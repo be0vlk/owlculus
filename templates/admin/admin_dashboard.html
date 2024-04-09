@@ -30,6 +30,21 @@
             </tbody>
         </table>
 
+        <h3 class="uk-heading-line uk-text-left uk-margin-large-bottom"><span>Create Invitation</span></h3>
+        <div class="user-management">
+            <form id="create-invitation-form" data-method="POST">
+                <div class="uk-margin">
+                    <select class="uk-select" id="invitationRole" name="role" required>
+                        <option value="">Select a role</option>
+                        <option value="admin">Admin</option>
+                        <option value="investigator">Investigator</option>
+                        <option value="analyst">Analyst</option>
+                    </select>
+                </div>
+                <button class="uk-button uk-button-primary" type="submit">Create Invitation</button>
+            </form>
+        </div>
+
         <h3 class="uk-heading-line uk-text-left uk-margin-large-bottom"><span> Add New User</span></h3>
     <form id="add-user-form" action="/admin/users" method="POST">
         <div class="uk-margin">
@@ -52,7 +67,10 @@
     </form>
 
     </div>
+
 </div>
+
+
 
             <!-- Edit User Modal -->
         <div id="editUserModal" class="uk-modal" uk-modal>
@@ -86,19 +104,6 @@
                 </form>
             </div>
         </div>
-
-        <h3 class="uk-heading-line uk-text-left uk-margin-large-bottom"><span>Create Invitation</span></h3>
-        <form id="create-invitation-form" data-method="POST">
-        <div class="uk-margin">
-            <select class="uk-select" id="invitationRole" name="role" required>
-                <option value="">Select a role</option>
-                <option value="admin">Admin</option>
-                <option value="investigator">Investigator</option>
-                <option value="analyst">Analyst</option>
-            </select>
-        </div>
-        <button class="uk-button uk-button-primary" type="submit">Create Invitation</button>
-        </form>
 
 <script>
 $(document).ready(function() {
