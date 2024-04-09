@@ -6,7 +6,7 @@
 
 Owlculus is purpose built for managing OSINT investigation cases. Based on my old and now archived pyqt project of the same name, this version comes with significantly enhanced capabilties and extensibility.
 
-**NOTE:** This project is now and will always be 100% free and open-source, no matter how much it improves.
+**NOTE:** This project is now and will always be 100% free and open-source, no matter how much it improves. If you're feeling generous, donate to your favorite charity instead :)
 
 ## Features
 - Create and track cases with customizable report number formats.
