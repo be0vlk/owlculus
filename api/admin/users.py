@@ -2,15 +2,18 @@
 This module contains the API endpoints for managing users.
 """
 
-from flask import Blueprint, jsonify, request, Response, render_template
+import os
+
+from flask import Blueprint, jsonify, request, Response, render_template, make_response
 from flask_restful import Api, Resource, reqparse
-from utils.models import User
+from utils.models import User, Invitation
 from flask_jwt_extended import jwt_required
 from api.auth import role_required
 from werkzeug.security import generate_password_hash
 from utils.db import db
 from utils.helpers import validate_format, generate_password
-from datetime import datetime
+from datetime import datetime, timedelta
+from dotenv import load_dotenv
 
 users_bp = Blueprint(
     "users",
@@ -153,6 +156,88 @@ class UsersDetail(Resource):
         else:
             return {"message": "User not found"}, 404
 
+
+class InvitationsList(Resource):
+    @jwt_required()
+    @role_required("admin")
+    def post(self):
+        data = request.get_json()
+        role = data.get("role")
+
+        if not role:
+            return {"message": "Role is required"}, 400
+
+        token = generate_password()
+        expires_at = datetime.utcnow() + timedelta(days=2)
+
+        new_invitation = Invitation(token=token, role=role, expires_at=expires_at)
+
+        db.session.add(new_invitation)
+        db.session.commit()
+
+        domain = os.getenv("DOMAIN")
+        invite_link = f"{domain}/admin/register?token={token}"
+        return {
+            "message": "Invitation created successfully",
+            "invite_link": invite_link,
+        }, 201
+
+
+class UserRegistration(Resource):
+    def get(self):
+        token = request.args.get("token")
+        if not token:
+            return "Invalid invitation link", 400
+
+        invitation = Invitation.query.filter_by(token=token).first()
+        if (
+            not invitation
+            or invitation.used
+            or invitation.expires_at < datetime.utcnow()
+        ):
+            return "Invalid or expired invitation", 400
+
+        return make_response(render_template("register.html", token=token))
+
+    def post(self):
+        data = request.get_json()
+        token = data.get("token")
+        username = data.get("username")
+        password = data.get("password")
+        email = data.get("email")
+
+        if not token or not username or not password or not email:
+            return {"message": "Missing required fields"}, 400
+
+        invitation = Invitation.query.filter_by(token=token).first()
+        if (
+            not invitation
+            or invitation.used
+            or invitation.expires_at < datetime.utcnow()
+        ):
+            return {"message": "Invalid or expired invitation"}, 400
+
+        existing_email = User.query.filter_by(email=email).first()
+        existing_user = User.query.filter_by(username=username).first()
+        if existing_user or existing_email:
+            return {"message": "User already exists"}, 400
+
+        hashed_password = generate_password_hash(password)
+        new_user = User(
+            username=username,
+            password=hashed_password,
+            email=email,
+            role=invitation.role,
+        )
+
+        invitation.used = True
+        db.session.add(new_user)
+        db.session.commit()
+        return {"message": "User registered successfully"}, 201
+
+
+api.add_resource(InvitationsList, "/invitations")
+api.add_resource(UserRegistration, "/register")
 
 api.add_resource(UsersList, "/users")
 api.add_resource(UsersDetail, "/users/<int:user_id>")

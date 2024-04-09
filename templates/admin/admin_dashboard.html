@@ -87,12 +87,26 @@
             </div>
         </div>
 
+        <h3 class="uk-heading-line uk-text-left uk-margin-large-bottom"><span>Create Invitation</span></h3>
+        <form id="create-invitation-form" data-method="POST">
+        <div class="uk-margin">
+            <select class="uk-select" id="invitationRole" name="role" required>
+                <option value="">Select a role</option>
+                <option value="admin">Admin</option>
+                <option value="investigator">Investigator</option>
+                <option value="analyst">Analyst</option>
+            </select>
+        </div>
+        <button class="uk-button uk-button-primary" type="submit">Create Invitation</button>
+        </form>
+
 <script>
 $(document).ready(function() {
     var usersTable;
 
     refreshUsers();
     setupFormSubmission("add-user-form");
+    setupFormSubmission("create-invitation-form", "/admin/invitations");
 
     function refreshUsers() {
         $.ajax({
@@ -167,12 +181,9 @@ $(document).ready(function() {
         });
     }
 
-
-
     // Call setupFormSubmission for both add and edit forms
     setupFormSubmission("add-user-form");
     setupFormSubmission("edit-user-form");
-
 
 
     function deleteUser(userId, rowToDelete) {

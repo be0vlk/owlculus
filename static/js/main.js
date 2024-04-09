@@ -63,7 +63,7 @@ function attachContextMenu(selector, menuItems) {
     });
 }
 
-window.setupFormSubmission = function(formId) {
+window.setupFormSubmission = function(formId, url) {
     const form = document.getElementById(formId);
     if (!form) {
         console.error('Form with ID "' + formId + '" not found.');
@@ -112,10 +112,13 @@ window.setupFormSubmission = function(formId) {
             requestOptions.body = JSON.stringify(jsonData);
         }
 
-        // Construct the URL for GET requests
-        const url = isGetRequest ? `${this.action}?${new URLSearchParams(jsonData)}` : this.action;
+        // Use the provided URL if available, otherwise use the form's action attribute
+        const submissionUrl = url || this.action;
 
-        fetch(url, requestOptions)
+        // Construct the URL for GET requests
+        const finalUrl = isGetRequest ? `${submissionUrl}?${new URLSearchParams(jsonData)}` : submissionUrl;
+
+        fetch(finalUrl, requestOptions)
         .then(response => {
             if (!response.ok) {
                 throw new Error('Network response was not ok');
@@ -124,7 +127,15 @@ window.setupFormSubmission = function(formId) {
         })
         .then(data => {
             console.log(data);
-            location.reload();
+            // If the URL is for creating an invitation, display the invitation link
+            if (url === "/admin/invitations") {
+                alert("Invitation created:\n\n " + data.invite_link);
+            } else if (url === "/admin/register") {
+                alert("Registration successful! You will be redirected to the login page.");
+                window.location.href = "/login";
+            } else {
+                location.reload();
+            }
         })
         .catch(error => {
             console.error('There was a problem with your form fetch operation:', error);

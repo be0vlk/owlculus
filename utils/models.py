@@ -23,6 +23,26 @@ user_case_association = db.Table(
 )
 
 
+class Invitation(db.Model):
+    __tablename__ = "invitations"
+    id = db.Column(db.Integer, primary_key=True)
+    token = db.Column(db.String(64), unique=True, nullable=False)
+    role = db.Column(db.String(32), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    used = db.Column(db.Boolean, default=False)
+
+    def serialize(self):
+        return {
+            "id": self.id,
+            "token": self.token,
+            "role": self.role,
+            "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "expires_at": self.expires_at.strftime("%Y-%m-%d %H:%M:%S"),
+            "used": self.used,
+        }
+
+
 class Client(db.Model):
     __tablename__ = "clients"
     id = db.Column(db.Integer, primary_key=True)

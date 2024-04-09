@@ -24,12 +24,14 @@ I will be very actively maintaining and improving this application and am always
 - More custom built and open-source tool compatibility
 - Different ways to add evidence to case files (browser extension?)
 - Better, more powerful ChatGPT integration
+- More robust analytics and other helpful insights
+- Better code organization and extensibility
 - Docker containerization
 
 ## Installation
 I highly recommend installing this on Linux (specifically tested on Debian 11 and Ubuntu 22.04), although not strictly required. I've included some automation scripts to make setup easier. You MUST follow each of these steps for the app to install and work properly. Run all of the following commands from the project root folder:
 
-1. `cat .env.example > .env` After you do this, make sure to edit the values in ".env" to suit your use, especially "UPLOAD_FOLDER", "DATABASE_URI" and, if you plan to use ChatGPT integration, "OPENAI_API_KEY".
+1. `cat .env.example > .env` After you do this, make sure to edit the values in ".env" to suit your use, especially "UPLOAD_FOLDER", "DATABASE_URI", "DOMAIN" and, if you plan to use ChatGPT integration, "OPENAI_API_KEY".
 2. `pip3 install -r requirements.txt`
 3. `chmod +x db_setup.sh && ./db_setup.sh`
 4. `python3 app.py`
@@ -72,7 +74,8 @@ Note that these tools run asyncrhonously so feel free to run a couple at once.
 `Strixy` Your ChatGPT assistant, prompted to function as an OSINT analyst. This is still a WIP but the basic functionality is there. Try doing things like uploading the results of the Redd Baron tool and asking it something like "analyze this user's posting patterns and suggest my next investigative step". You can completely customize the assistant in "utils.app_setup", but you need to do this before the first run. Otherwise, you'll have to login to your OpenAI playground and adjust it there.
 
 ### Admin
-Basic admin portal that allows you to create and delete users. The dropdown menu allows you to assign a role to the user. 
+Basic admin portal that allows you to create, manage and delete users.
+In addition to manual creation, you can also generate a one-time use link that will allow the user to create their own account with the role that you select. To do this, just pick the role from the dropdown under "Create Invitation". The link will be displayed in an alert window and you can copy it to your clipboard to send. By default, links are valid for 48 hours.
 
 `Admin` Full access to do anything in the app, including run all tools, view and edit any case/client, etc.
 
