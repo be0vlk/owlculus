@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- UIkit CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uikit@3.18.0/dist/css/uikit.min.css" integrity="sha256-QTsEtHRzyMLduFfoUmOSUGrAomBQuUTwdAMwl/u7fxc=" crossorigin="anonymous">
+
+    <!-- UIkit JS -->
+    <script src="https://cdn.jsdelivr.net/npm/uikit@3.18.0/dist/js/uikit.min.js" integrity="sha256-B2XXJTBmE0TAqLvnMbzkM9S9A3aVcNuIBFK2GGp+fDE=" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/uikit@3.18.0/dist/js/uikit-icons.min.js"></script>
+
+    <!-- jQuery -->
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+    <script src="/static/js/main.js"></script>
+    <link rel="stylesheet" href="/static/css/main.css">
+
+    <title>{% block title %}Home{% endblock %}</title>
+    <style>
+
+
+        .sidebar {
+            min-height: 100vh;
+            width: 250px;
+            position: fixed;
+            z-index: 1;
+            top: 0;
+            left: 0;
+            overflow-x: hidden;
+            padding-top: 20px;
+            background-color: #343a40;
+            color: #ffffff;
+        }
+
+        .sidebar .uk-nav-default > li > a {
+            color: #ffffff;
+        }
+
+        .sidebar .uk-nav-default > li > a:hover {
+            background-color: #495057;
+        }
+
+        /* Apply hover effect only to links that are not in an .uk-active parent */
+        .sidebar .uk-nav-default > li:not(.uk-active) > a:hover {
+            background-color: #495057;
+        }
+
+        /* Ensure active link retains its background color without change on hover */
+        .sidebar .uk-nav-default > .uk-active > a, .sidebar .uk-nav-default > .uk-active > a:hover {
+            background-color: #007bff;
+            color: #ffffff;
+        }
+
+        .content {
+            margin-left: 250px;
+            padding: 20px;
+        }
+
+        .icon {
+            margin-right: 10px; /* Adjust the value as needed */
+        }
+    </style>
+    {% block head_extra %}{% endblock %}
+</head>
+<body>
+
+<div class="uk-grid-collapse" uk-grid>
+    <div class="sidebar uk-width-1-4@m">
+        <img src="../static/owl_logo_white.png" alt="Sidebar Image" style="width: 100%; height: auto; display: block;">
+        <br>
+        <ul class="uk-nav uk-nav-default uk-text-large">
+            <li><a href="/cases"><span class="icon" uk-icon="icon: folder"></span> Cases</a></li>
+            <li><a href="/clients"><span class="icon" uk-icon="icon: users"></span> Clients</a></li>
+            <li><a href="/tools"><span class="icon" uk-icon="icon: code"></span> Tools</a></li>
+            <li class="uk-nav-divider"><br></li>
+            <li><a href="/admin/users"><span class="icon" uk-icon="icon: settings"></span> Admin</a></li>
+            <li><a href="/login"><span class="icon" uk-icon="icon: sign-out"></span> Logout</a></li>
+        </ul>
+    </div>
+    <div class="content uk-width-expand@m">
+        <!-- Page Content here -->
+        {% block content %}{% endblock %}
+    </div>
+</div>
+<script>
+$(document).ready(function() {
+    var currentPageUrl = window.location.pathname;
+
+    // Ensure the URL ends with a slash for consistent comparison
+    if (!currentPageUrl.endsWith('/')) {
+        currentPageUrl += '/';
+    }
+
+    $('.sidebar a').each(function() {
+        var linkPage = $(this).attr('href');
+
+        // Append a slash if not present for consistent comparison
+        if (!linkPage.endsWith('/')) {
+            linkPage += '/';
+        }
+
+        // Check if the sidebar link's href matches the current page URL
+        if (currentPageUrl === linkPage) {
+            $('.sidebar .uk-nav-default > li').removeClass('uk-active');
+            $(this).closest('li').addClass('uk-active');
+        }
+    });
+});
+</script>
+
+</body>
+</html>

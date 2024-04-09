@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block title %}Case Detail{% endblock %}
+
+{% block head_extra %}
+    <link href="https://cdn.jsdelivr.net/npm/quill@2.0.0-rc.4/dist/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/quill@2.0.0-rc.4/dist/quill.js"></script>
+    <style>
+    .ql-container {
+      min-height: 200px;
+    }
+    .note-content {
+      margin-bottom: 10px;
+    }
+
+    .note-content p {
+      margin: 0;
+    }
+
+    /* Styles for the file browser */
+    #evidence-list {
+      list-style-type: none;
+      padding-left: 20px;
+    }
+
+    #evidence-list ul {
+      list-style-type: none;
+      padding-left: 20px;
+    }
+
+    #evidence-list li {
+      margin-bottom: 5px;
+    }
+
+    #evidence-list a {
+      text-decoration: none;
+    }
+
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="uk-container uk-margin-top" data-case-id="{{ case.id }}" data-client-id="{{ case.client.id }}" data-case-number="{{ case.case_number }}" data-case-type="{{ case.case_type }}">
+    <h2 class="uk-heading-line uk-text-bold"><span>Case {{ case.case_number }}</span></h2>
+    <div class="uk-card uk-card-default uk-card-body uk-margin-top">
+        <h3 class="uk-card-title">Details</h3>
+
+        {% if current_user.role == "admin" %}
+        <button id="edit-case-details" class="uk-button uk-button-default">Edit Case Details</button>
+        {% endif %}
+
+        <!-- Generate Report Button -->
+        <!-- On the server side, reports are stored in the case folder -->
+        <button id="generate-report" class="uk-button uk-button-default">Generate Report</button>
+
+        <!-- Find Correlations Button -->
+        <button id="request-correlations" class="uk-button uk-button-default">Find Correlations</button>
+
+        <!-- Show Evidence Button -->
+        <button id="show-evidence" class="uk-button uk-button-default" uk-toggle="target: #evidence-modal">Show Evidence</button>
+
+        <!-- Evidence Modal -->
+        <!-- This will also display reports that were generated -->
+        <div id="evidence-modal" uk-modal>
+            <div class="uk-modal-dialog uk-modal-body">
+                <h2 class="uk-modal-title">Evidence Files</h2>
+                <ul id="evidence-list"></ul>
+
+                <!-- File Upload Form -->
+                <form id="evidence-upload-form" class="uk-margin-top">
+                    <div class="uk-margin">
+                        <div uk-form-custom="target: true">
+                            <input type="file" name="file">
+                            <input class="uk-input uk-form-width-medium" type="text" placeholder="Select file" disabled>
+                        </div>
+                    </div>
+                    <div class="uk-margin">
+                        <input class="uk-input uk-form-width-medium" type="text" name="subfolder" placeholder="Subfolder (optional)">
+                    </div>
+                    <button class="uk-button uk-button-primary" type="submit">Upload</button>
+                </form>
+
+                <p class="uk-text-right">
+                    <button class="uk-button uk-button-default uk-modal-close" type="button">Close</button>
+                </p>
+            </div>
+        </div>
+
+        {% if current_user.role == "admin" %}
+        <button id="delete-case" class="uk-button uk-button-danger uk-margin-small-left">Delete Case</button>
+        {% endif %}
+
+        <p><strong>Case Type:</strong> {{ case.case_type }}</p>
+        <p><strong>Client:</strong>{{ case.client.name }}</p>
+        <p><strong>Assigned Users:</strong> {{ case.authorized_users|map(attribute='username')|join(', ') }}</p>
+        <p><strong>Description:</strong> {{ case.description }}</p>
+        <p><strong>Created By:</strong> {{ case.created_by }}</p>
+        <p><strong>Created At:</strong> {{ case.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</p>
+    </div>
+
+    <!-- Display note data -->
+    <div id="notes-section" class="uk-container uk-margin-top">
+        <h3>Notes</h3>
+        <div class="uk-button-group">
+            <!-- Note category buttons will be dynamically generated here -->
+        </div>
+        <div id="notes-container" class="uk-margin-top"></div>
+    </div>
+
+    <!-- Edit Note Modal -->
+    <div id="edit-note-modal" uk-modal>
+        <div class="uk-modal-dialog uk-modal-body">
+            <h2 class="uk-modal-title">Edit Note</h2>
+            <form id="noteForm" class="uk-form-stacked">
+                <div id="note-fields"></div>
+            <!-- TODO: Need to figure out the issues with quill before I enable this -->
+{#                <div class="uk-margin">#}
+{#                    <label class="uk-form-label" for="Notes">Notes</label>#}
+{#                    <div class="uk-form-controls">#}
+{#                        <div id="Notes-editor" class="richtext-editor"></div>#}
+{#                    </div>#}
+{#                </div>#}
+                {% if current_user.role == 'investigator' or current_user.role == 'admin' %}
+                <p class="uk-text-right">
+                    <button class="uk-button uk-button-default uk-modal-close" type="button">Cancel</button>
+                    <button class="uk-button uk-button-primary" type="submit">Save</button>
+                </p>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+
+    <!-- Correlation Results Modal -->
+    <div id="correlation-results-modal" uk-modal>
+        <div class="uk-modal-dialog uk-modal-body">
+            <h2 class="uk-modal-title">Matches Found:</h2>
+            <div id="correlation-results-content"></div>
+            <p class="uk-text-right">
+                <button class="uk-button uk-button-default uk-modal-close" type="button">Close</button>
+            </p>
+        </div>
+    </div>
+
+</div>
+
+<script src="{{ url_for('static', filename='/js/cases.js') }}"></script>
+
+{% endblock %}

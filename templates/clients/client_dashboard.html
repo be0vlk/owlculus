@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}Client Dashboard{% endblock %}
+{% block head_extra %}
+    <link href="https://cdn.datatables.net/v/dt/dt-2.0.0/b-3.0.0/b-html5-3.0.0/datatables.min.css" rel="stylesheet">
+    <script src="https://cdn.datatables.net/v/dt/dt-2.0.0/b-3.0.0/b-html5-3.0.0/datatables.min.js"></script>
+{% endblock %}
+
+{% block content %}
+
+<!-- Use the DataTables plugin for table stuff -->
+<script>
+$(document).ready(function() {
+    initializeDataTable("#clientsTable");
+});
+
+</script>
+
+    <div class="uk-container uk-margin-large">
+    <h1 class="uk-heading-line uk-text-center uk-margin-large-bottom"><span>Client Dashboard</span></h1>
+
+    <div class="uk-flex uk-flex-between uk-margin-bottom">
+        <div class="uk-flex-initial">
+            <button class="uk-button uk-button-primary" type="button" uk-toggle="target: #addClientModal">Add New Client</button>
+        </div>
+    </div>
+
+    <!-- Modal for adding a client -->
+    <div id="addClientModal" uk-modal>
+        <div class="uk-modal-dialog">
+            <button class="uk-modal-close-default" type="button" uk-close></button>
+            <div class="uk-modal-header">
+                <h2 class="uk-modal-title">Add Client</h2>
+            </div>
+            <div class="uk-modal-body">
+                <form id="add-client-form" method="POST" action="/clients/">
+                    <div class="uk-margin">
+                        <label class="uk-form-label" for="name">Client Name</label>
+                        <input class="uk-input" type="text" id="name" name="name" required>
+                    </div>
+                    <div class="uk-margin">
+                        <label class="uk-form-label" for="email">Email</label>
+                        <input class="uk-input" type="email" id="email" name="email">
+                    </div>
+                    <div class="uk-margin">
+                        <label class="uk-form-label" for="phone">Phone</label>
+                        <input class="uk-input" type="tel" id="phone" name="phone">
+                    </div>
+                    <div class="uk-modal-footer uk-text-right">
+                        <button class="uk-button uk-button-default uk-modal-close" type="button">Cancel</button>
+                        <button class="uk-button uk-button-primary" type="submit">Submit</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <table id="clientsTable" class="uk-table uk-table-hover uk-table-divider uk-table-responsive display" style="width:100%">
+        <thead>
+            <tr>
+                <th>Client Name</th>
+                <th>Email</th>
+                <th>Phone</th>
+                <th>Total Cases</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for client in clients %}
+                <tr ondblclick="redirectToClient({{ client.id }})">
+                <td>{{ client.name }}</td>
+                <td>{{ client.email }}</td>
+                <td>{{ client.phone }}</td>
+                <td>
+                    {% if client.cases %}
+                        {{ client.cases | length }}
+                    {% else %}
+                        No cases
+                    {% endif %}
+                </td>
+
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+
+</div>
+    <script>
+    setupFormSubmission("add-client-form");
+    function redirectToClient(clientId) {
+    window.location.href = `/clients/${clientId}`;
+}
+    </script>
+{% endblock %}

@@ -1,0 +1,125 @@
+{
+  "Executives": [
+    {
+      "name": "CEO",
+      "label": "CEO",
+      "type": "text"
+    },
+    {
+      "name": "CFO",
+      "label": "CFO",
+      "type": "text"
+    },
+    {
+      "name": "CTO",
+      "label": "CTO",
+      "type": "text"
+    },
+    {
+      "name": "CMO",
+      "label": "CMO",
+      "type": "text"
+    },
+    {
+      "name": "COO",
+      "label": "COO",
+      "type": "text"
+    }
+  ],
+  "Affiliates": [
+    {
+      "name": "Affiliated Companies",
+      "label": "Affiliated Companies",
+      "type": "text"
+    },
+    {
+      "name": "Subsidiaries",
+      "label": "Subsidiaries",
+      "type": "text"
+    },
+    {
+      "name": "Parent Company",
+      "label": "Parent Company",
+      "type": "text"
+    }
+  ],
+  "SOCMINT": [
+    {
+      "name": "Facebook",
+      "label": "Facebook",
+      "type": "text"
+    },
+    {
+      "name": "Flickr",
+      "label": "Flickr",
+      "type": "text"
+    },
+    {
+      "name": "Instagram",
+      "label": "Instagram",
+      "type": "text"
+    },
+    {
+      "name": "LinkedIn",
+      "label": "LinkedIn",
+      "type": "text"
+    },
+    {
+      "name": "Pinterest",
+      "label": "Pinterest",
+      "type": "text"
+    },
+    {
+      "name": "Reddit",
+      "label": "Reddit",
+      "type": "text"
+    },
+    {
+      "name": "Snapchat",
+      "label": "Snapchat",
+      "type": "text"
+    },
+    {
+      "name": "Tumblr",
+      "label": "Tumblr",
+      "type": "text"
+    },
+    {
+      "name": "TikTok",
+      "label": "TikTok",
+      "type": "text"
+    },
+    {
+      "name": "X (Twitter)",
+      "label": "X",
+      "type": "text"
+    },
+    {
+      "name": "YouTube",
+      "label": "YouTube",
+      "type": "text"
+    }
+  ],
+  "Basic Info": [
+    {
+      "name": "Name",
+      "label": "Name",
+      "type": "text"
+    },
+    {
+      "name": "Address",
+      "label": "Address",
+      "type": "text"
+    },
+    {
+      "name": "Phone Number",
+      "label": "Phone Number",
+      "type": "text"
+    },
+    {
+      "name": "Domain",
+      "label": "Domain",
+      "type": "text"
+    }
+  ]
+}

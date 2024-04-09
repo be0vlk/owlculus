@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}Case Dashboard{% endblock %}
+
+{% block head_extra %}
+    <link href="https://cdn.datatables.net/v/dt/dt-2.0.0/b-3.0.0/b-html5-3.0.0/datatables.min.css" rel="stylesheet">
+    <script src="https://cdn.datatables.net/v/dt/dt-2.0.0/b-3.0.0/b-html5-3.0.0/datatables.min.js"></script>
+{% endblock %}
+
+{% block content %}
+
+<script>
+// Redirect to the case detail page when a row is double-clicked
+function redirectToCase(caseId) {
+    window.location.href = `/cases/${caseId}`;
+}
+   $(document).ready( function () {
+       initializeDataTable('#casesTable');
+   } );
+</script>
+
+    <div class="uk-container uk-margin-large">
+        <h1 class="uk-heading-line uk-text-center uk-margin-large-bottom">
+            <span>Case Dashboard</span>
+        </h1>
+            <div class="uk-text-left uk-margin-large-bottom">
+                {% if current_user.role == 'admin' %}
+                <button class="uk-button uk-button-primary" uk-toggle="target: #new-case-modal">Create Case</button>
+                <button class="uk-button uk-button-secondary" uk-toggle="target: #add-user-to-case-modal">Add User to Case</button>
+                {% endif %}
+        </div>
+        <div id="new-case-modal" uk-modal>
+            <div class="uk-modal-dialog uk-modal-body">
+                <h2 class="uk-modal-title">Add New Case</h2>
+                <form id="new-case-form" action="/cases" method="POST">
+                    <div class="uk-margin">
+                        <label>
+                            <select class="uk-select" name="case_type" required>
+                                <option value="">Select case type</option>
+                                <option value="Company">Company</option>
+                                <option value="Person">Person</option>
+                                <!-- Can add more options here but you might want to also edit utils.helpers -->
+                            </select>
+                        </label>
+                    </div>
+                     <div class="uk-margin">
+                      <!-- Client name selection dropdown -->
+                         <label>
+                             <select class="uk-select" name="client_name">
+                                <option value="">Select client</option>
+                                {% for client in clients %}
+                                   <option value="{{client.name}}">{{client.name}}</option>
+                                {% endfor %}
+                             </select>
+                         </label>
+                     </div>
+
+<div class="uk-margin">
+    <label>Assign Users:</label>
+    <div class="uk-grid-small uk-child-width-auto uk-grid">
+        {% for user in users %}
+            {% if user.role != 'admin' %}
+                <label>
+                    <input class="uk-checkbox" type="checkbox" name="assigned_users" value="{{ user.id }}">
+                    {{ user.username }}
+                </label>
+            {% endif %}
+        {% endfor %}
+    </div>
+</div>
+
+                    <div class="uk-margin">
+                        <textarea class="uk-textarea" rows="5" placeholder="Description" name="description"></textarea>
+                    </div>
+                    <p class="uk-text-right">
+                        <button class="uk-button uk-button-default uk-modal-close" type="button">Cancel</button>
+                        <button class="uk-button uk-button-primary" type="submit">Save</button>
+                    </p>
+                </form>
+            </div>
+        </div>
+
+    <table id="casesTable" class="uk-table uk-table-hover uk-table-divider uk-table-responsive display" style="width:100%">
+        <thead>
+            <tr>
+                <th>Case Number</th>
+                <th>Case Type</th>
+                <th>Client Name</th>
+                <th>Assigned Users</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for case in cases %}
+            <tr data-caseid="{{ case.id }}" ondblclick="redirectToCase({{ case.id }})">
+                <td>{{ case.case_number }}</td>
+                <td>{{ case.case_type }}</td>
+                <td>{{ case.client.name if case.client else 'N/A' }}</td>
+            <td>{{ case.authorized_users|map(attribute='username')|join(', ') }}</td>
+                <td>{{ case.description }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+<!-- Add User to Case Modal -->
+<div id="add-user-to-case-modal" uk-modal>
+    <div class="uk-modal-dialog uk-modal-body">
+        <h2 class="uk-modal-title">Add User to Case</h2>
+        <form id="add-user-to-case-form" method="POST">
+            <div class="uk-margin">
+                <label>Select Case:</label>
+                <div class="uk-form-controls">
+                    <select class="uk-select" name="case_id" onchange="updateFormAction(this)">
+                        {% if current_user.role == 'admin' %}
+                            {% for case in cases %}
+                                <option value="{{ case.id }}">{{ case.case_number }}</option>
+                            {% endfor %}
+                        {% else %}
+                            {% for case in current_user.authorized_cases %}
+                                <option value="{{ case.id }}">{{ case.case_number }}</option>
+                            {% endfor %}
+                        {% endif %}
+                    </select>
+                </div>
+            </div>
+            <div class="uk-margin">
+                <label>Select User:</label>
+                <div class="uk-form-controls">
+                    <select class="uk-select" name="user_id">
+                        {% for user in users %}
+                            <option value="{{ user.id }}">{{ user.username }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <p class="uk-text-right">
+                <button class="uk-button uk-button-default uk-modal-close" type="button">Cancel</button>
+                <button class="uk-button uk-button-primary" type="submit">Add User</button>
+            </p>
+        </form>
+    </div>
+</div>
+
+    </div>
+
+    <script>
+        setupFormSubmission("new-case-form");
+        setupFormSubmission("add-user-to-case-form");
+        function updateFormAction(selectElement) {
+            var caseId = selectElement.value;
+            var form = document.getElementById("add-user-to-case-form");
+            form.action = "/cases/" + caseId + "/add_user";
+        }
+
+        // Set the initial form action when the modal is opened
+        document.addEventListener('DOMContentLoaded', function() {
+            var modal = document.getElementById('add-user-to-case-modal');
+            var caseSelect = modal.querySelector('select[name="case_id"]');
+            var initialCaseId = caseSelect.value;
+            var form = document.getElementById('add-user-to-case-form');
+            form.action = '/cases/' + initialCaseId + '/add_user';
+        });
+    </script>
+
+{% endblock %}
