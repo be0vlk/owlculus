@@ -12,9 +12,11 @@ from utils.helpers import upload_file
 from utils.db import db
 from utils.models import Case, Evidence, User
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from dotenv import load_dotenv
 
 tool_runner_bp = Blueprint("tool_runner", __name__)
 api = Api(tool_runner_bp)
+load_dotenv()
 
 current_directory = os.path.dirname(os.path.abspath(__file__))
 
@@ -130,8 +132,14 @@ class ToolRunner(Resource):
                 if current_user.role == "admin"
                 else current_user.authorized_cases
             )
+            openai_api_key = os.getenv("OPENAI_API_KEY")
             return Response(
-                render_template("tools.html", cases=cases, current_user=current_user),
+                render_template(
+                    "tools.html",
+                    cases=cases,
+                    current_user=current_user,
+                    OPENAI_API_KEY=openai_api_key
+                ),
                 mimetype="text/html",
             )
 
@@ -149,9 +157,7 @@ class ToolRunner(Resource):
         def generate():
             try:
                 output_lines = []
-                for line in run_tool(
-                    tool, target, case_number
-                ):
+                for line in run_tool(tool, target, case_number):
                     yield f"data: {line}\n\n"
                     output_lines.append(line)
 

@@ -152,14 +152,54 @@
     </div>
     {% endif %}
 
+{#    <!-- Collapsible Card for Strixy tool -->#}
+{#    {% if current_user.role in ['admin'] %}#}
+{#    <div class="uk-card-large uk-card-default uk-margin-top">#}
+{#        <div class="uk-card-header">#}
+{#            <h3 class="uk-card-title uk-margin-remove-bottom">Strixy</h3>#}
+{#            <a class="uk-button uk-button-text" onclick="toggleStrixy()">Show/Hide</a>#}
+{#        </div>#}
+{#        <div id="strixy-body" hidden>#}
+{#            <div class="uk-card-body">#}
+{#                <p>Interact with Strixy, an AI OSINT analyst powered by ChatGPT.</p>#}
+{#                <form id="uploadForm" onsubmit="uploadFile(event)">#}
+{#                    <input type="file" name="file" id="file" class="uk-margin-small-top">#}
+{#                    <button type="submit" class="uk-button uk-button-primary">Upload</button>#}
+{#                </form>#}
+{#                <form onsubmit="runStrixy(this)" data-tool="strixy">#}
+{#                    <input type="hidden" name="tool" value="strixy">#}
+{#                    <textarea class="uk-textarea uk-margin-small-bottom" name="query" placeholder="Enter your query" required></textarea>#}
+{#                    <input type="checkbox" name="new_thread" id="new_thread">#}
+{#                    <label for="new_thread">Start a new thread</label>#}
+{#                    <select class="uk-select uk-margin-small-top" name="file_id" id="file_id">#}
+{#                        <option value="">Select a file</option>#}
+{#                    </select>#}
+{#                    <button type="submit" class="uk-button uk-button-primary">Run</button>#}
+{#                    <button type="button" class="uk-button uk-button-danger" onclick="cancelTool(this)">Cancel</button>#}
+{#                    <div class="loader"></div>#}
+{#                </form>#}
+{#                <div class="uk-card uk-card-default uk-margin-top">#}
+{#                    <div class="uk-card-header">#}
+{#                        <h3 class="uk-card-title">Output</h3>#}
+{#                    </div>#}
+{#                    <div class="uk-card-body output-container" style="max-height: 400px; overflow-y: auto;">#}
+{#                        <div id="strixy-output" class="uk-text-break strixy-output"></div>#}
+{#                    </div>#}
+{#                </div>#}
+{#            </div>#}
+{#        </div>#}
+{#    </div>#}
+{#    {% endif %}#}
+
     <!-- Collapsible Card for Strixy tool -->
-    {% if current_user.role in ['admin'] %}
+{% if current_user.role in ['admin'] %}
+  {% if OPENAI_API_KEY %}
     <div class="uk-card-large uk-card-default uk-margin-top">
-        <div class="uk-card-header">
-            <h3 class="uk-card-title uk-margin-remove-bottom">Strixy</h3>
-            <a class="uk-button uk-button-text" uk-toggle="target: #strixy-body">Show/Hide</a>
-        </div>
-        <div id="strixy-body" hidden>
+      <div class="uk-card-header">
+        <h3 class="uk-card-title uk-margin-remove-bottom">Strixy</h3>
+        <a class="uk-button uk-button-text" onclick="toggleStrixy()">Show/Hide</a>
+      </div>
+      <div id="strixy-body" hidden>
             <div class="uk-card-body">
                 <p>Interact with Strixy, an AI OSINT analyst powered by ChatGPT.</p>
                 <form id="uploadForm" onsubmit="uploadFile(event)">
@@ -186,10 +226,19 @@
                         <div id="strixy-output" class="uk-text-break strixy-output"></div>
                     </div>
                 </div>
-            </div>
-        </div>
+      </div>
     </div>
-    {% endif %}
+  {% else %}
+    <div class="uk-card-large uk-card-default uk-margin-top">
+      <div class="uk-card-header">
+        <h3 class="uk-card-title uk-margin-remove-bottom">Strixy</h3>
+      </div>
+      <div class="uk-card-body">
+        <p>The Strixy tool is not available because the OPENAI_API_KEY is not set in the .env file.</p>
+      </div>
+    </div>
+  {% endif %}
+{% endif %}
 
     </div>
 </div>

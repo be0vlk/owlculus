@@ -183,4 +183,12 @@ function fetchFiles() {
     });
 }
 
-fetchFiles();
+function toggleStrixy() {
+    var strixybody = document.getElementById('strixy-body');
+    if (strixybody.hidden) {
+        strixybody.hidden = false;
+        fetchFiles();
+    } else {
+        strixybody.hidden = true;
+    }
+}
