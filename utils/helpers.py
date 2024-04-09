@@ -114,7 +114,10 @@ def generate_case_number():
 
 
 def setup_case_folder(case_number=None, case_type=None):
-    """Sets up a new case folder with the given name and type, then populates it with pre-made markdown templates."""
+    """
+    Sets up a new case folder with the given name and type, then populates it with pre-made JSON templates.
+    """
+
     current_app.logger.debug("Setting up case folder.")
     base_path = Path(current_app.config["UPLOAD_FOLDER"])
     case_folder_path = base_path / secure_filename(case_number)
@@ -172,6 +175,7 @@ def rename_case_folder(old_case_number, new_case_number):
     """
     Renames the case folder from the old case number to the new case number.
     """
+
     base_path = Path(current_app.config["UPLOAD_FOLDER"])
     old_case_folder_path = base_path / secure_filename(old_case_number)
     new_case_folder_path = base_path / secure_filename(new_case_number)

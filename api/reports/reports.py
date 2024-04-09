@@ -22,6 +22,9 @@ api = Api(reports_bp)
 
 
 class CaseReport(Resource):
+    """
+    API endpoint to generate basic reports for a case.
+    """
     @jwt_required()
     def get(self, case_id):
         case = Case.query.get_or_404(case_id)

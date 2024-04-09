@@ -1,3 +1,7 @@
+"""
+This module contains the API endpoints for managing clients.
+"""
+
 from flask import jsonify, Blueprint, abort, render_template, request, Response
 from flask_restful import Api, Resource, reqparse
 from utils.db import db
@@ -17,6 +21,9 @@ api = Api(clients_bp)
 
 
 class ClientList(Resource):
+    """
+    API endpoint for the client dashboard, listing all clients and adding a new client.
+    """
     @jwt_required()
     @role_required("investigator")
     def get(self):
@@ -30,7 +37,7 @@ class ClientList(Resource):
             return jsonify([client.serialize() for client in all_clients])
 
     @jwt_required()
-    @role_required("investigator")
+    @role_required("admin")  # Only admins can add clients by default
     def post(self):
         parser = reqparse.RequestParser()
         parser.add_argument("name", required=True, help="Name cannot be blank!")
@@ -64,6 +71,9 @@ class ClientList(Resource):
 
 
 class ClientDetail(Resource):
+    """
+    API endpoint for viewing, updating and deleting a single client.
+    """
 
     @jwt_required()
     @role_required("investigator")
@@ -79,7 +89,7 @@ class ClientDetail(Resource):
             return jsonify(client.serialize())
 
     @jwt_required()
-    @role_required("investigator")
+    @role_required("admin")
     def patch(self, client_id):
         parser = reqparse.RequestParser()
         parser.add_argument("name", store_missing=False)

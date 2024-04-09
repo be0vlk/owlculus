@@ -30,6 +30,7 @@ def generate_secret_key():
     """
     Generates a random secret key used by the app and as the JWT secret for authentication.
     """
+
     secret = str(secrets.token_urlsafe(18))
     set_key(find_dotenv(), "APP_SECRET_KEY", secret)
 
@@ -42,6 +43,7 @@ def create_admin_user(app):
     Feel free to change the default admin username via the 'admin_username' variable.
     You may also want to change the email in the admin_user/User object.
     """
+
     admin_username = "admin"
     admin_password = str(secrets.token_urlsafe(18))
     hashed_password = generate_password_hash(admin_password)

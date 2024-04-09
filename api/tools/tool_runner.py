@@ -23,7 +23,7 @@ current_directory = os.path.dirname(os.path.abspath(__file__))
 AVAILABLE_TOOLS = {
     "maigret": "maigret {target}",
     "holehe": "holehe {target}",
-    "phoneinfoga": "phoneinfoga scan -n '{target}'",
+    # "phoneinfoga": "phoneinfoga scan -n '{target}'",
     "reddbaron": f"python3 {current_directory}/reddbaron.py {{target}}",
 }
 
@@ -94,6 +94,9 @@ def add_file_metadata_to_case(case_number, file_path, evidence_type):
 
 
 class ToolRunner(Resource):
+    """
+    Routes for the tool running functionality.
+    """
     @jwt_required()
     def get(self):
         current_user = User.query.filter_by(username=get_jwt_identity()).first()

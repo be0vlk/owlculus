@@ -46,6 +46,10 @@ api = Api(cases_bp)
 
 
 class CaseList(Resource):
+    """
+    API endpoint for the case dashboard functionality, including listing all cases and creating new ones.
+    """
+
     @jwt_required()
     def get(self):
         current_user = get_current_user()
@@ -79,7 +83,7 @@ class CaseList(Resource):
             return jsonify([case.serialize() for case in all_cases])
 
     @jwt_required()
-    @role_required("admin")
+    @role_required("admin")  # Only admins can create cases by default, you can change that here
     def post(self):
         parser = reqparse.RequestParser()
         parser.add_argument(
@@ -125,7 +129,8 @@ class CaseList(Resource):
         db.session.add(new_case)
         db.session.commit()
 
-        # Load note categories from JSON file based on case type
+        # Load note categories from JSON file based on case type. You can extend it here.
+        # If you do so, you also need to add more options in case_dashboard.html (new-case-modal select dropdown)
         static_folder = current_app.static_folder
         if args["case_type"].lower() == "person":
             categories_path = os.path.join(static_folder, "person_notes.json")
@@ -163,6 +168,10 @@ class CaseList(Resource):
 
 
 class CaseDetail(Resource):
+    """
+    API endpoint for managing individual cases, including viewing, updating, deleting and notetaking functionality.
+    """
+
     @jwt_required()
     @case_auth_required
     def get(self, case_id):
@@ -173,14 +182,12 @@ class CaseDetail(Resource):
         if "text/html" in request.headers.get("Accept", ""):
             notes = case.notes
 
-            # Load note categories based on the case type
+            # Load note categories based on the case type. You can extend it here if you added new case types.
             static_folder = current_app.static_folder
             if case.case_type.lower() == "person":
                 categories_path = os.path.join(static_folder, "person_notes.json")
             elif case.case_type.lower() == "company":
                 categories_path = os.path.join(static_folder, "company_notes.json")
-            else:
-                categories_path = os.path.join(static_folder, "note_categories.json")
 
             with open(categories_path) as f:
                 note_categories = json.load(f).keys()
@@ -312,6 +319,9 @@ class CaseDetail(Resource):
 
 
 class CaseFiles(Resource):
+    """
+    API endpoint for managing case files, including uploading, downloading, and listing files.
+    """
     @jwt_required()
     @case_auth_required
     def get(self, case_id):
@@ -395,6 +405,10 @@ class CaseFiles(Resource):
 
 
 class CaseNotes(Resource):
+    """
+    API endpoint for managing case notes, including viewing, creating, updating, and deleting notes.
+    """
+
     @jwt_required()
     @case_auth_required
     def get(self, case_id, note_id=None):
@@ -465,8 +479,11 @@ class CaseNotes(Resource):
 
 
 class AddUserToCase(Resource):
+    """
+    API endpoint for adding a user to a case.
+    """
     @jwt_required()
-    @role_required("admin")
+    @role_required("admin")  # Only admins can add users to cases by default, you can change that here
     def post(self, case_id):
         parser = reqparse.RequestParser()
         parser.add_argument(

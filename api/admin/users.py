@@ -1,3 +1,7 @@
+"""
+This module contains the API endpoints for managing users.
+"""
+
 from flask import Blueprint, jsonify, request, Response, render_template
 from flask_restful import Api, Resource, reqparse
 from utils.models import User
@@ -19,7 +23,7 @@ api = Api(users_bp)
 
 class UsersList(Resource):
     """
-    This class handles HTTP GET and POST requests at the root '/admin/users' endpoint.
+    API endpoint for managing users.
     """
 
     @jwt_required()

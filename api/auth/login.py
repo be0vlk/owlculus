@@ -1,3 +1,7 @@
+"""
+This module contains the login blueprint and resource.
+"""
+
 from werkzeug.security import check_password_hash
 from flask import Blueprint, current_app, render_template, jsonify, make_response
 from flask_restful import Api, Resource, reqparse
@@ -16,6 +20,9 @@ api = Api(login_bp)
 
 
 class Login(Resource):
+    """
+    API endpoint that handles the login logic and JWT issuance.
+    """
     def get(self):
         response = make_response(render_template("login.html"))
         response.headers["Content-Type"] = "text/html"

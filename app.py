@@ -19,7 +19,7 @@ def create_app():
     app.config["SECRET_KEY"] = os.getenv("APP_SECRET_KEY")
     app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URI")
     app.config["UPLOAD_FOLDER"] = os.getenv("UPLOAD_FOLDER")
-    app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=4)
+    app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=4)  # Adjust depending on your paranoia
     app.config["JWT_TOKEN_LOCATION"] = ["headers", "cookies"]
     app.config["MAX_CONTENT_LENGTH"] = (
         16 * 1000 * 1000
