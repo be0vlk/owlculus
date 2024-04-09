@@ -1,4 +1,4 @@
-# Owlculus: OSINT Toolkit
+# Owlculus
 
 <p align="center">
   <img src="https://i.imgur.com/Cuf4hMK.png" />
