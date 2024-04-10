@@ -212,6 +212,8 @@ def delete_case_folder(case_number=None):
 
 
 def upload_file(filename, file_stream, case_number=None, subfolder=None):
+    filename = secure_filename(filename)
+
     # Check file extension
     if "." in filename and filename.rsplit(".", 1)[1].lower() not in ALLOWED_EXTENSIONS:
         return False
