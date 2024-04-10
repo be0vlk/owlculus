@@ -23,6 +23,16 @@ api = Api(correlations_bp)
 
 
 def find_filename_correlations(case_id):
+    """
+    Finds correlations between cases based on matching filenames in evidence items.
+    Args:
+        case_id:
+
+    Returns:
+        dict: A dictionary with case numbers as keys and a list of correlated evidence data as values.
+
+    """
+
     correlations = {}
     case_evidence = (
         db.session.query(Evidence)
@@ -84,8 +94,11 @@ def find_note_correlations(case_id):
         ).all()
 
         for similar_note in similar_notes:
-            # Compare individual key-value pairs within the data JSON
+            # Compare individual key-value pairs within the data JSON, skipping the "First Name" key
             for key, value in note.data.items():
+                if key == "First Name":
+                    continue
+
                 if (
                         key in similar_note.data
                         and similar_note.data[key] == value
@@ -107,6 +120,18 @@ def find_note_correlations(case_id):
 
 
 def find_correlations(input_case=None, all_cases=False):
+    """
+    Finds correlations between cases based on given evidence. If a specific case is provided,
+    it finds correlations for that case. If all_cases is set to True, it finds correlations
+    between all cases.
+
+    Args:
+        input_case (str, optional): The case number to find correlations for.
+        all_cases (bool, optional): Whether to find correlations between all cases.
+
+    Returns: dict: Case numbers as keys and a dict of correlated case numbers and evidence as values.
+    """
+
     correlations = {}
 
     if all_cases:
@@ -186,6 +211,10 @@ def save_correlations(base_path, input_case, correlations):
 
 
 class Correlations(Resource):
+    """
+    The API endpoint for running the correlations tool.
+    """
+
     @jwt_required()
     def post(self):
         parser = reqparse.RequestParser()

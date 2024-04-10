@@ -72,7 +72,24 @@ def main():
     post_data = fetch_reddit_posts_json(target_user)
     all_posts = extract_posts_info(post_data)
 
-    print("Comments:")
+    print("POSTS")
+    print("-" * 40 + "\n")
+    for post in all_posts:
+        info_lines = [
+            f"Subreddit: {post['subreddit']}",
+            f"Post Author: {post['post_author']}",
+            f"Post Title: {post['post_title']}",
+            "Post Body: " + post["post_body"],
+            f"Created UTC: {post['created_utc']}",
+            f"Post URL: {post['post_url']}",
+            "-" * 40,
+        ]
+
+        for line in info_lines:
+            print(line)
+
+    print("\nCOMMENTS")
+    print("-" * 40 + "\n")
     for comment in all_comments:
         info_lines = [
             f"Subreddit: {comment['subreddit']}",
@@ -82,21 +99,6 @@ def main():
             f"Comment Author: {comment['comment_author']}",
             f"Created UTC: {comment['created_utc']}",
             f"Comment URL: {comment['comment_url']}",
-            "-" * 40,
-        ]
-
-        for line in info_lines:
-            print(line)
-
-    print("Posts:")
-    for post in all_posts:
-        info_lines = [
-            f"Subreddit: {post['subreddit']}",
-            f"Post Author: {post['post_author']}",
-            f"Post Title: {post['post_title']}",
-            "Post Body: " + post["post_body"],
-            f"Created UTC: {post['created_utc']}",
-            f"Post URL: {post['post_url']}",
             "-" * 40,
         ]
 

@@ -2,18 +2,19 @@
 This module contains the API endpoints for managing users.
 """
 
+from datetime import datetime, timedelta
 import os
 
-from flask import Blueprint, jsonify, request, Response, render_template, make_response
-from flask_restful import Api, Resource, reqparse
-from utils.models import User, Invitation
+from flask import Blueprint, jsonify, make_response, render_template, request, Response
 from flask_jwt_extended import jwt_required
-from api.auth import role_required
+from flask_restful import Api, Resource, reqparse
 from werkzeug.security import generate_password_hash
+
+from api.auth import role_required
 from utils.db import db
-from utils.helpers import validate_format, generate_password
-from datetime import datetime, timedelta
-from dotenv import load_dotenv
+from utils.helpers import generate_password, validate_format
+from utils.models import Invitation, User
+
 
 users_bp = Blueprint(
     "users",
@@ -26,7 +27,16 @@ api = Api(users_bp)
 
 class UsersList(Resource):
     """
-    API endpoint for managing users.
+    API endpoint for managing users in the system.
+
+    It provides two HTTP methods:
+    - GET: Retrieves a list of all users. If the request's Accept header includes "text/html",
+      it returns an HTML response with a rendered template. Otherwise, it returns a JSON response
+      with a list of serialized user objects.
+    - POST: Creates a new user. The request must include the username, email, and role.
+      If a password is not provided, a random one is generated. If a user with the provided
+      username or email already exists, the request fails. Otherwise, a new user is created
+      and a success message is returned along with the generated password.
     """
 
     @jwt_required()
@@ -82,7 +92,19 @@ class UsersList(Resource):
 
 class UsersDetail(Resource):
     """
-    This class handles the HTTP GET, PATCH, and DELETE methods for individual users.
+    API endpoint for managing individual users in the system.
+
+    It provides three HTTP methods:
+    - GET: Retrieves the details of a specific user identified by user_id. If the user exists,
+      it returns a JSON response with the serialized user object. Otherwise, it returns a message
+      indicating that the user was not found.
+    - PATCH: Updates the details of a specific user identified by user_id. The request can include
+      changes to the username, password, email, role, and active status. If the user exists and the
+      update is successful, it returns a success message along with the updated user object.
+      Otherwise, it returns an error message.
+    - DELETE: Deletes a specific user identified by user_id. If the user exists and the deletion is
+      successful, it returns a success message. Otherwise, it returns a message indicating that the
+      user was not found.
     """
 
     @jwt_required()
@@ -158,6 +180,15 @@ class UsersDetail(Resource):
 
 
 class InvitationsList(Resource):
+    """
+    API endpoint for creating one-time registration invites.
+
+    It provides one HTTP method:
+    - POST: Creates a new invitation. The request must include the role. If the role is provided,
+      a new invitation is created with a generated token and an expiration date set to 2 days from
+      the current date. The response includes a success message and the invitation link.
+    """
+
     @jwt_required()
     @role_required("admin")
     def post(self):
@@ -184,6 +215,19 @@ class InvitationsList(Resource):
 
 
 class UserRegistration(Resource):
+    """
+    API endpoint for user registration.
+
+    It provides two HTTP methods:
+    - GET: Retrieves the registration page for a specific invitation identified by a token. If the
+      token is valid and the invitation is not used or expired, it returns the registration page.
+      Otherwise, it returns an error message.
+    - POST: Registers a new user. The request must include the token, username, password, and email.
+      If all required fields are provided and the token is valid, a new user is created and the
+      invitation is marked as used. If the user registration is successful, it returns a success
+      message. Otherwise, it returns an error message.
+    """
+
     def get(self):
         token = request.args.get("token")
         if not token:
@@ -238,6 +282,5 @@ class UserRegistration(Resource):
 
 api.add_resource(InvitationsList, "/invitations")
 api.add_resource(UserRegistration, "/register")
-
 api.add_resource(UsersList, "/users")
 api.add_resource(UsersDetail, "/users/<int:user_id>")

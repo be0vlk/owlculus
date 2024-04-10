@@ -1,13 +1,15 @@
-from flask import Flask, redirect
+import os
+from datetime import timedelta
 from pathlib import Path
+
+from dotenv import load_dotenv
+from flask import Flask, redirect
+from flask_cors import CORS
+from flask_jwt_extended import JWTManager
+from flask_migrate import Migrate
+
 from utils.db import db
 from utils.helpers import printc
-from flask_migrate import Migrate
-from dotenv import load_dotenv
-import os
-from flask_jwt_extended import JWTManager
-from datetime import timedelta
-from flask_cors import CORS
 
 migrate = Migrate()
 

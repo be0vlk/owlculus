@@ -23,6 +23,7 @@ class Login(Resource):
     """
     API endpoint that handles the login logic and JWT issuance.
     """
+
     def get(self):
         response = make_response(render_template("login.html"))
         response.headers["Content-Type"] = "text/html"

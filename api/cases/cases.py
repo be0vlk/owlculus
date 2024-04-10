@@ -50,7 +50,7 @@ class CaseList(Resource):
     API endpoint for the case dashboard functionality, including listing all cases and creating new ones.
     """
 
-    @jwt_required()
+    @jwt_required()  # Not using role_required because the authorized cases are filtered in the get method
     def get(self):
         current_user = get_current_user()
         include_archived = (

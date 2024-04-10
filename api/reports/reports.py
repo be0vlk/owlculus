@@ -10,6 +10,7 @@ from utils.models import Case, Note
 from jinja2 import Environment, FileSystemLoader
 from weasyprint import HTML
 import os
+from api.auth import case_auth_required
 
 
 reports_bp = Blueprint(
@@ -23,9 +24,21 @@ api = Api(reports_bp)
 
 class CaseReport(Resource):
     """
-    API endpoint to generate basic reports for a case.
+    API endpoint for generating reports related to a specific case.
+
+    The class provides a GET method that requires JWT authentication. The method generates a report for a case
+    identified by its ID. The report includes details of the case and all notes associated with it.
+
+    If the client accepts "text/html", the method returns the report as an HTML response. Otherwise, it generates
+    an HTML report and a PDF report, saves them in the case's folder in the UPLOAD_FOLDER directory, and returns
+    a JSON response indicating successful report generation.
+
+    Methods:
+        get(case_id: int): Generates and returns a report for a case identified by case_id.
     """
+
     @jwt_required()
+    @case_auth_required
     def get(self, case_id):
         case = Case.query.get_or_404(case_id)
         notes = Note.query.filter_by(case_id=case_id).all()
