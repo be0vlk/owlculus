@@ -8,6 +8,9 @@ Owlculus is purpose built for managing OSINT investigation cases. Based on my ol
 
 **NOTE:** This project is now and will always be 100% free and open-source, no matter how much it improves. If you're feeling generous, donate to your favorite charity instead :)
 
+# ATTENTION
+A dramatically enhanced new version of the app will be released as a separate branch on January 12th 2025. If you are considering using this app, I'd suggest waiting until then as it really is that much better!
+
 ## Features
 - Create and track cases with customizable report number formats.
 - A separate client database table to manage client contact information.
