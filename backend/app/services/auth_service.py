@@ -1,6 +1,3 @@
-"""
-Authentication service handling all auth-related business logic
-"""
 
 from datetime import timedelta
 from fastapi import HTTPException, status
