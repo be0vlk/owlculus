@@ -38,7 +38,7 @@ services:
     ports:
       - "5174:5174"
     environment:
-      ROLLUP_USE_NODE_BUILTINS: true
+      ROLLUP_USE_NODE_BUILTINS: "true"
     platform: linux/amd64
     command: npm run dev -- --host 0.0.0.0
 
