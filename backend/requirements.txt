@@ -1,0 +1,13 @@
+fastapi[standard]
+uvicorn
+sqlmodel
+sqlalchemy-utils
+psycopg2-binary
+bcrypt
+pyjwt
+pydantic-settings
+werkzeug
+filetype
+selenium
+beautifulsoup4
+python-dotenv

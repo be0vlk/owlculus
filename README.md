@@ -24,34 +24,95 @@ I will be very actively maintaining and improving this application and am always
 - More robust analytics and other helpful insights
 
 ## Installation
-I highly recommend installing this on Linux (specifically tested on Debian 11 and Ubuntu 22.04), although not strictly required. I've included an automation script to make setup a bit easier. You MUST follow each of these steps for the app to install and work properly.
 
-Run all of the following commands from the project root folder:
+Owlculus uses **Docker for easy, consistent installation** on any platform (Linux, macOS, Windows). The Docker setup handles all dependencies, database configuration, and service orchestration automatically.
 
+### Quick Start
+
+**Prerequisites:** [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/)
+
+1. Clone the repository:
+```bash
+git clone https://github.com/be0vlk/owlculus.git
+cd owlculus
+```
+
+2. Run the setup script:
 ```bash
 chmod +x setup.sh
 ./setup.sh
-python3 backend/app/database/init_db.py
 ```
 
-See, wasn't that easy?
+That's it! 🦉 Owlculus will be available at:
+- **Frontend:** http://localhost
+- **Backend API:** http://localhost:8000
+- **Login:** admin / [auto-generated secure password]
+
+### Development Setup
+
+For development with hot-reload:
+
+```bash
+./setup.sh dev
+```
+
+This starts the development environment with:
+- **Frontend:** http://localhost:5173 (with hot-reload)
+- **Backend API:** http://localhost:8000 (with hot-reload)
+- Source code mounted as volumes for instant updates
+
+### Management Commands
+
+## Environment Configuration
+
+The setup script automatically creates a `.env` file with secure defaults. 
+
+## Troubleshooting
+
+### Common Issues
+
+**Services won't start:**
+```bash
+# Check if ports are already in use
+sudo netstat -tulpn | grep -E ':80|:8000|:5432'
+
+# View service logs
+docker compose logs
+
+# Rebuild images if needed
+docker compose build --no-cache
+```
+
+**Database connection issues:**
+```bash
+# Check PostgreSQL container health
+docker compose ps
+
+# Reset database (⚠️ destroys all data)
+docker compose down -v
+docker compose up -d
+```
+
+**Permission errors on Linux:**
+```bash
+# Fix file permissions
+sudo chown -R $USER:$USER .
+chmod +x setup.sh
+```
+
+**Can't access the application:**
+- Ensure Docker containers are running: `docker compose ps`
+- Check firewall settings if accessing remotely
+- Wait 30-60 seconds for all services to fully start
+
+### Getting Help
+
+If you encounter issues:
+1. Check the [troubleshooting section](#troubleshooting) above
+2. Review service logs: `docker compose logs -f`
+3. Open an issue on GitHub with logs and error details
 
 ## Usage
-### Startup
-After installation, navigate to the backend folder and run the following commands:
-
-```bash
-source ../venv/bin/activate
-uvicorn app.main:app --reload
-```
-
-Then to start the frontend, navigate to the frontend folder and run:
-
-```bash
-npm run dev
-```
-
-You should now be able to open the app in your browser on http://localhost:5173 or whatever you have set as the frontend url in your .env file and log in with the admin user you created during setup.
 
 ### Case Dashboard
 ![Imgur](https://i.imgur.com/LqT2jQf.png)

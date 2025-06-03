@@ -152,8 +152,9 @@ async def create_case(
     )
     db_case.users.append(current_user)
     db.add(db_case)
-    db.commit()
+    db.flush()
     db.refresh(db_case)
+    db.commit()
     return db_case
 
 async def update_case(
@@ -206,7 +207,7 @@ async def check_entity_duplicates(
     
     # Get entity type either directly or from validation dict
     entity_dict = entity.model_dump()
-    entity_type = getattr(entity, 'entity_type', None) or entity_dict.get('__entity_type')
+    entity_type = getattr(entity, 'entity_type', None) or getattr(entity, '__entity_type', None) or getattr(entity, 'entity_type_hint', None) or entity_dict.get('__entity_type')
     
     if entity_type == "company":
         company_name = entity.data.get("name")

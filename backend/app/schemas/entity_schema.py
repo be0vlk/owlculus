@@ -174,6 +174,7 @@ class EntityCreate(BaseModel):
 class EntityUpdate(BaseModel):
     data: Dict[str, Any]
     updated_at: datetime = Field(default_factory=get_utc_now)
+    entity_type_hint: Optional[str] = Field(None, alias="__entity_type")
 
     @model_validator(mode="before")
     def validate_data(cls, values: Dict[str, Any]) -> Dict[str, Any]:
