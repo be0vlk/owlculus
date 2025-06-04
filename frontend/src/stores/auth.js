@@ -47,7 +47,6 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       await api.put('/api/users/me/password', passwordData);
     } catch (err) {
-      const errorMessage = err.response?.data?.detail || 'Failed to change password';
       console.error('Password change error:', err);
       throw err;
     }

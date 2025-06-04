@@ -56,10 +56,10 @@ export function useClients() {
     if (searchQuery.value) {
       const query = searchQuery.value.toLowerCase()
       filteredClients = filteredClients.filter(client => 
-        client.name.toLowerCase().includes(query) ||
-        client.email.toLowerCase().includes(query) ||
-        client.phone.toLowerCase().includes(query) ||
-        client.address.toLowerCase().includes(query)
+        (client.name || '').toLowerCase().includes(query) ||
+        (client.email || '').toLowerCase().includes(query) ||
+        (client.phone || '').toLowerCase().includes(query) ||
+        (client.address || '').toLowerCase().includes(query)
       )
     }
 

@@ -1,115 +1,97 @@
+<!-- eslint-disable vue/multi-word-component-names -->
 <template>
-  <div class="min-h-screen bg-gray-100 dark:bg-gray-900">
-    <div class="flex">
-      <!-- Sidebar -->
-      <Sidebar class="fixed inset-y-0 left-0" />
+  <v-app>
+    <Sidebar />
+    
+    <v-main>
+      <v-container class="pa-6">
+        <!-- Page Header -->
+        <div class="mb-6">
+          <v-row align="center" justify="space-between">
+            <v-col>
+              <h1 class="text-h4 font-weight-bold">
+                Settings
+              </h1>
+            </v-col>
+          </v-row>
+        </div>
 
-      <!-- Main content -->
-      <div class="flex-1 ml-64">
-        <header class="bg-white shadow dark:bg-gray-800">
-          <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-            <h1 class="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">Settings</h1>
-          </div>
-        </header>
-        <main class="mx-auto max-w-7xl py-6 sm:px-6 lg:px-8">
-          <!-- Password Reset Section -->
-          <div class="bg-white shadow sm:rounded-lg dark:bg-gray-800">
-            <div class="px-4 py-5 sm:p-6">
-              <h3 class="text-base font-semibold leading-6 text-gray-900 dark:text-white">Change Password</h3>
-              <div class="mt-2 max-w-xl text-sm text-gray-500 dark:text-gray-300">
-                <p>Update your password by entering your current password and a new password.</p>
-              </div>
-              <form @submit.prevent="handlePasswordChange" class="mt-5">
-                <div class="space-y-4">
-                  <div>
-                    <label for="current-password" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Current Password
-                    </label>
-                    <div class="mt-1">
-                      <input
-                        id="current-password"
-                        v-model="currentPassword"
-                        type="password"
-                        required
-                        :disabled="isLoading"
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-cyan-500 focus:ring-cyan-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white text-gray-900"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label for="new-password" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      New Password
-                    </label>
-                    <div class="mt-1">
-                      <input
-                        id="new-password"
-                        v-model="newPassword"
-                        type="password"
-                        required
-                        :disabled="isLoading"
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-cyan-500 focus:ring-cyan-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white text-gray-900"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label for="confirm-password" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Confirm New Password
-                    </label>
-                    <div class="mt-1">
-                      <input
-                        id="confirm-password"
-                        v-model="confirmPassword"
-                        type="password"
-                        required
-                        :disabled="isLoading"
-                        class="block w-full rounded-md border-gray-300 shadow-sm focus:border-cyan-500 focus:ring-cyan-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white text-gray-900"
-                      />
-                    </div>
-                  </div>
-                </div>
+        <!-- Password Reset Section -->
+        <v-card>
+          <v-card-title>
+            <span class="text-h5">Change Password</span>
+          </v-card-title>
+          <v-card-text>
+            <p class="text-body-2 mb-6">
+              Update your password by entering your current password and a new password.
+            </p>
 
-                <div v-if="error" class="mt-4 rounded-md bg-red-50 p-4 dark:bg-red-900">
-                  <div class="flex">
-                    <div class="flex-shrink-0">
-                      <svg class="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
-                      </svg>
-                    </div>
-                    <div class="ml-3">
-                      <h3 class="text-sm font-medium text-red-800 dark:text-red-200">{{ error }}</h3>
-                    </div>
-                  </div>
-                </div>
-
-                <div v-if="success" class="mt-4 rounded-md bg-green-50 p-4 dark:bg-green-900">
-                  <div class="flex">
-                    <div class="flex-shrink-0">
-                      <svg class="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
-                      </svg>
-                    </div>
-                    <div class="ml-3">
-                      <h3 class="text-sm font-medium text-green-800 dark:text-green-200">Password updated successfully</h3>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="mt-5">
-                  <button
-                    type="submit"
+            <v-form @submit.prevent="handlePasswordChange">
+              <v-row>
+                <v-col cols="12" md="6">
+                  <v-text-field
+                    v-model="currentPassword"
+                    label="Current Password"
+                    type="password"
+                    variant="outlined"
                     :disabled="isLoading"
-                    class="inline-flex items-center rounded-md border border-transparent bg-cyan-600 px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 disabled:opacity-50"
+                    required
+                    class="mb-4"
+                  />
+
+                  <v-text-field
+                    v-model="newPassword"
+                    label="New Password"
+                    type="password"
+                    variant="outlined"
+                    :disabled="isLoading"
+                    required
+                    class="mb-4"
+                  />
+
+                  <v-text-field
+                    v-model="confirmPassword"
+                    label="Confirm New Password"
+                    type="password"
+                    variant="outlined"
+                    :disabled="isLoading"
+                    required
+                    class="mb-4"
+                  />
+
+                  <!-- Error Alert -->
+                  <v-alert
+                    v-if="error"
+                    type="error"
+                    class="mb-4"
+                    :text="error"
+                  />
+
+                  <!-- Success Alert -->
+                  <v-alert
+                    v-if="success"
+                    type="success"
+                    class="mb-4"
+                    text="Password updated successfully"
+                  />
+
+                  <v-btn
+                    type="submit"
+                    color="primary"
+                    :loading="isLoading"
+                    :disabled="isLoading"
+                    size="large"
                   >
                     {{ isLoading ? 'Updating...' : 'Update Password' }}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </main>
-      </div>
-    </div>
-  </div>
+                  </v-btn>
+                </v-col>
+              </v-row>
+            </v-form>
+          </v-card-text>
+        </v-card>
+      </v-container>
+    </v-main>
+  </v-app>
 </template>
 
 <script setup>

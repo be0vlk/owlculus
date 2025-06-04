@@ -1,77 +1,117 @@
 <template>
-  <div class="min-h-screen bg-gray-100 dark:bg-gray-900">
-    <div class="flex">
-      <Sidebar class="fixed inset-y-0 left-0" />
+  <v-app>
+    <Sidebar />
+    
+    <v-main>
+      <v-container class="pa-6">
+        <!-- Loading state -->
+        <v-card-text v-if="loading" class="text-center pa-16">
+          <v-progress-circular
+            size="64"
+            width="4"
+            color="primary"
+            indeterminate
+          />
+          <v-card-text class="text-h6 mt-4">Loading case...</v-card-text>
+        </v-card-text>
 
-      <div class="flex-1 ml-64">
-        <header class="bg-white shadow dark:bg-gray-800">
-          <div class="max-w-7xl mx-auto px-8 py-6">
-            <div class="flex items-center justify-between">
-              <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
-                {{ caseData?.case_number }}
-              </h1>
-              <div class="flex items-center space-x-4">
-                <button
-                  @click="showEditModal = true"
-                  class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-cyan-600 hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500"
-                >
-                  Edit Case
-                </button>
-                <button
-                  @click="showAddUserModal = true"
-                  class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-cyan-600 hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500"
-                >
-                  Add User
-                </button>
-              </div>
-            </div>
+        <!-- Error state -->
+        <v-alert
+          v-else-if="error"
+          type="error"
+          class="ma-4"
+          :text="error"
+          prominent
+          border="start"
+        />
+
+        <!-- Case Content -->
+        <div v-else-if="caseData">
+          <!-- Page Header -->
+          <div class="mb-6">
+            <v-row align="center" justify="space-between">
+              <v-col>
+                <h1 class="text-h3 font-weight-bold">
+                  {{ caseData?.case_number }}
+                </h1>
+              </v-col>
+              <v-col cols="auto">
+                <div class="d-flex ga-2">
+                  <v-btn
+                    color="primary"
+                    prepend-icon="mdi-pencil"
+                    @click="showEditModal = true"
+                  >
+                    Edit Case
+                  </v-btn>
+                  <v-btn
+                    color="primary"
+                    prepend-icon="mdi-account-plus"
+                    @click="showAddUserModal = true"
+                  >
+                    Add User
+                  </v-btn>
+                </div>
+              </v-col>
+            </v-row>
           </div>
-        </header>
+          <!-- Case Details -->
+          <v-card class="mb-6">
+            <v-card-text>
+              <v-row>
+                <v-col cols="12" md="6">
+                  <CaseDetail :case-data="caseData" :client="client" />
+                </v-col>
+              </v-row>
+            </v-card-text>
+          </v-card>
 
-        <main class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-          <LoadingSpinner v-if="loading" size="large" />
-          <ErrorMessage v-else-if="error" :message="error" />
+          <!-- Case Tabs -->
+          <v-card>
+            <CaseTabs
+              :tabs="[
+                { name: 'entities', label: 'Entities' },
+                { name: 'evidence', label: 'Evidence' },
+                { name: 'notes', label: 'Notes' },
+              ]"
+            >
+              <template #default="{ activeTab }">
+                <!-- Entities Tab -->
+                <div v-if="activeTab === 'entities'" class="pa-4">
+                  <div class="mb-4">
+                    <v-btn
+                      color="primary"
+                      prepend-icon="mdi-plus"
+                      @click="showNewEntityModal = true"
+                    >
+                      Add Entity
+                    </v-btn>
+                  </div>
 
-          <div v-else-if="caseData" class="bg-white dark:bg-gray-800 shadow rounded-lg">
-            <div class="px-4 py-5 sm:p-6">
-              <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                <CaseDetail :case-data="caseData" :client="client" class="dark:text-gray-200" />
-              </div>
-            </div>
-
-            <div class="px-4 py-5 sm:p-6">
-              <CaseTabs
-                :tabs="[
-                  { name: 'entities', label: 'Entities' },
-                  { name: 'evidence', label: 'Evidence' },
-                  { name: 'notes', label: 'Notes' },
-                ]"
-              >
-                <template #default="{ activeTab }">
-                  <div v-if="activeTab === 'entities'">
-                    <div class="mb-4">
-                      <button
-                        @click="showNewEntityModal = true"
-                        class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-cyan-600 hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500"
-                      >
-                        Add Entity
-                      </button>
-                    </div>
-                    <LoadingSpinner v-if="loadingEntities" size="medium" />
-                    <ErrorMessage
-                      v-else-if="entityError"
-                      :message="entityError"
+                  <!-- Entities Loading -->
+                  <v-card-text v-if="loadingEntities" class="text-center pa-8">
+                    <v-progress-circular
+                      size="50"
+                      width="4"
+                      color="primary"
+                      indeterminate
                     />
-                    <EntityTabs v-else :entity-types="Object.keys(groupedEntities)">
-                      <template #default="{ activeType }">
-                        <ul
-                          v-if="
-                            activeType === 'person' &&
-                            groupedEntities.person?.length
-                          "
-                          role="list"
-                          class="divide-y divide-gray-200 dark:divide-gray-700"
-                        >
+                  </v-card-text>
+
+                  <!-- Entities Error -->
+                  <v-alert
+                    v-else-if="entityError"
+                    type="error"
+                    class="mb-4"
+                    :text="entityError"
+                  />
+
+                  <!-- Entity Types Tabs -->
+                  <EntityTabs v-else :entity-types="Object.keys(groupedEntities)">
+                    <template #default="{ activeType }">
+                      <!-- Person Entities -->
+                      <div v-if="activeType === 'person'">
+                        <div v-if="groupedEntities.person?.length">
                           <EntityListItem
                             v-for="entity in groupedEntities.person"
                             :key="entity.id"
@@ -84,25 +124,15 @@
                               {{ entity.data.email }}
                             </template>
                           </EntityListItem>
-                        </ul>
-                        <div
-                          v-if="
-                            activeType === 'person' &&
-                            !groupedEntities.person?.length
-                          "
-                          class="text-gray-500 dark:text-gray-400 p-4"
-                        >
-                          No people entities found.
                         </div>
+                        <v-card-text v-else class="text-center text-medium-emphasis">
+                          No people entities found.
+                        </v-card-text>
+                      </div>
 
-                        <ul
-                          v-if="
-                            activeType === 'company' &&
-                            groupedEntities.company?.length
-                          "
-                          role="list"
-                          class="divide-y divide-gray-200 dark:divide-gray-700"
-                        >
+                      <!-- Company Entities -->
+                      <div v-if="activeType === 'company'">
+                        <div v-if="groupedEntities.company?.length">
                           <EntityListItem
                             v-for="entity in groupedEntities.company"
                             :key="entity.id"
@@ -115,25 +145,15 @@
                               {{ entity.data.website }}
                             </template>
                           </EntityListItem>
-                        </ul>
-                        <div
-                          v-if="
-                            activeType === 'company' &&
-                            !groupedEntities.company?.length
-                          "
-                          class="text-gray-500 dark:text-gray-400 p-4"
-                        >
-                          No company entities found.
                         </div>
+                        <v-card-text v-else class="text-center text-medium-emphasis">
+                          No company entities found.
+                        </v-card-text>
+                      </div>
 
-                        <ul
-                          v-if="
-                            activeType === 'domain' &&
-                            groupedEntities.domain?.length
-                          "
-                          role="list"
-                          class="divide-y divide-gray-200 dark:divide-gray-700"
-                        >
+                      <!-- Domain Entities -->
+                      <div v-if="activeType === 'domain'">
+                        <div v-if="groupedEntities.domain?.length">
                           <EntityListItem
                             v-for="entity in groupedEntities.domain"
                             :key="entity.id"
@@ -146,25 +166,15 @@
                               {{ entity.data.description || 'No description' }}
                             </template>
                           </EntityListItem>
-                        </ul>
-                        <div
-                          v-if="
-                            activeType === 'domain' &&
-                            !groupedEntities.domain?.length
-                          "
-                          class="text-gray-500 dark:text-gray-400 p-4"
-                        >
-                          No domains found.
                         </div>
+                        <v-card-text v-else class="text-center text-medium-emphasis">
+                          No domains found.
+                        </v-card-text>
+                      </div>
 
-                        <ul
-                          v-if="
-                            activeType === 'ip_address' &&
-                            groupedEntities.ip_address?.length
-                          "
-                          role="list"
-                          class="divide-y divide-gray-200 dark:divide-gray-700"
-                        >
+                      <!-- IP Address Entities -->
+                      <div v-if="activeType === 'ip_address'">
+                        <div v-if="groupedEntities.ip_address?.length">
                           <EntityListItem
                             v-for="entity in groupedEntities.ip_address"
                             :key="entity.id"
@@ -177,25 +187,15 @@
                               {{ entity.data.description || 'No description' }}
                             </template>
                           </EntityListItem>
-                        </ul>
-                        <div
-                          v-if="
-                            activeType === 'ip_address' &&
-                            !groupedEntities.ip_address?.length
-                          "
-                          class="text-gray-500 dark:text-gray-400 p-4"
-                        >
-                          No IP addresses found.
                         </div>
+                        <v-card-text v-else class="text-center text-medium-emphasis">
+                          No IP addresses found.
+                        </v-card-text>
+                      </div>
 
-                        <ul
-                          v-if="
-                            activeType === 'network_assets' &&
-                            groupedEntities.network_assets?.length
-                          "
-                          role="list"
-                          class="divide-y divide-gray-200 dark:divide-gray-700"
-                        >
+                      <!-- Network Assets Entities -->
+                      <div v-if="activeType === 'network_assets'">
+                        <div v-if="groupedEntities.network_assets?.length">
                           <EntityListItem
                             v-for="entity in groupedEntities.network_assets"
                             :key="entity.id"
@@ -208,25 +208,15 @@
                               {{ formatNetworkAssetDetails(entity.data) }}
                             </template>
                           </EntityListItem>
-                        </ul>
-                        <div
-                          v-if="
-                            activeType === 'network_assets' &&
-                            !groupedEntities.network_assets?.length
-                          "
-                          class="text-gray-500 dark:text-gray-400 p-4"
-                        >
-                          No network assets found.
                         </div>
+                        <v-card-text v-else class="text-center text-medium-emphasis">
+                          No network assets found.
+                        </v-card-text>
+                      </div>
 
-                        <ul
-                          v-if="
-                            activeType === 'network' &&
-                            groupedEntities.network?.length
-                          "
-                          role="list"
-                          class="divide-y divide-gray-200 dark:divide-gray-700"
-                        >
+                      <!-- Network Entities -->
+                      <div v-if="activeType === 'network'">
+                        <div v-if="groupedEntities.network?.length">
                           <EntityListItem
                             v-for="entity in groupedEntities.network"
                             :key="entity.id"
@@ -237,63 +227,62 @@
                               Network Asset
                             </template>
                             <template #detail>
-                              <div v-if="entity.data.domains?.length">
-                                Domains: {{ entity.data.domains.join(', ') }}
+                              <div v-if="entity.data.domains?.length" class="mb-1">
+                                <strong>Domains:</strong> {{ entity.data.domains.join(', ') }}
                               </div>
-                              <div v-if="entity.data.ip_addresses?.length">
-                                IPs: {{ entity.data.ip_addresses.join(', ') }}
+                              <div v-if="entity.data.ip_addresses?.length" class="mb-1">
+                                <strong>IPs:</strong> {{ entity.data.ip_addresses.join(', ') }}
                               </div>
                               <div v-if="entity.data.email_addresses?.length">
-                                Emails:
-                                {{ entity.data.email_addresses.join(', ') }}
+                                <strong>Emails:</strong> {{ entity.data.email_addresses.join(', ') }}
                               </div>
                             </template>
                           </EntityListItem>
-                        </ul>
-                        <div
-                          v-if="
-                            activeType === 'network' &&
-                            !groupedEntities.network?.length
-                          "
-                          class="text-gray-500 dark:text-gray-400 p-4"
-                        >
-                          No network asset entities found.
                         </div>
-                      </template>
-                    </EntityTabs>
-                  </div>
-                  <div v-else-if="activeTab === 'evidence'">
-                    <div class="mb-4">
-                      <button
-                        @click="showUploadEvidenceModal = true"
-                        class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-cyan-600 hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500"
-                      >
-                        Upload Evidence
-                      </button>
-                    </div>
-                    <EvidenceList
-                      :evidence-list="evidence"
-                      :loading="loadingEvidence"
-                      :error="evidenceError"
-                      @download="handleDownloadEvidence"
-                      @delete="handleDeleteEvidence"
-                    />
-                  </div>
-                  <div v-else-if="activeTab === 'notes'">
-                    <NoteEditor
-                      v-model="caseData.notes"
-                      :case-id="Number(route.params.id)"
-                      @update:modelValue="handleNotesUpdate"
-                    />
-                  </div>
-                </template>
-              </CaseTabs>
-            </div>
-          </div>
-        </main>
-      </div>
-    </div>
+                        <v-card-text v-else class="text-center text-medium-emphasis">
+                          No network asset entities found.
+                        </v-card-text>
+                      </div>
+                    </template>
+                  </EntityTabs>
+                </div>
 
+                <!-- Evidence Tab -->
+                <div v-else-if="activeTab === 'evidence'" class="pa-4">
+                  <div class="mb-4">
+                    <v-btn
+                      color="primary"
+                      prepend-icon="mdi-upload"
+                      @click="showUploadEvidenceModal = true"
+                    >
+                      Upload Evidence
+                    </v-btn>
+                  </div>
+                  <EvidenceList
+                    :evidence-list="evidence"
+                    :loading="loadingEvidence"
+                    :error="evidenceError"
+                    @download="handleDownloadEvidence"
+                    @delete="handleDeleteEvidence"
+                  />
+                </div>
+
+                <!-- Notes Tab -->
+                <div v-else-if="activeTab === 'notes'" class="pa-4">
+                  <NoteEditor
+                    v-model="caseData.notes"
+                    :case-id="Number(route.params.id)"
+                    @update:modelValue="handleNotesUpdate"
+                  />
+                </div>
+              </template>
+            </CaseTabs>
+          </v-card>
+        </div>
+      </v-container>
+    </v-main>
+
+    <!-- Modals -->
     <EditCaseModal
       v-if="caseData"
       :show="showEditModal"
@@ -335,15 +324,13 @@
       @close="showUploadEvidenceModal = false"
       @uploaded="handleEvidenceUpload"
     />
-  </div>
+  </v-app>
 </template>
 
 <script setup>
 import { ref, onMounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import Sidebar from '../components/Sidebar.vue';
-import LoadingSpinner from '../components/LoadingSpinner.vue';
-import ErrorMessage from '../components/ErrorMessage.vue';
 import CaseDetail from '../components/CaseDetail.vue';
 import EntityListItem from '../components/EntityListItem.vue';
 import EntityTabs from '../components/EntityTabs.vue';

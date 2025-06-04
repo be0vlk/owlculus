@@ -1,97 +1,125 @@
 <template>
-  <div class="space-y-4">
-    <div v-if="loading" class="flex justify-center">
-      <LoadingSpinner size="medium" />
+  <div class="d-flex flex-column ga-4">
+    <div v-if="loading" class="d-flex justify-center">
+      <v-progress-circular
+        indeterminate
+        :size="50"
+        :width="8"
+        color="primary"
+      />
     </div>
-    <div v-else-if="error" class="text-red-500 dark:text-red-400">
+    <v-alert v-else-if="error" type="error">
       {{ error }}
-    </div>
-    <div v-else class="border rounded-lg dark:border-gray-700">
+    </v-alert>
+    <v-card v-else elevation="1" rounded="lg">
       <div class="file-explorer">
         <template v-for="category in CATEGORIES" :key="category">
           <div class="directory-group">
-            <div 
+            <v-list-item 
               @click="toggleDirectory(category)"
-              class="flex items-center p-2 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
-              :class="{'bg-gray-50 dark:bg-gray-800': expandedDirectories[category]}"
+              class="cursor-pointer"
+              :class="{ 'bg-surface': expandedDirectories[category] }"
             >
-              <span class="mr-2">
-                <svg v-if="expandedDirectories[category]" class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                </svg>
-                <svg v-else class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                </svg>
-              </span>
-              <svg class="w-5 h-5 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-              </svg>
-              <span class="font-medium text-gray-700 dark:text-gray-300">{{ category }}</span>
-              <span class="ml-2 text-sm text-gray-500">({{ groupedEvidence[category]?.length || 0 }} items)</span>
-            </div>
+              <template v-slot:prepend>
+                <v-icon 
+                  :icon="expandedDirectories[category] ? 'mdi-chevron-down' : 'mdi-chevron-right'"
+                  color="grey-darken-1"
+                  class="mr-2"
+                />
+                <v-icon 
+                  icon="mdi-folder"
+                  color="grey-darken-1"
+                  class="mr-2"
+                />
+              </template>
+              
+              <v-list-item-title class="font-weight-medium">
+                {{ category }}
+              </v-list-item-title>
+              
+              <template v-slot:append>
+                <v-chip 
+                  size="small" 
+                  variant="tonal"
+                  color="grey"
+                >
+                  {{ groupedEvidence[category]?.length || 0 }} items
+                </v-chip>
+              </template>
+            </v-list-item>
             
-            <transition name="slide">
-              <ul v-if="expandedDirectories[category]" class="pl-8">
+            <v-expand-transition>
+              <div v-if="expandedDirectories[category]" class="ml-8">
                 <template v-if="groupedEvidence[category]?.length">
-                  <li 
+                  <v-list-item 
                     v-for="evidence in groupedEvidence[category]" 
                     :key="evidence.id"
-                    class="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-800"
+                    class="evidence-item"
                   >
-                    <div class="flex items-center flex-1">
-                      <svg v-if="evidence.evidence_type === 'file'" class="w-5 h-5 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                      </svg>
-                      <div>
-                        <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100">
-                          {{ evidence.title }}
-                        </h3>
-                        <p v-if="evidence.description" class="text-xs text-gray-500 dark:text-gray-400">
-                          {{ evidence.description }}
-                        </p>
-                        <div class="text-xs text-gray-500 dark:text-gray-400">
-                          Added {{ new Date(evidence.created_at).toLocaleString() }}
-                        </div>
-                      </div>
-                    </div>
-                    <div class="flex space-x-2 ml-4">
-                      <button
+                    <template v-slot:prepend>
+                      <v-icon 
                         v-if="evidence.evidence_type === 'file'"
-                        @click="$emit('download', evidence)"
-                        class="inline-flex items-center px-2 py-1 text-xs font-medium text-cyan-700 bg-cyan-100 rounded-md hover:bg-cyan-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 dark:bg-cyan-900 dark:text-cyan-100 dark:hover:bg-cyan-800"
-                      >
-                        Download
-                      </button>
-                      <button
-                        @click="$emit('delete', evidence)"
-                        class="inline-flex items-center px-2 py-1 text-xs font-medium text-red-700 bg-red-100 rounded-md hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:bg-red-900 dark:text-red-100 dark:hover:bg-red-800"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </li>
+                        icon="mdi-file-document"
+                        color="grey-darken-1"
+                        class="mr-2"
+                      />
+                    </template>
+                    
+                    <v-list-item-title class="text-body-2 font-weight-medium">
+                      {{ evidence.title }}
+                    </v-list-item-title>
+                    
+                    <v-list-item-subtitle v-if="evidence.description" class="text-caption text-medium-emphasis">
+                      {{ evidence.description }}
+                    </v-list-item-subtitle>
+                    
+                    <v-list-item-subtitle class="text-caption text-medium-emphasis">
+                      Added {{ new Date(evidence.created_at).toLocaleString() }}
+                    </v-list-item-subtitle>
+                    
+                    <template v-slot:append>
+                      <div class="d-flex ga-2">
+                        <v-btn
+                          v-if="evidence.evidence_type === 'file'"
+                          size="small"
+                          variant="outlined"
+                          icon
+                          @click="$emit('download', evidence)"
+                        >
+                          <v-icon>mdi-download</v-icon>
+                          <v-tooltip activator="parent" location="top">Download</v-tooltip>
+                        </v-btn>
+                        <v-btn
+                          size="small"
+                          color="error"
+                          variant="outlined"
+                          icon
+                          @click="$emit('delete', evidence)"
+                        >
+                          <v-icon>mdi-delete</v-icon>
+                          <v-tooltip activator="parent" location="top">Delete</v-tooltip>
+                        </v-btn>
+                      </div>
+                    </template>
+                  </v-list-item>
                 </template>
-                <li v-else class="py-8">
-                  <div class="text-center text-gray-500 dark:text-gray-400">
-                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-                    </svg>
-                    <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">No evidence in this category</h3>
-                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Upload new evidence to get started</p>
-                  </div>
-                </li>
-              </ul>
-            </transition>
+                <div v-else class="py-8 text-center">
+                  <v-icon icon="mdi-inbox" size="48" color="grey-darken-1" class="mb-3" />
+                  <h3 class="text-body-1 font-weight-medium mb-1">No evidence in this category</h3>
+                  <p class="text-body-2 text-medium-emphasis">Upload new evidence to get started</p>
+                </div>
+              </div>
+            </v-expand-transition>
           </div>
         </template>
       </div>
-    </div>
+    </v-card>
   </div>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue';
-import LoadingSpinner from './LoadingSpinner.vue';
+// Vuetify components are auto-imported
 
 const props = defineProps({
   evidenceList: {
@@ -141,8 +169,8 @@ defineEmits(['download', 'delete']);
 </script>
 
 <style scoped>
-.file-explorer {
-  @apply divide-y divide-gray-200 dark:divide-gray-700;
+.evidence-item:hover {
+  background-color: rgba(var(--v-theme-on-surface), 0.05);
 }
 
 .slide-enter-active,

@@ -1,28 +1,32 @@
 <template>
-    <li class="py-4">
-      <div class="flex items-center space-x-4">
-        <div class="flex-1 min-w-0">
-          <p class="text-sm font-medium text-gray-900 truncate dark:text-white">
+    <v-list-item class="py-4">
+      <template v-slot:prepend>
+        <div class="flex-grow-1">
+          <v-list-item-title class="text-body-2 font-weight-medium text-truncate">
             <slot name="name" />
-          </p>
-          <p v-if="hasDetail" class="text-sm text-gray-500 truncate dark:text-gray-400">
+          </v-list-item-title>
+          <v-list-item-subtitle v-if="hasDetail" class="text-body-2 text-truncate text-medium-emphasis">
             <slot name="detail" />
-          </p>
+          </v-list-item-subtitle>
         </div>
-        <div>
-          <button
-            @click="$emit('viewDetails')"
-            class="inline-flex items-center shadow-sm px-2.5 py-0.5 border border-gray-300 dark:border-gray-700 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500"
-          >
-            View Details
-          </button>
-        </div>
-      </div>
-    </li>
+      </template>
+      
+      <template v-slot:append>
+        <v-btn
+          size="small"
+          variant="outlined"
+          @click="$emit('viewDetails')"
+        >
+          View Details
+        </v-btn>
+      </template>
+    </v-list-item>
   </template>
   
   <script setup>
-  const props = defineProps({
+  // Vuetify components are auto-imported
+  
+  defineProps({
       hasDetail: {
           type: Boolean,
           default: false

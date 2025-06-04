@@ -1,27 +1,40 @@
 <template>
-  <div class="note-editor">
-    <div class="editor-toolbar border-b border-gray-200 dark:border-gray-700 p-2 flex gap-2">
-      <button
-        v-for="(action, index) in editorActions"
-        :key="index"
-        @click="action.action"
-        :class="[
-          'p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300',
-          { 'bg-gray-100 dark:bg-gray-700': action.isActive?.() }
-        ]"
-        :title="action.title"
-      >
-        <font-awesome-icon :icon="action.icon" />
-      </button>
-    </div>
-    <div class="p-4 min-h-[200px] bg-white dark:bg-gray-800">
-      <editor-content :editor="editor" class="prose dark:prose-invert max-w-none text-gray-900 dark:text-gray-100" />
-    </div>
-    <div class="flex justify-end p-2 text-sm text-gray-500 dark:text-gray-400">
-      <span v-if="saving">Saving...</span>
-      <span v-else-if="lastSavedTime">Last saved: {{ formatLastSaved }}</span>
-    </div>
-  </div>
+  <v-card variant="outlined" class="note-editor">
+    <!-- Toolbar -->
+    <v-toolbar density="compact" color="surface" class="border-b">
+      <v-btn-group variant="text" density="compact">
+        <v-btn
+          v-for="(action, index) in editorActions"
+          :key="index"
+          :icon="action.icon"
+          size="small"
+          :variant="action.isActive?.() ? 'tonal' : 'text'"
+          :color="action.isActive?.() ? 'primary' : 'default'"
+          @click="action.action"
+          :title="action.title"
+        />
+      </v-btn-group>
+      
+      <v-spacer />
+      
+      <div class="text-caption text-medium-emphasis">
+        <v-progress-circular
+          v-if="saving"
+          size="16"
+          width="2"
+          indeterminate
+          class="mr-2"
+        />
+        <span v-if="saving">Saving...</span>
+        <span v-else-if="lastSavedTime">Last saved: {{ formatLastSaved }}</span>
+      </div>
+    </v-toolbar>
+
+    <!-- Editor Content -->
+    <v-card-text class="pa-4" style="min-height: 200px;">
+      <editor-content :editor="editor" class="tiptap-content" />
+    </v-card-text>
+  </v-card>
 </template>
 
 <script setup>
@@ -58,43 +71,43 @@ const formatLastSaved = computed(() => {
 
 const editorActions = computed(() => [
   {
-    icon: ['fas', 'bold'],
+    icon: 'mdi-format-bold',
     title: 'Bold',
     action: () => editor.value?.chain().focus().toggleBold().run(),
     isActive: () => editor.value?.isActive('bold'),
   },
   {
-    icon: ['fas', 'italic'],
+    icon: 'mdi-format-italic',
     title: 'Italic',
     action: () => editor.value?.chain().focus().toggleItalic().run(),
     isActive: () => editor.value?.isActive('italic'),
   },
   {
-    icon: ['fas', 'underline'],
+    icon: 'mdi-format-underline',
     title: 'Underline',
     action: () => editor.value?.chain().focus().toggleUnderline().run(),
     isActive: () => editor.value?.isActive('underline'),
   },
   {
-    icon: ['fas', 'strikethrough'],
+    icon: 'mdi-format-strikethrough',
     title: 'Strike',
     action: () => editor.value?.chain().focus().toggleStrike().run(),
     isActive: () => editor.value?.isActive('strike'),
   },
   {
-    icon: ['fas', 'list-ul'],
+    icon: 'mdi-format-list-bulleted',
     title: 'Bullet List',
     action: () => editor.value?.chain().focus().toggleBulletList().run(),
     isActive: () => editor.value?.isActive('bulletList'),
   },
   {
-    icon: ['fas', 'list-ol'],
+    icon: 'mdi-format-list-numbered',
     title: 'Ordered List',
     action: () => editor.value?.chain().focus().toggleOrderedList().run(),
     isActive: () => editor.value?.isActive('orderedList'),
   },
   {
-    icon: ['fas', 'quote-right'],
+    icon: 'mdi-format-quote-close',
     title: 'Blockquote',
     action: () => editor.value?.chain().focus().toggleBlockquote().run(),
     isActive: () => editor.value?.isActive('blockquote'),
@@ -118,7 +131,8 @@ const editor = useEditor({
   },
   editorProps: {
     attributes: {
-      class: 'prose dark:prose-invert focus:outline-none min-h-[150px] text-gray-900 dark:text-gray-100',
+      class: 'tiptap-editor focus:outline-none',
+      style: 'min-height: 150px;',
     },
   },
 });
@@ -169,37 +183,53 @@ onBeforeUnmount(() => {
 });
 </script>
 
-<style>
-.note-editor {
-  @apply border rounded-lg dark:border-gray-700;
+<style scoped>
+.note-editor .tiptap-content .ProseMirror {
+  outline: none;
+  min-height: 150px;
 }
 
-.note-editor .ProseMirror {
-  @apply min-h-[200px] outline-none;
-}
-
-.note-editor .ProseMirror p.is-editor-empty:first-child::before {
-  @apply text-gray-400 dark:text-gray-500;
+.note-editor .tiptap-content .ProseMirror p.is-editor-empty:first-child::before {
+  color: rgb(var(--v-theme-on-surface-variant));
   content: attr(data-placeholder);
   float: left;
   height: 0;
   pointer-events: none;
 }
 
-/* Additional styling for the editor content */
-.note-editor .prose {
-  @apply max-w-none;
+/* TipTap editor content styling */
+.note-editor .tiptap-content h1,
+.note-editor .tiptap-content h2,
+.note-editor .tiptap-content h3 {
+  margin: 16px 0 8px 0;
+  line-height: 1.2;
+  font-weight: 600;
 }
 
-.note-editor .prose :where(blockquote):not(:where([class~="not-prose"] *)) {
-  @apply border-l-4 border-gray-300 dark:border-gray-600;
+.note-editor .tiptap-content h1 { font-size: 1.5rem; }
+.note-editor .tiptap-content h2 { font-size: 1.3rem; }
+.note-editor .tiptap-content h3 { font-size: 1.1rem; }
+
+.note-editor .tiptap-content ul,
+.note-editor .tiptap-content ol {
+  padding-left: 24px;
+  margin: 8px 0;
 }
 
-.note-editor .prose :where(ul > li):not(:where([class~="not-prose"] *))::marker {
-  @apply text-gray-500 dark:text-gray-400;
+.note-editor .tiptap-content blockquote {
+  border-left: 4px solid rgb(var(--v-theme-primary));
+  margin: 16px 0;
+  padding-left: 16px;
+  font-style: italic;
+  color: rgb(var(--v-theme-on-surface-variant));
 }
 
-.note-editor .prose :where(ol > li):not(:where([class~="not-prose"] *))::marker {
-  @apply text-gray-500 dark:text-gray-400;
+.note-editor .tiptap-content a {
+  color: rgb(var(--v-theme-primary));
+  text-decoration: underline;
+}
+
+.note-editor .tiptap-content p {
+  margin: 8px 0;
 }
 </style>

@@ -1,76 +1,69 @@
 <template>
-  <div v-if="show" class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-    <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-      <!-- Background overlay -->
-      <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" @click="$emit('close')"></div>
-
-      <!-- Modal panel -->
-      <div class="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
-        <div class="sm:flex sm:items-start">
-          <div class="mt-3 text-center sm:mt-0 sm:text-left w-full">
-            <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white" id="modal-title">
-              Edit Case
-            </h3>
-            
-            <!-- Error Message -->
-            <div v-if="error" class="mt-2 p-2 bg-red-100 text-red-700 rounded-md text-sm">
-              {{ error }}
-            </div>
-
-            <!-- Edit Form -->
-            <form @submit.prevent="handleSubmit" class="mt-4 space-y-4">
-              <div>
-                <BaseInput
-                  label="Title"
-                  id="title"
-                  v-model="formData.title"
-                  required
-                />
-              </div>
-
-              <div>
-                <BaseSelect
-                  label="Status"
-                  id="status"
-                  v-model="formData.status"
-                  :options="[
-                    { value: 'Open', label: 'Open' },
-                    { value: 'Closed', label: 'Closed' }
-                  ]"
-                  required
-                />
-              </div>
-
-              <!-- Modal footer -->
-              <div class="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
-                <button
-                  type="submit"
-                  :disabled="updating"
-                  class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-cyan-600 text-base font-medium text-white hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
-                >
-                  {{ updating ? 'Saving...' : 'Save Changes' }}
-                </button>
-                <button
-                  type="button"
-                  @click="$emit('close')"
-                  class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 sm:mt-0 sm:w-auto sm:text-sm dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+  <v-dialog v-model="dialogVisible" max-width="500px" persistent>
+    <v-card>
+      <v-card-title>
+        <span class="text-h5">Edit Case</span>
+      </v-card-title>
+      <v-card-text>
+        <v-alert v-if="error" type="error" class="mb-4">
+          {{ error }}
+        </v-alert>
+        <v-form @submit.prevent="handleSubmit">
+      <div>
+        <label for="title" class="block text-sm font-medium mb-1">Title</label>
+        <v-text-field
+          id="title"
+          v-model="formData.title"
+          required
+          variant="outlined"
+          density="comfortable"
+        />
       </div>
-    </div>
-  </div>
+
+      <div>
+        <label for="status" class="block text-sm font-medium mb-1">Status</label>
+        <v-select
+          v-model="formData.status"
+          :items="[
+            { value: 'Open', title: 'Open' },
+            { value: 'Closed', title: 'Closed' }
+          ]"
+          item-title="title"
+          item-value="value"
+          required
+          variant="outlined"
+          density="comfortable"
+        />
+      </div>
+        </v-form>
+      </v-card-text>
+
+      <v-card-actions>
+        <v-spacer></v-spacer>
+        <v-btn
+          variant="text"
+          @click="$emit('close')"
+        >
+          Cancel
+        </v-btn>
+        <v-btn
+          color="primary"
+          variant="flat"
+          @click="handleSubmit"
+          :disabled="updating"
+          :loading="updating"
+        >
+          {{ updating ? 'Saving...' : 'Save Changes' }}
+        </v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import api from '../services/api'
-import BaseInput from './BaseInput.vue'
-import BaseSelect from './BaseSelect.vue'
+// Vuetify components are auto-imported
 
 const props = defineProps({
   show: {
@@ -88,6 +81,15 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'update'])
+
+const dialogVisible = computed({
+  get: () => props.show,
+  set: (value) => {
+    if (!value) {
+      emit('close')
+    }
+  }
+})
 
 const formData = ref({
   title: '',

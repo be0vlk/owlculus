@@ -13,12 +13,7 @@
     "format": "prettier --write src/"
   },
   "dependencies": {
-    "@fortawesome/fontawesome-free": "^6.7.2",
-    "@fortawesome/fontawesome-svg-core": "^6.7.2",
-    "@fortawesome/free-solid-svg-icons": "^6.7.2",
-    "@fortawesome/vue-fontawesome": "^3.0.8",
-    "@headlessui/vue": "^1.7.23",
-    "@primevue/themes": "^4.2.5",
+    "@mdi/font": "^7.4.47",
     "@tiptap/extension-blockquote": "^2.10.4",
     "@tiptap/extension-bullet-list": "^2.10.4",
     "@tiptap/extension-heading": "^2.10.4",
@@ -35,7 +30,8 @@
     "date-fns": "^4.1.0",
     "pinia": "^2.2.6",
     "vue": "^3.5.13",
-    "vue-router": "^4.4.5"
+    "vue-router": "^4.4.5",
+    "vuetify": "^3.7.3"
   },
   "devDependencies": {
     "@eslint/js": "^9.14.0",
@@ -44,16 +40,15 @@
     "@vitest/eslint-plugin": "1.1.10",
     "@vue/eslint-config-prettier": "^10.1.0",
     "@vue/test-utils": "^2.4.6",
-    "autoprefixer": "^10.4.20",
     "eslint": "^9.14.0",
     "eslint-plugin-playwright": "^2.1.0",
     "eslint-plugin-vue": "^9.30.0",
     "jsdom": "^25.0.1",
-    "postcss": "^8.4.49",
     "prettier": "^3.3.3",
-    "tailwindcss": "^3.4.16",
+    "sass": "^1.77.8",
     "vite": "^6.0.1",
     "vite-plugin-vue-devtools": "^7.6.5",
-    "vitest": "^2.1.9"
+    "vite-plugin-vuetify": "^2.0.4",
+    "vitest": "^3.2.1"
   }
 }

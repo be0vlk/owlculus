@@ -3,7 +3,9 @@
 
 export function formatDate(dateString) {
   if (!dateString) return ''
-  const date = new Date(dateString)
+  // Handle UTC timestamps properly - add 'Z' if not present to indicate UTC
+  const utcDateString = dateString.includes('Z') ? dateString : `${dateString}Z`
+  const date = new Date(utcDateString)
   return new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: '2-digit',
@@ -16,7 +18,9 @@ export function formatDate(dateString) {
 
 export function formatDateOnly(dateString) {
   if (!dateString) return ''
-  const date = new Date(dateString)
+  // Handle UTC timestamps properly - add 'Z' if not present to indicate UTC
+  const utcDateString = dateString.includes('Z') ? dateString : `${dateString}Z`
+  const date = new Date(utcDateString)
   return new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: '2-digit',

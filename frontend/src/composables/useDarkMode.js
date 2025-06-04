@@ -1,29 +1,57 @@
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import { useTheme } from 'vuetify'
+
+const LOCAL_STORAGE_KEY = 'color-scheme'
+
+// Create a single source of truth for dark mode state
+const isDark = ref(false)
+
+// Initialize dark mode state
+const initDarkMode = () => {
+  const storedTheme = localStorage.getItem(LOCAL_STORAGE_KEY)
+  if (storedTheme !== null) {
+    return storedTheme === 'dark'
+  }
+  // Default to system preference if no stored preference
+  return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+}
 
 export const useDarkMode = () => {
-  const isDark = ref(document.documentElement.classList.contains('dark'))
+  const theme = useTheme()
+
+  const setDarkMode = (dark) => {
+    isDark.value = dark
+    localStorage.setItem(LOCAL_STORAGE_KEY, dark ? 'dark' : 'light')
+    
+    // Update Vuetify theme
+    theme.global.name.value = dark ? 'owlculusDark' : 'owlculusLight'
+  }
 
   const toggleDark = () => {
-    isDark.value = !isDark.value
-    
-    if (isDark.value) {
-      document.documentElement.classList.add('dark')
-      localStorage.setItem('color-scheme', 'dark')
-    } else {
-      document.documentElement.classList.remove('dark')
-      localStorage.setItem('color-scheme', 'light')
-    }
+    setDarkMode(!isDark.value)
   }
 
-  // Initialize from localStorage
-  const storedTheme = localStorage.getItem('color-scheme')
-  if (storedTheme === 'dark') {
-    isDark.value = true
-    document.documentElement.classList.add('dark')
-  }
+  onMounted(() => {
+    // Initialize theme based on persisted preference or system preference
+    const darkMode = initDarkMode()
+    setDarkMode(darkMode)
+
+    // Watch for system theme changes only if no explicit user choice
+    if (window.matchMedia) {
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+      const handleChange = (e) => {
+        if (localStorage.getItem(LOCAL_STORAGE_KEY) === null) {
+          setDarkMode(e.matches)
+        }
+      }
+      
+      mediaQuery.addEventListener('change', handleChange)
+    }
+  })
 
   return {
     isDark,
-    toggleDark
+    toggleDark,
+    setDarkMode
   }
 }
