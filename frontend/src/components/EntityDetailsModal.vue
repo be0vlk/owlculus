@@ -1,93 +1,63 @@
 <template>
-  <div v-if="show" class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-    <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-      <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" @click="$emit('close')"></div>
-
-      <div class="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full sm:p-6">
-        <div class="sm:flex sm:items-start">
-          <div class="mt-3 text-center sm:mt-0 sm:text-left w-full">
-            <div class="flex justify-between items-center mb-4">
-              <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white" id="modal-title">
-                {{ getEntityTitle }}
-              </h3>
-              <button
-                @click="$emit('close')"
-                class="rounded-md text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              >
-                <span class="sr-only">Close</span>
-                <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div v-if="error" class="mt-2 p-2 bg-red-100 text-red-700 rounded-md text-sm">
-              {{ error }}
-            </div>
+  <v-dialog v-model="dialogVisible" max-width="800px" persistent>
+    <v-card>
+      <v-card-title>
+        <span class="text-h5">{{ getEntityTitle }}</span>
+      </v-card-title>
+      <v-card-text>
+        <v-alert v-if="error" type="error" class="mb-4">
+          {{ error }}
+        </v-alert>
 
             <!-- Tabs -->
-            <div class="mt-4">
-              <ul class="flex flex-wrap -mb-px text-sm font-medium text-center" role="tablist">
-                <li v-for="(section, key) in entitySchema" :key="key" class="mr-2">
-                  <a
-                    href="#"
-                    @click.prevent="activeTab = key"
-                    :class="[
-                      'inline-block p-4 rounded-t-lg border-b-2',
-                      activeTab === key 
-                        ? 'text-cyan-600 border-cyan-600 dark:text-cyan-500 dark:border-cyan-500' 
-                        : 'text-gray-500 border-transparent hover:text-gray-600 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-                    ]"
-                    role="tab"
-                    :aria-selected="activeTab === key"
-                  >
-                    {{ section.title }}
-                  </a>
-                </li>
-              </ul>
-            </div>
+            <v-tabs v-model="activeTab" class="mt-4" color="primary">
+              <v-tab
+                v-for="(section, key) in entitySchema"
+                :key="key"
+                :value="key"
+              >
+                {{ section.title }}
+              </v-tab>
+            </v-tabs>
 
             <!-- Tab Contents -->
-            <div class="mt-4">
-              <form v-if="isEditing" @submit.prevent="handleSubmit" class="space-y-4">
-                <div v-for="(section, key) in entitySchema" :key="key" v-show="activeTab === key" class="space-y-4">
-                  <div class="grid grid-cols-1 gap-4" :class="{ 'sm:grid-cols-2': section.fields.some(f => f.gridCols === 2) }">
+            <v-tabs-window v-model="activeTab" class="mt-4">
+              <v-tabs-window-item
+                v-for="(section, key) in entitySchema"
+                :key="key"
+                :value="key"
+              >
+                <form v-if="isEditing" @submit.prevent="handleSubmit" class="mt-4">
+                  <v-row>
                     <template v-for="field in section.fields" :key="field.id">
-                      <BaseInput
-                        :label="field.label"
-                        :id="field.id"
-                        :type="field.type"
-                        v-model="formData.data[section.parentField ? `${section.parentField}.${field.id}` : field.id]"
-                        :class="{ 'col-span-2': field.gridCols === 2 }"
-                      />
+                      <v-col :cols="field.gridCols === 2 ? 12 : 6">
+                        <label :for="field.id" class="d-block text-body-2 font-weight-medium mb-1">{{ field.label }}</label>
+                        <v-textarea
+                          v-if="field.type === 'textarea'"
+                          :id="field.id"
+                          v-model="formData.data[section.parentField ? `${section.parentField}.${field.id}` : field.id]"
+                          rows="3"
+                          variant="outlined"
+                          density="compact"
+                        />
+                        <v-text-field
+                          v-else
+                          :id="field.id"
+                          :type="field.type"
+                          v-model="formData.data[section.parentField ? `${section.parentField}.${field.id}` : field.id]"
+                          variant="outlined"
+                          density="compact"
+                        />
+                      </v-col>
                     </template>
-                  </div>
-                </div>
+                  </v-row>
+                </form>
 
-                <div class="mt-6 sm:flex sm:flex-row-reverse">
-                  <button
-                    type="submit"
-                    :disabled="updating"
-                    class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-cyan-600 text-base font-medium text-white hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 sm:ml-3 sm:w-auto sm:text-sm"
-                  >
-                    {{ updating ? 'Saving...' : 'Save Changes' }}
-                  </button>
-                  <button
-                    type="button"
-                    @click="cancelEdit"
-                    class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 sm:mt-0 sm:w-auto sm:text-sm dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-
-              <div v-else>
-                <div v-for="(section, key) in entitySchema" :key="key" v-show="activeTab === key" class="space-y-4">
-                  <div class="grid grid-cols-1 gap-4" :class="{ 'sm:grid-cols-2': section.fields.some(f => f.gridCols === 2) }">
+                <div v-else class="mt-4">
+                  <v-row>
                     <template v-for="field in section.fields" :key="field.id">
-                      <div :class="{ 'col-span-2': field.gridCols === 2 }">
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      <v-col :cols="field.gridCols === 2 ? 12 : 6">
+                        <label class="d-block text-body-2 font-weight-medium mb-1">
                           {{ field.label }}
                         </label>
                         <div v-if="section.parentField === 'associates'" class="mt-1">
@@ -100,53 +70,72 @@
                               {{ getEntityDisplayName(associate) }}
                             </EntityTag>
                           </div>
-                          <div v-else class="text-sm text-gray-500 dark:text-gray-400">
+                          <div v-else class="text-body-2 text-medium-emphasis">
                             {{ getFieldValue(entity.data, section.parentField, field.id) || '' }}
                           </div>
                         </div>
-                        <div v-else-if="field.type === 'url'" class="mt-1 text-sm">
-                          <a 
+                        <div v-else-if="field.type === 'url'" class="mt-1">
+                          <v-btn
                             v-if="getFieldValue(entity.data, section.parentField, field.id)"
                             :href="getFieldValue(entity.data, section.parentField, field.id)"
                             target="_blank"
-                            rel="noopener noreferrer"
-                            class="text-cyan-600 hover:text-cyan-500 dark:text-cyan-400 dark:hover:text-cyan-300"
+                            variant="text"
+                            color="primary"
+                            size="small"
+                            class="pa-0"
                           >
                             {{ getFieldValue(entity.data, section.parentField, field.id) }}
-                          </a>
-                          <span v-else class="text-gray-500 dark:text-gray-400">-</span>
+                          </v-btn>
+                          <span v-else class="text-medium-emphasis">-</span>
                         </div>
-                        <div v-else class="mt-1 text-sm text-gray-900 dark:text-gray-100">
+                        <div v-else class="mt-1 text-body-2">
                           {{ getFieldValue(entity.data, section.parentField, field.id) || '' }}
                         </div>
-                      </div>
+                      </v-col>
                     </template>
-                  </div>
+                  </v-row>
                 </div>
+              </v-tabs-window-item>
+            </v-tabs-window>
 
-                <div class="mt-6 sm:flex sm:flex-row-reverse">
-                  <button
-                    type="button"
-                    @click="startEditing"
-                    class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-cyan-600 text-base font-medium text-white hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 sm:ml-3 sm:w-auto sm:text-sm"
-                  >
-                    Edit Entity
-                  </button>
-                  <button
-                    type="button"
-                    @click="$emit('close')"
-                    class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 sm:mt-0 sm:w-auto sm:text-sm dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600"
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+      </v-card-text>
+      <v-card-actions>
+        <v-spacer></v-spacer>
+        <template v-if="isEditing">
+          <v-btn
+            variant="text"
+            @click="cancelEdit"
+          >
+            Cancel
+          </v-btn>
+          <v-btn
+            color="primary"
+            variant="flat"
+            @click="handleSubmit"
+            :disabled="updating"
+            :loading="updating"
+          >
+            {{ updating ? 'Saving...' : 'Save Changes' }}
+          </v-btn>
+        </template>
+        <template v-else>
+          <v-btn
+            variant="text"
+            @click="$emit('close')"
+          >
+            Close
+          </v-btn>
+          <v-btn
+            color="primary"
+            variant="flat"
+            @click="startEditing"
+          >
+            Edit Entity
+          </v-btn>
+        </template>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
 </template>
 
 <script setup>
@@ -155,7 +144,7 @@ import { entityService } from '../services/entity';
 import { entitySchemas } from '../composables/entitySchemas';
 import { cleanFormData } from '../utils/cleanFormData';
 import EntityTag from './EntityTag.vue';
-import BaseInput from './BaseInput.vue';
+// Vuetify components are auto-imported
 
 const props = defineProps({
   show: { type: Boolean, required: true, default: false },
@@ -165,6 +154,15 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['close', 'edit', 'viewEntity']);
+
+const dialogVisible = computed({
+  get: () => props.show,
+  set: (value) => {
+    if (!value) {
+      emit('close')
+    }
+  }
+});
 const error = ref('');
 const isEditing = ref(false);
 const updating = ref(false);
@@ -211,7 +209,7 @@ watch(() => props.entity, () => {
 function flattenNestedFields(data, schema) {
   const result = { ...data };
   
-  Object.entries(schema).forEach(([sectionKey, section]) => {
+  Object.entries(schema).forEach(([, section]) => {
     if (section.parentField && data[section.parentField]) {
       // For each field in the section, create a dot notation entry
       section.fields.forEach(field => {
@@ -264,7 +262,7 @@ async function handleSubmit() {
     const restructureNestedFields = (data, schema) => {
       const result = { ...data };
       
-      Object.entries(schema).forEach(([sectionKey, section]) => {
+      Object.entries(schema).forEach(([, section]) => {
         if (section.parentField) {
           // Initialize the parent field if it doesn't exist
           result[section.parentField] = result[section.parentField] || {};
@@ -476,4 +474,5 @@ const getFieldValue = (data, parentField, fieldId) => {
   }
   return data[fieldId];
 };
+
 </script>

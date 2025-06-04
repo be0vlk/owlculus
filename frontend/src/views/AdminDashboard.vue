@@ -1,117 +1,165 @@
 <template>
-  <div class="min-h-screen bg-gray-100 dark:bg-gray-900">
-    <div class="flex">
-      <!-- Sidebar -->
-      <Sidebar class="fixed inset-y-0 left-0" />
+  <v-app>
+    <Sidebar />
+    
+    <v-main>
+      <v-container class="pa-6">
+        <!-- Page Header -->
+        <div class="mb-6">
+          <v-row align="center" justify="space-between">
+            <v-col>
+              <h1 class="text-h4 font-weight-bold">
+                Admin Dashboard
+              </h1>
+            </v-col>
+            <v-col cols="auto">
+              <v-btn
+                color="primary"
+                prepend-icon="mdi-account-plus"
+                @click="showNewUserModal = true"
+              >
+                Add New User
+              </v-btn>
+            </v-col>
+          </v-row>
+        </div>
 
-      <!-- Main content -->
-      <div class="flex-1 ml-64">
-        <header class="bg-white shadow dark:bg-gray-800">
-          <div class="max-w-7xl mx-auto px-8 py-6">
-            <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100">Admin</h1>
-          </div>
-        </header>
-        <main class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-          <!-- Loading state -->
-          <div v-if="loading" class="flex justify-center items-center h-64">
-            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-500 dark:border-cyan-400"></div>
-          </div>
+        <!-- Loading state -->
+        <v-card v-if="loading">
+          <v-card-title class="d-flex align-center justify-end pa-6">
+            <v-skeleton-loader type="text" width="300" />
+          </v-card-title>
+          <v-skeleton-loader 
+            type="table" 
+            class="ma-4"
+          />
+        </v-card>
 
-          <!-- Error state -->
-          <div v-else-if="error" class="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-400 dark:border-red-500 p-4 mb-4">
-            <div class="flex">
-              <div class="flex-shrink-0">
-                <svg class="h-5 w-5 text-red-400 dark:text-red-500" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
-                </svg>
-              </div>
-              <div class="ml-3">
-                <p class="text-sm text-red-700 dark:text-red-400">{{ error }}</p>
-              </div>
-            </div>
-          </div>
+        <!-- Error state -->
+        <v-alert
+          v-else-if="error"
+          type="error"
+          class="ma-4"
+          :text="error"
+          prominent
+          border="start"
+        />
 
-          <!-- Admin Panel -->
-          <div v-else class="space-y-6">
-            <!-- User Management -->
-            <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
-              <div class="px-6 py-5 border-b border-gray-200 dark:border-gray-700">
-                <div class="flex items-center justify-between">
-                  <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100">User Management</h2>
-                  <button
-                    @click="showNewUserModal = true"
-                    class="px-4 py-2 text-sm font-medium text-white bg-cyan-600 hover:bg-cyan-700 dark:bg-cyan-700 dark:hover:bg-cyan-800 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 dark:focus:ring-offset-gray-900"
-                  >
-                    Add New User
-                  </button>
-                </div>
+        <!-- User Management Table -->
+        <v-card v-else>
+          <v-card-title class="d-flex align-center justify-end">
+            <!-- Search Field -->
+            <v-text-field
+              v-model="searchQuery"
+              prepend-inner-icon="mdi-magnify"
+              label="Search users..."
+              variant="outlined"
+              density="compact"
+              hide-details
+              style="min-width: 300px;"
+            />
+          </v-card-title>
+
+          <v-data-table
+            :headers="vuetifyHeaders"
+            :items="sortedAndFilteredUsers"
+            :loading="loading"
+            item-key="id"
+            class="elevation-0 admin-dashboard-table"
+            hover
+          >
+            <!-- Role column -->
+            <template #[`item.role`]="{ item }">
+              <v-chip
+                :color="getRoleColor(item.role)"
+                size="small"
+                variant="tonal"
+              >
+                {{ item.role }}
+              </v-chip>
+            </template>
+
+            <!-- Created date -->
+            <template #[`item.created_at`]="{ item }">
+              <span class="text-body-2">
+                {{ formatRelativeDate(item.created_at) }}
+                <v-tooltip activator="parent" location="top">
+                  {{ formatDate(item.created_at) }}
+                </v-tooltip>
+              </span>
+            </template>
+
+            <!-- Actions column -->
+            <template #[`item.actions`]="{ item }">
+              <div class="d-flex ga-2">
+                <v-btn
+                  color="info"
+                  size="small"
+                  variant="outlined"
+                  icon
+                  @click="editUser(item)"
+                >
+                  <v-icon>mdi-pencil</v-icon>
+                  <v-tooltip activator="parent" location="top">
+                    Edit {{ item.username }}
+                  </v-tooltip>
+                </v-btn>
+                <v-btn
+                  color="warning"
+                  size="small"
+                  variant="outlined"
+                  icon
+                  @click="resetPassword(item)"
+                >
+                  <v-icon>mdi-key</v-icon>
+                  <v-tooltip activator="parent" location="top">
+                    Reset password for {{ item.username }}
+                  </v-tooltip>
+                </v-btn>
+                <v-btn
+                  color="error"
+                  size="small"
+                  variant="outlined"
+                  icon
+                  @click="deleteUser(item)"
+                >
+                  <v-icon>mdi-delete</v-icon>
+                  <v-tooltip activator="parent" location="top">
+                    Delete {{ item.username }}
+                  </v-tooltip>
+                </v-btn>
               </div>
-              <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                  <thead class="bg-gray-50 dark:bg-gray-700">
-                    <tr>
-                      <th 
-                        v-for="column in columns" 
-                        :key="column.key"
-                        scope="col" 
-                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 whitespace-nowrap"
-                        @click="sortBy(column.key)"
-                      >
-                        <div class="flex items-center space-x-1">
-                          <span>{{ column.label }}</span>
-                          <span v-if="sortKey === column.key" class="ml-2">
-                            {{ sortOrder === 'asc' ? '↑' : '↓' }}
-                          </span>
-                        </div>
-                      </th>
-                      <th scope="col" class="relative px-6 py-3">
-                        <span class="sr-only">Actions</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                    <tr v-for="user in sortedAndFilteredUsers" :key="user.id" class="hover:bg-gray-50 dark:hover:bg-gray-700">
-                      <td class="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap">
-                        {{ user.username }}
-                      </td>
-                      <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-300">
-                        {{ user.email }}
-                      </td>
-                      <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-300 whitespace-nowrap">
-                        {{ user.role }}
-                      </td>
-                      <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-300 whitespace-nowrap">
-                        {{ formatDate(user.created_at) }}
-                      </td>
-                      <td class="px-6 py-4 text-right text-sm font-medium whitespace-nowrap">
-                        <button
-                          @click="editUser(user)"
-                          class="text-cyan-600 hover:text-cyan-700 dark:text-cyan-400 dark:hover:text-cyan-300 mr-4"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          @click="resetPassword(user)"
-                          class="text-cyan-600 hover:text-cyan-700 dark:text-cyan-400 dark:hover:text-cyan-300 mr-4"
-                        >
-                          Reset Password
-                        </button>
-                        <button
-                          @click="deleteUser(user)"
-                          class="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+            </template>
+
+            <!-- Empty state -->
+            <template #no-data>
+              <div class="text-center pa-12">
+                <v-icon
+                  icon="mdi-account-group-outline"
+                  size="64"
+                  color="grey-lighten-1"
+                  class="mb-4"
+                />
+                <h3 class="text-h6 font-weight-medium mb-2">
+                  {{ getEmptyStateTitle() }}
+                </h3>
+                <p class="text-body-2 text-medium-emphasis mb-4">
+                  {{ getEmptyStateMessage() }}
+                </p>
+                <v-btn
+                  v-if="shouldShowCreateButton()"
+                  color="primary"
+                  prepend-icon="mdi-account-plus"
+                  @click="showNewUserModal = true"
+                >
+                  Add First User
+                </v-btn>
               </div>
-            </div>
-          </div>
-        </main>
-      </div>
-    </div>
+            </template>
+          </v-data-table>
+        </v-card>
+      </v-container>
+    </v-main>
     
     <!-- User Modal -->
     <UserModal
@@ -128,7 +176,7 @@
       @close="closePasswordResetModal"
       @saved="handlePasswordResetSaved"
     />
-  </div>
+  </v-app>
 </template>
 
 <script setup>
@@ -140,6 +188,7 @@ import Sidebar from '../components/Sidebar.vue'
 import UserModal from '../components/UserModal.vue'
 import PasswordResetModal from '../components/PasswordResetModal.vue'
 import { formatDate } from '@/composables/dateUtils'
+import { formatDistanceToNow } from 'date-fns'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -151,20 +200,29 @@ const sortKey = ref('username')
 const sortOrder = ref('asc')
 const showNewUserModal = ref(false)
 const editingUser = ref(null)
-const settings = ref({
-  sessionTimeout: 30
-})
+const searchQuery = ref('')
 
-const columns = [
-  { key: 'username', label: 'Username' },
-  { key: 'email', label: 'Email' },
-  { key: 'role', label: 'Role' },
-  { key: 'created_at', label: 'Created' }
+// Vuetify table headers
+const vuetifyHeaders = [
+  { title: 'Username', key: 'username', sortable: true },
+  { title: 'Email', key: 'email', sortable: true },
+  { title: 'Role', key: 'role', sortable: true },
+  { title: 'Created', key: 'created_at', sortable: true },
+  { title: 'Actions', key: 'actions', sortable: false }
 ]
 
 // Password reset state
 const showPasswordResetModal = ref(false)
 const selectedUserForPasswordReset = ref(null)
+
+const getRoleColor = (role) => {
+  switch (role) {
+    case 'Admin': return 'error'
+    case 'Investigator': return 'primary'
+    case 'Analyst': return 'info'
+    default: return 'default'
+  }
+}
 
 const resetPassword = (user) => {
   selectedUserForPasswordReset.value = user
@@ -197,17 +255,22 @@ onMounted(async () => {
   }
 })
 
-const sortBy = (key) => {
-  if (sortKey.value === key) {
-    sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
-  } else {
-    sortKey.value = key
-    sortOrder.value = 'asc'
-  }
-}
 
 const sortedAndFilteredUsers = computed(() => {
-  return [...users.value].sort((a, b) => {
+  let filteredUsers = users.value
+
+  // Apply search filter
+  if (searchQuery.value) {
+    const query = searchQuery.value.toLowerCase()
+    filteredUsers = users.value.filter(user =>
+      (user.username || '').toLowerCase().includes(query) ||
+      (user.email || '').toLowerCase().includes(query) ||
+      (user.role || '').toLowerCase().includes(query)
+    )
+  }
+
+  // Sort the filtered results
+  return [...filteredUsers].sort((a, b) => {
     const aVal = a[sortKey.value]
     const bVal = b[sortKey.value]
 
@@ -247,17 +310,69 @@ const deleteUser = async (user) => {
   try {
     await userService.deleteUser(user.id)
     users.value = users.value.filter(u => u.id !== user.id)
-  } catch (err) {
+  } catch {
     error.value = 'Failed to delete user. Please try again.'
-    console.error('Error deleting user:', err)
   }
 }
 
-const saveSettings = async () => {
+// Function to format relative dates
+const formatRelativeDate = (dateString) => {
+  if (!dateString) return 'N/A'
   try {
-    // TODO: Implement settings API
-  } catch (err) {
-    error.value = 'Failed to save settings. Please try again.'
+    // Handle UTC timestamps properly - add 'Z' if not present to indicate UTC
+    const utcDateString = dateString.includes('Z') ? dateString : `${dateString}Z`
+    return formatDistanceToNow(new Date(utcDateString), { addSuffix: true })
+  } catch (error) {
+    console.error('Error formatting relative date:', error)
+    return 'Invalid date'
   }
 }
+
+// Empty state functions
+const getEmptyStateTitle = () => {
+  if (searchQuery.value) {
+    return 'No users found'
+  } else if ((users.value || []).length === 0) {
+    return 'No users yet'
+  } else {
+    return 'No users match your search'
+  }
+}
+
+const getEmptyStateMessage = () => {
+  if (searchQuery.value) {
+    return 'Try adjusting your search terms to find the user you\'re looking for.'
+  } else if ((users.value || []).length === 0) {
+    return 'Get started by adding your first user to begin managing the system.'
+  } else {
+    return 'Try adjusting your search to see more users.'
+  }
+}
+
+const shouldShowCreateButton = () => {
+  return (users.value || []).length === 0 && !searchQuery.value
+}
 </script>
+
+<style scoped>
+.admin-dashboard-table :deep(.v-data-table__tr:hover) {
+  background-color: rgba(var(--v-theme-primary), 0.04) !important;
+  cursor: pointer;
+}
+
+.admin-dashboard-table :deep(.v-data-table__td) {
+  padding: 12px 16px !important;
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08) !important;
+}
+
+.admin-dashboard-table :deep(.v-data-table__th) {
+  padding: 16px !important;
+  font-weight: 600 !important;
+  color: rgba(var(--v-theme-on-surface), 0.87) !important;
+  border-bottom: 2px solid rgba(var(--v-theme-on-surface), 0.12) !important;
+}
+
+.admin-dashboard-table :deep(.v-data-table-rows-no-data) {
+  padding: 48px 16px !important;
+}
+</style>

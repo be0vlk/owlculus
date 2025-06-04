@@ -178,3 +178,5 @@ config/secrets.*
 # Docker volumes data
 postgres_data/
 redis_data/
+
+megalinter-reports

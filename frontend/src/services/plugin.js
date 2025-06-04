@@ -16,7 +16,7 @@ export const pluginService = {
     try {
       const singleResult = JSON.parse(response.data);
       return [singleResult]; // Return as array for consistency
-    } catch (e) {
+    } catch {
       // If single parse fails, try splitting into multiple JSON objects
       const results = response.data
         .split('\n')
@@ -24,8 +24,8 @@ export const pluginService = {
         .map(line => {
           try {
             return JSON.parse(line);
-          } catch (e) {
-            console.error('Failed to parse plugin response line:', e);
+          } catch {
+            console.error('Failed to parse plugin response line');
             return null;
           }
         })

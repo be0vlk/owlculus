@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { caseService } from '../services/case'
@@ -70,6 +70,11 @@ export function useDashboard() {
     loadData()
   }
 
+  // Watch for changes to showClosedCases and reload data
+  watch(showClosedCases, () => {
+    loadData()
+  })
+
   const sortBy = (key) => {
     if (sortKey.value === key) {
       sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
@@ -94,12 +99,21 @@ export function useDashboard() {
     // Apply search filter
     if (searchQuery.value) {
       const query = searchQuery.value.toLowerCase()
-      filteredCases = filteredCases.filter(case_ => 
-        case_.case_number.toLowerCase().includes(query) ||
-        case_.title.toLowerCase().includes(query) ||
-        getClientName(case_.client_id).toLowerCase().includes(query) ||
-        case_.status.toLowerCase().includes(query)
-      )
+      filteredCases = filteredCases.filter(case_ => {
+        // Search in basic case fields
+        const basicFieldsMatch = 
+          (case_.case_number || '').toLowerCase().includes(query) ||
+          (case_.title || '').toLowerCase().includes(query) ||
+          (getClientName(case_.client_id) || '').toLowerCase().includes(query) ||
+          (case_.status || '').toLowerCase().includes(query)
+        
+        // Search in assigned user names
+        const assignedUsersMatch = case_.users?.some(user => 
+          (user.username || '').toLowerCase().includes(query)
+        ) || false
+        
+        return basicFieldsMatch || assignedUsersMatch
+      })
     }
 
     // Apply sorting

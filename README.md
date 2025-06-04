@@ -110,7 +110,7 @@ chmod +x setup.sh
 If you encounter issues:
 1. Check the [troubleshooting section](#troubleshooting) above
 2. Review service logs: `docker compose logs -f`
-3. Open an issue on GitHub with logs and error details
+3. Open an issue on GitHub with logs and error details when possible
 
 ## Usage
 

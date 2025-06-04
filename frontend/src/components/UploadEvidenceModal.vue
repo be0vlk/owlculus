@@ -1,55 +1,37 @@
 <template>
-  <div v-if="show" class="fixed inset-0 z-10 overflow-y-auto">
-    <div class="flex min-h-screen items-center justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-      <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="$emit('close')" />
+  <v-dialog v-model="dialogVisible" max-width="600px" persistent>
 
-      <div class="inline-block transform overflow-hidden rounded-lg bg-white dark:bg-gray-800 px-4 pt-5 pb-4 text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6 sm:align-middle">
-        <div class="absolute top-0 right-0 pt-4 pr-4">
-          <button
-            type="button"
-            class="rounded-md bg-white dark:bg-gray-800 text-gray-400 hover:text-gray-500 focus:outline-none"
-            @click="$emit('close')"
-          >
-            <span class="sr-only">Close</span>
-            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+    <v-card>
+      <v-card-title>
+        <span class="text-h5">Upload Evidence</span>
+      </v-card-title>
+      <v-card-text>
+        <v-form @submit.prevent="handleSubmit">
+      <div>
+        <label for="category" class="block text-sm font-medium mb-1">
+          Category
+        </label>
+        <v-select
+          id="category"
+          v-model="form.category"
+          :items="CATEGORIES"
+          variant="outlined"
+          density="comfortable"
+        />
+      </div>
 
-        <div class="sm:flex sm:items-start">
-          <div class="mt-3 w-full text-center sm:mt-0 sm:text-left">
-            <h3 class="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-              Upload Evidence
-            </h3>
-
-            <form @submit.prevent="handleSubmit" class="mt-4 space-y-4">
-              <div>
-                <label for="category" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Category
-                </label>
-                <select
-                  id="category"
-                  v-model="form.category"
-                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-cyan-500 focus:ring-cyan-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm"
-                >
-                  <option v-for="category in CATEGORIES" :key="category" :value="category">
-                    {{ category }}
-                  </option>
-                </select>
-              </div>
-
-              <div>
-                <label for="description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Description (Optional)
-                </label>
-                <textarea
-                  id="description"
-                  v-model="form.description"
-                  rows="3"
-                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-cyan-500 focus:ring-cyan-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm"
-                />
-              </div>
+      <div>
+        <label for="description" class="block text-sm font-medium mb-1">
+          Description (Optional)
+        </label>
+        <v-textarea
+          id="description"
+          v-model="form.description"
+          rows="3"
+          variant="outlined"
+          density="comfortable"
+        />
+      </div>
 
               <div>
                 <div 
@@ -99,21 +81,25 @@
                       <ul class="mt-1 space-y-1">
                         <li v-for="file in selectedFiles" :key="file.name" class="flex items-center">
                           <span class="text-sm text-gray-500 dark:text-gray-400">{{ file.name }}</span>
-                          <button
+                          <v-btn
+                            size="small"
+                            variant="text"
                             @click="removeFile(file)"
-                            class="ml-2 text-cyan-600 hover:text-cyan-500"
+                            class="ml-2"
                           >
                             Remove
-                          </button>
+                          </v-btn>
                         </li>
                       </ul>
-                      <button
+                      <v-btn
                         v-if="selectedFiles.length > 1"
+                        size="small"
+                        variant="text"
                         @click="clearFiles"
-                        class="mt-2 text-sm text-cyan-600 hover:text-cyan-500"
+                        class="mt-2"
                       >
                         Remove All
-                      </button>
+                      </v-btn>
                     </div>
                     <div v-if="fileError" class="mt-2">
                       <p class="text-sm text-red-600">
@@ -124,33 +110,35 @@
                 </div>
               </div>
 
-              <div class="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
-                <button
-                  type="submit"
-                  :disabled="uploading || selectedFiles.length === 0"
-                  class="inline-flex w-full justify-center rounded-md border border-transparent bg-cyan-600 px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed sm:ml-3 sm:w-auto sm:text-sm"
-                >
-                  {{ uploading ? 'Uploading...' : 'Upload' }}
-                </button>
-                <button
-                  type="button"
-                  class="mt-3 inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-base font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 sm:mt-0 sm:w-auto sm:text-sm"
-                  @click="$emit('close')"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+        </v-form>
+      </v-card-text>
+
+      <v-card-actions>
+        <v-spacer></v-spacer>
+        <v-btn
+          variant="text"
+          @click="$emit('close')"
+        >
+          Cancel
+        </v-btn>
+        <v-btn
+          color="primary"
+          variant="flat"
+          @click="handleSubmit"
+          :disabled="uploading || selectedFiles.length === 0"
+          :loading="uploading"
+        >
+          {{ uploading ? 'Uploading...' : 'Upload' }}
+        </v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
 </template>
 
 <script setup>
-import { ref, defineProps, defineEmits } from 'vue';
+import { ref, defineProps, defineEmits, computed } from 'vue';
 import { evidenceService } from '../services/evidence';
+// Vuetify components are auto-imported
 
 const CATEGORIES = [
   'Social Media',
@@ -173,6 +161,15 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['close', 'uploaded']);
+
+const dialogVisible = computed({
+  get: () => props.show,
+  set: (value) => {
+    if (!value) {
+      emit('close')
+    }
+  }
+});
 
 const form = ref({
   description: '',
@@ -234,7 +231,7 @@ async function handleSubmit() {
     });
     emit('uploaded', evidence);
     emit('close');
-  } catch (error) {
+  } catch {
     fileError.value = 'Failed to upload files. Please try again.';
   } finally {
     uploading.value = false;

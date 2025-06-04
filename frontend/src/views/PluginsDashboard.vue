@@ -1,144 +1,176 @@
 <template>
-  <div class="min-h-screen bg-gray-100 dark:bg-gray-900">
-    <div class="flex">
-      <!-- Sidebar -->
-      <Sidebar class="fixed inset-y-0 left-0" />
+  <v-app>
+    <Sidebar />
+    
+    <v-main>
+      <v-container class="pa-6">
+        <!-- Page Header -->
+        <div class="mb-6">
+          <v-row align="center" justify="space-between">
+            <v-col>
+              <h1 class="text-h4 font-weight-bold">
+                Plugins Dashboard
+              </h1>
+            </v-col>
+          </v-row>
+        </div>
 
-      <!-- Main content -->
-      <div class="flex-1 ml-64">
-        <header class="bg-white shadow dark:bg-gray-800">
-          <div class="max-w-7xl mx-auto px-8 py-6">
-            <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100">Plugins Dashboard</h1>
-          </div>
-        </header>
-        <main class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-          <div v-if="error" class="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-400 dark:border-red-500 p-4 mb-4">
-            {{ error }}
-          </div>
-          
-          <div v-if="loading" class="flex justify-center items-center h-64">
-            <LoadingSpinner />
-          </div>
-          
-          <div v-else>
-            <!-- Tab Navigation -->
-            <div class="border-b border-gray-200 dark:border-gray-700 mb-6">
-              <nav class="-mb-px flex space-x-8" aria-label="Plugin Categories">
-                <button
-                  v-for="category in categories"
-                  :key="category"
-                  @click="currentCategory = category"
-                  class="py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap"
-                  :class="[
-                    currentCategory === category
-                      ? 'border-cyan-500 text-cyan-600 dark:border-cyan-400 dark:text-cyan-400'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-                  ]"
-                >
-                  {{ category }}
-                </button>
-              </nav>
-            </div>
+        <!-- Error state -->
+        <v-alert
+          v-if="error"
+          type="error"
+          class="ma-4"
+          :text="error"
+          prominent
+          border="start"
+        />
+        
+        <!-- Loading state -->
+        <v-card-text v-if="loading" class="text-center pa-16">
+          <v-progress-circular
+            size="64"
+            width="4"
+            color="primary"
+            indeterminate
+          />
+          <v-card-text class="text-h6 mt-4">Loading plugins...</v-card-text>
+        </v-card-text>
+        
+        <div v-else>
+          <!-- Tab Navigation -->
+          <v-tabs
+            v-model="currentCategory"
+            class="mb-6"
+            color="primary"
+          >
+            <v-tab
+              v-for="category in categories"
+              :key="category"
+              :value="category"
+            >
+              {{ category }}
+            </v-tab>
+          </v-tabs>
 
-            <!-- Plugin Grid -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <div v-for="(plugin, name) in filteredPlugins" :key="name" 
-                   class="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col cursor-pointer transition-all duration-200"
-                   :class="expandedCards[name] ? 'h-full' : 'h-40'"
-                   @click="toggleCard(name)">
-                <div class="p-4 flex-1 overflow-hidden">
-                  <div class="flex justify-between items-start">
-                    <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">{{ plugin.display_name || name }}</h2>
-                    <div class="flex items-center">
-                      <span class="px-2 py-1 text-xs rounded-full" 
-                            :class="plugin.enabled ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'">
+          <!-- Plugin Grid -->
+          <v-row>
+            <v-col 
+              v-for="(plugin, name) in filteredPlugins" 
+              :key="name"
+              cols="12" 
+              md="6" 
+              lg="4"
+            >
+              <v-card 
+                :class="{ 'h-100': expandedCards[name] }"
+                @click="toggleCard(name)"
+                style="cursor: pointer;"
+              >
+                <v-card-text>
+                  <div class="d-flex justify-space-between align-start mb-3">
+                    <v-card-title class="pa-0 text-h6">
+                      {{ plugin.display_name || name }}
+                    </v-card-title>
+                    <div class="d-flex align-center ga-2">
+                      <v-chip
+                        :color="plugin.enabled ? 'success' : 'error'"
+                        size="small"
+                        variant="tonal"
+                      >
                         {{ plugin.enabled ? 'Enabled' : 'Disabled' }}
-                      </span>
-                      <button @click.stop="toggleCard(name)" 
-                              class="ml-2 p-1 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 transition-colors rounded-full hover:bg-gray-100 dark:hover:bg-gray-700">
-                        <svg v-if="expandedCards[name]" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path fill-rule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clip-rule="evenodd" />
-                        </svg>
-                        <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                          <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
-                        </svg>
-                      </button>
+                      </v-chip>
+                      <v-btn
+                        :icon="expandedCards[name] ? 'mdi-chevron-up' : 'mdi-chevron-down'"
+                        variant="text"
+                        size="small"
+                        @click.stop="toggleCard(name)"
+                      />
                     </div>
                   </div>
                   
-                  <p class="text-gray-600 dark:text-gray-300 mt-2" :class="{'line-clamp-2': !expandedCards[name]}">
-                    {{ plugin.description }}
-                  </p>
+                  <v-card-text class="pa-0">
+                    <p class="text-body-2" :class="{'text-truncate': !expandedCards[name]}">
+                      {{ plugin.description }}
+                    </p>
+                  </v-card-text>
 
-                  <div v-if="expandedCards[name]" 
-                       class="mt-6 space-y-6 animate-fade-in">
-                    <div v-if="plugin.parameters && Object.keys(plugin.parameters).length">
-                      <h3 class="font-medium text-gray-900 dark:text-gray-100">Parameters</h3>
-                      <div class="mt-3 space-y-3" @click.stop>
-                        <div v-for="(param, paramName) in plugin.parameters" :key="paramName">
-                          <BaseInput 
-                            v-if="param.type !== 'list'"
-                            :id="paramName"
-                            v-model="pluginParams[name][paramName]"
-                            :type="param.type === 'number' ? 'number' : 'text'"
-                            :placeholder="param.description"
-                            :label="paramName"
-                            class="bg-gray-50 dark:bg-gray-700/50"
-                            @keydown.enter="handleEnterKey($event, name)"
-                          />
-                          <BaseListInput
-                            v-else
-                            :id="paramName"
-                            v-model="pluginParams[name][paramName]"
-                            :placeholder="param.description"
-                            :label="paramName"
-                            class="bg-gray-50 dark:bg-gray-700/50"
-                            @keydown.enter="handleEnterKey($event, name)"
-                          />
+                  <v-expand-transition>
+                    <div v-if="expandedCards[name]" class="mt-6">
+                      <!-- Parameters Section -->
+                      <div v-if="plugin.parameters && Object.keys(plugin.parameters).length" class="mb-4">
+                        <v-card-subtitle class="pa-0 text-h6 mb-3">Parameters</v-card-subtitle>
+                        <div class="d-flex flex-column ga-3" @click.stop>
+                          <div v-for="(param, paramName) in plugin.parameters" :key="paramName" class="mb-3">
+                            <div v-if="param.type !== 'list'">
+                              <v-text-field
+                                v-model="pluginParams[name][paramName]"
+                                :label="paramName"
+                                :type="param.type === 'number' ? 'number' : 'text'"
+                                :placeholder="param.description"
+                                variant="outlined"
+                                density="compact"
+                                @keydown.enter="handleEnterKey($event, name)"
+                              />
+                            </div>
+                            <div v-else>
+                              <v-combobox
+                                v-model="pluginParams[name][paramName]"
+                                :label="paramName"
+                                :placeholder="param.description"
+                                chips
+                                multiple
+                                variant="outlined"
+                                density="compact"
+                                @keydown.enter="handleEnterKey($event, name)"
+                              />
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <button 
-                      @click.stop="executePlugin(name)"
-                      :disabled="!plugin.enabled || executing[name]"
-                      class="w-full px-4 py-2 bg-cyan-600 text-white rounded-md hover:bg-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-colors"
-                    >
-                      <span v-if="executing[name]" class="flex items-center justify-center">
-                        <LoadingSpinner class="h-4 w-4 mr-2" />
-                        Executing...
-                      </span>
-                      <span v-else>Execute Plugin</span>
-                    </button>
+                      <!-- Execute Button -->
+                      <v-btn
+                        :loading="executing[name]"
+                        :disabled="!plugin.enabled || executing[name]"
+                        color="primary"
+                        block
+                        class="mb-4"
+                        @click.stop="executePlugin(name)"
+                      >
+                        {{ executing[name] ? 'Executing...' : 'Execute Plugin' }}
+                      </v-btn>
 
-                    <div v-if="results[name]" @click.stop>
-                      <h3 class="font-medium text-lg mb-4">Results</h3>
-                      <PluginResult 
-                        :result="results[name]" 
-                        :plugin-name="name"
+                      <!-- Results Section -->
+                      <div v-if="results[name]" @click.stop class="mb-4">
+                        <v-card-subtitle class="pa-0 text-h6 mb-3">Results</v-card-subtitle>
+                        <PluginResult 
+                          :result="results[name]" 
+                          :plugin-name="name"
+                        />
+                      </div>
+                      
+                      <!-- Error Section -->
+                      <v-alert
+                        v-if="pluginErrors[name]"
+                        type="error"
+                        :text="pluginErrors[name]"
+                        @click.stop
                       />
                     </div>
-                    
-                    <div v-if="pluginErrors[name]" class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded" @click.stop>
-                      {{ pluginErrors[name] }}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </main>
-      </div>
-    </div>
-  </div>
+                  </v-expand-transition>
+                </v-card-text>
+              </v-card>
+            </v-col>
+          </v-row>
+        </div>
+      </v-container>
+    </v-main>
+  </v-app>
 </template>
 
 <script setup>
 import { ref, onMounted, reactive, computed } from 'vue'
 import { pluginService } from '@/services/plugin'
-import LoadingSpinner from '@/components/LoadingSpinner.vue'
-import BaseInput from '@/components/BaseInput.vue'
-import BaseListInput from '@/components/BaseListInput.vue'
 import PluginResult from '@/components/PluginResult.vue'
 import Sidebar from '@/components/Sidebar.vue'
 
@@ -203,7 +235,6 @@ const executePlugin = async (name) => {
   results[name] = null // Clear previous results
   
   try {
-    const plugin = plugins.value[name]
     const result = await pluginService.executePlugin(name, pluginParams[name])
     
     // Handle async generator result
@@ -239,27 +270,3 @@ onMounted(() => {
   loadPlugins()
 })
 </script>
-
-<style scoped>
-.animate-fade-in {
-  animation: fadeIn 0.2s ease-in-out;
-}
-
-.line-clamp-2 {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-</style>

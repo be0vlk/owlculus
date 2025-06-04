@@ -63,3 +63,4 @@ build/
 # Temporary files
 tmp/
 temp/
+.claude/

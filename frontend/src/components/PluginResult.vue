@@ -8,24 +8,28 @@
     <div v-else class="fallback-result">
       <!-- Fallback for plugins without custom components -->
       <template v-if="Array.isArray(result)">
-        <div v-for="(item, index) in result" :key="index" class="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-          <pre class="text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono text-sm">{{ formatValue(item) }}</pre>
-        </div>
+        <v-card v-for="(item, index) in result" :key="index" elevation="1" rounded="lg" class="mb-2">
+          <v-card-text>
+            <pre class="text-body-2 font-mono">{{ formatValue(item) }}</pre>
+          </v-card-text>
+        </v-card>
       </template>
       <template v-else-if="typeof result === 'object' && result !== null">
-        <div v-for="(value, key) in result" :key="key" class="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-4 mb-2 last:mb-0 border border-gray-200 dark:border-gray-700">
-          <div class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
-            {{ formatKey(key) }}
-          </div>
-          <div class="text-gray-700 dark:text-gray-300">
-            <pre class="whitespace-pre-wrap font-mono text-sm">{{ formatValue(value) }}</pre>
-          </div>
-        </div>
+        <v-card v-for="(value, key) in result" :key="key" elevation="1" rounded="lg" class="mb-2">
+          <v-card-text>
+            <div class="text-body-2 font-weight-medium text-medium-emphasis mb-1">
+              {{ formatKey(key) }}
+            </div>
+            <pre class="text-body-2 font-mono">{{ formatValue(value) }}</pre>
+          </v-card-text>
+        </v-card>
       </template>
       <template v-else>
-        <div class="bg-white dark:bg-gray-800 shadow-sm rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-          <pre class="text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono text-sm">{{ formatValue(result) }}</pre>
-        </div>
+        <v-card elevation="1" rounded="lg">
+          <v-card-text>
+            <pre class="text-body-2 font-mono">{{ formatValue(result) }}</pre>
+          </v-card-text>
+        </v-card>
       </template>
     </div>
   </div>
