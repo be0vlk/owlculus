@@ -162,22 +162,27 @@
                         {{ executing[name] ? 'Executing...' : 'Execute Plugin' }}
                       </v-btn>
 
-                      <!-- Results Section -->
-                      <div v-if="results[name]" @click.stop class="mb-4">
-                        <v-card-subtitle class="pa-0 text-h6 mb-3">Results</v-card-subtitle>
-                        <PluginResult 
-                          :result="results[name]" 
-                          :plugin-name="name"
+                      <!-- Results Available Indicator -->
+                      <div v-if="results[name] || pluginErrors[name]" @click.stop class="mb-4">
+                        <v-alert
+                          v-if="pluginErrors[name]"
+                          type="error"
+                          variant="tonal"
+                          density="compact"
+                          :text="pluginErrors[name]"
                         />
+                        
+                        <v-btn
+                          v-else
+                          variant="outlined"
+                          color="success"
+                          block
+                          prepend-icon="mdi-eye"
+                          @click="openResultsModal(name)"
+                        >
+                          View Results
+                        </v-btn>
                       </div>
-                      
-                      <!-- Error Section -->
-                      <v-alert
-                        v-if="pluginErrors[name]"
-                        type="error"
-                        :text="pluginErrors[name]"
-                        @click.stop
-                      />
                     </div>
                   </v-expand-transition>
                 </v-card-text>
@@ -187,13 +192,24 @@
         </div>
       </v-container>
     </v-main>
+
+    <!-- Results Modal -->
+    <PluginResultsModal
+      v-model="modalState.isOpen"
+      :plugin-name="modalState.pluginName"
+      :results="modalState.results"
+      :error="modalState.error"
+      :parameters="modalState.parameters"
+      :execution-time="modalState.executionTime"
+      @export="handleExportResults"
+    />
   </v-app>
 </template>
 
 <script setup>
 import { ref, onMounted, reactive, computed } from 'vue'
 import { pluginService } from '@/services/plugin'
-import PluginResult from '@/components/PluginResult.vue'
+import PluginResultsModal from '@/components/PluginResultsModal.vue'
 import Sidebar from '@/components/Sidebar.vue'
 
 const plugins = ref({})
@@ -205,6 +221,17 @@ const results = reactive({})
 const pluginParams = reactive({})
 const pluginErrors = reactive({})
 const pluginParamComponents = reactive({})
+const executionTimes = reactive({})
+
+// Modal state
+const modalState = reactive({
+  isOpen: false,
+  pluginName: '',
+  results: null,
+  error: null,
+  parameters: {},
+  executionTime: new Date()
+})
 
 const categories = ['Person', 'Network', 'Company', 'Other']
 const currentCategory = ref('Person')
@@ -284,6 +311,7 @@ const executePlugin = async (name) => {
   executing[name] = true
   pluginErrors[name] = null
   results[name] = null // Clear previous results
+  executionTimes[name] = new Date() // Track execution time
   
   try {
     const result = await pluginService.executePlugin(name, pluginParams[name])
@@ -302,12 +330,40 @@ const executePlugin = async (name) => {
       results[name] = result
     }
     
-  } catch (e) {
-    console.error('Plugin error:', e)
-    pluginErrors[name] = e.message
+    // Auto-open modal when execution completes
+    if (results[name]) {
+      openResultsModal(name)
+    }
+    
+  } catch (err) {
+    console.error('Plugin error:', err)
+    pluginErrors[name] = err.message
   } finally {
     executing[name] = false
   }
+}
+
+const openResultsModal = (pluginName) => {
+  modalState.pluginName = pluginName
+  modalState.results = results[pluginName]
+  modalState.error = pluginErrors[pluginName]
+  modalState.parameters = { ...pluginParams[pluginName] }
+  modalState.executionTime = executionTimes[pluginName] || new Date()
+  modalState.isOpen = true
+}
+
+const handleExportResults = (exportData) => {
+  // Create downloadable JSON file
+  const dataStr = JSON.stringify(exportData, null, 2)
+  const dataBlob = new Blob([dataStr], { type: 'application/json' })
+  const url = URL.createObjectURL(dataBlob)
+  
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${exportData.pluginName}_results_${Date.now()}.json`
+  link.click()
+  
+  URL.revokeObjectURL(url)
 }
 
 const handleEnterKey = (event, pluginName) => {
