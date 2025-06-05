@@ -67,6 +67,7 @@
             item-key="id"
             class="elevation-0 clients-dashboard-table"
             hover
+            @dblclick:row="handleRowDoubleClick"
           >
             <!-- Created date -->
             <template #[`item.created_at`]="{ item }">
@@ -127,6 +128,14 @@
       @close="closeNewClientModal"
       @created="handleClientCreated"
     />
+
+    <!-- Edit Client Modal -->
+    <EditClientModal
+      :is-open="isEditClientModalOpen"
+      :client="selectedClient"
+      @close="closeEditClientModal"
+      @updated="handleClientUpdated"
+    />
   </v-app>
 </template>
 
@@ -134,6 +143,7 @@
 import { ref, onMounted } from 'vue'
 import Sidebar from '../components/Sidebar.vue'
 import NewClientModal from '../components/NewClientModal.vue'
+import EditClientModal from '../components/EditClientModal.vue'
 import { useClients } from '../composables/useClients'
 import { clientService } from '../services/client'
 
@@ -158,6 +168,8 @@ const vuetifyHeaders = [
 ]
 
 const isNewClientModalOpen = ref(false)
+const isEditClientModalOpen = ref(false)
+const selectedClient = ref(null)
 
 const openNewClientModal = () => {
   isNewClientModalOpen.value = true
@@ -169,6 +181,27 @@ const closeNewClientModal = () => {
 
 const handleClientCreated = (newClient) => {
   clients.value.push(newClient)
+}
+
+const openEditClientModal = (client) => {
+  selectedClient.value = client
+  isEditClientModalOpen.value = true
+}
+
+const closeEditClientModal = () => {
+  isEditClientModalOpen.value = false
+  selectedClient.value = null
+}
+
+const handleClientUpdated = (updatedClient) => {
+  const index = clients.value.findIndex(c => c.id === updatedClient.id)
+  if (index !== -1) {
+    clients.value[index] = updatedClient
+  }
+}
+
+const handleRowDoubleClick = (event, { item }) => {
+  openEditClientModal(item)
 }
 
 const handleDelete = async (client) => {
