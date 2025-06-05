@@ -100,31 +100,57 @@
                       <div v-if="plugin.parameters && Object.keys(plugin.parameters).length" class="mb-4">
                         <v-card-subtitle class="pa-0 text-h6 mb-3">Parameters</v-card-subtitle>
                         <div class="d-flex flex-column ga-3" @click.stop>
-                          <div v-for="(param, paramName) in plugin.parameters" :key="paramName" class="mb-3">
-                            <div v-if="param.type !== 'list'">
-                              <v-text-field
-                                v-model="pluginParams[name][paramName]"
-                                :label="paramName"
-                                :type="param.type === 'number' ? 'number' : 'text'"
-                                :placeholder="param.description"
-                                variant="outlined"
-                                density="compact"
-                                @keydown.enter="handleEnterKey($event, name)"
-                              />
+                          <!-- Custom Plugin Parameter Component -->
+                          <component 
+                            v-if="pluginParamComponents[name]"
+                            :is="pluginParamComponents[name]"
+                            :parameters="plugin.parameters"
+                            v-model="pluginParams[name]"
+                          />
+                          
+                          <!-- Default Parameter Rendering -->
+                          <template v-else>
+                            <div v-for="(param, paramName) in plugin.parameters" :key="paramName" class="mb-3">
+                              <!-- Boolean type - Switch -->
+                              <div v-if="param.type === 'boolean'">
+                                <v-switch
+                                  v-model="pluginParams[name][paramName]"
+                                  :label="paramName"
+                                  :hint="param.description"
+                                  persistent-hint
+                                  color="primary"
+                                  density="compact"
+                                />
+                              </div>
+                              
+                              <!-- List type -->
+                              <div v-else-if="param.type === 'list'">
+                                <v-combobox
+                                  v-model="pluginParams[name][paramName]"
+                                  :label="paramName"
+                                  :placeholder="param.description"
+                                  chips
+                                  multiple
+                                  variant="outlined"
+                                  density="compact"
+                                  @keydown.enter="handleEnterKey($event, name)"
+                                />
+                              </div>
+                              
+                              <!-- Default text/number field -->
+                              <div v-else>
+                                <v-text-field
+                                  v-model="pluginParams[name][paramName]"
+                                  :label="paramName"
+                                  :type="param.type === 'number' || param.type === 'float' ? 'number' : 'text'"
+                                  :placeholder="param.description"
+                                  variant="outlined"
+                                  density="compact"
+                                  @keydown.enter="handleEnterKey($event, name)"
+                                />
+                              </div>
                             </div>
-                            <div v-else>
-                              <v-combobox
-                                v-model="pluginParams[name][paramName]"
-                                :label="paramName"
-                                :placeholder="param.description"
-                                chips
-                                multiple
-                                variant="outlined"
-                                density="compact"
-                                @keydown.enter="handleEnterKey($event, name)"
-                              />
-                            </div>
-                          </div>
+                          </template>
                         </div>
                       </div>
 
@@ -182,6 +208,7 @@ const executing = reactive({})
 const results = reactive({})
 const pluginParams = reactive({})
 const pluginErrors = reactive({})
+const pluginParamComponents = reactive({})
 
 const categories = ['Person', 'Network', 'Company', 'Other']
 const currentCategory = ref('Person')
@@ -208,20 +235,48 @@ const toggleCard = (name) => {
   expandedCards.value[name] = !expandedCards.value[name]
 }
 
+const loadPluginParamComponent = async (pluginName) => {
+  const name = pluginName
+    .replace(/Plugin$/, '') // Remove 'Plugin' suffix if present
+    .replace(/^[a-z]/, c => c.toUpperCase()) // Ensure first letter is uppercase
+  
+  const componentName = `${name}PluginParams`
+  
+  try {
+    const module = await import(`@/components/plugins/${componentName}.vue`)
+    pluginParamComponents[pluginName] = module.default
+  } catch (error) {
+    // No custom parameter component found, use default rendering
+    pluginParamComponents[pluginName] = null
+  }
+}
+
 const loadPlugins = async () => {
   try {
     error.value = null
     plugins.value = await pluginService.listPlugins()
     initializeExpandedState(plugins.value)
-    // Initialize parameters for each plugin
-    Object.keys(plugins.value).forEach(name => {
+    // Initialize parameters for each plugin and load custom parameter components
+    const loadPromises = Object.keys(plugins.value).map(async (name) => {
+      // Load custom parameter component
+      await loadPluginParamComponent(name)
+      
+      // Initialize parameters
       pluginParams[name] = {}
       if (plugins.value[name].parameters) {
         Object.keys(plugins.value[name].parameters).forEach(paramName => {
-          pluginParams[name][paramName] = plugins.value[name].parameters[paramName].default || ''
+          const param = plugins.value[name].parameters[paramName]
+          // Set default value based on type
+          if (param.type === 'boolean') {
+            pluginParams[name][paramName] = param.default !== undefined ? param.default : true
+          } else {
+            pluginParams[name][paramName] = param.default || ''
+          }
         })
       }
     })
+    
+    await Promise.all(loadPromises)
   } catch (e) {
     error.value = e.message
   } finally {
