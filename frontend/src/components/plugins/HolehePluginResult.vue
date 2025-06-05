@@ -137,7 +137,7 @@
         </div>
 
         <div v-if="item.data.timestamp" class="text-caption mt-2">
-          Completed at {{ new Date(item.data.timestamp * 1000).toLocaleString() }}
+          Completed at {{ formatDate(new Date(item.data.timestamp * 1000).toISOString()) }} UTC
         </div>
       </v-alert>
 
@@ -216,6 +216,7 @@
 
 <script setup>
 import { defineProps, computed } from 'vue';
+import { formatDate } from '@/composables/dateUtils';
 
 const props = defineProps({
   result: {

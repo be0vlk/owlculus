@@ -74,7 +74,7 @@
                     </v-list-item-subtitle>
                     
                     <v-list-item-subtitle class="text-caption text-medium-emphasis">
-                      Added {{ new Date(evidence.created_at).toLocaleString() }}
+                      Added {{ formatDate(evidence.created_at) }} UTC
                     </v-list-item-subtitle>
                     
                     <template v-slot:append>
@@ -119,6 +119,7 @@
 
 <script setup>
 import { ref, computed } from 'vue';
+import { formatDate } from '@/composables/dateUtils';
 // Vuetify components are auto-imported
 
 const props = defineProps({

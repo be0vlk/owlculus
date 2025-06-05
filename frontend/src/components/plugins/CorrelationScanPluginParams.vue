@@ -69,7 +69,7 @@
           <div>
             <div class="font-weight-medium">{{ selectedCase.title }}</div>
             <div class="text-body-2 text-medium-emphasis">
-              Created {{ formatDate(selectedCase.created_at) }}
+              Created {{ formatDateOnly(selectedCase.created_at) }}
             </div>
           </div>
         </div>
@@ -81,6 +81,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { caseService } from '@/services/case'
+import { formatDateOnly } from '@/composables/dateUtils'
 
 const props = defineProps({
   parameters: {
@@ -141,14 +142,6 @@ const updateParams = () => {
   emit('update:modelValue', { ...localParams })
 }
 
-const formatDate = (dateString) => {
-  if (!dateString) return 'Unknown'
-  try {
-    return new Date(dateString).toLocaleDateString()
-  } catch {
-    return 'Unknown'
-  }
-}
 
 // Watch for external changes to modelValue
 watch(() => props.modelValue, (newValue) => {

@@ -41,11 +41,72 @@
       max="60"
       @update:model-value="updateParams"
     />
+
+    <!-- Save to Case Option -->
+    <v-switch
+      v-model="caseParams.save_to_case"
+      label="Save to case evidence"
+      persistent-hint
+      color="primary"
+      density="compact"
+      @update:model-value="updateCaseParams"
+    />
+
+    <!-- Case Selection (only when save_to_case is enabled) -->
+    <v-select
+      v-if="caseParams.save_to_case"
+      v-model="caseParams.case_id"
+      label="Case to Save Evidence To"
+      :items="caseItems"
+      :loading="loadingCases"
+      :disabled="loadingCases"
+      item-title="display_name"
+      item-value="id"
+      persistent-hint
+      variant="outlined"
+      density="compact"
+      @update:model-value="updateCaseParams"
+    >
+      <template #prepend-item>
+        <v-list-item>
+          <v-list-item-title class="text-caption text-medium-emphasis">
+            Only cases you have access to are shown
+          </v-list-item-title>
+        </v-list-item>
+        <v-divider />
+      </template>
+
+      <template #no-data>
+        <v-list-item>
+          <v-list-item-title class="text-medium-emphasis">
+            No accessible cases found
+          </v-list-item-title>
+        </v-list-item>
+      </template>
+    </v-select>
+
+    <!-- Selected Case Info -->
+    <v-card v-if="selectedCase && caseParams.save_to_case" variant="outlined" class="mt-2">
+      <v-card-text class="pa-3">
+        <div class="d-flex align-center">
+          <v-avatar color="primary" variant="tonal" class="mr-3">
+            <span class="text-body-2 font-weight-bold">#{{ selectedCase.case_number }}</span>
+          </v-avatar>
+          <div>
+            <div class="font-weight-medium">{{ selectedCase.title }}</div>
+            <div class="text-body-2 text-medium-emphasis">
+              Created {{ formatDateOnly(selectedCase.created_at) }}
+            </div>
+          </div>
+        </div>
+      </v-card-text>
+    </v-card>
   </div>
 </template>
 
 <script setup>
 import { reactive, watch, computed } from 'vue'
+import { useCaseSelection } from '@/composables/useCaseSelection'
 
 const props = defineProps({
   parameters: {
@@ -72,19 +133,36 @@ const emailRule = (value) => {
   return pattern.test(value) || 'Please enter a valid email address'
 }
 
-// Local parameter state
+// Local parameter state for plugin-specific params
 const localParams = reactive({
   email: props.modelValue.email || '',
   timeout: props.modelValue.timeout || 10.0
 })
 
-// Emit parameter updates
+// Use case selection composable
+const {
+  cases,
+  loadingCases,
+  caseParams,
+  caseItems,
+  selectedCase,
+  updateCaseParams,
+  formatDateOnly
+} = useCaseSelection(props, emit)
+
+// Emit parameter updates for plugin-specific params
 const updateParams = () => {
-  emit('update:modelValue', { ...localParams })
+  emit('update:modelValue', { 
+    ...props.modelValue,
+    ...localParams 
+  })
 }
 
 // Watch for external changes to modelValue
 watch(() => props.modelValue, (newValue) => {
-  Object.assign(localParams, newValue)
+  Object.assign(localParams, {
+    email: newValue.email || '',
+    timeout: newValue.timeout || 10.0
+  })
 }, { deep: true })
 </script>
