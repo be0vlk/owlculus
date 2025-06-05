@@ -56,7 +56,7 @@ class PluginService:
         """Execute a plugin with the given parameters"""
         plugin = self.get_plugin(name)
         plugin._current_user = current_user
-        return plugin.run(params or {})
+        return plugin.execute_with_evidence_collection(params or {})
 
 
 # Create a singleton instance

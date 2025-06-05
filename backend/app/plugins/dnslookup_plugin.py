@@ -21,6 +21,7 @@ class DnsLookup(BasePlugin):
         super().__init__(display_name="DNS Lookup")
         self.description = "Resolves domain names to IP addresses and performs reverse DNS lookups for IP addresses"
         self.category = "Network"
+        self.evidence_category = "Network Assets"
         self.save_to_case = False
         self.parameters = {
             "domain": {
@@ -216,6 +217,7 @@ class DnsLookup(BasePlugin):
             nameservers = [ns.strip() for ns in params["nameservers"].split(",") if ns.strip()]
             resolver.nameservers = nameservers
 
+        
         # Process targets based on lookup mode
         for target in targets:
             if lookup_mode == "reverse":
@@ -254,7 +256,6 @@ class DnsLookup(BasePlugin):
                     resolver, target, record_types
                 )
                 
-                # Yield results for this domain
                 yield {
                     "type": "data",
                     "data": {
@@ -264,4 +265,5 @@ class DnsLookup(BasePlugin):
                         "timestamp": time.time(),
                     },
                 }
+
 

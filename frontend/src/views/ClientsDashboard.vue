@@ -71,10 +71,7 @@
             <!-- Created date -->
             <template #[`item.created_at`]="{ item }">
               <span class="text-body-2">
-                {{ formatRelativeDate(item.created_at) }}
-                <v-tooltip activator="parent" location="top">
-                  {{ formatDate(item.created_at) }}
-                </v-tooltip>
+                {{ formatDate(item.created_at) }}
               </span>
             </template>
 
@@ -139,7 +136,6 @@ import Sidebar from '../components/Sidebar.vue'
 import NewClientModal from '../components/NewClientModal.vue'
 import { useClients } from '../composables/useClients'
 import { clientService } from '../services/client'
-import { formatDistanceToNow } from 'date-fns'
 
 const {
   loading,
@@ -186,18 +182,6 @@ const handleDelete = async (client) => {
   }
 }
 
-// Function to format relative dates
-const formatRelativeDate = (dateString) => {
-  if (!dateString) return 'N/A'
-  try {
-    // Handle UTC timestamps properly - add 'Z' if not present to indicate UTC
-    const utcDateString = dateString.includes('Z') ? dateString : `${dateString}Z`
-    return formatDistanceToNow(new Date(utcDateString), { addSuffix: true })
-  } catch (error) {
-    console.error('Error formatting relative date:', error)
-    return 'Invalid date'
-  }
-}
 
 // Empty state functions
 const getEmptyStateTitle = () => {

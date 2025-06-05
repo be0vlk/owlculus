@@ -319,9 +319,8 @@ const deleteUser = async (user) => {
 const formatRelativeDate = (dateString) => {
   if (!dateString) return 'N/A'
   try {
-    // Handle UTC timestamps properly - add 'Z' if not present to indicate UTC
-    const utcDateString = dateString.includes('Z') ? dateString : `${dateString}Z`
-    return formatDistanceToNow(new Date(utcDateString), { addSuffix: true })
+    // Parse the datetime string directly - backend provides ISO format with timezone
+    return formatDistanceToNow(new Date(dateString), { addSuffix: true })
   } catch (error) {
     console.error('Error formatting relative date:', error)
     return 'Invalid date'

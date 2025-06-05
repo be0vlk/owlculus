@@ -5,27 +5,27 @@
 
 export function formatDate(dateString) {
   if (!dateString) return ''
-  // Handle UTC timestamps properly - add 'Z' if not present to indicate UTC
-  const utcDateString = dateString.includes('Z') ? dateString : `${dateString}Z`
-  const date = new Date(utcDateString)
+  // Parse the datetime string directly - backend provides ISO format with timezone
+  const date = new Date(dateString)
   return new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
-    hour12: false
+    hour12: false,
+    timeZone: 'UTC'
   }).format(date).replace(',', '')
 }
 
 export function formatDateOnly(dateString) {
   if (!dateString) return ''
-  // Handle UTC timestamps properly - add 'Z' if not present to indicate UTC
-  const utcDateString = dateString.includes('Z') ? dateString : `${dateString}Z`
-  const date = new Date(utcDateString)
+  // Parse the datetime string directly - backend provides ISO format with timezone
+  const date = new Date(dateString)
   return new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: '2-digit',
-    day: '2-digit'
+    day: '2-digit',
+    timeZone: 'UTC'
   }).format(date)
 }

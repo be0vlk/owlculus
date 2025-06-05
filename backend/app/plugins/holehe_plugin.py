@@ -18,6 +18,7 @@ class HolehePlugin(BasePlugin):
         super().__init__(display_name="Holehe")
         self.description = "Check if email addresses are registered on 120+ platforms using account recovery verification"
         self.category = "Person"
+        self.evidence_category = "Social Media"
         self.save_to_case = True
         self.parameters = {
             "email": {
@@ -150,6 +151,7 @@ class HolehePlugin(BasePlugin):
         if not modules:
             return
 
+        
         # Check each platform - only yield found accounts
         async with httpx.AsyncClient() as client:
             for platform_name, platform_func in modules:
@@ -166,3 +168,4 @@ class HolehePlugin(BasePlugin):
                 
                 # Small delay between requests to be respectful
                 await asyncio.sleep(0.1)
+

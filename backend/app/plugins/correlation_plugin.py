@@ -18,6 +18,7 @@ class CorrelationScan(BasePlugin):
         super().__init__(display_name="Correlation Scan")
         self.description = "Finds matching entities and relationships across cases"
         self.category = "Other"
+        self.evidence_category = "Documents"
         self.save_to_case = False
         self.parameters = {
             "case_id": {
@@ -25,12 +26,6 @@ class CorrelationScan(BasePlugin):
                 "description": "ID of the case to scan",
                 "required": True,
             },
-            "save_to_case": {
-                "type": "boolean",
-                "description": "Save correlation results as evidence to the case",
-                "default": False,
-                "required": False,
-            }
         }
 
     def parse_output(self, line: str) -> Optional[Dict[str, Any]]:
@@ -80,9 +75,6 @@ class CorrelationScan(BasePlugin):
             # Get all entities from the specified case
             case_entities = await self._get_case_entities(db, case_id)
 
-            # Collect all matches
-            all_matches = []
-
             for entity in case_entities:
                 # Extract and normalize entity name based on type
                 entity_name = self._get_display_name(entity.data, entity.entity_type)
@@ -108,7 +100,6 @@ class CorrelationScan(BasePlugin):
                         "case_id": case_id,
                         "matches": name_matches,
                     }
-                    all_matches.append(match_data)
                     yield {"type": "data", "data": match_data}
 
                 # If this is a person entity with an employer, check for employer matches
@@ -127,13 +118,7 @@ class CorrelationScan(BasePlugin):
                             "case_id": case_id,
                             "matches": employer_matches,
                         }
-                        all_matches.append(match_data)
                         yield {"type": "data", "data": match_data}
-
-            # Create evidence if matches were found and saving is enabled
-            save_to_case = params.get("save_to_case", False)
-            if all_matches and save_to_case:
-                await self._create_evidence_for_matches(db, case_id, all_matches)
             
         except Exception as e:
             yield {"type": "error", "data": {"message": f"Error during correlation scan: {str(e)}"}}
@@ -225,26 +210,23 @@ class CorrelationScan(BasePlugin):
         else:
             return data.get("Name", "")
 
-    async def _create_evidence_for_matches(
-        self,
-        db: Session,
-        case_id: int,
-        matches: List[Dict[str, Any]],
-    ) -> None:
-        """Create single evidence entry for all entity matches"""
-        if not matches:
-            return
+    def _format_evidence_content(self, results: List[Dict[str, Any]], params: Dict[str, Any]) -> str:
+        """Custom formatting for correlation scan evidence"""
+        if not results:
+            return ""
 
         # Format the evidence content
         content_lines = [
             "Correlation Scan Results",
             "=" * 50,
             "",
-            f"Total entities with matches: {len(matches)}",
+            f"Total entities with matches: {len(results)}",
+            f"Case ID: {params.get('case_id', 'Unknown')}",
+            f"Execution time: {get_utc_now().strftime('%Y-%m-%d %H:%M:%S UTC')}",
             "",
         ]
 
-        for match_group in matches:
+        for match_group in results:
             entity_name = match_group["entity_name"]
             entity_type = match_group["entity_type"]
             match_type = match_group.get("match_type", "name")
@@ -309,12 +291,4 @@ class CorrelationScan(BasePlugin):
 
             content_lines.append("=" * 50 + "\n")
 
-        content = "\n".join(content_lines)
-
-        # Use base plugin's evidence saving system
-        await self._save_evidence_to_case(
-            db=db,
-            case_id=case_id,
-            content=content,
-            filename=f"correlation_scan_results_{get_utc_now().strftime('%Y%m%d_%H%M%S')}.txt",
-        )
+        return "\n".join(content_lines)
