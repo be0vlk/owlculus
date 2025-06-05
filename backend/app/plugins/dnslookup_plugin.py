@@ -18,7 +18,7 @@ class DnsLookup(BasePlugin):
 
     def __init__(self):
         super().__init__(display_name="DNS Lookup")
-        self.description = "Resolves domain names to their IP addresses and other DNS records"
+        self.description = "Resolves domain names to IP addresses and DNS records"
         self.category = "Network"
         self.save_to_case = False
         self.parameters = {

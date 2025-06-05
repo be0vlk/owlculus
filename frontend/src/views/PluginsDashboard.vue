@@ -88,11 +88,7 @@
                     </div>
                   </div>
                   
-                  <v-card-text class="pa-0">
-                    <p class="text-body-2" :class="{'text-truncate': !expandedCards[name]}">
-                      {{ plugin.description }}
-                    </p>
-                  </v-card-text>
+                  <!-- Description removed from preview - now shown in parameter component -->
 
                   <v-expand-transition>
                     <div v-if="expandedCards[name]" class="mt-6">
@@ -104,7 +100,7 @@
                           <component 
                             v-if="pluginParamComponents[name]"
                             :is="pluginParamComponents[name]"
-                            :parameters="plugin.parameters"
+                            :parameters="{ ...plugin.parameters, description: plugin.description }"
                             v-model="pluginParams[name]"
                           />
                           

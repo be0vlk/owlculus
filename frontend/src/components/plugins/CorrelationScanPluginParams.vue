@@ -33,22 +33,21 @@
       </template>
     </v-select>
 
-    <!-- Information Card -->
-    <v-card variant="tonal" color="info" class="mt-2">
-      <v-card-text class="pa-3">
-        <div class="d-flex align-start">
-          <v-icon icon="mdi-information" class="mr-2 mt-1" size="small" />
-          <div class="text-body-2">
-            <div class="font-weight-medium mb-1">How Correlation Scan Works:</div>
-            <ul class="ml-4">
-              <li>Scans all entities in the selected case</li>
-              <li>Searches for matching names across your other accessible cases</li>
-              <li>Finds employer connections for person entities</li>
-              <li>Creates an evidence file with all discovered correlations</li>
-            </ul>
-          </div>
-        </div>
-      </v-card-text>
+    <!-- About Plugin Information Card -->
+    <v-card
+      v-if="pluginDescription"
+      color="blue-lighten-5"
+      elevation="0"
+      rounded="lg"
+      class="pa-3"
+    >
+      <div class="d-flex align-center ga-2 mb-2">
+        <v-icon color="blue">mdi-information</v-icon>
+        <span class="text-subtitle2 font-weight-medium">About</span>
+      </div>
+      <p class="text-body-2 mb-0">
+        {{ pluginDescription }}
+      </p>
     </v-card>
 
     <!-- Selected Case Info -->
@@ -86,6 +85,11 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:modelValue'])
+
+// Plugin description from backend
+const pluginDescription = computed(() => {
+  return props.parameters?.description || ''
+})
 
 // Local state
 const cases = ref([])

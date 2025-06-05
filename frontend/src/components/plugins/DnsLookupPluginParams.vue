@@ -55,11 +55,28 @@
       density="compact"
       @update:model-value="updateParams"
     />
+
+    <!-- About Plugin Information Card -->
+    <v-card
+      v-if="pluginDescription"
+      color="blue-lighten-5"
+      elevation="0"
+      rounded="lg"
+      class="pa-3"
+    >
+      <div class="d-flex align-center ga-2 mb-2">
+        <v-icon color="blue">mdi-information</v-icon>
+        <span class="text-subtitle2 font-weight-medium">About</span>
+      </div>
+      <p class="text-body-2 mb-0">
+        {{ pluginDescription }}
+      </p>
+    </v-card>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, watch } from 'vue'
+import { ref, reactive, watch, computed } from 'vue'
 
 const props = defineProps({
   parameters: {
@@ -73,6 +90,11 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:modelValue'])
+
+// Plugin description from backend
+const pluginDescription = computed(() => {
+  return props.parameters?.description || ''
+})
 
 // DNS record types
 const dnsRecordTypes = [
