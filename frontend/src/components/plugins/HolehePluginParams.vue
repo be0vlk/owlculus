@@ -125,13 +125,10 @@ const localParams = reactive({
 
 // Use case selection composable
 const {
-  cases,
   loadingCases,
   caseParams,
   caseItems,
-  selectedCase,
-  updateCaseParams,
-  formatDateOnly
+  updateCaseParams
 } = useCaseSelection(props, emit)
 
 // Emit parameter updates for plugin-specific params

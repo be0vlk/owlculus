@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Owlculus Docker Setup Script
-# Simplified Docker-only setup for consistent environments
+# Interactive setup with customizable defaults
 
 # Colors for output
 CYAN='\033[0;36m'
@@ -27,6 +27,24 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Default configuration values
+DEFAULT_FRONTEND_PORT=80
+DEFAULT_BACKEND_PORT=8000
+DEFAULT_DB_PORT=5432
+DEFAULT_DOMAIN="localhost"
+DEFAULT_ADMIN_USERNAME="admin"
+DEFAULT_ADMIN_EMAIL="admin@owlculus.local"
+
+# Configuration variables
+FRONTEND_PORT=""
+BACKEND_PORT=""
+DB_PORT=""
+DOMAIN=""
+ADMIN_USERNAME=""
+ADMIN_EMAIL=""
+ADMIN_PASSWORD=""
+INTERACTIVE_MODE="true"
+
 # Function to check if command exists
 command_exists() {
     command -v "$1" >/dev/null 2>&1
@@ -44,9 +62,136 @@ generate_secret_key() {
     fi
 }
 
+# Function to prompt for user input with default value
+prompt_with_default() {
+    local prompt="$1"
+    local default="$2"
+    local value=""
+    
+    echo -n "$prompt [$default]: "
+    read value
+    
+    if [ -z "$value" ]; then
+        echo "$default"
+    else
+        echo "$value"
+    fi
+}
+
+# Function to validate port number
+validate_port() {
+    local port="$1"
+    if [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -ge 1 ] && [ "$port" -le 65535 ]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Function to run interactive configuration
+interactive_config() {
+    echo ""
+    echo "Owlculus Interactive Setup"
+    echo "=========================="
+    echo ""
+    echo "Configure your Owlculus installation. Press Enter to use defaults."
+    echo ""
+    
+    # Network Configuration
+    echo "Network Configuration:"
+    echo "---------------------"
+    
+    while true; do
+        DOMAIN=$(prompt_with_default "Domain/hostname" "$DEFAULT_DOMAIN")
+        if [ -n "$DOMAIN" ]; then
+            break
+        fi
+        print_error "Domain cannot be empty"
+    done
+    
+    while true; do
+        FRONTEND_PORT=$(prompt_with_default "Frontend port" "$DEFAULT_FRONTEND_PORT")
+        if validate_port "$FRONTEND_PORT"; then
+            break
+        fi
+        print_error "Invalid port number. Please enter a number between 1-65535"
+    done
+    
+    while true; do
+        BACKEND_PORT=$(prompt_with_default "Backend API port" "$DEFAULT_BACKEND_PORT")
+        if validate_port "$BACKEND_PORT"; then
+            break
+        fi
+        print_error "Invalid port number. Please enter a number between 1-65535"
+    done
+    
+    while true; do
+        DB_PORT=$(prompt_with_default "Database port" "$DEFAULT_DB_PORT")
+        if validate_port "$DB_PORT"; then
+            break
+        fi
+        print_error "Invalid port number. Please enter a number between 1-65535"
+    done
+    
+    echo ""
+    echo "Admin Account Configuration:"
+    echo "---------------------------"
+    
+    while true; do
+        ADMIN_USERNAME=$(prompt_with_default "Admin username" "$DEFAULT_ADMIN_USERNAME")
+        if [ -n "$ADMIN_USERNAME" ]; then
+            break
+        fi
+        print_error "Username cannot be empty"
+    done
+    
+    while true; do
+        ADMIN_EMAIL=$(prompt_with_default "Admin email" "$DEFAULT_ADMIN_EMAIL")
+        if [[ "$ADMIN_EMAIL" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+            break
+        fi
+        print_error "Please enter a valid email address"
+    done
+    
+    echo ""
+    echo -n "Admin password (leave empty for auto-generated): "
+    read -s ADMIN_PASSWORD
+    echo ""
+    
+    if [ -z "$ADMIN_PASSWORD" ]; then
+        ADMIN_PASSWORD=$(openssl rand -base64 16 | tr -d /=+ | cut -c -12)
+        print_status "Auto-generated secure admin password"
+    fi
+    
+    echo ""
+    echo "Configuration Summary:"
+    echo "====================="
+    echo "Domain: $DOMAIN"
+    echo "Frontend Port: $FRONTEND_PORT"
+    echo "Backend Port: $BACKEND_PORT"
+    echo "Database Port: $DB_PORT"
+    echo "Admin Username: $ADMIN_USERNAME"
+    echo "Admin Email: $ADMIN_EMAIL"
+    echo "Admin Password: [set]"
+    echo ""
+    
+    while true; do
+        echo -n "Proceed with this configuration? [y/N]: "
+        read confirm
+        case $confirm in
+            [Yy]|[Yy][Ee][Ss]) break ;;
+            [Nn]|[Nn][Oo]|"") 
+                echo "Setup cancelled by user"
+                exit 0
+                ;;
+            *) echo "Please answer yes or no" ;;
+        esac
+    done
+}
+
 # Function to show usage
 show_usage() {
-    echo "🦉 Owlculus Docker Setup"
+    echo "Owlculus Docker Setup"
     echo
     echo "Usage: $0 [mode] [options]"
     echo
@@ -57,16 +202,29 @@ show_usage() {
     echo
     echo "Options:"
     echo "  --verbose       Show all Docker build/start output"
+    echo "  --non-interactive  Use default values without prompting"
     echo
     echo "Examples:"
-    echo "  $0                    # Production setup (quiet mode)"
-    echo "  $0 dev                # Development setup (quiet mode)"
-    echo "  $0 production --verbose # Production setup with full Docker output"
+    echo "  $0                          # Interactive production setup"
+    echo "  $0 dev                      # Interactive development setup"
+    echo "  $0 --non-interactive        # Non-interactive production setup"
+    echo "  $0 dev --verbose            # Development setup with full Docker output"
     echo
     echo "Requirements:"
     echo "  - Docker"
     echo "  - Docker Compose"
     echo
+}
+
+# Function to set defaults for non-interactive mode
+set_defaults() {
+    DOMAIN="$DEFAULT_DOMAIN"
+    FRONTEND_PORT="$DEFAULT_FRONTEND_PORT"
+    BACKEND_PORT="$DEFAULT_BACKEND_PORT"
+    DB_PORT="$DEFAULT_DB_PORT"
+    ADMIN_USERNAME="$DEFAULT_ADMIN_USERNAME"
+    ADMIN_EMAIL="$DEFAULT_ADMIN_EMAIL"
+    ADMIN_PASSWORD=$(openssl rand -base64 16 | tr -d /=+ | cut -c -12)
 }
 
 # Main setup function
@@ -75,7 +233,7 @@ setup_owlculus() {
     local VERBOSE="${2:-false}"
     local ADMIN_PASSWORD_TO_DISPLAY=""
     
-    print_status "🦉 Setting up Owlculus with Docker..."
+    print_status "Setting up Owlculus with Docker..."
     
     # Check if Docker is installed
     if ! command_exists docker; then
@@ -102,46 +260,69 @@ setup_owlculus() {
         DOCKER_COMPOSE_CMD="docker-compose"
     fi
     
-    print_status "✅ Docker and Docker Compose are available"
+    print_status "Docker and Docker Compose are available"
     
-    # Create .env file from template if it doesn't exist
+    # Run interactive configuration or use defaults
+    if [ "$INTERACTIVE_MODE" = "true" ]; then
+        interactive_config
+    else
+        set_defaults
+        print_status "Using default configuration values"
+    fi
+    
+    # Create .env file from scratch if it doesn't exist
     if [ ! -f .env ]; then
-        print_status "📝 Creating .env file from template..."
-        cp .env.example .env
+        print_status "Creating .env file with configuration..."
         
         # Generate secure credentials
-        print_status "🔐 Generating secure credentials..."
+        print_status "Generating secure credentials..."
         SECRET_KEY=$(generate_secret_key)
         DB_PASSWORD=$(openssl rand -base64 32 | tr -d /=+ | cut -c -25)
-        ADMIN_PASSWORD=$(openssl rand -base64 16 | tr -d /=+ | cut -c -12)
         
-        # Replace placeholders
-        sed -i.bak "s/generate-a-secure-key-with-at-least-32-characters/$SECRET_KEY/" .env
-        sed -i.bak "s/your-secure-database-password/$DB_PASSWORD/" .env  
-        sed -i.bak "s/your-secure-admin-password/$ADMIN_PASSWORD/" .env
-        rm -f .env.bak
+        # Create .env file directly with all values
+        cat > .env << EOF
+SECRET_KEY=$SECRET_KEY
+POSTGRES_PASSWORD=$DB_PASSWORD
+ADMIN_USERNAME=$ADMIN_USERNAME
+ADMIN_PASSWORD=$ADMIN_PASSWORD
+ADMIN_EMAIL=$ADMIN_EMAIL
+
+# Port Configuration
+FRONTEND_PORT=$FRONTEND_PORT
+BACKEND_PORT=$BACKEND_PORT
+DB_PORT=$DB_PORT
+DOMAIN=$DOMAIN
+EOF
         
-        print_success "✅ .env file created with generated credentials"
+        print_success ".env file created with configuration"
         ADMIN_PASSWORD_TO_DISPLAY="$ADMIN_PASSWORD"
     else
-        print_status "📄 .env file already exists, using existing configuration"
+        print_status ".env file already exists, using existing configuration"
     fi
     
     # Determine compose file based on mode
     if [ "$MODE" = "dev" ] || [ "$MODE" = "development" ]; then
-        print_status "🚀 Starting Owlculus in development mode..."
+        print_status "Starting Owlculus in development mode..."
         COMPOSE_FILE="docker-compose.dev.yml"
-        FRONTEND_URL="http://localhost:5173"
+        FRONTEND_URL="http://$DOMAIN:5173"
     else
-        print_status "🚀 Starting Owlculus in production mode..."
+        print_status "Starting Owlculus in production mode..."
         COMPOSE_FILE="docker-compose.yml"
-        FRONTEND_URL="http://localhost"
+        if [ "$FRONTEND_PORT" = "80" ]; then
+            FRONTEND_URL="http://$DOMAIN"
+        else
+            FRONTEND_URL="http://$DOMAIN:$FRONTEND_PORT"
+        fi
     fi
     
-    BACKEND_URL="http://localhost:8000"
+    if [ "$BACKEND_PORT" = "80" ]; then
+        BACKEND_URL="http://$DOMAIN"
+    else
+        BACKEND_URL="http://$DOMAIN:$BACKEND_PORT"
+    fi
     
     # Build Docker images
-    print_status "🔨 Building Docker images..."
+    print_status "Building Docker images..."
     if [ "$VERBOSE" = "true" ]; then
         $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE build
     else
@@ -149,7 +330,7 @@ setup_owlculus() {
     fi
     
     # Start services
-    print_status "🐳 Starting services..."
+    print_status "Starting services..."
     if [ "$VERBOSE" = "true" ]; then
         $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE up -d
     else
@@ -157,36 +338,36 @@ setup_owlculus() {
     fi
     
     # Wait for services to be healthy
-    print_status "⏳ Waiting for services to start..."
+    print_status "Waiting for services to start..."
     sleep 10
     
     # Check service health
-    print_status "🏥 Checking service health..."
+    print_status "Checking service health..."
     sleep 5
     
     # Test backend
     if curl -f -s "$BACKEND_URL/" > /dev/null; then
-        print_success "✅ Backend is running at $BACKEND_URL"
+        print_success "Backend is running at $BACKEND_URL"
     else
-        print_warning "⚠️  Backend may still be starting up at $BACKEND_URL"
+        print_warning "Backend may still be starting up at $BACKEND_URL"
     fi
     
     # Test frontend
     if curl -f -s "$FRONTEND_URL/" > /dev/null; then
-        print_success "✅ Frontend is running at $FRONTEND_URL"
+        print_success "Frontend is running at $FRONTEND_URL"
     else
-        print_warning "⚠️  Frontend may still be starting up at $FRONTEND_URL"
+        print_warning "Frontend may still be starting up at $FRONTEND_URL"
     fi
     
     # Success message
     echo ""
-    print_success "🎉 Owlculus setup completed!"
+    print_success "Owlculus setup completed!"
     echo ""
-    echo "🦉 Owlculus is now running!"
-    echo "   🌐 Frontend: $FRONTEND_URL"
-    echo "   🔧 Backend API: $BACKEND_URL"
+    echo "Owlculus is now running!"
+    echo "   Frontend: $FRONTEND_URL"
+    echo "   Backend API: $BACKEND_URL"
     echo ""
-    echo "📋 Useful commands:"
+    echo "Useful commands:"
     echo "   Show credentials: cat .env"
     echo "   Stop services:    $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE down"
     echo "   View logs:        $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE logs -f"
@@ -196,26 +377,38 @@ setup_owlculus() {
     
     # Display admin credentials at the very end if they were generated
     if [ -n "$ADMIN_PASSWORD_TO_DISPLAY" ]; then
-        echo "🔐 Generated admin credentials:"
-        echo "   Username: admin"
+        echo "Generated admin credentials:"
+        echo "   Username: $ADMIN_USERNAME"
         echo "   Password: $ADMIN_PASSWORD_TO_DISPLAY"
         echo ""
-        print_warning "💾 Save the admin password above - you'll need it to log in!"
+        print_warning "Save the admin password above - you'll need it to log in!"
         echo ""
     fi
 }
 
 # Parse arguments
-MODE="${1:-production}"
+MODE="production"
 VERBOSE="false"
 
-# Check for verbose flag in any argument position
+# Parse arguments in order
 for arg in "$@"; do
-    if [ "$arg" = "--verbose" ]; then
-        VERBOSE="true"
-        break
-    fi
+    case "$arg" in
+        --verbose)
+            VERBOSE="true"
+            ;;
+        --non-interactive)
+            INTERACTIVE_MODE="false"
+            ;;
+        production|prod|dev|development|help)
+            MODE="$arg"
+            ;;
+    esac
 done
+
+# Set default mode if not specified
+if [ -z "$MODE" ]; then
+    MODE="production"
+fi
 
 # Main script logic
 case "$MODE" in

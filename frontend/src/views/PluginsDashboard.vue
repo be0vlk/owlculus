@@ -268,7 +268,7 @@ const loadPluginParamComponent = async (pluginName) => {
   try {
     const module = await import(`@/components/plugins/${componentName}.vue`)
     pluginParamComponents[pluginName] = module.default
-  } catch (error) {
+  } catch {
     // No custom parameter component found, use default rendering
     pluginParamComponents[pluginName] = null
   }

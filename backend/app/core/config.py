@@ -8,7 +8,7 @@ dotenv.load_dotenv()
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Owlculus"
     DESCRIPTION: str = "An OSINT case management platform and toolkit"
-    VERSION: str = "0.1.0"
+    VERSION: str = "1.0.0"
     API_V1_STR: str = "/api"
     SECRET_KEY: SecretStr = SecretStr(os.environ.get("SECRET_KEY"))
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 4  # 4 hours, adjust if you want

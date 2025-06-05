@@ -37,35 +37,68 @@ git clone https://github.com/be0vlk/owlculus.git
 cd owlculus
 ```
 
-2. Run the setup script:
+2. Run the interactive setup:
 ```bash
 chmod +x setup.sh
 ./setup.sh
 ```
 
-That's it! 🦉 Owlculus will be available at:
+The setup script will guide you through configuration options:
+- **Network settings:** Domain, frontend port (default: 80), backend port (default: 8000), database port (default: 5432)
+- **Admin account:** Username (default: admin), email, password (auto-generated if not provided)
+
+After setup, Owlculus will be available at your configured URLs (defaults shown):
 - **Frontend:** http://localhost
 - **Backend API:** http://localhost:8000
-- **Login:** admin / [auto-generated secure password]
+- **Login:** Your configured admin credentials
+
+### Setup Options
+
+**Interactive setup (default):**
+```bash
+./setup.sh                    # Production mode with interactive configuration
+./setup.sh dev                # Development mode with interactive configuration
+```
+
+**Non-interactive setup:**
+```bash
+./setup.sh --non-interactive         # Uses all defaults
+./setup.sh dev --non-interactive     # Development mode with defaults
+```
+
+**Verbose output:**
+```bash
+./setup.sh --verbose                 # Shows full Docker build output
+./setup.sh dev --verbose             # Development with verbose output
+```
 
 ### Development Setup
 
-For development with hot-reload:
-
-```bash
-./setup.sh dev
-```
-
-This starts the development environment with:
+Development mode includes:
 - **Frontend:** http://localhost:5173 (with hot-reload)
 - **Backend API:** http://localhost:8000 (with hot-reload)
 - Source code mounted as volumes for instant updates
 
 ### Management Commands
 
+Use the included Makefile for easy management:
+
+```bash
+make help          # Show all available commands
+make start         # Start production services
+make start-dev     # Start development services
+make stop          # Stop all services
+make logs          # View service logs
+make clean         # Remove all containers and volumes (⚠️ destroys data)
+```
+
 ## Environment Configuration
 
-The setup script automatically creates a `.env` file with secure defaults. 
+The setup script automatically creates a `.env` file with your configuration and secure auto-generated credentials. You can view your credentials anytime:
+
+```bash
+cat .env
+``` 
 
 ## Troubleshooting
 
@@ -141,10 +174,10 @@ The app is smart enough to recognize certain relationships between entities and 
 This page allows you to upload and download evidence to the case folder. A default, organized virtual folder structure is created along with the case.
 
 ### Plugins
-This page allows you to conveniently run certain OSINT tools right from the app. I have completely re-written this functionality compared to the old version of this app which means that, for now, it is limited in scope. However, it is designed to be extensible and I will be adding many more plugins soon!
+This page allows you to conveniently run certain OSINT tools right from the app.
 
 #### Correlation Plugin
-This plugin will scan for correlations between entities in cases. It will also automatically create output in the given case's evidence folder where you can download the results.
+This plugin will scan for correlations between entities in cases.
 
 ![Imgur](https://i.imgur.com/cKtoJya.png)
 

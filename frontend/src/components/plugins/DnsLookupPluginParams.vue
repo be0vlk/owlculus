@@ -186,13 +186,10 @@ const selectedRecordTypes = ref(
 
 // Use case selection composable
 const {
-  cases,
   loadingCases,
   caseParams,
   caseItems,
-  selectedCase,
-  updateCaseParams,
-  formatDateOnly
+  updateCaseParams
 } = useCaseSelection(props, emit)
 
 // Update mode and clear inappropriate parameters

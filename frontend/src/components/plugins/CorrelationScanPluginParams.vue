@@ -65,7 +65,6 @@
 <script setup>
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { caseService } from '@/services/case'
-import { formatDateOnly } from '@/composables/dateUtils'
 
 const props = defineProps({
   parameters: {
@@ -103,10 +102,6 @@ const caseItems = computed(() => {
   }))
 })
 
-const selectedCase = computed(() => {
-  if (!localParams.case_id) return null
-  return cases.value.find(case_ => case_.id === localParams.case_id)
-})
 
 // Methods
 const loadCases = async () => {
