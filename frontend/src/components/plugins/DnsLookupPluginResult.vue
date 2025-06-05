@@ -11,15 +11,11 @@
         {{ item.data.message }}
       </v-alert>
 
-      <!-- Domain Results -->
+      <!-- DNS Results -->
       <v-card v-else-if="item.type === 'data'" elevation="2" rounded="lg">
         <v-card-title class="d-flex align-center">
-          <v-icon icon="mdi-web" class="mr-2" />
-          {{ item.data.domain }}
-          <v-spacer />
-          <v-chip v-if="item.data.timestamp" size="small" variant="text">
-            {{ new Date(item.data.timestamp * 1000).toLocaleTimeString() }}
-          </v-chip>
+          <v-icon :icon="item.data.target_type === 'ip_address' ? 'mdi-ip-network' : 'mdi-web'" class="mr-2" />
+          {{ item.data.target }}
         </v-card-title>
 
         <v-card-text>
@@ -35,20 +31,12 @@
                 <div class="d-flex align-center mb-2">
                   <v-chip 
                     size="small" 
-                    :color="recordResult.cached ? 'grey' : 'primary'"
+                    color="primary"
                     variant="tonal"
                     class="mr-2"
                   >
-                    {{ recordResult.type }}
+                    {{ recordResult.type }}{{ recordResult.ip_address ? ' (Reverse)' : '' }}
                   </v-chip>
-                  <v-icon 
-                    v-if="recordResult.cached" 
-                    icon="mdi-cached" 
-                    size="small"
-                    color="grey"
-                  >
-                    <v-tooltip activator="parent" location="top">Cached result</v-tooltip>
-                  </v-icon>
                 </div>
                 
                 <v-card elevation="1" rounded="lg">

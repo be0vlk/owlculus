@@ -4,7 +4,7 @@
     v-model="drawer"
     :width="256"
     permanent
-    class="owlculus-sidebar"
+    class="owlculus-sidebar border-e"
   >
     <!-- Logo Section -->
     <v-container class="pa-4">
@@ -113,7 +113,5 @@ const handleLogout = () => {
 </script>
 
 <style scoped>
-.owlculus-sidebar {
-  border-right: 1px solid rgb(var(--v-theme-surface-variant)) !important;
-}
+/* Styles handled by Vuetify border-e class */
 </style>

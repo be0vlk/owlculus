@@ -1,17 +1,49 @@
 <template>
   <div class="d-flex flex-column ga-3">
-    <!-- Domain -->
+    <!-- About Plugin Information Card -->
+    <v-card
+      v-if="pluginDescription"
+      color="blue-lighten-5"
+      elevation="0"
+      rounded="lg"
+      class="pa-3"
+    >
+      <div class="d-flex align-center ga-2 mb-2">
+        <v-icon color="blue">mdi-information</v-icon>
+        <span class="text-subtitle2 font-weight-medium">About</span>
+      </div>
+      <p class="text-body-2 mb-0">
+        {{ pluginDescription }}
+      </p>
+    </v-card>
+
+    <!-- Lookup Mode -->
+    <v-radio-group
+      v-model="lookupMode"
+      inline
+      density="compact"
+      @update:model-value="updateMode"
+    >
+      <template #label>
+        <span class="text-subtitle2">Lookup Type</span>
+      </template>
+      <v-radio label="Forward DNS (Domain → IP)" value="forward" />
+      <v-radio label="Reverse DNS (IP → Domain)" value="reverse" />
+    </v-radio-group>
+
+    <!-- Input Field -->
     <v-text-field
       v-model="localParams.domain"
-      label="Domain"
-      placeholder="Domain name to resolve (or comma-separated list for bulk lookup)"
+      :label="inputLabel"
+      :placeholder="inputPlaceholder"
       variant="outlined"
       density="compact"
       @update:model-value="updateParams"
     />
 
-    <!-- Record Types -->
+    <!-- Record Types (only for forward DNS) -->
     <v-select
+      v-if="lookupMode === 'forward'"
       v-model="selectedRecordTypes"
       label="Record Types"
       hint="Select DNS record types to query"
@@ -44,34 +76,6 @@
       density="compact"
       @update:model-value="updateParams"
     />
-
-    <!-- Use Cache -->
-    <v-switch
-      v-model="localParams.use_cache"
-      label="Use Cache"
-      hint="Use cached results if available"
-      persistent-hint
-      color="primary"
-      density="compact"
-      @update:model-value="updateParams"
-    />
-
-    <!-- About Plugin Information Card -->
-    <v-card
-      v-if="pluginDescription"
-      color="blue-lighten-5"
-      elevation="0"
-      rounded="lg"
-      class="pa-3"
-    >
-      <div class="d-flex align-center ga-2 mb-2">
-        <v-icon color="blue">mdi-information</v-icon>
-        <span class="text-subtitle2 font-weight-medium">About</span>
-      </div>
-      <p class="text-body-2 mb-0">
-        {{ pluginDescription }}
-      </p>
-    </v-card>
   </div>
 </template>
 
@@ -106,12 +110,26 @@ const dnsRecordTypes = [
   { title: 'CNAME Records (Canonical Name)', value: 'CNAME' }
 ]
 
+// Lookup mode state
+const lookupMode = ref(props.modelValue.lookup_mode || 'forward')
+
+// Dynamic input labels based on mode
+const inputLabel = computed(() => {
+  return lookupMode.value === 'forward' ? 'Domain Names' : 'IP Addresses'
+})
+
+const inputPlaceholder = computed(() => {
+  return lookupMode.value === 'forward' 
+    ? 'Enter domain names (e.g., google.com, github.com)'
+    : 'Enter IP addresses (e.g., 8.8.8.8, 1.1.1.1)'
+})
+
 // Local parameter state
 const localParams = reactive({
   domain: props.modelValue.domain || '',
   timeout: props.modelValue.timeout || 5.0,
   nameservers: props.modelValue.nameservers || '',
-  use_cache: props.modelValue.use_cache !== undefined ? props.modelValue.use_cache : true
+  lookup_mode: lookupMode.value
 })
 
 // Selected record types as array
@@ -121,9 +139,26 @@ const selectedRecordTypes = ref(
     : ['A']
 )
 
+// Update mode and clear inappropriate parameters
+const updateMode = () => {
+  localParams.lookup_mode = lookupMode.value
+  
+  if (lookupMode.value === 'reverse') {
+    // For reverse DNS, we don't need record types (only PTR)
+    delete localParams.record_types
+  } else {
+    // For forward DNS, ensure we have record types
+    updateRecordTypes()
+  }
+  
+  updateParams()
+}
+
 // Update record types parameter when selection changes
 const updateRecordTypes = () => {
-  localParams.record_types = selectedRecordTypes.value.join(',')
+  if (lookupMode.value === 'forward') {
+    localParams.record_types = selectedRecordTypes.value.join(',')
+  }
   updateParams()
 }
 
@@ -132,15 +167,22 @@ const updateParams = () => {
   emit('update:modelValue', { ...localParams })
 }
 
-// Initialize record_types on mount
-if (!localParams.record_types) {
+// Initialize record_types on mount for forward mode
+if (lookupMode.value === 'forward' && !localParams.record_types) {
   updateRecordTypes()
 }
 
 // Watch for external changes to modelValue
 watch(() => props.modelValue, (newValue) => {
   Object.assign(localParams, newValue)
-  if (newValue.record_types) {
+  
+  // Update lookup mode
+  if (newValue.lookup_mode) {
+    lookupMode.value = newValue.lookup_mode
+  }
+  
+  // Update record types if in forward mode
+  if (newValue.record_types && lookupMode.value === 'forward') {
     selectedRecordTypes.value = newValue.record_types.split(',').map(t => t.trim())
   }
 }, { deep: true })

@@ -63,6 +63,7 @@
             >
               <v-card 
                 :class="{ 'h-100': expandedCards[name] }"
+                :ripple="false"
                 @click="toggleCard(name)"
                 style="cursor: pointer;"
               >
@@ -94,7 +95,6 @@
                     <div v-if="expandedCards[name]" class="mt-6">
                       <!-- Parameters Section -->
                       <div v-if="plugin.parameters && Object.keys(plugin.parameters).length" class="mb-4">
-                        <v-card-subtitle class="pa-0 text-h6 mb-3">Parameters</v-card-subtitle>
                         <div class="d-flex flex-column ga-3" @click.stop>
                           <!-- Custom Plugin Parameter Component -->
                           <component 

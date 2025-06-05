@@ -33,8 +33,8 @@ class YourPluginNamePlugin(BasePlugin):
     def __init__(self):
         super().__init__(display_name="Your Display Name")
         self.description = "Brief 1-2 sentence description of what this plugin does"
-        self.category = "Person"  # Person, Network, OSINT, Other
-        self.save_to_case = True  # Whether to save results as evidence
+        self.category = "Person"  # Person, Network, Company, Other
+        self.save_to_case = False  # Whether to auto-save results as evidence
         self.parameters = {
             "required_param": {
                 "type": "string",  # string, float, boolean
@@ -45,6 +45,12 @@ class YourPluginNamePlugin(BasePlugin):
                 "type": "float",
                 "description": "Optional parameter description",
                 "default": 10.0,
+                "required": False,
+            },
+            "save_to_case": {
+                "type": "boolean",
+                "description": "Save results as evidence to the case",
+                "default": False,
                 "required": False,
             },
         }
@@ -85,20 +91,24 @@ class YourPluginNamePlugin(BasePlugin):
                 "timestamp": time.time(),
             },
         }
+
+        # Handle optional case evidence saving
+        save_to_case = params.get("save_to_case", False)
+        if save_to_case:
+            # Save results as evidence (implement based on your plugin's needs)
+            pass
 ```
 
 ### 3. Plugin Categories
 - **Person**: Email lookups, social media checks, people search
 - **Network**: DNS, IP analysis, network reconnaissance  
-- **OSINT**: General intelligence gathering tools
+- **Company**: Business intelligence, corporate research
 - **Other**: Miscellaneous tools
 
 ### 4. Result Types
 Your plugin should yield dictionaries with these `type` values:
 - **`"data"`**: Actual results (what users care about)
-- **`"status"`**: Progress updates (use sparingly)
 - **`"error"`**: Error messages
-- **`"complete"`**: Final completion message (optional)
 
 ### 5. Dependencies
 Add any required packages to `/backend/requirements.txt`:
@@ -115,17 +125,7 @@ your-package-name==version
 ```vue
 <template>
   <div class="d-flex flex-column ga-3">
-    <!-- Input fields -->
-    <v-text-field
-      v-model="localParams.your_param"
-      label="Your Parameter"
-      placeholder="Enter value"
-      variant="outlined"
-      density="compact"
-      @update:model-value="updateParams"
-    />
-
-    <!-- Info card with plugin description -->
+    <!-- About card with plugin description (always at top) -->
     <v-card
       v-if="pluginDescription"
       color="blue-lighten-5"
@@ -141,6 +141,16 @@ your-package-name==version
         {{ pluginDescription }}
       </p>
     </v-card>
+
+    <!-- Input fields -->
+    <v-text-field
+      v-model="localParams.your_param"
+      label="Your Parameter"
+      placeholder="Enter value"
+      variant="outlined"
+      density="compact"
+      @update:model-value="updateParams"
+    />
   </div>
 </template>
 
@@ -321,11 +331,14 @@ docker compose restart backend
 - **Use appropriate categories** for plugin organization
 - **Handle errors gracefully** - yield error results instead of throwing exceptions
 - **Add delays** between API calls to be respectful (`await asyncio.sleep(0.1)`)
-- **Only yield meaningful results** - filter out noise
+- **Only yield meaningful results** - filter out noise, no status/completion messages
 - **Use appropriate timeouts** for external API calls
+- **Make evidence saving optional** - use user parameters instead of hardcoded `save_to_case = True`
+- **Keep output clean** - users want results, not progress updates
 
 ### Frontend
 - **Follow Vuetify patterns** for consistent UI
+- **Always place About card at top** of parameter components
 - **Provide clear parameter labels** and placeholders
 - **Include validation** for required fields
 - **Show copy functionality** for useful data
@@ -342,8 +355,8 @@ docker compose restart backend
 
 Study these existing plugins for reference:
 - **Simple API Plugin**: `holehe_plugin.py` - Direct library usage
-- **DNS Tool Plugin**: `dnslookup_plugin.py` - Network tools with caching
-- **Subprocess Plugin**: See correlation plugin for external tool execution
+- **DNS Tool Plugin**: `dnslookup_plugin.py` - Network tools with mode selection
+- **Database Plugin**: `correlation_plugin.py` - Case analysis with optional evidence saving
 
 ## Troubleshooting
 

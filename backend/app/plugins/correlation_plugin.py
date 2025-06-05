@@ -18,12 +18,18 @@ class CorrelationScan(BasePlugin):
         super().__init__(display_name="Correlation Scan")
         self.description = "Finds matching entities and relationships across cases"
         self.category = "Other"
-        self.save_to_case = True
+        self.save_to_case = False
         self.parameters = {
             "case_id": {
                 "type": "integer",
                 "description": "ID of the case to scan",
                 "required": True,
+            },
+            "save_to_case": {
+                "type": "boolean",
+                "description": "Save correlation results as evidence to the case",
+                "default": False,
+                "required": False,
             }
         }
 
@@ -124,12 +130,10 @@ class CorrelationScan(BasePlugin):
                         all_matches.append(match_data)
                         yield {"type": "data", "data": match_data}
 
-            # Create evidence if matches were found
-            if all_matches:
+            # Create evidence if matches were found and saving is enabled
+            save_to_case = params.get("save_to_case", False)
+            if all_matches and save_to_case:
                 await self._create_evidence_for_matches(db, case_id, all_matches)
-                
-            # Send completion signal
-            yield {"type": "complete", "data": {"message": "Correlation scan completed"}}
             
         except Exception as e:
             yield {"type": "error", "data": {"message": f"Error during correlation scan: {str(e)}"}}

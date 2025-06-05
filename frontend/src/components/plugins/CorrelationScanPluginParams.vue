@@ -1,10 +1,26 @@
 <template>
   <div class="d-flex flex-column ga-3">
+    <!-- About Plugin Information Card -->
+    <v-card
+      v-if="pluginDescription"
+      color="blue-lighten-5"
+      elevation="0"
+      rounded="lg"
+      class="pa-3"
+    >
+      <div class="d-flex align-center ga-2 mb-2">
+        <v-icon color="blue">mdi-information</v-icon>
+        <span class="text-subtitle2 font-weight-medium">About</span>
+      </div>
+      <p class="text-body-2 mb-0">
+        {{ pluginDescription }}
+      </p>
+    </v-card>
+
     <!-- Case Selection -->
     <v-select
       v-model="localParams.case_id"
       label="Case to Scan"
-      hint="Select the case to scan for entity correlations"
       :items="caseItems"
       :loading="loadingCases"
       :disabled="loadingCases"
@@ -23,7 +39,7 @@
         </v-list-item>
         <v-divider />
       </template>
-      
+
       <template #no-data>
         <v-list-item>
           <v-list-item-title class="text-medium-emphasis">
@@ -33,22 +49,15 @@
       </template>
     </v-select>
 
-    <!-- About Plugin Information Card -->
-    <v-card
-      v-if="pluginDescription"
-      color="blue-lighten-5"
-      elevation="0"
-      rounded="lg"
-      class="pa-3"
-    >
-      <div class="d-flex align-center ga-2 mb-2">
-        <v-icon color="blue">mdi-information</v-icon>
-        <span class="text-subtitle2 font-weight-medium">About</span>
-      </div>
-      <p class="text-body-2 mb-0">
-        {{ pluginDescription }}
-      </p>
-    </v-card>
+    <!-- Save to Case Option -->
+    <v-switch
+      v-model="localParams.save_to_case"
+      label="Save to case evidence"
+      persistent-hint
+      color="primary"
+      density="compact"
+      @update:model-value="updateParams"
+    />
 
     <!-- Selected Case Info -->
     <v-card v-if="selectedCase" variant="outlined" class="mt-2">
@@ -97,7 +106,8 @@ const loadingCases = ref(true)
 
 // Local parameter state
 const localParams = reactive({
-  case_id: props.modelValue.case_id || null
+  case_id: props.modelValue.case_id || null,
+  save_to_case: props.modelValue.save_to_case !== undefined ? props.modelValue.save_to_case : false
 })
 
 // Computed properties
