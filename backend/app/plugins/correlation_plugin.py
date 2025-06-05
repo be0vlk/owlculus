@@ -16,7 +16,7 @@ class CorrelationScan(BasePlugin):
 
     def __init__(self):
         super().__init__(display_name="Correlation Scan")
-        self.description = "Scans for matching entities across your cases"
+        self.description = "Finds matching entities and relationships across cases"
         self.category = "Other"
         self.save_to_case = True
         self.parameters = {
