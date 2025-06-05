@@ -45,8 +45,74 @@
           border="start"
         />
 
-        <!-- User Management Table -->
-        <v-card v-else>
+        <!-- Main Content -->
+        <div v-else>
+          <!-- Case Number Configuration Card -->
+          <v-card class="mb-6">
+            <v-card-title class="d-flex align-center">
+              <v-icon icon="mdi-format-list-numbered" class="me-2" />
+              Case Number Configuration
+            </v-card-title>
+            
+            <v-card-text>
+              <v-row>
+                <v-col cols="12" md="6">
+                  <v-select
+                    v-model="selectedTemplate"
+                    :items="templateOptions"
+                    item-title="display_name"
+                    item-value="value"
+                    label="Case Number Format"
+                    variant="outlined"
+                    density="compact"
+                    @update:model-value="onTemplateChange"
+                  />
+                </v-col>
+                
+                <v-col cols="12" md="6" v-if="selectedTemplate === 'PREFIX-YYMM-NN'">
+                  <v-text-field
+                    v-model="caseNumberPrefix"
+                    label="Prefix (2-8 letters/numbers)"
+                    variant="outlined"
+                    density="compact"
+                    :rules="[validatePrefix]"
+                    @input="onPrefixChange"
+                  />
+                </v-col>
+              </v-row>
+              
+              <v-row v-if="exampleCaseNumber">
+                <v-col cols="12">
+                  <v-alert
+                    type="info"
+                    variant="tonal"
+                    density="compact"
+                  >
+                    <template #text>
+                      <strong>Preview:</strong> Next case will be numbered like: 
+                      <code class="text-primary">{{ exampleCaseNumber }}</code>
+                    </template>
+                  </v-alert>
+                </v-col>
+              </v-row>
+              
+              <v-row>
+                <v-col cols="12" class="d-flex justify-end">
+                  <v-btn
+                    color="primary"
+                    :loading="configLoading"
+                    :disabled="!isConfigChanged || !isConfigValid"
+                    @click="saveConfiguration"
+                  >
+                    Save Configuration
+                  </v-btn>
+                </v-col>
+              </v-row>
+            </v-card-text>
+          </v-card>
+
+          <!-- User Management Table -->
+          <v-card>
           <v-card-title class="d-flex align-center justify-end">
             <!-- Search Field -->
             <v-text-field
@@ -82,10 +148,7 @@
             <!-- Created date -->
             <template #[`item.created_at`]="{ item }">
               <span class="text-body-2">
-                {{ formatRelativeDate(item.created_at) }}
-                <v-tooltip activator="parent" location="top">
-                  {{ formatDate(item.created_at) }}
-                </v-tooltip>
+                {{ formatDate(item.created_at) }}
               </span>
             </template>
 
@@ -157,7 +220,8 @@
               </div>
             </template>
           </v-data-table>
-        </v-card>
+          </v-card>
+        </div>
       </v-container>
     </v-main>
     
@@ -176,19 +240,37 @@
       @close="closePasswordResetModal"
       @saved="handlePasswordResetSaved"
     />
+
+    <!-- Snackbar for notifications -->
+    <v-snackbar
+      v-model="snackbar.show"
+      :color="snackbar.color"
+      :timeout="snackbar.timeout"
+      location="top right"
+    >
+      {{ snackbar.text }}
+      <template #actions>
+        <v-btn
+          variant="text"
+          @click="snackbar.show = false"
+        >
+          Close
+        </v-btn>
+      </template>
+    </v-snackbar>
   </v-app>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { userService } from '@/services/user'
+import api from '@/services/api'
 import Sidebar from '../components/Sidebar.vue'
 import UserModal from '../components/UserModal.vue'
 import PasswordResetModal from '../components/PasswordResetModal.vue'
 import { formatDate } from '@/composables/dateUtils'
-import { formatDistanceToNow } from 'date-fns'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -215,6 +297,27 @@ const vuetifyHeaders = [
 const showPasswordResetModal = ref(false)
 const selectedUserForPasswordReset = ref(null)
 
+// Configuration state
+const selectedTemplate = ref('YYMM-NN')
+const caseNumberPrefix = ref('')
+const originalTemplate = ref('YYMM-NN')
+const originalPrefix = ref('')
+const configLoading = ref(false)
+const exampleCaseNumber = ref('')
+
+// Snackbar state
+const snackbar = ref({
+  show: false,
+  text: '',
+  color: 'success',
+  timeout: 4000
+})
+
+const templateOptions = [
+  { display_name: 'Monthly Reset (YYMM-NN)', value: 'YYMM-NN' },
+  { display_name: 'Prefix + Monthly Reset (PREFIX-YYMM-NN)', value: 'PREFIX-YYMM-NN' }
+]
+
 const getRoleColor = (role) => {
   switch (role) {
     case 'Admin': return 'error'
@@ -236,7 +339,112 @@ const closePasswordResetModal = () => {
 
 const handlePasswordResetSaved = () => {
   closePasswordResetModal()
-  alert('Password has been reset successfully')
+  showNotification('Password has been reset successfully', 'success')
+}
+
+// Snackbar helper function
+const showNotification = (text, color = 'success') => {
+  snackbar.value.text = text
+  snackbar.value.color = color
+  snackbar.value.show = true
+}
+
+// Configuration computed properties
+const isConfigChanged = computed(() => {
+  return selectedTemplate.value !== originalTemplate.value || 
+         caseNumberPrefix.value !== originalPrefix.value
+})
+
+const isConfigValid = computed(() => {
+  if (selectedTemplate.value === 'PREFIX-YYMM-NN') {
+    return validatePrefix(caseNumberPrefix.value) === true
+  }
+  return true
+})
+
+// Configuration methods
+const validatePrefix = (value) => {
+  if (selectedTemplate.value === 'PREFIX-YYMM-NN') {
+    if (!value) return 'Prefix is required'
+    if (!/^[A-Za-z0-9]{2,8}$/.test(value)) {
+      return 'Prefix must be 2-8 alphanumeric characters'
+    }
+  }
+  return true
+}
+
+const onTemplateChange = async () => {
+  if (selectedTemplate.value !== 'PREFIX-YYMM-NN') {
+    caseNumberPrefix.value = ''
+  }
+  await updatePreview()
+}
+
+const onPrefixChange = async () => {
+  await updatePreview()
+}
+
+const updatePreview = async () => {
+  if (!isConfigValid.value) {
+    exampleCaseNumber.value = ''
+    return
+  }
+  
+  try {
+    const params = new URLSearchParams({
+      template: selectedTemplate.value
+    })
+    
+    if (selectedTemplate.value === 'PREFIX-YYMM-NN' && caseNumberPrefix.value) {
+      params.append('prefix', caseNumberPrefix.value)
+    }
+    
+    const response = await api.get(`/api/admin/configuration/preview?${params}`)
+    exampleCaseNumber.value = response.data.example_case_number
+  } catch (error) {
+    console.error('Error updating preview:', error)
+    exampleCaseNumber.value = ''
+  }
+}
+
+const loadConfiguration = async () => {
+  try {
+    const response = await api.get('/api/admin/configuration')
+    const config = response.data
+    
+    selectedTemplate.value = config.case_number_template
+    caseNumberPrefix.value = config.case_number_prefix || ''
+    originalTemplate.value = config.case_number_template
+    originalPrefix.value = config.case_number_prefix || ''
+    
+    await updatePreview()
+  } catch (error) {
+    console.error('Error loading configuration:', error)
+  }
+}
+
+const saveConfiguration = async () => {
+  if (!isConfigValid.value) return
+  
+  configLoading.value = true
+  try {
+    const configData = {
+      case_number_template: selectedTemplate.value,
+      case_number_prefix: selectedTemplate.value === 'PREFIX-YYMM-NN' ? caseNumberPrefix.value : null
+    }
+    
+    await api.put('/api/admin/configuration', configData)
+    
+    originalTemplate.value = selectedTemplate.value
+    originalPrefix.value = caseNumberPrefix.value
+    
+    showNotification('Configuration saved successfully!', 'success')
+  } catch (error) {
+    console.error('Error saving configuration:', error)
+    showNotification('Failed to save configuration. Please try again.', 'error')
+  } finally {
+    configLoading.value = false
+  }
 }
 
 onMounted(async () => {
@@ -246,12 +454,18 @@ onMounted(async () => {
   }
 
   try {
-    const userData = await userService.getUsers()
+    // Load both users and configuration in parallel
+    const [userData] = await Promise.all([
+      userService.getUsers(),
+      loadConfiguration()
+    ])
+    
     users.value = userData
     loading.value = false
   } catch (err) {
-    error.value = 'Failed to load users. Please try again later.'
-    console.error('Error loading users:', err)
+    error.value = 'Failed to load admin data. Please try again later.'
+    console.error('Error loading admin data:', err)
+    loading.value = false
   }
 })
 
@@ -315,17 +529,6 @@ const deleteUser = async (user) => {
   }
 }
 
-// Function to format relative dates
-const formatRelativeDate = (dateString) => {
-  if (!dateString) return 'N/A'
-  try {
-    // Parse the datetime string directly - backend provides ISO format with timezone
-    return formatDistanceToNow(new Date(dateString), { addSuffix: true })
-  } catch (error) {
-    console.error('Error formatting relative date:', error)
-    return 'Invalid date'
-  }
-}
 
 // Empty state functions
 const getEmptyStateTitle = () => {

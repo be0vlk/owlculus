@@ -93,7 +93,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { userService } from '../services/user'
 // Vuetify components are auto-imported
 
@@ -139,15 +139,26 @@ const resetForm = () => {
   }
 }
 
-onMounted(() => {
+const updateFormData = () => {
   if (props.user) {
     formData.value = {
       ...formData.value,
       ...props.user,
       password: '' // Don't include password when editing
     }
+  } else {
+    resetForm()
   }
+}
+
+onMounted(() => {
+  updateFormData()
 })
+
+// Watch for changes to the user prop to update form data
+watch(() => props.user, () => {
+  updateFormData()
+}, { immediate: true })
 
 const handleSubmit = async () => {
   try {

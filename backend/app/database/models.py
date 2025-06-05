@@ -80,6 +80,14 @@ class Entity(SQLModel, table=True):
     creator: "User" = Relationship()
 
 
+class SystemConfiguration(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    case_number_template: str = Field(default="YYMM-NN")
+    case_number_prefix: Optional[str] = Field(default=None)
+    created_at: datetime = Field(default_factory=get_utc_now)
+    updated_at: datetime = Field(default_factory=get_utc_now)
+
+
 class Case(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     client_id: Optional[int] = Field(default=None, foreign_key="client.id")

@@ -59,22 +59,6 @@
       @update:model-value="updateParams"
     />
 
-    <!-- Selected Case Info -->
-    <v-card v-if="selectedCase" variant="outlined" class="mt-2">
-      <v-card-text class="pa-3">
-        <div class="d-flex align-center">
-          <v-avatar color="primary" variant="tonal" class="mr-3">
-            <span class="text-body-2 font-weight-bold">#{{ selectedCase.case_number }}</span>
-          </v-avatar>
-          <div>
-            <div class="font-weight-medium">{{ selectedCase.title }}</div>
-            <div class="text-body-2 text-medium-emphasis">
-              Created {{ formatDateOnly(selectedCase.created_at) }}
-            </div>
-          </div>
-        </div>
-      </v-card-text>
-    </v-card>
   </div>
 </template>
 

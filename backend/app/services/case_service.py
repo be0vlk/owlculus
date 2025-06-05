@@ -11,30 +11,43 @@ from app import schemas
 from app.core.utils import get_utc_now
 from app.core.dependencies import admin_only, no_analyst
 from app.core.file_storage import create_case_directory
+from app.services.system_config_service import SystemConfigService
 
 
 class CaseService:
     def __init__(self, db: Session):
         self.db = db
+        self.config_service = SystemConfigService(db)
 
     async def _generate_case_number(self, current_time: datetime) -> str:
+        # Get system configuration
+        config = await self.config_service.get_configuration()
+        
         # Extract year and month from current time
         year = str(current_time.year)[2:]
         month = str(current_time.month).zfill(2)
-        prefix = f"{year}{month}"
+        
+        # Build search pattern based on template
+        if config.case_number_template == "PREFIX-YYMM-NN" and config.case_number_prefix:
+            search_pattern = f"{config.case_number_prefix}-{year}{month}-%"
+            base_format = f"{config.case_number_prefix}-{year}{month}"
+        else:
+            # Default to YYMM-NN format
+            search_pattern = f"{year}{month}-%"
+            base_format = f"{year}{month}"
 
         # Find the highest case number for this month
-        stmt = select(models.Case).where(models.Case.case_number.like(f"{prefix}-%"))
+        stmt = select(models.Case).where(models.Case.case_number.like(search_pattern))
         cases = self.db.exec(stmt).all()
 
         if not cases:
-            return f"{prefix}-01"
+            return f"{base_format}-01"
 
-        # Get the highest number
-        highest = max(int(case.case_number.split("-")[1]) for case in cases)
+        # Get the highest number from the last part after the final dash
+        highest = max(int(case.case_number.split("-")[-1]) for case in cases)
         # Increment and ensure 2 digits
         next_number = str(highest + 1).zfill(2)
-        return f"{prefix}-{next_number}"
+        return f"{base_format}-{next_number}"
 
     @admin_only()
     async def create_case(
