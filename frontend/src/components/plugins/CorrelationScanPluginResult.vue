@@ -90,6 +90,16 @@
       >
         {{ resultItem.data.message }}
       </v-alert>
+
+      <!-- Completion Message -->
+      <v-alert
+        v-else-if="resultItem.type === 'complete'"
+        type="success"
+        density="comfortable"
+        variant="tonal"
+      >
+        {{ resultItem.data.message }}
+      </v-alert>
     </template>
 
     <!-- No Results -->

@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     DATABASE_URI: str = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
     BACKEND_CORS_ORIGINS: list[str | AnyHttpUrl] = [
         os.environ.get("FRONTEND_URL", "http://localhost:5173"),
+        "http://localhost",
+        "http://localhost:80",
     ]
     ALGORITHM: str = "HS256"
 

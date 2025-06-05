@@ -28,7 +28,9 @@ async def stream_generator(plugin_name: str, params: Dict[str, Any] = None, curr
         async for line in result:
             yield json.dumps(line) + "\n"
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        yield json.dumps({"type": "error", "data": {"message": str(e)}}) + "\n"
+    except Exception as e:
+        yield json.dumps({"type": "error", "data": {"message": f"Plugin execution error: {str(e)}"}}) + "\n"
 
 @router.post("/{plugin_name}/execute")
 async def execute_plugin(

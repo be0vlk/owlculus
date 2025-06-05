@@ -2,10 +2,8 @@
 Plugin for scanning and correlating entity names across cases
 """
 
-from typing import AsyncGenerator, Dict, Any, Optional
-import json
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from typing import AsyncGenerator, Dict, Any, Optional, List
+from sqlmodel import select, Session
 
 from .base_plugin import BasePlugin
 from ..database.models import Entity, Case, CaseUserLink
@@ -37,11 +35,7 @@ class CorrelationScan(BasePlugin):
         self, params: Optional[Dict[str, Any]] = None
     ) -> AsyncGenerator[Dict[str, Any], None]:
         if not params:
-            yield json.loads(
-                json.dumps(
-                    {"type": "error", "data": {"message": "Parameters are required"}}
-                )
-            )
+            yield {"type": "error", "data": {"message": "Parameters are required"}}
             return
 
         db = next(get_db())
@@ -54,208 +48,142 @@ class CorrelationScan(BasePlugin):
     async def execute(
         self, params: Dict[str, Any], db: Session
     ) -> AsyncGenerator[Dict[str, Any], None]:
-        if not self._current_user:
-            yield json.loads(
-                json.dumps(
-                    {"type": "error", "data": {"message": "Current user not found"}}
+        try:
+            if not self._current_user:
+                yield {"type": "error", "data": {"message": "Current user not found"}}
+                return
+
+            case_id = params.get("case_id")
+            if not case_id:
+                yield {"type": "error", "data": {"message": "Case ID is required"}}
+                return
+
+            # Verify user has access to this case
+            stmt = select(CaseUserLink).where(
+                CaseUserLink.case_id == case_id,
+                CaseUserLink.user_id == self._current_user.id,
+            )
+            result = db.execute(stmt)
+            if not result.first():
+                yield {
+                    "type": "error",
+                    "data": {"message": "You do not have access to this case"},
+                }
+                return
+
+            # Get all entities from the specified case
+            case_entities = await self._get_case_entities(db, case_id)
+
+            # Collect all matches
+            all_matches = []
+
+            for entity in case_entities:
+                # Extract and normalize entity name based on type
+                entity_name = self._get_display_name(entity.data, entity.entity_type)
+                employer_name = None
+                
+                if entity.entity_type == "person" and entity.data:
+                    employer_name = entity.data.get("employer", "")
+                
+                if not entity_name:
+                    continue
+
+                # Find name matches
+                name_matches = await self._find_name_matches(
+                    db, entity, entity_name
                 )
-            )
-            return
 
-        case_id = params.get("case_id")
-        if not case_id:
-            yield json.loads(
-                json.dumps(
-                    {"type": "error", "data": {"message": "Case ID is required"}}
-                )
-            )
-            return
-
-        # Verify user has access to this case
-        stmt = select(CaseUserLink).where(
-            CaseUserLink.case_id == case_id,
-            CaseUserLink.user_id == self._current_user.id,
-        )
-        result = db.execute(stmt)
-        if not result.first():
-            yield json.loads(
-                json.dumps(
-                    {
-                        "type": "error",
-                        "data": {"message": "You do not have access to this case"},
-                    }
-                )
-            )
-            return
-
-        # Get all entities from the specified case
-        case_entities = await self._get_case_entities(db, case_id)
-
-        # Collect all matches
-        all_matches = []
-
-        for entity in case_entities:
-            entity_name = None
-            employer_name = None
-
-            # Handle different entity types
-            if entity.entity_type == "company":
-                entity_name = entity.data.get("name", "")
-            elif entity.entity_type == "person":
-                first_name = entity.data.get("first_name", "")
-                last_name = entity.data.get("last_name", "")
-                employer_name = entity.data.get("employer", "")
-                if first_name or last_name:
-                    entity_name = f"{first_name} {last_name}".strip()
-            else:
-                entity_name = entity.data.get("Name", "")  # fallback for other types
-
-            if not entity_name:
-                continue
-
-            # Store original case for display
-            original_name = entity_name
-            entity_name = entity_name.lower()
-
-            # Find name matches in all cases
-            matches = await self._find_name_matches(
-                db, entity_name, entity.id, entity.entity_type
-            )
-
-            if matches:
-                all_matches.append(
-                    {
+                if name_matches:
+                    match_data = {
                         "entity_id": entity.id,
-                        "entity_name": original_name,
+                        "entity_name": entity_name,
                         "entity_type": entity.entity_type,
                         "match_type": "name",
-                        "matches": matches,
+                        "case_id": case_id,
+                        "matches": name_matches,
                     }
-                )
+                    all_matches.append(match_data)
+                    yield {"type": "data", "data": match_data}
 
-                yield json.loads(
-                    json.dumps(
-                        {
-                            "type": "data",
-                            "data": {
-                                "entity_id": entity.id,
-                                "entity_name": original_name,
-                                "entity_type": entity.entity_type,
-                                "match_type": "name",
-                                "case_id": case_id,
-                                "matches": matches,
-                            },
-                        }
+                # If this is a person entity with an employer, check for employer matches
+                if employer_name:
+                    employer_matches = await self._find_employer_matches(
+                        db, entity, employer_name
                     )
-                )
 
-            # If this is a person entity with an employer, check for employer matches
-            if entity.entity_type == "person" and employer_name:
-                employer_matches = await self._find_employer_matches(
-                    db, employer_name, entity.id
-                )
-
-                if employer_matches:
-                    all_matches.append(
-                        {
+                    if employer_matches:
+                        match_data = {
                             "entity_id": entity.id,
-                            "entity_name": original_name,
+                            "entity_name": entity_name,
                             "entity_type": entity.entity_type,
                             "match_type": "employer",
                             "employer_name": employer_name,
+                            "case_id": case_id,
                             "matches": employer_matches,
                         }
-                    )
+                        all_matches.append(match_data)
+                        yield {"type": "data", "data": match_data}
 
-                    yield json.loads(
-                        json.dumps(
-                            {
-                                "type": "data",
-                                "data": {
-                                    "entity_id": entity.id,
-                                    "entity_name": original_name,
-                                    "entity_type": entity.entity_type,
-                                    "match_type": "employer",
-                                    "employer_name": employer_name,
-                                    "case_id": case_id,
-                                    "matches": employer_matches,
-                                },
-                            }
-                        )
-                    )
+            # Create evidence if matches were found
+            if all_matches:
+                await self._create_evidence_for_matches(db, case_id, all_matches)
+                
+            # Send completion signal
+            yield {"type": "complete", "data": {"message": "Correlation scan completed"}}
+            
+        except Exception as e:
+            yield {"type": "error", "data": {"message": f"Error during correlation scan: {str(e)}"}}
 
-        # Create a single evidence file for all matches
-        if all_matches:
-            await self._create_evidence_for_matches(db, case_id, all_matches)
-
-    async def _get_case_entities(self, db: Session, case_id: int) -> list[Entity]:
+    async def _get_case_entities(self, db: Session, case_id: int) -> List[Entity]:
         """Get all entities for a specific case"""
         stmt = select(Entity).where(Entity.case_id == case_id)
         result = db.execute(stmt)
         return result.scalars().all()
 
     async def _find_name_matches(
-        self, db: Session, name: str, exclude_entity_id: int, entity_type: str
-    ) -> list[Dict[str, Any]]:
+        self, db: Session, source_entity: Entity, entity_name: str
+    ) -> List[Dict[str, Any]]:
         """Find entities with matching names across all cases assigned to the current user"""
+        # Get all accessible entities of the same type
         stmt = (
             select(Entity, Case)
             .join(Case)
             .join(CaseUserLink, Case.id == CaseUserLink.case_id)
             .where(
-                Entity.id != exclude_entity_id,
-                Entity.entity_type == entity_type,
+                Entity.id != source_entity.id,
+                Entity.entity_type == source_entity.entity_type,
                 CaseUserLink.user_id == self._current_user.id,
             )
         )
         result = db.execute(stmt)
 
         matches = []
+        normalized_source_name = entity_name.lower()
+        
         for entity, case in result:
-            match_found = False
-
-            if entity_type == "company":
-                match_found = entity.data.get("name", "").lower() == name
-            elif entity_type == "person":
-                first_name = entity.data.get("first_name", "").lower()
-                last_name = entity.data.get("last_name", "").lower()
-                full_name = f"{first_name} {last_name}".strip()
-                match_found = full_name == name
-            else:
-                match_found = entity.data.get("Name", "").lower() == name
-
-            if match_found:
-                matches.append(
-                    {
-                        "entity_id": entity.id,
-                        "entity_type": entity.entity_type,
-                        "case_id": entity.case_id,
-                        "case_number": case.case_number,
-                        "case_title": case.title,
-                    }
-                )
+            # Check if names match based on entity type
+            match_name = self._get_display_name(entity.data, entity.entity_type)
+            if match_name and match_name.lower() == normalized_source_name:
+                matches.append({
+                    "entity_id": entity.id,
+                    "entity_type": entity.entity_type,
+                    "case_id": entity.case_id,
+                    "case_number": case.case_number,
+                    "case_title": case.title,
+                })
 
         return matches
 
     async def _find_employer_matches(
-        self, db: Session, employer_name: str, exclude_entity_id: int
-    ) -> list[Dict[str, Any]]:
-        """Find entities with matching employer names across all cases assigned to the current user
-
-        Args:
-            db: Database session
-            employer_name: Name of the employer to match
-            exclude_entity_id: Entity ID to exclude from matches
-
-        Returns:
-            List of matching entities with their case information
-        """
+        self, db: Session, source_entity: Entity, employer_name: str
+    ) -> List[Dict[str, Any]]:
+        """Find entities with matching employer names across all cases assigned to the current user"""
         stmt = (
             select(Entity, Case)
             .join(Case)
             .join(CaseUserLink, Case.id == CaseUserLink.case_id)
             .where(
-                Entity.id != exclude_entity_id,
+                Entity.id != source_entity.id,
                 Entity.entity_type == "person",
                 CaseUserLink.user_id == self._current_user.id,
             )
@@ -263,32 +191,41 @@ class CorrelationScan(BasePlugin):
         result = db.execute(stmt)
 
         matches = []
+        normalized_employer = employer_name.lower()
+        
         for entity, case in result:
-            if entity.data is None:
-                continue
-            employer_value = entity.data.get("employer")
-            if employer_value is None:
-                continue
-            employer = employer_value.lower()
-            if employer and employer == employer_name.lower():
-                matches.append(
-                    {
-                        "entity_id": entity.id,
-                        "entity_type": entity.entity_type,
-                        "case_id": entity.case_id,
-                        "case_number": case.case_number,
-                        "case_title": case.title,
-                        "person_name": f"{entity.data.get('first_name', '')} {entity.data.get('last_name', '')}".strip(),
-                    }
-                )
+            if entity.data and entity.data.get("employer", "").lower() == normalized_employer:
+                person_name = self._get_display_name(entity.data, "person")
+                matches.append({
+                    "entity_id": entity.id,
+                    "entity_type": entity.entity_type,
+                    "case_id": entity.case_id,
+                    "case_number": case.case_number,
+                    "case_title": case.title,
+                    "person_name": person_name,
+                })
 
         return matches
+
+    def _get_display_name(self, data: dict, entity_type: str) -> str:
+        """Extract display name from entity data based on type"""
+        if not data:
+            return ""
+            
+        if entity_type == "company":
+            return data.get("name", "")
+        elif entity_type == "person":
+            first_name = data.get("first_name", "")
+            last_name = data.get("last_name", "")
+            return f"{first_name} {last_name}".strip()
+        else:
+            return data.get("Name", "")
 
     async def _create_evidence_for_matches(
         self,
         db: Session,
         case_id: int,
-        matches: list[Dict[str, Any]],
+        matches: List[Dict[str, Any]],
     ) -> None:
         """Create single evidence entry for all entity matches"""
         if not matches:
