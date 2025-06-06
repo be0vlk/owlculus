@@ -33,6 +33,7 @@
         color="primary"
         rounded="xl"
         class="ma-1"
+        min-height="56"
       />
     </v-list>
 
@@ -45,6 +46,7 @@
           :text="isDark ? 'Light Mode' : 'Dark Mode'"
           variant="text"
           block
+          size="large"
           class="mb-2 justify-start"
           @click="toggleDark"
         />
@@ -55,6 +57,7 @@
           color="error"
           variant="text"
           block
+          size="large"
           class="justify-start"
           @click="handleLogout"
         />

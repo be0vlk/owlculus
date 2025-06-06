@@ -3,35 +3,26 @@
     <Sidebar />
     
     <v-main>
-      <v-container class="pa-6">
-        <!-- Page Header -->
-        <div class="mb-6">
-          <v-row align="center" justify="space-between">
-            <v-col>
-              <h1 class="text-h4 font-weight-bold">
-                Clients Dashboard
-              </h1>
-            </v-col>
-            <v-col cols="auto">
-              <v-btn
-                color="primary"
-                prepend-icon="mdi-plus"
-                @click="openNewClientModal"
-              >
-                Add Client
-              </v-btn>
-            </v-col>
-          </v-row>
-        </div>
+      <v-container fluid class="pa-6">
+        <!-- Page Header Card -->
+        <v-card class="mb-6 header-gradient">
+          <v-card-title class="d-flex align-center pa-6 text-white">
+            <div class="text-h4 font-weight-bold">Clients Dashboard</div>
+          </v-card-title>
+        </v-card>
 
         <!-- Loading state -->
-        <v-card v-if="loading">
-          <v-card-title class="d-flex align-center justify-end pa-6">
-            <v-skeleton-loader type="text" width="300" />
+        <v-card v-if="loading" variant="outlined">
+          <v-card-title class="d-flex align-center pa-4 bg-surface">
+            <v-skeleton-loader type="text" width="200" />
+            <v-spacer />
+            <v-skeleton-loader type="button" width="120" />
+            <v-skeleton-loader type="text" width="200" class="ml-2" />
           </v-card-title>
+          <v-divider />
           <v-skeleton-loader 
             type="table" 
-            class="ma-4"
+            class="pa-4"
           />
         </v-card>
 
@@ -39,26 +30,77 @@
         <v-alert
           v-else-if="error"
           type="error"
-          class="ma-4"
-          :text="error"
-          prominent
+          variant="tonal"
           border="start"
-        />
+          prominent
+          icon="mdi-alert-circle"
+          class="mb-6"
+        >
+          <v-alert-title>Error Loading Clients</v-alert-title>
+          {{ error }}
+        </v-alert>
 
         <!-- Clients Data Table -->
-        <v-card v-else>
-          <v-card-title class="d-flex align-center justify-end">
-            <!-- Search Field -->
-            <v-text-field
-              v-model="searchQuery"
-              prepend-inner-icon="mdi-magnify"
-              label="Search clients..."
-              variant="outlined"
-              density="compact"
-              hide-details
-              style="min-width: 300px;"
-            />
+        <v-card v-else variant="outlined">
+          <!-- Header -->
+          <v-card-title class="d-flex align-center pa-4 bg-surface">
+            <v-icon icon="mdi-account-group" color="primary" size="large" class="me-3" />
+            <div class="flex-grow-1">
+              <div class="text-h6 font-weight-bold">Client Management</div>
+              <div class="text-body-2 text-medium-emphasis">Manage client accounts and information</div>
+            </div>
+            <div class="d-flex align-center ga-2">
+              <v-btn
+                color="primary"
+                variant="flat"
+                prepend-icon="mdi-plus"
+                @click="openNewClientModal"
+              >
+                Add Client
+              </v-btn>
+              <v-tooltip text="Refresh client list" location="bottom">
+                <template #activator="{ props }">
+                  <v-btn
+                    v-bind="props"
+                    icon="mdi-refresh"
+                    variant="outlined"
+                    @click="loadData"
+                    :loading="loading"
+                  />
+                </template>
+              </v-tooltip>
+            </div>
           </v-card-title>
+          
+          <v-divider />
+          
+          <!-- Search Toolbar -->
+          <v-card-text class="pa-4">
+            <v-row align="center" class="mb-0">
+              <v-col cols="12" md="8">
+                <!-- Could add filters here in the future -->
+              </v-col>
+              
+              <!-- Search Controls -->
+              <v-col cols="12" md="4">
+                <div class="d-flex align-center ga-4 justify-end">
+                  <!-- Search Field -->
+                  <v-text-field
+                    v-model="searchQuery"
+                    prepend-inner-icon="mdi-magnify"
+                    label="Search clients..."
+                    variant="outlined"
+                    density="comfortable"
+                    hide-details
+                    style="min-width: 280px;"
+                    clearable
+                  />
+                </div>
+              </v-col>
+            </v-row>
+          </v-card-text>
+          
+          <v-divider />
 
           <v-data-table
             :headers="vuetifyHeaders"
@@ -78,18 +120,32 @@
 
             <!-- Actions column -->
             <template #[`item.actions`]="{ item }">
-              <v-btn
-                color="error"
-                size="small"
-                variant="outlined"
-                icon
-                @click="handleDelete(item)"
-              >
-                <v-icon>mdi-delete</v-icon>
-                <v-tooltip activator="parent" location="top">
-                  Delete {{ item.name }}
-                </v-tooltip>
-              </v-btn>
+              <div class="d-flex ga-2">
+                <v-btn
+                  color="info"
+                  size="small"
+                  variant="outlined"
+                  icon
+                  @click="openEditClientModal(item)"
+                >
+                  <v-icon>mdi-pencil</v-icon>
+                  <v-tooltip activator="parent" location="top">
+                    Edit {{ item.name }}
+                  </v-tooltip>
+                </v-btn>
+                <v-btn
+                  color="error"
+                  size="small"
+                  variant="outlined"
+                  icon
+                  @click="handleDelete(item)"
+                >
+                  <v-icon>mdi-delete</v-icon>
+                  <v-tooltip activator="parent" location="top">
+                    Delete {{ item.name }}
+                  </v-tooltip>
+                </v-btn>
+              </div>
             </template>
 
             <!-- Empty state -->
@@ -136,6 +192,24 @@
       @close="closeEditClientModal"
       @updated="handleClientUpdated"
     />
+
+    <!-- Snackbar for notifications -->
+    <v-snackbar
+      v-model="snackbar.show"
+      :color="snackbar.color"
+      :timeout="snackbar.timeout"
+      location="top right"
+    >
+      {{ snackbar.text }}
+      <template #actions>
+        <v-btn
+          variant="text"
+          @click="snackbar.show = false"
+        >
+          Close
+        </v-btn>
+      </template>
+    </v-snackbar>
   </v-app>
 </template>
 
@@ -171,6 +245,14 @@ const isNewClientModalOpen = ref(false)
 const isEditClientModalOpen = ref(false)
 const selectedClient = ref(null)
 
+// Snackbar state
+const snackbar = ref({
+  show: false,
+  text: '',
+  color: 'success',
+  timeout: 4000
+})
+
 const openNewClientModal = () => {
   isNewClientModalOpen.value = true
 }
@@ -181,6 +263,7 @@ const closeNewClientModal = () => {
 
 const handleClientCreated = (newClient) => {
   clients.value.push(newClient)
+  showNotification(`Client "${newClient.name}" created successfully`, 'success')
 }
 
 const openEditClientModal = (client) => {
@@ -197,6 +280,7 @@ const handleClientUpdated = (updatedClient) => {
   const index = clients.value.findIndex(c => c.id === updatedClient.id)
   if (index !== -1) {
     clients.value[index] = updatedClient
+    showNotification(`Client "${updatedClient.name}" updated successfully`, 'success')
   }
 }
 
@@ -210,11 +294,19 @@ const handleDelete = async (client) => {
   try {
     await clientService.deleteClient(client.id)
     clients.value = clients.value.filter(c => c.id !== client.id)
+    showNotification(`Client "${client.name}" deleted successfully`, 'success')
   } catch (error) {
     console.error('Error deleting client:', error)
+    showNotification('Failed to delete client. Please try again.', 'error')
   }
 }
 
+// Snackbar helper function
+const showNotification = (text, color = 'success') => {
+  snackbar.value.text = text
+  snackbar.value.color = color
+  snackbar.value.show = true
+}
 
 // Empty state functions
 const getEmptyStateTitle = () => {
@@ -247,6 +339,10 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.header-gradient {
+  background: linear-gradient(135deg, rgb(var(--v-theme-primary)) 0%, rgba(var(--v-theme-primary), 0.8) 100%) !important;
+}
+
 .clients-dashboard-table :deep(.v-data-table__tr:hover) {
   background-color: rgba(var(--v-theme-primary), 0.04) !important;
   cursor: pointer;

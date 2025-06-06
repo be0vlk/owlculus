@@ -3,63 +3,79 @@
     <Sidebar />
     
     <v-main>
-      <v-container class="pa-6">
+      <v-container fluid class="pa-6">
         <!-- Loading state -->
-        <v-card-text v-if="loading" class="text-center pa-16">
-          <v-progress-circular
-            size="64"
-            width="4"
-            color="primary"
-            indeterminate
-          />
-          <v-card-text class="text-h6 mt-4">Loading case...</v-card-text>
-        </v-card-text>
+        <v-row v-if="loading" justify="center" align="center" class="fill-height">
+          <v-col cols="12" class="text-center">
+            <v-card variant="outlined" class="pa-8 mx-auto" max-width="400">
+              <v-progress-circular
+                size="64"
+                width="4"
+                color="primary"
+                indeterminate
+                class="mb-4"
+              />
+              <div class="text-h6">Loading case...</div>
+              <div class="text-body-2 text-medium-emphasis">Please wait while we load your case data</div>
+            </v-card>
+          </v-col>
+        </v-row>
 
         <!-- Error state -->
-        <v-alert
-          v-else-if="error"
-          type="error"
-          class="ma-4"
-          :text="error"
-          prominent
-          border="start"
-        />
+        <v-row v-else-if="error" justify="center">
+          <v-col cols="12" md="8" lg="6">
+            <v-alert
+              type="error"
+              variant="tonal"
+              border="start"
+              prominent
+              icon="mdi-alert-circle"
+              class="ma-4"
+            >
+              <v-alert-title>Error Loading Case</v-alert-title>
+              {{ error }}
+            </v-alert>
+          </v-col>
+        </v-row>
 
         <!-- Case Content -->
         <div v-else-if="caseData">
-          <!-- Page Header -->
-          <div class="mb-6">
-            <v-row align="center" justify="space-between">
-              <v-col>
-                <h1 class="text-h3 font-weight-bold">
-                  {{ caseData?.case_number }}
-                </h1>
-              </v-col>
-              <v-col cols="auto">
-                <div class="d-flex ga-2">
-                  <v-btn
-                    color="primary"
-                    prepend-icon="mdi-pencil"
-                    @click="showEditModal = true"
-                  >
-                    Edit Case
-                  </v-btn>
-                  <v-btn
-                    color="primary"
-                    prepend-icon="mdi-account-plus"
-                    @click="showAddUserModal = true"
-                  >
-                    Add User
-                  </v-btn>
-                </div>
-              </v-col>
-            </v-row>
-          </div>
+          <!-- Page Header Card -->
+          <v-card class="mb-6" variant="outlined">
+            <v-card-title class="d-flex align-center pa-6">
+              <v-icon start size="large" color="primary">mdi-briefcase</v-icon>
+              <div class="text-h4 font-weight-bold">
+                {{ caseData?.case_number }}
+              </div>
+              <v-spacer />
+              <v-btn-group variant="outlined" divided>
+                <v-btn
+                  color="primary"
+                  prepend-icon="mdi-pencil"
+                  @click="showEditModal = true"
+                >
+                  Edit Case
+                </v-btn>
+                <v-btn
+                  color="primary"
+                  prepend-icon="mdi-account-plus"
+                  @click="showAddUserModal = true"
+                >
+                  Add User
+                </v-btn>
+              </v-btn-group>
+            </v-card-title>
+          </v-card>
           <!-- Case Details -->
-          <v-card class="mb-6">
-            <v-card-text>
+          <v-card class="mb-6" variant="outlined">
+            <v-card-title class="d-flex align-center">
+              <v-icon start>mdi-information</v-icon>
+              Case Information
+            </v-card-title>
+            <v-divider />
+            <v-card-text class="pa-6">
               <v-row>
-                <v-col cols="12" md="6">
+                <v-col cols="12" lg="8">
                   <CaseDetail :case-data="caseData" :client="client" />
                 </v-col>
               </v-row>
@@ -67,7 +83,7 @@
           </v-card>
 
           <!-- Case Tabs -->
-          <v-card>
+          <v-card variant="outlined">
             <CaseTabs
               :tabs="[
                 { name: 'entities', label: 'Entities' },
@@ -78,33 +94,46 @@
               <template #default="{ activeTab }">
                 <!-- Entities Tab -->
                 <div v-if="activeTab === 'entities'" class="pa-4">
-                  <div class="mb-4">
-                    <v-btn
-                      color="primary"
-                      prepend-icon="mdi-plus"
-                      @click="showNewEntityModal = true"
-                    >
-                      Add Entity
-                    </v-btn>
-                  </div>
+                  <v-row class="mb-4" no-gutters>
+                    <v-col cols="auto">
+                      <v-btn
+                        color="primary"
+                        prepend-icon="mdi-plus"
+                        @click="showNewEntityModal = true"
+                      >
+                        Add Entity
+                      </v-btn>
+                    </v-col>
+                  </v-row>
 
                   <!-- Entities Loading -->
-                  <v-card-text v-if="loadingEntities" class="text-center pa-8">
-                    <v-progress-circular
-                      size="50"
-                      width="4"
-                      color="primary"
-                      indeterminate
-                    />
-                  </v-card-text>
+                  <v-row v-if="loadingEntities" justify="center">
+                    <v-col cols="12" class="text-center">
+                      <v-card variant="outlined" class="pa-8">
+                        <v-progress-circular
+                          size="64"
+                          width="4"
+                          color="primary"
+                          indeterminate
+                          class="mb-4"
+                        />
+                        <div class="text-h6">Loading entities...</div>
+                      </v-card>
+                    </v-col>
+                  </v-row>
 
                   <!-- Entities Error -->
                   <v-alert
                     v-else-if="entityError"
                     type="error"
-                    class="mb-4"
-                    :text="entityError"
-                  />
+                    variant="tonal"
+                    border="start"
+                    icon="mdi-alert-circle"
+                    class="mb-6"
+                  >
+                    <v-alert-title>Error Loading Entities</v-alert-title>
+                    {{ entityError }}
+                  </v-alert>
 
                   <!-- Entity Types Tabs -->
                   <EntityTabs v-else :entity-types="Object.keys(groupedEntities)">
@@ -125,9 +154,12 @@
                             </template>
                           </EntityListItem>
                         </div>
-                        <v-card-text v-else class="text-center text-medium-emphasis">
-                          No people entities found.
-                        </v-card-text>
+                        <v-empty-state
+                          v-else
+                          icon="mdi-account-outline"
+                          title="No People Found"
+                          text="No person entities have been added to this case yet."
+                        />
                       </div>
 
                       <!-- Company Entities -->
@@ -146,9 +178,12 @@
                             </template>
                           </EntityListItem>
                         </div>
-                        <v-card-text v-else class="text-center text-medium-emphasis">
-                          No company entities found.
-                        </v-card-text>
+                        <v-empty-state
+                          v-else
+                          icon="mdi-domain"
+                          title="No Companies Found"
+                          text="No company entities have been added to this case yet."
+                        />
                       </div>
 
                       <!-- Domain Entities -->
@@ -167,9 +202,12 @@
                             </template>
                           </EntityListItem>
                         </div>
-                        <v-card-text v-else class="text-center text-medium-emphasis">
-                          No domains found.
-                        </v-card-text>
+                        <v-empty-state
+                          v-else
+                          icon="mdi-web"
+                          title="No Domains Found"
+                          text="No domain entities have been added to this case yet."
+                        />
                       </div>
 
                       <!-- IP Address Entities -->
@@ -188,9 +226,12 @@
                             </template>
                           </EntityListItem>
                         </div>
-                        <v-card-text v-else class="text-center text-medium-emphasis">
-                          No IP addresses found.
-                        </v-card-text>
+                        <v-empty-state
+                          v-else
+                          icon="mdi-ip"
+                          title="No IP Addresses Found"
+                          text="No IP address entities have been added to this case yet."
+                        />
                       </div>
 
                       <!-- Network Assets Entities -->
@@ -209,9 +250,12 @@
                             </template>
                           </EntityListItem>
                         </div>
-                        <v-card-text v-else class="text-center text-medium-emphasis">
-                          No network assets found.
-                        </v-card-text>
+                        <v-empty-state
+                          v-else
+                          icon="mdi-server-network"
+                          title="No Network Assets Found"
+                          text="No network asset entities have been added to this case yet."
+                        />
                       </div>
 
                       <!-- Network Entities -->
@@ -239,9 +283,12 @@
                             </template>
                           </EntityListItem>
                         </div>
-                        <v-card-text v-else class="text-center text-medium-emphasis">
-                          No network asset entities found.
-                        </v-card-text>
+                        <v-empty-state
+                          v-else
+                          icon="mdi-server-network"
+                          title="No Network Entities Found"
+                          text="No network entities have been added to this case yet."
+                        />
                       </div>
                     </template>
                   </EntityTabs>
@@ -249,23 +296,25 @@
 
                 <!-- Evidence Tab -->
                 <div v-else-if="activeTab === 'evidence'" class="pa-4">
-                  <div class="mb-4">
-                    <v-btn
-                      color="primary"
-                      prepend-icon="mdi-upload"
-                      @click="showUploadEvidenceModal = true"
-                      :disabled="!hasFolders"
-                    >
-                      Upload Evidence
-                    </v-btn>
-                    <v-tooltip
-                      v-if="!hasFolders"
-                      activator="parent"
-                      location="bottom"
-                    >
-                      Create a folder first to organize evidence
-                    </v-tooltip>
-                  </div>
+                  <v-row class="mb-4" no-gutters>
+                    <v-col cols="auto">
+                      <v-btn
+                        color="primary"
+                        prepend-icon="mdi-upload"
+                        @click="showUploadEvidenceModal = true"
+                        :disabled="!hasFolders"
+                      >
+                        Upload Evidence
+                      </v-btn>
+                      <v-tooltip
+                        v-if="!hasFolders"
+                        activator="parent"
+                        location="bottom"
+                      >
+                        Create a folder first to organize evidence
+                      </v-tooltip>
+                    </v-col>
+                  </v-row>
                   <EvidenceList
                     :evidence-list="evidence"
                     :loading="loadingEvidence"
@@ -280,12 +329,21 @@
                 </div>
 
                 <!-- Notes Tab -->
-                <div v-else-if="activeTab === 'notes'" class="pa-4">
-                  <NoteEditor
-                    v-model="caseData.notes"
-                    :case-id="Number(route.params.id)"
-                    @update:modelValue="handleNotesUpdate"
-                  />
+                <div v-else-if="activeTab === 'notes'" class="pa-6">
+                  <v-card variant="outlined">
+                    <v-card-title class="d-flex align-center">
+                      <v-icon start>mdi-note-text</v-icon>
+                      Case Notes
+                    </v-card-title>
+                    <v-divider />
+                    <v-card-text class="pa-0">
+                      <NoteEditor
+                        v-model="caseData.notes"
+                        :case-id="Number(route.params.id)"
+                        @update:modelValue="handleNotesUpdate"
+                      />
+                    </v-card-text>
+                  </v-card>
                 </div>
               </template>
             </CaseTabs>
@@ -337,6 +395,47 @@
       @close="showUploadEvidenceModal = false; uploadTargetFolder = null"
       @uploaded="handleEvidenceUpload"
     />
+
+    <!-- Entity Creation Success Dialog -->
+    <v-dialog 
+      v-model="showEntityCreationSuccess" 
+      max-width="500px" 
+      persistent
+    >
+      <v-card>
+        <v-card-title class="d-flex align-center">
+          <v-icon start color="success">mdi-check-circle</v-icon>
+          Entity Created Successfully
+        </v-card-title>
+        
+        <v-card-text>
+          <p class="text-body-1 mb-4">
+            Your entity <strong>{{ getEntityDisplayName(createdEntity) }}</strong> has been created successfully.
+          </p>
+          
+          <p class="text-body-2 text-medium-emphasis">
+            Would you like to open the entity details to add more information and edit its properties?
+          </p>
+        </v-card-text>
+        
+        <v-card-actions>
+          <v-spacer />
+          <v-btn
+            variant="text"
+            @click="handleSkipEditEntity"
+          >
+            No, thanks
+          </v-btn>
+          <v-btn
+            color="primary"
+            variant="flat"
+            @click="handleEditNewEntity"
+          >
+            Yes, edit entity
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-app>
 </template>
 
@@ -380,6 +479,8 @@ const loadingEvidence = ref(false);
 const evidenceError = ref('');
 const showUploadEvidenceModal = ref(false);
 const uploadTargetFolder = ref(null);
+const showEntityCreationSuccess = ref(false);
+const createdEntity = ref(null);
 
 // Computed properties
 const userRole = computed(() => authStore.user?.role || 'Analyst');
@@ -427,9 +528,21 @@ const handleNotesUpdate = (notes) => {
 // Handle new entity creation
 const handleNewEntity = (newEntity) => {
   entities.value = [...entities.value, newEntity];
-  // Automatically open the entity details modal for the newly created entity
-  selectedEntity.value = newEntity;
+  showEntityCreationSuccess.value = true;
+  createdEntity.value = newEntity;
+};
+
+// Handle entity creation success dialog actions
+const handleEditNewEntity = () => {
+  selectedEntity.value = createdEntity.value;
   showEntityDetailsModal.value = true;
+  showEntityCreationSuccess.value = false;
+  createdEntity.value = null;
+};
+
+const handleSkipEditEntity = () => {
+  showEntityCreationSuccess.value = false;
+  createdEntity.value = null;
 };
 
 // Computed property to group entities by type
@@ -551,6 +664,20 @@ const formatNetworkAssetDetails = (data) => {
   if (data.ip_addresses?.length) details.push(`${data.ip_addresses.length} IPs`);
   if (data.subdomains?.length) details.push(`${data.subdomains.length} subdomains`);
   return details.join(', ') || 'No details';
+};
+
+const getEntityDisplayName = (entity) => {
+  if (!entity) return '';
+  if (entity.entity_type === 'person') {
+    return `${entity.data.first_name} ${entity.data.last_name}`.trim();
+  } else if (entity.entity_type === 'company') {
+    return entity.data.name;
+  } else if (entity.entity_type === 'domain') {
+    return entity.data.domain;
+  } else if (entity.entity_type === 'ip_address') {
+    return entity.data.ip_address;
+  }
+  return 'Unknown Entity';
 };
 
 onMounted(() => {

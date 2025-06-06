@@ -3,44 +3,31 @@
     <Sidebar />
     
     <v-main>
-      <v-container class="pa-6">
-        <!-- Page Header -->
-        <div class="mb-6">
-          <v-row align="center" justify="space-between">
-            <v-col>
-              <h1 class="text-h4 font-weight-bold">
-                Case Dashboard
-              </h1>
-            </v-col>
-            <v-col cols="auto">
-              <v-btn
-                v-if="authStore.requiresAdmin()"
-                color="primary"
-                prepend-icon="mdi-plus"
-                @click="isNewCaseModalOpen = true"
-              >
-                New Case
-              </v-btn>
-            </v-col>
-          </v-row>
-        </div>
+      <v-container fluid class="pa-6">
+        <!-- Page Header Card -->
+        <v-card class="mb-6 header-gradient">
+          <v-card-title class="d-flex align-center pa-6 text-white">
+            <div class="text-h4 font-weight-bold">Case Dashboard</div>
+          </v-card-title>
+        </v-card>
 
         <!-- Loading state -->
-        <v-card v-if="loading">
-          <v-card-title class="d-flex align-center justify-space-between pa-6">
+        <v-card v-if="loading" variant="outlined">
+          <v-card-title class="d-flex align-center pa-4 bg-surface">
+            <v-skeleton-loader type="text" width="200" />
+            <v-spacer />
             <div class="d-flex ga-2">
               <v-skeleton-loader type="button" width="80" />
               <v-skeleton-loader type="button" width="90" />
               <v-skeleton-loader type="button" width="100" />
             </div>
-            <div class="d-flex align-center ga-4">
-              <v-skeleton-loader type="button" width="150" />
-              <v-skeleton-loader type="text" width="300" />
-            </div>
+            <v-skeleton-loader type="button" width="120" class="ml-4" />
+            <v-skeleton-loader type="text" width="200" class="ml-2" />
           </v-card-title>
+          <v-divider />
           <v-skeleton-loader 
             type="table" 
-            class="ma-4"
+            class="pa-4"
           />
         </v-card>
 
@@ -48,70 +35,118 @@
         <v-alert
           v-else-if="error"
           type="error"
-          class="ma-4"
-          :text="error"
-          prominent
+          variant="tonal"
           border="start"
-        />
+          prominent
+          icon="mdi-alert-circle"
+          class="mb-6"
+        >
+          <v-alert-title>Error Loading Cases</v-alert-title>
+          {{ error }}
+        </v-alert>
 
         <!-- Cases data table -->
-        <v-card v-else>
-          <!-- Filters and Search Toolbar -->
-          <v-card-title class="d-flex align-center justify-space-between">
-            <!-- Quick Filter Chips -->
-            <div class="d-flex align-center ga-2">
-              <v-chip-group
-                v-model="activeQuickFilter"
-                selected-class="text-primary"
-                color="primary"
-                variant="outlined"
-              >
-                <v-chip
-                  filter
-                  value="all"
-                  size="small"
-                >
-                  All Cases
-                </v-chip>
-                <v-chip
-                  filter
-                  value="my-cases"
-                  size="small"
-                >
-                  My Cases
-                </v-chip>
-                <v-chip
-                  filter
-                  value="unassigned"
-                  size="small"
-                >
-                  Unassigned
-                </v-chip>
-              </v-chip-group>
+        <v-card v-else variant="outlined">
+          <!-- Header -->
+          <v-card-title class="d-flex align-center pa-4 bg-surface">
+            <v-icon icon="mdi-briefcase" color="primary" size="large" class="me-3" />
+            <div class="flex-grow-1">
+              <div class="text-h6 font-weight-bold">Case Management</div>
+              <div class="text-body-2 text-medium-emphasis">Manage investigation cases and assignments</div>
             </div>
-            
-            <!-- Controls -->
-            <div class="d-flex align-center ga-4">
-              <!-- Show Closed Cases Switch -->
-              <v-switch
-                v-model="showClosedCases"
-                label="Show Closed Cases"
+            <div class="d-flex align-center ga-2">
+              <v-btn
+                v-if="authStore.requiresAdmin()"
                 color="primary"
-                hide-details
-              />
-              
-              <!-- Search Field -->
-              <v-text-field
-                v-model="searchQuery"
-                prepend-inner-icon="mdi-magnify"
-                label="Search cases..."
-                variant="outlined"
-                density="compact"
-                hide-details
-                style="min-width: 300px;"
-              />
+                variant="flat"
+                prepend-icon="mdi-plus"
+                @click="isNewCaseModalOpen = true"
+              >
+                New Case
+              </v-btn>
+              <v-tooltip text="Refresh case list" location="bottom">
+                <template #activator="{ props }">
+                  <v-btn
+                    v-bind="props"
+                    icon="mdi-refresh"
+                    variant="outlined"
+                    @click="loadData"
+                    :loading="loading"
+                  />
+                </template>
+              </v-tooltip>
             </div>
           </v-card-title>
+          
+          <v-divider />
+          
+          <!-- Filters and Search Toolbar -->
+          <v-card-text class="pa-4">
+            <v-row align="center" class="mb-0">
+              <!-- Quick Filter Chips -->
+              <v-col cols="12" md="8">
+                <div class="d-flex align-center ga-2 flex-wrap">
+                  <span class="text-body-2 font-weight-medium me-2">Filter:</span>
+                  <v-chip-group
+                    v-model="activeQuickFilter"
+                    selected-class="text-primary"
+                    color="primary"
+                    variant="outlined"
+                  >
+                    <v-chip
+                      filter
+                      value="all"
+                      size="small"
+                    >
+                      All Cases
+                    </v-chip>
+                    <v-chip
+                      filter
+                      value="my-cases"
+                      size="small"
+                    >
+                      My Cases
+                    </v-chip>
+                    <v-chip
+                      filter
+                      value="unassigned"
+                      size="small"
+                    >
+                      Unassigned
+                    </v-chip>
+                  </v-chip-group>
+                </div>
+              </v-col>
+              
+              <!-- Controls -->
+              <v-col cols="12" md="4">
+                <div class="d-flex align-center ga-4 justify-end">
+                  <!-- Show Closed Cases Switch -->
+                  <v-switch
+                    v-model="showClosedCases"
+                    label="Show Closed"
+                    color="primary"
+                    hide-details
+                    density="comfortable"
+                  />
+                  
+                  <!-- Search Field -->
+                  <v-text-field
+                    v-model="searchQuery"
+                    prepend-inner-icon="mdi-magnify"
+                    label="Search cases..."
+                    variant="outlined"
+                    density="comfortable"
+                    hide-details
+                    style="min-width: 280px;"
+                    clearable
+                  />
+                </div>
+              </v-col>
+            </v-row>
+          </v-card-text>
+          
+          <v-divider />
 
             <v-data-table
               :headers="vuetifyHeaders"
@@ -203,6 +238,24 @@
       @close="isNewCaseModalOpen = false" 
       @created="handleCaseCreated" 
     />
+
+    <!-- Snackbar for notifications -->
+    <v-snackbar
+      v-model="snackbar.show"
+      :color="snackbar.color"
+      :timeout="snackbar.timeout"
+      location="top right"
+    >
+      {{ snackbar.text }}
+      <template #actions>
+        <v-btn
+          variant="text"
+          @click="snackbar.show = false"
+        >
+          Close
+        </v-btn>
+      </template>
+    </v-snackbar>
   </v-app>
 </template>
 
@@ -232,6 +285,14 @@ const {
 const isNewCaseModalOpen = ref(false)
 const activeQuickFilter = ref('all')
 
+// Snackbar state
+const snackbar = ref({
+  show: false,
+  text: '',
+  color: 'success',
+  timeout: 4000
+})
+
 // Convert the original columns to Vuetify data table headers
 const vuetifyHeaders = computed(() => [
   { title: 'Case Number', value: 'case_number', sortable: true },
@@ -260,10 +321,11 @@ const enhancedFilteredCases = computed(() => {
   return filteredCases
 })
 
-const handleCaseCreated = () => {
+const handleCaseCreated = (newCase) => {
   // Refresh the cases list
   loadData()
   isNewCaseModalOpen.value = false
+  showNotification(`Case "${newCase?.case_number || 'New case'}" created successfully`, 'success')
 }
 
 const handleRowClick = (event, { item }) => {
@@ -274,6 +336,13 @@ const handleRowClick = (event, { item }) => {
 const getUserRoleColor = () => {
   // Return light grey for all user chips
   return 'grey-lighten-1'
+}
+
+// Snackbar helper function
+const showNotification = (text, color = 'success') => {
+  snackbar.value.text = text
+  snackbar.value.color = color
+  snackbar.value.show = true
 }
 
 
@@ -314,6 +383,10 @@ onMounted(loadData)
 </script>
 
 <style scoped>
+.header-gradient {
+  background: linear-gradient(135deg, rgb(var(--v-theme-primary)) 0%, rgba(var(--v-theme-primary), 0.8) 100%) !important;
+}
+
 .case-dashboard-table :deep(.v-data-table__tr:hover) {
   background-color: rgba(var(--v-theme-primary), 0.04) !important;
   cursor: pointer;

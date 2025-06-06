@@ -1,40 +1,81 @@
 <template>
-  <v-dialog v-model="dialogVisible" max-width="500px" persistent>
-    <v-card>
-      <v-card-title>
-        <span class="text-h5">Add User to Case</span>
-      </v-card-title>
+  <v-dialog v-model="dialogVisible" max-width="600px" persistent>
+    <v-card prepend-icon="mdi-account-plus" title="Add User to Case">
       <v-card-text>
-        <div v-if="loading" class="flex justify-center mt-4">
-          <v-progress-circular
-            indeterminate
-            :size="50"
-            :width="8"
-            color="primary"
-          />
-        </div>
-        <v-alert v-else-if="error" type="error" class="mb-4">
+        <!-- Loading State -->
+        <v-row v-if="loading" justify="center">
+          <v-col cols="12" class="text-center">
+            <v-card variant="outlined" class="pa-8">
+              <v-progress-circular
+                size="64"
+                width="4"
+                color="primary"
+                indeterminate
+                class="mb-4"
+              />
+              <div class="text-h6">Loading Users...</div>
+              <div class="text-body-2 text-medium-emphasis">Please wait while we fetch available users</div>
+            </v-card>
+          </v-col>
+        </v-row>
+
+        <!-- Error State -->
+        <v-alert
+          v-else-if="error"
+          type="error"
+          variant="tonal"
+          border="start"
+          icon="mdi-alert-circle"
+          class="mb-6"
+        >
+          <v-alert-title>Error Loading Users</v-alert-title>
           {{ error }}
         </v-alert>
-        <v-form v-else>
-          <v-select
-            v-model="selectedUserId"
-            :items="availableUsers"
-            item-title="email"
-            item-value="id"
-            label="Select User"
-            placeholder="Select a user"
-            variant="outlined"
-            density="comfortable"
-          />
+
+        <!-- User Selection Form -->
+        <v-form v-else ref="formRef" v-model="isFormValid">
+          <v-card variant="outlined" class="mb-6">
+            <v-card-title class="text-subtitle-1 pb-2">
+              <v-icon start>mdi-account-group</v-icon>
+              User Selection
+            </v-card-title>
+            
+            <v-card-text>
+              <v-select
+                v-model="selectedUserId"
+                :items="enhancedUsers"
+                item-title="displayText"
+                item-value="id"
+                label="Select User"
+                variant="outlined"
+                density="comfortable"
+                placeholder="Choose a user to add to this case"
+                :rules="[rules.required]"
+                class="mb-4"
+              />
+
+              <v-alert
+                v-if="availableUsers.length === 0"
+                type="info"
+                variant="tonal"
+                icon="mdi-information"
+              >
+                <v-alert-title>No Users Available</v-alert-title>
+                All users are already assigned to this case or no users exist in the system.
+              </v-alert>
+            </v-card-text>
+          </v-card>
         </v-form>
       </v-card-text>
 
+      <v-divider />
+
       <v-card-actions>
-        <v-spacer></v-spacer>
+        <v-spacer />
         <v-btn
           variant="text"
           @click="$emit('close')"
+          :disabled="loading"
         >
           Cancel
         </v-btn>
@@ -42,7 +83,8 @@
           color="primary"
           variant="flat"
           @click="handleAddUser"
-          :disabled="!selectedUserId || loading"
+          :disabled="!isFormValid || loading"
+          :loading="loading"
         >
           Add User
         </v-btn>
@@ -55,7 +97,6 @@
 import { ref, watch, computed } from 'vue';
 import { userService } from '@/services/user';
 import { caseService } from '@/services/case';
-// Vuetify components are auto-imported
 
 const props = defineProps({
   show: {
@@ -70,6 +111,19 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'userAdded']);
 
+// Reactive variables
+const formRef = ref(null);
+const isFormValid = ref(false);
+const loading = ref(false);
+const error = ref(null);
+const selectedUserId = ref('');
+const availableUsers = ref([]);
+
+// Validation rules
+const rules = {
+  required: (value) => !!value || 'Please select a user'
+};
+
 const dialogVisible = computed({
   get: () => props.show,
   set: (value) => {
@@ -79,10 +133,13 @@ const dialogVisible = computed({
   }
 });
 
-const loading = ref(false);
-const error = ref(null);
-const selectedUserId = ref('');
-const availableUsers = ref([]);
+// Enhanced computed property for user display
+const enhancedUsers = computed(() => {
+  return availableUsers.value.map(user => ({
+    ...user,
+    displayText: `${user.email} - ${user.username}`
+  }));
+});
 
 const loadUsers = async () => {
   try {
@@ -90,14 +147,18 @@ const loadUsers = async () => {
     error.value = null;
     availableUsers.value = await userService.getUsers();
   } catch (err) {
-    error.value = err.message || 'Failed to load users';
+    error.value = err.response?.data?.message || err.message || 'Failed to load users';
   } finally {
     loading.value = false;
   }
 };
 
 const handleAddUser = async () => {
-  if (!selectedUserId.value) return;
+  // Validate form before submission
+  if (!formRef.value) return;
+  
+  const { valid } = await formRef.value.validate();
+  if (!valid) return;
   
   try {
     loading.value = true;
@@ -106,18 +167,26 @@ const handleAddUser = async () => {
     emit('userAdded');
     emit('close');
   } catch (err) {
-    error.value = err.message || 'Failed to add user to case';
+    error.value = err.response?.data?.message || err.message || 'Failed to add user to case';
   } finally {
     loading.value = false;
   }
 };
 
+// Watch for dialog opening/closing
 watch(() => props.show, (newValue) => {
   if (newValue) {
     loadUsers();
+    // Reset form validation when dialog opens
+    setTimeout(() => {
+      if (formRef.value) {
+        formRef.value.resetValidation();
+      }
+    }, 100);
   } else {
-    // Clear selection when modal is closed
+    // Clear selection and errors when modal is closed
     selectedUserId.value = '';
+    error.value = null;
   }
 });
 </script>

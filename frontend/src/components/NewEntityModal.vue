@@ -1,81 +1,174 @@
 <template>
-  <v-dialog v-model="dialogVisible" max-width="800px" persistent>
-    <v-card>
-      <v-card-title>
-        <span class="text-h5">Add New Entity</span>
-      </v-card-title>
+  <v-dialog v-model="dialogVisible" max-width="700px" persistent>
+    <v-card prepend-icon="mdi-account-plus" title="Add New Entity">
       <v-card-text>
-        <v-alert v-if="error" type="error" class="mb-4">
+        <!-- Error Alert -->
+        <v-alert v-if="error" type="error" variant="tonal" class="mb-4">
           {{ error }}
         </v-alert>
-        <v-form @submit.prevent="handleSubmit">
-              <div>
-                <label for="entityType" class="block text-sm font-medium mb-1">Entity Type</label>
-                <v-select
-                  v-model="formData.entity_type"
-                  :items="[
-                    { value: 'person', title: 'Person' },
-                    { value: 'company', title: 'Company' },
-                    { value: 'domain', title: 'Domain' },
-                    { value: 'ip_address', title: 'IP Address' }
-                  ]"
-                  item-title="title"
-                  item-value="value"
-                  variant="outlined"
-                  density="comfortable"
-                />
-              </div>
 
-              <div v-if="formData.entity_type === 'person'" class="space-y-4">
-                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div>
-                    <label for="firstName" class="block text-sm font-medium mb-1">First Name</label>
-                    <v-text-field id="firstName" v-model="formData.data.first_name" variant="outlined" density="compact" />
-                  </div>
-                  <div>
-                    <label for="lastName" class="block text-sm font-medium mb-1">Last Name</label>
-                    <v-text-field id="lastName" v-model="formData.data.last_name" variant="outlined" density="compact" />
-                  </div>
-                </div>
-              </div>
+        <v-form ref="formRef" @submit.prevent="handleSubmit">
+          <!-- Entity Type Selector -->
+          <v-card variant="outlined" class="mb-6">
+            <v-card-title class="text-subtitle-1 pb-2">
+              <v-icon start>mdi-shape</v-icon>
+              Entity Type
+            </v-card-title>
+            
+            <v-card-text class="pt-0">
+              <v-tabs 
+                v-model="selectedTab" 
+                color="primary" 
+                align-tabs="start"
+                @update:model-value="handleTabChange"
+              >
+                <v-tab 
+                  v-for="entityType in entityTypes" 
+                  :key="entityType.value"
+                  :value="entityType.value"
+                  :prepend-icon="entityType.icon"
+                >
+                  {{ entityType.title }}
+                </v-tab>
+              </v-tabs>
+            </v-card-text>
+          </v-card>
 
-              <div v-if="formData.entity_type === 'company'" class="space-y-4">
-                <div>
-                  <label for="companyName" class="block text-sm font-medium mb-1">Company Name</label>
-                  <v-text-field id="companyName" v-model="formData.data.name" variant="outlined" density="compact" required />
-                </div>
-              </div>
+          <!-- Entity Form Content -->
+          <v-tabs-window v-model="selectedTab">
+            <!-- Person Form -->
+            <v-tabs-window-item value="person">
+              <v-card variant="outlined">
+                <v-card-title class="text-subtitle-1">
+                  <v-icon start>mdi-account</v-icon>
+                  Person Details
+                </v-card-title>
+                
+                <v-card-text>
+                  <v-row>
+                    <v-col cols="12" md="6">
+                      <v-text-field
+                        v-model="formData.data.first_name"
+                        label="First Name"
+                        variant="outlined"
+                        density="comfortable"
+                        prepend-inner-icon="mdi-account-outline"
+                      />
+                    </v-col>
+                    
+                    <v-col cols="12" md="6">
+                      <v-text-field
+                        v-model="formData.data.last_name"
+                        label="Last Name"
+                        variant="outlined"
+                        density="comfortable"
+                        prepend-inner-icon="mdi-account-outline"
+                      />
+                    </v-col>
+                  </v-row>
+                </v-card-text>
+              </v-card>
+            </v-tabs-window-item>
 
-              <div v-if="formData.entity_type === 'domain'" class="space-y-4">
-                <div>
-                  <label for="domain" class="block text-sm font-medium mb-1">Domain Name</label>
-                  <v-text-field id="domain" v-model="formData.data.domain" placeholder="example.com" variant="outlined" density="compact" required />
-                </div>
-                <div>
-                  <label for="domain_description" class="block text-sm font-medium mb-1">Description</label>
-                  <v-textarea id="domain_description" v-model="formData.data.description" placeholder="Add any notes or context about this domain" variant="outlined" density="compact" rows="3" />
-                </div>
-              </div>
+            <!-- Company Form -->
+            <v-tabs-window-item value="company">
+              <v-card variant="outlined">
+                <v-card-title class="text-subtitle-1">
+                  <v-icon start>mdi-domain</v-icon>
+                  Company Details
+                </v-card-title>
+                
+                <v-card-text>
+                  <v-text-field
+                    v-model="formData.data.name"
+                    label="Company Name"
+                    variant="outlined"
+                    density="comfortable"
+                    prepend-inner-icon="mdi-domain"
+                    required
+                    placeholder="Enter company name"
+                  />
+                </v-card-text>
+              </v-card>
+            </v-tabs-window-item>
 
-              <div v-if="formData.entity_type === 'ip_address'" class="space-y-4">
-                <div>
-                  <label for="ip_address" class="block text-sm font-medium mb-1">IP Address</label>
-                  <v-text-field id="ip_address" v-model="formData.data.ip_address" placeholder="192.168.1.1" variant="outlined" density="compact" required />
-                </div>
-                <div>
-                  <label for="ip_description" class="block text-sm font-medium mb-1">Description</label>
-                  <v-textarea id="ip_description" v-model="formData.data.description" placeholder="Add any notes or context about this IP address" variant="outlined" density="compact" rows="3" />
-                </div>
-              </div>
+            <!-- Domain Form -->
+            <v-tabs-window-item value="domain">
+              <v-card variant="outlined">
+                <v-card-title class="text-subtitle-1">
+                  <v-icon start>mdi-web</v-icon>
+                  Domain Details
+                </v-card-title>
+                
+                <v-card-text>
+                  <v-text-field
+                    v-model="formData.data.domain"
+                    label="Domain Name"
+                    variant="outlined"
+                    density="comfortable"
+                    prepend-inner-icon="mdi-web"
+                    placeholder="example.com"
+                    required
+                    class="mb-4"
+                    :rules="[rules.domain]"
+                  />
+                  
+                  <v-textarea
+                    v-model="formData.data.description"
+                    label="Description (Optional)"
+                    variant="outlined"
+                    density="comfortable"
+                    rows="3"
+                    placeholder="Add any notes or context about this domain"
+                  />
+                </v-card-text>
+              </v-card>
+            </v-tabs-window-item>
 
+            <!-- IP Address Form -->
+            <v-tabs-window-item value="ip_address">
+              <v-card variant="outlined">
+                <v-card-title class="text-subtitle-1">
+                  <v-icon start>mdi-ip</v-icon>
+                  IP Address Details
+                </v-card-title>
+                
+                <v-card-text>
+                  <v-text-field
+                    v-model="formData.data.ip_address"
+                    label="IP Address"
+                    variant="outlined"
+                    density="comfortable"
+                    prepend-inner-icon="mdi-ip"
+                    placeholder="192.168.1.1"
+                    required
+                    class="mb-4"
+                    :rules="[rules.ip]"
+                  />
+                  
+                  <v-textarea
+                    v-model="formData.data.description"
+                    label="Description (Optional)"
+                    variant="outlined"
+                    density="comfortable"
+                    rows="3"
+                    placeholder="Add any notes or context about this IP address"
+                  />
+                </v-card-text>
+              </v-card>
+            </v-tabs-window-item>
+          </v-tabs-window>
         </v-form>
       </v-card-text>
 
+      <v-divider />
+
       <v-card-actions>
-        <v-spacer></v-spacer>
+        <v-spacer />
         <v-btn
           variant="text"
           @click="$emit('close')"
+          :disabled="creating"
         >
           Cancel
         </v-btn>
@@ -83,10 +176,10 @@
           color="primary"
           variant="flat"
           @click="handleSubmit"
-          :disabled="creating"
+          :disabled="creating || !isFormValid"
           :loading="creating"
         >
-          {{ creating ? 'Adding...' : 'Add Entity' }}
+          Add Entity
         </v-btn>
       </v-card-actions>
     </v-card>
@@ -94,11 +187,10 @@
 </template>
 
 <script setup>
-import { watch, computed } from 'vue';
+import { watch, computed, ref } from 'vue';
 import { entityService } from '../services/entity';
 import { useForm } from '../composables/useForm';
 import { cleanFormData } from '../utils/cleanFormData';
-// Vuetify components are auto-imported
 
 const props = defineProps({
   show: { type: Boolean, required: true, default: false },
@@ -106,6 +198,32 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['close', 'created']);
+
+// Reactive variables
+const selectedTab = ref('person');
+const formRef = ref(null);
+
+// Entity types configuration
+const entityTypes = [
+  { value: 'person', title: 'Person', icon: 'mdi-account' },
+  { value: 'company', title: 'Company', icon: 'mdi-domain' },
+  { value: 'domain', title: 'Domain', icon: 'mdi-web' },
+  { value: 'ip_address', title: 'IP Address', icon: 'mdi-ip' }
+];
+
+// Validation rules
+const rules = {
+  domain: (value) => {
+    if (!value) return 'Domain is required';
+    const domainPattern = /^[a-zA-Z0-9][a-zA-Z0-9-_]*\.{1}[a-zA-Z]{2,}$/;
+    return domainPattern.test(value) || 'Please enter a valid domain name';
+  },
+  ip: (value) => {
+    if (!value) return 'IP address is required';
+    const ipPattern = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+    return ipPattern.test(value) || 'Please enter a valid IP address';
+  }
+};
 
 const dialogVisible = computed({
   get: () => props.show,
@@ -117,7 +235,7 @@ const dialogVisible = computed({
 });
 
 const initialFormData = {
-  entity_type: '',
+  entity_type: 'person',
   data: {
     social_media: { x: '', linkedin: '', facebook: '', instagram: '', tiktok: '', reddit: '', other: '' },
     domains: [],
@@ -125,6 +243,24 @@ const initialFormData = {
     subdomains: [],
   },
 };
+
+// Form validation
+const isFormValid = computed(() => {
+  if (!formData.entity_type) return false;
+  
+  switch (formData.entity_type) {
+    case 'person':
+      return formData.data.first_name || formData.data.last_name;
+    case 'company':
+      return formData.data.name;
+    case 'domain':
+      return formData.data.domain && rules.domain(formData.data.domain) === true;
+    case 'ip_address':
+      return formData.data.ip_address && rules.ip(formData.data.ip_address) === true;
+    default:
+      return false;
+  }
+});
 
 const { formData, error, creating, handleSubmit } = useForm(initialFormData, async (formData) => {
   const submitData = {
@@ -137,6 +273,12 @@ const { formData, error, creating, handleSubmit } = useForm(initialFormData, asy
   emit('close');
 });
 
+// Handle tab change
+function handleTabChange(newTab) {
+  formData.entity_type = newTab;
+}
+
+// Watch for entity type changes
 watch(() => formData.entity_type, (newType) => {
   const baseSocialMedia = formData.data.social_media;
   formData.data = {
@@ -155,6 +297,31 @@ watch(() => formData.entity_type, (newType) => {
     Object.assign(formData.data, {
       name: ''
     });
+  } else if (newType === 'domain') {
+    Object.assign(formData.data, {
+      domain: '',
+      description: ''
+    });
+  } else if (newType === 'ip_address') {
+    Object.assign(formData.data, {
+      ip_address: '',
+      description: ''
+    });
+  }
+});
+
+// Watch for tab changes to sync with form data
+watch(selectedTab, (newTab) => {
+  if (newTab !== formData.entity_type) {
+    formData.entity_type = newTab;
+  }
+});
+
+// Initialize form when dialog opens
+watch(() => props.show, (show) => {
+  if (show) {
+    selectedTab.value = 'person';
+    formData.entity_type = 'person';
   }
 });
 </script>

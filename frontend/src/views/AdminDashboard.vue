@@ -3,26 +3,14 @@
     <Sidebar />
     
     <v-main>
-      <v-container class="pa-6">
-        <!-- Page Header -->
-        <div class="mb-6">
-          <v-row align="center" justify="space-between">
-            <v-col>
-              <h1 class="text-h4 font-weight-bold">
-                Admin Dashboard
-              </h1>
-            </v-col>
-            <v-col cols="auto">
-              <v-btn
-                color="primary"
-                prepend-icon="mdi-account-plus"
-                @click="showNewUserModal = true"
-              >
-                Add New User
-              </v-btn>
-            </v-col>
-          </v-row>
-        </div>
+      <v-container fluid class="pa-6">
+        <!-- Page Header Card -->
+        <v-card class="mb-6 header-gradient">
+          <v-card-title class="d-flex align-center pa-6 text-white">
+            <div class="text-h4 font-weight-bold">Admin Dashboard</div>
+          </v-card-title>
+        </v-card>
+
 
         <!-- Loading state -->
         <v-card v-if="loading">
@@ -48,83 +36,156 @@
         <!-- Main Content -->
         <div v-else>
           <!-- Case Number Configuration Card -->
-          <v-card class="mb-6">
-            <v-card-title class="d-flex align-center">
-              <v-icon icon="mdi-format-list-numbered" class="me-2" />
-              Case Number Configuration
+          <v-card class="mb-6" variant="outlined">
+            <v-card-title class="d-flex align-center pa-4 bg-surface">
+              <v-icon icon="mdi-format-list-numbered" color="primary" size="large" class="me-3" />
+              <div>
+                <div class="text-h6 font-weight-bold">Case Number Configuration</div>
+                <div class="text-body-2 text-medium-emphasis">Configure how case numbers are generated</div>
+              </div>
             </v-card-title>
             
-            <v-card-text>
-              <v-row>
-                <v-col cols="12" md="6">
-                  <v-select
-                    v-model="selectedTemplate"
-                    :items="templateOptions"
-                    item-title="display_name"
-                    item-value="value"
-                    label="Case Number Format"
-                    variant="outlined"
-                    density="compact"
-                    @update:model-value="onTemplateChange"
-                  />
-                </v-col>
+            <v-divider />
+            
+            <v-card-text class="pa-4">
+              <v-container fluid class="pa-0">
+                <v-row>
+                  <v-col cols="12" lg="6">
+                    <v-select
+                      v-model="selectedTemplate"
+                      :items="templateOptions"
+                      item-title="display_name"
+                      item-value="value"
+                      label="Case Number Format"
+                      variant="outlined"
+                      density="comfortable"
+                      prepend-inner-icon="mdi-format-list-numbered"
+                      @update:model-value="onTemplateChange"
+                    />
+                  </v-col>
+                  
+                  <v-col cols="12" lg="6" v-if="selectedTemplate === 'PREFIX-YYMM-NN'">
+                    <v-text-field
+                      v-model="caseNumberPrefix"
+                      label="Prefix (2-8 letters/numbers)"
+                      variant="outlined"
+                      density="comfortable"
+                      prepend-inner-icon="mdi-alphabetical-variant"
+                      :rules="[validatePrefix]"
+                      @input="onPrefixChange"
+                      hint="Enter 2-8 alphanumeric characters"
+                      persistent-hint
+                    />
+                  </v-col>
+                </v-row>
                 
-                <v-col cols="12" md="6" v-if="selectedTemplate === 'PREFIX-YYMM-NN'">
-                  <v-text-field
-                    v-model="caseNumberPrefix"
-                    label="Prefix (2-8 letters/numbers)"
-                    variant="outlined"
-                    density="compact"
-                    :rules="[validatePrefix]"
-                    @input="onPrefixChange"
-                  />
-                </v-col>
-              </v-row>
-              
-              <v-row v-if="exampleCaseNumber">
-                <v-col cols="12">
-                  <v-alert
-                    type="info"
-                    variant="tonal"
-                    density="compact"
-                  >
-                    <template #text>
-                      <strong>Preview:</strong> Next case will be numbered like: 
-                      <code class="text-primary">{{ exampleCaseNumber }}</code>
-                    </template>
-                  </v-alert>
-                </v-col>
-              </v-row>
-              
-              <v-row>
-                <v-col cols="12" class="d-flex justify-end">
-                  <v-btn
-                    color="primary"
-                    :loading="configLoading"
-                    :disabled="!isConfigChanged || !isConfigValid"
-                    @click="saveConfiguration"
-                  >
-                    Save Configuration
-                  </v-btn>
-                </v-col>
-              </v-row>
+                <v-row v-if="exampleCaseNumber">
+                  <v-col cols="12">
+                    <v-card variant="tonal" color="info" class="pa-4">
+                      <div class="d-flex align-center">
+                        <v-icon icon="mdi-eye" color="info" class="me-3" />
+                        <div>
+                          <div class="text-subtitle-2 font-weight-bold text-info">Preview</div>
+                          <div class="text-body-2">
+                            Next case will be numbered: 
+                            <v-chip color="primary" variant="elevated" class="ml-2">
+                              {{ exampleCaseNumber }}
+                            </v-chip>
+                          </div>
+                        </div>
+                      </div>
+                    </v-card>
+                  </v-col>
+                </v-row>
+              </v-container>
             </v-card-text>
+            
+            <v-divider />
+            
+            <v-card-actions class="pa-4">
+              <v-spacer />
+              <v-btn
+                variant="text"
+                prepend-icon="mdi-refresh"
+                @click="loadConfiguration"
+                :disabled="configLoading"
+              >
+                Reset
+              </v-btn>
+              <v-btn
+                color="primary"
+                variant="flat"
+                prepend-icon="mdi-content-save"
+                :loading="configLoading"
+                :disabled="!isConfigChanged || !isConfigValid"
+                @click="saveConfiguration"
+              >
+                Save Configuration
+              </v-btn>
+            </v-card-actions>
           </v-card>
 
           <!-- User Management Table -->
-          <v-card>
-          <v-card-title class="d-flex align-center justify-end">
-            <!-- Search Field -->
-            <v-text-field
-              v-model="searchQuery"
-              prepend-inner-icon="mdi-magnify"
-              label="Search users..."
-              variant="outlined"
-              density="compact"
-              hide-details
-              style="min-width: 300px;"
-            />
-          </v-card-title>
+          <v-card variant="outlined">
+            <!-- Header -->
+            <v-card-title class="d-flex align-center pa-4 bg-surface">
+              <v-icon icon="mdi-account-group" color="primary" size="large" class="me-3" />
+              <div class="flex-grow-1">
+                <div class="text-h6 font-weight-bold">User Management</div>
+                <div class="text-body-2 text-medium-emphasis">Manage system users and their permissions</div>
+              </div>
+              <div class="d-flex align-center ga-2">
+                <v-btn
+                  color="primary"
+                  variant="flat"
+                  prepend-icon="mdi-account-plus"
+                  @click="showNewUserModal = true"
+                >
+                  Add User
+                </v-btn>
+                <v-tooltip text="Refresh user list" location="bottom">
+                  <template #activator="{ props }">
+                    <v-btn
+                      v-bind="props"
+                      icon="mdi-refresh"
+                      variant="outlined"
+                      @click="loadUsers"
+                      :loading="loading"
+                    />
+                  </template>
+                </v-tooltip>
+              </div>
+            </v-card-title>
+            
+            <v-divider />
+            
+            <!-- Search Toolbar -->
+            <v-card-text class="pa-4">
+              <v-row align="center" class="mb-0">
+                <v-col cols="12" md="8">
+                  <!-- Could add user role filters here in the future -->
+                </v-col>
+                
+                <!-- Search Controls -->
+                <v-col cols="12" md="4">
+                  <div class="d-flex align-center ga-4 justify-end">
+                    <!-- Search Field -->
+                    <v-text-field
+                      v-model="searchQuery"
+                      prepend-inner-icon="mdi-magnify"
+                      label="Search users..."
+                      variant="outlined"
+                      density="comfortable"
+                      hide-details
+                      style="min-width: 280px;"
+                      clearable
+                    />
+                  </div>
+                </v-col>
+              </v-row>
+            </v-card-text>
+            
+            <v-divider />
 
           <v-data-table
             :headers="vuetifyHeaders"
@@ -215,7 +276,7 @@
                   prepend-icon="mdi-account-plus"
                   @click="showNewUserModal = true"
                 >
-                  Add First User
+                  Add User
                 </v-btn>
               </div>
             </template>
@@ -554,9 +615,28 @@ const getEmptyStateMessage = () => {
 const shouldShowCreateButton = () => {
   return (users.value || []).length === 0 && !searchQuery.value
 }
+
+// Load users function for refresh functionality
+const loadUsers = async () => {
+  try {
+    loading.value = true
+    error.value = null
+    const userData = await userService.getUsers()
+    users.value = userData
+  } catch (err) {
+    error.value = 'Failed to load users. Please try again later.'
+    console.error('Error loading users:', err)
+  } finally {
+    loading.value = false
+  }
+}
 </script>
 
 <style scoped>
+.header-gradient {
+  background: linear-gradient(135deg, rgb(var(--v-theme-primary)) 0%, rgba(var(--v-theme-primary), 0.8) 100%) !important;
+}
+
 .admin-dashboard-table :deep(.v-data-table__tr:hover) {
   background-color: rgba(var(--v-theme-primary), 0.04) !important;
   cursor: pointer;

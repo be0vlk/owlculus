@@ -8,7 +8,7 @@ Owlculus is a comprehensive OSINT case management platform built for solo work o
 
 **Version 1.0.0** - Stable
 
-**NOTE:** This project is now and will always be 100% free and open-source, no matter how much it improves. If you're feeling generous, donate to your favorite charity instead :)
+**NOTE:** This project is now and will always be 100% free and open-source, no matter how much it improves.
 
 ## Features
 

@@ -3,192 +3,292 @@
     <Sidebar />
     
     <v-main>
-      <v-container class="pa-6">
-        <!-- Page Header -->
-        <div class="mb-6">
-          <v-row align="center" justify="space-between">
-            <v-col>
-              <h1 class="text-h4 font-weight-bold">
-                Plugins Dashboard
-              </h1>
-            </v-col>
-          </v-row>
-        </div>
+      <v-container fluid class="pa-6">
+        <!-- Page Header Card -->
+        <v-card class="mb-6 header-gradient">
+          <v-card-title class="d-flex align-center pa-6 text-white">
+            <div class="text-h4 font-weight-bold">Plugins Dashboard</div>
+          </v-card-title>
+        </v-card>
+
+        <!-- Loading state -->
+        <v-card v-if="loading" variant="outlined">
+          <v-card-title class="d-flex align-center pa-4 bg-surface">
+            <v-skeleton-loader type="text" width="200" />
+            <v-spacer />
+            <v-skeleton-loader type="button" width="120" />
+          </v-card-title>
+          <v-divider />
+          <v-card-text class="text-center pa-16">
+            <v-progress-circular
+              size="64"
+              width="4"
+              color="primary"
+              indeterminate
+            />
+            <div class="text-h6 mt-4">Loading plugins...</div>
+          </v-card-text>
+        </v-card>
 
         <!-- Error state -->
         <v-alert
-          v-if="error"
+          v-else-if="error"
           type="error"
-          class="ma-4"
-          :text="error"
-          prominent
+          variant="tonal"
           border="start"
-        />
+          prominent
+          icon="mdi-alert-circle"
+          class="mb-6"
+        >
+          <v-alert-title>Error Loading Plugins</v-alert-title>
+          {{ error }}
+        </v-alert>
         
-        <!-- Loading state -->
-        <v-card-text v-if="loading" class="text-center pa-16">
-          <v-progress-circular
-            size="64"
-            width="4"
-            color="primary"
-            indeterminate
-          />
-          <v-card-text class="text-h6 mt-4">Loading plugins...</v-card-text>
-        </v-card-text>
-        
+        <!-- Main Content -->
         <div v-else>
-          <!-- Tab Navigation -->
-          <v-tabs
-            v-model="currentCategory"
-            class="mb-6"
-            color="primary"
-          >
-            <v-tab
-              v-for="category in categories"
-              :key="category"
-              :value="category"
-            >
-              {{ category }}
-            </v-tab>
-          </v-tabs>
-
-          <!-- Plugin Grid -->
-          <v-row>
-            <v-col 
-              v-for="(plugin, name) in filteredPlugins" 
-              :key="name"
-              cols="12" 
-              md="6" 
-              lg="4"
-            >
-              <v-card 
-                :class="{ 'h-100': expandedCards[name] }"
-                :ripple="false"
-                @click="toggleCard(name)"
-                style="cursor: pointer;"
-              >
-                <v-card-text>
-                  <div class="d-flex justify-space-between align-start mb-3">
-                    <v-card-title class="pa-0 text-h6">
-                      {{ plugin.display_name || name }}
-                    </v-card-title>
-                    <div class="d-flex align-center ga-2">
+          <!-- Plugin Management Card -->
+          <v-card variant="outlined">
+            <!-- Header -->
+            <v-card-title class="d-flex align-center pa-4 bg-surface">
+              <v-icon icon="mdi-puzzle" color="primary" size="large" class="me-3" />
+              <div class="flex-grow-1">
+                <div class="text-h6 font-weight-bold">Plugin Management</div>
+                <div class="text-body-2 text-medium-emphasis">Execute OSINT plugins and analyze results</div>
+              </div>
+              <div class="d-flex align-center ga-2">
+                <v-tooltip text="Refresh plugins list" location="bottom">
+                  <template #activator="{ props }">
+                    <v-btn
+                      v-bind="props"
+                      icon="mdi-refresh"
+                      variant="outlined"
+                      @click="loadPlugins"
+                      :loading="loading"
+                    />
+                  </template>
+                </v-tooltip>
+              </div>
+            </v-card-title>
+            
+            <v-divider />
+            
+            <!-- Category Tabs Toolbar -->
+            <v-card-text class="pa-4">
+              <v-row align="center" class="mb-0">
+                <v-col cols="12">
+                  <div class="d-flex align-center ga-2">
+                    <span class="text-body-2 font-weight-medium me-2">Categories:</span>
+                    <v-chip-group
+                      v-model="selectedCategories"
+                      selected-class="text-primary"
+                      color="primary"
+                      variant="outlined"
+                      multiple
+                    >
                       <v-chip
-                        :color="plugin.enabled ? 'success' : 'error'"
+                        value="All"
+                        filter
                         size="small"
-                        variant="tonal"
                       >
-                        {{ plugin.enabled ? 'Enabled' : 'Disabled' }}
+                        All
                       </v-chip>
-                      <v-btn
-                        :icon="expandedCards[name] ? 'mdi-chevron-up' : 'mdi-chevron-down'"
-                        variant="text"
+                      <v-chip
+                        v-for="category in categories"
+                        :key="category"
+                        :value="category"
+                        filter
                         size="small"
-                        @click.stop="toggleCard(name)"
-                      />
-                    </div>
+                      >
+                        {{ category }}
+                      </v-chip>
+                    </v-chip-group>
                   </div>
-                  
-                  <!-- Description removed from preview - now shown in parameter component -->
+                </v-col>
+              </v-row>
+            </v-card-text>
+            
+            <v-divider />
 
-                  <v-expand-transition>
-                    <div v-if="expandedCards[name]" class="mt-6">
-                      <!-- Parameters Section -->
-                      <div v-if="plugin.parameters && Object.keys(plugin.parameters).length" class="mb-4">
-                        <div class="d-flex flex-column ga-3" @click.stop>
-                          <!-- Custom Plugin Parameter Component -->
-                          <component 
-                            v-if="pluginParamComponents[name]"
-                            :is="pluginParamComponents[name]"
-                            :parameters="{ ...plugin.parameters, description: plugin.description }"
-                            v-model="pluginParams[name]"
+            <!-- Plugin Grid -->
+            <v-card-text class="pa-4">
+              <v-row v-if="Object.keys(filteredPlugins).length">
+                <v-col 
+                  v-for="(plugin, name) in filteredPlugins" 
+                  :key="name"
+                  cols="12" 
+                  md="6" 
+                  lg="4"
+                >
+                  <v-card 
+                    :class="{ 'h-100': expandedCards[name] }"
+                    variant="outlined"
+                    :ripple="false"
+                    @click="toggleCard(name)"
+                    style="cursor: pointer;"
+                    hover
+                  >
+                    <v-card-text class="pa-4">
+                      <div class="d-flex justify-space-between align-start mb-3">
+                        <div class="d-flex align-center">
+                          <v-icon icon="mdi-puzzle-outline" color="primary" class="me-2" />
+                          <div class="text-h6 font-weight-bold">
+                            {{ plugin.display_name || name }}
+                          </div>
+                        </div>
+                        <div class="d-flex align-center ga-2">
+                          <v-chip
+                            :color="plugin.enabled ? 'success' : 'error'"
+                            size="small"
+                            variant="tonal"
+                          >
+                            {{ plugin.enabled ? 'Enabled' : 'Disabled' }}
+                          </v-chip>
+                          <v-btn
+                            :icon="expandedCards[name] ? 'mdi-chevron-up' : 'mdi-chevron-down'"
+                            variant="text"
+                            size="small"
+                            @click.stop="toggleCard(name)"
                           />
-                          
-                          <!-- Default Parameter Rendering -->
-                          <template v-else>
-                            <div v-for="(param, paramName) in plugin.parameters" :key="paramName" class="mb-3">
-                              <!-- Boolean type - Switch -->
-                              <div v-if="param.type === 'boolean'">
-                                <v-switch
-                                  v-model="pluginParams[name][paramName]"
-                                  :label="paramName"
-                                  :hint="param.description"
-                                  persistent-hint
-                                  color="primary"
-                                  density="compact"
-                                />
-                              </div>
-                              
-                              <!-- List type -->
-                              <div v-else-if="param.type === 'list'">
-                                <v-combobox
-                                  v-model="pluginParams[name][paramName]"
-                                  :label="paramName"
-                                  :placeholder="param.description"
-                                  chips
-                                  multiple
-                                  variant="outlined"
-                                  density="compact"
-                                  @keydown.enter="handleEnterKey($event, name)"
-                                />
-                              </div>
-                              
-                              <!-- Default text/number field -->
-                              <div v-else>
-                                <v-text-field
-                                  v-model="pluginParams[name][paramName]"
-                                  :label="paramName"
-                                  :type="param.type === 'number' || param.type === 'float' ? 'number' : 'text'"
-                                  :placeholder="param.description"
-                                  variant="outlined"
-                                  density="compact"
-                                  @keydown.enter="handleEnterKey($event, name)"
-                                />
-                              </div>
-                            </div>
-                          </template>
                         </div>
                       </div>
-
-                      <!-- Execute Button -->
-                      <v-btn
-                        :loading="executing[name]"
-                        :disabled="!plugin.enabled || executing[name]"
-                        color="primary"
-                        block
-                        class="mb-4"
-                        @click.stop="executePlugin(name)"
-                      >
-                        {{ executing[name] ? 'Executing...' : 'Execute Plugin' }}
-                      </v-btn>
-
-                      <!-- Results Available Indicator -->
-                      <div v-if="results[name] || pluginErrors[name]" @click.stop class="mb-4">
-                        <v-alert
-                          v-if="pluginErrors[name]"
-                          type="error"
-                          variant="tonal"
-                          density="compact"
-                          :text="pluginErrors[name]"
-                        />
-                        
-                        <v-btn
-                          v-else
-                          variant="outlined"
-                          color="success"
-                          block
-                          prepend-icon="mdi-eye"
-                          @click="openResultsModal(name)"
-                        >
-                          View Results
-                        </v-btn>
+                      
+                      <!-- Plugin description preview -->
+                      <div v-if="plugin.description && !expandedCards[name]" class="text-body-2 text-medium-emphasis mb-3">
+                        {{ plugin.description.substring(0, 100) }}{{ plugin.description.length > 100 ? '...' : '' }}
                       </div>
-                    </div>
-                  </v-expand-transition>
-                </v-card-text>
-              </v-card>
-            </v-col>
-          </v-row>
+
+                      <v-expand-transition>
+                        <div v-if="expandedCards[name]" class="mt-4">
+                          <!-- Full description -->
+                          <div v-if="plugin.description" class="mb-4">
+                            <v-card variant="tonal" color="info" class="pa-3">
+                              <div class="text-body-2">{{ plugin.description }}</div>
+                            </v-card>
+                          </div>
+
+                          <!-- Parameters Section -->
+                          <div v-if="plugin.parameters && Object.keys(plugin.parameters).length" class="mb-4">
+                            <div class="d-flex flex-column ga-3" @click.stop>
+                              <!-- Custom Plugin Parameter Component -->
+                              <component 
+                                v-if="pluginParamComponents[name]"
+                                :is="pluginParamComponents[name]"
+                                :parameters="{ ...plugin.parameters, description: plugin.description }"
+                                v-model="pluginParams[name]"
+                              />
+                              
+                              <!-- Default Parameter Rendering -->
+                              <template v-else>
+                                <div v-for="(param, paramName) in plugin.parameters" :key="paramName" class="mb-3">
+                                  <!-- Boolean type - Switch -->
+                                  <div v-if="param.type === 'boolean'">
+                                    <v-switch
+                                      v-model="pluginParams[name][paramName]"
+                                      :label="paramName"
+                                      :hint="param.description"
+                                      persistent-hint
+                                      color="primary"
+                                      density="comfortable"
+                                    />
+                                  </div>
+                                  
+                                  <!-- List type -->
+                                  <div v-else-if="param.type === 'list'">
+                                    <v-combobox
+                                      v-model="pluginParams[name][paramName]"
+                                      :label="paramName"
+                                      :placeholder="param.description"
+                                      chips
+                                      multiple
+                                      variant="outlined"
+                                      density="comfortable"
+                                      @keydown.enter="handleEnterKey($event, name)"
+                                    />
+                                  </div>
+                                  
+                                  <!-- Default text/number field -->
+                                  <div v-else>
+                                    <v-text-field
+                                      v-model="pluginParams[name][paramName]"
+                                      :label="paramName"
+                                      :type="param.type === 'number' || param.type === 'float' ? 'number' : 'text'"
+                                      :placeholder="param.description"
+                                      variant="outlined"
+                                      density="comfortable"
+                                      @keydown.enter="handleEnterKey($event, name)"
+                                    />
+                                  </div>
+                                </div>
+                              </template>
+                            </div>
+                          </div>
+
+                          <!-- Execute Button -->
+                          <v-btn
+                            :loading="executing[name]"
+                            :disabled="!plugin.enabled || executing[name]"
+                            color="primary"
+                            variant="flat"
+                            block
+                            class="mb-4"
+                            prepend-icon="mdi-play"
+                            @click.stop="executePlugin(name)"
+                          >
+                            {{ executing[name] ? 'Executing...' : 'Execute Plugin' }}
+                          </v-btn>
+
+                          <!-- Results Available Indicator -->
+                          <div v-if="results[name] || pluginErrors[name]" @click.stop class="mb-4">
+                            <v-alert
+                              v-if="pluginErrors[name]"
+                              type="error"
+                              variant="tonal"
+                              density="compact"
+                              :text="pluginErrors[name]"
+                            />
+                            
+                            <v-btn
+                              v-else
+                              variant="outlined"
+                              color="success"
+                              block
+                              prepend-icon="mdi-eye"
+                              @click="openResultsModal(name)"
+                            >
+                              View Results
+                            </v-btn>
+                          </div>
+                        </div>
+                      </v-expand-transition>
+                    </v-card-text>
+                  </v-card>
+                </v-col>
+              </v-row>
+
+              <!-- Empty state -->
+              <div v-else class="text-center pa-12">
+                <v-icon
+                  icon="mdi-puzzle-outline"
+                  size="64"
+                  color="grey-lighten-1"
+                  class="mb-4"
+                />
+                <h3 class="text-h6 font-weight-medium mb-2">
+                  No plugins available
+                </h3>
+                <p class="text-body-2 text-medium-emphasis mb-4">
+                  Try selecting a different category or check your plugin configuration.
+                </p>
+                <v-btn
+                  color="primary"
+                  prepend-icon="mdi-refresh"
+                  @click="loadPlugins"
+                >
+                  Refresh Plugins
+                </v-btn>
+              </div>
+            </v-card-text>
+          </v-card>
         </div>
       </v-container>
     </v-main>
@@ -207,7 +307,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, reactive, computed } from 'vue'
+import { ref, onMounted, reactive, computed, watch } from 'vue'
 import { pluginService } from '@/services/plugin'
 import PluginResultsModal from '@/components/PluginResultsModal.vue'
 import Sidebar from '@/components/Sidebar.vue'
@@ -234,14 +334,37 @@ const modalState = reactive({
 })
 
 const categories = ['Person', 'Network', 'Company', 'Other']
-const currentCategory = ref('Person')
+const selectedCategories = ref(['All'])
+
+// Watch for changes in category selection to handle "All" logic
+watch(selectedCategories, (newCategories, oldCategories) => {
+  // If "All" was just selected
+  if (newCategories.includes('All') && !oldCategories.includes('All')) {
+    // Clear other selections and keep only "All"
+    selectedCategories.value = ['All']
+  }
+  // If a specific category was selected while "All" was already selected
+  else if (oldCategories.includes('All') && newCategories.length > 1) {
+    // Remove "All" and keep only the newly selected categories
+    selectedCategories.value = newCategories.filter(cat => cat !== 'All')
+  }
+  // If no categories are selected, default to "All"
+  else if (newCategories.length === 0) {
+    selectedCategories.value = ['All']
+  }
+}, { immediate: false })
 
 const filteredPlugins = computed(() => {
+  // If "All" is selected or no categories are selected, show all plugins
+  if (selectedCategories.value.includes('All') || selectedCategories.value.length === 0) {
+    return plugins.value
+  }
+  
   return Object.entries(plugins.value).reduce((acc, [name, plugin]) => {
     // Get the plugin's category, defaulting to 'Other' if not set or not matching predefined categories
     const pluginCategory = plugin.category && categories.includes(plugin.category) ? plugin.category : 'Other'
-    // Only include plugins that match the current category
-    if (pluginCategory === currentCategory.value) {
+    // Include plugins that match any of the selected categories
+    if (selectedCategories.value.includes(pluginCategory)) {
       acc[name] = plugin
     }
     return acc
@@ -377,3 +500,9 @@ onMounted(() => {
   loadPlugins()
 })
 </script>
+
+<style scoped>
+.header-gradient {
+  background: linear-gradient(135deg, rgb(var(--v-theme-primary)) 0%, rgba(var(--v-theme-primary), 0.8) 100%) !important;
+}
+</style>

@@ -1,48 +1,101 @@
 <template>
-  <v-dialog v-model="dialogVisible" max-width="500px" persistent>
-    <v-card>
-      <v-card-title>
-        <span class="text-h5">Edit Case</span>
-      </v-card-title>
+  <v-dialog v-model="dialogVisible" max-width="600px" persistent>
+    <v-card prepend-icon="mdi-briefcase-edit" title="Edit Case">
       <v-card-text>
-        <v-alert v-if="error" type="error" class="mb-4">
+        <!-- Error Alert -->
+        <v-alert v-if="error" type="error" variant="tonal" class="mb-4">
           {{ error }}
         </v-alert>
-        <v-form @submit.prevent="handleSubmit">
-      <div>
-        <label for="title" class="block text-sm font-medium mb-1">Title</label>
-        <v-text-field
-          id="title"
-          v-model="formData.title"
-          required
-          variant="outlined"
-          density="comfortable"
-        />
-      </div>
 
-      <div>
-        <label for="status" class="block text-sm font-medium mb-1">Status</label>
-        <v-select
-          v-model="formData.status"
-          :items="[
-            { value: 'Open', title: 'Open' },
-            { value: 'Closed', title: 'Closed' }
-          ]"
-          item-title="title"
-          item-value="value"
-          required
-          variant="outlined"
-          density="comfortable"
-        />
-      </div>
+        <v-form ref="formRef" v-model="isFormValid" @submit.prevent="handleSubmit">
+          <!-- Case Details Section -->
+          <v-card variant="outlined" class="mb-6">
+            <v-card-title class="text-subtitle-1 pb-2">
+              <v-icon start>mdi-information</v-icon>
+              Case Information
+            </v-card-title>
+            
+            <v-card-text>
+              <v-text-field
+                v-model="formData.title"
+                label="Case Title"
+                variant="outlined"
+                density="comfortable"
+                prepend-inner-icon="mdi-briefcase"
+                :rules="[rules.required, rules.titleLength]"
+                counter="100"
+                placeholder="Enter a descriptive case title"
+                class="mb-4"
+                :readonly="updating"
+              />
+
+              <v-select
+                v-model="formData.status"
+                :items="statusOptions"
+                label="Case Status"
+                variant="outlined"
+                density="comfortable"
+                prepend-inner-icon="mdi-flag"
+                :rules="[rules.required]"
+                :readonly="updating"
+              />
+            </v-card-text>
+          </v-card>
+
+          <!-- Case Metadata (Read-only info) -->
+          <v-card variant="outlined" v-if="caseData.created_at">
+            <v-card-title class="text-subtitle-1 pb-2">
+              <v-icon start>mdi-clock</v-icon>
+              Case Timeline
+            </v-card-title>
+            
+            <v-card-text>
+              <v-row>
+                <v-col cols="12" md="6">
+                  <div class="mb-4">
+                    <div class="text-caption text-medium-emphasis mb-1">
+                      <v-icon size="16" class="me-1">mdi-calendar-plus</v-icon>
+                      Created
+                    </div>
+                    <v-chip
+                      variant="outlined"
+                      size="small"
+                      class="font-mono"
+                    >
+                      {{ formatDate(caseData.created_at) }}
+                    </v-chip>
+                  </div>
+                </v-col>
+                
+                <v-col cols="12" md="6">
+                  <div class="mb-4">
+                    <div class="text-caption text-medium-emphasis mb-1">
+                      <v-icon size="16" class="me-1">mdi-calendar-edit</v-icon>
+                      Last Updated
+                    </div>
+                    <v-chip
+                      variant="outlined"
+                      size="small"
+                      class="font-mono"
+                    >
+                      {{ formatDate(caseData.updated_at) }}
+                    </v-chip>
+                  </div>
+                </v-col>
+              </v-row>
+            </v-card-text>
+          </v-card>
         </v-form>
       </v-card-text>
 
+      <v-divider />
+
       <v-card-actions>
-        <v-spacer></v-spacer>
+        <v-spacer />
         <v-btn
           variant="text"
           @click="$emit('close')"
+          :disabled="updating"
         >
           Cancel
         </v-btn>
@@ -50,10 +103,10 @@
           color="primary"
           variant="flat"
           @click="handleSubmit"
-          :disabled="updating"
+          :disabled="updating || !isFormValid"
           :loading="updating"
         >
-          {{ updating ? 'Saving...' : 'Save Changes' }}
+          Save Changes
         </v-btn>
       </v-card-actions>
     </v-card>
@@ -63,7 +116,7 @@
 <script setup>
 import { ref, watch, computed } from 'vue'
 import api from '../services/api'
-// Vuetify components are auto-imported
+import { formatDate } from '../composables/dateUtils'
 
 const props = defineProps({
   show: {
@@ -75,12 +128,49 @@ const props = defineProps({
     required: true,
     default: () => ({
       title: '',
-      status: ''
+      status: '',
+      created_at: null,
+      updated_at: null
     })
   }
 })
 
 const emit = defineEmits(['close', 'update'])
+
+// Reactive variables
+const formRef = ref(null)
+const isFormValid = ref(false)
+const updating = ref(false)
+const error = ref(null)
+
+// Status options with icons and colors
+const statusOptions = [
+  { 
+    value: 'Open', 
+    title: 'Open',
+    props: {
+      prependIcon: 'mdi-folder-open',
+      color: 'success'
+    }
+  },
+  { 
+    value: 'Closed', 
+    title: 'Closed',
+    props: {
+      prependIcon: 'mdi-folder',
+      color: 'grey'
+    }
+  }
+]
+
+// Validation rules
+const rules = {
+  required: (value) => !!value || 'This field is required',
+  titleLength: (value) => {
+    if (!value) return true // handled by required rule
+    return value.length <= 100 || 'Title must be 100 characters or less'
+  }
+}
 
 const dialogVisible = computed({
   get: () => props.show,
@@ -95,10 +185,8 @@ const formData = ref({
   title: '',
   status: ''
 })
-const updating = ref(false)
-const error = ref(null)
 
-// Use watch instead of onMounted to handle updates to caseData
+// Watch for caseData changes and update form
 watch(() => props.caseData, (newValue) => {
   if (newValue) {
     formData.value = {
@@ -108,15 +196,28 @@ watch(() => props.caseData, (newValue) => {
   }
 }, { immediate: true })
 
+// Reset form validation when dialog opens
+watch(() => props.show, (show) => {
+  if (show && formRef.value) {
+    setTimeout(() => {
+      formRef.value.resetValidation()
+    }, 100)
+  }
+})
+
 const handleSubmit = async () => {
-  if (!formData.value) return
+  // Validate form before submission
+  if (!formRef.value) return
+  
+  const { valid } = await formRef.value.validate()
+  if (!valid) return
   
   updating.value = true
   error.value = null
   
   try {
     const response = await api.put(`/api/cases/${props.caseData.id}`, {
-      title: formData.value.title,
+      title: formData.value.title.trim(),
       status: formData.value.status
     })
     emit('update', response.data)

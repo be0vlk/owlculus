@@ -1,116 +1,172 @@
 <template>
-  <v-dialog v-model="dialogVisible" max-width="800px" persistent>
+  <v-dialog v-model="dialogVisible" max-width="900px" persistent scrollable>
     <v-card>
-      <v-card-title>
+      <v-card-title class="d-flex align-center">
+        <v-icon start :icon="getEntityIcon" color="primary" />
         <span class="text-h5">{{ getEntityTitle }}</span>
+        <v-spacer />
+        <v-chip 
+          :color="isEditing ? 'warning' : 'primary'" 
+          variant="tonal" 
+          size="small"
+        >
+          {{ isEditing ? 'Editing' : 'View Mode' }}
+        </v-chip>
       </v-card-title>
-      <v-card-text>
-        <v-alert v-if="error" type="error" class="mb-4">
+      
+      <v-divider />
+      
+      <v-card-text class="pa-0">
+        <!-- Error Alert -->
+        <v-alert v-if="error" type="error" variant="tonal" class="ma-4">
           {{ error }}
         </v-alert>
 
-            <!-- Tabs -->
-            <v-tabs v-model="activeTab" class="mt-4" color="primary">
-              <v-tab
-                v-for="(section, key) in entitySchema"
-                :key="key"
-                :value="key"
-              >
-                {{ section.title }}
-              </v-tab>
-            </v-tabs>
+        <!-- Tabs -->
+        <v-tabs 
+          v-model="activeTab" 
+          color="primary" 
+          align-tabs="start"
+          class="border-b"
+        >
+          <v-tab
+            v-for="(section, key) in entitySchema"
+            :key="key"
+            :value="key"
+            :prepend-icon="getSectionIcon(key)"
+          >
+            {{ section.title }}
+          </v-tab>
+        </v-tabs>
 
-            <!-- Tab Contents -->
-            <v-tabs-window v-model="activeTab" class="mt-4">
+        <!-- Tab Contents -->
+        <v-tabs-window v-model="activeTab" class="pa-4">
               <v-tabs-window-item
                 v-for="(section, key) in entitySchema"
                 :key="key"
                 :value="key"
               >
-                <form v-if="isEditing" @submit.prevent="handleSubmit" class="mt-4">
-                  <v-row>
-                    <template v-for="field in section.fields" :key="field.id">
-                      <v-col :cols="field.gridCols === 2 ? 12 : 6">
-                        <label :for="field.id" class="d-block text-body-2 font-weight-medium mb-1">{{ field.label }}</label>
-                        <v-textarea
-                          v-if="field.type === 'textarea'"
-                          :id="field.id"
-                          v-model="formData.data[section.parentField ? `${section.parentField}.${field.id}` : field.id]"
-                          rows="3"
-                          variant="outlined"
-                          density="compact"
-                        />
-                        <v-text-field
-                          v-else
-                          :id="field.id"
-                          :type="field.type"
-                          v-model="formData.data[section.parentField ? `${section.parentField}.${field.id}` : field.id]"
-                          variant="outlined"
-                          density="compact"
-                        />
-                      </v-col>
-                    </template>
-                  </v-row>
-                </form>
+                <!-- Edit Mode Form -->
+                <v-form v-if="isEditing" @submit.prevent="handleSubmit" ref="formRef">
+                  <v-container fluid class="pa-0">
+                    <v-row>
+                      <template v-for="field in section.fields" :key="field.id">
+                        <v-col :cols="field.gridCols === 2 ? 12 : 6">
+                          <v-textarea
+                            v-if="field.type === 'textarea'"
+                            v-model="formData.data[section.parentField ? `${section.parentField}.${field.id}` : field.id]"
+                            :label="field.label"
+                            variant="outlined"
+                            density="comfortable"
+                            rows="3"
+                            auto-grow
+                            clearable
+                          />
+                          <v-text-field
+                            v-else
+                            v-model="formData.data[section.parentField ? `${section.parentField}.${field.id}` : field.id]"
+                            :label="field.label"
+                            :type="field.type"
+                            variant="outlined"
+                            density="comfortable"
+                            clearable
+                            :prepend-inner-icon="getFieldIcon(field.type)"
+                          />
+                        </v-col>
+                      </template>
+                    </v-row>
+                  </v-container>
+                </v-form>
 
-                <div v-else class="mt-4">
+                <!-- View Mode -->
+                <v-container v-else fluid class="pa-0">
                   <v-row>
                     <template v-for="field in section.fields" :key="field.id">
                       <v-col :cols="field.gridCols === 2 ? 12 : 6">
-                        <label class="d-block text-body-2 font-weight-medium mb-1">
-                          {{ field.label }}
-                        </label>
-                        <div v-if="section.parentField === 'associates'" class="mt-1">
-                          <div v-if="getAssociateEntities(field.id).length > 0" class="mb-2">
-                            <EntityTag
-                              v-for="associate in getAssociateEntities(field.id)"
-                              :key="associate.id"
-                              @click="$emit('viewEntity', associate)"
+                        <v-card variant="outlined" class="pa-3">
+                          <v-card-subtitle class="pa-0 pb-2">
+                            <v-icon 
+                              :icon="getFieldIcon(field.type)" 
+                              size="small" 
+                              class="me-2"
+                            />
+                            {{ field.label }}
+                          </v-card-subtitle>
+                          
+                          <!-- Associates Section -->
+                          <div v-if="section.parentField === 'associates'">
+                            <div v-if="getAssociateEntities(field.id).length > 0" class="mb-2">
+                              <EntityTag
+                                v-for="associate in getAssociateEntities(field.id)"
+                                :key="associate.id"
+                                @click="$emit('viewEntity', associate)"
+                                class="ma-1"
+                              >
+                                {{ getEntityDisplayName(associate) }}
+                              </EntityTag>
+                            </div>
+                            <v-chip v-else variant="text" color="grey" size="small">
+                              {{ getFieldValue(entity.data, section.parentField, field.id) || 'Not specified' }}
+                            </v-chip>
+                          </div>
+                          
+                          <!-- URL Fields -->
+                          <div v-else-if="field.type === 'url'">
+                            <v-btn
+                              v-if="getFieldValue(entity.data, section.parentField, field.id)"
+                              :href="getFieldValue(entity.data, section.parentField, field.id)"
+                              target="_blank"
+                              variant="outlined"
+                              color="primary"
+                              size="small"
+                              prepend-icon="mdi-open-in-new"
+                              class="ma-0"
                             >
-                              {{ getEntityDisplayName(associate) }}
-                            </EntityTag>
+                              {{ getFieldValue(entity.data, section.parentField, field.id) }}
+                            </v-btn>
+                            <v-chip v-else variant="text" color="grey" size="small">
+                              Not provided
+                            </v-chip>
                           </div>
-                          <div v-else class="text-body-2 text-medium-emphasis">
-                            {{ getFieldValue(entity.data, section.parentField, field.id) || '' }}
+                          
+                          <!-- Regular Fields -->
+                          <div v-else class="text-body-1">
+                            <span v-if="getFieldValue(entity.data, section.parentField, field.id)">
+                              {{ getFieldValue(entity.data, section.parentField, field.id) }}
+                            </span>
+                            <v-chip v-else variant="text" color="grey" size="small">
+                              Not provided
+                            </v-chip>
                           </div>
-                        </div>
-                        <div v-else-if="field.type === 'url'" class="mt-1">
-                          <v-btn
-                            v-if="getFieldValue(entity.data, section.parentField, field.id)"
-                            :href="getFieldValue(entity.data, section.parentField, field.id)"
-                            target="_blank"
-                            variant="text"
-                            color="primary"
-                            size="small"
-                            class="pa-0"
-                          >
-                            {{ getFieldValue(entity.data, section.parentField, field.id) }}
-                          </v-btn>
-                          <span v-else class="text-medium-emphasis">-</span>
-                        </div>
-                        <div v-else class="mt-1 text-body-2">
-                          {{ getFieldValue(entity.data, section.parentField, field.id) || '' }}
-                        </div>
+                        </v-card>
                       </v-col>
                     </template>
                   </v-row>
-                </div>
+                </v-container>
               </v-tabs-window-item>
             </v-tabs-window>
 
       </v-card-text>
-      <v-card-actions>
-        <v-spacer></v-spacer>
+      
+      <v-divider />
+      
+      <v-card-actions class="pa-4">
+        <v-spacer />
+        
+        <!-- Edit Mode Actions -->
         <template v-if="isEditing">
           <v-btn
             variant="text"
+            prepend-icon="mdi-close"
             @click="cancelEdit"
+            :disabled="updating"
           >
             Cancel
           </v-btn>
           <v-btn
             color="primary"
             variant="flat"
+            prepend-icon="mdi-content-save"
             @click="handleSubmit"
             :disabled="updating"
             :loading="updating"
@@ -118,9 +174,12 @@
             {{ updating ? 'Saving...' : 'Save Changes' }}
           </v-btn>
         </template>
+        
+        <!-- View Mode Actions -->
         <template v-else>
           <v-btn
             variant="text"
+            prepend-icon="mdi-close"
             @click="$emit('close')"
           >
             Close
@@ -128,6 +187,7 @@
           <v-btn
             color="primary"
             variant="flat"
+            prepend-icon="mdi-pencil"
             @click="startEditing"
           >
             Edit Entity
@@ -467,6 +527,45 @@ const getEntityTitle = computed(() => {
   }
   return props.entity.data.name || 'Entity Details';
 });
+
+const getEntityIcon = computed(() => {
+  const iconMap = {
+    person: 'mdi-account',
+    company: 'mdi-domain',
+    domain: 'mdi-web',
+    ip_address: 'mdi-ip',
+    network: 'mdi-server-network'
+  };
+  return iconMap[props.entity.entity_type] || 'mdi-help-circle';
+});
+
+const getSectionIcon = (sectionKey) => {
+  const iconMap = {
+    basicInfo: 'mdi-information',
+    address: 'mdi-map-marker',
+    social_media: 'mdi-share-variant',
+    associates: 'mdi-account-group',
+    executives: 'mdi-account-tie',
+    affiliates: 'mdi-handshake',
+    contact: 'mdi-phone',
+    technical: 'mdi-server',
+    notes: 'mdi-note-text'
+  };
+  return iconMap[sectionKey] || 'mdi-folder';
+};
+
+const getFieldIcon = (fieldType) => {
+  const iconMap = {
+    email: 'mdi-email',
+    tel: 'mdi-phone',
+    url: 'mdi-link',
+    textarea: 'mdi-text',
+    text: 'mdi-form-textbox',
+    number: 'mdi-numeric',
+    date: 'mdi-calendar'
+  };
+  return iconMap[fieldType] || 'mdi-form-textbox';
+};
 
 const getFieldValue = (data, parentField, fieldId) => {
   if (parentField) {
