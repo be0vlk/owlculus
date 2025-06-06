@@ -18,6 +18,10 @@ class EvidenceBase(BaseModel):
         description="Category of the evidence for organization purposes"
     )
     content: Optional[str] = None  # File path
+    file_hash: Optional[str] = None  # SHA-256 hash of file content
+    folder_path: Optional[str] = None
+    is_folder: bool = Field(default=False)
+    parent_folder_id: Optional[int] = None
 
 
 class EvidenceCreate(EvidenceBase):
@@ -52,6 +56,25 @@ class EvidenceCreate(EvidenceBase):
         return self
 
 
+class FolderCreate(BaseModel):
+    """Schema for creating folders."""
+    
+    case_id: int = Field(..., gt=0)
+    title: str = Field(..., min_length=1, max_length=255)
+    description: Optional[str] = None
+    parent_folder_id: Optional[int] = None
+    folder_path: Optional[str] = Field(default=None, max_length=500)
+
+
+class FolderUpdate(BaseModel):
+    """Schema for updating folders."""
+    
+    title: Optional[str] = Field(None, min_length=1, max_length=255)
+    description: Optional[str] = None
+    parent_folder_id: Optional[int] = None
+    updated_at: datetime = Field(default_factory=get_utc_now)
+
+
 class EvidenceUpdate(BaseModel):
     """Schema for updating evidence."""
 
@@ -59,6 +82,9 @@ class EvidenceUpdate(BaseModel):
     description: Optional[str] = None
     category: Optional[str] = None
     content: Optional[str] = None  # File path
+    file_hash: Optional[str] = None  # SHA-256 hash of file content
+    folder_path: Optional[str] = None
+    parent_folder_id: Optional[int] = None
     updated_at: datetime = Field(default_factory=get_utc_now)
 
     VALID_CATEGORIES: ClassVar[List[str]] = EvidenceCreate.VALID_CATEGORIES

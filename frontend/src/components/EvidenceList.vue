@@ -12,115 +12,262 @@
       {{ error }}
     </v-alert>
     <v-card v-else elevation="1" rounded="lg">
-      <div class="file-explorer">
-        <template v-for="category in CATEGORIES" :key="category">
-          <div class="directory-group">
-            <v-list-item 
-              @click="toggleDirectory(category)"
-              class="cursor-pointer"
-              :class="{ 'bg-surface': expandedDirectories[category] }"
+      <v-card-title class="d-flex align-center justify-space-between">
+        <span>Evidence</span>
+        <div v-if="treeItems.length > 0 && selectedItems.length > 0" class="d-flex align-center ga-2">
+          <span class="text-caption">{{ selectedItems.length }} selected</span>
+          <v-btn
+            v-if="userRole !== 'Analyst'"
+            color="error"
+            size="small"
+            variant="outlined"
+            @click="showMassDeleteConfirm = true"
+            prepend-icon="mdi-delete"
+          >
+            Delete Selected
+          </v-btn>
+        </div>
+      </v-card-title>
+      
+      <div class="pa-4">
+        <template v-if="treeItems.length === 0">
+          <div class="text-center py-8">
+            <v-icon icon="mdi-folder-open" size="64" color="grey-darken-1" class="mb-4" />
+            <h3 class="text-h6 mb-2">No folders created yet</h3>
+            <p class="text-body-2 text-medium-emphasis mb-4">
+              Create your first folder to organize evidence
+            </p>
+            <v-btn
+              v-if="userRole !== 'Analyst'"
+              color="primary"
+              @click="showCreateFolder = true"
+              :disabled="!caseId"
             >
-              <template v-slot:prepend>
-                <v-icon 
-                  :icon="expandedDirectories[category] ? 'mdi-chevron-down' : 'mdi-chevron-right'"
-                  color="grey-darken-1"
-                  class="mr-2"
+              <v-icon start>mdi-folder-plus</v-icon>
+              Create Folder
+            </v-btn>
+          </div>
+        </template>
+        
+        <template v-else>
+          <v-treeview
+            :items="treeItems"
+            :open="openItems"
+            item-value="id"
+            item-title="title"
+            item-children="children"
+            density="compact"
+            :return-object="false"
+          >
+            <template v-slot:prepend="{ item, open }">
+              <div class="d-flex align-center ga-2">
+                <v-checkbox-btn
+                  :model-value="selectedItems.includes(item.id)"
+                  @update:model-value="toggleSelection(item.id)"
+                  density="compact"
+                  hide-details
                 />
                 <v-icon 
-                  icon="mdi-folder"
-                  color="grey-darken-1"
-                  class="mr-2"
+                  v-if="item.is_folder"
+                  :icon="open ? 'mdi-folder-open' : 'mdi-folder'"
+                  color="blue-darken-1"
+                  @contextmenu.prevent="showContextMenu($event, item)"
                 />
-              </template>
-              
-              <v-list-item-title class="font-weight-medium">
-                {{ category }}
-              </v-list-item-title>
-              
-              <template v-slot:append>
+                <v-icon 
+                  v-else
+                  :icon="getFileIcon(item)"
+                  color="grey-darken-1"
+                  @contextmenu.prevent="showContextMenu($event, item)"
+                />
+              </div>
+            </template>
+            
+            <template v-slot:title="{ item }">
+              <span 
+                class="tree-item-title"
+                @contextmenu.prevent="showContextMenu($event, item)"
+              >
+                {{ item.title }}
+              </span>
+            </template>
+            
+            <template v-slot:append="{ item }">
+              <div class="d-flex align-center ga-1">
                 <v-chip 
-                  size="small" 
+                  v-if="item.is_folder && item.childCount > 0"
+                  size="x-small" 
                   variant="tonal"
                   color="grey"
                 >
-                  {{ groupedEvidence[category]?.length || 0 }} items
+                  {{ item.childCount }}
                 </v-chip>
-              </template>
-            </v-list-item>
-            
-            <v-expand-transition>
-              <div v-if="expandedDirectories[category]" class="ml-8">
-                <template v-if="groupedEvidence[category]?.length">
-                  <v-list-item 
-                    v-for="evidence in groupedEvidence[category]" 
-                    :key="evidence.id"
-                    class="evidence-item"
-                  >
-                    <template v-slot:prepend>
-                      <v-icon 
-                        v-if="evidence.evidence_type === 'file'"
-                        icon="mdi-file-document"
-                        color="grey-darken-1"
-                        class="mr-2"
-                      />
-                    </template>
-                    
-                    <v-list-item-title class="text-body-2 font-weight-medium">
-                      {{ evidence.title }}
-                    </v-list-item-title>
-                    
-                    <v-list-item-subtitle v-if="evidence.description" class="text-caption text-medium-emphasis">
-                      {{ evidence.description }}
-                    </v-list-item-subtitle>
-                    
-                    <v-list-item-subtitle class="text-caption text-medium-emphasis">
-                      Added {{ formatDate(evidence.created_at) }} UTC
-                    </v-list-item-subtitle>
-                    
-                    <template v-slot:append>
-                      <div class="d-flex ga-2">
-                        <v-btn
-                          v-if="evidence.evidence_type === 'file'"
-                          size="small"
-                          variant="outlined"
-                          icon
-                          @click="$emit('download', evidence)"
-                        >
-                          <v-icon>mdi-download</v-icon>
-                          <v-tooltip activator="parent" location="top">Download</v-tooltip>
-                        </v-btn>
-                        <v-btn
-                          size="small"
-                          color="error"
-                          variant="outlined"
-                          icon
-                          @click="$emit('delete', evidence)"
-                        >
-                          <v-icon>mdi-delete</v-icon>
-                          <v-tooltip activator="parent" location="top">Delete</v-tooltip>
-                        </v-btn>
-                      </div>
-                    </template>
-                  </v-list-item>
-                </template>
-                <div v-else class="py-8 text-center">
-                  <v-icon icon="mdi-inbox" size="48" color="grey-darken-1" class="mb-3" />
-                  <h3 class="text-body-1 font-weight-medium mb-1">No evidence in this category</h3>
-                  <p class="text-body-2 text-medium-emphasis">Upload new evidence to get started</p>
-                </div>
+                
+                <v-btn
+                  v-if="!item.is_folder && item.evidence_type === 'file'"
+                  size="x-small"
+                  variant="text"
+                  icon="mdi-download"
+                  @click.stop="$emit('download', item)"
+                />
+                
+                <v-btn
+                  v-if="userRole !== 'Analyst'"
+                  size="x-small"
+                  variant="text"
+                  icon="mdi-delete"
+                  color="error"
+                  @click.stop="deleteItem(item)"
+                />
               </div>
-            </v-expand-transition>
-          </div>
+            </template>
+          </v-treeview>
         </template>
       </div>
     </v-card>
+    
+    <!-- Context Menu -->
+    <FolderContextMenu
+      v-model="contextMenu.show"
+      :activator="contextMenu.activator"
+      :item="contextMenu.item"
+      :user-role="userRole"
+      @create-subfolder="createSubfolder"
+      @upload-files="uploadToFolder"
+      @rename="renameItem"
+      @delete="deleteItem"
+      @show-properties="showProperties"
+    />
+    
+    <!-- Create Folder Dialog -->
+    <CreateFolderDialog
+      v-model="showCreateFolder"
+      :case-id="caseId"
+      :parent-folder-id="newFolderParent"
+      @folder-created="handleFolderCreated"
+    />
+    
+    <!-- Rename Dialog -->
+    <RenameDialog
+      v-model="showRename"
+      :item="renameTargetItem"
+      @renamed="handleItemRenamed"
+    />
+    
+    <!-- Delete Confirmation -->
+    <v-dialog v-model="showDeleteConfirm" max-width="500px">
+      <v-card>
+        <v-card-title class="d-flex align-center">
+          <v-icon icon="mdi-delete" color="error" class="mr-2"></v-icon>
+          Confirm Delete
+        </v-card-title>
+        
+        <v-card-text>
+          <p>
+            Are you sure you want to delete 
+            <strong>{{ deleteTargetItem?.title }}</strong>?
+          </p>
+          <p v-if="deleteTargetItem?.is_folder" class="text-warning mt-2">
+            <v-icon icon="mdi-alert" class="mr-1"></v-icon>
+            This will also delete all contents within this folder.
+          </p>
+        </v-card-text>
+        
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn color="grey" variant="text" @click="showDeleteConfirm = false">
+            Cancel
+          </v-btn>
+          <v-btn 
+            color="error" 
+            variant="flat" 
+            @click="confirmDelete"
+            :loading="deleteLoading"
+          >
+            Delete
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+    
+    <!-- Properties Dialog -->
+    <v-dialog v-model="showPropertiesDialog" max-width="500px">
+      <v-card>
+        <v-card-title class="d-flex align-center">
+          <v-icon :icon="propertiesItem?.is_folder ? 'mdi-folder' : 'mdi-file'" class="mr-2"></v-icon>
+          {{ propertiesItem?.is_folder ? 'Folder' : 'File' }} Properties
+        </v-card-title>
+        
+        <v-card-text>
+          <v-list density="compact">
+            <v-list-item>
+              <v-list-item-title>Name</v-list-item-title>
+              <v-list-item-subtitle>{{ propertiesItem?.title }}</v-list-item-subtitle>
+            </v-list-item>
+            
+            <v-list-item v-if="!propertiesItem?.is_folder && propertiesItem?.category">
+              <v-list-item-title>Evidence Type</v-list-item-title>
+              <v-list-item-subtitle>{{ propertiesItem.category }}</v-list-item-subtitle>
+            </v-list-item>
+            
+            <v-list-item v-if="!propertiesItem?.is_folder && propertiesItem?.file_hash">
+              <v-list-item-title>Hash</v-list-item-title>
+              <v-list-item-subtitle class="font-mono">{{ propertiesItem.file_hash }}</v-list-item-subtitle>
+            </v-list-item>
+          </v-list>
+        </v-card-text>
+        
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn color="primary" variant="text" @click="showPropertiesDialog = false">
+            Close
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+    
+    <!-- Mass Delete Confirmation -->
+    <v-dialog v-model="showMassDeleteConfirm" max-width="500px">
+      <v-card>
+        <v-card-title class="d-flex align-center">
+          <v-icon icon="mdi-delete-multiple" color="error" class="mr-2"></v-icon>
+          Confirm Mass Delete
+        </v-card-title>
+        
+        <v-card-text>
+          <p>
+            Are you sure you want to delete <strong>{{ selectedItems.length }}</strong> selected items?
+          </p>
+          <p class="text-warning mt-2">
+            <v-icon icon="mdi-alert" class="mr-1"></v-icon>
+            This action cannot be undone. Folders will be deleted along with all their contents.
+          </p>
+        </v-card-text>
+        
+        <v-card-actions>
+          <v-spacer></v-spacer>
+          <v-btn color="grey" variant="text" @click="showMassDeleteConfirm = false">
+            Cancel
+          </v-btn>
+          <v-btn 
+            color="error" 
+            variant="flat" 
+            @click="confirmMassDelete"
+            :loading="massDeleteLoading"
+          >
+            Delete All
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
-import { formatDate } from '@/composables/dateUtils';
-// Vuetify components are auto-imported
+import { ref, computed, watch } from 'vue'
+import { evidenceService } from '../services/evidence'
+import CreateFolderDialog from './CreateFolderDialog.vue'
+import FolderContextMenu from './FolderContextMenu.vue'
+import RenameDialog from './RenameDialog.vue'
 
 const props = defineProps({
   evidenceList: {
@@ -135,53 +282,249 @@ const props = defineProps({
     type: String,
     default: '',
   },
-});
+  caseId: {
+    type: Number,
+    required: true,
+  },
+  userRole: {
+    type: String,
+    default: 'Investigator'
+  }
+})
 
-const expandedDirectories = ref({});
+const emit = defineEmits(['download', 'delete', 'refresh', 'upload-to-folder'])
 
-const CATEGORIES = [
-  'Social Media',
-  'Associates',
-  'Network Assets',
-  'Communications',
-  'Documents',
-  'Other'
-];
+// Reactive data
+const showCreateFolder = ref(false)
+const showRename = ref(false)
+const showDeleteConfirm = ref(false)
+const showPropertiesDialog = ref(false)
+const showMassDeleteConfirm = ref(false)
+const deleteLoading = ref(false)
+const massDeleteLoading = ref(false)
+const newFolderParent = ref(null)
+const renameTargetItem = ref(null)
+const deleteTargetItem = ref(null)
+const propertiesItem = ref(null)
+const openItems = ref([])
+const selectedItems = ref([])
 
-const groupedEvidence = computed(() => {
-  const groups = {};
+// Context menu
+const contextMenu = ref({
+  show: false,
+  activator: null,
+  item: null
+})
+
+// Computed
+
+
+const treeItems = computed(() => {
+  const items = []
+  const itemMap = new Map()
   
+  // First pass: create all items
   props.evidenceList.forEach(evidence => {
-    const category = evidence.category || 'Other';
-    if (!groups[category]) {
-      groups[category] = [];
+    const item = {
+      id: evidence.id,
+      title: evidence.title,
+      is_folder: evidence.is_folder,
+      evidence_type: evidence.evidence_type,
+      category: evidence.category,
+      file_hash: evidence.file_hash,
+      parent_folder_id: evidence.parent_folder_id,
+      folder_path: evidence.folder_path,
+      children: evidence.is_folder ? [] : undefined, // Only folders have children
+      childCount: 0
     }
-    groups[category].push(evidence);
-  });
+    itemMap.set(evidence.id, item)
+  })
+  
+  // Second pass: build hierarchy
+  itemMap.forEach(item => {
+    if (item.parent_folder_id && itemMap.has(item.parent_folder_id)) {
+      const parent = itemMap.get(item.parent_folder_id)
+      parent.children.push(item)
+      parent.childCount++
+    } else {
+      items.push(item)
+    }
+  })
+  
+  // Sort items: folders first, then by title
+  const sortItems = (items) => {
+    return items.sort((a, b) => {
+      if (a.is_folder && !b.is_folder) return -1
+      if (!a.is_folder && b.is_folder) return 1
+      return a.title.localeCompare(b.title)
+    }).map(item => ({
+      ...item,
+      children: item.children ? sortItems(item.children) : item.children
+    }))
+  }
+  
+  return sortItems(items)
+})
 
-  return groups;
-});
+// Methods
+const getFileIcon = (item) => {
+  if (item.is_folder) return 'mdi-folder'
+  
+  const fileExtension = item.title.split('.').pop()?.toLowerCase()
+  
+  switch (fileExtension) {
+    case 'pdf':
+      return 'mdi-file-pdf-box'
+    case 'doc':
+    case 'docx':
+      return 'mdi-file-word-box'
+    case 'jpg':
+    case 'jpeg':
+    case 'png':
+    case 'gif':
+      return 'mdi-file-image-box'
+    case 'mp4':
+    case 'avi':
+    case 'mov':
+      return 'mdi-file-video-box'
+    case 'mp3':
+    case 'wav':
+      return 'mdi-file-music-box'
+    case 'txt':
+      return 'mdi-file-document-outline'
+    default:
+      return 'mdi-file-document'
+  }
+}
 
-const toggleDirectory = (category) => {
-  expandedDirectories.value[category] = !expandedDirectories.value[category];
-};
+const showContextMenu = (event, item) => {
+  event.preventDefault()
+  contextMenu.value = {
+    show: true,
+    activator: event.target,
+    item
+  }
+}
 
-defineEmits(['download', 'delete']);
+
+const createSubfolder = (parentItem) => {
+  newFolderParent.value = parentItem?.id || null
+  showCreateFolder.value = true
+}
+
+const uploadToFolder = (folderItem) => {
+  emit('upload-to-folder', folderItem)
+}
+
+const renameItem = (item) => {
+  renameTargetItem.value = item
+  showRename.value = true
+}
+
+const deleteItem = (item) => {
+  deleteTargetItem.value = item
+  showDeleteConfirm.value = true
+}
+
+const showProperties = (item) => {
+  propertiesItem.value = item
+  showPropertiesDialog.value = true
+}
+
+const toggleSelection = (itemId) => {
+  const index = selectedItems.value.indexOf(itemId)
+  if (index > -1) {
+    // Remove from selection
+    selectedItems.value.splice(index, 1)
+  } else {
+    // Add to selection
+    selectedItems.value.push(itemId)
+  }
+}
+
+
+const handleFolderCreated = () => {
+  emit('refresh')
+}
+
+const handleItemRenamed = () => {
+  emit('refresh')
+}
+
+const confirmDelete = async () => {
+  if (!deleteTargetItem.value) return
+  
+  deleteLoading.value = true
+  
+  try {
+    if (deleteTargetItem.value.is_folder) {
+      await evidenceService.deleteFolder(deleteTargetItem.value.id)
+    } else {
+      await evidenceService.deleteEvidence(deleteTargetItem.value.id)
+    }
+    
+    emit('refresh')
+    showDeleteConfirm.value = false
+  } catch (error) {
+    console.error('Delete error:', error)
+  } finally {
+    deleteLoading.value = false
+  }
+}
+
+const confirmMassDelete = async () => {
+  if (selectedItems.value.length === 0) return
+  
+  massDeleteLoading.value = true
+  
+  try {
+    // Get the items to delete from the evidence list
+    const itemsToDelete = props.evidenceList.filter(item => 
+      selectedItems.value.includes(item.id)
+    )
+    
+    // Delete each item
+    for (const item of itemsToDelete) {
+      if (item.is_folder) {
+        await evidenceService.deleteFolder(item.id)
+      } else {
+        await evidenceService.deleteEvidence(item.id)
+      }
+    }
+    
+    // Clear selection and refresh
+    selectedItems.value = []
+    emit('refresh')
+    showMassDeleteConfirm.value = false
+  } catch (error) {
+    console.error('Mass delete error:', error)
+  } finally {
+    massDeleteLoading.value = false
+  }
+}
+
+// Watch for evidence list changes to maintain open state
+watch(() => props.evidenceList, () => {
+  // Maintain open folders
+}, { deep: true })
 </script>
 
 <style scoped>
-.evidence-item:hover {
+.tree-item-title {
+  cursor: pointer;
+  user-select: none;
+}
+
+.tree-item-title:hover {
+  text-decoration: underline;
+}
+
+:deep(.v-treeview-item) {
+  border-radius: 4px;
+  margin-bottom: 2px;
+}
+
+:deep(.v-treeview-item:hover) {
   background-color: rgba(var(--v-theme-on-surface), 0.05);
-}
-
-.slide-enter-active,
-.slide-leave-active {
-  transition: all 0.3s ease;
-}
-
-.slide-enter-from,
-.slide-leave-to {
-  opacity: 0;
-  transform: translateY(-10px);
 }
 </style>

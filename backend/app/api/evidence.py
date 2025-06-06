@@ -21,6 +21,8 @@ async def create_evidence(
     case_id: int,
     category: str,
     description: Optional[str] = Form(None),
+    folder_path: Optional[str] = Form(None),
+    parent_folder_id: Optional[int] = Form(None),
     files: list[UploadFile] = File(...),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_active_user),
@@ -39,6 +41,8 @@ async def create_evidence(
             case_id=case_id,
             evidence_type="file",
             content="",
+            folder_path=folder_path,
+            parent_folder_id=parent_folder_id,
         )
 
         try:
@@ -121,4 +125,55 @@ async def delete_evidence(
     evidence_service = EvidenceService(db)
     return await evidence_service.delete_evidence(
         evidence_id=evidence_id, current_user=current_user
+    )
+
+
+@router.post("/folders", response_model=schemas.Evidence)
+async def create_folder(
+    folder_data: schemas.FolderCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    evidence_service = EvidenceService(db)
+    return await evidence_service.create_folder(
+        folder_data=folder_data, current_user=current_user
+    )
+
+
+@router.get("/case/{case_id}/folder-tree", response_model=list[schemas.Evidence])
+async def get_folder_tree(
+    case_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    evidence_service = EvidenceService(db)
+    return await evidence_service.get_folder_tree(
+        case_id=case_id, current_user=current_user
+    )
+
+
+@router.put("/folders/{folder_id}", response_model=schemas.Evidence)
+async def update_folder(
+    folder_id: int,
+    folder_update: schemas.FolderUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    evidence_service = EvidenceService(db)
+    return await evidence_service.update_folder(
+        folder_id=folder_id,
+        folder_update=folder_update,
+        current_user=current_user,
+    )
+
+
+@router.delete("/folders/{folder_id}", response_model=schemas.Evidence)
+async def delete_folder(
+    folder_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    evidence_service = EvidenceService(db)
+    return await evidence_service.delete_folder(
+        folder_id=folder_id, current_user=current_user
     )

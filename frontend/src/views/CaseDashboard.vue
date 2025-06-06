@@ -254,16 +254,28 @@
                       color="primary"
                       prepend-icon="mdi-upload"
                       @click="showUploadEvidenceModal = true"
+                      :disabled="!hasFolders"
                     >
                       Upload Evidence
                     </v-btn>
+                    <v-tooltip
+                      v-if="!hasFolders"
+                      activator="parent"
+                      location="bottom"
+                    >
+                      Create a folder first to organize evidence
+                    </v-tooltip>
                   </div>
                   <EvidenceList
                     :evidence-list="evidence"
                     :loading="loadingEvidence"
                     :error="evidenceError"
+                    :case-id="Number(route.params.id)"
+                    :user-role="userRole"
                     @download="handleDownloadEvidence"
                     @delete="handleDeleteEvidence"
+                    @refresh="loadEvidence"
+                    @upload-to-folder="handleUploadToFolder"
                   />
                 </div>
 
@@ -321,7 +333,8 @@
       v-if="showUploadEvidenceModal"
       :show="showUploadEvidenceModal"
       :case-id="Number(route.params.id)"
-      @close="showUploadEvidenceModal = false"
+      :target-folder="uploadTargetFolder"
+      @close="showUploadEvidenceModal = false; uploadTargetFolder = null"
       @uploaded="handleEvidenceUpload"
     />
   </v-app>
@@ -330,6 +343,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
+import { useAuthStore } from '../stores/auth';
 import Sidebar from '../components/Sidebar.vue';
 import CaseDetail from '../components/CaseDetail.vue';
 import EntityListItem from '../components/EntityListItem.vue';
@@ -348,6 +362,7 @@ import { entityService } from '../services/entity';
 import { evidenceService } from '../services/evidence';
 
 const route = useRoute();
+const authStore = useAuthStore();
 const loading = ref(false);
 const loadingEntities = ref(false);
 const error = ref(null);
@@ -364,6 +379,14 @@ const evidence = ref([]);
 const loadingEvidence = ref(false);
 const evidenceError = ref('');
 const showUploadEvidenceModal = ref(false);
+const uploadTargetFolder = ref(null);
+
+// Computed properties
+const userRole = computed(() => authStore.user?.role || 'Analyst');
+
+const hasFolders = computed(() => {
+  return evidence.value.some(item => item.is_folder);
+});
 
 // Entity details handling
 function showEntityDetails(entity) {
@@ -515,6 +538,11 @@ const handleDeleteEvidence = async (evidenceItem) => {
 
 const handleEvidenceUpload = async (newEvidenceList) => {
   evidence.value = [...evidence.value, ...newEvidenceList];
+};
+
+const handleUploadToFolder = (folder) => {
+  uploadTargetFolder.value = folder;
+  showUploadEvidenceModal.value = true;
 };
 
 const formatNetworkAssetDetails = (data) => {

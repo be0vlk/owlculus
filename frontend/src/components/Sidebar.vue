@@ -12,8 +12,8 @@
         <v-img
           :src="isDark ? '/owl_logo_white.png' : '/owl_logo.png'"
           alt="Owlculus Logo"
-          max-height="100"
-          max-width="180"
+          max-height="140"
+          max-width="220"
           contain
         />
       </div>
@@ -48,7 +48,7 @@
           class="mb-2 justify-start"
           @click="toggleDark"
         />
-        
+
         <v-btn
           prepend-icon="mdi-logout"
           text="Logout"
@@ -85,12 +85,12 @@ const navigationItems = computed(() => {
     { name: 'Cases', href: '/cases', icon: 'mdi-folder-outline' },
     { name: 'Plugins', href: '/plugins', icon: 'mdi-wrench-outline' },
   ]
-  
+
   // Add settings for non-admin users
   if (!authStore.requiresAdmin()) {
     items.push({ name: 'Settings', href: '/settings', icon: 'mdi-cog-outline' })
   }
-  
+
   // Only show clients and admin sections for admin users
   if (authStore.requiresAdmin()) {
     items.push(
@@ -98,7 +98,7 @@ const navigationItems = computed(() => {
       { name: 'Admin', href: '/admin', icon: 'mdi-shield-account-outline' }
     )
   }
-  
+
   return items
 })
 

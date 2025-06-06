@@ -6,7 +6,7 @@ export const evidenceService = {
     return response.data;
   },
 
-  async createEvidence({ description, category, caseId, files }) {
+  async createEvidence({ description, category, caseId, files, folderPath, parentFolderId }) {
     const formData = new FormData();
     files.forEach(file => {
       formData.append('files', file);
@@ -19,6 +19,12 @@ export const evidenceService = {
     });
     if (description) {
       formData.append('description', description);
+    }
+    if (folderPath) {
+      formData.append('folder_path', folderPath);
+    }
+    if (parentFolderId) {
+      formData.append('parent_folder_id', parentFolderId);
     }
 
     const response = await api.post(`/api/evidence?${queryParams}`, formData, {
@@ -38,5 +44,44 @@ export const evidenceService = {
 
   async deleteEvidence(evidenceId) {
     await api.delete(`/api/evidence/${evidenceId}`);
+  },
+
+  async getFolderTree(caseId) {
+    const response = await api.get(`/api/evidence/case/${caseId}/folder-tree`);
+    return response.data;
+  },
+
+  async createFolder({ caseId, title, description, parentFolderId }) {
+    const response = await api.post('/api/evidence/folders', {
+      case_id: caseId,
+      title,
+      description,
+      parent_folder_id: parentFolderId
+    });
+    return response.data;
+  },
+
+  async updateFolder(folderId, { title, description, parentFolderId }) {
+    const response = await api.put(`/api/evidence/folders/${folderId}`, {
+      title,
+      description,
+      parent_folder_id: parentFolderId
+    });
+    return response.data;
+  },
+
+  async deleteFolder(folderId) {
+    await api.delete(`/api/evidence/folders/${folderId}`);
+  },
+  
+  async updateEvidence(evidenceId, { title, description, category, folderPath, parentFolderId }) {
+    const response = await api.put(`/api/evidence/${evidenceId}`, {
+      title,
+      description,
+      category,
+      folder_path: folderPath,
+      parent_folder_id: parentFolderId
+    });
+    return response.data;
   },
 };

@@ -60,11 +60,17 @@ class Evidence(SQLModel, table=True):
     evidence_type: str
     category: str = Field(default="Other")
     content: str
+    file_hash: Optional[str] = Field(default=None, max_length=64)
+    folder_path: Optional[str] = Field(default=None, max_length=500)
+    is_folder: bool = Field(default=False)
+    parent_folder_id: Optional[int] = Field(default=None, foreign_key="evidence.id")
     created_at: datetime = Field(default_factory=get_utc_now)
     updated_at: datetime = Field(default_factory=get_utc_now)
     created_by_id: int = Field(foreign_key="user.id")
     case: "Case" = Relationship(back_populates="evidence")
     creator: "User" = Relationship()
+    parent_folder: Optional["Evidence"] = Relationship(back_populates="subfolders", sa_relationship_kwargs={"remote_side": "Evidence.id"})
+    subfolders: List["Evidence"] = Relationship(back_populates="parent_folder")
 
 
 class Entity(SQLModel, table=True):

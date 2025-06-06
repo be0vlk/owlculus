@@ -271,7 +271,7 @@ const handleRowClick = (event, { item }) => {
 }
 
 // Function to get color for user role chips
-const getUserRoleColor = (role) => {
+const getUserRoleColor = () => {
   // Return light grey for all user chips
   return 'grey-lighten-1'
 }
