@@ -33,7 +33,7 @@ DEFAULT_BACKEND_PORT=8000
 DEFAULT_DB_PORT=5432
 DEFAULT_DOMAIN="localhost"
 DEFAULT_ADMIN_USERNAME="admin"
-DEFAULT_ADMIN_EMAIL="admin@owlculus.local"
+DEFAULT_ADMIN_EMAIL="admin@example.com"
 
 # Configuration variables
 FRONTEND_PORT=""
@@ -89,6 +89,7 @@ validate_port() {
 
 # Function to run interactive configuration
 interactive_config() {
+    local MODE="$1"
     echo ""
     echo "Owlculus Interactive Setup"
     echo "=========================="
@@ -96,28 +97,26 @@ interactive_config() {
     echo "Configure your Owlculus installation. Press Enter to use defaults."
     echo ""
     
+    # Adjust default frontend port for dev mode
+    local DEFAULT_FE_PORT="$DEFAULT_FRONTEND_PORT"
+    if [ "$MODE" = "dev" ] || [ "$MODE" = "development" ]; then
+        DEFAULT_FE_PORT="5173"
+    fi
+    
     # Network Configuration
     echo "Network Configuration:"
     echo "---------------------"
     
     while true; do
-        FRONTEND_URL=$(prompt_with_default "Frontend URL (include http/https)" "http://localhost:$DEFAULT_FRONTEND_PORT")
-        if [ -n "$FRONTEND_URL" ]; then
+        DOMAIN=$(prompt_with_default "Domain/Hostname (without port or protocol)" "$DEFAULT_DOMAIN")
+        if [ -n "$DOMAIN" ]; then
             break
         fi
-        print_error "Frontend URL cannot be empty"
+        print_error "Domain/Hostname cannot be empty"
     done
     
     while true; do
-        BACKEND_API_URL=$(prompt_with_default "Backend API URL (include http/https)" "http://localhost:$DEFAULT_BACKEND_PORT")
-        if [ -n "$BACKEND_API_URL" ]; then
-            break
-        fi
-        print_error "Backend API URL cannot be empty"
-    done
-    
-    while true; do
-        FRONTEND_PORT=$(prompt_with_default "Frontend port" "$DEFAULT_FRONTEND_PORT")
+        FRONTEND_PORT=$(prompt_with_default "Frontend port" "$DEFAULT_FE_PORT")
         if validate_port "$FRONTEND_PORT"; then
             break
         fi
@@ -170,9 +169,19 @@ interactive_config() {
         print_status "Auto-generated secure admin password"
     fi
     
+    # Construct URLs from domain and ports
+    FRONTEND_URL="http://$DOMAIN:$FRONTEND_PORT"
+    BACKEND_API_URL="http://$DOMAIN:$BACKEND_PORT"
+    
+    # Clean up URLs if using standard ports
+    if [ "$FRONTEND_PORT" = "80" ]; then
+        FRONTEND_URL="http://$DOMAIN"
+    fi
+    
     echo ""
     echo "Configuration Summary:"
     echo "====================="
+    echo "Domain: $DOMAIN"
     echo "Frontend URL: $FRONTEND_URL"
     echo "Backend API URL: $BACKEND_API_URL"
     echo "Frontend Port: $FRONTEND_PORT"
@@ -211,12 +220,15 @@ show_usage() {
     echo "Options:"
     echo "  --verbose       Show all Docker build/start output"
     echo "  --non-interactive  Use default values without prompting"
+    echo "  --clean         Remove all Owlculus Docker containers, images, and volumes before setup"
     echo
     echo "Examples:"
     echo "  $0                          # Interactive production setup"
     echo "  $0 dev                      # Interactive development setup"
     echo "  $0 --non-interactive        # Non-interactive production setup"
     echo "  $0 dev --verbose            # Development setup with full Docker output"
+    echo "  $0 --clean                  # Clean setup (removes Owlculus Docker artifacts)"
+    echo "  $0 dev --clean --verbose    # Clean dev setup with verbose output"
     echo
     echo "Requirements:"
     echo "  - Docker"
@@ -224,13 +236,80 @@ show_usage() {
     echo
 }
 
+# Function to clean Owlculus Docker artifacts
+clean_docker_artifacts() {
+    print_warning "Cleaning up Owlculus Docker artifacts..."
+    
+    # Stop and remove containers for both production and dev
+    if docker compose -f docker-compose.yml ps -q 2>/dev/null | grep -q .; then
+        print_status "Stopping production containers..."
+        docker compose -f docker-compose.yml down 2>/dev/null || true
+    fi
+    
+    if docker compose -f docker-compose.dev.yml ps -q 2>/dev/null | grep -q .; then
+        print_status "Stopping development containers..."
+        docker compose -f docker-compose.dev.yml down 2>/dev/null || true
+    fi
+    
+    # Remove Owlculus volumes
+    print_status "Removing Owlculus volumes..."
+    docker volume ls -q | grep -E "^owlculus_" | while read volume; do
+        print_status "Removing volume: $volume"
+        docker volume rm "$volume" 2>/dev/null || true
+    done
+    
+    # Remove Owlculus images
+    print_status "Removing Owlculus images..."
+    docker images --format "{{.Repository}}:{{.Tag}}" | grep -E "^owlculus-" | while read image; do
+        print_status "Removing image: $image"
+        docker rmi "$image" 2>/dev/null || true
+    done
+    
+    # Remove any dangling Owlculus-related containers
+    docker ps -a --format "{{.Names}}" | grep -E "^owlculus-" | while read container; do
+        print_status "Removing container: $container"
+        docker rm -f "$container" 2>/dev/null || true
+    done
+    
+    # Remove .env files
+    if [ -f .env ]; then
+        print_status "Removing .env file..."
+        rm .env
+    fi
+    
+    if [ -f frontend/.env ]; then
+        print_status "Removing frontend/.env file..."
+        rm frontend/.env
+    fi
+    
+    print_success "Owlculus Docker artifacts cleaned up!"
+    echo
+}
+
 # Function to set defaults for non-interactive mode
 set_defaults() {
-    BACKEND_API_URL="http://$DEFAULT_DOMAIN:$DEFAULT_BACKEND_PORT"
-    FRONTEND_URL="http://$DEFAULT_DOMAIN:$DEFAULT_FRONTEND_PORT"
-    FRONTEND_PORT="$DEFAULT_FRONTEND_PORT"
+    local MODE="$1"
+    local DEFAULT_FE_PORT="$DEFAULT_FRONTEND_PORT"
+    
+    # Adjust default frontend port for dev mode
+    if [ "$MODE" = "dev" ] || [ "$MODE" = "development" ]; then
+        DEFAULT_FE_PORT="5173"
+    fi
+    
+    DOMAIN="$DEFAULT_DOMAIN"
+    FRONTEND_PORT="$DEFAULT_FE_PORT"
     BACKEND_PORT="$DEFAULT_BACKEND_PORT"
     DB_PORT="$DEFAULT_DB_PORT"
+    
+    # Construct URLs
+    BACKEND_API_URL="http://$DOMAIN:$BACKEND_PORT"
+    FRONTEND_URL="http://$DOMAIN:$FRONTEND_PORT"
+    
+    # Clean up frontend URL if using standard port
+    if [ "$FRONTEND_PORT" = "80" ]; then
+        FRONTEND_URL="http://$DOMAIN"
+    fi
+    
     ADMIN_USERNAME="$DEFAULT_ADMIN_USERNAME"
     ADMIN_EMAIL="$DEFAULT_ADMIN_EMAIL"
     ADMIN_PASSWORD=$(openssl rand -base64 16 | tr -d /=+ | cut -c -12)
@@ -240,7 +319,13 @@ set_defaults() {
 setup_owlculus() {
     local MODE="${1:-production}"
     local VERBOSE="${2:-false}"
+    local CLEAN="${3:-false}"
     local ADMIN_PASSWORD_TO_DISPLAY=""
+    
+    # Run cleanup if requested
+    if [ "$CLEAN" = "true" ]; then
+        clean_docker_artifacts
+    fi
     
     print_status "Setting up Owlculus with Docker..."
     
@@ -273,9 +358,9 @@ setup_owlculus() {
     
     # Run interactive configuration or use defaults
     if [ "$INTERACTIVE_MODE" = "true" ]; then
-        interactive_config
+        interactive_config "$MODE"
     else
-        set_defaults
+        set_defaults "$MODE"
         print_status "Using default configuration values"
     fi
     
@@ -291,7 +376,9 @@ setup_owlculus() {
         # Create .env file directly with all values
         cat > .env << EOF
 SECRET_KEY=$SECRET_KEY
+POSTGRES_USER=owlculus
 POSTGRES_PASSWORD=$DB_PASSWORD
+POSTGRES_DB=owlculus
 ADMIN_USERNAME=$ADMIN_USERNAME
 ADMIN_PASSWORD=$ADMIN_PASSWORD
 ADMIN_EMAIL=$ADMIN_EMAIL
@@ -301,8 +388,9 @@ FRONTEND_PORT=$FRONTEND_PORT
 BACKEND_PORT=$BACKEND_PORT
 DB_PORT=$DB_PORT
 
-# CORS Configuration
+# URL Configuration
 FRONTEND_URL=$FRONTEND_URL
+BACKEND_URL=$BACKEND_API_URL
 EOF
         
         print_success ".env file created with configuration"
@@ -397,6 +485,7 @@ EOF
 # Parse arguments
 MODE="production"
 VERBOSE="false"
+CLEAN="false"
 
 # Parse arguments in order
 for arg in "$@"; do
@@ -406,6 +495,9 @@ for arg in "$@"; do
             ;;
         --non-interactive)
             INTERACTIVE_MODE="false"
+            ;;
+        --clean)
+            CLEAN="true"
             ;;
         production|prod|dev|development|help)
             MODE="$arg"
@@ -421,10 +513,10 @@ fi
 # Main script logic
 case "$MODE" in
     production|prod)
-        setup_owlculus "production" "$VERBOSE"
+        setup_owlculus "production" "$VERBOSE" "$CLEAN"
         ;;
     development|dev)
-        setup_owlculus "dev" "$VERBOSE"
+        setup_owlculus "dev" "$VERBOSE" "$CLEAN"
         ;;
     help|--help|-h)
         show_usage

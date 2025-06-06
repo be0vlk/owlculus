@@ -26,7 +26,7 @@ def create_initial_data():
             print("Creating admin user...")
             admin_username = os.environ.get("ADMIN_USERNAME", "admin")
             admin_password = os.environ.get("ADMIN_PASSWORD", "admin")
-            admin_email = os.environ.get("ADMIN_EMAIL", "admin@owlculus.local")
+            admin_email = os.environ.get("ADMIN_EMAIL", "admin@example.com")
             
             admin_account = User(
                 username=admin_username,
