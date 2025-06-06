@@ -66,9 +66,8 @@ generate_secret_key() {
 prompt_with_default() {
     local prompt="$1"
     local default="$2"
-    local value=""
     
-    echo -n "$prompt [$default]: "
+    echo -n "$prompt [$default]: " >&2
     read value
     
     if [ -z "$value" ]; then
@@ -102,11 +101,19 @@ interactive_config() {
     echo "---------------------"
     
     while true; do
-        DOMAIN=$(prompt_with_default "Domain/hostname" "$DEFAULT_DOMAIN")
-        if [ -n "$DOMAIN" ]; then
+        FRONTEND_URL=$(prompt_with_default "Frontend URL (include http/https)" "http://localhost:$DEFAULT_FRONTEND_PORT")
+        if [ -n "$FRONTEND_URL" ]; then
             break
         fi
-        print_error "Domain cannot be empty"
+        print_error "Frontend URL cannot be empty"
+    done
+    
+    while true; do
+        BACKEND_API_URL=$(prompt_with_default "Backend API URL (include http/https)" "http://localhost:$DEFAULT_BACKEND_PORT")
+        if [ -n "$BACKEND_API_URL" ]; then
+            break
+        fi
+        print_error "Backend API URL cannot be empty"
     done
     
     while true; do
@@ -166,7 +173,8 @@ interactive_config() {
     echo ""
     echo "Configuration Summary:"
     echo "====================="
-    echo "Domain: $DOMAIN"
+    echo "Frontend URL: $FRONTEND_URL"
+    echo "Backend API URL: $BACKEND_API_URL"
     echo "Frontend Port: $FRONTEND_PORT"
     echo "Backend Port: $BACKEND_PORT"
     echo "Database Port: $DB_PORT"
@@ -218,7 +226,8 @@ show_usage() {
 
 # Function to set defaults for non-interactive mode
 set_defaults() {
-    DOMAIN="$DEFAULT_DOMAIN"
+    BACKEND_API_URL="http://$DEFAULT_DOMAIN:$DEFAULT_BACKEND_PORT"
+    FRONTEND_URL="http://$DEFAULT_DOMAIN:$DEFAULT_FRONTEND_PORT"
     FRONTEND_PORT="$DEFAULT_FRONTEND_PORT"
     BACKEND_PORT="$DEFAULT_BACKEND_PORT"
     DB_PORT="$DEFAULT_DB_PORT"
@@ -291,7 +300,9 @@ ADMIN_EMAIL=$ADMIN_EMAIL
 FRONTEND_PORT=$FRONTEND_PORT
 BACKEND_PORT=$BACKEND_PORT
 DB_PORT=$DB_PORT
-DOMAIN=$DOMAIN
+
+# CORS Configuration
+FRONTEND_URL=$FRONTEND_URL
 EOF
         
         print_success ".env file created with configuration"
@@ -300,25 +311,22 @@ EOF
         print_status ".env file already exists, using existing configuration"
     fi
     
+    # Create frontend .env file with API URL
+    print_status "Creating frontend environment configuration..."
+    
+    cat > frontend/.env << EOF
+VITE_API_BASE_URL=$BACKEND_API_URL
+EOF
+    
+    print_success "Frontend configuration created with API URL: $BACKEND_API_URL"
+    
     # Determine compose file based on mode
     if [ "$MODE" = "dev" ] || [ "$MODE" = "development" ]; then
         print_status "Starting Owlculus in development mode..."
         COMPOSE_FILE="docker-compose.dev.yml"
-        FRONTEND_URL="http://$DOMAIN:5173"
     else
         print_status "Starting Owlculus in production mode..."
         COMPOSE_FILE="docker-compose.yml"
-        if [ "$FRONTEND_PORT" = "80" ]; then
-            FRONTEND_URL="http://$DOMAIN"
-        else
-            FRONTEND_URL="http://$DOMAIN:$FRONTEND_PORT"
-        fi
-    fi
-    
-    if [ "$BACKEND_PORT" = "80" ]; then
-        BACKEND_URL="http://$DOMAIN"
-    else
-        BACKEND_URL="http://$DOMAIN:$BACKEND_PORT"
     fi
     
     # Build Docker images
@@ -346,10 +354,10 @@ EOF
     sleep 5
     
     # Test backend
-    if curl -f -s "$BACKEND_URL/" > /dev/null; then
-        print_success "Backend is running at $BACKEND_URL"
+    if curl -f -s "$BACKEND_API_URL/" > /dev/null; then
+        print_success "Backend is running at $BACKEND_API_URL"
     else
-        print_warning "Backend may still be starting up at $BACKEND_URL"
+        print_warning "Backend may still be starting up at $BACKEND_API_URL"
     fi
     
     # Test frontend
@@ -365,7 +373,7 @@ EOF
     echo ""
     echo "Owlculus is now running!"
     echo "   Frontend: $FRONTEND_URL"
-    echo "   Backend API: $BACKEND_URL"
+    echo "   Backend API: $BACKEND_API_URL"
     echo ""
     echo "Useful commands:"
     echo "   Show credentials: cat .env"
