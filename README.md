@@ -4,24 +4,65 @@
   <img src="https://i.imgur.com/Cuf4hMK.png" />
 </p>
 
-Owlculus is purpose built for managing OSINT investigation cases and running useful tools right in the browser.
+Owlculus is a comprehensive OSINT case management platform built for solo work or investigative teams. Manage cases, collaborate, and run OSINT tools directly in your browser.
+
+**Version 1.0.0** - Stable
 
 **NOTE:** This project is now and will always be 100% free and open-source, no matter how much it improves. If you're feeling generous, donate to your favorite charity instead :)
 
 ## Features
-- Create and track cases with preset report number formats.
-- Web-based multi-user collaboration with predefined roles for different permissions.
-- The backend RESTful API architecture enables various types of automation and integration.
-- Run useful OSINT tools right in the app and associate results with cases.
-- Automatically scan for correlations between cases. Investigated John Doe two months ago in a different case? The scan will find it.
+
+### Core Platform
+- **Case Management**: Create and track cases with customizable report number formats
+- **Multi-User Collaboration**: Role-based permissions (Admin, Investigator, Analyst)
+- **RESTful API**: Comprehensive backend for automation and integrations
+- **Rich Text Editing**: Note editor with formatting and organization
+- **Evidence Management**: Organized file storage with automatic folder structures
+- **Entity System**: Assign various types of entities to your case each which templated, self-contained notes
+- **Cross-Case Correlation**: Automatically discover connections between investigations (WIP)
+
+### OSINT Plugin Ecosystem
+- **DNS Lookup Plugin**: Comprehensive DNS reconnaissance (A, AAAA, MX, NS, TXT, CNAME records)
+- **Holehe Plugin**: Email address reconnaissance across 120+ social platforms
+- **Correlation Scanner**: Intelligent cross-case entity matching and relationship discovery
+- **Extensible Framework**: Built on a modular architecture for straightforward custom tool integration
+- **Optional Evidence Saving**: Plugin results can be directly saved to case evidence folders
+
+### System Features
+- **Configurable Case Numbers**: Customizable templates (YYMM-NN, PREFIX-YYMM-NN)
+- **Dark/Light Mode**: User preference themes
+- **Real-time Updates**: Live plugin execution with streaming results
+
+## Technology Stack
+
+**Backend:**
+- FastAPI with SQLModel
+- PostgreSQL database
+- JWT authentication
+- Docker containerization
+
+**Frontend:**
+- Vue 3.5.13 with Composition API
+- Vuetify 3.7.3 (Material Design)
+- Pinia state management
+- TipTap rich text editor
+- Vite build system
+
+**Testing & Development:**
+- Playwright E2E testing
+- Vitest unit testing
+- ESLint + Prettier
+- Hot-reload development
 
 ## Roadmap
+
 I will be very actively maintaining and improving this application and am always open to suggestions. If you have any of those, or come across any bugs, please feel free to open an issue right here on GitHub. Some things definitely planned are:
 
-- More custom built and open-source tool compatibility on the plugins dashboard
-- Different ways to add evidence to case files (browser extension?)
-- Powerful LLM integration
-- More robust analytics and other helpful insights
+- **Enhanced Plugin Library**: More OSINT tools and custom integrations
+- **Evidence Automation**: Browser extensions and automated collection workflows
+- **LLM Integration**: AI-powered analysis and insights (StrixyChat integration planned)
+- **Advanced Analytics**: Cross-case patterns, timeline analysis, and reporting dashboards
+- **API Enhancements**: Webhook support and third-party integrations
 
 ## Installation
 
@@ -66,6 +107,12 @@ After setup, Owlculus will be available at your configured URLs (defaults shown)
 ./setup.sh dev --non-interactive     # Development mode with defaults
 ```
 
+**Clean installation:**
+```bash
+./setup.sh --clean                   # Remove all Owlculus Docker artifacts first
+./setup.sh dev --clean               # Clean development setup
+```
+
 **Verbose output:**
 ```bash
 ./setup.sh --verbose                 # Shows full Docker build output
@@ -85,10 +132,19 @@ Use the included Makefile for easy management:
 
 ```bash
 make help          # Show all available commands
+make setup         # Initial setup (production)
+make setup-dev     # Initial setup (development)
 make start         # Start production services
 make start-dev     # Start development services
 make stop          # Stop all services
+make restart       # Restart all services
 make logs          # View service logs
+make build         # Build Docker images
+make rebuild       # Rebuild images (no cache)
+make test          # Run backend tests
+make shell-backend # Open backend container shell
+make shell-db      # Open database shell
+make status        # Show service status
 make clean         # Remove all containers and volumes (⚠️ destroys data)
 ```
 
@@ -162,11 +218,16 @@ Now, double-click directly on the case in the table and you'll be redirected to 
 This page displays the basic case information and allows you to create and view notes, upload/download evidence to the case folder, add users to the case, create entities (more on that below) and update the case status. When you first create a case, you will not see the entity tabs so don't worry if your screen looks a little different at first.
 
 #### Entities
-This is a key part of Owlculus functionality. Rather than define the case type when you create it, like we did in the previous version, you now add individual entities to the case. For now, the only entity types are `person`, `company`, `domain` and `ip_address`. Each entity is its own standalone component and each type comes with predefined templates for note-taking.
+This is a key part of Owlculus functionality. Rather than defining case types upfront, you add individual entities to build your investigation dynamically. The system supports flexible entity types including `person`, `company`, `domain`, and `ip_address`, with JSON-based data storage allowing for extensible schemas.
 
-When you first create an entity, only some of the template will show up. After you create it, you can click the "View Details" button to expand it. This will show you the full template and allow you to add several additional notes, all conveniently organized by category.
+**Entity Features:**
+- **Template-Based Notes**: Each entity type comes with predefined, organized note templates
+- **Expandable Views**: Start with essential fields, expand to detailed templates as needed
+- **Rich Text Editing**: TipTap-powered notes with formatting, links, and structure
+- **Smart Relationships**: Automatic entity linking and relationship detection
+- **Cross-Case Visibility**: Entities can be discovered across multiple cases through correlation scanning
 
-The app is smart enough to recognize certain relationships between entities and automatically create/link them. For example, if you create a person entity for John Doe and add "Jane Doe" as his sister within his notes, a new entity will be created for Jane Doe and automatically linked to John. This will be much more robust in the future but try it out!
+When you create an entity, you'll see a streamlined interface initially. Use "View Details" to access the full template with categorized note sections. The system intelligently recognizes relationships—mentioning "Jane Doe" in John Doe's family notes can automatically create and link a new Jane Doe entity.
 
 #### Evidence
 
@@ -185,11 +246,30 @@ In this example, the match came up because John Doe and Billy Bob both have "Acm
 
 **NOTE:** This will only reveal correlations between cases that are assigned to the current user. Hypothetically, there could still be cases that are not assigned to the user but have a correlation. Admins have access to everything.
 
-### Admin
-Basic admin portal that allows you to create, manage and delete users.
+### System Configuration
+Administrators can customize system-wide settings through the Settings page:
 
-`Admin` Full access to do anything in the app, including run all plugins, view and edit any case/client, etc.
+**Case Number Configuration:**
+- **Templates**: Choose from preset formats (YYMM-NN, PREFIX-YYMM-NN)
+- **Custom Prefixes**: Set organization-specific prefixes for case numbers
+- **Auto-Incrementing**: Automatic sequential numbering within each format
 
-`Investigator` Standard read/write access to any cases they have been assigned to. This includes editing notes and running the various plugins offered in app. They cannot create cases.
+### User Roles & Permissions
 
-`Analyst` Essentially, read-only access. They can review notes and download evidence from any case they are assigned to, but have no access to any write operations or plugin runs.
+**Admin**
+- Full access to all system features and data
+- Create and manage cases, clients, and users
+- Run all plugins and access all case data
+- Configure system settings and case number formats
+
+**Investigator** 
+- Standard read/write access to assigned cases
+- Create and edit notes, upload evidence
+- Run plugins and analysis tools
+- Cannot create cases or manage users
+
+**Analyst**
+- Read-only access to assigned cases
+- View notes and download evidence
+- Cannot edit data or run plugins
+- Cannot create cases or manage users

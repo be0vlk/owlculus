@@ -55,7 +55,7 @@
               v-for="user in caseData.users" 
               :key="user.id"
               size="small"
-              color="primary"
+              color="grey-lighten-1"
               variant="tonal"
             >
               {{ user.username }}

@@ -272,16 +272,8 @@ const handleRowClick = (event, { item }) => {
 
 // Function to get color for user role chips
 const getUserRoleColor = (role) => {
-  switch (role?.toLowerCase()) {
-    case 'admin':
-      return 'primary'
-    case 'investigator':
-      return 'secondary'
-    case 'analyst':
-      return 'info'
-    default:
-      return 'grey'
-  }
+  // Return light grey for all user chips
+  return 'grey-lighten-1'
 }
 
 
