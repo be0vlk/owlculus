@@ -42,6 +42,13 @@ import { useEditor, EditorContent } from '@tiptap/vue-3';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import Link from '@tiptap/extension-link';
+import Highlight from '@tiptap/extension-highlight';
+import TaskList from '@tiptap/extension-task-list';
+import TaskItem from '@tiptap/extension-task-item';
+import Table from '@tiptap/extension-table';
+import TableRow from '@tiptap/extension-table-row';
+import TableHeader from '@tiptap/extension-table-header';
+import TableCell from '@tiptap/extension-table-cell';
 import { onBeforeUnmount, ref, watch, defineEmits, defineProps, computed } from 'vue';
 import { caseService } from '../services/case';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -69,61 +76,49 @@ const formatLastSaved = computed(() => {
   return formatDistanceToNow(lastSavedTime.value, { addSuffix: true });
 });
 
-const editorActions = computed(() => [
-  {
-    icon: 'mdi-format-bold',
-    title: 'Bold',
-    action: () => editor.value?.chain().focus().toggleBold().run(),
-    isActive: () => editor.value?.isActive('bold'),
-  },
-  {
-    icon: 'mdi-format-italic',
-    title: 'Italic',
-    action: () => editor.value?.chain().focus().toggleItalic().run(),
-    isActive: () => editor.value?.isActive('italic'),
-  },
-  {
-    icon: 'mdi-format-underline',
-    title: 'Underline',
-    action: () => editor.value?.chain().focus().toggleUnderline().run(),
-    isActive: () => editor.value?.isActive('underline'),
-  },
-  {
-    icon: 'mdi-format-strikethrough',
-    title: 'Strike',
-    action: () => editor.value?.chain().focus().toggleStrike().run(),
-    isActive: () => editor.value?.isActive('strike'),
-  },
-  {
-    icon: 'mdi-format-list-bulleted',
-    title: 'Bullet List',
-    action: () => editor.value?.chain().focus().toggleBulletList().run(),
-    isActive: () => editor.value?.isActive('bulletList'),
-  },
-  {
-    icon: 'mdi-format-list-numbered',
-    title: 'Ordered List',
-    action: () => editor.value?.chain().focus().toggleOrderedList().run(),
-    isActive: () => editor.value?.isActive('orderedList'),
-  },
-  {
-    icon: 'mdi-format-quote-close',
-    title: 'Blockquote',
-    action: () => editor.value?.chain().focus().toggleBlockquote().run(),
-    isActive: () => editor.value?.isActive('blockquote'),
-  },
-]);
-
 const editor = useEditor({
   content: props.modelValue || '',
   extensions: [
-    StarterKit,
+    StarterKit.configure({
+      // Disable default TaskList from StarterKit to use our custom one
+      taskList: false,
+    }),
     Underline,
     Link,
+    Highlight.configure({
+      multicolor: true,
+    }),
+    TaskList.configure({
+      HTMLAttributes: {
+        class: 'task-list',
+      },
+    }),
+    TaskItem.configure({
+      nested: true,
+      HTMLAttributes: {
+        class: 'task-item',
+      },
+    }),
+    Table.configure({
+      resizable: true,
+      HTMLAttributes: {
+        class: 'tiptap-table',
+      },
+    }),
+    TableRow,
+    TableHeader,
+    TableCell,
     Placeholder.configure({
-      placeholder: 'Write your notes here...',
+      placeholder: ({ node }) => {
+        if (node.type.name === 'heading') {
+          return "What's the title?";
+        }
+        return 'Write your case notes here... Use / for commands.';
+      },
     }),
   ],
+  // Performance optimization - prevent unnecessary re-renders
+  shouldRerenderOnTransaction: false,
   onUpdate: ({ editor }) => {
     const content = editor.getHTML();
     emit('update:modelValue', content);
@@ -146,6 +141,69 @@ watch(
     }
   }
 );
+
+const editorActions = computed(() => [
+  {
+    icon: 'mdi-format-bold',
+    title: 'Bold (Ctrl+B)',
+    action: () => editor.value?.chain().focus().toggleBold().run(),
+    isActive: () => editor.value?.isActive('bold'),
+  },
+  {
+    icon: 'mdi-format-italic',
+    title: 'Italic (Ctrl+I)',
+    action: () => editor.value?.chain().focus().toggleItalic().run(),
+    isActive: () => editor.value?.isActive('italic'),
+  },
+  {
+    icon: 'mdi-format-underline',
+    title: 'Underline (Ctrl+U)',
+    action: () => editor.value?.chain().focus().toggleUnderline().run(),
+    isActive: () => editor.value?.isActive('underline'),
+  },
+  {
+    icon: 'mdi-format-strikethrough',
+    title: 'Strikethrough',
+    action: () => editor.value?.chain().focus().toggleStrike().run(),
+    isActive: () => editor.value?.isActive('strike'),
+  },
+  {
+    icon: 'mdi-marker',
+    title: 'Highlight',
+    action: () => editor.value?.chain().focus().toggleHighlight().run(),
+    isActive: () => editor.value?.isActive('highlight'),
+  },
+  {
+    icon: 'mdi-format-list-bulleted',
+    title: 'Bullet List',
+    action: () => editor.value?.chain().focus().toggleBulletList().run(),
+    isActive: () => editor.value?.isActive('bulletList'),
+  },
+  {
+    icon: 'mdi-format-list-numbered',
+    title: 'Ordered List',
+    action: () => editor.value?.chain().focus().toggleOrderedList().run(),
+    isActive: () => editor.value?.isActive('orderedList'),
+  },
+  {
+    icon: 'mdi-format-list-checks',
+    title: 'Task List',
+    action: () => editor.value?.chain().focus().toggleTaskList().run(),
+    isActive: () => editor.value?.isActive('taskList'),
+  },
+  {
+    icon: 'mdi-format-quote-close',
+    title: 'Blockquote',
+    action: () => editor.value?.chain().focus().toggleBlockquote().run(),
+    isActive: () => editor.value?.isActive('blockquote'),
+  },
+  {
+    icon: 'mdi-table',
+    title: 'Insert Table',
+    action: () => editor.value?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(),
+    isActive: () => editor.value?.isActive('table'),
+  },
+]);
 
 const saveNotes = async () => {
   if (!editor.value) return;
@@ -231,5 +289,80 @@ onBeforeUnmount(() => {
 
 .note-editor .tiptap-content p {
   margin: 8px 0;
+}
+
+/* Highlight styling */
+.note-editor .tiptap-content mark {
+  background-color: rgb(var(--v-theme-warning));
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+/* Task list styling */
+.note-editor .tiptap-content .task-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+.note-editor .tiptap-content .task-item {
+  display: flex;
+  align-items: flex-start;
+  margin: 4px 0;
+}
+
+.note-editor .tiptap-content .task-item > label {
+  flex: 0 0 auto;
+  margin-right: 8px;
+  margin-top: 2px;
+  user-select: none;
+}
+
+.note-editor .tiptap-content .task-item > div {
+  flex: 1 1 auto;
+}
+
+.note-editor .tiptap-content .task-item input[type="checkbox"] {
+  margin: 0;
+}
+
+.note-editor .tiptap-content .task-item[data-checked="true"] > div {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+/* Table styling */
+.note-editor .tiptap-content .tiptap-table {
+  border-collapse: collapse;
+  margin: 16px 0;
+  table-layout: fixed;
+  width: 100%;
+}
+
+.note-editor .tiptap-content .tiptap-table td,
+.note-editor .tiptap-content .tiptap-table th {
+  border: 1px solid rgb(var(--v-theme-outline-variant));
+  box-sizing: border-box;
+  min-width: 1em;
+  padding: 8px 12px;
+  position: relative;
+  vertical-align: top;
+}
+
+.note-editor .tiptap-content .tiptap-table th {
+  background-color: rgb(var(--v-theme-surface-variant));
+  font-weight: 600;
+  text-align: left;
+}
+
+.note-editor .tiptap-content .tiptap-table .selectedCell:after {
+  background-color: rgba(var(--v-theme-primary), 0.1);
+  content: "";
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
 }
 </style>

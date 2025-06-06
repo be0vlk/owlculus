@@ -404,6 +404,9 @@ const handleNotesUpdate = (notes) => {
 // Handle new entity creation
 const handleNewEntity = (newEntity) => {
   entities.value = [...entities.value, newEntity];
+  // Automatically open the entity details modal for the newly created entity
+  selectedEntity.value = newEntity;
+  showEntityDetailsModal.value = true;
 };
 
 // Computed property to group entities by type
