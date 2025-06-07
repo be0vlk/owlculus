@@ -11,10 +11,10 @@ export const columns = [
   { key: 'client_name', label: 'Client' },
   { key: 'status', label: 'Status' },
   { key: 'created_at', label: 'Created' },
-  { key: 'users', label: 'Assigned To' }
+  { key: 'users', label: 'Assigned To' },
 ]
 
-export function useDashboard () {
+export function useDashboard() {
   const router = useRouter()
   const authStore = useAuthStore()
 
@@ -90,7 +90,7 @@ export function useDashboard () {
 
   const getAssignedUsers = (assignedUsers) => {
     if (!assignedUsers || assignedUsers.length === 0) return 'Unassigned'
-    return assignedUsers.map(user => user.username).join(', ')
+    return assignedUsers.map((user) => user.username).join(', ')
   }
 
   const sortedAndFilteredCases = computed(() => {
@@ -99,7 +99,7 @@ export function useDashboard () {
     // Apply search filter
     if (searchQuery.value) {
       const query = searchQuery.value.toLowerCase()
-      filteredCases = filteredCases.filter(case_ => {
+      filteredCases = filteredCases.filter((case_) => {
         // Search in basic case fields
         const basicFieldsMatch =
           (case_.case_number || '').toLowerCase().includes(query) ||
@@ -108,9 +108,8 @@ export function useDashboard () {
           (case_.status || '').toLowerCase().includes(query)
 
         // Search in assigned user names
-        const assignedUsersMatch = case_.users?.some(user =>
-          (user.username || '').toLowerCase().includes(query)
-        ) || false
+        const assignedUsersMatch =
+          case_.users?.some((user) => (user.username || '').toLowerCase().includes(query)) || false
 
         return basicFieldsMatch || assignedUsersMatch
       })
@@ -118,12 +117,8 @@ export function useDashboard () {
 
     // Apply sorting
     return [...filteredCases].sort((a, b) => {
-      let aValue = sortKey.value === 'client_name'
-        ? getClientName(a.client_id)
-        : a[sortKey.value]
-      let bValue = sortKey.value === 'client_name'
-        ? getClientName(b.client_id)
-        : b[sortKey.value]
+      let aValue = sortKey.value === 'client_name' ? getClientName(a.client_id) : a[sortKey.value]
+      let bValue = sortKey.value === 'client_name' ? getClientName(b.client_id) : b[sortKey.value]
 
       if (typeof aValue === 'string') aValue = aValue.toLowerCase()
       if (typeof bValue === 'string') bValue = bValue.toLowerCase()
@@ -153,6 +148,6 @@ export function useDashboard () {
     toggleClosedCases,
 
     // Computed
-    sortedAndFilteredCases
+    sortedAndFilteredCases,
   }
 }

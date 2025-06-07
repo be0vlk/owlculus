@@ -9,10 +9,10 @@ export const columns = [
   { key: 'email', label: 'Email' },
   { key: 'phone', label: 'Phone' },
   { key: 'address', label: 'Address' },
-  { key: 'created_at', label: 'Created' }
+  { key: 'created_at', label: 'Created' },
 ]
 
-export function useClients () {
+export function useClients() {
   const router = useRouter()
   const authStore = useAuthStore()
 
@@ -55,11 +55,12 @@ export function useClients () {
     // Apply search filter
     if (searchQuery.value) {
       const query = searchQuery.value.toLowerCase()
-      filteredClients = filteredClients.filter(client =>
-        (client.name || '').toLowerCase().includes(query) ||
-        (client.email || '').toLowerCase().includes(query) ||
-        (client.phone || '').toLowerCase().includes(query) ||
-        (client.address || '').toLowerCase().includes(query)
+      filteredClients = filteredClients.filter(
+        (client) =>
+          (client.name || '').toLowerCase().includes(query) ||
+          (client.email || '').toLowerCase().includes(query) ||
+          (client.phone || '').toLowerCase().includes(query) ||
+          (client.address || '').toLowerCase().includes(query),
       )
     }
 
@@ -93,6 +94,6 @@ export function useClients () {
     sortedAndFilteredClients,
 
     // Constants
-    columns
+    columns,
   }
 }

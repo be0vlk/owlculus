@@ -17,22 +17,22 @@ export default [
 
   js.configs.recommended,
   ...pluginVue.configs['flat/essential'],
-  
+
   {
     name: 'app/browser-globals',
     languageOptions: {
       globals: {
         localStorage: 'readonly',
-        window: 'readonly'
-      }
-    }
+        window: 'readonly',
+      },
+    },
   },
-  
+
   {
     ...pluginVitest.configs.recommended,
     files: ['src/**/__tests__/*'],
   },
-  
+
   {
     ...pluginPlaywright.configs['flat/recommended'],
     files: ['e2e/**/*.{test,spec}.{js,ts,jsx,tsx}'],

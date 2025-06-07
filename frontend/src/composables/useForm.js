@@ -1,7 +1,7 @@
 // composables/useForm.js
 import { ref, reactive } from 'vue'
 
-export function useForm (initialData, submitCallback) {
+export function useForm(initialData, submitCallback) {
   const formData = reactive({ ...initialData })
   const error = ref('')
   const creating = ref(false)
