@@ -130,5 +130,3 @@ const normalizedResult = computed(() => {
 })
 </script>
 
-<style scoped>
-</style>

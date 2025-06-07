@@ -1,4 +1,4 @@
-@import './base.css';
+@import url('./base.css');
 
 #app {
   min-height: 100vh;
@@ -15,7 +15,7 @@
 
 @media (hover: hover) {
   .owlculus-link:hover {
-    background-color: rgba(var(--v-theme-primary), 0.1);
+    background-color: rgb(var(--v-theme-primary), 0.1);
   }
 }
 
@@ -29,7 +29,7 @@
 .ProseMirror h1,
 .ProseMirror h2,
 .ProseMirror h3 {
-  margin: 16px 0 8px 0;
+  margin: 16px 0 8px;
   line-height: 1.2;
 }
 

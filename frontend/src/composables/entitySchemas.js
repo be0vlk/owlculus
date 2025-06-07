@@ -1,3 +1,28 @@
+// Common field templates to reduce duplication
+const commonFields = {
+  address: [
+    { id: 'street', label: 'Street', type: 'text', parentField: 'address', gridCols: 2 },
+    { id: 'city', label: 'City', type: 'text', parentField: 'address' },
+    { id: 'state', label: 'State', type: 'text', parentField: 'address' },
+    { id: 'country', label: 'Country', type: 'text', parentField: 'address' },
+    { id: 'postal_code', label: 'Postal Code', type: 'text', parentField: 'address' }
+  ],
+  socialMedia: [
+    { id: 'bluesky', label: 'Bluesky', type: 'url' },
+    { id: 'discord', label: 'Discord', type: 'text' },
+    { id: 'facebook', label: 'Facebook', type: 'url' },
+    { id: 'instagram', label: 'Instagram', type: 'url' },
+    { id: 'linkedin', label: 'LinkedIn', type: 'url' },
+    { id: 'reddit', label: 'Reddit', type: 'url' },
+    { id: 'telegram', label: 'Telegram', type: 'url' },
+    { id: 'tiktok', label: 'TikTok', type: 'url' },
+    { id: 'twitch', label: 'Twitch', type: 'url' },
+    { id: 'x', label: 'X', type: 'url' },
+    { id: 'youtube', label: 'YouTube', type: 'url' },
+    { id: 'other', label: 'Other', type: 'text' }
+  ]
+}
+
 export const entitySchemas = {
   person: {
     basicInfo: {
@@ -10,29 +35,12 @@ export const entitySchemas = {
         { id: 'phone', label: 'Phone', type: 'tel' },
         { id: 'employer', label: 'Employer', type: 'text' },
         { id: 'nationality', label: 'Nationality', type: 'text' },
-        { id: 'street', label: 'Street', type: 'text', parentField: 'address', gridCols: 2 },
-        { id: 'city', label: 'City', type: 'text', parentField: 'address' },
-        { id: 'state', label: 'State', type: 'text', parentField: 'address' },
-        { id: 'country', label: 'Country', type: 'text', parentField: 'address' },
-        { id: 'postal_code', label: 'Postal Code', type: 'text', parentField: 'address' }
+        ...commonFields.address
       ]
     },
     socialMedia: {
       title: 'Social Media',
-      fields: [
-        { id: 'bluesky', label: 'Bluesky', type: 'url' },
-        { id: 'discord', label: 'Discord', type: 'text' },
-        { id: 'facebook', label: 'Facebook', type: 'url' },
-        { id: 'instagram', label: 'Instagram', type: 'url' },
-        { id: 'linkedin', label: 'LinkedIn', type: 'url' },
-        { id: 'reddit', label: 'Reddit', type: 'url' },
-        { id: 'telegram', label: 'Telegram', type: 'url' },
-        { id: 'tiktok', label: 'TikTok', type: 'url' },
-        { id: 'twitch', label: 'Twitch', type: 'url' },
-        { id: 'x', label: 'X', type: 'url' },
-        { id: 'youtube', label: 'YouTube', type: 'url' },
-        { id: 'other', label: 'Other', type: 'text' }
-      ],
+      fields: commonFields.socialMedia,
       parentField: 'social_media'
     },
     associates: {
@@ -57,11 +65,7 @@ export const entitySchemas = {
         { id: 'name', label: 'Company Name', type: 'text', required: true },
         { id: 'website', label: 'Website', type: 'url', placeholder: 'example.com' },
         { id: 'phone', label: 'Phone', type: 'tel' },
-        { id: 'street', label: 'Street', type: 'text', parentField: 'address', gridCols: 2 },
-        { id: 'city', label: 'City', type: 'text', parentField: 'address' },
-        { id: 'state', label: 'State', type: 'text', parentField: 'address' },
-        { id: 'country', label: 'Country', type: 'text', parentField: 'address' },
-        { id: 'postal_code', label: 'Postal Code', type: 'text', parentField: 'address' }
+        ...commonFields.address
       ]
     },
     executives: {
@@ -115,7 +119,7 @@ export const entitySchemas = {
     basicInfo: {
       title: 'Domain Information',
       fields: [
-        { 
+        {
           id: 'domain',
           label: 'Domain Name',
           type: 'text',
@@ -155,7 +159,7 @@ export const entitySchemas = {
     basicInfo: {
       title: 'Network Assets',
       fields: [
-        { 
+        {
           id: 'subdomains',
           label: 'Subdomains',
           type: 'text',
@@ -165,4 +169,4 @@ export const entitySchemas = {
       ]
     }
   }
-};
+}

@@ -270,13 +270,13 @@ pre {
 
 .target-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 12%);
 }
 
 .records-display {
   max-height: 200px;
   overflow-y: auto;
-  background: rgba(var(--v-theme-surface), 0.7);
+  background: rgb(var(--v-theme-surface), 0.7);
   border-radius: 4px;
   padding: 8px;
   margin: 0;
@@ -284,11 +284,11 @@ pre {
 
 /* Enhanced visual hierarchy for record types */
 .v-chip[color="success"] {
-  background: rgba(var(--v-theme-success), 0.12);
-  border: 1px solid rgba(var(--v-theme-success), 0.3);
+  background: rgb(var(--v-theme-success), 0.12);
+  border: 1px solid rgb(var(--v-theme-success), 0.3);
 }
 
 .bg-primary-lighten-5 {
-  background: linear-gradient(45deg, rgba(var(--v-theme-primary), 0.08), rgba(var(--v-theme-primary), 0.03));
+  background: linear-gradient(45deg, rgb(var(--v-theme-primary), 0.08), rgb(var(--v-theme-primary), 0.03));
 }
 </style>

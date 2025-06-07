@@ -239,7 +239,7 @@ const exportResults = () => {
 /* Better pre/code formatting in wide layout */
 :deep(.modal-plugin-result pre) {
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: break-word;
   max-width: 100%;
   overflow-x: auto;
 }

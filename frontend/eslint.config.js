@@ -19,6 +19,16 @@ export default [
   ...pluginVue.configs['flat/essential'],
   
   {
+    name: 'app/browser-globals',
+    languageOptions: {
+      globals: {
+        localStorage: 'readonly',
+        window: 'readonly'
+      }
+    }
+  },
+  
+  {
     ...pluginVitest.configs.recommended,
     files: ['src/**/__tests__/*'],
   },

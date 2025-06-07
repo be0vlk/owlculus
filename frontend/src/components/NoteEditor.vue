@@ -259,7 +259,7 @@ onBeforeUnmount(() => {
 .note-editor .tiptap-content h1,
 .note-editor .tiptap-content h2,
 .note-editor .tiptap-content h3 {
-  margin: 16px 0 8px 0;
+  margin: 16px 0 8px;
   line-height: 1.2;
   font-weight: 600;
 }
@@ -354,13 +354,10 @@ onBeforeUnmount(() => {
   text-align: left;
 }
 
-.note-editor .tiptap-content .tiptap-table .selectedCell:after {
-  background-color: rgba(var(--v-theme-primary), 0.1);
+.note-editor .tiptap-content .tiptap-table .selectedCell::after {
+  background-color: rgb(var(--v-theme-primary), 0.1);
   content: "";
-  left: 0;
-  right: 0;
-  top: 0;
-  bottom: 0;
+  inset: 0;
   pointer-events: none;
   position: absolute;
   z-index: 2;

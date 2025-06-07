@@ -323,7 +323,7 @@ const copyToClipboard = async (text) => {
 }
 
 .results-overview {
-  background: linear-gradient(45deg, rgba(var(--v-theme-primary), 0.05), rgba(var(--v-theme-primary), 0.02));
+  background: linear-gradient(45deg, rgb(var(--v-theme-primary), 0.05), rgb(var(--v-theme-primary), 0.02));
 }
 
 .platform-results-grid {
@@ -337,7 +337,7 @@ const copyToClipboard = async (text) => {
 
 .platform-results-grid .v-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 15%);
 }
 
 /* Better visual hierarchy for found vs not found */

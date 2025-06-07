@@ -384,10 +384,10 @@ function getFileIcon(fileName) {
 
 .upload-area.drag-over {
   border-color: rgb(var(--v-theme-primary));
-  background-color: rgba(var(--v-theme-primary), 0.04);
+  background-color: rgb(var(--v-theme-primary), 0.04);
 }
 
 .upload-area:hover {
-  border-color: rgba(var(--v-theme-primary), 0.5);
+  border-color: rgb(var(--v-theme-primary), 0.5);
 }
 </style>

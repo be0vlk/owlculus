@@ -1,13 +1,13 @@
 <template>
   <v-app>
     <Sidebar />
-    
+
     <v-main>
       <v-container fluid class="pa-6">
         <!-- Page Header Card -->
         <v-card class="mb-6 header-gradient">
           <v-card-title class="d-flex align-center pa-6 text-white">
-            <div class="text-h4 font-weight-bold">Admin Dashboard</div>
+            <div class="text-h4 font-weight-bold">Admin</div>
           </v-card-title>
         </v-card>
 
@@ -17,8 +17,8 @@
           <v-card-title class="d-flex align-center justify-end pa-6">
             <v-skeleton-loader type="text" width="300" />
           </v-card-title>
-          <v-skeleton-loader 
-            type="table" 
+          <v-skeleton-loader
+            type="table"
             class="ma-4"
           />
         </v-card>
@@ -44,9 +44,9 @@
                 <div class="text-body-2 text-medium-emphasis">Configure how case numbers are generated</div>
               </div>
             </v-card-title>
-            
+
             <v-divider />
-            
+
             <v-card-text class="pa-4">
               <v-container fluid class="pa-0">
                 <v-row>
@@ -63,7 +63,7 @@
                       @update:model-value="onTemplateChange"
                     />
                   </v-col>
-                  
+
                   <v-col cols="12" lg="6" v-if="selectedTemplate === 'PREFIX-YYMM-NN'">
                     <v-text-field
                       v-model="caseNumberPrefix"
@@ -78,16 +78,16 @@
                     />
                   </v-col>
                 </v-row>
-                
+
                 <v-row v-if="exampleCaseNumber">
                   <v-col cols="12">
-                    <v-card variant="tonal" color="info" class="pa-4">
+                    <v-card variant="tonal" color="secondary" class="pa-4">
                       <div class="d-flex align-center">
                         <v-icon icon="mdi-eye" color="info" class="me-3" />
                         <div>
                           <div class="text-subtitle-2 font-weight-bold text-info">Preview</div>
                           <div class="text-body-2">
-                            Next case will be numbered: 
+                            Next case will be numbered in the format:
                             <v-chip color="primary" variant="elevated" class="ml-2">
                               {{ exampleCaseNumber }}
                             </v-chip>
@@ -99,9 +99,9 @@
                 </v-row>
               </v-container>
             </v-card-text>
-            
+
             <v-divider />
-            
+
             <v-card-actions class="pa-4">
               <v-spacer />
               <v-btn
@@ -156,16 +156,16 @@
                 </v-tooltip>
               </div>
             </v-card-title>
-            
+
             <v-divider />
-            
+
             <!-- Search Toolbar -->
             <v-card-text class="pa-4">
               <v-row align="center" class="mb-0">
                 <v-col cols="12" md="8">
                   <!-- Could add user role filters here in the future -->
                 </v-col>
-                
+
                 <!-- Search Controls -->
                 <v-col cols="12" md="4">
                   <div class="d-flex align-center ga-4 justify-end">
@@ -184,7 +184,7 @@
                 </v-col>
               </v-row>
             </v-card-text>
-            
+
             <v-divider />
 
           <v-data-table
@@ -285,7 +285,7 @@
         </div>
       </v-container>
     </v-main>
-    
+
     <!-- User Modal -->
     <UserModal
       :show="showNewUserModal"
@@ -412,7 +412,7 @@ const showNotification = (text, color = 'success') => {
 
 // Configuration computed properties
 const isConfigChanged = computed(() => {
-  return selectedTemplate.value !== originalTemplate.value || 
+  return selectedTemplate.value !== originalTemplate.value ||
          caseNumberPrefix.value !== originalPrefix.value
 })
 
@@ -450,16 +450,16 @@ const updatePreview = async () => {
     exampleCaseNumber.value = ''
     return
   }
-  
+
   try {
     const params = new URLSearchParams({
       template: selectedTemplate.value
     })
-    
+
     if (selectedTemplate.value === 'PREFIX-YYMM-NN' && caseNumberPrefix.value) {
       params.append('prefix', caseNumberPrefix.value)
     }
-    
+
     const response = await api.get(`/api/admin/configuration/preview?${params}`)
     exampleCaseNumber.value = response.data.example_case_number
   } catch (error) {
@@ -472,12 +472,12 @@ const loadConfiguration = async () => {
   try {
     const response = await api.get('/api/admin/configuration')
     const config = response.data
-    
+
     selectedTemplate.value = config.case_number_template
     caseNumberPrefix.value = config.case_number_prefix || ''
     originalTemplate.value = config.case_number_template
     originalPrefix.value = config.case_number_prefix || ''
-    
+
     await updatePreview()
   } catch (error) {
     console.error('Error loading configuration:', error)
@@ -486,19 +486,19 @@ const loadConfiguration = async () => {
 
 const saveConfiguration = async () => {
   if (!isConfigValid.value) return
-  
+
   configLoading.value = true
   try {
     const configData = {
       case_number_template: selectedTemplate.value,
       case_number_prefix: selectedTemplate.value === 'PREFIX-YYMM-NN' ? caseNumberPrefix.value : null
     }
-    
+
     await api.put('/api/admin/configuration', configData)
-    
+
     originalTemplate.value = selectedTemplate.value
     originalPrefix.value = caseNumberPrefix.value
-    
+
     showNotification('Configuration saved successfully!', 'success')
   } catch (error) {
     console.error('Error saving configuration:', error)
@@ -520,7 +520,7 @@ onMounted(async () => {
       userService.getUsers(),
       loadConfiguration()
     ])
-    
+
     users.value = userData
     loading.value = false
   } catch (err) {
@@ -550,7 +550,7 @@ const sortedAndFilteredUsers = computed(() => {
     const bVal = b[sortKey.value]
 
     if (aVal === bVal) return 0
-    
+
     const comparison = aVal > bVal ? 1 : -1
     return sortOrder.value === 'asc' ? comparison : -comparison
   })
@@ -634,24 +634,24 @@ const loadUsers = async () => {
 
 <style scoped>
 .header-gradient {
-  background: linear-gradient(135deg, rgb(var(--v-theme-primary)) 0%, rgba(var(--v-theme-primary), 0.8) 100%) !important;
+  background: linear-gradient(135deg, rgb(var(--v-theme-primary)) 0%, rgb(var(--v-theme-primary), 0.8) 100%) !important;
 }
 
 .admin-dashboard-table :deep(.v-data-table__tr:hover) {
-  background-color: rgba(var(--v-theme-primary), 0.04) !important;
+  background-color: rgb(var(--v-theme-primary), 0.04) !important;
   cursor: pointer;
 }
 
 .admin-dashboard-table :deep(.v-data-table__td) {
   padding: 12px 16px !important;
-  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08) !important;
+  border-bottom: 1px solid rgb(var(--v-theme-on-surface), 0.08) !important;
 }
 
 .admin-dashboard-table :deep(.v-data-table__th) {
   padding: 16px !important;
   font-weight: 600 !important;
-  color: rgba(var(--v-theme-on-surface), 0.87) !important;
-  border-bottom: 2px solid rgba(var(--v-theme-on-surface), 0.12) !important;
+  color: rgb(var(--v-theme-on-surface), 0.87) !important;
+  border-bottom: 2px solid rgb(var(--v-theme-on-surface), 0.12) !important;
 }
 
 .admin-dashboard-table :deep(.v-data-table-rows-no-data) {

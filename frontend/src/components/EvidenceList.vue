@@ -525,6 +525,6 @@ watch(() => props.evidenceList, () => {
 }
 
 :deep(.v-treeview-item:hover) {
-  background-color: rgba(var(--v-theme-on-surface), 0.05);
+  background-color: rgb(var(--v-theme-on-surface), 0.05);
 }
 </style>

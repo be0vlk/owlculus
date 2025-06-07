@@ -22,7 +22,7 @@ export const useDarkMode = () => {
   const setDarkMode = (dark) => {
     isDark.value = dark
     localStorage.setItem(LOCAL_STORAGE_KEY, dark ? 'dark' : 'light')
-    
+
     // Update Vuetify theme
     theme.global.name.value = dark ? 'owlculusDark' : 'owlculusLight'
   }
@@ -44,7 +44,7 @@ export const useDarkMode = () => {
           setDarkMode(e.matches)
         }
       }
-      
+
       mediaQuery.addEventListener('change', handleChange)
     }
   })

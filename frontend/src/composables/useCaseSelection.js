@@ -5,7 +5,7 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { caseService } from '@/services/case'
 import { formatDateOnly } from '@/composables/dateUtils'
 
-export function useCaseSelection(props, emit) {
+export function useCaseSelection (props, emit) {
   // Local state
   const cases = ref([])
   const loadingCases = ref(true)
@@ -48,9 +48,9 @@ export function useCaseSelection(props, emit) {
     if (!caseParams.save_to_case) {
       caseParams.case_id = null
     }
-    
+
     // Emit both case selection parameters
-    emit('update:modelValue', { 
+    emit('update:modelValue', {
       ...props.modelValue,
       save_to_case: caseParams.save_to_case,
       case_id: caseParams.case_id
@@ -77,11 +77,11 @@ export function useCaseSelection(props, emit) {
     cases,
     loadingCases,
     caseParams,
-    
+
     // Computed
     caseItems,
     selectedCase,
-    
+
     // Methods
     loadCases,
     updateCaseParams,

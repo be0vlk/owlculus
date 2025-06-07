@@ -1,13 +1,13 @@
 <template>
   <v-app>
     <Sidebar />
-    
+
     <v-main>
       <v-container fluid class="pa-6">
         <!-- Page Header Card -->
         <v-card class="mb-6 header-gradient">
           <v-card-title class="d-flex align-center pa-6 text-white">
-            <div class="text-h4 font-weight-bold">Clients Dashboard</div>
+            <div class="text-h4 font-weight-bold">Clients</div>
           </v-card-title>
         </v-card>
 
@@ -20,8 +20,8 @@
             <v-skeleton-loader type="text" width="200" class="ml-2" />
           </v-card-title>
           <v-divider />
-          <v-skeleton-loader 
-            type="table" 
+          <v-skeleton-loader
+            type="table"
             class="pa-4"
           />
         </v-card>
@@ -71,16 +71,16 @@
               </v-tooltip>
             </div>
           </v-card-title>
-          
+
           <v-divider />
-          
+
           <!-- Search Toolbar -->
           <v-card-text class="pa-4">
             <v-row align="center" class="mb-0">
               <v-col cols="12" md="8">
                 <!-- Could add filters here in the future -->
               </v-col>
-              
+
               <!-- Search Controls -->
               <v-col cols="12" md="4">
                 <div class="d-flex align-center ga-4 justify-end">
@@ -99,7 +99,7 @@
               </v-col>
             </v-row>
           </v-card-text>
-          
+
           <v-divider />
 
           <v-data-table
@@ -340,24 +340,24 @@ onMounted(() => {
 
 <style scoped>
 .header-gradient {
-  background: linear-gradient(135deg, rgb(var(--v-theme-primary)) 0%, rgba(var(--v-theme-primary), 0.8) 100%) !important;
+  background: linear-gradient(135deg, rgb(var(--v-theme-primary)) 0%, rgb(var(--v-theme-primary), 0.8) 100%) !important;
 }
 
 .clients-dashboard-table :deep(.v-data-table__tr:hover) {
-  background-color: rgba(var(--v-theme-primary), 0.04) !important;
+  background-color: rgb(var(--v-theme-primary), 0.04) !important;
   cursor: pointer;
 }
 
 .clients-dashboard-table :deep(.v-data-table__td) {
   padding: 12px 16px !important;
-  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08) !important;
+  border-bottom: 1px solid rgb(var(--v-theme-on-surface), 0.08) !important;
 }
 
 .clients-dashboard-table :deep(.v-data-table__th) {
   padding: 16px !important;
   font-weight: 600 !important;
-  color: rgba(var(--v-theme-on-surface), 0.87) !important;
-  border-bottom: 2px solid rgba(var(--v-theme-on-surface), 0.12) !important;
+  color: rgb(var(--v-theme-on-surface), 0.87) !important;
+  border-bottom: 2px solid rgb(var(--v-theme-on-surface), 0.12) !important;
 }
 
 .clients-dashboard-table :deep(.v-data-table-rows-no-data) {

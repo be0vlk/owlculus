@@ -1,13 +1,13 @@
 <template>
   <v-app>
     <Sidebar />
-    
+
     <v-main>
       <v-container fluid class="pa-6">
         <!-- Page Header Card -->
         <v-card class="mb-6 header-gradient">
           <v-card-title class="d-flex align-center pa-6 text-white">
-            <div class="text-h4 font-weight-bold">Plugins Dashboard</div>
+            <div class="text-h4 font-weight-bold">Plugins</div>
           </v-card-title>
         </v-card>
 
@@ -43,7 +43,7 @@
           <v-alert-title>Error Loading Plugins</v-alert-title>
           {{ error }}
         </v-alert>
-        
+
         <!-- Main Content -->
         <div v-else>
           <!-- Plugin Management Card -->
@@ -69,9 +69,9 @@
                 </v-tooltip>
               </div>
             </v-card-title>
-            
+
             <v-divider />
-            
+
             <!-- Category Tabs Toolbar -->
             <v-card-text class="pa-4">
               <v-row align="center" class="mb-0">
@@ -106,20 +106,20 @@
                 </v-col>
               </v-row>
             </v-card-text>
-            
+
             <v-divider />
 
             <!-- Plugin Grid -->
             <v-card-text class="pa-4">
               <v-row v-if="Object.keys(filteredPlugins).length">
-                <v-col 
-                  v-for="(plugin, name) in filteredPlugins" 
+                <v-col
+                  v-for="(plugin, name) in filteredPlugins"
                   :key="name"
-                  cols="12" 
-                  md="6" 
+                  cols="12"
+                  md="6"
                   lg="4"
                 >
-                  <v-card 
+                  <v-card
                     :class="{ 'h-100': expandedCards[name] }"
                     variant="outlined"
                     :ripple="false"
@@ -151,7 +151,7 @@
                           />
                         </div>
                       </div>
-                      
+
                       <!-- Plugin description preview -->
                       <div v-if="plugin.description && !expandedCards[name]" class="text-body-2 text-medium-emphasis mb-3">
                         {{ plugin.description.substring(0, 100) }}{{ plugin.description.length > 100 ? '...' : '' }}
@@ -170,13 +170,13 @@
                           <div v-if="plugin.parameters && Object.keys(plugin.parameters).length" class="mb-4">
                             <div class="d-flex flex-column ga-3" @click.stop>
                               <!-- Custom Plugin Parameter Component -->
-                              <component 
+                              <component
                                 v-if="pluginParamComponents[name]"
                                 :is="pluginParamComponents[name]"
                                 :parameters="{ ...plugin.parameters, description: plugin.description }"
                                 v-model="pluginParams[name]"
                               />
-                              
+
                               <!-- Default Parameter Rendering -->
                               <template v-else>
                                 <div v-for="(param, paramName) in plugin.parameters" :key="paramName" class="mb-3">
@@ -191,7 +191,7 @@
                                       density="comfortable"
                                     />
                                   </div>
-                                  
+
                                   <!-- List type -->
                                   <div v-else-if="param.type === 'list'">
                                     <v-combobox
@@ -205,7 +205,7 @@
                                       @keydown.enter="handleEnterKey($event, name)"
                                     />
                                   </div>
-                                  
+
                                   <!-- Default text/number field -->
                                   <div v-else>
                                     <v-text-field
@@ -246,7 +246,7 @@
                               density="compact"
                               :text="pluginErrors[name]"
                             />
-                            
+
                             <v-btn
                               v-else
                               variant="outlined"
@@ -359,7 +359,7 @@ const filteredPlugins = computed(() => {
   if (selectedCategories.value.includes('All') || selectedCategories.value.length === 0) {
     return plugins.value
   }
-  
+
   return Object.entries(plugins.value).reduce((acc, [name, plugin]) => {
     // Get the plugin's category, defaulting to 'Other' if not set or not matching predefined categories
     const pluginCategory = plugin.category && categories.includes(plugin.category) ? plugin.category : 'Other'
@@ -385,9 +385,9 @@ const loadPluginParamComponent = async (pluginName) => {
   const name = pluginName
     .replace(/Plugin$/, '') // Remove 'Plugin' suffix if present
     .replace(/^[a-z]/, c => c.toUpperCase()) // Ensure first letter is uppercase
-  
+
   const componentName = `${name}PluginParams`
-  
+
   try {
     const module = await import(`@/components/plugins/${componentName}.vue`)
     pluginParamComponents[pluginName] = module.default
@@ -406,7 +406,7 @@ const loadPlugins = async () => {
     const loadPromises = Object.keys(plugins.value).map(async (name) => {
       // Load custom parameter component
       await loadPluginParamComponent(name)
-      
+
       // Initialize parameters
       pluginParams[name] = {}
       if (plugins.value[name].parameters) {
@@ -421,7 +421,7 @@ const loadPlugins = async () => {
         })
       }
     })
-    
+
     await Promise.all(loadPromises)
   } catch (e) {
     error.value = e.message
@@ -435,10 +435,10 @@ const executePlugin = async (name) => {
   pluginErrors[name] = null
   results[name] = null // Clear previous results
   executionTimes[name] = new Date() // Track execution time
-  
+
   try {
     const result = await pluginService.executePlugin(name, pluginParams[name])
-    
+
     // Handle async generator result
     if (result && typeof result[Symbol.asyncIterator] === 'function') {
       for await (const data of result) {
@@ -452,12 +452,12 @@ const executePlugin = async (name) => {
     } else {
       results[name] = result
     }
-    
+
     // Auto-open modal when execution completes
     if (results[name]) {
       openResultsModal(name)
     }
-    
+
   } catch (err) {
     console.error('Plugin error:', err)
     pluginErrors[name] = err.message
@@ -480,12 +480,12 @@ const handleExportResults = (exportData) => {
   const dataStr = JSON.stringify(exportData, null, 2)
   const dataBlob = new Blob([dataStr], { type: 'application/json' })
   const url = URL.createObjectURL(dataBlob)
-  
+
   const link = document.createElement('a')
   link.href = url
   link.download = `${exportData.pluginName}_results_${Date.now()}.json`
   link.click()
-  
+
   URL.revokeObjectURL(url)
 }
 
@@ -503,6 +503,6 @@ onMounted(() => {
 
 <style scoped>
 .header-gradient {
-  background: linear-gradient(135deg, rgb(var(--v-theme-primary)) 0%, rgba(var(--v-theme-primary), 0.8) 100%) !important;
+  background: linear-gradient(135deg, rgb(var(--v-theme-primary)) 0%, rgb(var(--v-theme-primary), 0.8) 100%) !important;
 }
 </style>

@@ -14,7 +14,7 @@ export const columns = [
   { key: 'users', label: 'Assigned To' }
 ]
 
-export function useDashboard() {
+export function useDashboard () {
   const router = useRouter()
   const authStore = useAuthStore()
 
@@ -42,7 +42,7 @@ export function useDashboard() {
       }
       const casesData = await caseService.getCases(params)
       cases.value = casesData
-      
+
       // Only try to load clients if user is admin
       if (authStore.requiresAdmin()) {
         try {
@@ -56,7 +56,7 @@ export function useDashboard() {
           // Don't set error state since this is expected for non-admin users
         }
       }
-      
+
       loading.value = false
     } catch (err) {
       error.value = 'Failed to load dashboard data'
@@ -89,8 +89,8 @@ export function useDashboard() {
   }
 
   const getAssignedUsers = (assignedUsers) => {
-    if (!assignedUsers || assignedUsers.length === 0) return 'Unassigned';
-    return assignedUsers.map(user => user.username).join(', ');
+    if (!assignedUsers || assignedUsers.length === 0) return 'Unassigned'
+    return assignedUsers.map(user => user.username).join(', ')
   }
 
   const sortedAndFilteredCases = computed(() => {
@@ -101,25 +101,25 @@ export function useDashboard() {
       const query = searchQuery.value.toLowerCase()
       filteredCases = filteredCases.filter(case_ => {
         // Search in basic case fields
-        const basicFieldsMatch = 
+        const basicFieldsMatch =
           (case_.case_number || '').toLowerCase().includes(query) ||
           (case_.title || '').toLowerCase().includes(query) ||
           (getClientName(case_.client_id) || '').toLowerCase().includes(query) ||
           (case_.status || '').toLowerCase().includes(query)
-        
+
         // Search in assigned user names
-        const assignedUsersMatch = case_.users?.some(user => 
+        const assignedUsersMatch = case_.users?.some(user =>
           (user.username || '').toLowerCase().includes(query)
         ) || false
-        
+
         return basicFieldsMatch || assignedUsersMatch
       })
     }
 
     // Apply sorting
     return [...filteredCases].sort((a, b) => {
-      let aValue = sortKey.value === 'client_name' 
-        ? getClientName(a.client_id) 
+      let aValue = sortKey.value === 'client_name'
+        ? getClientName(a.client_id)
         : a[sortKey.value]
       let bValue = sortKey.value === 'client_name'
         ? getClientName(b.client_id)
@@ -143,7 +143,7 @@ export function useDashboard() {
     sortKey,
     sortOrder,
     showClosedCases,
-    
+
     // Methods
     loadData,
     sortBy,
@@ -151,7 +151,7 @@ export function useDashboard() {
     formatDate,
     getAssignedUsers,
     toggleClosedCases,
-    
+
     // Computed
     sortedAndFilteredCases
   }

@@ -46,7 +46,7 @@
           :text="isDark ? 'Light Mode' : 'Dark Mode'"
           variant="text"
           block
-          size="large"
+          size="default"
           class="mb-2 justify-start"
           @click="toggleDark"
         />
@@ -57,7 +57,7 @@
           color="error"
           variant="text"
           block
-          size="large"
+          size="default"
           class="justify-start"
           @click="handleLogout"
         />
@@ -116,5 +116,11 @@ const handleLogout = () => {
 </script>
 
 <style scoped>
-/* Styles handled by Vuetify border-e class */
+/* Fix text clipping in navigation items and increase font size */
+.v-list-item :deep(.v-list-item-title) {
+  line-height: 1.2;
+  padding-bottom: 2px;
+  font-size: medium;
+  font-weight: 500;
+}
 </style>

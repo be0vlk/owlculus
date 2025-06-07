@@ -12,7 +12,7 @@ export const columns = [
   { key: 'created_at', label: 'Created' }
 ]
 
-export function useClients() {
+export function useClients () {
   const router = useRouter()
   const authStore = useAuthStore()
 
@@ -55,7 +55,7 @@ export function useClients() {
     // Apply search filter
     if (searchQuery.value) {
       const query = searchQuery.value.toLowerCase()
-      filteredClients = filteredClients.filter(client => 
+      filteredClients = filteredClients.filter(client =>
         (client.name || '').toLowerCase().includes(query) ||
         (client.email || '').toLowerCase().includes(query) ||
         (client.phone || '').toLowerCase().includes(query) ||
@@ -69,7 +69,7 @@ export function useClients() {
       const bVal = b[sortKey.value]
 
       if (aVal === bVal) return 0
-      
+
       const comparison = aVal > bVal ? 1 : -1
       return sortOrder.value === 'asc' ? comparison : -comparison
     })
@@ -83,15 +83,15 @@ export function useClients() {
     searchQuery,
     sortKey,
     sortOrder,
-    
+
     // Methods
     loadData,
     sortBy,
     formatDate,
-    
+
     // Computed
     sortedAndFilteredClients,
-    
+
     // Constants
     columns
   }
