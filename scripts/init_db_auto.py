@@ -7,7 +7,7 @@ import os
 import sys
 
 # Add the app directory to Python path for imports
-sys.path.insert(0, '/app')
+sys.path.insert(0, "/app")
 
 from sqlmodel import Session, select
 from app.database.connection import engine, create_db_and_tables
@@ -27,7 +27,7 @@ def create_initial_data():
             admin_username = os.environ.get("ADMIN_USERNAME", "admin")
             admin_password = os.environ.get("ADMIN_PASSWORD", "admin")
             admin_email = os.environ.get("ADMIN_EMAIL", "admin@example.com")
-            
+
             admin_account = User(
                 username=admin_username,
                 email=admin_email,
@@ -46,10 +46,7 @@ def create_initial_data():
         if not client1:
             print("Creating default 'Personal' client...")
             admin_email = os.environ.get("ADMIN_EMAIL", "admin@owlculus.local")
-            client1 = Client(
-                name="Personal", 
-                email=admin_email
-            )
+            client1 = Client(name="Personal", email=admin_email)
             session.add(client1)
             session.commit()
             session.refresh(client1)

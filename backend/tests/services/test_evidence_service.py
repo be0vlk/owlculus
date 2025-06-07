@@ -39,7 +39,9 @@ def sample_case_fixture(session: Session, test_admin: models.User):
 
 
 @pytest.fixture(name="sample_folder")
-def sample_folder_fixture(session: Session, sample_case: models.Case, test_admin: models.User):
+def sample_folder_fixture(
+    session: Session, sample_case: models.Case, test_admin: models.User
+):
     folder = models.Evidence(
         case_id=sample_case.id,
         title="Test Folder",
@@ -84,11 +86,11 @@ async def test_create_evidence_text_type(
         category="Other",
         content="Sample text content",
     )
-    
+
     created_evidence = await evidence_service_instance.create_evidence(
         evidence_data, test_admin
     )
-    
+
     assert created_evidence.title == "Test Text Evidence"
     assert created_evidence.evidence_type == "text"
     assert created_evidence.content == "Sample text content"
@@ -110,7 +112,7 @@ async def test_create_evidence_file_without_folder_fails(
         evidence_type="file",
         category="Other",
     )
-    
+
     with pytest.raises(HTTPException) as excinfo:
         await evidence_service_instance.create_evidence(
             evidence_data, test_admin, file=mock_upload_file
@@ -120,7 +122,7 @@ async def test_create_evidence_file_without_folder_fails(
 
 
 @pytest.mark.asyncio
-@patch('app.services.evidence_service.save_upload_file')
+@patch("app.services.evidence_service.save_upload_file")
 async def test_create_evidence_file_with_folder(
     mock_save_file: AsyncMock,
     evidence_service_instance: evidence_service.EvidenceService,
@@ -130,7 +132,7 @@ async def test_create_evidence_file_with_folder(
     mock_upload_file: Mock,
 ):
     mock_save_file.return_value = ("uploads/case_1/test_file.txt", "abc123hash")
-    
+
     evidence_data = schemas.EvidenceCreate(
         case_id=sample_case.id,
         title="Test File Evidence",
@@ -139,11 +141,11 @@ async def test_create_evidence_file_with_folder(
         category="Other",
         folder_path="test_folder",
     )
-    
+
     created_evidence = await evidence_service_instance.create_evidence(
         evidence_data, test_admin, file=mock_upload_file
     )
-    
+
     assert created_evidence.title == "Test File Evidence"
     assert created_evidence.evidence_type == "file"
     assert created_evidence.content == "uploads/case_1/test_file.txt"
@@ -167,7 +169,7 @@ async def test_create_evidence_file_without_file_fails(
         category="Other",
         folder_path="test_folder",
     )
-    
+
     with pytest.raises(HTTPException) as excinfo:
         await evidence_service_instance.create_evidence(evidence_data, test_admin)
     assert excinfo.value.status_code == 400
@@ -187,7 +189,7 @@ async def test_create_evidence_nonexistent_case(
         category="Other",
         content="Sample content",
     )
-    
+
     with pytest.raises(HTTPException) as excinfo:
         await evidence_service_instance.create_evidence(evidence_data, test_admin)
     assert excinfo.value.status_code == 404
@@ -195,8 +197,8 @@ async def test_create_evidence_nonexistent_case(
 
 
 @pytest.mark.asyncio
-@patch('app.services.evidence_service.save_upload_file')
-@patch('app.services.evidence_service.delete_file')
+@patch("app.services.evidence_service.save_upload_file")
+@patch("app.services.evidence_service.delete_file")
 async def test_create_evidence_file_save_error_cleanup(
     mock_delete_file: AsyncMock,
     mock_save_file: AsyncMock,
@@ -207,7 +209,7 @@ async def test_create_evidence_file_save_error_cleanup(
     mock_upload_file: Mock,
 ):
     mock_save_file.return_value = ("uploads/case_1/test_file.txt", "abc123hash")
-    
+
     evidence_data = schemas.EvidenceCreate(
         case_id=sample_case.id,
         title="Test File Evidence",
@@ -216,9 +218,11 @@ async def test_create_evidence_file_save_error_cleanup(
         category="Other",
         folder_path="test_folder",
     )
-    
+
     # Mock database error during commit
-    with patch.object(evidence_service_instance.db, 'commit', side_effect=Exception("DB Error")):
+    with patch.object(
+        evidence_service_instance.db, "commit", side_effect=Exception("DB Error")
+    ):
         with pytest.raises(HTTPException) as excinfo:
             await evidence_service_instance.create_evidence(
                 evidence_data, test_admin, file=mock_upload_file
@@ -250,11 +254,11 @@ async def test_get_case_evidence(
         )
         evidence_service_instance.db.add(evidence)
     evidence_service_instance.db.commit()
-    
+
     evidence_list = await evidence_service_instance.get_case_evidence(
         sample_case.id, test_admin
     )
-    
+
     assert len(evidence_list) == 3
     assert all(e.case_id == sample_case.id for e in evidence_list)
 
@@ -291,7 +295,7 @@ async def test_get_case_evidence_pagination(
         )
         evidence_service_instance.db.add(evidence)
     evidence_service_instance.db.commit()
-    
+
     # Test pagination
     first_page = await evidence_service_instance.get_case_evidence(
         sample_case.id, test_admin, skip=0, limit=5
@@ -299,7 +303,7 @@ async def test_get_case_evidence_pagination(
     second_page = await evidence_service_instance.get_case_evidence(
         sample_case.id, test_admin, skip=5, limit=5
     )
-    
+
     assert len(first_page) == 5
     assert len(second_page) == 5
     assert first_page[0].id != second_page[0].id
@@ -326,11 +330,11 @@ async def test_get_evidence(
     evidence_service_instance.db.add(evidence)
     evidence_service_instance.db.commit()
     evidence_service_instance.db.refresh(evidence)
-    
+
     retrieved_evidence = await evidence_service_instance.get_evidence(
         evidence.id, test_admin
     )
-    
+
     assert retrieved_evidence.id == evidence.id
     assert retrieved_evidence.title == "Test Evidence"
 
@@ -366,17 +370,17 @@ def test_update_evidence(
     evidence_service_instance.db.add(evidence)
     evidence_service_instance.db.commit()
     evidence_service_instance.db.refresh(evidence)
-    
+
     update_data = schemas.EvidenceUpdate(
         title="Updated Title",
         description="Updated description",
-        content="Updated content"
+        content="Updated content",
     )
-    
+
     updated_evidence = evidence_service_instance.update_evidence(
         evidence.id, update_data, test_admin
     )
-    
+
     assert updated_evidence.title == "Updated Title"
     assert updated_evidence.description == "Updated description"
     assert updated_evidence.content == "Updated content"
@@ -402,9 +406,9 @@ def test_update_evidence_file_content_fails(
     evidence_service_instance.db.add(evidence)
     evidence_service_instance.db.commit()
     evidence_service_instance.db.refresh(evidence)
-    
+
     update_data = schemas.EvidenceUpdate(content="new_content")
-    
+
     with pytest.raises(HTTPException) as excinfo:
         evidence_service_instance.update_evidence(evidence.id, update_data, test_admin)
     assert excinfo.value.status_code == 400
@@ -416,7 +420,7 @@ def test_update_evidence_not_found(
     test_admin: models.User,
 ):
     update_data = schemas.EvidenceUpdate(title="Updated Title")
-    
+
     with pytest.raises(HTTPException) as excinfo:
         evidence_service_instance.update_evidence(999, update_data, test_admin)
     assert excinfo.value.status_code == 404
@@ -425,7 +429,7 @@ def test_update_evidence_not_found(
 
 # Test delete_evidence method
 @pytest.mark.asyncio
-@patch('app.services.evidence_service.delete_file')
+@patch("app.services.evidence_service.delete_file")
 async def test_delete_evidence_file(
     mock_delete_file: AsyncMock,
     evidence_service_instance: evidence_service.EvidenceService,
@@ -447,14 +451,14 @@ async def test_delete_evidence_file(
     evidence_service_instance.db.add(evidence)
     evidence_service_instance.db.commit()
     evidence_service_instance.db.refresh(evidence)
-    
+
     deleted_evidence = await evidence_service_instance.delete_evidence(
         evidence.id, current_user=test_admin
     )
-    
+
     assert deleted_evidence.id == evidence.id
     mock_delete_file.assert_called_once_with("uploads/test_file.txt")
-    
+
     # Verify evidence is deleted from database
     db_evidence = evidence_service_instance.db.get(models.Evidence, evidence.id)
     assert db_evidence is None
@@ -480,13 +484,13 @@ async def test_delete_evidence_text(
     evidence_service_instance.db.add(evidence)
     evidence_service_instance.db.commit()
     evidence_service_instance.db.refresh(evidence)
-    
+
     deleted_evidence = await evidence_service_instance.delete_evidence(
         evidence.id, current_user=test_admin
     )
-    
+
     assert deleted_evidence.id == evidence.id
-    
+
     # Verify evidence is deleted from database
     db_evidence = evidence_service_instance.db.get(models.Evidence, evidence.id)
     assert db_evidence is None
@@ -513,16 +517,18 @@ async def test_delete_evidence_analyst_forbidden(
     evidence_service_instance.db.add(evidence)
     evidence_service_instance.db.commit()
     evidence_service_instance.db.refresh(evidence)
-    
+
     with pytest.raises(HTTPException) as excinfo:
-        await evidence_service_instance.delete_evidence(evidence.id, current_user=test_analyst)
+        await evidence_service_instance.delete_evidence(
+            evidence.id, current_user=test_analyst
+        )
     assert excinfo.value.status_code == 403
     assert excinfo.value.detail == "Not authorized"
 
 
 # Test create_folder method
 @pytest.mark.asyncio
-@patch('app.services.evidence_service.create_folder')
+@patch("app.services.evidence_service.create_folder")
 async def test_create_folder(
     mock_create_folder_func: Mock,
     evidence_service_instance: evidence_service.EvidenceService,
@@ -534,11 +540,11 @@ async def test_create_folder(
         title="New Folder",
         description="New folder description",
     )
-    
+
     created_folder = await evidence_service_instance.create_folder(
         folder_data, test_admin
     )
-    
+
     assert created_folder.title == "New Folder"
     assert created_folder.is_folder == True
     assert created_folder.evidence_type == "folder"
@@ -547,7 +553,7 @@ async def test_create_folder(
 
 
 @pytest.mark.asyncio
-@patch('app.services.evidence_service.create_folder')
+@patch("app.services.evidence_service.create_folder")
 async def test_create_subfolder(
     mock_create_folder_func: Mock,
     evidence_service_instance: evidence_service.EvidenceService,
@@ -561,15 +567,17 @@ async def test_create_subfolder(
         description="Sub folder description",
         parent_folder_id=sample_folder.id,
     )
-    
+
     created_folder = await evidence_service_instance.create_folder(
         folder_data, test_admin
     )
-    
+
     assert created_folder.title == "Sub Folder"
     assert created_folder.parent_folder_id == sample_folder.id
     assert created_folder.folder_path == "test_folder/Sub Folder"
-    mock_create_folder_func.assert_called_once_with(sample_case.id, "test_folder/Sub Folder")
+    mock_create_folder_func.assert_called_once_with(
+        sample_case.id, "test_folder/Sub Folder"
+    )
 
 
 @pytest.mark.asyncio
@@ -582,7 +590,7 @@ async def test_create_folder_nonexistent_case(
         title="New Folder",
         description="New folder description",
     )
-    
+
     with pytest.raises(HTTPException) as excinfo:
         await evidence_service_instance.create_folder(folder_data, test_admin)
     assert excinfo.value.status_code == 404
@@ -601,7 +609,7 @@ async def test_create_folder_nonexistent_parent(
         description="Sub folder description",
         parent_folder_id=999,
     )
-    
+
     with pytest.raises(HTTPException) as excinfo:
         await evidence_service_instance.create_folder(folder_data, test_admin)
     assert excinfo.value.status_code == 404
@@ -619,7 +627,7 @@ async def test_get_folder_tree(
     folder_tree = await evidence_service_instance.get_folder_tree(
         sample_case.id, test_admin
     )
-    
+
     assert len(folder_tree) >= 1
     assert any(item.id == sample_folder.id for item in folder_tree)
 
@@ -643,14 +651,13 @@ async def test_update_folder(
     test_admin: models.User,
 ):
     update_data = schemas.FolderUpdate(
-        title="Updated Folder",
-        description="Updated description"
+        title="Updated Folder", description="Updated description"
     )
-    
+
     updated_folder = await evidence_service_instance.update_folder(
         sample_folder.id, update_data, test_admin
     )
-    
+
     assert updated_folder.title == "Updated Folder"
     assert updated_folder.description == "Updated description"
 
@@ -661,7 +668,7 @@ async def test_update_folder_not_found(
     test_admin: models.User,
 ):
     update_data = schemas.FolderUpdate(title="Updated Folder")
-    
+
     with pytest.raises(HTTPException) as excinfo:
         await evidence_service_instance.update_folder(999, update_data, test_admin)
     assert excinfo.value.status_code == 404
@@ -670,7 +677,7 @@ async def test_update_folder_not_found(
 
 # Test delete_folder method
 @pytest.mark.asyncio
-@patch('app.services.evidence_service.delete_folder')
+@patch("app.services.evidence_service.delete_folder")
 async def test_delete_folder(
     mock_delete_folder_func: Mock,
     evidence_service_instance: evidence_service.EvidenceService,
@@ -680,12 +687,12 @@ async def test_delete_folder(
     deleted_folder = await evidence_service_instance.delete_folder(
         sample_folder.id, current_user=test_admin
     )
-    
+
     assert deleted_folder.id == sample_folder.id
     mock_delete_folder_func.assert_called_once_with(
         sample_folder.case_id, sample_folder.folder_path
     )
-    
+
     # Verify folder is deleted from database
     db_folder = evidence_service_instance.db.get(models.Evidence, sample_folder.id)
     assert db_folder is None
@@ -698,13 +705,15 @@ async def test_delete_folder_analyst_forbidden(
     test_analyst: models.User,
 ):
     with pytest.raises(HTTPException) as excinfo:
-        await evidence_service_instance.delete_folder(sample_folder.id, current_user=test_analyst)
+        await evidence_service_instance.delete_folder(
+            sample_folder.id, current_user=test_analyst
+        )
     assert excinfo.value.status_code == 403
     assert excinfo.value.detail == "Not authorized"
 
 
 @pytest.mark.asyncio
-@patch('app.services.evidence_service.delete_folder')
+@patch("app.services.evidence_service.delete_folder")
 async def test_delete_folder_with_contents(
     mock_delete_folder_func: Mock,
     evidence_service_instance: evidence_service.EvidenceService,
@@ -727,14 +736,14 @@ async def test_delete_folder_with_contents(
     )
     evidence_service_instance.db.add(evidence)
     evidence_service_instance.db.commit()
-    
+
     deleted_folder = await evidence_service_instance.delete_folder(
         sample_folder.id, current_user=test_admin
     )
-    
+
     assert deleted_folder.id == sample_folder.id
     mock_delete_folder_func.assert_called_once()
-    
+
     # Verify folder and its contents are deleted
     db_folder = evidence_service_instance.db.get(models.Evidence, sample_folder.id)
     assert db_folder is None
@@ -744,8 +753,8 @@ async def test_delete_folder_with_contents(
 
 # Test download_evidence method
 @pytest.mark.asyncio
-@patch('fastapi.responses.FileResponse')
-@patch('app.core.file_storage.UPLOAD_DIR')
+@patch("fastapi.responses.FileResponse")
+@patch("app.core.file_storage.UPLOAD_DIR")
 async def test_download_evidence_file(
     mock_upload_dir: Mock,
     mock_file_response: Mock,
@@ -759,9 +768,9 @@ async def test_download_evidence_file(
     mock_path.exists.return_value = True
     mock_path.name = "test_file.txt"
     mock_upload_dir.__truediv__ = Mock(return_value=mock_path)
-    
+
     mock_file_response.return_value = Mock()
-    
+
     evidence = models.Evidence(
         case_id=sample_case.id,
         title="File Evidence",
@@ -776,11 +785,9 @@ async def test_download_evidence_file(
     evidence_service_instance.db.add(evidence)
     evidence_service_instance.db.commit()
     evidence_service_instance.db.refresh(evidence)
-    
-    result = await evidence_service_instance.download_evidence(
-        evidence.id, test_admin
-    )
-    
+
+    result = await evidence_service_instance.download_evidence(evidence.id, test_admin)
+
     mock_file_response.assert_called_once()
 
 
@@ -804,7 +811,7 @@ async def test_download_evidence_text_fails(
     evidence_service_instance.db.add(evidence)
     evidence_service_instance.db.commit()
     evidence_service_instance.db.refresh(evidence)
-    
+
     with pytest.raises(HTTPException) as excinfo:
         await evidence_service_instance.download_evidence(evidence.id, test_admin)
     assert excinfo.value.status_code == 400
@@ -819,9 +826,15 @@ async def test_evidence_categories_validation(
     test_admin: models.User,
 ):
     # Test all valid categories
-    valid_categories = ["Social Media", "Associates", "Network Assets", 
-                       "Communications", "Documents", "Other"]
-    
+    valid_categories = [
+        "Social Media",
+        "Associates",
+        "Network Assets",
+        "Communications",
+        "Documents",
+        "Other",
+    ]
+
     for category in valid_categories:
         evidence_data = schemas.EvidenceCreate(
             case_id=sample_case.id,
@@ -831,7 +844,7 @@ async def test_evidence_categories_validation(
             category=category,
             content="Sample content",
         )
-        
+
         created_evidence = await evidence_service_instance.create_evidence(
             evidence_data, test_admin
         )
@@ -846,7 +859,7 @@ async def test_evidence_with_special_characters(
 ):
     special_title = "Evidence with 'quotes' and émojis 🎉"
     special_content = "Content with\nnewlines and\ttabs"
-    
+
     evidence_data = schemas.EvidenceCreate(
         case_id=sample_case.id,
         title=special_title,
@@ -855,11 +868,11 @@ async def test_evidence_with_special_characters(
         category="Other",
         content=special_content,
     )
-    
+
     created_evidence = await evidence_service_instance.create_evidence(
         evidence_data, test_admin
     )
-    
+
     assert created_evidence.title == special_title
     assert created_evidence.content == special_content
 
@@ -881,16 +894,16 @@ async def test_bulk_evidence_operations(
             category="Other",
             content=f"Content {i}",
         )
-        
+
         evidence = await evidence_service_instance.create_evidence(
             evidence_data, test_admin
         )
         evidence_list.append(evidence)
-    
+
     # Verify all evidence was created
     case_evidence = await evidence_service_instance.get_case_evidence(
         sample_case.id, test_admin, limit=100
     )
-    
+
     assert len(case_evidence) == 50
     assert all(e.case_id == sample_case.id for e in case_evidence)

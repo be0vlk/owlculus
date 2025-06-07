@@ -12,6 +12,7 @@ from app.core.utils import get_utc_now
 from app.core.dependencies import no_analyst, case_must_be_open
 from app.database import crud
 
+
 class EntityService:
     def __init__(self, db: Session):
         self.db = db
@@ -89,7 +90,9 @@ class EntityService:
             raise HTTPException(status_code=400, detail=str(e))
 
         # Check for duplicates using crud function
-        await crud.check_entity_duplicates(self.db, db_entity.case_id, validated_update, entity_id)
+        await crud.check_entity_duplicates(
+            self.db, db_entity.case_id, validated_update, entity_id
+        )
 
         db_entity.data = validated_update.data
         db_entity.updated_at = get_utc_now()

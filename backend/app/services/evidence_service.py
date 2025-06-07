@@ -9,7 +9,14 @@ from typing import List, Optional
 from app.database import models
 from app.schemas import evidence_schema as schemas
 from app.core.utils import get_utc_now
-from app.core.file_storage import save_upload_file, delete_file, create_folder, delete_folder, normalize_folder_path, UPLOAD_DIR
+from app.core.file_storage import (
+    save_upload_file,
+    delete_file,
+    create_folder,
+    delete_folder,
+    normalize_folder_path,
+    UPLOAD_DIR,
+)
 from app.core.dependencies import no_analyst
 
 
@@ -36,13 +43,13 @@ class EvidenceService:
             existing_folders = self.db.exec(
                 select(models.Evidence).where(
                     models.Evidence.case_id == evidence.case_id,
-                    models.Evidence.is_folder == True
+                    models.Evidence.is_folder == True,
                 )
             ).first()
             if not existing_folders:
                 raise HTTPException(
-                    status_code=400, 
-                    detail="Cannot upload files without any folders. Create a folder first to organize evidence."
+                    status_code=400,
+                    detail="Cannot upload files without any folders. Create a folder first to organize evidence.",
                 )
 
         # For file uploads, save the file and get the path
@@ -54,7 +61,9 @@ class EvidenceService:
             try:
                 # Save the file and get its path and hash
                 relative_path, file_hash = await save_upload_file(
-                    upload_file=file, case_id=evidence.case_id, folder_path=evidence.folder_path
+                    upload_file=file,
+                    case_id=evidence.case_id,
+                    folder_path=evidence.folder_path,
                 )
                 evidence.content = relative_path
                 evidence.file_hash = file_hash
@@ -373,7 +382,7 @@ class EvidenceService:
             subfolder_evidence = self.db.exec(
                 select(models.Evidence).where(
                     models.Evidence.case_id == db_folder.case_id,
-                    models.Evidence.folder_path.like(f"{db_folder.folder_path}%")
+                    models.Evidence.folder_path.like(f"{db_folder.folder_path}%"),
                 )
             ).all()
 

@@ -69,7 +69,10 @@ class Evidence(SQLModel, table=True):
     created_by_id: int = Field(foreign_key="user.id")
     case: "Case" = Relationship(back_populates="evidence")
     creator: "User" = Relationship()
-    parent_folder: Optional["Evidence"] = Relationship(back_populates="subfolders", sa_relationship_kwargs={"remote_side": "Evidence.id"})
+    parent_folder: Optional["Evidence"] = Relationship(
+        back_populates="subfolders",
+        sa_relationship_kwargs={"remote_side": "Evidence.id"},
+    )
     subfolders: List["Evidence"] = Relationship(back_populates="parent_folder")
 
 

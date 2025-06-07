@@ -37,7 +37,9 @@ async def read_users(
     current_user: models.User = Depends(get_current_active_user),
 ):
     user_service = UserService(db)
-    return await user_service.get_users(current_user=current_user, skip=skip, limit=limit)
+    return await user_service.get_users(
+        current_user=current_user, skip=skip, limit=limit
+    )
 
 
 @router.put("/{user_id}", response_model=schemas.User)

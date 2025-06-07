@@ -28,11 +28,13 @@ async def create_evidence(
     current_user: models.User = Depends(get_current_active_user),
 ):
     if not files:
-        raise HTTPException(status_code=400, detail="At least one file must be provided")
+        raise HTTPException(
+            status_code=400, detail="At least one file must be provided"
+        )
 
     evidence_service = EvidenceService(db)
     results = []
-    
+
     for file in files:
         evidence_data = schemas.EvidenceCreate(
             title=file.filename,
@@ -55,9 +57,7 @@ async def create_evidence(
             continue
 
     if not results:
-        raise HTTPException(
-            status_code=500, detail="Failed to upload any files"
-        )
+        raise HTTPException(status_code=500, detail="Failed to upload any files")
 
     return results
 

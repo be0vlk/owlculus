@@ -39,9 +39,7 @@ def create_initial_data():
         # Create a default client "Personal" so you can create cases without a real client attached
         client1 = session.exec(select(Client).where(Client.name == "Personal")).first()
         if not client1:
-            client1 = Client(
-                name="Personal", email=admin_email
-            )
+            client1 = Client(name="Personal", email=admin_email)
             session.add(client1)
             session.commit()
             session.refresh(client1)

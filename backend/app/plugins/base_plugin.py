@@ -36,9 +36,11 @@ class BasePlugin(ABC):
             max_workers=3, thread_name_prefix=f"{self.name}_executor"
         )
         self._current_user: Optional[models.User] = None
-        self._evidence_results: List[Dict[str, Any]] = []  # Collect results for evidence saving
+        self._evidence_results: List[Dict[str, Any]] = (
+            []
+        )  # Collect results for evidence saving
         self._current_params: Optional[Dict[str, Any]] = None
-        
+
         # Validate evidence_category on initialization
         self._validate_evidence_category()
 
@@ -189,7 +191,7 @@ class BasePlugin(ABC):
     def _get_enhanced_parameters(self) -> Dict[str, Dict[str, Any]]:
         """Get parameters with automatic save_to_case injection"""
         enhanced_params = self.parameters.copy()
-        
+
         # Always add save_to_case parameter if not already defined
         if "save_to_case" not in enhanced_params:
             enhanced_params["save_to_case"] = {
@@ -198,7 +200,7 @@ class BasePlugin(ABC):
                 "default": False,
                 "required": False,
             }
-        
+
         return enhanced_params
 
     def add_evidence_result(self, result: Dict[str, Any]) -> None:
@@ -209,21 +211,23 @@ class BasePlugin(ABC):
         """Save all collected evidence results to the case"""
         if not self._current_params or not self._evidence_results:
             return
-            
+
         save_to_case = self._current_params.get("save_to_case", False)
         case_id = self._current_params.get("case_id")
-        
+
         if not save_to_case or not case_id:
             return
-            
+
         # Get database session
         db = next(get_db())
         try:
             # Format the evidence content
-            content = self._format_evidence_content(self._evidence_results, self._current_params)
-            
+            content = self._format_evidence_content(
+                self._evidence_results, self._current_params
+            )
+
             if content:
-                timestamp = get_utc_now().strftime('%Y%m%d_%H%M%S')
+                timestamp = get_utc_now().strftime("%Y%m%d_%H%M%S")
                 await self._save_evidence_to_case(
                     db=db,
                     case_id=case_id,
@@ -234,7 +238,9 @@ class BasePlugin(ABC):
         finally:
             db.close()
 
-    def _format_evidence_content(self, results: List[Dict[str, Any]], params: Dict[str, Any]) -> str:
+    def _format_evidence_content(
+        self, results: List[Dict[str, Any]], params: Dict[str, Any]
+    ) -> str:
         """Format evidence content - can be overridden by plugins for custom formatting"""
         content_lines = [
             f"{self.display_name} Results",
@@ -246,27 +252,31 @@ class BasePlugin(ABC):
             "Parameters:",
             "-" * 20,
         ]
-        
+
         # Add parameters (excluding sensitive ones)
         for key, value in params.items():
             if key not in ["save_to_case", "case_id"]:
                 content_lines.append(f"{key}: {value}")
-        
-        content_lines.extend([
-            "",
-            "Results:",
-            "-" * 20,
-            "",
-        ])
-        
+
+        content_lines.extend(
+            [
+                "",
+                "Results:",
+                "-" * 20,
+                "",
+            ]
+        )
+
         # Add results in JSON format for readability
         for i, result in enumerate(results, 1):
-            content_lines.extend([
-                f"Result #{i}:",
-                json.dumps(result, indent=2, default=str),
-                "",
-            ])
-        
+            content_lines.extend(
+                [
+                    f"Result #{i}:",
+                    json.dumps(result, indent=2, default=str),
+                    "",
+                ]
+            )
+
         return "\n".join(content_lines)
 
     async def execute_with_evidence_collection(
@@ -275,13 +285,13 @@ class BasePlugin(ABC):
         """Execute plugin with automatic evidence collection"""
         self._current_params = params or {}
         self._evidence_results = []  # Reset evidence collection
-        
+
         try:
             async for result in self.run(params):
                 # Collect data results for evidence saving
                 if result.get("type") == "data":
                     self.add_evidence_result(result.get("data", {}))
-                
+
                 yield result
         finally:
             # Save evidence at the end of execution

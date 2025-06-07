@@ -22,7 +22,9 @@ async def read_clients(
     current_user: models.User = Depends(get_current_active_user),
 ):
     client_service = ClientService(db)
-    return await client_service.get_clients(current_user=current_user, skip=skip, limit=limit)
+    return await client_service.get_clients(
+        current_user=current_user, skip=skip, limit=limit
+    )
 
 
 @router.post("/", response_model=schemas.Client)
@@ -42,7 +44,9 @@ async def read_client(
     current_user: models.User = Depends(get_current_active_user),
 ):
     client_service = ClientService(db)
-    return await client_service.get_client(client_id=client_id, current_user=current_user)
+    return await client_service.get_client(
+        client_id=client_id, current_user=current_user
+    )
 
 
 @router.put("/{client_id}", response_model=schemas.Client)

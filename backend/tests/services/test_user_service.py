@@ -40,32 +40,44 @@ class TestUserService:
             role="Investigator",
             is_active=True,
         )
-        
+
         # Mock the crud functions
-        with patch('app.services.user_service.crud.get_user_by_username') as mock_get_username:
+        with patch(
+            "app.services.user_service.crud.get_user_by_username"
+        ) as mock_get_username:
             mock_get_username.return_value = None  # Username not taken
-            
-            with patch('app.services.user_service.crud.get_user_by_email') as mock_get_email:
+
+            with patch(
+                "app.services.user_service.crud.get_user_by_email"
+            ) as mock_get_email:
                 mock_get_email.return_value = None  # Email not taken
-                
-                with patch('app.services.user_service.crud.create_user') as mock_create:
+
+                with patch("app.services.user_service.crud.create_user") as mock_create:
                     created_user = Mock()
                     created_user.id = 1
                     created_user.username = user_data.username
                     created_user.email = user_data.email
                     created_user.role = user_data.role
                     mock_create.return_value = created_user
-                    
-                    result = await user_service_instance.create_user(user_data, current_user=test_admin)
-                    
+
+                    result = await user_service_instance.create_user(
+                        user_data, current_user=test_admin
+                    )
+
                     assert result.username == user_data.username
                     assert result.email == user_data.email
                     assert result.role == user_data.role
-                    
+
                     # Verify all checks were made
-                    mock_get_username.assert_called_once_with(user_service_instance.db, username=user_data.username)
-                    mock_get_email.assert_called_once_with(user_service_instance.db, email=user_data.email)
-                    mock_create.assert_called_once_with(user_service_instance.db, user=user_data)
+                    mock_get_username.assert_called_once_with(
+                        user_service_instance.db, username=user_data.username
+                    )
+                    mock_get_email.assert_called_once_with(
+                        user_service_instance.db, email=user_data.email
+                    )
+                    mock_create.assert_called_once_with(
+                        user_service_instance.db, user=user_data
+                    )
 
     @pytest.mark.asyncio
     async def test_create_user_username_exists(
@@ -81,15 +93,19 @@ class TestUserService:
             role="Investigator",
             is_active=True,
         )
-        
-        with patch('app.services.user_service.crud.get_user_by_username') as mock_get_username:
+
+        with patch(
+            "app.services.user_service.crud.get_user_by_username"
+        ) as mock_get_username:
             existing_user = Mock()
             existing_user.username = user_data.username
             mock_get_username.return_value = existing_user
-            
+
             with pytest.raises(HTTPException) as exc_info:
-                await user_service_instance.create_user(user_data, current_user=test_admin)
-            
+                await user_service_instance.create_user(
+                    user_data, current_user=test_admin
+                )
+
             assert exc_info.value.status_code == 400
             assert "Username already registered" in exc_info.value.detail
 
@@ -107,18 +123,24 @@ class TestUserService:
             role="Investigator",
             is_active=True,
         )
-        
-        with patch('app.services.user_service.crud.get_user_by_username') as mock_get_username:
+
+        with patch(
+            "app.services.user_service.crud.get_user_by_username"
+        ) as mock_get_username:
             mock_get_username.return_value = None
-            
-            with patch('app.services.user_service.crud.get_user_by_email') as mock_get_email:
+
+            with patch(
+                "app.services.user_service.crud.get_user_by_email"
+            ) as mock_get_email:
                 existing_user = Mock()
                 existing_user.email = user_data.email
                 mock_get_email.return_value = existing_user
-                
+
                 with pytest.raises(HTTPException) as exc_info:
-                    await user_service_instance.create_user(user_data, current_user=test_admin)
-                
+                    await user_service_instance.create_user(
+                        user_data, current_user=test_admin
+                    )
+
                 assert exc_info.value.status_code == 400
                 assert "Email already registered" in exc_info.value.detail
 
@@ -136,19 +158,22 @@ class TestUserService:
             role="Investigator",
             is_active=True,
         )
-        
+
         # Mock the admin_only decorator to raise exception for non-admin
-        with patch('app.core.dependencies.admin_only') as mock_decorator:
+        with patch("app.core.dependencies.admin_only") as mock_decorator:
+
             def side_effect(*args, **kwargs):
-                if 'current_user' in kwargs and kwargs['current_user'].role != 'Admin':
+                if "current_user" in kwargs and kwargs["current_user"].role != "Admin":
                     raise HTTPException(status_code=403, detail="Admin access required")
-                return kwargs.get('current_user')
-            
+                return kwargs.get("current_user")
+
             mock_decorator.return_value = side_effect
-            
+
             with pytest.raises(HTTPException) as exc_info:
-                await user_service_instance.create_user(user_data, current_user=test_user)
-            
+                await user_service_instance.create_user(
+                    user_data, current_user=test_user
+                )
+
             assert exc_info.value.status_code == 403
 
     @pytest.mark.asyncio
@@ -160,17 +185,19 @@ class TestUserService:
         """Test successful user listing"""
         skip = 0
         limit = 10
-        
-        with patch('app.services.user_service.crud.get_users') as mock_get_users:
+
+        with patch("app.services.user_service.crud.get_users") as mock_get_users:
             mock_users = [Mock(), Mock(), Mock()]
             mock_get_users.return_value = mock_users
-            
+
             result = await user_service_instance.get_users(
                 current_user=test_admin, skip=skip, limit=limit
             )
-            
+
             assert result == mock_users
-            mock_get_users.assert_called_once_with(user_service_instance.db, skip=skip, limit=limit)
+            mock_get_users.assert_called_once_with(
+                user_service_instance.db, skip=skip, limit=limit
+            )
 
     @pytest.mark.asyncio
     async def test_get_users_admin_only_permission(
@@ -179,17 +206,18 @@ class TestUserService:
         test_user: models.User,  # Non-admin user
     ):
         """Test that only admins can list users"""
-        with patch('app.core.dependencies.admin_only') as mock_decorator:
+        with patch("app.core.dependencies.admin_only") as mock_decorator:
+
             def side_effect(*args, **kwargs):
-                if 'current_user' in kwargs and kwargs['current_user'].role != 'Admin':
+                if "current_user" in kwargs and kwargs["current_user"].role != "Admin":
                     raise HTTPException(status_code=403, detail="Admin access required")
-                return kwargs.get('current_user')
-            
+                return kwargs.get("current_user")
+
             mock_decorator.return_value = side_effect
-            
+
             with pytest.raises(HTTPException) as exc_info:
                 await user_service_instance.get_users(current_user=test_user)
-            
+
             assert exc_info.value.status_code == 403
 
     @pytest.mark.asyncio
@@ -205,35 +233,45 @@ class TestUserService:
             email="updated@example.com",
             role="Investigator",
         )
-        
-        with patch('app.services.user_service.crud.get_user') as mock_get_user:
+
+        with patch("app.services.user_service.crud.get_user") as mock_get_user:
             existing_user = Mock()
             existing_user.id = user_id
             existing_user.username = "olduser"
             existing_user.email = "old@example.com"
             mock_get_user.return_value = existing_user
-            
-            with patch('app.services.user_service.crud.get_user_by_username') as mock_get_username:
+
+            with patch(
+                "app.services.user_service.crud.get_user_by_username"
+            ) as mock_get_username:
                 mock_get_username.return_value = None  # Username not taken
-                
-                with patch('app.services.user_service.crud.get_user_by_email') as mock_get_email:
+
+                with patch(
+                    "app.services.user_service.crud.get_user_by_email"
+                ) as mock_get_email:
                     mock_get_email.return_value = None  # Email not taken
-                    
-                    with patch('app.services.user_service.crud.update_user') as mock_update:
+
+                    with patch(
+                        "app.services.user_service.crud.update_user"
+                    ) as mock_update:
                         updated_user = Mock()
                         updated_user.username = user_update.username
                         updated_user.email = user_update.email
                         mock_update.return_value = updated_user
-                        
+
                         result = await user_service_instance.update_user(
                             user_id, user_update, current_user=test_admin
                         )
-                        
+
                         assert result.username == user_update.username
                         assert result.email == user_update.email
-                        
-                        mock_get_user.assert_called_once_with(user_service_instance.db, user_id=user_id)
-                        mock_update.assert_called_once_with(user_service_instance.db, user_id=user_id, user=user_update)
+
+                        mock_get_user.assert_called_once_with(
+                            user_service_instance.db, user_id=user_id
+                        )
+                        mock_update.assert_called_once_with(
+                            user_service_instance.db, user_id=user_id, user=user_update
+                        )
 
     @pytest.mark.asyncio
     async def test_update_user_self_success(
@@ -247,24 +285,30 @@ class TestUserService:
             username="newusername",
             email="newemail@example.com",
         )
-        
-        with patch('app.services.user_service.crud.get_user') as mock_get_user:
+
+        with patch("app.services.user_service.crud.get_user") as mock_get_user:
             mock_get_user.return_value = test_user
-            
-            with patch('app.services.user_service.crud.get_user_by_username') as mock_get_username:
+
+            with patch(
+                "app.services.user_service.crud.get_user_by_username"
+            ) as mock_get_username:
                 mock_get_username.return_value = None
-                
-                with patch('app.services.user_service.crud.get_user_by_email') as mock_get_email:
+
+                with patch(
+                    "app.services.user_service.crud.get_user_by_email"
+                ) as mock_get_email:
                     mock_get_email.return_value = None
-                    
-                    with patch('app.services.user_service.crud.update_user') as mock_update:
+
+                    with patch(
+                        "app.services.user_service.crud.update_user"
+                    ) as mock_update:
                         updated_user = Mock()
                         mock_update.return_value = updated_user
-                        
+
                         result = await user_service_instance.update_user(
                             user_id, user_update, current_user=test_user
                         )
-                        
+
                         assert result == updated_user
 
     @pytest.mark.asyncio
@@ -276,12 +320,12 @@ class TestUserService:
         """Test unauthorized user update"""
         other_user_id = 999  # Different from test_user.id
         user_update = schemas.UserUpdate(username="newusername")
-        
+
         with pytest.raises(HTTPException) as exc_info:
             await user_service_instance.update_user(
                 other_user_id, user_update, current_user=test_user
             )
-        
+
         assert exc_info.value.status_code == 403
         assert "Not authorized" in exc_info.value.detail
 
@@ -294,15 +338,15 @@ class TestUserService:
         """Test updating non-existent user"""
         user_id = 999
         user_update = schemas.UserUpdate(username="newusername")
-        
-        with patch('app.services.user_service.crud.get_user') as mock_get_user:
+
+        with patch("app.services.user_service.crud.get_user") as mock_get_user:
             mock_get_user.return_value = None
-            
+
             with pytest.raises(HTTPException) as exc_info:
                 await user_service_instance.update_user(
                     user_id, user_update, current_user=test_admin
                 )
-            
+
             assert exc_info.value.status_code == 404
             assert "User not found" in exc_info.value.detail
 
@@ -315,23 +359,25 @@ class TestUserService:
         """Test updating user with taken username"""
         user_id = 2
         user_update = schemas.UserUpdate(username="takenuser")
-        
-        with patch('app.services.user_service.crud.get_user') as mock_get_user:
+
+        with patch("app.services.user_service.crud.get_user") as mock_get_user:
             existing_user = Mock()
             existing_user.id = user_id
             existing_user.username = "olduser"
             mock_get_user.return_value = existing_user
-            
-            with patch('app.services.user_service.crud.get_user_by_username') as mock_get_username:
+
+            with patch(
+                "app.services.user_service.crud.get_user_by_username"
+            ) as mock_get_username:
                 conflicting_user = Mock()
                 conflicting_user.username = user_update.username
                 mock_get_username.return_value = conflicting_user
-                
+
                 with pytest.raises(HTTPException) as exc_info:
                     await user_service_instance.update_user(
                         user_id, user_update, current_user=test_admin
                     )
-                
+
                 assert exc_info.value.status_code == 400
                 assert "Username already taken" in exc_info.value.detail
 
@@ -344,23 +390,25 @@ class TestUserService:
         """Test updating user with taken email"""
         user_id = 2
         user_update = schemas.UserUpdate(email="taken@example.com")
-        
-        with patch('app.services.user_service.crud.get_user') as mock_get_user:
+
+        with patch("app.services.user_service.crud.get_user") as mock_get_user:
             existing_user = Mock()
             existing_user.id = user_id
             existing_user.email = "old@example.com"
             mock_get_user.return_value = existing_user
-            
-            with patch('app.services.user_service.crud.get_user_by_email') as mock_get_email:
+
+            with patch(
+                "app.services.user_service.crud.get_user_by_email"
+            ) as mock_get_email:
                 conflicting_user = Mock()
                 conflicting_user.email = user_update.email
                 mock_get_email.return_value = conflicting_user
-                
+
                 with pytest.raises(HTTPException) as exc_info:
                     await user_service_instance.update_user(
                         user_id, user_update, current_user=test_admin
                     )
-                
+
                 assert exc_info.value.status_code == 400
                 assert "Email already registered" in exc_info.value.detail
 
@@ -374,23 +422,29 @@ class TestUserService:
         user_id = test_user.id
         current_password = "oldpassword"
         new_password = "newpassword123"
-        
-        with patch('app.services.user_service.crud.get_user') as mock_get_user:
+
+        with patch("app.services.user_service.crud.get_user") as mock_get_user:
             mock_get_user.return_value = test_user
-            
-            with patch('app.services.user_service.crud.change_user_password') as mock_change_password:
+
+            with patch(
+                "app.services.user_service.crud.change_user_password"
+            ) as mock_change_password:
                 updated_user = Mock()
                 mock_change_password.return_value = updated_user
-                
+
                 result = await user_service_instance.change_password(
                     user_id, current_password, new_password, current_user=test_user
                 )
-                
+
                 assert result == updated_user
-                mock_get_user.assert_called_once_with(user_service_instance.db, user_id=user_id)
+                mock_get_user.assert_called_once_with(
+                    user_service_instance.db, user_id=user_id
+                )
                 mock_change_password.assert_called_once_with(
-                    user_service_instance.db, user=test_user, 
-                    current_password=current_password, new_password=new_password
+                    user_service_instance.db,
+                    user=test_user,
+                    current_password=current_password,
+                    new_password=new_password,
                 )
 
     @pytest.mark.asyncio
@@ -401,15 +455,15 @@ class TestUserService:
     ):
         """Test password change for non-existent user"""
         user_id = 999
-        
-        with patch('app.services.user_service.crud.get_user') as mock_get_user:
+
+        with patch("app.services.user_service.crud.get_user") as mock_get_user:
             mock_get_user.return_value = None
-            
+
             with pytest.raises(HTTPException) as exc_info:
                 await user_service_instance.change_password(
                     user_id, "oldpass", "newpass", current_user=test_user
                 )
-            
+
             assert exc_info.value.status_code == 404
             assert "User not found" in exc_info.value.detail
 
@@ -421,17 +475,17 @@ class TestUserService:
     ):
         """Test unauthorized password change"""
         other_user_id = 999
-        
-        with patch('app.services.user_service.crud.get_user') as mock_get_user:
+
+        with patch("app.services.user_service.crud.get_user") as mock_get_user:
             other_user = Mock()
             other_user.id = other_user_id
             mock_get_user.return_value = other_user
-            
+
             with pytest.raises(HTTPException) as exc_info:
                 await user_service_instance.change_password(
                     other_user_id, "oldpass", "newpass", current_user=test_user
                 )
-            
+
             assert exc_info.value.status_code == 403
             assert "Not authorized" in exc_info.value.detail
 
@@ -443,18 +497,22 @@ class TestUserService:
     ):
         """Test password change with wrong current password"""
         user_id = test_user.id
-        
-        with patch('app.services.user_service.crud.get_user') as mock_get_user:
+
+        with patch("app.services.user_service.crud.get_user") as mock_get_user:
             mock_get_user.return_value = test_user
-            
-            with patch('app.services.user_service.crud.change_user_password') as mock_change_password:
-                mock_change_password.side_effect = ValueError("Current password is incorrect")
-                
+
+            with patch(
+                "app.services.user_service.crud.change_user_password"
+            ) as mock_change_password:
+                mock_change_password.side_effect = ValueError(
+                    "Current password is incorrect"
+                )
+
                 with pytest.raises(HTTPException) as exc_info:
                     await user_service_instance.change_password(
                         user_id, "wrongpass", "newpass", current_user=test_user
                     )
-                
+
                 assert exc_info.value.status_code == 400
                 assert "Current password is incorrect" in exc_info.value.detail
 
@@ -467,24 +525,30 @@ class TestUserService:
         """Test successful admin password reset"""
         user_id = 2
         new_password = "resetpassword123"
-        
-        with patch('app.services.user_service.crud.get_user') as mock_get_user:
+
+        with patch("app.services.user_service.crud.get_user") as mock_get_user:
             target_user = Mock()
             target_user.id = user_id
             mock_get_user.return_value = target_user
-            
-            with patch('app.services.user_service.crud.admin_reset_password') as mock_reset:
+
+            with patch(
+                "app.services.user_service.crud.admin_reset_password"
+            ) as mock_reset:
                 updated_user = Mock()
                 mock_reset.return_value = updated_user
-                
+
                 result = await user_service_instance.admin_reset_password(
                     user_id, new_password, current_user=test_admin
                 )
-                
+
                 assert result == updated_user
-                mock_get_user.assert_called_once_with(user_service_instance.db, user_id=user_id)
+                mock_get_user.assert_called_once_with(
+                    user_service_instance.db, user_id=user_id
+                )
                 mock_reset.assert_called_once_with(
-                    user_service_instance.db, user=target_user, new_password=new_password
+                    user_service_instance.db,
+                    user=target_user,
+                    new_password=new_password,
                 )
 
     @pytest.mark.asyncio
@@ -495,15 +559,15 @@ class TestUserService:
     ):
         """Test admin password reset for non-existent user"""
         user_id = 999
-        
-        with patch('app.services.user_service.crud.get_user') as mock_get_user:
+
+        with patch("app.services.user_service.crud.get_user") as mock_get_user:
             mock_get_user.return_value = None
-            
+
             with pytest.raises(HTTPException) as exc_info:
                 await user_service_instance.admin_reset_password(
                     user_id, "newpass", current_user=test_admin
                 )
-            
+
             assert exc_info.value.status_code == 404
             assert "User not found" in exc_info.value.detail
 
@@ -514,17 +578,18 @@ class TestUserService:
         test_user: models.User,  # Non-admin user
     ):
         """Test that only admins can reset passwords"""
-        with patch('app.core.dependencies.admin_only') as mock_decorator:
+        with patch("app.core.dependencies.admin_only") as mock_decorator:
+
             def side_effect(*args, **kwargs):
-                if 'current_user' in kwargs and kwargs['current_user'].role != 'Admin':
+                if "current_user" in kwargs and kwargs["current_user"].role != "Admin":
                     raise HTTPException(status_code=403, detail="Admin access required")
-                return kwargs.get('current_user')
-            
+                return kwargs.get("current_user")
+
             mock_decorator.return_value = side_effect
-            
+
             with pytest.raises(HTTPException) as exc_info:
                 await user_service_instance.admin_reset_password(
                     999, "newpass", current_user=test_user
                 )
-            
+
             assert exc_info.value.status_code == 403

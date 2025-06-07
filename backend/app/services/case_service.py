@@ -22,13 +22,16 @@ class CaseService:
     async def _generate_case_number(self, current_time: datetime) -> str:
         # Get system configuration
         config = await self.config_service.get_configuration()
-        
+
         # Extract year and month from current time
         year = str(current_time.year)[2:]
         month = str(current_time.month).zfill(2)
-        
+
         # Build search pattern based on template
-        if config.case_number_template == "PREFIX-YYMM-NN" and config.case_number_prefix:
+        if (
+            config.case_number_template == "PREFIX-YYMM-NN"
+            and config.case_number_prefix
+        ):
             search_pattern = f"{config.case_number_prefix}-{year}{month}-%"
             base_format = f"{config.case_number_prefix}-{year}{month}"
         else:

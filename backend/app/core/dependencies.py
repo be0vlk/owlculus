@@ -100,7 +100,9 @@ def case_must_be_open():
 
     def decorator(func):
         @wraps(func)
-        async def wrapper(self, case_id: int, *args, current_user: User = None, **kwargs):
+        async def wrapper(
+            self, case_id: int, *args, current_user: User = None, **kwargs
+        ):
             if not current_user:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,

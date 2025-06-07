@@ -459,6 +459,7 @@ async def test_remove_user_from_case_user_not_found(
 # Additional edge case and validation tests
 # ========================================
 
+
 @pytest.mark.asyncio
 async def test_case_status_transitions(
     case_service_instance: case_service.CaseService,
@@ -468,7 +469,7 @@ async def test_case_status_transitions(
     """Test various case status transitions"""
     # Valid status transitions based on schema
     valid_statuses = ["Open", "Closed"]
-    
+
     for status in valid_statuses:
         case_update = schemas.CaseUpdate(status=status)
         updated_case = await case_service_instance.update_case(
@@ -490,17 +491,17 @@ async def test_case_with_entities_and_evidence(
         case_id=sample_case.id,
         entity_type="person",
         data={"first_name": "John", "last_name": "Doe"},
-        created_by_id=test_admin.id
+        created_by_id=test_admin.id,
     )
     entity2 = models.Entity(
         case_id=sample_case.id,
         entity_type="company",
         data={"name": "Test Corp"},
-        created_by_id=test_admin.id
+        created_by_id=test_admin.id,
     )
     session.add(entity1)
     session.add(entity2)
-    
+
     # Add evidence to case
     evidence = models.Evidence(
         case_id=sample_case.id,
@@ -508,22 +509,23 @@ async def test_case_with_entities_and_evidence(
         description="Test document",
         evidence_type="document",
         content="/tmp/test_doc.pdf",
-        created_by_id=test_admin.id
+        created_by_id=test_admin.id,
     )
     session.add(evidence)
     session.commit()
-    
+
     # Retrieve case and verify associations
     retrieved_case = await case_service_instance.get_case(sample_case.id, test_admin)
     assert retrieved_case.id == sample_case.id
-    
+
     # Check if entities exist
     from sqlmodel import select
+
     entities = session.exec(
         select(models.Entity).where(models.Entity.case_id == retrieved_case.id)
     ).all()
     assert len(entities) == 2
-    
+
     # Check if evidence exists
     evidence_items = session.exec(
         select(models.Evidence).where(models.Evidence.case_id == retrieved_case.id)
@@ -541,28 +543,28 @@ async def test_concurrent_case_number_generation(
     case_service_instance.db.add(client)
     case_service_instance.db.commit()
     case_service_instance.db.refresh(client)
-    
+
     # Create multiple cases in same month
     current_time = datetime(2023, 1, 15, 12, 0, 0)
-    
+
     case_numbers = []
     for i in range(5):
         case_data = schemas.CaseCreate(
             client_id=client.id,
             title=f"Test Case {i}",
             status="Open",
-            notes=f"Test Notes {i}"
+            notes=f"Test Notes {i}",
         )
         created_case = await case_service_instance.create_case(
             case_data, current_user=test_admin
         )
         case_numbers.append(created_case.case_number)
-    
+
     # Verify all case numbers are unique
     assert len(set(case_numbers)) == 5
     # Verify sequential numbering (numbers should increment)
     # Extract the numeric parts after the dash
-    numbers = [int(cn.split('-')[1]) for cn in case_numbers]
+    numbers = [int(cn.split("-")[1]) for cn in case_numbers]
     assert numbers == [1, 2, 3, 4, 5]
 
 
@@ -574,13 +576,13 @@ async def test_case_soft_delete_vs_hard_delete(
 ):
     """Test case deletion behavior (if implemented)"""
     # Check if delete method exists
-    if hasattr(case_service_instance, 'delete_case'):
+    if hasattr(case_service_instance, "delete_case"):
         # Test soft delete (if implemented)
         await case_service_instance.delete_case(sample_case.id, current_user=test_admin)
-        
+
         # Case should still exist but be marked as deleted
         deleted_case = case_service_instance.db.get(models.Case, sample_case.id)
-        if hasattr(deleted_case, 'is_deleted'):
+        if hasattr(deleted_case, "is_deleted"):
             assert deleted_case.is_deleted == True
         else:
             # Hard delete - case should not exist
@@ -600,11 +602,9 @@ async def test_case_archival_functionality(
         sample_case.id, case_update, current_user=test_admin
     )
     assert updated_case.status == "Closed"
-    
+
     # Verify closed cases are filtered correctly
-    active_cases = await case_service_instance.get_cases(
-        test_admin, status="Open"
-    )
+    active_cases = await case_service_instance.get_cases(test_admin, status="Open")
     assert sample_case.id not in [case.id for case in active_cases]
 
 
@@ -618,26 +618,22 @@ async def test_case_search_with_multiple_filters(
     client = models.Client(name="Search Client", contact_email="search@example.com")
     session.add(client)
     session.commit()
-    
+
     # Create various cases
     for i in range(10):
         case_data = schemas.CaseCreate(
             client_id=client.id,
             title=f"Case {i}",
             status="Open" if i % 2 == 0 else "Closed",
-            notes=f"Notes for case {i}"
+            notes=f"Notes for case {i}",
         )
         await case_service_instance.create_case(case_data, current_user=test_admin)
-    
+
     # Test filtering by status
-    open_cases = await case_service_instance.get_cases(
-        test_admin, status="Open"
-    )
+    open_cases = await case_service_instance.get_cases(test_admin, status="Open")
     assert len(open_cases) == 5
-    
-    closed_cases = await case_service_instance.get_cases(
-        test_admin, status="Closed"
-    )
+
+    closed_cases = await case_service_instance.get_cases(test_admin, status="Closed")
     assert len(closed_cases) == 5
 
 
@@ -651,14 +647,11 @@ async def test_case_with_very_long_notes(
     case_service_instance.db.add(client)
     case_service_instance.db.commit()
     case_service_instance.db.refresh(client)
-    
+
     # Create case with very long notes
     long_notes = "A" * 50000  # 50k characters
     case_data = schemas.CaseCreate(
-        client_id=client.id,
-        title="Long Notes Case",
-        status="Open",
-        notes=long_notes
+        client_id=client.id, title="Long Notes Case", status="Open", notes=long_notes
     )
     created_case = await case_service_instance.create_case(
         case_data, current_user=test_admin
@@ -679,7 +672,7 @@ async def test_removing_last_user_from_case(
     link = models.CaseUserLink(case_id=sample_case.id, user_id=test_admin.id)
     session.add(link)
     session.commit()
-    
+
     # Try to remove the last user
     # This should either fail or handle gracefully
     try:
@@ -707,7 +700,7 @@ async def test_case_reopening_after_closure(
         sample_case.id, case_update, current_user=test_admin
     )
     assert closed_case.status == "Closed"
-    
+
     # Reopen the case
     case_update = schemas.CaseUpdate(status="Open")
     reopened_case = await case_service_instance.update_case(
@@ -725,7 +718,7 @@ async def test_invalid_status_values(
     """Test updating case with invalid status values"""
     # Try to set invalid status - this should raise a ValidationError from Pydantic
     from pydantic import ValidationError
-    
+
     with pytest.raises(ValidationError):
         case_update = schemas.CaseUpdate(status="InvalidStatus")
 
@@ -740,23 +733,24 @@ async def test_case_date_filtering(
     client = models.Client(name="Date Test Client", contact_email="date@example.com")
     session.add(client)
     session.commit()
-    
+
     # Create cases with different dates
     import time
+
     cases = []
     for i in range(3):
         case_data = schemas.CaseCreate(
             client_id=client.id,
             title=f"Date Test Case {i}",
             status="Open",
-            notes=f"Created at different times"
+            notes=f"Created at different times",
         )
         case = await case_service_instance.create_case(
             case_data, current_user=test_admin
         )
         cases.append(case)
         time.sleep(0.1)  # Small delay to ensure different timestamps
-    
+
     # Verify all cases were created
     assert len(cases) == 3
     # Case numbers should be sequential
@@ -778,22 +772,22 @@ async def test_case_user_permissions_matrix(
         link = models.CaseUserLink(case_id=sample_case.id, user_id=user.id)
         session.add(link)
     session.commit()
-    
+
     # Test read permissions - all should succeed
     for user in [test_admin, test_user, test_analyst]:
         case = await case_service_instance.get_case(sample_case.id, user)
         assert case.id == sample_case.id
-    
+
     # Test update permissions
     case_update = schemas.CaseUpdate(notes="Updated by different roles")
-    
+
     # Admin and Investigator should succeed
     for user in [test_admin, test_user]:
         updated = await case_service_instance.update_case(
             sample_case.id, case_update, current_user=user
         )
         assert updated.notes == "Updated by different roles"
-    
+
     # Analyst should fail
     with pytest.raises(HTTPException) as excinfo:
         await case_service_instance.update_case(
@@ -808,11 +802,13 @@ async def test_case_title_special_characters(
     test_admin: models.User,
 ):
     """Test case creation with special characters in title"""
-    client = models.Client(name="Special Char Client", contact_email="special@example.com")
+    client = models.Client(
+        name="Special Char Client", contact_email="special@example.com"
+    )
     case_service_instance.db.add(client)
     case_service_instance.db.commit()
     case_service_instance.db.refresh(client)
-    
+
     special_titles = [
         "Case with 'quotes'",
         'Case with "double quotes"',
@@ -822,15 +818,15 @@ async def test_case_title_special_characters(
         "Case with\ttabs",
         "Çase with açcents",
         "案例 with Chinese",
-        "Case™ with symbols®"
+        "Case™ with symbols®",
     ]
-    
+
     for title in special_titles:
         case_data = schemas.CaseCreate(
             client_id=client.id,
             title=title,
             status="Open",
-            notes="Testing special characters"
+            notes="Testing special characters",
         )
         created_case = await case_service_instance.create_case(
             case_data, current_user=test_admin
@@ -846,31 +842,31 @@ async def test_case_bulk_operations_performance(
 ):
     """Test performance with bulk case operations"""
     import time
-    
+
     client = models.Client(name="Bulk Test Client", contact_email="bulk@example.com")
     session.add(client)
     session.commit()
-    
+
     # Measure time to create 100 cases
     start_time = time.time()
-    
+
     for i in range(100):
         case_data = schemas.CaseCreate(
             client_id=client.id,
             title=f"Bulk Case {i:03d}",
             status="Open" if i % 2 == 0 else "Closed",
-            notes=f"Bulk test case number {i}"
+            notes=f"Bulk test case number {i}",
         )
         await case_service_instance.create_case(case_data, current_user=test_admin)
-    
+
     creation_time = time.time() - start_time
     assert creation_time < 10.0  # Should complete within 10 seconds
-    
+
     # Measure time to retrieve all cases
     start_time = time.time()
     all_cases = await case_service_instance.get_cases(test_admin)
     retrieval_time = time.time() - start_time
-    
+
     assert len(all_cases) >= 100
     assert retrieval_time < 1.0  # Should complete within 1 second
 
@@ -885,12 +881,12 @@ async def test_case_number_year_rollover(
     case_service_instance.db.add(client)
     case_service_instance.db.commit()
     case_service_instance.db.refresh(client)
-    
+
     # Create case in December 2023
     dec_2023 = datetime(2023, 12, 15, 12, 0, 0)
     case_number_dec = await case_service_instance._generate_case_number(dec_2023)
     assert case_number_dec.startswith("2312-")
-    
+
     # Create case in January 2024
     jan_2024 = datetime(2024, 1, 15, 12, 0, 0)
     case_number_jan = await case_service_instance._generate_case_number(jan_2024)
@@ -909,7 +905,7 @@ async def test_add_duplicate_user_to_case(
     # User is already assigned via sample_case_link
     # Try to add them again - this should fail with IntegrityError
     from sqlalchemy.exc import IntegrityError
-    
+
     with pytest.raises(IntegrityError):
         await case_service_instance.add_user_to_case(
             sample_case.id, test_user.id, current_user=test_admin

@@ -38,27 +38,31 @@ class EvidenceCreate(EvidenceBase):
         "Network Assets",
         "Communications",
         "Documents",
-        "Other"
+        "Other",
     ]
 
     @model_validator(mode="after")
     def validate_fields(self) -> "EvidenceCreate":
         if self.evidence_type not in ["file", "text"]:
             raise ValueError("evidence_type must be either 'file' or 'text'")
-        
+
         # Make category validation case-insensitive
         if self.category.lower() not in [cat.lower() for cat in self.VALID_CATEGORIES]:
-            raise ValueError(f"category must be one of: {', '.join(self.VALID_CATEGORIES)}")
-        
+            raise ValueError(
+                f"category must be one of: {', '.join(self.VALID_CATEGORIES)}"
+            )
+
         # Ensure consistent casing with VALID_CATEGORIES
-        self.category = next(cat for cat in self.VALID_CATEGORIES if cat.lower() == self.category.lower())
-        
+        self.category = next(
+            cat for cat in self.VALID_CATEGORIES if cat.lower() == self.category.lower()
+        )
+
         return self
 
 
 class FolderCreate(BaseModel):
     """Schema for creating folders."""
-    
+
     case_id: int = Field(..., gt=0)
     title: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
@@ -68,7 +72,7 @@ class FolderCreate(BaseModel):
 
 class FolderUpdate(BaseModel):
     """Schema for updating folders."""
-    
+
     title: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     parent_folder_id: Optional[int] = None
@@ -91,10 +95,18 @@ class EvidenceUpdate(BaseModel):
 
     @model_validator(mode="after")
     def validate_category(self) -> "EvidenceUpdate":
-        if self.category is not None and self.category.lower() not in [cat.lower() for cat in self.VALID_CATEGORIES]:
-            raise ValueError(f"category must be one of: {', '.join(self.VALID_CATEGORIES)}")
+        if self.category is not None and self.category.lower() not in [
+            cat.lower() for cat in self.VALID_CATEGORIES
+        ]:
+            raise ValueError(
+                f"category must be one of: {', '.join(self.VALID_CATEGORIES)}"
+            )
         if self.category is not None:
-            self.category = next(cat for cat in self.VALID_CATEGORIES if cat.lower() == self.category.lower())
+            self.category = next(
+                cat
+                for cat in self.VALID_CATEGORIES
+                if cat.lower() == self.category.lower()
+            )
         return self
 
 

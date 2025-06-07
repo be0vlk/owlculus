@@ -9,20 +9,20 @@ class SystemConfigurationBase(BaseModel):
 
 
 class SystemConfigurationCreate(SystemConfigurationBase):
-    @validator('case_number_template')
+    @validator("case_number_template")
     def validate_template(cls, v):
         if v not in ["YYMM-NN", "PREFIX-YYMM-NN"]:
             raise ValueError('Template must be either "YYMM-NN" or "PREFIX-YYMM-NN"')
         return v
 
-    @validator('case_number_prefix')
+    @validator("case_number_prefix")
     def validate_prefix(cls, v, values):
-        template = values.get('case_number_template')
+        template = values.get("case_number_template")
         if template == "PREFIX-YYMM-NN":
             if not v:
-                raise ValueError('Prefix is required for PREFIX-YYMM-NN template')
+                raise ValueError("Prefix is required for PREFIX-YYMM-NN template")
             if not v.isalnum() or len(v) < 2 or len(v) > 8:
-                raise ValueError('Prefix must be 2-8 alphanumeric characters')
+                raise ValueError("Prefix must be 2-8 alphanumeric characters")
         return v
 
 

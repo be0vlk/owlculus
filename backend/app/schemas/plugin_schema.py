@@ -8,6 +8,7 @@ from typing import Dict, Any, Optional
 
 class PluginParameter(BaseModel):
     """Schema for plugin parameter metadata"""
+
     type: str
     description: str
     required: bool = False

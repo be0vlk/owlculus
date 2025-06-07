@@ -32,10 +32,10 @@ def normalize_folder_path(folder_path: str) -> str:
     """
     if not folder_path:
         return ""
-    
+
     # Remove leading/trailing whitespace and slashes
     path = folder_path.strip().strip("/\\")
-    
+
     # Split path and validate each component
     parts = []
     for part in path.split("/"):
@@ -46,7 +46,7 @@ def normalize_folder_path(folder_path: str) -> str:
         sanitized = "".join(c for c in part if c.isalnum() or c in "._- ")
         if sanitized:
             parts.append(sanitized)
-    
+
     return "/".join(parts) if parts else ""
 
 
@@ -60,20 +60,20 @@ def create_folder(case_id: int, folder_path: str) -> Path:
             status_code=400,
             detail=f"Invalid case ID: {case_id}",
         )
-    
+
     if not folder_path:
         raise HTTPException(
             status_code=400,
             detail="Folder path is required",
         )
-    
+
     normalized_path = normalize_folder_path(folder_path)
     if not normalized_path:
         raise HTTPException(
             status_code=400,
             detail="Invalid folder path",
         )
-    
+
     case_dir = UPLOAD_DIR / str(case_id)
     folder_dir = case_dir / normalized_path
     folder_dir.mkdir(parents=True, exist_ok=True)
@@ -89,21 +89,22 @@ def delete_folder(case_id: int, folder_path: str) -> None:
             status_code=400,
             detail=f"Invalid case ID: {case_id}",
         )
-    
+
     normalized_path = normalize_folder_path(folder_path)
     if not normalized_path:
         raise HTTPException(
             status_code=400,
             detail="Invalid folder path",
         )
-    
+
     case_dir = UPLOAD_DIR / str(case_id)
     folder_dir = case_dir / normalized_path
-    
+
     if folder_dir.exists() and folder_dir.is_dir():
         import shutil
+
         shutil.rmtree(folder_dir)
-    
+
     # Clean up empty parent directories
     parent = folder_dir.parent
     while parent != case_dir and parent.exists() and not any(parent.iterdir()):
@@ -154,10 +155,10 @@ async def save_upload_file(
 
         # Read file content once
         content = await upload_file.read()
-        
+
         # Calculate hash
         file_hash = calculate_file_hash(content)
-        
+
         # Save file
         with open(file_path, "wb") as buffer:
             buffer.write(content)

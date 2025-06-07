@@ -79,17 +79,15 @@ class CorrelationScan(BasePlugin):
                 # Extract and normalize entity name based on type
                 entity_name = self._get_display_name(entity.data, entity.entity_type)
                 employer_name = None
-                
+
                 if entity.entity_type == "person" and entity.data:
                     employer_name = entity.data.get("employer", "")
-                
+
                 if not entity_name:
                     continue
 
                 # Find name matches
-                name_matches = await self._find_name_matches(
-                    db, entity, entity_name
-                )
+                name_matches = await self._find_name_matches(db, entity, entity_name)
 
                 if name_matches:
                     match_data = {
@@ -119,9 +117,12 @@ class CorrelationScan(BasePlugin):
                             "matches": employer_matches,
                         }
                         yield {"type": "data", "data": match_data}
-            
+
         except Exception as e:
-            yield {"type": "error", "data": {"message": f"Error during correlation scan: {str(e)}"}}
+            yield {
+                "type": "error",
+                "data": {"message": f"Error during correlation scan: {str(e)}"},
+            }
 
     async def _get_case_entities(self, db: Session, case_id: int) -> List[Entity]:
         """Get all entities for a specific case"""
@@ -148,18 +149,20 @@ class CorrelationScan(BasePlugin):
 
         matches = []
         normalized_source_name = entity_name.lower()
-        
+
         for entity, case in result:
             # Check if names match based on entity type
             match_name = self._get_display_name(entity.data, entity.entity_type)
             if match_name and match_name.lower() == normalized_source_name:
-                matches.append({
-                    "entity_id": entity.id,
-                    "entity_type": entity.entity_type,
-                    "case_id": entity.case_id,
-                    "case_number": case.case_number,
-                    "case_title": case.title,
-                })
+                matches.append(
+                    {
+                        "entity_id": entity.id,
+                        "entity_type": entity.entity_type,
+                        "case_id": entity.case_id,
+                        "case_number": case.case_number,
+                        "case_title": case.title,
+                    }
+                )
 
         return matches
 
@@ -181,18 +184,23 @@ class CorrelationScan(BasePlugin):
 
         matches = []
         normalized_employer = employer_name.lower()
-        
+
         for entity, case in result:
-            if entity.data and entity.data.get("employer", "").lower() == normalized_employer:
+            if (
+                entity.data
+                and entity.data.get("employer", "").lower() == normalized_employer
+            ):
                 person_name = self._get_display_name(entity.data, "person")
-                matches.append({
-                    "entity_id": entity.id,
-                    "entity_type": entity.entity_type,
-                    "case_id": entity.case_id,
-                    "case_number": case.case_number,
-                    "case_title": case.title,
-                    "person_name": person_name,
-                })
+                matches.append(
+                    {
+                        "entity_id": entity.id,
+                        "entity_type": entity.entity_type,
+                        "case_id": entity.case_id,
+                        "case_number": case.case_number,
+                        "case_title": case.title,
+                        "person_name": person_name,
+                    }
+                )
 
         return matches
 
@@ -200,7 +208,7 @@ class CorrelationScan(BasePlugin):
         """Extract display name from entity data based on type"""
         if not data:
             return ""
-            
+
         if entity_type == "company":
             return data.get("name", "")
         elif entity_type == "person":
@@ -210,7 +218,9 @@ class CorrelationScan(BasePlugin):
         else:
             return data.get("Name", "")
 
-    def _format_evidence_content(self, results: List[Dict[str, Any]], params: Dict[str, Any]) -> str:
+    def _format_evidence_content(
+        self, results: List[Dict[str, Any]], params: Dict[str, Any]
+    ) -> str:
         """Custom formatting for correlation scan evidence"""
         if not results:
             return ""

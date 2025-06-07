@@ -180,3 +180,5 @@ postgres_data/
 redis_data/
 
 megalinter-reports
+/.mega-linter.yml
+/.jscpd.json

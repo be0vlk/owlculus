@@ -150,6 +150,7 @@ def override_auth_fixture(session):
 
 # Additional fixtures for comprehensive testing
 
+
 @pytest.fixture(name="test_inactive_user")
 def test_inactive_user_fixture(session):
     """Create an inactive user for testing authentication edge cases"""
@@ -170,9 +171,7 @@ def test_inactive_user_fixture(session):
 def test_client_fixture(session):
     """Create a test client (organization)"""
     client = models.Client(
-        name="Test Organization",
-        email="contact@testorg.com",
-        phone="+1234567890"
+        name="Test Organization", email="contact@testorg.com", phone="+1234567890"
     )
     session.add(client)
     session.commit()
@@ -190,7 +189,7 @@ def test_case_fixture(session, test_client, test_admin):
         case_status="Open",
         case_notes="Initial test case notes",
         client_id=test_client.id,
-        created_by_id=test_admin.id
+        created_by_id=test_admin.id,
     )
     session.add(case)
     session.commit()
@@ -199,20 +198,17 @@ def test_case_fixture(session, test_client, test_admin):
 
 
 @pytest.fixture(name="test_case_with_users")
-def test_case_with_users_fixture(session, test_case, test_admin, test_user, test_analyst):
+def test_case_with_users_fixture(
+    session, test_case, test_admin, test_user, test_analyst
+):
     """Create a test case with multiple users assigned"""
     # Add users to case
-    case_user_admin = models.CaseUserLink(
-        case_id=test_case.id,
-        user_id=test_admin.id
-    )
+    case_user_admin = models.CaseUserLink(case_id=test_case.id, user_id=test_admin.id)
     case_user_investigator = models.CaseUserLink(
-        case_id=test_case.id,
-        user_id=test_user.id
+        case_id=test_case.id, user_id=test_user.id
     )
     case_user_analyst = models.CaseUserLink(
-        case_id=test_case.id,
-        user_id=test_analyst.id
+        case_id=test_case.id, user_id=test_analyst.id
     )
     session.add(case_user_admin)
     session.add(case_user_investigator)
@@ -231,7 +227,7 @@ def test_closed_case_fixture(session, test_client, test_admin):
         case_status="Closed",
         case_notes="Case has been closed",
         client_id=test_client.id,
-        created_by_id=test_admin.id
+        created_by_id=test_admin.id,
     )
     session.add(case)
     session.commit()
@@ -243,7 +239,7 @@ def test_closed_case_fixture(session, test_client, test_admin):
 def test_entities_fixture(session, test_case, test_admin):
     """Create various test entities of different types"""
     entities = []
-    
+
     # Person entity
     person_entity = models.Entity(
         case_id=test_case.id,
@@ -258,13 +254,13 @@ def test_entities_fixture(session, test_case, test_admin):
                 "city": "New York",
                 "state": "NY",
                 "country": "USA",
-                "postal_code": "10001"
-            }
+                "postal_code": "10001",
+            },
         },
-        created_by_id=test_admin.id
+        created_by_id=test_admin.id,
     )
     entities.append(person_entity)
-    
+
     # Company entity
     company_entity = models.Entity(
         case_id=test_case.id,
@@ -279,44 +275,41 @@ def test_entities_fixture(session, test_case, test_admin):
                 "city": "San Francisco",
                 "state": "CA",
                 "country": "USA",
-                "postal_code": "94105"
-            }
+                "postal_code": "94105",
+            },
         },
-        created_by_id=test_admin.id
+        created_by_id=test_admin.id,
     )
     entities.append(company_entity)
-    
+
     # Domain entity
     domain_entity = models.Entity(
         case_id=test_case.id,
         entity_type="domain",
         data={
             "domain": "suspicious-domain.com",
-            "description": "Potentially malicious domain"
+            "description": "Potentially malicious domain",
         },
-        created_by_id=test_admin.id
+        created_by_id=test_admin.id,
     )
     entities.append(domain_entity)
-    
+
     # IP Address entity
     ip_entity = models.Entity(
         case_id=test_case.id,
         entity_type="ip_address",
-        data={
-            "ip_address": "192.168.1.100",
-            "description": "Internal network IP"
-        },
-        created_by_id=test_admin.id
+        data={"ip_address": "192.168.1.100", "description": "Internal network IP"},
+        created_by_id=test_admin.id,
     )
     entities.append(ip_entity)
-    
+
     for entity in entities:
         session.add(entity)
     session.commit()
-    
+
     for entity in entities:
         session.refresh(entity)
-    
+
     return entities
 
 
@@ -325,12 +318,12 @@ def test_evidence_fixture(session, test_case, test_admin):
     """Create test evidence files"""
     import os
     import tempfile
-    
+
     # Create temporary file for testing
     with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as tmp_file:
         tmp_file.write(b"Test evidence content")
         tmp_file_path = tmp_file.name
-    
+
     evidence = models.Evidence(
         case_id=test_case.id,
         evidence_name="test_evidence.txt",
@@ -339,17 +332,17 @@ def test_evidence_fixture(session, test_case, test_admin):
         file_path=tmp_file_path,
         file_size=21,  # Size of "Test evidence content"
         file_hash="abc123def456",
-        uploaded_by_id=test_admin.id
+        uploaded_by_id=test_admin.id,
     )
     session.add(evidence)
     session.commit()
     session.refresh(evidence)
-    
+
     # Clean up function
     def cleanup():
         if os.path.exists(tmp_file_path):
             os.remove(tmp_file_path)
-    
+
     # Return evidence and cleanup function
     return evidence, cleanup
 
@@ -373,14 +366,14 @@ def invalid_token_fixture():
 
 @pytest.fixture(name="test_complete_scenario")
 def test_complete_scenario_fixture(
-    session, 
-    test_client, 
-    test_admin, 
-    test_user, 
+    session,
+    test_client,
+    test_admin,
+    test_user,
     test_analyst,
     test_case_with_users,
     test_entities,
-    test_evidence
+    test_evidence,
 ):
     """Create a complete test scenario with all components"""
     return {
@@ -389,7 +382,7 @@ def test_complete_scenario_fixture(
         "users": {
             "admin": test_admin,
             "investigator": test_user,
-            "analyst": test_analyst
+            "analyst": test_analyst,
         },
         "entities": test_entities,
         "evidence": test_evidence[0],  # Just the evidence object, not cleanup function

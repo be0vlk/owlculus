@@ -58,7 +58,6 @@ class DnsLookup(BasePlugin):
         """Not used as DNS queries are handled directly"""
         return None
 
-
     def _is_ip_address(self, value: str) -> bool:
         """Check if the given value is a valid IP address"""
         try:
@@ -74,11 +73,11 @@ class DnsLookup(BasePlugin):
     ) -> Dict[str, Any]:
         """
         Perform reverse DNS lookup for an IP address
-        
+
         Args:
             resolver: DNS resolver instance
             ip_address: IP address to perform reverse lookup on
-            
+
         Returns:
             Dictionary containing reverse lookup results or error
         """
@@ -86,10 +85,10 @@ class DnsLookup(BasePlugin):
             # Create reverse DNS query name
             reverse_name = from_address(ip_address)
             answers = await resolver.resolve(reverse_name, RdataType.PTR)
-            
+
             # Extract hostnames from PTR records
-            records = [answer.to_text().rstrip('.') for answer in answers]
-            
+            records = [answer.to_text().rstrip(".") for answer in answers]
+
             return {
                 "ip_address": ip_address,
                 "type": "PTR",
@@ -116,27 +115,29 @@ class DnsLookup(BasePlugin):
     ) -> Dict[str, Any]:
         """
         Perform a single DNS lookup for a specific record type
-        
+
         Args:
             resolver: DNS resolver instance
             domain: Domain name to query
             record_type: DNS record type (A, AAAA, MX, etc.)
-            
+
         Returns:
             Dictionary containing query results or error
         """
         try:
             rdata_type = getattr(RdataType, record_type.upper())
             answers = await resolver.resolve(domain, rdata_type)
-            
+
             # Format results based on record type
             if record_type.upper() == "MX":
-                records = [f"{answer.preference} {answer.exchange}" for answer in answers]
+                records = [
+                    f"{answer.preference} {answer.exchange}" for answer in answers
+                ]
             elif record_type.upper() == "TXT":
                 records = [str(answer).strip('"') for answer in answers]
             else:
                 records = [answer.to_text() for answer in answers]
-            
+
             return {
                 "domain": domain,
                 "type": record_type,
@@ -163,12 +164,12 @@ class DnsLookup(BasePlugin):
     ) -> List[Dict[str, Any]]:
         """
         Perform multiple DNS lookups concurrently for a single domain
-        
+
         Args:
             resolver: DNS resolver instance
             domain: Domain name to query
             record_types: List of DNS record types
-            
+
         Returns:
             List of lookup results
         """
@@ -176,7 +177,7 @@ class DnsLookup(BasePlugin):
         for record_type in record_types:
             task = self._perform_single_lookup(resolver, domain, record_type)
             tasks.append(task)
-        
+
         return await asyncio.gather(*tasks)
 
     async def run(
@@ -185,10 +186,10 @@ class DnsLookup(BasePlugin):
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Execute DNS lookup with given parameters
-        
+
         Args:
             params: Dictionary of query parameters
-            
+
         Yields:
             Dictionary containing DNS records or errors
         """
@@ -199,25 +200,28 @@ class DnsLookup(BasePlugin):
         # Parse parameters
         domains_param = params["domain"]
         targets = [d.strip() for d in domains_param.split(",") if d.strip()]
-        
+
         lookup_mode = params.get("lookup_mode", "forward")
-        
+
         record_types_param = params.get("record_types", "A")
-        record_types = [rt.strip().upper() for rt in record_types_param.split(",") if rt.strip()]
-        
+        record_types = [
+            rt.strip().upper() for rt in record_types_param.split(",") if rt.strip()
+        ]
+
         timeout = params.get("timeout", 5.0)
-        
+
         # Configure resolver
         resolver = dns.asyncresolver.Resolver()
         resolver.timeout = timeout
         resolver.lifetime = timeout * 2
-        
+
         # Set custom nameservers if provided
         if "nameservers" in params and params["nameservers"]:
-            nameservers = [ns.strip() for ns in params["nameservers"].split(",") if ns.strip()]
+            nameservers = [
+                ns.strip() for ns in params["nameservers"].split(",") if ns.strip()
+            ]
             resolver.nameservers = nameservers
 
-        
         # Process targets based on lookup mode
         for target in targets:
             if lookup_mode == "reverse":
@@ -225,13 +229,15 @@ class DnsLookup(BasePlugin):
                 if not self._is_ip_address(target):
                     yield {
                         "type": "error",
-                        "data": {"message": f"'{target}' is not a valid IP address for reverse lookup"},
+                        "data": {
+                            "message": f"'{target}' is not a valid IP address for reverse lookup"
+                        },
                     }
                     continue
-                
+
                 # Handle IP address - perform reverse DNS lookup
                 result = await self._perform_reverse_lookup(resolver, target)
-                
+
                 yield {
                     "type": "data",
                     "data": {
@@ -246,16 +252,18 @@ class DnsLookup(BasePlugin):
                 if self._is_ip_address(target):
                     yield {
                         "type": "error",
-                        "data": {"message": f"'{target}' appears to be an IP address. Use reverse lookup mode for IP addresses."},
+                        "data": {
+                            "message": f"'{target}' appears to be an IP address. Use reverse lookup mode for IP addresses."
+                        },
                     }
                     continue
-                
+
                 # Handle domain - perform forward DNS lookup
                 # Perform concurrent lookups for all record types
                 results = await self._perform_concurrent_lookups(
                     resolver, target, record_types
                 )
-                
+
                 yield {
                     "type": "data",
                     "data": {
@@ -265,5 +273,3 @@ class DnsLookup(BasePlugin):
                         "timestamp": time.time(),
                     },
                 }
-
-

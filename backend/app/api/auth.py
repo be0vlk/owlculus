@@ -22,6 +22,5 @@ async def login_for_access_token(
 ):
     auth_service = AuthService(db)
     return await auth_service.authenticate_user(
-        username=form_data.username,
-        password=form_data.password
+        username=form_data.username, password=form_data.password
     )

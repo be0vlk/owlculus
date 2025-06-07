@@ -58,24 +58,24 @@ MAX_FILE_SIZE = 15 * 1024 * 1024  # 15MB in bytes
 
 ALLOWED_MIME_TYPES = {
     # Documents
-    'application/pdf',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'text/plain',
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "text/plain",
     # Images
-    'image/jpeg',
-    'image/png',
-    'image/gif',
-    'image/bmp',
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/bmp",
     # Videos
-    'video/mp4',
-    'video/quicktime',
-    'video/x-msvideo',
-    'video/x-ms-wmv',
+    "video/mp4",
+    "video/quicktime",
+    "video/x-msvideo",
+    "video/x-ms-wmv",
     # Audio
-    'audio/mpeg',
-    'audio/wav',
-    'audio/ogg',
+    "audio/mpeg",
+    "audio/wav",
+    "audio/ogg",
 }
 
 
@@ -105,7 +105,7 @@ async def validate_file_security(file: UploadFile) -> None:
             await file.seek(0)
             raise HTTPException(
                 status_code=400,
-                detail=f"File too large. Maximum size is {MAX_FILE_SIZE / (1024 * 1024)}MB"
+                detail=f"File too large. Maximum size is {MAX_FILE_SIZE / (1024 * 1024)}MB",
             )
 
     # Reset file position
@@ -113,25 +113,22 @@ async def validate_file_security(file: UploadFile) -> None:
 
     # First try filetype detection
     kind = filetype.guess(content)
-    
+
     if kind and kind.mime in ALLOWED_MIME_TYPES:
         return
-    
+
     # If filetype couldn't detect the type or it's not in allowed types,
     # check if it might be a text file
-    if file.content_type == 'text/plain':
+    if file.content_type == "text/plain":
         try:
             # Try to decode as text
-            content.decode('utf-8')
+            content.decode("utf-8")
             # If we got here, it's valid UTF-8 text
             return
         except UnicodeDecodeError:
             pass
-    
-    raise HTTPException(
-        status_code=400,
-        detail=f"File type not allowed"
-    )
+
+    raise HTTPException(status_code=400, detail=f"File type not allowed")
 
 
 def secure_filename_with_path(filename: str, base_path: Path) -> str:
@@ -144,26 +141,23 @@ def secure_filename_with_path(filename: str, base_path: Path) -> str:
     safe_name = secure_filename(filename)
     if not safe_name:
         safe_name = "unnamed_file"
-    
+
     # Ensure the path is absolute and normalized
     abs_base = base_path.absolute().resolve()
-    
+
     # Split filename into name and extension
     name, ext = os.path.splitext(safe_name)
-    
+
     # Handle duplicates by appending counter
     counter = 1
     final_name = safe_name
     while (abs_base / final_name).exists():
         final_name = f"{name}_{counter}{ext}"
         counter += 1
-    
+
     # Create full path and verify it's within base_path
     full_path = (abs_base / final_name).resolve()
     if not str(full_path).startswith(str(abs_base)):
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid file path"
-        )
-    
+        raise HTTPException(status_code=400, detail="Invalid file path")
+
     return final_name

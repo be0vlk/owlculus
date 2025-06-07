@@ -74,12 +74,14 @@ class ClientService:
 
         # Check if client has any associated cases
         client_cases = await crud.get_cases(self.db)
-        cases_for_client = [case for case in client_cases if case.client_id == client_id]
-        
+        cases_for_client = [
+            case for case in client_cases if case.client_id == client_id
+        ]
+
         if cases_for_client:
             raise HTTPException(
                 status_code=400,
-                detail="Cannot delete client with associated cases. Please remove or reassign all cases first."
+                detail="Cannot delete client with associated cases. Please remove or reassign all cases first.",
             )
 
         await crud.delete_client(self.db, client_id=client_id)
