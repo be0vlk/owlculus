@@ -325,6 +325,7 @@
                     @delete="handleDeleteEvidence"
                     @refresh="loadEvidence"
                     @upload-to-folder="handleUploadToFolder"
+                    @extract-metadata="handleExtractMetadata"
                   />
                 </div>
 
@@ -396,6 +397,14 @@
       @uploaded="handleEvidenceUpload"
     />
 
+    <MetadataModal
+      v-model="showMetadataModal"
+      :evidence-item="selectedEvidenceForMetadata"
+      :metadata="extractedMetadata"
+      :loading="loadingMetadata"
+      :error="metadataError"
+    />
+
     <!-- Entity Creation Success Dialog -->
     <v-dialog 
       v-model="showEntityCreationSuccess" 
@@ -455,6 +464,7 @@ import EntityDetailsModal from '../components/EntityDetailsModal.vue';
 import NoteEditor from '../components/NoteEditor.vue';
 import EvidenceList from '../components/EvidenceList.vue';
 import UploadEvidenceModal from '../components/UploadEvidenceModal.vue';
+import MetadataModal from '../components/MetadataModal.vue';
 import { caseService } from '../services/case';
 import { clientService } from '../services/client';
 import { entityService } from '../services/entity';
@@ -481,6 +491,12 @@ const showUploadEvidenceModal = ref(false);
 const uploadTargetFolder = ref(null);
 const showEntityCreationSuccess = ref(false);
 const createdEntity = ref(null);
+// Metadata extraction
+const showMetadataModal = ref(false);
+const selectedEvidenceForMetadata = ref(null);
+const extractedMetadata = ref(null);
+const loadingMetadata = ref(false);
+const metadataError = ref('');
 
 // Computed properties
 const userRole = computed(() => authStore.user?.role || 'Analyst');
@@ -656,6 +672,23 @@ const handleEvidenceUpload = async (newEvidenceList) => {
 const handleUploadToFolder = (folder) => {
   uploadTargetFolder.value = folder;
   showUploadEvidenceModal.value = true;
+};
+
+const handleExtractMetadata = async (evidenceItem) => {
+  selectedEvidenceForMetadata.value = evidenceItem;
+  extractedMetadata.value = null;
+  metadataError.value = '';
+  loadingMetadata.value = true;
+  showMetadataModal.value = true;
+  
+  try {
+    const metadata = await evidenceService.extractMetadata(evidenceItem.id);
+    extractedMetadata.value = metadata;
+  } catch (error) {
+    metadataError.value = error.response?.data?.detail || error.message || 'Failed to extract metadata';
+  } finally {
+    loadingMetadata.value = false;
+  }
 };
 
 const formatNetworkAssetDetails = (data) => {

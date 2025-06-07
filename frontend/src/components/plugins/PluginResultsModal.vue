@@ -18,7 +18,7 @@
             Executed {{ formatExecutionTime(executionTime) }}
           </div>
         </div>
-        
+
         <!-- Action buttons -->
         <div class="d-flex ga-2">
           <v-btn
@@ -44,9 +44,9 @@
       <v-card-text class="flex-grow-1 pa-0">
         <v-container class="py-6 px-6" style="max-width: none;">
           <!-- Plugin Parameters Display -->
-          <v-card 
-            v-if="parameters && Object.keys(parameters).length" 
-            variant="outlined" 
+          <v-card
+            v-if="parameters && Object.keys(parameters).length"
+            variant="outlined"
             class="mb-6"
           >
             <v-card-title class="text-subtitle-1 py-3">
@@ -72,8 +72,8 @@
 
           <!-- Results Display -->
           <div v-if="results" class="results-container">
-            <PluginResult 
-              :result="results" 
+            <PluginResult
+              :result="results"
               :plugin-name="pluginName"
               class="modal-plugin-result"
             />
@@ -98,11 +98,11 @@
 
           <!-- No Results State -->
           <v-card v-else variant="outlined" class="text-center pa-8">
-            <v-icon 
-              icon="mdi-file-search-outline" 
-              size="64" 
-              color="grey-darken-1" 
-              class="mb-4" 
+            <v-icon
+              icon="mdi-file-search-outline"
+              size="64"
+              color="grey-darken-1"
+              class="mb-4"
             />
             <h3 class="text-h6 mb-2">No Results Available</h3>
             <p class="text-body-2 text-medium-emphasis">
@@ -118,8 +118,8 @@
 <script setup>
 import { computed } from 'vue'
 import { useDisplay } from 'vuetify'
-import PluginResult from '@/components/PluginResult.vue'
-import { formatDate } from '@/composables/dateUtils'
+import PluginResult from '@/components/plugins/PluginResult.vue'
+import { formatDate } from '@/composables/dateUtils.js'
 
 const props = defineProps({
   modelValue: {
@@ -163,7 +163,7 @@ const closeModal = () => {
 
 const getPluginDisplayName = (name) => {
   if (!name) return 'Unknown Plugin'
-  
+
   // Remove 'Plugin' suffix and capitalize
   return name
     .replace(/Plugin$/, '')
@@ -179,7 +179,7 @@ const getPluginIcon = (name) => {
     'correlation': 'mdi-chart-scatter-plot',
     'default': 'mdi-puzzle'
   }
-  
+
   const pluginKey = name?.toLowerCase().replace('plugin', '') || 'default'
   return iconMap[pluginKey] || iconMap.default
 }

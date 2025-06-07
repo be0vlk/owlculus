@@ -84,4 +84,9 @@ export const evidenceService = {
     })
     return response.data
   },
+
+  async extractMetadata(evidenceId) {
+    const response = await api.get(`/api/evidence/${evidenceId}/metadata`)
+    return response.data
+  },
 }

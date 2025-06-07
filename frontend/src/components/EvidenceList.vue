@@ -135,7 +135,7 @@
       @upload-files="uploadToFolder"
       @rename="renameItem"
       @delete="deleteItem"
-      @show-properties="showProperties"
+      @extract-metadata="extractMetadata"
     />
     
     <!-- Create Folder Dialog -->
@@ -189,41 +189,6 @@
       </v-card>
     </v-dialog>
     
-    <!-- Properties Dialog -->
-    <v-dialog v-model="showPropertiesDialog" max-width="500px">
-      <v-card>
-        <v-card-title class="d-flex align-center">
-          <v-icon :icon="propertiesItem?.is_folder ? 'mdi-folder' : 'mdi-file'" class="mr-2"></v-icon>
-          {{ propertiesItem?.is_folder ? 'Folder' : 'File' }} Properties
-        </v-card-title>
-        
-        <v-card-text>
-          <v-list density="compact">
-            <v-list-item>
-              <v-list-item-title>Name</v-list-item-title>
-              <v-list-item-subtitle>{{ propertiesItem?.title }}</v-list-item-subtitle>
-            </v-list-item>
-            
-            <v-list-item v-if="!propertiesItem?.is_folder && propertiesItem?.category">
-              <v-list-item-title>Evidence Type</v-list-item-title>
-              <v-list-item-subtitle>{{ propertiesItem.category }}</v-list-item-subtitle>
-            </v-list-item>
-            
-            <v-list-item v-if="!propertiesItem?.is_folder && propertiesItem?.file_hash">
-              <v-list-item-title>Hash</v-list-item-title>
-              <v-list-item-subtitle class="font-mono">{{ propertiesItem.file_hash }}</v-list-item-subtitle>
-            </v-list-item>
-          </v-list>
-        </v-card-text>
-        
-        <v-card-actions>
-          <v-spacer></v-spacer>
-          <v-btn color="primary" variant="text" @click="showPropertiesDialog = false">
-            Close
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
     
     <!-- Mass Delete Confirmation -->
     <v-dialog v-model="showMassDeleteConfirm" max-width="500px">
@@ -292,20 +257,18 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['download', 'delete', 'refresh', 'upload-to-folder'])
+const emit = defineEmits(['download', 'delete', 'refresh', 'upload-to-folder', 'extract-metadata'])
 
 // Reactive data
 const showCreateFolder = ref(false)
 const showRename = ref(false)
 const showDeleteConfirm = ref(false)
-const showPropertiesDialog = ref(false)
 const showMassDeleteConfirm = ref(false)
 const deleteLoading = ref(false)
 const massDeleteLoading = ref(false)
 const newFolderParent = ref(null)
 const renameTargetItem = ref(null)
 const deleteTargetItem = ref(null)
-const propertiesItem = ref(null)
 const openItems = ref([])
 const selectedItems = ref([])
 
@@ -426,9 +389,9 @@ const deleteItem = (item) => {
   showDeleteConfirm.value = true
 }
 
-const showProperties = (item) => {
-  propertiesItem.value = item
-  showPropertiesDialog.value = true
+
+const extractMetadata = (item) => {
+  emit('extract-metadata', item)
 }
 
 const toggleSelection = (itemId) => {

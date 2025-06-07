@@ -1,5 +1,57 @@
 # Plugin Development Guide
 
+## Quick Start: Plugin Generator Script
+
+**The fastest way to create a new plugin is using the plugin generator script:**
+
+### Interactive Mode (Recommended)
+```bash
+python scripts/create_plugin.py
+```
+
+This will guide you through:
+- Plugin name and display name
+- Description and categories
+- Required Python dependencies
+- Test file generation
+- Frontend component creation
+
+### Command Line Mode
+```bash
+# Create a basic plugin
+python scripts/create_plugin.py my_plugin
+
+# Create with dependencies and custom settings
+python scripts/create_plugin.py whois \
+  --category Network \
+  --evidence-category "Network Assets" \
+  --dependencies "python-whois" \
+  --description "Query domain registration information"
+
+# Create backend-only plugin without tests
+python scripts/create_plugin.py api_tool \
+  --backend-only \
+  --no-tests \
+  --dependencies "requests,beautifulsoup4"
+```
+
+### Generator Features
+- **Automatic File Creation**: Backend plugin, frontend components, and test files
+- **Dependency Management**: Automatically adds packages to `requirements.txt`
+- **Category-Specific Templates**: Optimized templates based on plugin category
+- **Comprehensive Tests**: Generates test scaffolding with multiple test cases
+- **Best Practices**: Follows all plugin development patterns and conventions
+
+### Generator Options
+- `--category`: Person, Network, Company, Other
+- `--evidence-category`: Social Media, Associates, Network Assets, Communications, Documents, Other
+- `--dependencies`: Comma-separated list of Python packages
+- `--backend-only`: Skip frontend component generation
+- `--no-tests`: Skip test file generation
+- `--force`: Overwrite existing files
+
+---
+
 ## Plugin Architecture Overview
 
 Owlculus uses a plugin system that consists of:
@@ -9,7 +61,7 @@ Owlculus uses a plugin system that consists of:
 
 The system automatically discovers and loads plugins based on naming conventions.
 
-## Backend Plugin Development
+## Manual Plugin Development
 
 ### 1. File Location and Naming
 - **Location**: `/backend/app/plugins/`
@@ -374,7 +426,20 @@ The system automatically:
 
 ## Development Workflow
 
-### 1. Create Backend Plugin
+### Recommended: Use Plugin Generator
+```bash
+# Interactive mode (recommended for beginners)
+python scripts/create_plugin.py
+
+# Command line mode (faster for experienced developers)
+python scripts/create_plugin.py my_tool --dependencies "requests,beautifulsoup4"
+```
+
+The generator handles all the boilerplate and follows best practices automatically.
+
+### Manual Development (Alternative)
+
+#### 1. Create Backend Plugin
 ```bash
 # 1. Add dependencies to requirements.txt
 echo "your-tool==1.0.0" >> backend/requirements.txt
@@ -388,7 +453,7 @@ touch backend/app/plugins/mytool_plugin.py
 docker compose exec backend pip install your-tool
 ```
 
-### 2. Create Frontend Components (Optional)
+#### 2. Create Frontend Components (Optional)
 ```bash
 # Create parameter component
 touch frontend/src/components/plugins/MytoolPluginParams.vue
@@ -397,10 +462,24 @@ touch frontend/src/components/plugins/MytoolPluginParams.vue
 touch frontend/src/components/plugins/MytoolPluginResult.vue
 ```
 
-### 3. Test Plugin
+#### 3. Create Tests (Recommended)
 ```bash
+# Create test file
+touch backend/tests/plugins/test_mytool_plugin.py
+
+# Implement test cases (see generated examples)
+```
+
+### Final Steps (Both Methods)
+```bash
+# Install new dependencies
+docker compose exec backend pip install your-new-dependencies
+
 # Restart backend to load new plugin
 docker compose restart backend
+
+# Run tests
+docker compose exec backend pytest backend/tests/plugins/test_mytool_plugin.py
 
 # Plugin should appear in the frontend automatically
 # Navigate to Plugins dashboard to test

@@ -12,3 +12,5 @@ selenium
 beautifulsoup4
 python-dotenv
 holehe
+pyexiftool==0.5.6
+python-whois

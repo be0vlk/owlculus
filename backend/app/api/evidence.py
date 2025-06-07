@@ -11,6 +11,7 @@ from app.database import models
 from app.schemas import evidence_schema as schemas
 from app.core.dependencies import get_current_active_user
 from app.services.evidence_service import EvidenceService
+from app.services.exiftool_service import ExifToolService
 
 router = APIRouter()
 
@@ -177,3 +178,59 @@ async def delete_folder(
     return await evidence_service.delete_folder(
         folder_id=folder_id, current_user=current_user
     )
+
+
+@router.get("/{evidence_id}/metadata")
+async def extract_evidence_metadata(
+    evidence_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """Extract metadata from evidence file using ExifTool"""
+    evidence_service = EvidenceService(db)
+    exiftool_service = ExifToolService()
+
+    # Get the evidence record
+    evidence = await evidence_service.get_evidence(
+        evidence_id=evidence_id, current_user=current_user
+    )
+
+    if not evidence:
+        raise HTTPException(status_code=404, detail="Evidence not found")
+
+    if not evidence.content or evidence.is_folder:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot extract metadata from folders or evidence without files",
+        )
+
+    # Check if file type is supported
+    if not exiftool_service.is_supported_file(evidence.content):
+        return {
+            "success": False,
+            "error": f"Unsupported file type for metadata extraction",
+            "supported_file": False,
+            "file_extension": (
+                evidence.content.split(".")[-1]
+                if "." in evidence.content
+                else "unknown"
+            ),
+        }
+
+    # Construct full file path
+    from pathlib import Path
+    from app.core.file_storage import UPLOAD_DIR
+
+    full_file_path = UPLOAD_DIR / evidence.content
+
+    # Extract metadata
+    metadata_result = await exiftool_service.extract_metadata(str(full_file_path))
+
+    if "error" in metadata_result:
+        return {
+            "success": False,
+            "error": metadata_result["error"],
+            "supported_file": True,
+        }
+
+    return metadata_result

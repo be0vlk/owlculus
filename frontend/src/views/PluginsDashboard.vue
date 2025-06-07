@@ -159,12 +159,6 @@
 
                       <v-expand-transition>
                         <div v-if="expandedCards[name]" class="mt-4">
-                          <!-- Full description -->
-                          <div v-if="plugin.description" class="mb-4">
-                            <v-card variant="tonal" color="info" class="pa-3">
-                              <div class="text-body-2">{{ plugin.description }}</div>
-                            </v-card>
-                          </div>
 
                           <!-- Parameters Section -->
                           <div v-if="plugin.parameters && Object.keys(plugin.parameters).length" class="mb-4">
@@ -309,7 +303,7 @@
 <script setup>
 import { ref, onMounted, reactive, computed, watch } from 'vue'
 import { pluginService } from '@/services/plugin'
-import PluginResultsModal from '@/components/PluginResultsModal.vue'
+import PluginResultsModal from '@/components/plugins/PluginResultsModal.vue'
 import Sidebar from '@/components/Sidebar.vue'
 
 const plugins = ref({})
