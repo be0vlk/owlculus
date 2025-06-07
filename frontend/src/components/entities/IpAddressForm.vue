@@ -33,6 +33,8 @@
 </template>
 
 <script setup>
+import { usePluginValidation } from '@/composables/usePluginParams'
+
 const props = defineProps({
   modelValue: {
     type: Object,
@@ -42,16 +44,12 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 
+const { ipRule } = usePluginValidation()
+
 const updateField = (field, value) => {
   emit('update:modelValue', {
     ...props.modelValue,
     [field]: value
   })
-}
-
-const ipRule = (value) => {
-  if (!value) return 'IP address is required'
-  const ipPattern = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/
-  return ipPattern.test(value) || 'Please enter a valid IP address'
 }
 </script>

@@ -36,7 +36,7 @@
 </template>
 
 <script setup>
-import { defineProps, shallowRef, watch } from 'vue';
+import { defineProps, shallowRef, watch, markRaw } from 'vue';
 
 const props = defineProps({
   result: {
@@ -61,9 +61,9 @@ const loadPluginComponent = async () => {
   const componentName = `${name}PluginResult`;
   
   try {
-    // Update import path to use absolute path from src
-    const module = await import(`@/components/plugins/${componentName}.vue`);
-    pluginComponent.value = module.default;
+    // Use relative path for dynamic imports
+    const module = await import(`./${componentName}.vue`);
+    pluginComponent.value = markRaw(module.default);
   } catch (error) {
     console.log(`No custom component found for plugin: ${componentName}`, error);
     pluginComponent.value = null;

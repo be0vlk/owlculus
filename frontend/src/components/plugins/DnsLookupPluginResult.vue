@@ -1,16 +1,12 @@
 <template>
   <div class="d-flex flex-column ga-4">
     <!-- Status Messages -->
-    <template v-for="(item, index) in parsedResults" :key="`status-${index}`">
-      <v-alert 
-        v-if="item.type === 'status'"
-        type="info"
-        density="compact"
-        variant="tonal"
-      >
-        {{ item.data.message }}
-      </v-alert>
-    </template>
+    <PluginStatusAlert
+      v-for="(item, index) in statusMessages"
+      :key="`status-${index}`"
+      type="status"
+      :message="item.data.message"
+    />
 
     <!-- DNS Results Grid -->
     <div v-if="dnsResults.length" class="dns-results-grid">
@@ -102,42 +98,21 @@
     </div>
 
     <!-- Completion and Error Messages -->
-    <template v-for="(item, index) in parsedResults" :key="`message-${index}`">
-      <!-- Completion Message -->
-      <v-alert 
-        v-if="item.type === 'complete'"
-        type="success"
-        variant="tonal"
-        class="mb-4"
-      >
-        <template #title>
-          <div class="d-flex align-center">
-            <v-icon icon="mdi-check-circle" class="mr-2" />
-            DNS Lookup Complete
-          </div>
-        </template>
-        <div class="text-body-1">{{ item.data.message }}</div>
-        <div v-if="item.data.cache_entries" class="text-caption mt-2">
-          Cache entries: {{ item.data.cache_entries }}
-        </div>
-      </v-alert>
+    <PluginStatusAlert
+      v-for="(item, index) in completionMessages"
+      :key="`complete-${index}`"
+      type="complete"
+      :message="item.data.message"
+      plugin-name="DNS Lookup"
+    />
 
-      <!-- Error Messages -->
-      <v-alert
-        v-else-if="item.type === 'error'"
-        type="error"
-        variant="tonal"
-        prominent
-      >
-        <template #title>
-          <div class="d-flex align-center">
-            <v-icon icon="mdi-alert-circle" class="mr-2" />
-            DNS Lookup Error
-          </div>
-        </template>
-        <div class="text-body-1">{{ item.data.message }}</div>
-      </v-alert>
-    </template>
+    <PluginStatusAlert
+      v-for="(item, index) in errorMessages"
+      :key="`error-${index}`"
+      type="error"
+      :message="item.data.message"
+      plugin-name="DNS Lookup"
+    />
 
     <!-- Legacy Format Support (for old responses) -->
     <template v-if="legacyFormat">
@@ -177,50 +152,30 @@
     </template>
 
     <!-- No Results -->
-    <v-card v-if="!parsedResults.length && !legacyFormat" elevation="2" rounded="lg">
-      <v-card-text class="text-center pa-8">
-        <v-icon icon="mdi-magnify" size="48" color="grey-darken-1" class="mb-3" />
-        <p class="text-body-2 text-medium-emphasis">
-          No results available.
-        </p>
-      </v-card-text>
-    </v-card>
+    <NoResultsCard v-if="!parsedResults.length && !legacyFormat" />
   </div>
 </template>
 
 <script setup>
-import { defineProps, computed } from 'vue';
+import { computed, toRef } from 'vue'
+import { usePluginResults } from '@/composables/usePluginResults'
+import PluginStatusAlert from './PluginStatusAlert.vue'
+import NoResultsCard from './NoResultsCard.vue'
 
 const props = defineProps({
   result: {
     type: [Object, Array],
     required: true,
   }
-});
+})
 
-// Parse streaming results
-const parsedResults = computed(() => {
-  if (!props.result) return [];
-  
-  // Handle array of results (streaming format)
-  if (Array.isArray(props.result)) {
-    return props.result;
-  }
-  
-  // Handle single result with type
-  if (props.result.type) {
-    return [props.result];
-  }
-  
-  return [];
-});
+const { parsedResults, statusMessages, completionMessages, errorMessages } = usePluginResults(toRef(props, 'result'))
 
-// Check for legacy format (old plugin response)
 const legacyFormat = computed(() => {
   return props.result && 
          !props.result.type && 
-         (props.result.domain || props.result.ips);
-});
+         (props.result.domain || props.result.ips)
+})
 
 const legacyResult = computed(() => {
   return legacyFormat.value ? props.result : null;

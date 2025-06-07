@@ -301,7 +301,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, reactive, computed, watch } from 'vue'
+import { ref, onMounted, reactive, computed, watch, markRaw } from 'vue'
 import { pluginService } from '@/services/plugin'
 import PluginResultsModal from '@/components/plugins/PluginResultsModal.vue'
 import Sidebar from '@/components/Sidebar.vue'
@@ -314,7 +314,7 @@ const executing = reactive({})
 const results = reactive({})
 const pluginParams = reactive({})
 const pluginErrors = reactive({})
-const pluginParamComponents = reactive({})
+const pluginParamComponents = ref({})
 const executionTimes = reactive({})
 
 // Modal state
@@ -383,11 +383,11 @@ const loadPluginParamComponent = async (pluginName) => {
   const componentName = `${name}PluginParams`
 
   try {
-    const module = await import(`@/components/plugins/${componentName}.vue`)
-    pluginParamComponents[pluginName] = module.default
+    const module = await import(`../components/plugins/${componentName}.vue`)
+    pluginParamComponents.value[pluginName] = markRaw(module.default)
   } catch {
     // No custom parameter component found, use default rendering
-    pluginParamComponents[pluginName] = null
+    pluginParamComponents.value[pluginName] = null
   }
 }
 

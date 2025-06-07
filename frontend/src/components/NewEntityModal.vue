@@ -150,7 +150,7 @@ async function handleSubmit() {
     const response = await entityForm.submitEntity()
     emit('created', response)
     emit('close')
-  } catch (error) {
+  } catch {
     // Error is already handled in the composable
   }
 }

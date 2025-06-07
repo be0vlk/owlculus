@@ -58,16 +58,12 @@
     </v-card>
 
     <!-- Status Messages -->
-    <template v-for="(item, index) in parsedResults" :key="`status-${index}`">
-      <v-alert 
-        v-if="item.type === 'status'"
-        type="info"
-        density="compact"
-        variant="tonal"
-      >
-        {{ item.data.message }}
-      </v-alert>
-    </template>
+    <PluginStatusAlert
+      v-for="(item, index) in statusMessages"
+      :key="`status-${index}`"
+      type="status"
+      :message="item.data.message"
+    />
 
     <!-- Results Grid for Platform Data -->
     <div v-if="platformResults.length" class="platform-results-grid">
@@ -239,44 +235,25 @@
     </template>
 
     <!-- No Results -->
-    <v-card v-if="!parsedResults.length" elevation="2" rounded="lg">
-      <v-card-text class="text-center pa-8">
-        <v-icon icon="mdi-magnify" size="48" color="grey-darken-1" class="mb-3" />
-        <p class="text-body-2 text-medium-emphasis">
-          No results available.
-        </p>
-      </v-card-text>
-    </v-card>
+    <NoResultsCard v-if="!parsedResults.length" />
   </div>
 </template>
 
 <script setup>
-import { defineProps, computed } from 'vue';
-import { formatDate } from '@/composables/dateUtils';
+import { computed, toRef } from 'vue'
+import { formatDate } from '@/composables/dateUtils'
+import { usePluginResults } from '@/composables/usePluginResults'
+import PluginStatusAlert from './PluginStatusAlert.vue'
+import NoResultsCard from './NoResultsCard.vue'
 
 const props = defineProps({
   result: {
     type: [Object, Array],
     required: true,
   }
-});
+})
 
-// Parse streaming results
-const parsedResults = computed(() => {
-  if (!props.result) return [];
-  
-  // Handle array of results (streaming format)
-  if (Array.isArray(props.result)) {
-    return props.result;
-  }
-  
-  // Handle single result with type
-  if (props.result.type) {
-    return [props.result];
-  }
-  
-  return [];
-});
+const { parsedResults, statusMessages } = usePluginResults(toRef(props, 'result'))
 
 // Extract platform data results
 const platformResults = computed(() => {

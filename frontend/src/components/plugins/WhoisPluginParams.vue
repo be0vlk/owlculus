@@ -1,21 +1,6 @@
 <template>
   <div class="d-flex flex-column ga-3">
-    <!-- About card with plugin description (always at top) -->
-    <v-card
-      v-if="pluginDescription"
-      color="blue-lighten-5"
-      elevation="0"
-      rounded="lg"
-      class="pa-3"
-    >
-      <div class="d-flex align-center ga-2 mb-2">
-        <v-icon color="blue">mdi-information</v-icon>
-        <span class="text-subtitle2 font-weight-medium">About</span>
-      </div>
-      <p class="text-body-2 mb-0">
-        {{ pluginDescription }}
-      </p>
-    </v-card>
+    <PluginDescriptionCard :description="pluginDescription" />
 
     <v-text-field
       v-model="localParams.domain"
@@ -23,10 +8,7 @@
       placeholder="example.com"
       variant="outlined"
       density="compact"
-      :rules="[
-        v => !!v || 'Domain is required',
-        v => !v || /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/.test(v.replace(/^https?:\/\//, '').split('/')[0]) || 'Invalid domain format'
-      ]"
+      :rules="[domainRule]"
       @update:model-value="updateParams"
     />
 
@@ -44,6 +26,8 @@
 
 <script setup>
 import { reactive, watch, computed } from 'vue'
+import { usePluginValidation } from '@/composables/usePluginParams'
+import PluginDescriptionCard from './PluginDescriptionCard.vue'
 
 const props = defineProps({
   parameters: {
@@ -58,7 +42,8 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 
-// Extract plugin description from parameters
+const { domainRule } = usePluginValidation()
+
 const pluginDescription = computed(() => props.parameters?.description)
 
 // Local parameter state

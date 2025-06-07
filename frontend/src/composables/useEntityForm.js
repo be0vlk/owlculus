@@ -15,7 +15,6 @@ export function useEntityForm(caseId) {
         reddit: '',
         other: '',
       },
-      domains: [],
       ip_addresses: [],
       subdomains: [],
     },
@@ -27,7 +26,6 @@ export function useEntityForm(caseId) {
     const baseSocialMedia = state.data.social_media
     state.data = {
       social_media: baseSocialMedia,
-      domains: [],
       ip_addresses: [],
       subdomains: [],
     }

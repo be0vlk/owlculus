@@ -107,11 +107,6 @@ export const entitySchemas = {
       ],
       parentField: 'social_media',
     },
-    domains: {
-      title: 'Domains',
-      fields: [{ id: 'domain', label: 'Domain', type: 'text', isArray: true }],
-      parentField: 'domains',
-    },
   },
   domain: {
     basicInfo: {

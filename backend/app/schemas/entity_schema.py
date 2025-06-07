@@ -102,7 +102,6 @@ class CompanyData(EntityData):
     social_media: Optional[SocialMedia] = None
     executives: Optional[Executives] = None
     affiliates: Optional[Affiliates] = None
-    domains: Optional[List[str]] = None
     ip_addresses: Optional[List[str]] = None
     other: Optional[str] = None
 

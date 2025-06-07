@@ -33,6 +33,8 @@
 </template>
 
 <script setup>
+import { usePluginValidation } from '@/composables/usePluginParams'
+
 const props = defineProps({
   modelValue: {
     type: Object,
@@ -42,16 +44,12 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 
+const { domainRule } = usePluginValidation()
+
 const updateField = (field, value) => {
   emit('update:modelValue', {
     ...props.modelValue,
     [field]: value
   })
-}
-
-const domainRule = (value) => {
-  if (!value) return 'Domain is required'
-  const domainPattern = /^[a-zA-Z0-9][a-zA-Z0-9-_]*\.{1}[a-zA-Z]{2,}$/
-  return domainPattern.test(value) || 'Please enter a valid domain name'
 }
 </script>
