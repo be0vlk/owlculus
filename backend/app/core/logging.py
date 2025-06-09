@@ -1,0 +1,49 @@
+import sys
+from pathlib import Path
+from loguru import logger
+from .config import logging_settings
+
+
+def setup_logging():
+    logger.remove()
+    
+    log_dir = Path(logging_settings.LOG_FILE).parent
+    log_dir.mkdir(parents=True, exist_ok=True)
+    
+    console_format = "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> | <level>{message}</level>"
+    file_format = "{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} | {extra} | {message}"
+    
+    logger.add(
+        sys.stderr,
+        format=console_format,
+        level="DEBUG" if logging_settings.LOG_LEVEL == "DEBUG" else "INFO",
+        colorize=True,
+        enqueue=True
+    )
+    
+    logger.add(
+        logging_settings.LOG_FILE,
+        format=file_format,
+        level=logging_settings.LOG_LEVEL,
+        rotation=logging_settings.LOG_ROTATION,
+        retention=logging_settings.LOG_RETENTION,
+        enqueue=True,
+        backtrace=True,
+        diagnose=False
+    )
+    
+    logger.info("Logging system initialized")
+    logger.debug(f"Log level: {logging_settings.LOG_LEVEL}")
+    logger.debug(f"Log file: {logging_settings.LOG_FILE}")
+
+
+def get_security_logger(**context):
+    return logger.bind(log_type="security", **context)
+
+
+def get_performance_logger(**context):
+    return logger.bind(log_type="performance", **context)
+
+
+def get_logger_with_context(**context):
+    return logger.bind(**context)

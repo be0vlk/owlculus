@@ -6,6 +6,13 @@ import os
 dotenv.load_dotenv()
 
 
+class LoggingSettings(BaseSettings):
+    LOG_LEVEL: str = os.environ.get("OWLCULUS_LOG_LEVEL", "INFO")
+    LOG_FILE: str = os.environ.get("OWLCULUS_LOG_FILE", "logs/owlculus.log")
+    LOG_ROTATION: str = os.environ.get("OWLCULUS_LOG_ROTATION", "10 MB")
+    LOG_RETENTION: str = os.environ.get("OWLCULUS_LOG_RETENTION", "30 days")
+
+
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Owlculus"
     DESCRIPTION: str = "An OSINT case management platform and toolkit"
@@ -33,3 +40,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+logging_settings = LoggingSettings()
