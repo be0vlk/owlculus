@@ -114,13 +114,12 @@ async def list_api_keys(
     "/configuration/api-keys/{provider}/status",
     response_model=system_config_schema.APIKeyStatusResponse,
 )
-@admin_only()
 async def get_api_key_status(
     provider: str,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Check if a specific provider has an API key configured (admin only)."""
+    """Check if a specific provider has an API key configured."""
     config_service = SystemConfigService(db)
     is_configured = config_service.is_provider_configured(provider)
     return system_config_schema.APIKeyStatusResponse(

@@ -21,7 +21,7 @@ class StrixyService:
             if not api_key:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="OpenAI API key not configured. Please contact administrator to configure the OpenAI API key."
+                    detail="OpenAI API key not configured. Please contact administrator to configure the OpenAI API key.",
                 )
             self._client = OpenAI(api_key=api_key)
         return self._client
@@ -29,7 +29,7 @@ class StrixyService:
     async def send_chat_message(self, messages: List[ChatMessage]) -> ChatResponse:
         try:
             client = self._get_openai_client()
-            
+
             system_message = {
                 "role": "system",
                 "content": """# Role and Objective
@@ -63,34 +63,31 @@ When providing investigation guidance:
 1. Assess the investigation context
 2. Suggest specific methodologies or tools
 
-You must maintain professional objectivity."""
+You must maintain professional objectivity.""",
             }
-            
+
             openai_messages = [system_message]
-            openai_messages.extend([
-                {"role": msg.role, "content": msg.content} 
-                for msg in messages
-            ])
-            
+            openai_messages.extend(
+                [{"role": msg.role, "content": msg.content} for msg in messages]
+            )
+
             completion = client.chat.completions.create(
                 model="gpt-4o",
                 messages=openai_messages,
                 max_tokens=1000,
-                temperature=0.7
+                temperature=0.7,
             )
-            
+
             response_content = completion.choices[0].message.content
-            
+
             return ChatResponse(
-                message=response_content,
-                role="assistant",
-                timestamp=datetime.now(UTC)
+                message=response_content, role="assistant", timestamp=datetime.now(UTC)
             )
-            
+
         except Exception as e:
             if isinstance(e, HTTPException):
                 raise e
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error communicating with OpenAI: {str(e)}"
+                detail=f"Error communicating with OpenAI: {str(e)}",
             )

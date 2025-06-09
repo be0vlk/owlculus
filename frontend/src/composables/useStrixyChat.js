@@ -1,5 +1,6 @@
 import { ref, nextTick } from 'vue'
 import { strixyService } from '@/services/strixy'
+import { systemService } from '@/services/system'
 import { useNotifications } from './useNotifications'
 
 export function useStrixyChat() {
@@ -13,7 +14,7 @@ export function useStrixyChat() {
     messages.value.push({
       content: message,
       role: role,
-      timestamp: new Date()
+      timestamp: new Date(),
     })
   }
 
@@ -26,9 +27,9 @@ export function useStrixyChat() {
     loading.value = true
 
     try {
-      const chatMessages = messages.value.map(msg => ({
+      const chatMessages = messages.value.map((msg) => ({
         role: msg.role,
-        content: msg.content
+        content: msg.content,
       }))
 
       const response = await strixyService.sendMessage(chatMessages)
@@ -40,8 +41,10 @@ export function useStrixyChat() {
       console.error('Error sending message:', error)
 
       // Check if it's an API key configuration error
-      if (error.response?.status === 400 &&
-          error.response?.data?.detail?.includes('OpenAI API key not configured')) {
+      if (
+        error.response?.status === 400 &&
+        error.response?.data?.detail?.includes('OpenAI API key not configured')
+      ) {
         apiKeyError.value = true
         showError('OpenAI API key not configured. Please contact your administrator.')
       } else {
@@ -59,19 +62,34 @@ export function useStrixyChat() {
     }
   }
 
-  const initializeChat = () => {
+  const checkApiKeyStatus = async () => {
+    try {
+      const status = await systemService.checkApiKeyStatus('openai')
+      apiKeyError.value = !status.is_configured
+      if (!status.is_configured) {
+        showError('OpenAI API key not configured. Please contact your administrator.')
+      }
+    } catch (error) {
+      console.error('Error checking OpenAI API key status:', error)
+      apiKeyError.value = true
+      showError('Unable to verify OpenAI API key status. Please contact your administrator.')
+    }
+  }
+
+  const initializeChat = async () => {
+    await checkApiKeyStatus()
     if (messages.value.length === 0) {
       addMessage(
         "Hello! I'm Strixy, your Owlculus Toolkit OSINT assistant. How can I help?",
-        'assistant'
+        'assistant',
       )
     }
   }
 
-  const clearChat = () => {
+  const clearChat = async () => {
     messages.value = []
     apiKeyError.value = false
-    initializeChat()
+    await initializeChat()
   }
 
   return {
@@ -82,6 +100,6 @@ export function useStrixyChat() {
     sendMessage,
     initializeChat,
     clearChat,
-    scrollToBottom
+    scrollToBottom,
   }
 }

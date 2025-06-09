@@ -20,12 +20,28 @@
           </template>
         </v-alert>
 
-        <v-card variant="outlined" class="chat-container">
+        <v-card variant="outlined" class="chat-container" :class="{ 'chat-disabled': apiKeyError }">
           <v-card-title class="d-flex align-center pa-4 bg-surface">
-            <v-icon icon="mdi-robot" color="primary" size="large" class="me-3" />
+            <v-icon icon="mdi-robot" :color="apiKeyError ? 'grey' : 'primary'" size="large" class="me-3" />
             <div class="flex-grow-1">
-              <div class="text-h6 font-weight-bold">Chat Interface</div>
+              <div class="text-h6 font-weight-bold" :class="{ 'text-disabled': apiKeyError }">Chat Interface</div>
             </div>
+            
+            
+            <v-tooltip text="Export chat" location="bottom">
+              <template #activator="{ props }">
+                <v-btn
+                  v-bind="props"
+                  icon="mdi-download"
+                  variant="tonal"
+                  color="primary"
+                  :disabled="!hasUserMessages || loading"
+                  @click="exportChat"
+                  class="mr-2"
+                />
+              </template>
+            </v-tooltip>
+            
             <v-tooltip text="Start new chat" location="bottom">
               <template #activator="{ props }">
                 <v-btn
@@ -75,9 +91,10 @@
                         {{ formatTime(message.timestamp) }}
                       </span>
                     </div>
-                    <div class="message-content">
-                      {{ message.content }}
-                    </div>
+                    <div 
+                      class="message-content"
+                      v-html="renderMarkdown(message.content)"
+                    ></div>
                   </div>
                 </v-list-item>
               </v-list>
@@ -136,6 +153,14 @@ import { onMounted, computed, ref } from 'vue'
 import Sidebar from '@/components/Sidebar.vue'
 import ConfirmationDialog from '@/components/ConfirmationDialog.vue'
 import { useStrixyChat } from '@/composables/useStrixyChat'
+import MarkdownIt from 'markdown-it'
+
+const md = new MarkdownIt({
+  html: false,
+  linkify: true,
+  typographer: true,
+  breaks: true
+})
 
 const {
   messages,
@@ -164,10 +189,10 @@ const handleNewChat = async () => {
       confirmColor: 'primary'
     })
     if (confirmed) {
-      clearChat()
+      await clearChat()
     }
   } else {
-    clearChat()
+    await clearChat()
   }
 }
 
@@ -178,14 +203,67 @@ const formatTime = (timestamp) => {
   })
 }
 
-onMounted(() => {
-  initializeChat()
+const exportChat = () => {
+  if (!hasUserMessages.value) return
+
+  const exportData = {
+    title: 'Strixy Chat Export',
+    exportTime: new Date().toISOString(),
+    messages: messages.value.map(msg => ({
+      role: msg.role,
+      content: msg.content,
+      timestamp: msg.timestamp
+    }))
+  }
+
+  const dataStr = JSON.stringify(exportData, null, 2)
+  const dataBlob = new Blob([dataStr], { type: 'application/json' })
+  const url = URL.createObjectURL(dataBlob)
+
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `strixy_chat_${Date.now()}.json`
+  link.click()
+
+  URL.revokeObjectURL(url)
+}
+
+const renderMarkdown = (content) => {
+  if (!content) return ''
+  return md.render(content)
+}
+
+onMounted(async () => {
+  await initializeChat()
 })
 </script>
 
 <style scoped>
 .chat-container {
   max-width: 100%;
+}
+
+.chat-disabled {
+  opacity: 0.6;
+  pointer-events: none;
+  position: relative;
+}
+
+.chat-disabled::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(var(--v-theme-surface), 0.3);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.text-disabled {
+  color: rgb(var(--v-theme-on-surface-variant)) !important;
+  opacity: 0.6;
 }
 
 .chat-messages {
@@ -219,8 +297,96 @@ onMounted(() => {
 
 .message-content {
   line-height: 1.5;
-  white-space: pre-wrap;
   word-wrap: break-word;
+}
+
+/* Markdown styling */
+.message-content :deep(h1),
+.message-content :deep(h2),
+.message-content :deep(h3),
+.message-content :deep(h4),
+.message-content :deep(h5),
+.message-content :deep(h6) {
+  margin: 0.5em 0 0.3em 0;
+  font-weight: 600;
+}
+
+.message-content :deep(h1) { font-size: 1.5em; }
+.message-content :deep(h2) { font-size: 1.3em; }
+.message-content :deep(h3) { font-size: 1.1em; }
+
+.message-content :deep(p) {
+  margin: 0.5em 0;
+}
+
+.message-content :deep(ul),
+.message-content :deep(ol) {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.message-content :deep(li) {
+  margin: 0.2em 0;
+}
+
+.message-content :deep(blockquote) {
+  border-left: 4px solid rgb(var(--v-theme-primary));
+  margin: 0.5em 0;
+  padding: 0.5em 0 0.5em 1em;
+  background-color: rgba(var(--v-theme-surface-variant), 0.3);
+  border-radius: 4px;
+}
+
+.message-content :deep(code) {
+  background-color: rgba(var(--v-theme-surface-variant), 0.8);
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.9em;
+}
+
+.message-content :deep(pre) {
+  background-color: rgba(var(--v-theme-surface-variant), 0.8);
+  border-radius: 6px;
+  padding: 1em;
+  overflow-x: auto;
+  margin: 0.5em 0;
+}
+
+.message-content :deep(pre code) {
+  background: none;
+  padding: 0;
+}
+
+.message-content :deep(a) {
+  color: rgb(var(--v-theme-primary));
+  text-decoration: underline;
+}
+
+.message-content :deep(strong) {
+  font-weight: 600;
+}
+
+.message-content :deep(em) {
+  font-style: italic;
+}
+
+.message-content :deep(table) {
+  border-collapse: collapse;
+  margin: 0.5em 0;
+  width: 100%;
+}
+
+.message-content :deep(th),
+.message-content :deep(td) {
+  border: 1px solid rgba(var(--v-theme-outline), 0.3);
+  padding: 0.5em;
+  text-align: left;
+}
+
+.message-content :deep(th) {
+  background-color: rgba(var(--v-theme-surface-variant), 0.5);
+  font-weight: 600;
 }
 
 @media (max-width: 600px) {

@@ -60,7 +60,7 @@ class CaseService:
         case_logger = get_security_logger(
             admin_user_id=current_user.id,
             action="create_case",
-            case_name=case.case_name,
+            case_name=case.title,
             event_type="case_creation_attempt",
         )
 
