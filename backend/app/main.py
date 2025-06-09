@@ -1,12 +1,11 @@
-import time
-import uuid
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
 from app.core.config import settings
-from app.core.logging import setup_logging, get_performance_logger
+from app.core.logging import setup_logging, client_ip_context, user_agent_context
+from app.core.dependencies import get_client_ip, get_user_agent
 from app.api.router import api_router
 
 
@@ -26,35 +25,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-@app.middleware("http")
-async def logging_middleware(request: Request, call_next):
-    request_id = str(uuid.uuid4())
-    start_time = time.time()
-    
-    perf_logger = get_performance_logger(
-        request_id=request_id,
-        method=request.method,
-        path=request.url.path,
-        event_type="http_request"
-    )
-    
-    perf_logger.info(f"Request started: {request.method} {request.url.path}")
-    
-    response = await call_next(request)
-    
-    process_time = time.time() - start_time
-    perf_logger.bind(
-        status_code=response.status_code,
-        response_time_ms=round(process_time * 1000, 3),
-        event_type="http_response"
-    ).info(
-        f"Request completed: {request.method} {request.url.path} - "
-        f"Status: {response.status_code} - Time: {process_time:.3f}s"
-    )
-    
-    response.headers["X-Request-ID"] = request_id
-    return response
-
 
 # Set all CORS enabled origins
 if settings.BACKEND_CORS_ORIGINS:
@@ -65,6 +35,16 @@ if settings.BACKEND_CORS_ORIGINS:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+# Middleware to capture client IP and user agent for logging
+@app.middleware("http")
+async def request_info_middleware(request: Request, call_next):
+    client_ip = get_client_ip(request)
+    user_agent = get_user_agent(request)
+    client_ip_context.set(client_ip)
+    user_agent_context.set(user_agent)
+    response = await call_next(request)
+    return response
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
 

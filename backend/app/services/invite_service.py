@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from app.database import models, crud
 from app import schemas
 from app.core.dependencies import admin_only
+from app.core.logging import get_security_logger
 from app.core.utils import get_utc_now
 
 
@@ -17,21 +18,42 @@ class InviteService:
     async def create_invite(
         self, invite: schemas.InviteCreate, current_user: models.User
     ) -> models.Invite:
-        # Generate secure token
-        token = secrets.token_urlsafe(32)
-
-        # Set expiration to 48 hours from now
-        expires_at = get_utc_now() + timedelta(hours=48)
+        invite_logger = get_security_logger(
+            admin_user_id=current_user.id,
+            action="create_invite",
+            target_role=invite.role,
+            event_type="invite_creation_attempt"
+        )
 
         try:
-            return await crud.create_invite(
+            # Generate secure token
+            token = secrets.token_urlsafe(32)
+
+            # Set expiration to 48 hours from now
+            expires_at = get_utc_now() + timedelta(hours=48)
+
+            new_invite = await crud.create_invite(
                 db=self.db,
                 token=token,
                 role=invite.role,
                 expires_at=expires_at,
                 created_by_id=current_user.id,
             )
+
+            invite_logger.bind(
+                invite_id=new_invite.id,
+                invite_role=new_invite.role,
+                expires_at=new_invite.expires_at.isoformat(),
+                event_type="invite_creation_success"
+            ).info("Invite created successfully")
+
+            return new_invite
+
         except Exception as e:
+            invite_logger.bind(
+                event_type="invite_creation_error",
+                error_type="system_error"
+            ).error(f"Invite creation error: {str(e)}")
             raise HTTPException(status_code=400, detail=str(e))
 
     @admin_only()
@@ -84,29 +106,52 @@ class InviteService:
     async def register_user_with_invite(
         self, registration: schemas.UserRegistration
     ) -> schemas.UserRegistrationResponse:
-        # Validate invite first
-        validation = await self.validate_invite(registration.token)
-        if not validation.valid:
-            raise HTTPException(status_code=400, detail=validation.error)
-
-        # Get the invite
-        invite = await crud.get_invite_by_token(self.db, token=registration.token)
-        if not invite:
-            raise HTTPException(status_code=400, detail="Invalid invite token")
-
-        # Check for existing username
-        existing_user = await crud.get_user_by_username(
-            self.db, username=registration.username
+        invite_logger = get_security_logger(
+            action="register_with_invite",
+            username=registration.username,
+            event_type="invite_registration_attempt"
         )
-        if existing_user:
-            raise HTTPException(status_code=400, detail="Username already taken")
-
-        # Check for existing email
-        existing_user = await crud.get_user_by_email(self.db, email=registration.email)
-        if existing_user:
-            raise HTTPException(status_code=400, detail="Email already registered")
 
         try:
+            # Validate invite first
+            validation = await self.validate_invite(registration.token)
+            if not validation.valid:
+                invite_logger.bind(
+                    event_type="invite_registration_failed",
+                    failure_reason="invalid_invite",
+                    validation_error=validation.error
+                ).warning("User registration failed: invalid invite")
+                raise HTTPException(status_code=400, detail=validation.error)
+
+            # Get the invite
+            invite = await crud.get_invite_by_token(self.db, token=registration.token)
+            if not invite:
+                invite_logger.bind(
+                    event_type="invite_registration_failed",
+                    failure_reason="invite_not_found"
+                ).warning("User registration failed: invite not found")
+                raise HTTPException(status_code=400, detail="Invalid invite token")
+
+            # Check for existing username
+            existing_user = await crud.get_user_by_username(
+                self.db, username=registration.username
+            )
+            if existing_user:
+                invite_logger.bind(
+                    event_type="invite_registration_failed",
+                    failure_reason="username_taken"
+                ).warning("User registration failed: username already taken")
+                raise HTTPException(status_code=400, detail="Username already taken")
+
+            # Check for existing email
+            existing_user = await crud.get_user_by_email(self.db, email=registration.email)
+            if existing_user:
+                invite_logger.bind(
+                    event_type="invite_registration_failed",
+                    failure_reason="email_taken"
+                ).warning("User registration failed: email already registered")
+                raise HTTPException(status_code=400, detail="Email already registered")
+
             # Create user with role from invite
             user = await crud.create_user_from_invite(
                 db=self.db,
@@ -119,6 +164,13 @@ class InviteService:
             # Mark invite as used
             await crud.mark_invite_used(self.db, invite)
 
+            invite_logger.bind(
+                user_id=user.id,
+                invite_id=invite.id,
+                user_role=user.role,
+                event_type="invite_registration_success"
+            ).info("User registered successfully with invite")
+
             return schemas.UserRegistrationResponse(
                 id=user.id,
                 username=user.username,
@@ -126,28 +178,82 @@ class InviteService:
                 role=user.role,
                 created_at=user.created_at,
             )
+
+        except HTTPException:
+            raise
         except ValueError as e:
+            invite_logger.bind(
+                event_type="invite_registration_failed",
+                failure_reason="validation_error"
+            ).warning(f"User registration failed: {str(e)}")
             raise HTTPException(status_code=400, detail=str(e))
+        except Exception as e:
+            invite_logger.bind(
+                event_type="invite_registration_error",
+                error_type="system_error"
+            ).error(f"User registration error: {str(e)}")
+            raise HTTPException(status_code=500, detail="Internal server error")
 
     @admin_only()
     async def delete_invite(self, invite_id: int, current_user: models.User) -> bool:
-        # Get invite to check ownership
-        invite = self.db.get(models.Invite, invite_id)
-        if not invite:
-            raise HTTPException(status_code=404, detail="Invite not found")
-
-        if invite.created_by_id != current_user.id:
-            raise HTTPException(
-                status_code=403, detail="Not authorized to delete this invite"
-            )
-
-        if invite.used_at:
-            raise HTTPException(status_code=400, detail="Cannot delete used invite")
+        invite_logger = get_security_logger(
+            admin_user_id=current_user.id,
+            invite_id=invite_id,
+            action="delete_invite",
+            event_type="invite_deletion_attempt"
+        )
 
         try:
-            return await crud.delete_invite(self.db, invite_id=invite_id)
+            # Get invite to check ownership
+            invite = self.db.get(models.Invite, invite_id)
+            if not invite:
+                invite_logger.bind(
+                    event_type="invite_deletion_failed",
+                    failure_reason="invite_not_found"
+                ).warning("Invite deletion failed: invite not found")
+                raise HTTPException(status_code=404, detail="Invite not found")
+
+            if invite.created_by_id != current_user.id:
+                invite_logger.bind(
+                    event_type="invite_deletion_failed",
+                    failure_reason="not_authorized",
+                    invite_creator_id=invite.created_by_id
+                ).warning("Invite deletion failed: not authorized")
+                raise HTTPException(
+                    status_code=403, detail="Not authorized to delete this invite"
+                )
+
+            if invite.used_at:
+                invite_logger.bind(
+                    event_type="invite_deletion_failed",
+                    failure_reason="invite_already_used",
+                    used_at=invite.used_at.isoformat()
+                ).warning("Invite deletion failed: cannot delete used invite")
+                raise HTTPException(status_code=400, detail="Cannot delete used invite")
+
+            result = await crud.delete_invite(self.db, invite_id=invite_id)
+
+            invite_logger.bind(
+                invite_role=invite.role,
+                event_type="invite_deletion_success"
+            ).info("Invite deleted successfully")
+
+            return result
+
+        except HTTPException:
+            raise
         except ValueError as e:
+            invite_logger.bind(
+                event_type="invite_deletion_failed",
+                failure_reason="validation_error"
+            ).warning(f"Invite deletion failed: {str(e)}")
             raise HTTPException(status_code=404, detail=str(e))
+        except Exception as e:
+            invite_logger.bind(
+                event_type="invite_deletion_error",
+                error_type="system_error"
+            ).error(f"Invite deletion error: {str(e)}")
+            raise HTTPException(status_code=500, detail="Internal server error")
 
     @admin_only()
     async def cleanup_expired_invites(self, current_user: models.User) -> int:

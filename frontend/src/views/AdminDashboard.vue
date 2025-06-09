@@ -570,13 +570,8 @@ const templateOptions = [
   { display_name: 'Prefix + Monthly Reset (PREFIX-YYMM-NN)', value: 'PREFIX-YYMM-NN' }
 ]
 
-const getRoleColor = (role) => {
-  switch (role) {
-    case 'Admin': return 'error'
-    case 'Investigator': return 'primary'
-    case 'Analyst': return 'info'
-    default: return 'default'
-  }
+const getRoleColor = () => {
+  return 'grey-darken-1'
 }
 
 const resetPassword = (user) => {

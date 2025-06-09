@@ -11,6 +11,7 @@ from app import schemas
 from app.core.utils import get_utc_now
 from app.core.dependencies import admin_only, no_analyst
 from app.core.file_storage import create_case_directory
+from app.core.logging import get_security_logger
 from app.services.system_config_service import SystemConfigService
 
 
@@ -56,20 +57,42 @@ class CaseService:
     async def create_case(
         self, case: schemas.CaseCreate, current_user: models.User
     ) -> models.Case:
-        # Always generate a new case number, ignoring any provided value
-        case_data = case.model_dump()
-        current_time = get_utc_now()
-        case_data["case_number"] = await self._generate_case_number(current_time)
-
-        # Create the case in the database
-        new_case = await crud.create_case(
-            self.db, case=schemas.CaseCreate(**case_data), current_user=current_user
+        case_logger = get_security_logger(
+            admin_user_id=current_user.id,
+            action="create_case",
+            case_name=case.case_name,
+            event_type="case_creation_attempt"
         )
 
-        # Create the case directory for file uploads
-        create_case_directory(new_case.id)
+        try:
+            # Always generate a new case number, ignoring any provided value
+            case_data = case.model_dump()
+            current_time = get_utc_now()
+            case_data["case_number"] = await self._generate_case_number(current_time)
 
-        return new_case
+            # Create the case in the database
+            new_case = await crud.create_case(
+                self.db, case=schemas.CaseCreate(**case_data), current_user=current_user
+            )
+
+            # Create the case directory for file uploads
+            create_case_directory(new_case.id)
+
+            case_logger.bind(
+                case_id=new_case.id,
+                case_number=new_case.case_number,
+                client_id=new_case.client_id,
+                event_type="case_creation_success"
+            ).info("Case created successfully")
+
+            return new_case
+
+        except Exception as e:
+            case_logger.bind(
+                event_type="case_creation_error",
+                error_type="system_error"
+            ).error(f"Case creation error: {str(e)}")
+            raise HTTPException(status_code=500, detail="Internal server error")
 
     async def get_cases(
         self,
@@ -116,56 +139,161 @@ class CaseService:
     async def update_case(
         self, case_id: int, case_update: schemas.CaseUpdate, current_user: models.User
     ) -> models.Case:
-        db_case = await crud.get_case(self.db, case_id=case_id)
-        if not db_case:
-            raise HTTPException(status_code=404, detail="Case not found")
+        case_logger = get_security_logger(
+            user_id=current_user.id,
+            case_id=case_id,
+            action="update_case",
+            event_type="case_update_attempt"
+        )
 
-        # Admin can update any case
-        if current_user.role != "Admin" and current_user not in db_case.users:
-            raise HTTPException(
-                status_code=403, detail="You do not have permission to update this case"
-            )
+        try:
+            db_case = await crud.get_case(self.db, case_id=case_id)
+            if not db_case:
+                case_logger.bind(
+                    event_type="case_update_failed",
+                    failure_reason="case_not_found"
+                ).warning("Case update failed: case not found")
+                raise HTTPException(status_code=404, detail="Case not found")
 
-        # Check case number uniqueness if being updated
-        if case_update.case_number and case_update.case_number != db_case.case_number:
-            existing_case = await crud.get_case_by_number(
-                self.db, case_number=case_update.case_number
-            )
-            if existing_case:
+            # Admin can update any case
+            if current_user.role != "Admin" and current_user not in db_case.users:
+                case_logger.bind(
+                    event_type="case_update_failed",
+                    failure_reason="not_authorized"
+                ).warning("Case update failed: not authorized")
                 raise HTTPException(
-                    status_code=400, detail="Case number already exists"
+                    status_code=403, detail="You do not have permission to update this case"
                 )
 
-        return await crud.update_case(
-            self.db, case_id=case_id, case=case_update, current_user=current_user
-        )
+            # Check case number uniqueness if being updated
+            if case_update.case_number and case_update.case_number != db_case.case_number:
+                existing_case = await crud.get_case_by_number(
+                    self.db, case_number=case_update.case_number
+                )
+                if existing_case:
+                    case_logger.bind(
+                        event_type="case_update_failed",
+                        failure_reason="case_number_exists",
+                        requested_case_number=case_update.case_number
+                    ).warning("Case update failed: case number already exists")
+                    raise HTTPException(
+                        status_code=400, detail="Case number already exists"
+                    )
+
+            updated_case = await crud.update_case(
+                self.db, case_id=case_id, case=case_update, current_user=current_user
+            )
+
+            case_logger.bind(
+                case_number=updated_case.case_number,
+                event_type="case_update_success"
+            ).info("Case updated successfully")
+
+            return updated_case
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            case_logger.bind(
+                event_type="case_update_error",
+                error_type="system_error"
+            ).error(f"Case update error: {str(e)}")
+            raise HTTPException(status_code=500, detail="Internal server error")
 
     @admin_only()
     async def add_user_to_case(
         self, case_id: int, user_id: int, current_user: models.User
     ) -> models.Case:
-        # Check if case exists first
-        db_case = await crud.get_case(self.db, case_id=case_id)
-        if not db_case:
-            raise HTTPException(status_code=404, detail="Case not found")
+        case_logger = get_security_logger(
+            admin_user_id=current_user.id,
+            case_id=case_id,
+            target_user_id=user_id,
+            action="add_user_to_case",
+            event_type="case_user_add_attempt"
+        )
 
-        db_user = await crud.get_user(self.db, user_id=user_id)
-        if not db_user:
-            raise HTTPException(status_code=404, detail="User not found")
+        try:
+            # Check if case exists first
+            db_case = await crud.get_case(self.db, case_id=case_id)
+            if not db_case:
+                case_logger.bind(
+                    event_type="case_user_add_failed",
+                    failure_reason="case_not_found"
+                ).warning("Add user to case failed: case not found")
+                raise HTTPException(status_code=404, detail="Case not found")
 
-        return await crud.add_user_to_case(self.db, case=db_case, user=db_user)
+            db_user = await crud.get_user(self.db, user_id=user_id)
+            if not db_user:
+                case_logger.bind(
+                    event_type="case_user_add_failed",
+                    failure_reason="user_not_found"
+                ).warning("Add user to case failed: user not found")
+                raise HTTPException(status_code=404, detail="User not found")
+
+            updated_case = await crud.add_user_to_case(self.db, case=db_case, user=db_user)
+
+            case_logger.bind(
+                case_number=db_case.case_number,
+                username=db_user.username,
+                event_type="case_user_add_success"
+            ).info("User added to case successfully")
+
+            return updated_case
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            case_logger.bind(
+                event_type="case_user_add_error",
+                error_type="system_error"
+            ).error(f"Add user to case error: {str(e)}")
+            raise HTTPException(status_code=500, detail="Internal server error")
 
     @admin_only()
     async def remove_user_from_case(
         self, case_id: int, user_id: int, current_user: models.User
     ) -> models.Case:
-        # Check if case exists first
-        db_case = await crud.get_case(self.db, case_id=case_id)
-        if not db_case:
-            raise HTTPException(status_code=404, detail="Case not found")
+        case_logger = get_security_logger(
+            admin_user_id=current_user.id,
+            case_id=case_id,
+            target_user_id=user_id,
+            action="remove_user_from_case",
+            event_type="case_user_remove_attempt"
+        )
 
-        db_user = await crud.get_user(self.db, user_id=user_id)
-        if not db_user:
-            raise HTTPException(status_code=404, detail="User not found")
+        try:
+            # Check if case exists first
+            db_case = await crud.get_case(self.db, case_id=case_id)
+            if not db_case:
+                case_logger.bind(
+                    event_type="case_user_remove_failed",
+                    failure_reason="case_not_found"
+                ).warning("Remove user from case failed: case not found")
+                raise HTTPException(status_code=404, detail="Case not found")
 
-        return await crud.remove_user_from_case(self.db, case=db_case, user=db_user)
+            db_user = await crud.get_user(self.db, user_id=user_id)
+            if not db_user:
+                case_logger.bind(
+                    event_type="case_user_remove_failed",
+                    failure_reason="user_not_found"
+                ).warning("Remove user from case failed: user not found")
+                raise HTTPException(status_code=404, detail="User not found")
+
+            updated_case = await crud.remove_user_from_case(self.db, case=db_case, user=db_user)
+
+            case_logger.bind(
+                case_number=db_case.case_number,
+                username=db_user.username,
+                event_type="case_user_remove_success"
+            ).info("User removed from case successfully")
+
+            return updated_case
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            case_logger.bind(
+                event_type="case_user_remove_error",
+                error_type="system_error"
+            ).error(f"Remove user from case error: {str(e)}")
+            raise HTTPException(status_code=500, detail="Internal server error")

@@ -9,6 +9,7 @@ from typing import List, Optional
 from app.database import models
 from app.schemas import evidence_schema as schemas
 from app.core.utils import get_utc_now
+from app.core.logging import get_security_logger
 from app.core.file_storage import (
     save_upload_file,
     delete_file,
@@ -30,72 +31,106 @@ class EvidenceService:
         current_user: models.User,
         file: Optional[UploadFile] = None,
     ) -> models.Evidence:
-
-        # Check if case exists
-        case = self.db.exec(
-            select(models.Case).where(models.Case.id == evidence.case_id)
-        ).first()
-        if not case:
-            raise HTTPException(status_code=404, detail="Case not found")
-
-        # Check if folders exist before allowing file uploads (excluding folder creation itself)
-        if evidence.evidence_type == "file" and not evidence.is_folder:
-            existing_folders = self.db.exec(
-                select(models.Evidence).where(
-                    models.Evidence.case_id == evidence.case_id,
-                    models.Evidence.is_folder == True,
-                )
-            ).first()
-            if not existing_folders:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Cannot upload files without any folders. Create a folder first to organize evidence.",
-                )
-
-        # For file uploads, save the file and get the path
-        if evidence.evidence_type == "file" and not evidence.is_folder:
-            if not file:
-                raise HTTPException(
-                    status_code=400, detail="File is required for file-type evidence"
-                )
-            try:
-                # Save the file and get its path and hash
-                relative_path, file_hash = await save_upload_file(
-                    upload_file=file,
-                    case_id=evidence.case_id,
-                    folder_path=evidence.folder_path,
-                )
-                evidence.content = relative_path
-                evidence.file_hash = file_hash
-            except HTTPException as e:
-                raise
-            except Exception as e:
-                raise HTTPException(
-                    status_code=500, detail=f"Error saving file: {str(e)}"
-                )
-
-        # Create the evidence record
-        db_evidence = models.Evidence(
+        evidence_logger = get_security_logger(
+            user_id=current_user.id,
             case_id=evidence.case_id,
-            title=evidence.title,
-            description=evidence.description,
+            action="create_evidence",
             evidence_type=evidence.evidence_type,
-            category=evidence.category,
-            content=evidence.content,
-            file_hash=evidence.file_hash,
-            folder_path=evidence.folder_path,
-            is_folder=evidence.is_folder,
-            parent_folder_id=evidence.parent_folder_id,
-            created_by_id=current_user.id,
-            created_at=get_utc_now(),
-            updated_at=get_utc_now(),
+            event_type="evidence_creation_attempt"
         )
 
         try:
+            # Check if case exists
+            case = self.db.exec(
+                select(models.Case).where(models.Case.id == evidence.case_id)
+            ).first()
+            if not case:
+                evidence_logger.bind(
+                    event_type="evidence_creation_failed",
+                    failure_reason="case_not_found"
+                ).warning("Evidence creation failed: case not found")
+                raise HTTPException(status_code=404, detail="Case not found")
+
+            # Check if folders exist before allowing file uploads (excluding folder creation itself)
+            if evidence.evidence_type == "file" and not evidence.is_folder:
+                existing_folders = self.db.exec(
+                    select(models.Evidence).where(
+                        models.Evidence.case_id == evidence.case_id,
+                        models.Evidence.is_folder == True,
+                    )
+                ).first()
+                if not existing_folders:
+                    evidence_logger.bind(
+                        event_type="evidence_creation_failed",
+                        failure_reason="no_folders_exist"
+                    ).warning("Evidence creation failed: no folders exist for file upload")
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Cannot upload files without any folders. Create a folder first to organize evidence.",
+                    )
+
+            # For file uploads, save the file and get the path
+            if evidence.evidence_type == "file" and not evidence.is_folder:
+                if not file:
+                    evidence_logger.bind(
+                        event_type="evidence_creation_failed",
+                        failure_reason="file_required"
+                    ).warning("Evidence creation failed: file required for file-type evidence")
+                    raise HTTPException(
+                        status_code=400, detail="File is required for file-type evidence"
+                    )
+                try:
+                    # Save the file and get its path and hash
+                    relative_path, file_hash = await save_upload_file(
+                        upload_file=file,
+                        case_id=evidence.case_id,
+                        folder_path=evidence.folder_path,
+                    )
+                    evidence.content = relative_path
+                    evidence.file_hash = file_hash
+                except HTTPException as e:
+                    raise
+                except Exception as e:
+                    evidence_logger.bind(
+                        event_type="evidence_creation_failed",
+                        failure_reason="file_save_error"
+                    ).warning(f"Evidence creation failed: error saving file: {str(e)}")
+                    raise HTTPException(
+                        status_code=500, detail=f"Error saving file: {str(e)}"
+                    )
+
+            # Create the evidence record
+            db_evidence = models.Evidence(
+                case_id=evidence.case_id,
+                title=evidence.title,
+                description=evidence.description,
+                evidence_type=evidence.evidence_type,
+                category=evidence.category,
+                content=evidence.content,
+                file_hash=evidence.file_hash,
+                folder_path=evidence.folder_path,
+                is_folder=evidence.is_folder,
+                parent_folder_id=evidence.parent_folder_id,
+                created_by_id=current_user.id,
+                created_at=get_utc_now(),
+                updated_at=get_utc_now(),
+            )
+
             self.db.add(db_evidence)
             self.db.commit()
             self.db.refresh(db_evidence)
+
+            evidence_logger.bind(
+                evidence_id=db_evidence.id,
+                evidence_title=db_evidence.title,
+                evidence_category=db_evidence.category,
+                event_type="evidence_creation_success"
+            ).info("Evidence created successfully")
+
             return db_evidence
+
+        except HTTPException:
+            raise
         except Exception as e:
             # If there was an error, try to delete the uploaded file
             if evidence.evidence_type == "file" and evidence.content:
@@ -103,6 +138,10 @@ class EvidenceService:
                     await delete_file(evidence.content)
                 except:
                     pass
+            evidence_logger.bind(
+                event_type="evidence_creation_error",
+                error_type="system_error"
+            ).error(f"Evidence creation error: {str(e)}")
             raise HTTPException(
                 status_code=500, detail=f"Error creating evidence: {str(e)}"
             )
@@ -144,37 +183,66 @@ class EvidenceService:
         evidence_update: schemas.EvidenceUpdate,
         current_user: models.User,
     ) -> models.Evidence:
-        # Get existing evidence
-        db_evidence = self.db.get(models.Evidence, evidence_id)
-        if not db_evidence:
-            raise HTTPException(status_code=404, detail="Evidence not found")
-
-        # Update fields if provided
-        if evidence_update.title is not None:
-            db_evidence.title = evidence_update.title
-        if evidence_update.description is not None:
-            db_evidence.description = evidence_update.description
-        if evidence_update.content is not None:
-            if db_evidence.evidence_type == "file":
-                raise HTTPException(
-                    status_code=400,
-                    detail="Cannot update content of file-type evidence",
-                )
-            db_evidence.content = evidence_update.content
-        if evidence_update.folder_path is not None:
-            db_evidence.folder_path = evidence_update.folder_path
-        if evidence_update.parent_folder_id is not None:
-            db_evidence.parent_folder_id = evidence_update.parent_folder_id
-
-        db_evidence.updated_at = get_utc_now()
+        evidence_logger = get_security_logger(
+            user_id=current_user.id,
+            evidence_id=evidence_id,
+            action="update_evidence",
+            event_type="evidence_update_attempt"
+        )
 
         try:
+            # Get existing evidence
+            db_evidence = self.db.get(models.Evidence, evidence_id)
+            if not db_evidence:
+                evidence_logger.bind(
+                    event_type="evidence_update_failed",
+                    failure_reason="evidence_not_found"
+                ).warning("Evidence update failed: evidence not found")
+                raise HTTPException(status_code=404, detail="Evidence not found")
+
+            # Update fields if provided
+            if evidence_update.title is not None:
+                db_evidence.title = evidence_update.title
+            if evidence_update.description is not None:
+                db_evidence.description = evidence_update.description
+            if evidence_update.content is not None:
+                if db_evidence.evidence_type == "file":
+                    evidence_logger.bind(
+                        event_type="evidence_update_failed",
+                        failure_reason="file_content_not_updatable"
+                    ).warning("Evidence update failed: cannot update content of file-type evidence")
+                    raise HTTPException(
+                        status_code=400,
+                        detail="Cannot update content of file-type evidence",
+                    )
+                db_evidence.content = evidence_update.content
+            if evidence_update.folder_path is not None:
+                db_evidence.folder_path = evidence_update.folder_path
+            if evidence_update.parent_folder_id is not None:
+                db_evidence.parent_folder_id = evidence_update.parent_folder_id
+
+            db_evidence.updated_at = get_utc_now()
+
             self.db.add(db_evidence)
             self.db.commit()
             self.db.refresh(db_evidence)
+
+            evidence_logger.bind(
+                case_id=db_evidence.case_id,
+                evidence_title=db_evidence.title,
+                event_type="evidence_update_success"
+            ).info("Evidence updated successfully")
+
             return db_evidence
+
+        except HTTPException:
+            raise
         except Exception as e:
             self.db.rollback()
+            evidence_logger.bind(
+                event_type="evidence_update_error",
+                error_type="system_error"
+            ).error(f"Evidence update error: {str(e)}")
             raise HTTPException(
                 status_code=500, detail=f"Error updating evidence: {str(e)}"
             )
@@ -183,24 +251,50 @@ class EvidenceService:
     async def delete_evidence(
         self, evidence_id: int, current_user: models.User
     ) -> models.Evidence:
-        evidence = await self.get_evidence(evidence_id, current_user)
+        evidence_logger = get_security_logger(
+            user_id=current_user.id,
+            evidence_id=evidence_id,
+            action="delete_evidence",
+            event_type="evidence_deletion_attempt"
+        )
 
-        # Delete the file if it's a file-type evidence and has content
-        if evidence.evidence_type == "file" and evidence.content:
-            try:
-                await delete_file(evidence.content)
-            except Exception as e:
-                raise HTTPException(
-                    status_code=500, detail=f"Error deleting file: {str(e)}"
-                )
-
-        # Delete the database record
         try:
+            evidence = await self.get_evidence(evidence_id, current_user)
+
+            # Delete the file if it's a file-type evidence and has content
+            if evidence.evidence_type == "file" and evidence.content:
+                try:
+                    await delete_file(evidence.content)
+                except Exception as e:
+                    evidence_logger.bind(
+                        event_type="evidence_deletion_failed",
+                        failure_reason="file_deletion_error"
+                    ).warning(f"Evidence deletion failed: error deleting file: {str(e)}")
+                    raise HTTPException(
+                        status_code=500, detail=f"Error deleting file: {str(e)}"
+                    )
+
+            # Delete the database record
             self.db.delete(evidence)
             self.db.commit()
+
+            evidence_logger.bind(
+                case_id=evidence.case_id,
+                evidence_title=evidence.title,
+                evidence_type=evidence.evidence_type,
+                event_type="evidence_deletion_success"
+            ).info("Evidence deleted successfully")
+
             return evidence
+
+        except HTTPException:
+            raise
         except Exception as e:
             self.db.rollback()
+            evidence_logger.bind(
+                event_type="evidence_deletion_error",
+                error_type="system_error"
+            ).error(f"Evidence deletion error: {str(e)}")
             raise HTTPException(
                 status_code=500, detail=f"Error deleting evidence: {str(e)}"
             )
@@ -210,39 +304,81 @@ class EvidenceService:
         evidence_id: int,
         current_user: models.User,
     ) -> models.Evidence:
-        # Get evidence
-        evidence = self.db.exec(
-            select(models.Evidence).where(models.Evidence.id == evidence_id)
-        ).first()
-        if not evidence:
-            raise HTTPException(status_code=404, detail="Evidence not found")
+        evidence_logger = get_security_logger(
+            user_id=current_user.id,
+            evidence_id=evidence_id,
+            action="download_evidence",
+            event_type="evidence_download_attempt"
+        )
 
-        # Check if user has access to the case
-        case = self.db.exec(
-            select(models.Case).where(models.Case.id == evidence.case_id)
-        ).first()
-        if not case:
-            raise HTTPException(status_code=404, detail="Case not found")
+        try:
+            # Get evidence
+            evidence = self.db.exec(
+                select(models.Evidence).where(models.Evidence.id == evidence_id)
+            ).first()
+            if not evidence:
+                evidence_logger.bind(
+                    event_type="evidence_download_failed",
+                    failure_reason="evidence_not_found"
+                ).warning("Evidence download failed: evidence not found")
+                raise HTTPException(status_code=404, detail="Evidence not found")
 
-        # For file evidence, return a FileResponse
-        if evidence.evidence_type == "file":
-            from fastapi.responses import FileResponse
-            from pathlib import Path
-            from app.core.file_storage import UPLOAD_DIR
+            # Check if user has access to the case
+            case = self.db.exec(
+                select(models.Case).where(models.Case.id == evidence.case_id)
+            ).first()
+            if not case:
+                evidence_logger.bind(
+                    event_type="evidence_download_failed",
+                    failure_reason="case_not_found"
+                ).warning("Evidence download failed: case not found")
+                raise HTTPException(status_code=404, detail="Case not found")
 
-            file_path = UPLOAD_DIR / evidence.content
-            if not file_path.exists():
-                raise HTTPException(status_code=404, detail="File not found")
+            # For file evidence, return a FileResponse
+            if evidence.evidence_type == "file":
+                from fastapi.responses import FileResponse
+                from pathlib import Path
+                from app.core.file_storage import UPLOAD_DIR
 
-            return FileResponse(
-                path=str(file_path),
-                filename=file_path.name,
-                media_type="application/octet-stream",
+                file_path = UPLOAD_DIR / evidence.content
+                if not file_path.exists():
+                    evidence_logger.bind(
+                        event_type="evidence_download_failed",
+                        failure_reason="file_not_found",
+                        file_path=str(file_path)
+                    ).warning("Evidence download failed: file not found on disk")
+                    raise HTTPException(status_code=404, detail="File not found")
+
+                evidence_logger.bind(
+                    case_id=evidence.case_id,
+                    evidence_title=evidence.title,
+                    filename=file_path.name,
+                    event_type="evidence_download_success"
+                ).info("Evidence downloaded successfully")
+
+                return FileResponse(
+                    path=str(file_path),
+                    filename=file_path.name,
+                    media_type="application/octet-stream",
+                )
+
+            evidence_logger.bind(
+                event_type="evidence_download_failed",
+                failure_reason="unsupported_evidence_type",
+                evidence_type=evidence.evidence_type
+            ).warning("Evidence download failed: evidence type does not support downloading")
+            raise HTTPException(
+                status_code=400, detail="Evidence type does not support downloading"
             )
 
-        raise HTTPException(
-            status_code=400, detail="Evidence type does not support downloading"
-        )
+        except HTTPException:
+            raise
+        except Exception as e:
+            evidence_logger.bind(
+                event_type="evidence_download_error",
+                error_type="system_error"
+            ).error(f"Evidence download error: {str(e)}")
+            raise HTTPException(status_code=500, detail="Internal server error")
 
     async def create_folder(
         self,
@@ -250,63 +386,97 @@ class EvidenceService:
         current_user: models.User,
     ) -> models.Evidence:
         """Create a new folder in the case directory."""
-        # Check if case exists
-        case = self.db.exec(
-            select(models.Case).where(models.Case.id == folder_data.case_id)
-        ).first()
-        if not case:
-            raise HTTPException(status_code=404, detail="Case not found")
-
-        # Build folder path
-        folder_path = folder_data.folder_path or ""
-        if folder_data.parent_folder_id:
-            parent_folder = self.db.get(models.Evidence, folder_data.parent_folder_id)
-            if not parent_folder or not parent_folder.is_folder:
-                raise HTTPException(status_code=404, detail="Parent folder not found")
-            if parent_folder.folder_path:
-                folder_path = f"{parent_folder.folder_path}/{folder_data.title}"
-            else:
-                folder_path = folder_data.title
-        else:
-            folder_path = folder_data.title
-
-        # Create physical folder
-        try:
-            create_folder(folder_data.case_id, folder_path)
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise HTTPException(
-                status_code=500, detail=f"Error creating folder: {str(e)}"
-            )
-
-        # Create folder record
-        db_folder = models.Evidence(
+        folder_logger = get_security_logger(
+            user_id=current_user.id,
             case_id=folder_data.case_id,
-            title=folder_data.title,
-            description=folder_data.description,
-            evidence_type="folder",
-            category="Other",
-            content="",
-            folder_path=folder_path,
-            is_folder=True,
-            parent_folder_id=folder_data.parent_folder_id,
-            created_by_id=current_user.id,
-            created_at=get_utc_now(),
-            updated_at=get_utc_now(),
+            action="create_folder",
+            folder_title=folder_data.title,
+            event_type="folder_creation_attempt"
         )
 
         try:
+            # Check if case exists
+            case = self.db.exec(
+                select(models.Case).where(models.Case.id == folder_data.case_id)
+            ).first()
+            if not case:
+                folder_logger.bind(
+                    event_type="folder_creation_failed",
+                    failure_reason="case_not_found"
+                ).warning("Folder creation failed: case not found")
+                raise HTTPException(status_code=404, detail="Case not found")
+
+            # Build folder path
+            folder_path = folder_data.folder_path or ""
+            if folder_data.parent_folder_id:
+                parent_folder = self.db.get(models.Evidence, folder_data.parent_folder_id)
+                if not parent_folder or not parent_folder.is_folder:
+                    folder_logger.bind(
+                        event_type="folder_creation_failed",
+                        failure_reason="parent_folder_not_found"
+                    ).warning("Folder creation failed: parent folder not found")
+                    raise HTTPException(status_code=404, detail="Parent folder not found")
+                if parent_folder.folder_path:
+                    folder_path = f"{parent_folder.folder_path}/{folder_data.title}"
+                else:
+                    folder_path = folder_data.title
+            else:
+                folder_path = folder_data.title
+
+            # Create physical folder
+            try:
+                create_folder(folder_data.case_id, folder_path)
+            except HTTPException:
+                raise
+            except Exception as e:
+                folder_logger.bind(
+                    event_type="folder_creation_failed",
+                    failure_reason="physical_folder_error"
+                ).warning(f"Folder creation failed: error creating physical folder: {str(e)}")
+                raise HTTPException(
+                    status_code=500, detail=f"Error creating folder: {str(e)}"
+                )
+
+            # Create folder record
+            db_folder = models.Evidence(
+                case_id=folder_data.case_id,
+                title=folder_data.title,
+                description=folder_data.description,
+                evidence_type="folder",
+                category="Other",
+                content="",
+                folder_path=folder_path,
+                is_folder=True,
+                parent_folder_id=folder_data.parent_folder_id,
+                created_by_id=current_user.id,
+                created_at=get_utc_now(),
+                updated_at=get_utc_now(),
+            )
+
             self.db.add(db_folder)
             self.db.commit()
             self.db.refresh(db_folder)
+
+            folder_logger.bind(
+                folder_id=db_folder.id,
+                folder_path=folder_path,
+                event_type="folder_creation_success"
+            ).info("Folder created successfully")
+
             return db_folder
+
+        except HTTPException:
+            raise
         except Exception as e:
             # Clean up physical folder if database operation fails
             try:
                 delete_folder(folder_data.case_id, folder_path)
             except:
                 pass
+            folder_logger.bind(
+                event_type="folder_creation_error",
+                error_type="system_error"
+            ).error(f"Folder creation error: {str(e)}")
             raise HTTPException(
                 status_code=500, detail=f"Error creating folder record: {str(e)}"
             )
@@ -333,27 +503,52 @@ class EvidenceService:
         current_user: models.User,
     ) -> models.Evidence:
         """Update a folder."""
-        db_folder = self.db.get(models.Evidence, folder_id)
-        if not db_folder or not db_folder.is_folder:
-            raise HTTPException(status_code=404, detail="Folder not found")
-
-        # Update fields if provided
-        if folder_update.title is not None:
-            db_folder.title = folder_update.title
-        if folder_update.description is not None:
-            db_folder.description = folder_update.description
-        if folder_update.parent_folder_id is not None:
-            db_folder.parent_folder_id = folder_update.parent_folder_id
-
-        db_folder.updated_at = get_utc_now()
+        folder_logger = get_security_logger(
+            user_id=current_user.id,
+            folder_id=folder_id,
+            action="update_folder",
+            event_type="folder_update_attempt"
+        )
 
         try:
+            db_folder = self.db.get(models.Evidence, folder_id)
+            if not db_folder or not db_folder.is_folder:
+                folder_logger.bind(
+                    event_type="folder_update_failed",
+                    failure_reason="folder_not_found"
+                ).warning("Folder update failed: folder not found")
+                raise HTTPException(status_code=404, detail="Folder not found")
+
+            # Update fields if provided
+            if folder_update.title is not None:
+                db_folder.title = folder_update.title
+            if folder_update.description is not None:
+                db_folder.description = folder_update.description
+            if folder_update.parent_folder_id is not None:
+                db_folder.parent_folder_id = folder_update.parent_folder_id
+
+            db_folder.updated_at = get_utc_now()
+
             self.db.add(db_folder)
             self.db.commit()
             self.db.refresh(db_folder)
+
+            folder_logger.bind(
+                case_id=db_folder.case_id,
+                folder_title=db_folder.title,
+                event_type="folder_update_success"
+            ).info("Folder updated successfully")
+
             return db_folder
+
+        except HTTPException:
+            raise
         except Exception as e:
             self.db.rollback()
+            folder_logger.bind(
+                event_type="folder_update_error",
+                error_type="system_error"
+            ).error(f"Folder update error: {str(e)}")
             raise HTTPException(
                 status_code=500, detail=f"Error updating folder: {str(e)}"
             )
@@ -363,21 +558,36 @@ class EvidenceService:
         self, folder_id: int, current_user: models.User
     ) -> models.Evidence:
         """Delete a folder and all its contents."""
-        db_folder = self.db.get(models.Evidence, folder_id)
-        if not db_folder or not db_folder.is_folder:
-            raise HTTPException(status_code=404, detail="Folder not found")
+        folder_logger = get_security_logger(
+            user_id=current_user.id,
+            folder_id=folder_id,
+            action="delete_folder",
+            event_type="folder_deletion_attempt"
+        )
 
-        # Delete physical folder and contents
-        if db_folder.folder_path:
-            try:
-                delete_folder(db_folder.case_id, db_folder.folder_path)
-            except Exception as e:
-                raise HTTPException(
-                    status_code=500, detail=f"Error deleting folder: {str(e)}"
-                )
-
-        # Delete all evidence records in this folder and subfolders
         try:
+            db_folder = self.db.get(models.Evidence, folder_id)
+            if not db_folder or not db_folder.is_folder:
+                folder_logger.bind(
+                    event_type="folder_deletion_failed",
+                    failure_reason="folder_not_found"
+                ).warning("Folder deletion failed: folder not found")
+                raise HTTPException(status_code=404, detail="Folder not found")
+
+            # Delete physical folder and contents
+            if db_folder.folder_path:
+                try:
+                    delete_folder(db_folder.case_id, db_folder.folder_path)
+                except Exception as e:
+                    folder_logger.bind(
+                        event_type="folder_deletion_failed",
+                        failure_reason="physical_folder_error"
+                    ).warning(f"Folder deletion failed: error deleting physical folder: {str(e)}")
+                    raise HTTPException(
+                        status_code=500, detail=f"Error deleting folder: {str(e)}"
+                    )
+
+            # Delete all evidence records in this folder and subfolders
             # Get all evidence in this folder path
             subfolder_evidence = self.db.exec(
                 select(models.Evidence).where(
@@ -393,9 +603,24 @@ class EvidenceService:
             # Delete the folder record itself
             self.db.delete(db_folder)
             self.db.commit()
+
+            folder_logger.bind(
+                case_id=db_folder.case_id,
+                folder_title=db_folder.title,
+                subfolder_count=len(subfolder_evidence),
+                event_type="folder_deletion_success"
+            ).info("Folder deleted successfully")
+
             return db_folder
+
+        except HTTPException:
+            raise
         except Exception as e:
             self.db.rollback()
+            folder_logger.bind(
+                event_type="folder_deletion_error",
+                error_type="system_error"
+            ).error(f"Folder deletion error: {str(e)}")
             raise HTTPException(
                 status_code=500, detail=f"Error deleting folder record: {str(e)}"
             )

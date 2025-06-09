@@ -1,7 +1,12 @@
 import sys
 from pathlib import Path
+from contextvars import ContextVar
 from loguru import logger
 from .config import logging_settings
+
+# Context variables to store request info across async calls
+client_ip_context: ContextVar[str] = ContextVar('client_ip', default=None)
+user_agent_context: ContextVar[str] = ContextVar('user_agent', default=None)
 
 
 def setup_logging():
@@ -38,11 +43,16 @@ def setup_logging():
 
 
 def get_security_logger(**context):
+    # Automatically include client IP and user agent from context if available
+    client_ip = client_ip_context.get()
+    if client_ip:
+        context["client_ip"] = client_ip
+    
+    user_agent = user_agent_context.get()
+    if user_agent:
+        context["user_agent"] = user_agent
+    
     return logger.bind(log_type="security", **context)
-
-
-def get_performance_logger(**context):
-    return logger.bind(log_type="performance", **context)
 
 
 def get_logger_with_context(**context):

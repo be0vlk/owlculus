@@ -298,7 +298,7 @@ const handleRowClick = (event, { item }) => {
 
 // Function to get color for user role chips
 const getUserRoleColor = () => {
-  return 'grey-lighten-1'
+  return 'grey-darken-1'
 }
 
 // Snackbar helper function

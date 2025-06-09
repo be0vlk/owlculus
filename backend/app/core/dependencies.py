@@ -1,4 +1,4 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlmodel import Session
 from functools import wraps
@@ -11,6 +11,32 @@ from app.database.models import User
 from app.core.config import settings
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
+
+
+def get_client_ip(request: Request) -> str:
+    """Extract client IP address from request, handling proxies."""
+    # Check for X-Forwarded-For header (common with reverse proxies)
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        # Take the first IP in the chain (original client)
+        return forwarded_for.split(",")[0].strip()
+    
+    # Check for X-Real-IP header (another common proxy header)
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip.strip()
+    
+    # Fall back to direct client IP
+    if request.client:
+        return request.client.host
+    
+    return "unknown"
+
+
+def get_user_agent(request: Request) -> str:
+    """Extract user agent from request headers."""
+    user_agent = request.headers.get("User-Agent")
+    return user_agent if user_agent else "unknown"
 
 
 async def get_current_user(
