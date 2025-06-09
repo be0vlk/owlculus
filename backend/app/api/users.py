@@ -83,3 +83,16 @@ async def admin_reset_password(
         new_password=password_reset.new_password,
         current_user=current_user,
     )
+
+
+@router.delete("/{user_id}")
+async def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    user_service = UserService(db)
+    return await user_service.delete_user(
+        user_id=user_id,
+        current_user=current_user,
+    )

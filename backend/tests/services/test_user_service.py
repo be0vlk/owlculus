@@ -239,6 +239,7 @@ class TestUserService:
             existing_user.id = user_id
             existing_user.username = "olduser"
             existing_user.email = "old@example.com"
+            existing_user.is_superadmin = False  # Regular user, not superadmin
             mock_get_user.return_value = existing_user
 
             with patch(
@@ -364,6 +365,7 @@ class TestUserService:
             existing_user = Mock()
             existing_user.id = user_id
             existing_user.username = "olduser"
+            existing_user.is_superadmin = False  # Regular user, not superadmin
             mock_get_user.return_value = existing_user
 
             with patch(
@@ -395,6 +397,7 @@ class TestUserService:
             existing_user = Mock()
             existing_user.id = user_id
             existing_user.email = "old@example.com"
+            existing_user.is_superadmin = False  # Regular user, not superadmin
             mock_get_user.return_value = existing_user
 
             with patch(
@@ -529,6 +532,7 @@ class TestUserService:
         with patch("app.services.user_service.crud.get_user") as mock_get_user:
             target_user = Mock()
             target_user.id = user_id
+            target_user.is_superadmin = False  # Regular user, not superadmin
             mock_get_user.return_value = target_user
 
             with patch(
@@ -593,3 +597,377 @@ class TestUserService:
                 )
 
             assert exc_info.value.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_delete_user_success_superadmin_deletes_regular_user(
+        self,
+        user_service_instance: UserService,
+    ):
+        """Test successful user deletion by superadmin"""
+        # Create superadmin user
+        superadmin = Mock()
+        superadmin.id = 1
+        superadmin.role = "Admin"
+        superadmin.is_superadmin = True
+
+        # Create regular user to delete
+        target_user = Mock()
+        target_user.id = 2
+        target_user.username = "regularuser"
+        target_user.role = "Investigator"
+        target_user.is_superadmin = False
+
+        with patch("app.services.user_service.crud.get_user") as mock_get_user:
+            mock_get_user.return_value = target_user
+
+            with patch("app.services.user_service.crud.delete_user") as mock_delete:
+                mock_delete.return_value = True
+
+                result = await user_service_instance.delete_user(
+                    target_user.id, current_user=superadmin
+                )
+
+                assert "deleted successfully" in result["message"]
+                mock_get_user.assert_called_once_with(
+                    user_service_instance.db, user_id=target_user.id
+                )
+                mock_delete.assert_called_once_with(
+                    user_service_instance.db, user_id=target_user.id
+                )
+
+    @pytest.mark.asyncio
+    async def test_delete_user_success_superadmin_deletes_admin(
+        self,
+        user_service_instance: UserService,
+    ):
+        """Test successful admin deletion by superadmin"""
+        # Create superadmin user
+        superadmin = Mock()
+        superadmin.id = 1
+        superadmin.role = "Admin"
+        superadmin.is_superadmin = True
+
+        # Create admin user to delete
+        target_admin = Mock()
+        target_admin.id = 2
+        target_admin.username = "adminuser"
+        target_admin.role = "Admin"
+        target_admin.is_superadmin = False
+
+        with patch("app.services.user_service.crud.get_user") as mock_get_user:
+            mock_get_user.return_value = target_admin
+
+            with patch("app.services.user_service.crud.delete_user") as mock_delete:
+                mock_delete.return_value = True
+
+                result = await user_service_instance.delete_user(
+                    target_admin.id, current_user=superadmin
+                )
+
+                assert "deleted successfully" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_delete_user_success_admin_deletes_regular_user(
+        self,
+        user_service_instance: UserService,
+    ):
+        """Test successful regular user deletion by regular admin"""
+        # Create regular admin user
+        admin = Mock()
+        admin.id = 1
+        admin.role = "Admin"
+        admin.is_superadmin = False
+
+        # Create regular user to delete
+        target_user = Mock()
+        target_user.id = 2
+        target_user.username = "regularuser"
+        target_user.role = "Investigator"
+        target_user.is_superadmin = False
+
+        with patch("app.services.user_service.crud.get_user") as mock_get_user:
+            mock_get_user.return_value = target_user
+
+            with patch("app.services.user_service.crud.delete_user") as mock_delete:
+                mock_delete.return_value = True
+
+                result = await user_service_instance.delete_user(
+                    target_user.id, current_user=admin
+                )
+
+                assert "deleted successfully" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_delete_user_cannot_delete_superadmin(
+        self,
+        user_service_instance: UserService,
+    ):
+        """Test that superadmin users cannot be deleted"""
+        # Create superadmin user
+        superadmin = Mock()
+        superadmin.id = 1
+        superadmin.role = "Admin"
+        superadmin.is_superadmin = True
+
+        # Create superadmin user to delete
+        target_superadmin = Mock()
+        target_superadmin.id = 2
+        target_superadmin.username = "superadmin2"
+        target_superadmin.role = "Admin"
+        target_superadmin.is_superadmin = True
+
+        with patch("app.services.user_service.crud.get_user") as mock_get_user:
+            mock_get_user.return_value = target_superadmin
+
+            with pytest.raises(HTTPException) as exc_info:
+                await user_service_instance.delete_user(
+                    target_superadmin.id, current_user=superadmin
+                )
+
+            assert exc_info.value.status_code == 403
+            assert "Cannot delete superadmin user" in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_delete_user_cannot_delete_self(
+        self,
+        user_service_instance: UserService,
+    ):
+        """Test that users cannot delete themselves"""
+        # Create regular admin user (not superadmin) to avoid superadmin protection
+        admin = Mock()
+        admin.id = 1
+        admin.role = "Admin"
+        admin.is_superadmin = False
+
+        with patch("app.services.user_service.crud.get_user") as mock_get_user:
+            mock_get_user.return_value = admin
+
+            with pytest.raises(HTTPException) as exc_info:
+                await user_service_instance.delete_user(
+                    admin.id, current_user=admin
+                )
+
+            assert exc_info.value.status_code == 403
+            assert "Cannot delete your own account" in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_delete_user_admin_cannot_delete_admin(
+        self,
+        user_service_instance: UserService,
+    ):
+        """Test that regular admin cannot delete other admin users"""
+        # Create regular admin user
+        admin = Mock()
+        admin.id = 1
+        admin.role = "Admin"
+        admin.is_superadmin = False
+
+        # Create admin user to delete
+        target_admin = Mock()
+        target_admin.id = 2
+        target_admin.username = "adminuser"
+        target_admin.role = "Admin"
+        target_admin.is_superadmin = False
+
+        with patch("app.services.user_service.crud.get_user") as mock_get_user:
+            mock_get_user.return_value = target_admin
+
+            with pytest.raises(HTTPException) as exc_info:
+                await user_service_instance.delete_user(
+                    target_admin.id, current_user=admin
+                )
+
+            assert exc_info.value.status_code == 403
+            assert "Only superadmin can delete admin users" in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_delete_user_not_found(
+        self,
+        user_service_instance: UserService,
+    ):
+        """Test deleting non-existent user"""
+        # Create superadmin user
+        superadmin = Mock()
+        superadmin.id = 1
+        superadmin.role = "Admin"
+        superadmin.is_superadmin = True
+
+        user_id = 999
+
+        with patch("app.services.user_service.crud.get_user") as mock_get_user:
+            mock_get_user.return_value = None
+
+            with pytest.raises(HTTPException) as exc_info:
+                await user_service_instance.delete_user(
+                    user_id, current_user=superadmin
+                )
+
+            assert exc_info.value.status_code == 404
+            assert "User not found" in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_delete_user_admin_only_permission(
+        self,
+        user_service_instance: UserService,
+        test_user: models.User,  # Non-admin user
+    ):
+        """Test that only admins can delete users"""
+        with patch("app.core.dependencies.admin_only") as mock_decorator:
+
+            def side_effect(*args, **kwargs):
+                if "current_user" in kwargs and kwargs["current_user"].role != "Admin":
+                    raise HTTPException(status_code=403, detail="Admin access required")
+                return kwargs.get("current_user")
+
+            mock_decorator.return_value = side_effect
+
+            with pytest.raises(HTTPException) as exc_info:
+                await user_service_instance.delete_user(
+                    999, current_user=test_user
+                )
+
+            assert exc_info.value.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_admin_reset_password_cannot_reset_superadmin(
+        self,
+        user_service_instance: UserService,
+    ):
+        """Test that regular admin cannot reset superadmin password"""
+        # Create regular admin user
+        admin = Mock()
+        admin.id = 1
+        admin.role = "Admin"
+        admin.is_superadmin = False
+
+        # Create superadmin user to reset password
+        superadmin_target = Mock()
+        superadmin_target.id = 2
+        superadmin_target.username = "superadmin"
+        superadmin_target.role = "Admin"
+        superadmin_target.is_superadmin = True
+
+        with patch("app.services.user_service.crud.get_user") as mock_get_user:
+            mock_get_user.return_value = superadmin_target
+
+            with pytest.raises(HTTPException) as exc_info:
+                await user_service_instance.admin_reset_password(
+                    superadmin_target.id, "newpassword", current_user=admin
+                )
+
+            assert exc_info.value.status_code == 403
+            assert "Only superadmin can reset superadmin passwords" in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_admin_reset_password_superadmin_can_reset_superadmin(
+        self,
+        user_service_instance: UserService,
+    ):
+        """Test that superadmin can reset another superadmin password"""
+        # Create superadmin user
+        superadmin = Mock()
+        superadmin.id = 1
+        superadmin.role = "Admin"
+        superadmin.is_superadmin = True
+
+        # Create superadmin user to reset password
+        superadmin_target = Mock()
+        superadmin_target.id = 2
+        superadmin_target.username = "superadmin2"
+        superadmin_target.role = "Admin"
+        superadmin_target.is_superadmin = True
+
+        with patch("app.services.user_service.crud.get_user") as mock_get_user:
+            mock_get_user.return_value = superadmin_target
+
+            with patch("app.services.user_service.crud.admin_reset_password") as mock_reset:
+                updated_user = Mock()
+                mock_reset.return_value = updated_user
+
+                result = await user_service_instance.admin_reset_password(
+                    superadmin_target.id, "newpassword", current_user=superadmin
+                )
+
+                assert result == updated_user
+                mock_reset.assert_called_once_with(
+                    user_service_instance.db,
+                    user=superadmin_target,
+                    new_password="newpassword"
+                )
+
+    @pytest.mark.asyncio
+    async def test_update_user_admin_cannot_edit_superadmin(
+        self,
+        user_service_instance: UserService,
+    ):
+        """Test that regular admin cannot edit superadmin users"""
+        # Create regular admin user
+        admin = Mock()
+        admin.id = 1
+        admin.role = "Admin"
+        admin.is_superadmin = False
+
+        # Create superadmin user to edit
+        superadmin_target = Mock()
+        superadmin_target.id = 2
+        superadmin_target.username = "superadmin"
+        superadmin_target.role = "Admin"
+        superadmin_target.is_superadmin = True
+
+        user_update = schemas.UserUpdate(username="newsuperadmin")
+
+        with patch("app.services.user_service.crud.get_user") as mock_get_user:
+            mock_get_user.return_value = superadmin_target
+
+            with pytest.raises(HTTPException) as exc_info:
+                await user_service_instance.update_user(
+                    superadmin_target.id, user_update, current_user=admin
+                )
+
+            assert exc_info.value.status_code == 403
+            assert "Only superadmin can edit superadmin users" in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_update_user_superadmin_can_edit_superadmin(
+        self,
+        user_service_instance: UserService,
+    ):
+        """Test that superadmin can edit another superadmin user"""
+        # Create superadmin user
+        superadmin = Mock()
+        superadmin.id = 1
+        superadmin.role = "Admin"
+        superadmin.is_superadmin = True
+
+        # Create superadmin user to edit
+        superadmin_target = Mock()
+        superadmin_target.id = 2
+        superadmin_target.username = "superadmin2"
+        superadmin_target.email = "super2@example.com"
+        superadmin_target.role = "Admin"
+        superadmin_target.is_superadmin = True
+
+        user_update = schemas.UserUpdate(username="newsuperadmin")
+
+        with patch("app.services.user_service.crud.get_user") as mock_get_user:
+            mock_get_user.return_value = superadmin_target
+
+            with patch("app.services.user_service.crud.get_user_by_username") as mock_get_username:
+                mock_get_username.return_value = None  # Username not taken
+
+                with patch("app.services.user_service.crud.get_user_by_email") as mock_get_email:
+                    mock_get_email.return_value = None  # Email not taken
+
+                    with patch("app.services.user_service.crud.update_user") as mock_update:
+                        updated_user = Mock()
+                        updated_user.username = user_update.username
+                        mock_update.return_value = updated_user
+
+                        result = await user_service_instance.update_user(
+                            superadmin_target.id, user_update, current_user=superadmin
+                        )
+
+                        assert result.username == user_update.username
+                        mock_update.assert_called_once_with(
+                            user_service_instance.db, user_id=superadmin_target.id, user=user_update
+                        )

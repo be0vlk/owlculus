@@ -23,6 +23,7 @@ class User(SQLModel, table=True):
     password_hash: str
     role: str = Field(default="Investigator")
     is_active: bool = Field(default=True)
+    is_superadmin: bool = Field(default=False)
     created_at: datetime = Field(default_factory=get_utc_now)
     updated_at: datetime = Field(default_factory=get_utc_now)
     cases: List["Case"] = Relationship(back_populates="users", link_model=CaseUserLink)

@@ -9,6 +9,7 @@ class UserBase(BaseModel):
     email: EmailStr
     role: Literal["Admin", "Investigator", "Analyst"] = "Analyst"
     is_active: bool
+    is_superadmin: bool = False
 
 
 class UserCreate(UserBase):
@@ -20,6 +21,7 @@ class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     role: Optional[Literal["Admin", "Investigator", "Analyst"]] = None
     is_active: Optional[bool] = None
+    is_superadmin: Optional[bool] = None
     updated_at: datetime = Field(default_factory=get_utc_now)
 
 

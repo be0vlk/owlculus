@@ -33,6 +33,7 @@ def create_initial_data():
                 email=admin_email,
                 password_hash=get_password_hash(admin_password),
                 role="Admin",
+                is_superadmin=True,
             )
             session.add(admin_account)
             session.commit()

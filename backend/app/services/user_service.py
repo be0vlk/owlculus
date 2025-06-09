@@ -94,6 +94,15 @@ class UserService:
                 ).warning("User update failed: user not found")
                 raise HTTPException(status_code=404, detail="User not found")
 
+            # Only superadmin can edit superadmin users
+            if db_user.is_superadmin and not current_user.is_superadmin:
+                user_logger.bind(
+                    event_type="user_update_failed",
+                    failure_reason="cannot_edit_superadmin",
+                    target_username=db_user.username
+                ).warning("User update failed: only superadmin can edit superadmin users")
+                raise HTTPException(status_code=403, detail="Only superadmin can edit superadmin users")
+
             # Check username uniqueness if being updated
             if user_update.username and user_update.username != db_user.username:
                 existing_user = await crud.get_user_by_username(
@@ -215,6 +224,15 @@ class UserService:
                 ).warning("Admin password reset failed: user not found")
                 raise HTTPException(status_code=404, detail="User not found")
 
+            # Only superadmin can reset superadmin passwords
+            if db_user.is_superadmin and not current_user.is_superadmin:
+                user_logger.bind(
+                    event_type="admin_password_reset_failed",
+                    failure_reason="cannot_reset_superadmin_password",
+                    target_username=db_user.username
+                ).warning("Admin password reset failed: only superadmin can reset superadmin passwords")
+                raise HTTPException(status_code=403, detail="Only superadmin can reset superadmin passwords")
+
             updated_user = await crud.admin_reset_password(
                 self.db, user=db_user, new_password=new_password
             )
@@ -233,4 +251,70 @@ class UserService:
                 event_type="admin_password_reset_error",
                 error_type="system_error"
             ).error(f"Admin password reset error: {str(e)}")
+            raise HTTPException(status_code=500, detail="Internal server error")
+
+    @admin_only()
+    async def delete_user(
+        self, user_id: int, current_user: models.User
+    ) -> dict:
+        user_logger = get_security_logger(
+            user_id=current_user.id,
+            target_user_id=user_id,
+            action="delete_user",
+            event_type="user_deletion_attempt"
+        )
+
+        try:
+            # Get the user to be deleted
+            db_user = await crud.get_user(self.db, user_id=user_id)
+            if not db_user:
+                user_logger.bind(
+                    event_type="user_deletion_failed",
+                    failure_reason="user_not_found"
+                ).warning("User deletion failed: user not found")
+                raise HTTPException(status_code=404, detail="User not found")
+
+            # Prevent deletion of superadmin users
+            if db_user.is_superadmin:
+                user_logger.bind(
+                    event_type="user_deletion_failed",
+                    failure_reason="cannot_delete_superadmin",
+                    target_username=db_user.username
+                ).warning("User deletion failed: cannot delete superadmin user")
+                raise HTTPException(status_code=403, detail="Cannot delete superadmin user")
+
+            # Prevent self-deletion
+            if current_user.id == user_id:
+                user_logger.bind(
+                    event_type="user_deletion_failed",
+                    failure_reason="self_deletion_attempted"
+                ).warning("User deletion failed: cannot delete self")
+                raise HTTPException(status_code=403, detail="Cannot delete your own account")
+
+            # Only superadmin can delete admin users
+            if db_user.role == "Admin" and not current_user.is_superadmin:
+                user_logger.bind(
+                    event_type="user_deletion_failed",
+                    failure_reason="only_superadmin_can_delete_admin",
+                    target_username=db_user.username
+                ).warning("User deletion failed: only superadmin can delete admin users")
+                raise HTTPException(status_code=403, detail="Only superadmin can delete admin users")
+
+            username_to_delete = db_user.username
+            await crud.delete_user(self.db, user_id=user_id)
+            
+            user_logger.bind(
+                target_username=username_to_delete,
+                event_type="user_deletion_success"
+            ).info("User deleted successfully")
+            
+            return {"message": f"User '{username_to_delete}' deleted successfully"}
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            user_logger.bind(
+                event_type="user_deletion_error",
+                error_type="system_error"
+            ).error(f"User deletion error: {str(e)}")
             raise HTTPException(status_code=500, detail="Internal server error")

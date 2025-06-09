@@ -59,6 +59,8 @@ async def update_user(db: Session, user_id: int, user: UserUpdate):
         db_user.role = user.role
     if user.is_active is not None:
         db_user.is_active = user.is_active
+    if user.is_superadmin is not None:
+        db_user.is_superadmin = user.is_superadmin
 
     db_user.updated_at = user.updated_at
     db.commit()
@@ -86,6 +88,16 @@ async def admin_reset_password(db: Session, user: models.User, new_password: str
     user.updated_at = get_utc_now()
     db.commit()
     return user
+
+
+async def delete_user(db: Session, user_id: int):
+    db_user = db.get(models.User, user_id)
+    if db_user is None:
+        raise ValueError(f"User with id {user_id} not found")
+
+    db.delete(db_user)
+    db.commit()
+    return True
 
 
 # --- Client ---

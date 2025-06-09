@@ -219,13 +219,24 @@
                 >
                   <!-- Role column -->
                   <template #[`item.role`]="{ item }">
-                    <v-chip
-                      :color="getRoleColor(item.role)"
-                      size="small"
-                      variant="tonal"
-                    >
-                      {{ item.role }}
-                    </v-chip>
+                    <div class="d-flex align-center ga-2">
+                      <v-chip
+                        :color="getRoleColor(item.role)"
+                        size="small"
+                        variant="tonal"
+                      >
+                        {{ item.role }}
+                      </v-chip>
+                      <v-chip
+                        v-if="item.is_superadmin"
+                        color="purple"
+                        size="small"
+                        variant="flat"
+                      >
+                        <v-icon start size="x-small">mdi-crown</v-icon>
+                        Superadmin
+                      </v-chip>
+                    </div>
                   </template>
 
                   <!-- Created date -->
@@ -239,6 +250,7 @@
                   <template #[`item.actions`]="{ item }">
                     <div class="d-flex ga-2">
                       <v-btn
+                        v-if="canEditUser(item)"
                         color="info"
                         size="small"
                         variant="outlined"
@@ -251,6 +263,7 @@
                         </v-tooltip>
                       </v-btn>
                       <v-btn
+                        v-if="canResetPassword(item)"
                         color="warning"
                         size="small"
                         variant="outlined"
@@ -263,6 +276,7 @@
                         </v-tooltip>
                       </v-btn>
                       <v-btn
+                        v-if="canDeleteUser(item)"
                         color="error"
                         size="small"
                         variant="outlined"
@@ -478,6 +492,66 @@
       @saved="handlePasswordResetSaved"
     />
 
+    <!-- Delete User Confirmation Dialog -->
+    <v-dialog
+      v-model="showDeleteConfirmDialog"
+      max-width="500"
+      persistent
+    >
+      <v-card>
+        <v-card-title class="d-flex align-center pa-6">
+          <v-icon
+            icon="mdi-alert-circle"
+            color="error"
+            size="large"
+            class="me-3"
+          />
+          <span class="text-h5 font-weight-medium">Confirm Deletion</span>
+        </v-card-title>
+
+        <v-divider />
+
+        <v-card-text class="pa-6">
+          <div class="text-body-1 mb-4">
+            Are you sure you want to delete the user 
+            <strong>{{ userToDelete?.username }}</strong>?
+          </div>
+          <v-alert
+            type="warning"
+            variant="tonal"
+            class="mb-0"
+          >
+            <div class="text-body-2">
+              <strong>This action cannot be undone.</strong> All user data and associated records will be permanently removed.
+            </div>
+          </v-alert>
+        </v-card-text>
+
+        <v-divider />
+
+        <v-card-actions class="pa-6">
+          <v-spacer />
+          <v-btn
+            variant="text"
+            color="primary"
+            @click="cancelDeleteUser"
+            :disabled="deleteLoading"
+          >
+            Cancel
+          </v-btn>
+          <v-btn
+            variant="flat"
+            color="error"
+            @click="confirmDeleteUser"
+            :loading="deleteLoading"
+            prepend-icon="mdi-delete"
+          >
+            Delete User
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <!-- Snackbar for notifications -->
     <v-snackbar
       v-model="snackbar.show"
@@ -528,6 +602,13 @@ const inviteSearchQuery = ref('')
 const activeTab = ref('users')
 const cleanupLoading = ref(false)
 
+// Dialog state
+const showPasswordResetModal = ref(false)
+const selectedUserForPasswordReset = ref(null)
+const showDeleteConfirmDialog = ref(false)
+const userToDelete = ref(null)
+const deleteLoading = ref(false)
+
 // Vuetify table headers
 const vuetifyHeaders = [
   { title: 'Username', key: 'username', sortable: true },
@@ -544,10 +625,6 @@ const inviteHeaders = [
   { title: 'Expires', key: 'expires_at', sortable: true },
   { title: 'Actions', key: 'actions', sortable: false }
 ]
-
-// Password reset state
-const showPasswordResetModal = ref(false)
-const selectedUserForPasswordReset = ref(null)
 
 // Configuration state
 const selectedTemplate = ref('YYMM-NN')
@@ -788,16 +865,31 @@ const handleUserSaved = (user) => {
   }
 }
 
-const deleteUser = async (user) => {
-  if (!confirm(`Are you sure you want to delete user ${user.username}?`)) {
-    return
-  }
+const deleteUser = (user) => {
+  userToDelete.value = user
+  showDeleteConfirmDialog.value = true
+}
 
+const cancelDeleteUser = () => {
+  showDeleteConfirmDialog.value = false
+  userToDelete.value = null
+  deleteLoading.value = false
+}
+
+const confirmDeleteUser = async () => {
+  if (!userToDelete.value) return
+
+  deleteLoading.value = true
+  
   try {
-    await userService.deleteUser(user.id)
-    users.value = users.value.filter(u => u.id !== user.id)
-  } catch {
-    error.value = 'Failed to delete user. Please try again.'
+    await userService.deleteUser(userToDelete.value.id)
+    users.value = users.value.filter(u => u.id !== userToDelete.value.id)
+    showNotification(`User '${userToDelete.value.username}' deleted successfully`, 'success')
+    cancelDeleteUser()
+  } catch (err) {
+    console.error('Error deleting user:', err)
+    showNotification('Failed to delete user. Please try again.', 'error')
+    deleteLoading.value = false
   }
 }
 
@@ -942,6 +1034,48 @@ const getInviteEmptyStateMessage = () => {
 
 const shouldShowCreateInviteButton = () => {
   return (invites.value || []).length === 0 && !inviteSearchQuery.value
+}
+
+// Check if current user can delete a specific user
+const canDeleteUser = (targetUser) => {
+  const currentUser = authStore.user
+  if (!currentUser) return false
+  
+  // Cannot delete yourself
+  if (currentUser.id === targetUser.id) return false
+  
+  // Cannot delete superadmin users
+  if (targetUser.is_superadmin) return false
+  
+  // Only superadmin can delete admin users
+  if (targetUser.role === 'Admin' && !currentUser.is_superadmin) return false
+  
+  // Regular admins can delete non-admin users
+  return true
+}
+
+// Check if current user can reset password for a specific user
+const canResetPassword = (targetUser) => {
+  const currentUser = authStore.user
+  if (!currentUser) return false
+  
+  // Only superadmin can reset superadmin passwords
+  if (targetUser.is_superadmin && !currentUser.is_superadmin) return false
+  
+  // All admins can reset non-superadmin passwords
+  return true
+}
+
+// Check if current user can edit a specific user
+const canEditUser = (targetUser) => {
+  const currentUser = authStore.user
+  if (!currentUser) return false
+  
+  // Only superadmin can edit superadmin users
+  if (targetUser.is_superadmin && !currentUser.is_superadmin) return false
+  
+  // All admins can edit non-superadmin users
+  return true
 }
 </script>
 
