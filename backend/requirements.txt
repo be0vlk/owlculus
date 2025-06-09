@@ -17,5 +17,6 @@ python-whois
 loguru
 cryptography
 openai
+shodan
 pytest
 pytest-asyncio
