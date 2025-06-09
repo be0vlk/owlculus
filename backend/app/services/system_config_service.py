@@ -136,22 +136,31 @@ class SystemConfigService:
         current_user: models.User,
     ) -> models.SystemConfiguration:
         """Set or update an API key for a specific provider."""
+        config = await self.get_configuration()
+        current_keys = config.api_keys.copy() if config.api_keys else {}
+
+        # Determine if this is a new key addition or update
+        is_new_key = provider not in current_keys
+        operation_type = "add" if is_new_key else "update"
+
         config_logger = get_security_logger(
             admin_user_id=current_user.id,
-            action="set_api_key",
+            action=f"{operation_type}_api_key",
             provider=provider,
-            event_type="api_key_set_attempt",
+            key_name=name,
+            is_new_key=is_new_key,
+            event_type=f"api_key_{operation_type}_attempt",
         )
 
         try:
-            config = await self.get_configuration()
-
-            # Create a new dictionary to ensure SQLAlchemy detects the change
-            current_keys = config.api_keys.copy() if config.api_keys else {}
-
             # If updating existing provider, preserve existing data
             if provider in current_keys:
                 existing_data = current_keys[provider].copy()
+                old_name = existing_data.get("name", "Unknown")
+
+                # Check if key is being updated or just metadata
+                key_being_updated = api_key is not None
+
                 current_keys[provider] = {
                     "api_key": (
                         encrypt_api_key(api_key)
@@ -164,10 +173,25 @@ class SystemConfigService:
                         "created_at", get_utc_now().isoformat()
                     ),
                 }
+
+                # Enhanced logging for updates
+                config_logger = config_logger.bind(
+                    old_name=old_name,
+                    new_name=name,
+                    key_updated=key_being_updated,
+                    metadata_only=not key_being_updated,
+                )
             else:
                 # New provider - API key is required
                 if not api_key:
+                    config_logger.bind(
+                        event_type="api_key_add_failed",
+                        failure_reason="api_key_required",
+                    ).warning(
+                        f"Failed to add new API key for {provider}: API key is required for new providers"
+                    )
                     raise ValueError("API key is required for new providers")
+
                 encrypted_key = encrypt_api_key(api_key)
                 current_keys[provider] = {
                     "api_key": encrypted_key,
@@ -183,37 +207,61 @@ class SystemConfigService:
             self.db.commit()
             self.db.refresh(config)
 
-            config_logger.bind(
-                provider=provider, key_name=name, event_type="api_key_set_success"
-            ).info(f"API key set successfully for provider: {provider}")
+            # Success logging with operation-specific details
+            success_event_type = f"api_key_{operation_type}_success"
+            if is_new_key:
+                config_logger.bind(event_type=success_event_type).info(
+                    f"New API key added successfully for provider: {provider}"
+                )
+            else:
+                config_logger.bind(event_type=success_event_type).info(
+                    f"API key updated successfully for provider: {provider}"
+                )
 
             return config
 
-        except Exception as e:
+        except ValueError as e:
+            # Log validation failures
             config_logger.bind(
-                event_type="api_key_set_error",
-                provider=provider,
+                event_type=f"api_key_{operation_type}_failed",
+                failure_reason="validation_error",
+                error_message=str(e),
+            ).warning(f"API key {operation_type} failed for {provider}: {str(e)}")
+            raise
+        except Exception as e:
+            # Log system errors
+            config_logger.bind(
+                event_type=f"api_key_{operation_type}_error",
                 error_type="system_error",
-            ).error(f"API key set error for {provider}: {str(e)}")
+                error_message=str(e),
+            ).error(f"API key {operation_type} error for {provider}: {str(e)}")
             raise
 
     async def remove_api_key(
         self, provider: str, current_user: models.User
     ) -> models.SystemConfiguration:
         """Remove an API key for a specific provider."""
+        config = await self.get_configuration()
+
+        # Get existing key details for logging
+        existing_key_data = None
+        if config.api_keys and provider in config.api_keys:
+            existing_key_data = config.api_keys[provider]
+
         config_logger = get_security_logger(
             admin_user_id=current_user.id,
             action="remove_api_key",
             provider=provider,
+            key_name=existing_key_data.get("name") if existing_key_data else None,
+            key_existed=existing_key_data is not None,
             event_type="api_key_remove_attempt",
         )
 
         try:
-            config = await self.get_configuration()
-
             if config.api_keys and provider in config.api_keys:
                 # Create a new dictionary to ensure SQLAlchemy detects the change
                 current_keys = config.api_keys.copy()
+                removed_key_data = current_keys[provider]
                 del current_keys[provider]
                 config.api_keys = current_keys
                 config.updated_at = get_utc_now()
@@ -223,20 +271,25 @@ class SystemConfigService:
                 self.db.refresh(config)
 
                 config_logger.bind(
-                    provider=provider, event_type="api_key_remove_success"
+                    removed_key_name=removed_key_data.get("name"),
+                    key_created_at=removed_key_data.get("created_at"),
+                    event_type="api_key_remove_success",
                 ).info(f"API key removed successfully for provider: {provider}")
             else:
                 config_logger.bind(
-                    provider=provider, event_type="api_key_remove_not_found"
-                ).warning(f"API key not found for provider: {provider}")
+                    event_type="api_key_remove_not_found",
+                    failure_reason="key_not_found",
+                ).warning(
+                    f"Attempted to remove non-existent API key for provider: {provider}"
+                )
 
             return config
 
         except Exception as e:
             config_logger.bind(
                 event_type="api_key_remove_error",
-                provider=provider,
                 error_type="system_error",
+                error_message=str(e),
             ).error(f"API key remove error for {provider}: {str(e)}")
             raise
 
