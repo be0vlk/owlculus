@@ -630,17 +630,12 @@ class TestShodanPlugin:
             Exception("Duplicate entity")  # Second call fails
         ]
         
-        with patch('app.plugins.shodan_plugin.EntityService', return_value=mock_entity_service), \
-             patch('builtins.print') as mock_print:
+        with patch('app.plugins.shodan_plugin.EntityService', return_value=mock_entity_service):
             
             await plugin._create_ip_entities_from_results()
 
         # Verify both entities were attempted
         assert mock_entity_service.create_entity.call_count == 2
-        
-        # Verify feedback messages were printed
-        mock_print.assert_any_call("✅ Created 1 IP address entities from Shodan results")
-        mock_print.assert_any_call("⚠️ Failed to create 1 IP address entities (may be duplicates)")
 
     @pytest.mark.asyncio
     @patch('app.plugins.shodan_plugin.get_db')
@@ -707,6 +702,7 @@ class TestShodanPlugin:
         # Setup mocks
         mock_get_db.return_value = iter([mock_db_session])
         mock_entity_service = Mock(spec=EntityService)
+        mock_entity_service.find_entity_by_ip_address = AsyncMock(return_value=None)
         mock_entity_service.create_entity = AsyncMock()
         
         with patch('app.plugins.shodan_plugin.EntityService', return_value=mock_entity_service), \
@@ -720,3 +716,217 @@ class TestShodanPlugin:
         
         # Verify entity creation was attempted
         mock_entity_service.create_entity.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch('app.plugins.shodan_plugin.get_db')
+    async def test_create_ip_entities_enrichment_existing_entity(
+        self, mock_get_db, plugin, mock_db_session
+    ):
+        """Test enriching existing IP entity instead of creating duplicate"""
+        # Setup plugin state
+        plugin._current_params = {
+            "save_to_case": True,
+            "case_id": 123
+        }
+        plugin._current_user = Mock()
+        plugin._current_user.id = 1
+        plugin._evidence_results = [
+            {
+                "ip": "8.8.8.8",
+                "organization": "Google LLC",
+                "search_type": "host_lookup",
+            }
+        ]
+
+        # Setup mocks - simulate existing entity
+        mock_get_db.return_value = iter([mock_db_session])
+        mock_entity_service = Mock(spec=EntityService)
+        
+        # Mock existing entity
+        existing_entity = Mock()
+        existing_entity.id = 456
+        mock_entity_service.find_entity_by_ip_address = AsyncMock(return_value=existing_entity)
+        mock_entity_service.enrich_entity_description = AsyncMock()
+        mock_entity_service.create_entity = AsyncMock()
+        
+        with patch('app.plugins.shodan_plugin.EntityService', return_value=mock_entity_service):
+            
+            await plugin._create_ip_entities_from_results()
+
+        # Verify entity lookup was called
+        mock_entity_service.find_entity_by_ip_address.assert_called_once_with(123, "8.8.8.8")
+        
+        # Verify enrichment was called instead of creation
+        mock_entity_service.enrich_entity_description.assert_called_once()
+        mock_entity_service.create_entity.assert_not_called()
+
+    @pytest.mark.asyncio
+    @patch('app.plugins.shodan_plugin.get_db')
+    async def test_create_ip_entities_mixed_new_and_existing(
+        self, mock_get_db, plugin, mock_db_session
+    ):
+        """Test handling mix of new and existing IP entities"""
+        # Setup plugin state with multiple IPs
+        plugin._current_params = {
+            "save_to_case": True,
+            "case_id": 123
+        }
+        plugin._current_user = Mock()
+        plugin._current_user.id = 1
+        plugin._evidence_results = [
+            {
+                "ip": "8.8.8.8",  # Will be existing
+                "organization": "Google LLC",
+                "search_type": "host_lookup",
+            },
+            {
+                "ip": "1.1.1.1",  # Will be new
+                "organization": "Cloudflare",
+                "search_type": "hostname_search",
+            },
+            {
+                "ip": "9.9.9.9",  # Will be new
+                "organization": "Quad9",
+                "search_type": "general_search",
+            }
+        ]
+
+        # Setup mocks
+        mock_get_db.return_value = iter([mock_db_session])
+        mock_entity_service = Mock(spec=EntityService)
+        
+        # Mock existing entity for 8.8.8.8, None for others
+        existing_entity = Mock()
+        existing_entity.id = 456
+        
+        async def mock_find_entity(case_id, ip):
+            if ip == "8.8.8.8":
+                return existing_entity
+            return None
+        
+        mock_entity_service.find_entity_by_ip_address = AsyncMock(side_effect=mock_find_entity)
+        mock_entity_service.enrich_entity_description = AsyncMock()
+        mock_entity_service.create_entity = AsyncMock()
+        
+        with patch('app.plugins.shodan_plugin.EntityService', return_value=mock_entity_service):
+            
+            await plugin._create_ip_entities_from_results()
+
+        # Verify lookups for all IPs
+        assert mock_entity_service.find_entity_by_ip_address.call_count == 3
+        
+        # Verify one enrichment and two creations
+        mock_entity_service.enrich_entity_description.assert_called_once()
+        assert mock_entity_service.create_entity.call_count == 2
+
+    @pytest.mark.asyncio
+    @patch('app.plugins.shodan_plugin.get_db')
+    async def test_create_ip_entities_enrichment_with_partial_failures(
+        self, mock_get_db, plugin, mock_db_session
+    ):
+        """Test enrichment with some operations failing"""
+        # Setup plugin state
+        plugin._current_params = {
+            "save_to_case": True,
+            "case_id": 123
+        }
+        plugin._current_user = Mock()
+        plugin._evidence_results = [
+            {"ip": "8.8.8.8", "search_type": "host_lookup"},  # Will succeed (existing)
+            {"ip": "1.1.1.1", "search_type": "hostname_search"},  # Will succeed (new)
+            {"ip": "2.2.2.2", "search_type": "general_search"},  # Will fail
+        ]
+
+        # Setup mocks
+        mock_get_db.return_value = iter([mock_db_session])
+        mock_entity_service = Mock(spec=EntityService)
+        
+        # Mock existing entity for 8.8.8.8
+        existing_entity = Mock()
+        existing_entity.id = 456
+        
+        async def mock_find_entity(case_id, ip):
+            if ip == "8.8.8.8":
+                return existing_entity
+            elif ip == "2.2.2.2":
+                raise Exception("Lookup failed")
+            return None
+        
+        mock_entity_service.find_entity_by_ip_address = AsyncMock(side_effect=mock_find_entity)
+        mock_entity_service.enrich_entity_description = AsyncMock()
+        mock_entity_service.create_entity = AsyncMock()
+        
+        with patch('app.plugins.shodan_plugin.EntityService', return_value=mock_entity_service):
+            
+            await plugin._create_ip_entities_from_results()
+
+        # Verify operations
+        mock_entity_service.enrich_entity_description.assert_called_once()
+        mock_entity_service.create_entity.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch('app.plugins.shodan_plugin.get_db')
+    async def test_create_ip_entities_no_existing_entities(
+        self, mock_get_db, plugin, mock_db_session
+    ):
+        """Test creating entities when none exist (original behavior)"""
+        # Setup plugin state
+        plugin._current_params = {
+            "save_to_case": True,
+            "case_id": 123
+        }
+        plugin._current_user = Mock()
+        plugin._current_user.id = 1
+        plugin._evidence_results = [
+            {"ip": "192.168.1.1", "search_type": "host_lookup"},
+            {"ip": "192.168.1.2", "search_type": "hostname_search"}
+        ]
+
+        # Setup mocks - no existing entities
+        mock_get_db.return_value = iter([mock_db_session])
+        mock_entity_service = Mock(spec=EntityService)
+        mock_entity_service.find_entity_by_ip_address = AsyncMock(return_value=None)
+        mock_entity_service.create_entity = AsyncMock()
+        
+        with patch('app.plugins.shodan_plugin.EntityService', return_value=mock_entity_service):
+            
+            await plugin._create_ip_entities_from_results()
+
+        # Verify all were created as new entities
+        assert mock_entity_service.create_entity.call_count == 2
+        mock_entity_service.enrich_entity_description.assert_not_called()
+
+    @pytest.mark.asyncio
+    @patch('app.plugins.shodan_plugin.get_db')
+    async def test_create_ip_entities_all_existing_entities(
+        self, mock_get_db, plugin, mock_db_session
+    ):
+        """Test enriching entities when all already exist"""
+        # Setup plugin state
+        plugin._current_params = {
+            "save_to_case": True,
+            "case_id": 123
+        }
+        plugin._current_user = Mock()
+        plugin._evidence_results = [
+            {"ip": "10.0.0.1", "search_type": "host_lookup"},
+            {"ip": "10.0.0.2", "search_type": "hostname_search"}
+        ]
+
+        # Setup mocks - all entities exist
+        mock_get_db.return_value = iter([mock_db_session])
+        mock_entity_service = Mock(spec=EntityService)
+        
+        existing_entity = Mock()
+        existing_entity.id = 456
+        mock_entity_service.find_entity_by_ip_address = AsyncMock(return_value=existing_entity)
+        mock_entity_service.enrich_entity_description = AsyncMock()
+        mock_entity_service.create_entity = AsyncMock()
+        
+        with patch('app.plugins.shodan_plugin.EntityService', return_value=mock_entity_service):
+            
+            await plugin._create_ip_entities_from_results()
+
+        # Verify all were enriched, none created
+        assert mock_entity_service.enrich_entity_description.call_count == 2
+        mock_entity_service.create_entity.assert_not_called()

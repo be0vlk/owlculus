@@ -115,3 +115,68 @@ class EntityService:
 
         self.db.delete(db_entity)
         self.db.commit()
+
+    async def find_entity_by_ip_address(
+        self, case_id: int, ip_address: str
+    ) -> Optional[models.Entity]:
+        """Find an existing IP address entity in the given case"""
+        case = self.db.get(models.Case, case_id)
+        if case is None:
+            raise HTTPException(status_code=404, detail="Case not found")
+
+        query = select(models.Entity).where(
+            models.Entity.case_id == case_id,
+            models.Entity.entity_type == "ip_address",
+            models.Entity.data["ip_address"].as_string() == ip_address,
+        )
+        result = self.db.exec(query)
+        return result.first()
+
+    async def find_entity_by_domain(
+        self, case_id: int, domain: str
+    ) -> Optional[models.Entity]:
+        """Find an existing domain entity in the given case (case-insensitive)"""
+        case = self.db.get(models.Case, case_id)
+        if case is None:
+            raise HTTPException(status_code=404, detail="Case not found")
+
+        query = select(models.Entity).where(
+            models.Entity.case_id == case_id,
+            models.Entity.entity_type == "domain",
+            models.Entity.data["domain"].as_string().ilike(domain),
+        )
+        result = self.db.exec(query)
+        return result.first()
+
+    @no_analyst()
+    async def enrich_entity_description(
+        self,
+        entity_id: int,
+        additional_description: str,
+        current_user: models.User,
+    ) -> models.Entity:
+        """Enrich an existing entity's description with additional information"""
+        db_entity = self.db.get(models.Entity, entity_id)
+        if not db_entity:
+            raise HTTPException(status_code=404, detail="Entity not found")
+
+        current_description = db_entity.data.get("description", "")
+        
+        if current_description:
+            # Append new description with separator
+            enriched_description = f"{current_description}\n\n--- Additional Info ---\n{additional_description}"
+        else:
+            enriched_description = additional_description
+        
+        # Update the entity data with enriched description
+        updated_data = db_entity.data.copy()
+        updated_data["description"] = enriched_description
+        
+        db_entity.data = updated_data
+        db_entity.updated_at = get_utc_now()
+
+        self.db.add(db_entity)
+        self.db.commit()
+        self.db.refresh(db_entity)
+
+        return db_entity

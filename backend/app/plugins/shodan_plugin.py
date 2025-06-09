@@ -307,7 +307,7 @@ class ShodanPlugin(BasePlugin):
             await self._create_ip_entities_from_results()
 
     async def _create_ip_entities_from_results(self) -> None:
-        """Extract IP addresses from results and create entities"""
+        """Extract IP addresses from results and create or enrich entities"""
         case_id = self._current_params.get("case_id")
         if not case_id:
             return
@@ -323,46 +323,63 @@ class ShodanPlugin(BasePlugin):
         try:
             entity_service = EntityService(db)
             created_count = 0
+            enriched_count = 0
             failed_count = 0
             
             for ip_data in discovered_ips:
                 try:
-                    # Create IP address entity
-                    entity_create = EntityCreate(
-                        entity_type="ip_address",
-                        data=IpAddressData(
-                            ip_address=ip_data["ip"],
-                            description=ip_data["description"]
-                        ).model_dump()
+                    ip_address = ip_data["ip"]
+                    description = ip_data["description"]
+                    
+                    # Check if IP entity already exists
+                    existing_entity = await entity_service.find_entity_by_ip_address(
+                        case_id, ip_address
                     )
                     
-                    await entity_service.create_entity(
-                        case_id=case_id,
-                        entity=entity_create,
-                        current_user=self._current_user
-                    )
-                    created_count += 1
+                    if existing_entity:
+                        # Enrich existing entity with new Shodan data
+                        await entity_service.enrich_entity_description(
+                            existing_entity.id,
+                            description,
+                            current_user=self._current_user
+                        )
+                        enriched_count += 1
+                    else:
+                        # Create new IP address entity
+                        entity_create = EntityCreate(
+                            entity_type="ip_address",
+                            data=IpAddressData(
+                                ip_address=ip_address,
+                                description=description
+                            ).model_dump()
+                        )
+                        
+                        await entity_service.create_entity(
+                            case_id=case_id,
+                            entity=entity_create,
+                            current_user=self._current_user
+                        )
+                        created_count += 1
                     
                 except Exception as e:
                     # Log error but continue with other IPs
                     failed_count += 1
                     continue
             
-            # Provide feedback on entity creation
-            if created_count > 0:
-                print(f"✅ Created {created_count} IP address entities from Shodan results")
-            if failed_count > 0:
-                print(f"⚠️ Failed to create {failed_count} IP address entities (may be duplicates)")
+            # Entity operations completed silently
                 
         except Exception as e:
             # Don't break evidence saving if entity creation fails completely
-            print(f"❌ Entity creation failed: {str(e)}")
+            pass
         finally:
             db.close()
 
     def _extract_unique_ips_from_results(self) -> list[dict]:
         """Extract unique IP addresses with metadata from collected results"""
         ip_data_map = {}  # Use dict to avoid duplicates while preserving rich data
+        
+        # Get the original query from current params
+        original_query = self._current_params.get("query", "") if self._current_params else ""
         
         for result in self._evidence_results:
             ip_address = result.get("ip")
@@ -374,7 +391,7 @@ class ShodanPlugin(BasePlugin):
                 continue
                 
             # Generate description based on available Shodan data
-            description = self._generate_ip_description(result)
+            description = self._generate_ip_description(result, original_query)
             
             ip_data_map[ip_address] = {
                 "ip": ip_address,
@@ -383,71 +400,16 @@ class ShodanPlugin(BasePlugin):
         
         return list(ip_data_map.values())
 
-    def _generate_ip_description(self, result: dict) -> str:
+    def _generate_ip_description(self, result: dict, original_query: str = "") -> str:
         """Generate a descriptive string for the IP address entity"""
-        components = []
-        
-        # Add search type context
         search_type = result.get("search_type", "unknown")
+        query_part = f" for '{original_query}'" if original_query else ""
+        
         if search_type == "host_lookup":
-            components.append("Discovered via Shodan IP lookup")
+            return f"Discovered via Shodan IP lookup{query_part}"
         elif search_type == "hostname_search":
-            components.append("Discovered via Shodan hostname search")
+            return f"Discovered via Shodan hostname lookup{query_part}"
         elif search_type == "general_search":
-            components.append("Discovered via Shodan general search")
+            return f"Discovered via Shodan general lookup{query_part}"
         else:
-            components.append("Discovered via Shodan search")
-        
-        # Add organization if available
-        organization = result.get("organization")
-        if organization and organization != "Unknown":
-            components.append(f"Org: {organization}")
-        
-        # Add location if available
-        location_parts = []
-        city = result.get("city")
-        country = result.get("country")
-        if city and city != "Unknown":
-            location_parts.append(city)
-        if country and country != "Unknown":
-            location_parts.append(country)
-        if location_parts:
-            components.append(f"Location: {', '.join(location_parts)}")
-        
-        # Add services information
-        services = []
-        
-        # Handle single service (from search results)
-        if result.get("port") and result.get("service"):
-            service_info = result.get("service", "Unknown")
-            if result.get("version"):
-                service_info += f" {result.get('version')}"
-            services.append(f"{result.get('port')}/{result.get('transport', 'tcp')}:{service_info}")
-        
-        # Handle multiple services (from host lookup)
-        if result.get("services") and isinstance(result.get("services"), list):
-            for service in result.get("services", [])[:3]:  # Limit to first 3 services
-                service_info = service.get("service", "Unknown")
-                if service.get("version"):
-                    service_info += f" {service.get('version')}"
-                services.append(f"{service.get('port')}/{service.get('transport', 'tcp')}:{service_info}")
-        
-        # Handle ports list (from host lookup)
-        elif result.get("ports") and isinstance(result.get("ports"), list):
-            port_list = result.get("ports", [])[:5]  # Limit to first 5 ports
-            if port_list:
-                services.append(f"Ports: {', '.join(map(str, port_list))}")
-        
-        if services:
-            components.append(f"Services: {', '.join(services)}")
-        
-        # Add vulnerability information if available
-        vulns = result.get("vulns")
-        if vulns and isinstance(vulns, list) and len(vulns) > 0:
-            vuln_count = len(vulns)
-            if vuln_count == 1:
-                components.append(f"Vulnerability: {vulns[0]}")
-            else:
-                components.append(f"Vulnerabilities: {vuln_count} found")
-        
-        return " | ".join(components)
+            return f"Discovered via Shodan lookup{query_part}"

@@ -286,6 +286,40 @@ async def check_entity_duplicates(
                     detail=f"A person with the name '{first_name} {last_name}' already exists in this case",
                 )
 
+    elif entity_type == "ip_address":
+        ip_address = entity.data.get("ip_address")
+        if ip_address:
+            query = select(models.Entity).where(
+                models.Entity.case_id == case_id,
+                models.Entity.entity_type == "ip_address",
+                models.Entity.data["ip_address"].as_string() == ip_address,
+            )
+            if entity_id:
+                query = query.where(models.Entity.id != entity_id)
+
+            if db.exec(query).first():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"An IP address '{ip_address}' already exists in this case",
+                )
+
+    elif entity_type == "domain":
+        domain = entity.data.get("domain")
+        if domain:
+            query = select(models.Entity).where(
+                models.Entity.case_id == case_id,
+                models.Entity.entity_type == "domain",
+                models.Entity.data["domain"].as_string().ilike(domain),
+            )
+            if entity_id:
+                query = query.where(models.Entity.id != entity_id)
+
+            if db.exec(query).first():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"A domain '{domain}' already exists in this case",
+                )
+
     elif entity_type == "network_assets":
         domains = entity.data.get("domains", [])
         ip_addresses = entity.data.get("ip_addresses", [])

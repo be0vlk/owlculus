@@ -249,6 +249,131 @@ class TestEntityService:
         assert exc_info.value.status_code == 400
         assert "already exists" in str(exc_info.value.detail)
 
+    async def test_create_entity_duplicate_ip_address(self, test_case, test_user):
+        """Test creating duplicate IP address entity"""
+        # Create first IP address
+        entity_data = EntityCreate(
+            entity_type="ip_address", 
+            data={"ip_address": "192.168.1.100", "description": "Test IP"}
+        )
+        await self.service.create_entity(
+            test_case.id, entity_data, current_user=test_user
+        )
+
+        # Try to create duplicate (exact match required for IP)
+        duplicate_data = EntityCreate(
+            entity_type="ip_address", 
+            data={"ip_address": "192.168.1.100", "description": "Duplicate IP"}
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            await self.service.create_entity(
+                test_case.id, duplicate_data, current_user=test_user
+            )
+        assert exc_info.value.status_code == 400
+        assert "already exists" in str(exc_info.value.detail)
+        assert "192.168.1.100" in str(exc_info.value.detail)
+
+    async def test_create_entity_duplicate_domain(self, test_case, test_user):
+        """Test creating duplicate domain entity"""
+        # Create first domain
+        entity_data = EntityCreate(
+            entity_type="domain", 
+            data={"domain": "Example.Com", "description": "Test domain"}
+        )
+        await self.service.create_entity(
+            test_case.id, entity_data, current_user=test_user
+        )
+
+        # Try to create duplicate (case-insensitive)
+        duplicate_data = EntityCreate(
+            entity_type="domain", 
+            data={"domain": "example.com", "description": "Duplicate domain"}  # lowercase
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            await self.service.create_entity(
+                test_case.id, duplicate_data, current_user=test_user
+            )
+        assert exc_info.value.status_code == 400
+        assert "already exists" in str(exc_info.value.detail)
+        assert "example.com" in str(exc_info.value.detail)
+
+    async def test_create_entity_different_case_allows_different_ips(self, test_case, test_user):
+        """Test that similar but different IP addresses are allowed"""
+        # Create first IP address
+        entity_data1 = EntityCreate(
+            entity_type="ip_address", 
+            data={"ip_address": "192.168.1.100", "description": "Test IP 1"}
+        )
+        await self.service.create_entity(
+            test_case.id, entity_data1, current_user=test_user
+        )
+
+        # Create different IP address (should succeed)
+        entity_data2 = EntityCreate(
+            entity_type="ip_address", 
+            data={"ip_address": "192.168.1.101", "description": "Test IP 2"}
+        )
+        entity2 = await self.service.create_entity(
+            test_case.id, entity_data2, current_user=test_user
+        )
+        assert entity2.data["ip_address"] == "192.168.1.101"
+
+    async def test_create_entity_different_case_allows_different_domains(self, test_case, test_user):
+        """Test that different domains are allowed, but case variations are not"""
+        # Create first domain
+        entity_data1 = EntityCreate(
+            entity_type="domain", 
+            data={"domain": "example.com", "description": "Test domain 1"}
+        )
+        await self.service.create_entity(
+            test_case.id, entity_data1, current_user=test_user
+        )
+
+        # Create different domain (should succeed)
+        entity_data2 = EntityCreate(
+            entity_type="domain", 
+            data={"domain": "different.com", "description": "Test domain 2"}
+        )
+        entity2 = await self.service.create_entity(
+            test_case.id, entity_data2, current_user=test_user
+        )
+        assert entity2.data["domain"] == "different.com"
+
+    async def test_duplicates_allowed_across_different_cases(self, test_case, test_user):
+        """Test that duplicate entities are allowed in different cases"""
+        # Create second case
+        from app.database import models
+        case2 = models.Case(
+            case_number="TEST-002",
+            title="Test Case 2",
+            description="Second test case",
+            status="Open",
+            client_id=test_case.client_id,
+            created_by_id=test_user.id,
+        )
+        self.db.add(case2)
+        self.db.commit()
+
+        # Create IP in first case
+        entity_data1 = EntityCreate(
+            entity_type="ip_address", 
+            data={"ip_address": "192.168.1.100", "description": "Test IP Case 1"}
+        )
+        await self.service.create_entity(
+            test_case.id, entity_data1, current_user=test_user
+        )
+
+        # Create same IP in second case (should succeed)
+        entity_data2 = EntityCreate(
+            entity_type="ip_address", 
+            data={"ip_address": "192.168.1.100", "description": "Test IP Case 2"}
+        )
+        entity2 = await self.service.create_entity(
+            case2.id, entity_data2, current_user=test_user
+        )
+        assert entity2.data["ip_address"] == "192.168.1.100"
+        assert entity2.case_id == case2.id
+
     async def test_create_entity_case_not_found(self, test_user):
         """Test creating entity for non-existent case"""
         entity_data = EntityCreate(
@@ -632,3 +757,148 @@ class TestEntityService:
 
         assert len(entities) == 50
         assert elapsed_time < 1.0  # Should complete within 1 second
+
+    # =========================
+    # Entity lookup tests
+    # =========================
+
+    async def test_find_entity_by_ip_address_success(self, test_case, test_user):
+        """Test finding an existing IP address entity"""
+        # Create IP entity
+        entity_data = EntityCreate(
+            entity_type="ip_address", 
+            data={"ip_address": "10.0.0.1", "description": "Test IP"}
+        )
+        created_entity = await self.service.create_entity(
+            test_case.id, entity_data, current_user=test_user
+        )
+
+        # Find the entity
+        found_entity = await self.service.find_entity_by_ip_address(
+            test_case.id, "10.0.0.1"
+        )
+        
+        assert found_entity is not None
+        assert found_entity.id == created_entity.id
+        assert found_entity.data["ip_address"] == "10.0.0.1"
+
+    async def test_find_entity_by_ip_address_not_found(self, test_case):
+        """Test finding non-existent IP address entity"""
+        found_entity = await self.service.find_entity_by_ip_address(
+            test_case.id, "192.168.99.99"
+        )
+        assert found_entity is None
+
+    async def test_find_entity_by_ip_address_case_not_found(self):
+        """Test finding IP entity in non-existent case"""
+        with pytest.raises(HTTPException) as exc_info:
+            await self.service.find_entity_by_ip_address(99999, "192.168.1.1")
+        assert exc_info.value.status_code == 404
+
+    async def test_find_entity_by_domain_success(self, test_case, test_user):
+        """Test finding an existing domain entity"""
+        # Create domain entity
+        entity_data = EntityCreate(
+            entity_type="domain", 
+            data={"domain": "TestDomain.Com", "description": "Test domain"}
+        )
+        created_entity = await self.service.create_entity(
+            test_case.id, entity_data, current_user=test_user
+        )
+
+        # Find the entity (case-insensitive)
+        found_entity = await self.service.find_entity_by_domain(
+            test_case.id, "testdomain.com"
+        )
+        
+        assert found_entity is not None
+        assert found_entity.id == created_entity.id
+        assert found_entity.data["domain"] == "TestDomain.Com"
+
+    async def test_find_entity_by_domain_not_found(self, test_case):
+        """Test finding non-existent domain entity"""
+        found_entity = await self.service.find_entity_by_domain(
+            test_case.id, "nonexistent.com"
+        )
+        assert found_entity is None
+
+    async def test_find_entity_by_domain_case_not_found(self):
+        """Test finding domain entity in non-existent case"""
+        with pytest.raises(HTTPException) as exc_info:
+            await self.service.find_entity_by_domain(99999, "example.com")
+        assert exc_info.value.status_code == 404
+
+    # =========================
+    # Entity enrichment tests
+    # =========================
+
+    async def test_enrich_entity_description_new_description(self, test_case, test_user):
+        """Test enriching entity with new description"""
+        # Create entity without description
+        entity_data = EntityCreate(
+            entity_type="ip_address", 
+            data={"ip_address": "172.16.0.1"}
+        )
+        created_entity = await self.service.create_entity(
+            test_case.id, entity_data, current_user=test_user
+        )
+
+        # Enrich with description
+        enriched_entity = await self.service.enrich_entity_description(
+            created_entity.id, 
+            "Discovered via Shodan: Apache server on port 80",
+            current_user=test_user
+        )
+
+        assert enriched_entity.data["description"] == "Discovered via Shodan: Apache server on port 80"
+        assert enriched_entity.updated_at > created_entity.created_at
+
+    async def test_enrich_entity_description_append_to_existing(self, test_case, test_user):
+        """Test enriching entity that already has a description"""
+        # Create entity with existing description
+        entity_data = EntityCreate(
+            entity_type="ip_address", 
+            data={
+                "ip_address": "172.16.0.2", 
+                "description": "Original description from manual entry"
+            }
+        )
+        created_entity = await self.service.create_entity(
+            test_case.id, entity_data, current_user=test_user
+        )
+
+        # Enrich with additional description
+        enriched_entity = await self.service.enrich_entity_description(
+            created_entity.id, 
+            "Additional info from Shodan scan",
+            current_user=test_user
+        )
+
+        expected_description = "Original description from manual entry\n\n--- Additional Info ---\nAdditional info from Shodan scan"
+        assert enriched_entity.data["description"] == expected_description
+
+    async def test_enrich_entity_description_not_found(self, test_user):
+        """Test enriching non-existent entity"""
+        with pytest.raises(HTTPException) as exc_info:
+            await self.service.enrich_entity_description(
+                99999, "Some description", current_user=test_user
+            )
+        assert exc_info.value.status_code == 404
+
+    async def test_enrich_entity_description_analyst_forbidden(self, test_case, test_analyst):
+        """Test analyst cannot enrich entities"""
+        # Create entity
+        entity = models.Entity(
+            case_id=test_case.id,
+            entity_type="ip_address",
+            data={"ip_address": "172.16.0.3"},
+            created_by_id=test_analyst.id,
+        )
+        self.db.add(entity)
+        self.db.commit()
+
+        with pytest.raises(HTTPException) as exc_info:
+            await self.service.enrich_entity_description(
+                entity.id, "Some enrichment", current_user=test_analyst
+            )
+        assert exc_info.value.status_code == 403
