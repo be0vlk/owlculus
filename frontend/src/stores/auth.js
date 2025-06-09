@@ -8,20 +8,36 @@ export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = ref(authService.isAuthenticated())
   const error = ref(null)
   const isInitialized = ref(false)
+  const initPromise = ref(null)
 
   // Initialize user data if already authenticated
   async function init() {
-    if (isAuthenticated.value) {
-      try {
-        const userData = await authService.getCurrentUser()
-        user.value = userData
-      } catch (err) {
-        console.error('Failed to initialize user data:', err)
-        // If we fail to get user data, we should logout
-        logout()
-      }
+    // If already initialized, return immediately
+    if (isInitialized.value) {
+      return
     }
-    isInitialized.value = true
+    
+    // If initialization is in progress, return the existing promise
+    if (initPromise.value) {
+      return initPromise.value
+    }
+    
+    // Start initialization
+    initPromise.value = (async () => {
+      if (isAuthenticated.value) {
+        try {
+          const userData = await authService.getCurrentUser()
+          user.value = userData
+        } catch (err) {
+          console.error('Failed to initialize user data:', err)
+          // If we fail to get user data, we should logout
+          logout()
+        }
+      }
+      isInitialized.value = true
+    })()
+    
+    return initPromise.value
   }
 
   async function login(username, password) {
@@ -57,9 +73,7 @@ export const useAuthStore = defineStore('auth', () => {
     return user.value?.role === 'Admin'
   }
 
-  // Initialize the store
-  // We need to call init() immediately but also expose it for manual refresh
-  init()
+  // Don't auto-initialize - let the router handle it to avoid race conditions
 
   return {
     user,
@@ -69,6 +83,7 @@ export const useAuthStore = defineStore('auth', () => {
     logout,
     init,
     isInitialized,
+    initPromise,
     requiresAdmin,
     changePassword,
   }

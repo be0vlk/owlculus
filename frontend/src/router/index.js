@@ -63,14 +63,26 @@ const router = createRouter({
   routes,
 })
 
+// Track navigation state to prevent race conditions
+let navigationInProgress = false
+
 // Navigation guard
 router.beforeEach(async (to, from, next) => {
-  const authStore = useAuthStore()
-
-  // Wait for auth store to be initialized
-  if (!authStore.isInitialized) {
-    await authStore.init()
+  // Prevent concurrent navigation
+  if (navigationInProgress && to.path === from.path) {
+    next(false)
+    return
   }
+  
+  navigationInProgress = true
+  
+  try {
+    const authStore = useAuthStore()
+
+    // Wait for auth store to be initialized
+    if (!authStore.isInitialized) {
+      await authStore.init()
+    }
 
   // Check if route requires authentication
   if (to.matched.some((record) => record.meta.requiresAuth)) {
@@ -103,6 +115,12 @@ router.beforeEach(async (to, from, next) => {
   }
 
   next()
+  } finally {
+    // Reset navigation flag after a short delay
+    setTimeout(() => {
+      navigationInProgress = false
+    }, 100)
+  }
 })
 
 export default router

@@ -29,7 +29,6 @@
         :to="item.href"
         :prepend-icon="item.icon"
         :title="item.name"
-        :active="isCurrentRoute(item.href)"
         color="primary"
         rounded="xl"
         class="ma-1"
@@ -104,10 +103,6 @@ const navigationItems = computed(() => {
 
   return items
 })
-
-const isCurrentRoute = (path) => {
-  return route.path === path
-}
 
 const handleLogout = () => {
   authStore.logout()
