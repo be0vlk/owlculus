@@ -85,6 +85,7 @@ const navigationItems = computed(() => {
   const items = [
     { name: 'Cases', href: '/cases', icon: 'mdi-folder-outline' },
     { name: 'Plugins', href: '/plugins', icon: 'mdi-wrench-outline' },
+    { name: 'Strixy (WIP)', href: '/strixy', icon: 'mdi-robot' },
   ]
 
   // Add settings for non-admin users

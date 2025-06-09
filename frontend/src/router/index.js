@@ -51,6 +51,12 @@ const routes = [
     meta: { requiresAuth: true },
   },
   {
+    path: '/strixy',
+    name: 'StrixyChat',
+    component: () => import('../views/StrixyChat.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
     path: '/admin',
     name: 'Admin',
     component: () => import('../views/AdminDashboard.vue'),
