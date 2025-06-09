@@ -7,6 +7,7 @@ from . import (
     plugins,
     evidence,
     system_config,
+    invites,
 )
 
 api_router = APIRouter()
@@ -18,3 +19,4 @@ api_router.include_router(clients.router, prefix="/clients", tags=["clients"])
 api_router.include_router(plugins.router, prefix="/plugins", tags=["plugins"])
 api_router.include_router(evidence.router, prefix="/evidence", tags=["evidence"])
 api_router.include_router(system_config.router, prefix="/admin", tags=["admin"])
+api_router.include_router(invites.router, prefix="/invites", tags=["invites"])

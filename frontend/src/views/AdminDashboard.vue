@@ -125,7 +125,7 @@
             </v-card-actions>
           </v-card>
 
-          <!-- User Management Table -->
+          <!-- User Management Card -->
           <v-card variant="outlined">
             <!-- Header -->
             <v-card-title class="d-flex align-center pa-4 bg-surface">
@@ -136,6 +136,7 @@
               </div>
               <div class="d-flex align-center ga-2">
                 <v-btn
+                  v-if="activeTab === 'users'"
                   color="primary"
                   variant="flat"
                   prepend-icon="mdi-account-plus"
@@ -143,13 +144,22 @@
                 >
                   Add User
                 </v-btn>
-                <v-tooltip text="Refresh user list" location="bottom">
+                <v-btn
+                  v-if="activeTab === 'invites'"
+                  color="primary"
+                  variant="flat"
+                  prepend-icon="mdi-email-plus"
+                  @click="showNewInviteModal = true"
+                >
+                  Generate Invite
+                </v-btn>
+                <v-tooltip :text="activeTab === 'users' ? 'Refresh user list' : 'Refresh invite list'" location="bottom">
                   <template #activator="{ props }">
                     <v-btn
                       v-bind="props"
                       icon="mdi-refresh"
                       variant="outlined"
-                      @click="loadUsers"
+                      @click="activeTab === 'users' ? loadUsers() : loadInvites()"
                       :loading="loading"
                     />
                   </template>
@@ -159,128 +169,287 @@
 
             <v-divider />
 
-            <!-- Search Toolbar -->
-            <v-card-text class="pa-4">
-              <v-row align="center" class="mb-0">
-                <v-col cols="12" md="8">
-                  <!-- Could add user role filters here in the future -->
-                </v-col>
-
-                <!-- Search Controls -->
-                <v-col cols="12" md="4">
-                  <div class="d-flex align-center ga-4 justify-end">
-                    <!-- Search Field -->
-                    <v-text-field
-                      v-model="searchQuery"
-                      prepend-inner-icon="mdi-magnify"
-                      label="Search users..."
-                      variant="outlined"
-                      density="comfortable"
-                      hide-details
-                      style="min-width: 280px;"
-                      clearable
-                    />
-                  </div>
-                </v-col>
-              </v-row>
-            </v-card-text>
+            <!-- Tabs -->
+            <v-tabs v-model="activeTab" bg-color="surface" class="px-4">
+              <v-tab value="users" prepend-icon="mdi-account-group">Users</v-tab>
+              <v-tab value="invites" prepend-icon="mdi-email">Invites</v-tab>
+            </v-tabs>
 
             <v-divider />
 
-          <v-data-table
-            :headers="vuetifyHeaders"
-            :items="sortedAndFilteredUsers"
-            :loading="loading"
-            item-key="id"
-            class="elevation-0 admin-dashboard-table"
-            hover
-          >
-            <!-- Role column -->
-            <template #[`item.role`]="{ item }">
-              <v-chip
-                :color="getRoleColor(item.role)"
-                size="small"
-                variant="tonal"
-              >
-                {{ item.role }}
-              </v-chip>
-            </template>
+            <!-- Tab Content -->
+            <v-tabs-window v-model="activeTab">
+              <!-- Users Tab -->
+              <v-tabs-window-item value="users">
+                <!-- Search Toolbar -->
+                <v-card-text class="pa-4">
+                  <v-row align="center" class="mb-0">
+                    <v-col cols="12" md="8">
+                      <!-- Could add user role filters here in the future -->
+                    </v-col>
 
-            <!-- Created date -->
-            <template #[`item.created_at`]="{ item }">
-              <span class="text-body-2">
-                {{ formatDate(item.created_at) }}
-              </span>
-            </template>
+                    <!-- Search Controls -->
+                    <v-col cols="12" md="4">
+                      <div class="d-flex align-center ga-4 justify-end">
+                        <!-- Search Field -->
+                        <v-text-field
+                          v-model="searchQuery"
+                          prepend-inner-icon="mdi-magnify"
+                          label="Search users..."
+                          variant="outlined"
+                          density="comfortable"
+                          hide-details
+                          style="min-width: 280px;"
+                          clearable
+                        />
+                      </div>
+                    </v-col>
+                  </v-row>
+                </v-card-text>
 
-            <!-- Actions column -->
-            <template #[`item.actions`]="{ item }">
-              <div class="d-flex ga-2">
-                <v-btn
-                  color="info"
-                  size="small"
-                  variant="outlined"
-                  icon
-                  @click="editUser(item)"
-                >
-                  <v-icon>mdi-pencil</v-icon>
-                  <v-tooltip activator="parent" location="top">
-                    Edit {{ item.username }}
-                  </v-tooltip>
-                </v-btn>
-                <v-btn
-                  color="warning"
-                  size="small"
-                  variant="outlined"
-                  icon
-                  @click="resetPassword(item)"
-                >
-                  <v-icon>mdi-key</v-icon>
-                  <v-tooltip activator="parent" location="top">
-                    Reset password for {{ item.username }}
-                  </v-tooltip>
-                </v-btn>
-                <v-btn
-                  color="error"
-                  size="small"
-                  variant="outlined"
-                  icon
-                  @click="deleteUser(item)"
-                >
-                  <v-icon>mdi-delete</v-icon>
-                  <v-tooltip activator="parent" location="top">
-                    Delete {{ item.username }}
-                  </v-tooltip>
-                </v-btn>
-              </div>
-            </template>
+                <v-divider />
 
-            <!-- Empty state -->
-            <template #no-data>
-              <div class="text-center pa-12">
-                <v-icon
-                  icon="mdi-account-group-outline"
-                  size="64"
-                  color="grey-lighten-1"
-                  class="mb-4"
-                />
-                <h3 class="text-h6 font-weight-medium mb-2">
-                  {{ getEmptyStateTitle() }}
-                </h3>
-                <p class="text-body-2 text-medium-emphasis mb-4">
-                  {{ getEmptyStateMessage() }}
-                </p>
-                <v-btn
-                  v-if="shouldShowCreateButton()"
-                  color="primary"
-                  prepend-icon="mdi-account-plus"
-                  @click="showNewUserModal = true"
+                <v-data-table
+                  :headers="vuetifyHeaders"
+                  :items="sortedAndFilteredUsers"
+                  :loading="loading"
+                  item-key="id"
+                  class="elevation-0 admin-dashboard-table"
+                  hover
                 >
-                  Add User
-                </v-btn>
-              </div>
-            </template>
-          </v-data-table>
+                  <!-- Role column -->
+                  <template #[`item.role`]="{ item }">
+                    <v-chip
+                      :color="getRoleColor(item.role)"
+                      size="small"
+                      variant="tonal"
+                    >
+                      {{ item.role }}
+                    </v-chip>
+                  </template>
+
+                  <!-- Created date -->
+                  <template #[`item.created_at`]="{ item }">
+                    <span class="text-body-2">
+                      {{ formatDate(item.created_at) }}
+                    </span>
+                  </template>
+
+                  <!-- Actions column -->
+                  <template #[`item.actions`]="{ item }">
+                    <div class="d-flex ga-2">
+                      <v-btn
+                        color="info"
+                        size="small"
+                        variant="outlined"
+                        icon
+                        @click="editUser(item)"
+                      >
+                        <v-icon>mdi-pencil</v-icon>
+                        <v-tooltip activator="parent" location="top">
+                          Edit {{ item.username }}
+                        </v-tooltip>
+                      </v-btn>
+                      <v-btn
+                        color="warning"
+                        size="small"
+                        variant="outlined"
+                        icon
+                        @click="resetPassword(item)"
+                      >
+                        <v-icon>mdi-key</v-icon>
+                        <v-tooltip activator="parent" location="top">
+                          Reset password for {{ item.username }}
+                        </v-tooltip>
+                      </v-btn>
+                      <v-btn
+                        color="error"
+                        size="small"
+                        variant="outlined"
+                        icon
+                        @click="deleteUser(item)"
+                      >
+                        <v-icon>mdi-delete</v-icon>
+                        <v-tooltip activator="parent" location="top">
+                          Delete {{ item.username }}
+                        </v-tooltip>
+                      </v-btn>
+                    </div>
+                  </template>
+
+                  <!-- Empty state -->
+                  <template #no-data>
+                    <div class="text-center pa-12">
+                      <v-icon
+                        icon="mdi-account-group-outline"
+                        size="64"
+                        color="grey-lighten-1"
+                        class="mb-4"
+                      />
+                      <h3 class="text-h6 font-weight-medium mb-2">
+                        {{ getEmptyStateTitle() }}
+                      </h3>
+                      <p class="text-body-2 text-medium-emphasis mb-4">
+                        {{ getEmptyStateMessage() }}
+                      </p>
+                      <v-btn
+                        v-if="shouldShowCreateButton()"
+                        color="primary"
+                        prepend-icon="mdi-account-plus"
+                        @click="showNewUserModal = true"
+                      >
+                        Add User
+                      </v-btn>
+                    </div>
+                  </template>
+                </v-data-table>
+              </v-tabs-window-item>
+
+              <!-- Invites Tab -->
+              <v-tabs-window-item value="invites">
+                <!-- Search Toolbar -->
+                <v-card-text class="pa-4">
+                  <v-row align="center" class="mb-0">
+                    <v-col cols="12" md="8">
+                      <div class="d-flex align-center ga-2">
+                        <v-btn
+                          color="error"
+                          variant="outlined"
+                          prepend-icon="mdi-delete-sweep"
+                          @click="cleanupExpiredInvites"
+                          :loading="cleanupLoading"
+                          size="small"
+                        >
+                          Cleanup Expired
+                        </v-btn>
+                      </div>
+                    </v-col>
+
+                    <!-- Search Controls -->
+                    <v-col cols="12" md="4">
+                      <div class="d-flex align-center ga-4 justify-end">
+                        <!-- Search Field -->
+                        <v-text-field
+                          v-model="inviteSearchQuery"
+                          prepend-inner-icon="mdi-magnify"
+                          label="Search invites..."
+                          variant="outlined"
+                          density="comfortable"
+                          hide-details
+                          style="min-width: 280px;"
+                          clearable
+                        />
+                      </div>
+                    </v-col>
+                  </v-row>
+                </v-card-text>
+
+                <v-divider />
+
+                <v-data-table
+                  :headers="inviteHeaders"
+                  :items="sortedAndFilteredInvites"
+                  :loading="loading"
+                  item-key="id"
+                  class="elevation-0 admin-dashboard-table"
+                  hover
+                >
+                  <!-- Role column -->
+                  <template #[`item.role`]="{ item }">
+                    <v-chip
+                      :color="getRoleColor(item.role)"
+                      size="small"
+                      variant="tonal"
+                    >
+                      {{ item.role }}
+                    </v-chip>
+                  </template>
+
+                  <!-- Status column -->
+                  <template #[`item.status`]="{ item }">
+                    <v-chip
+                      :color="getInviteStatusColor(item)"
+                      size="small"
+                      variant="tonal"
+                    >
+                      {{ getInviteStatus(item) }}
+                    </v-chip>
+                  </template>
+
+                  <!-- Created date -->
+                  <template #[`item.created_at`]="{ item }">
+                    <span class="text-body-2">
+                      {{ formatDate(item.created_at) }}
+                    </span>
+                  </template>
+
+                  <!-- Expires date -->
+                  <template #[`item.expires_at`]="{ item }">
+                    <span class="text-body-2">
+                      {{ formatDate(item.expires_at) }}
+                    </span>
+                  </template>
+
+                  <!-- Actions column -->
+                  <template #[`item.actions`]="{ item }">
+                    <div class="d-flex ga-2">
+                      <v-btn
+                        v-if="!item.is_used && !item.is_expired"
+                        color="info"
+                        size="small"
+                        variant="outlined"
+                        icon
+                        @click="copyInviteLink(item)"
+                      >
+                        <v-icon>mdi-content-copy</v-icon>
+                        <v-tooltip activator="parent" location="top">
+                          Copy invite link
+                        </v-tooltip>
+                      </v-btn>
+                      <v-btn
+                        v-if="!item.is_used"
+                        color="error"
+                        size="small"
+                        variant="outlined"
+                        icon
+                        @click="deleteInvite(item)"
+                      >
+                        <v-icon>mdi-delete</v-icon>
+                        <v-tooltip activator="parent" location="top">
+                          Delete invite
+                        </v-tooltip>
+                      </v-btn>
+                    </div>
+                  </template>
+
+                  <!-- Empty state -->
+                  <template #no-data>
+                    <div class="text-center pa-12">
+                      <v-icon
+                        icon="mdi-email-outline"
+                        size="64"
+                        color="grey-lighten-1"
+                        class="mb-4"
+                      />
+                      <h3 class="text-h6 font-weight-medium mb-2">
+                        {{ getInviteEmptyStateTitle() }}
+                      </h3>
+                      <p class="text-body-2 text-medium-emphasis mb-4">
+                        {{ getInviteEmptyStateMessage() }}
+                      </p>
+                      <v-btn
+                        v-if="shouldShowCreateInviteButton()"
+                        color="primary"
+                        prepend-icon="mdi-email-plus"
+                        @click="showNewInviteModal = true"
+                      >
+                        Generate Invite
+                      </v-btn>
+                    </div>
+                  </template>
+                </v-data-table>
+              </v-tabs-window-item>
+            </v-tabs-window>
           </v-card>
         </div>
       </v-container>
@@ -292,6 +461,13 @@
       :user="editingUser"
       @close="closeUserModal"
       @saved="handleUserSaved"
+    />
+
+    <!-- Invite Modal -->
+    <NewInviteModal
+      :show="showNewInviteModal"
+      @close="closeInviteModal"
+      @created="handleInviteCreated"
     />
 
     <!-- Password Reset Modal -->
@@ -330,20 +506,27 @@ import { userService } from '@/services/user'
 import api from '@/services/api'
 import Sidebar from '../components/Sidebar.vue'
 import UserModal from '../components/UserModal.vue'
+import NewInviteModal from '../components/NewInviteModal.vue'
 import PasswordResetModal from '../components/PasswordResetModal.vue'
 import { formatDate } from '@/composables/dateUtils'
+import { inviteService } from '@/services/invite'
 
 const router = useRouter()
 const authStore = useAuthStore()
 
 const users = ref([])
+const invites = ref([])
 const loading = ref(true)
 const error = ref(null)
 const sortKey = ref('username')
 const sortOrder = ref('asc')
 const showNewUserModal = ref(false)
+const showNewInviteModal = ref(false)
 const editingUser = ref(null)
 const searchQuery = ref('')
+const inviteSearchQuery = ref('')
+const activeTab = ref('users')
+const cleanupLoading = ref(false)
 
 // Vuetify table headers
 const vuetifyHeaders = [
@@ -351,6 +534,14 @@ const vuetifyHeaders = [
   { title: 'Email', key: 'email', sortable: true },
   { title: 'Role', key: 'role', sortable: true },
   { title: 'Created', key: 'created_at', sortable: true },
+  { title: 'Actions', key: 'actions', sortable: false }
+]
+
+const inviteHeaders = [
+  { title: 'Role', key: 'role', sortable: true },
+  { title: 'Status', key: 'status', sortable: true },
+  { title: 'Created', key: 'created_at', sortable: true },
+  { title: 'Expires', key: 'expires_at', sortable: true },
   { title: 'Actions', key: 'actions', sortable: false }
 ]
 
@@ -515,13 +706,15 @@ onMounted(async () => {
   }
 
   try {
-    // Load both users and configuration in parallel
-    const [userData] = await Promise.all([
+    // Load users, invites, and configuration in parallel
+    const [userData, inviteData] = await Promise.all([
       userService.getUsers(),
+      inviteService.getInvites(),
       loadConfiguration()
     ])
 
     users.value = userData
+    invites.value = inviteData
     loading.value = false
   } catch (err) {
     error.value = 'Failed to load admin data. Please try again later.'
@@ -553,6 +746,29 @@ const sortedAndFilteredUsers = computed(() => {
 
     const comparison = aVal > bVal ? 1 : -1
     return sortOrder.value === 'asc' ? comparison : -comparison
+  })
+})
+
+const sortedAndFilteredInvites = computed(() => {
+  let filteredInvites = invites.value
+
+  // Apply search filter
+  if (inviteSearchQuery.value) {
+    const query = inviteSearchQuery.value.toLowerCase()
+    filteredInvites = invites.value.filter(invite =>
+      (invite.role || '').toLowerCase().includes(query)
+    )
+  }
+
+  // Sort the filtered results
+  return [...filteredInvites].sort((a, b) => {
+    const aVal = a.created_at
+    const bVal = b.created_at
+
+    if (aVal === bVal) return 0
+
+    const comparison = new Date(aVal) > new Date(bVal) ? 1 : -1
+    return -comparison // Default to newest first
   })
 })
 
@@ -629,6 +845,108 @@ const loadUsers = async () => {
   } finally {
     loading.value = false
   }
+}
+
+// Invite-related helper functions
+const getInviteStatus = (invite) => {
+  if (invite.is_used) return 'Used'
+  if (invite.is_expired) return 'Expired'
+  return 'Active'
+}
+
+const getInviteStatusColor = (invite) => {
+  if (invite.is_used) return 'success'
+  if (invite.is_expired) return 'error'
+  return 'primary'
+}
+
+// Invite management functions
+const loadInvites = async () => {
+  try {
+    loading.value = true
+    error.value = null
+    const inviteData = await inviteService.getInvites()
+    invites.value = inviteData
+  } catch (err) {
+    error.value = 'Failed to load invites. Please try again later.'
+    console.error('Error loading invites:', err)
+  } finally {
+    loading.value = false
+  }
+}
+
+const closeInviteModal = () => {
+  showNewInviteModal.value = false
+}
+
+const handleInviteCreated = (invite) => {
+  invites.value.unshift(invite)
+  showNotification('Invite generated successfully!', 'success')
+}
+
+const copyInviteLink = async (invite) => {
+  try {
+    const baseUrl = window.location.origin
+    const inviteLink = `${baseUrl}/register?token=${invite.token}`
+    await navigator.clipboard.writeText(inviteLink)
+    showNotification('Invite link copied to clipboard!', 'success')
+  } catch {
+    showNotification('Failed to copy invite link', 'error')
+  }
+}
+
+const deleteInvite = async (invite) => {
+  if (!confirm(`Are you sure you want to delete this ${invite.role} invite?`)) {
+    return
+  }
+
+  try {
+    await inviteService.deleteInvite(invite.id)
+    invites.value = invites.value.filter(i => i.id !== invite.id)
+    showNotification('Invite deleted successfully', 'success')
+  } catch (err) {
+    showNotification('Failed to delete invite. Please try again.', 'error')
+    console.error('Error deleting invite:', err)
+  }
+}
+
+const cleanupExpiredInvites = async () => {
+  try {
+    cleanupLoading.value = true
+    const result = await inviteService.cleanupExpiredInvites()
+    await loadInvites() // Refresh the list
+    showNotification(`Cleaned up ${result.deleted_count || 0} expired invites`, 'success')
+  } catch (err) {
+    showNotification('Failed to cleanup expired invites', 'error')
+    console.error('Error cleaning up expired invites:', err)
+  } finally {
+    cleanupLoading.value = false
+  }
+}
+
+// Invite empty state functions
+const getInviteEmptyStateTitle = () => {
+  if (inviteSearchQuery.value) {
+    return 'No invites found'
+  } else if ((invites.value || []).length === 0) {
+    return 'No invites yet'
+  } else {
+    return 'No invites match your search'
+  }
+}
+
+const getInviteEmptyStateMessage = () => {
+  if (inviteSearchQuery.value) {
+    return 'Try adjusting your search terms to find the invite you\'re looking for.'
+  } else if ((invites.value || []).length === 0) {
+    return 'Generate your first invite to allow new users to register.'
+  } else {
+    return 'Try adjusting your search to see more invites.'
+  }
+}
+
+const shouldShowCreateInviteButton = () => {
+  return (invites.value || []).length === 0 && !inviteSearchQuery.value
 }
 </script>
 

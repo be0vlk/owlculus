@@ -373,3 +373,88 @@ def delete_component(db: Session, component_id: int):
     db.delete(db_entity)
     db.commit()
     return True
+
+
+# --- Invite ---
+
+
+async def create_invite(
+    db: Session, token: str, role: str, expires_at, created_by_id: int
+):
+    db_invite = models.Invite(
+        token=token,
+        role=role,
+        expires_at=expires_at,
+        created_by_id=created_by_id,
+    )
+    db.add(db_invite)
+    db.commit()
+    db.refresh(db_invite)
+    return db_invite
+
+
+async def get_invite_by_token(db: Session, token: str):
+    return db.exec(select(models.Invite).where(models.Invite.token == token)).first()
+
+
+async def get_invites_by_creator(
+    db: Session, creator_id: int, skip: int = 0, limit: int = 100
+):
+    return db.exec(
+        select(models.Invite)
+        .where(models.Invite.created_by_id == creator_id)
+        .order_by(models.Invite.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    ).all()
+
+
+async def mark_invite_used(db: Session, invite: models.Invite):
+    invite.used_at = get_utc_now()
+    db.commit()
+    return invite
+
+
+async def delete_invite(db: Session, invite_id: int):
+    db_invite = db.get(models.Invite, invite_id)
+    if db_invite is None:
+        raise ValueError(f"Invite with id {invite_id} not found")
+
+    db.delete(db_invite)
+    db.commit()
+    return True
+
+
+async def delete_expired_invites(db: Session):
+    from datetime import datetime
+
+    now = get_utc_now()
+    expired_invites = db.exec(
+        select(models.Invite).where(
+            models.Invite.expires_at < now, models.Invite.used_at.is_(None)
+        )
+    ).all()
+
+    for invite in expired_invites:
+        db.delete(invite)
+
+    db.commit()
+    return len(expired_invites)
+
+
+async def create_user_from_invite(
+    db: Session, username: str, email: str, password: str, role: str
+):
+    from ..core.security import get_password_hash
+
+    user_data = {
+        "username": username,
+        "email": email,
+        "password_hash": get_password_hash(password),
+        "role": role,
+    }
+    db_user = models.User(**user_data)
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
