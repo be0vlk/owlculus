@@ -630,7 +630,7 @@ const loadEvidence = async () => {
   evidenceError.value = '';
 
   try {
-    evidence.value = await evidenceService.getEvidenceForCase(Number(route.params.id));
+    evidence.value = await evidenceService.getFolderTree(Number(route.params.id));
   } catch (error) {
     evidenceError.value = error.response?.data?.detail || 'Failed to load evidence';
   } finally {

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, validator
-from typing import Optional, List
+from typing import Optional, List, Dict
 from datetime import datetime
 
 
@@ -85,3 +85,23 @@ class SystemConfigurationPreview(BaseModel):
     prefix: Optional[str] = None
     example_case_number: str
     display_name: str
+
+
+class EvidenceFolderTemplateFolder(BaseModel):
+    name: str
+    description: Optional[str] = None
+    subfolders: Optional[List["EvidenceFolderTemplateFolder"]] = []
+
+
+class EvidenceFolderTemplate(BaseModel):
+    name: str
+    description: str
+    folders: List[EvidenceFolderTemplateFolder]
+
+
+class EvidenceFolderTemplatesUpdate(BaseModel):
+    templates: Dict[str, EvidenceFolderTemplate]
+
+
+class EvidenceFolderTemplatesResponse(BaseModel):
+    templates: Dict[str, Dict]

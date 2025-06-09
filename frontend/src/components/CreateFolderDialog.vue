@@ -7,7 +7,7 @@
       </v-card-title>
       
       <v-card-text>
-        <v-form ref="form" v-model="valid" lazy-validation>
+        <v-form ref="form" v-model="valid" lazy-validation @submit.prevent>
           <v-text-field
             v-model="folderName"
             label="Folder Name"
@@ -16,7 +16,6 @@
             variant="outlined"
             density="comfortable"
             prepend-inner-icon="mdi-folder"
-            @keyup.enter="createFolder"
           ></v-text-field>
           
           <v-textarea
@@ -108,7 +107,14 @@ const folderNameRules = [
 
 // Methods
 const createFolder = async () => {
-  if (!form.value.validate()) {
+  // Trigger validation and wait for it to complete
+  const isValid = await form.value.validate()
+  if (!isValid.valid) {
+    return
+  }
+
+  // Double check the folder name is not empty
+  if (!folderName.value.trim()) {
     return
   }
 

@@ -2,7 +2,7 @@
   <v-card variant="outlined">
     <!-- Header -->
     <v-card-title class="d-flex align-center pa-4 bg-surface">
-      <v-icon icon="mdi-account-group" color="primary" size="large" class="me-3" />
+      <v-icon icon="mdi-account-cog" color="primary" size="large" class="me-3" />
       <div class="flex-grow-1">
         <div class="text-h6 font-weight-bold">User Management</div>
         <div class="text-body-2 text-medium-emphasis">Manage system users and their permissions</div>

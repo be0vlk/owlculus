@@ -11,25 +11,37 @@
     <v-alert v-else-if="error" type="error">
       {{ error }}
     </v-alert>
-    <v-card v-else elevation="1" rounded="lg">
-      <v-card-title class="d-flex align-center justify-space-between">
+    <v-card v-else elevation="1" rounded="lg" class="d-flex flex-column">
+      <v-card-title class="d-flex align-center justify-space-between flex-shrink-0">
         <span>Evidence</span>
-        <div v-if="treeItems.length > 0 && selectedItems.length > 0" class="d-flex align-center ga-2">
-          <span class="text-caption">{{ selectedItems.length }} selected</span>
+        <div class="d-flex align-center ga-2">
+          <div v-if="treeItems.length > 0 && selectedItems.length > 0" class="d-flex align-center ga-2">
+            <span class="text-caption">{{ selectedItems.length }} selected</span>
+            <v-btn
+              v-if="userRole !== 'Analyst'"
+              color="error"
+              size="small"
+              variant="outlined"
+              @click="showMassDeleteConfirm = true"
+              prepend-icon="mdi-delete"
+            >
+              Delete Selected
+            </v-btn>
+          </div>
           <v-btn
-            v-if="userRole !== 'Analyst'"
-            color="error"
+            v-if="treeItems.length > 0 && userRole !== 'Analyst'"
+            color="primary"
             size="small"
             variant="outlined"
-            @click="showMassDeleteConfirm = true"
-            prepend-icon="mdi-delete"
+            @click="showCreateFolder = true"
+            prepend-icon="mdi-folder-plus"
           >
-            Delete Selected
+            Create Folder
           </v-btn>
         </div>
       </v-card-title>
       
-      <div class="pa-4">
+      <v-card-text class="pa-4 flex-grow-1 overflow-y-auto evidence-container">
         <template v-if="treeItems.length === 0">
           <div class="text-center py-8">
             <v-icon icon="mdi-folder-open" size="64" color="grey-darken-1" class="mb-4" />
@@ -37,15 +49,30 @@
             <p class="text-body-2 text-medium-emphasis mb-4">
               Create your first folder to organize evidence
             </p>
-            <v-btn
-              v-if="userRole !== 'Analyst'"
-              color="primary"
-              @click="showCreateFolder = true"
-              :disabled="!caseId"
-            >
-              <v-icon start>mdi-folder-plus</v-icon>
-              Create Folder
-            </v-btn>
+            <div v-if="userRole !== 'Analyst'" class="d-flex flex-column align-center ga-3">
+              <div class="d-flex ga-2">
+                <v-btn
+                  color="primary"
+                  @click="showCreateFolder = true"
+                  :disabled="!caseId"
+                >
+                  <v-icon start>mdi-folder-plus</v-icon>
+                  Create Folder
+                </v-btn>
+                <v-btn
+                  color="secondary"
+                  variant="outlined"
+                  @click="showTemplateSelection = true"
+                  :disabled="!caseId"
+                >
+                  <v-icon start>mdi-folder-multiple</v-icon>
+                  Use Template
+                </v-btn>
+              </div>
+              <p class="text-caption text-medium-emphasis">
+                Use a template to quickly create organized folder structures
+              </p>
+            </div>
           </div>
         </template>
         
@@ -122,7 +149,7 @@
             </template>
           </v-treeview>
         </template>
-      </div>
+      </v-card-text>
     </v-card>
     
     <!-- Context Menu -->
@@ -224,6 +251,13 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <!-- Template Selection Modal -->
+    <evidence-template-selection-modal
+      v-model="showTemplateSelection"
+      :case-id="caseId"
+      @template-applied="handleTemplateApplied"
+    />
   </div>
 </template>
 
@@ -232,6 +266,7 @@ import { ref, computed, watch } from 'vue'
 import { evidenceService } from '../services/evidence'
 import CreateFolderDialog from './CreateFolderDialog.vue'
 import FolderContextMenu from './FolderContextMenu.vue'
+import EvidenceTemplateSelectionModal from './EvidenceTemplateSelectionModal.vue'
 import RenameDialog from './RenameDialog.vue'
 
 const props = defineProps({
@@ -264,6 +299,7 @@ const showCreateFolder = ref(false)
 const showRename = ref(false)
 const showDeleteConfirm = ref(false)
 const showMassDeleteConfirm = ref(false)
+const showTemplateSelection = ref(false)
 const deleteLoading = ref(false)
 const massDeleteLoading = ref(false)
 const newFolderParent = ref(null)
@@ -313,6 +349,7 @@ const treeItems = computed(() => {
       items.push(item)
     }
   })
+  
   
   // Sort items: folders first, then by title
   const sortItems = (items) => {
@@ -466,6 +503,11 @@ const confirmMassDelete = async () => {
   }
 }
 
+const handleTemplateApplied = () => {
+  showTemplateSelection.value = false
+  emit('refresh')
+}
+
 // Watch for evidence list changes to maintain open state
 watch(() => props.evidenceList, () => {
   // Maintain open folders
@@ -480,6 +522,24 @@ watch(() => props.evidenceList, () => {
 
 .tree-item-title:hover {
   text-decoration: underline;
+}
+
+.evidence-container {
+  max-height: 60vh;
+  min-height: 200px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 599px) {
+  .evidence-container {
+    max-height: 50vh;
+  }
+}
+
+@media (min-width: 1280px) {
+  .evidence-container {
+    max-height: 70vh;
+  }
 }
 
 :deep(.v-treeview-item) {

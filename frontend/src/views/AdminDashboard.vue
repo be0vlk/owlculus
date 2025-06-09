@@ -34,17 +34,8 @@
 
         <!-- Main Content -->
         <div v-else>
-          <!-- System Configuration -->
-          <SystemConfigurationCard @notification="handleNotification" />
-
-          <!-- API Key Management -->
-          <ApiKeyManagementCard 
-            @notification="handleNotification"
-            @confirmDelete="handleConfirmDelete"
-          />
-
           <!-- User and Invite Management -->
-          <v-card variant="outlined">
+          <v-card class="mb-6" variant="outlined">
             <!-- Header -->
             <v-card-title class="d-flex align-center pa-4 bg-surface">
               <v-icon icon="mdi-account-group" color="primary" size="large" class="me-3" />
@@ -58,7 +49,7 @@
 
             <!-- Tabs -->
             <v-tabs v-model="activeTab" bg-color="surface" class="px-4">
-              <v-tab value="users" prepend-icon="mdi-account-group">Users</v-tab>
+              <v-tab value="users" prepend-icon="mdi-account">Users</v-tab>
               <v-tab value="invites" prepend-icon="mdi-email">Invites</v-tab>
             </v-tabs>
 
@@ -83,6 +74,18 @@
               </v-tabs-window-item>
             </v-tabs-window>
           </v-card>
+
+          <!-- API Key Management -->
+          <ApiKeyManagementCard 
+            @notification="handleNotification"
+            @confirmDelete="handleConfirmDelete"
+          />
+
+          <!-- System Configuration -->
+          <SystemConfigurationCard @notification="handleNotification" />
+
+          <!-- Evidence Template Management -->
+          <EvidenceTemplateManagementCard @notification="handleNotification" />
         </div>
       </v-container>
     </v-main>
@@ -118,6 +121,7 @@ import { useNotifications } from '@/composables/useNotifications'
 import Sidebar from '@/components/Sidebar.vue'
 import SystemConfigurationCard from '@/components/SystemConfigurationCard.vue'
 import ApiKeyManagementCard from '@/components/ApiKeyManagementCard.vue'
+import EvidenceTemplateManagementCard from '@/components/EvidenceTemplateManagementCard.vue'
 import UserManagementCard from '@/components/UserManagementCard.vue'
 import InviteManagementCard from '@/components/InviteManagementCard.vue'
 import ConfirmationDialog from '@/components/ConfirmationDialog.vue'

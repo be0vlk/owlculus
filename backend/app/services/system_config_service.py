@@ -7,6 +7,7 @@ from ..database import models
 from ..core.utils import get_utc_now
 from ..core.logging import get_security_logger
 from ..core.security import encrypt_api_key, decrypt_api_key
+from ..core.evidence_templates import DEFAULT_TEMPLATES
 
 
 class SystemConfigService:
@@ -21,7 +22,10 @@ class SystemConfigService:
         if not config:
             # Create default configuration
             config = models.SystemConfiguration(
-                case_number_template="YYMM-NN", case_number_prefix=None, api_keys={}
+                case_number_template="YYMM-NN",
+                case_number_prefix=None,
+                api_keys={},
+                evidence_folder_templates=self._get_default_templates(),
             )
             self.db.add(config)
             self.db.commit()
@@ -347,3 +351,80 @@ class SystemConfigService:
         """Get list of all configured provider names."""
         api_keys = self.list_api_keys()
         return list(api_keys.keys())
+
+    def _get_default_templates(self) -> dict:
+        """Get default evidence folder templates."""
+        return DEFAULT_TEMPLATES.copy()
+
+    async def get_evidence_folder_templates(self) -> dict:
+        """Get evidence folder templates."""
+        config = await self.get_configuration()
+        if not config.evidence_folder_templates:
+            # Initialize with defaults if empty
+            config.evidence_folder_templates = self._get_default_templates()
+            config.updated_at = get_utc_now()
+            self.db.add(config)
+            self.db.commit()
+            self.db.refresh(config)
+        return config.evidence_folder_templates
+
+    async def update_evidence_folder_templates(
+        self, templates: dict, current_user: models.User
+    ) -> models.SystemConfiguration:
+        """Update evidence folder templates."""
+        config_logger = get_security_logger(
+            admin_user_id=current_user.id,
+            action="update_evidence_templates",
+            event_type="evidence_templates_update_attempt",
+        )
+
+        try:
+            config = await self.get_configuration()
+            old_templates = (
+                config.evidence_folder_templates.copy()
+                if config.evidence_folder_templates
+                else {}
+            )
+
+            # Validate template structure
+            for template_key, template_data in templates.items():
+                if not isinstance(template_data, dict):
+                    raise ValueError(f"Invalid template structure for {template_key}")
+                if "name" not in template_data or "description" not in template_data:
+                    raise ValueError(
+                        f"Template {template_key} must have name and description"
+                    )
+                if "folders" not in template_data or not isinstance(
+                    template_data["folders"], list
+                ):
+                    raise ValueError(f"Template {template_key} must have folders array")
+
+            config.evidence_folder_templates = templates
+            config.updated_at = get_utc_now()
+
+            self.db.add(config)
+            self.db.commit()
+            self.db.refresh(config)
+
+            config_logger.bind(
+                template_count=len(templates),
+                old_template_count=len(old_templates),
+                event_type="evidence_templates_update_success",
+            ).info("Evidence folder templates updated successfully")
+
+            return config
+
+        except ValueError as e:
+            config_logger.bind(
+                event_type="evidence_templates_update_failed",
+                failure_reason="validation_error",
+                error_message=str(e),
+            ).warning(f"Evidence templates update failed: {str(e)}")
+            raise
+        except Exception as e:
+            config_logger.bind(
+                event_type="evidence_templates_update_error",
+                error_type="system_error",
+                error_message=str(e),
+            ).error(f"Evidence templates update error: {str(e)}")
+            raise

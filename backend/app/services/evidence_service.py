@@ -634,3 +634,144 @@ class EvidenceService:
             raise HTTPException(
                 status_code=500, detail=f"Error deleting folder record: {str(e)}"
             )
+
+    async def create_folders_from_template(
+        self,
+        case_id: int,
+        template_name: str,
+        current_user: models.User,
+    ) -> List[models.Evidence]:
+        """Create folder structure from a template."""
+        template_logger = get_security_logger(
+            user_id=current_user.id,
+            case_id=case_id,
+            action="apply_folder_template",
+            template_name=template_name,
+            event_type="folder_template_apply_attempt",
+        )
+
+        try:
+            # Check if case exists
+            case = self.db.exec(
+                select(models.Case).where(models.Case.id == case_id)
+            ).first()
+            if not case:
+                template_logger.bind(
+                    event_type="folder_template_apply_failed",
+                    failure_reason="case_not_found",
+                ).warning("Folder template apply failed: case not found")
+                raise HTTPException(status_code=404, detail="Case not found")
+
+            # Check user permissions
+            if current_user.role != "Admin" and current_user not in case.users:
+                template_logger.bind(
+                    event_type="folder_template_apply_failed",
+                    failure_reason="not_authorized",
+                ).warning("Folder template apply failed: not authorized")
+                raise HTTPException(status_code=403, detail="Not authorized")
+
+            # Get templates from system configuration
+            from app.services.system_config_service import SystemConfigService
+
+            config_service = SystemConfigService(self.db)
+            templates = await config_service.get_evidence_folder_templates()
+
+            if template_name not in templates:
+                template_logger.bind(
+                    event_type="folder_template_apply_failed",
+                    failure_reason="template_not_found",
+                    available_templates=list(templates.keys()),
+                ).warning(
+                    f"Folder template apply failed: template '{template_name}' not found"
+                )
+                raise HTTPException(
+                    status_code=404, detail=f"Template '{template_name}' not found"
+                )
+
+            template = templates[template_name]
+            created_folders = []
+
+            # Recursive function to create folders
+            def create_folder_hierarchy(
+                folders: list, parent_path: str = "", parent_id: Optional[int] = None
+            ):
+                for folder_info in folders:
+                    folder_name = folder_info.get("name", "")
+                    if not folder_name:
+                        continue
+
+                    # Create folder path
+                    folder_path = (
+                        f"{parent_path}/{folder_name}" if parent_path else folder_name
+                    )
+
+                    # Create folder record
+                    folder_data = schemas.FolderCreate(
+                        title=folder_name,
+                        description=folder_info.get("description", ""),
+                        case_id=case_id,
+                        folder_path=folder_path,
+                        parent_folder_id=parent_id,
+                    )
+
+                    # Create the folder
+                    new_folder = models.Evidence(
+                        case_id=folder_data.case_id,
+                        title=folder_data.title,
+                        description=folder_data.description,
+                        evidence_type="folder",
+                        category="Other",
+                        content="",
+                        is_folder=True,
+                        folder_path=normalize_folder_path(folder_data.folder_path),
+                        parent_folder_id=folder_data.parent_folder_id,
+                        created_by_id=current_user.id,
+                        created_at=get_utc_now(),
+                        updated_at=get_utc_now(),
+                    )
+                    self.db.add(new_folder)
+                    self.db.flush()  # Get the ID without committing
+
+                    # Create physical folder
+                    create_folder(case_id, new_folder.folder_path)
+
+                    created_folders.append(new_folder)
+
+                    # Create subfolders if any
+                    subfolders = folder_info.get("subfolders", [])
+                    if subfolders:
+                        create_folder_hierarchy(
+                            subfolders, new_folder.folder_path, new_folder.id
+                        )
+
+            # Create all folders from template
+            template_folders = template.get("folders", [])
+            create_folder_hierarchy(template_folders)
+
+            # Commit all changes
+            self.db.commit()
+
+            # Refresh all folder objects
+            for folder in created_folders:
+                self.db.refresh(folder)
+
+            template_logger.bind(
+                folders_created=len(created_folders),
+                template_used=template_name,
+                event_type="folder_template_apply_success",
+            ).info(f"Folder template '{template_name}' applied successfully")
+
+            return created_folders
+
+        except HTTPException:
+            self.db.rollback()
+            raise
+        except Exception as e:
+            self.db.rollback()
+            template_logger.bind(
+                event_type="folder_template_apply_error",
+                error_type="system_error",
+            ).error(f"Folder template apply error: {str(e)}")
+            raise HTTPException(
+                status_code=500, detail=f"Error applying folder template: {str(e)}"
+            )

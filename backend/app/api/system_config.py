@@ -154,3 +154,42 @@ async def preview_case_number_template(
         raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/configuration/evidence-templates")
+@admin_only()
+async def get_evidence_folder_templates(
+    current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """Get evidence folder templates (admin only)."""
+    config_service = SystemConfigService(db)
+    templates = await config_service.get_evidence_folder_templates()
+    return system_config_schema.EvidenceFolderTemplatesResponse(templates=templates)
+
+
+@router.put("/configuration/evidence-templates")
+@admin_only()
+async def update_evidence_folder_templates(
+    templates_data: system_config_schema.EvidenceFolderTemplatesUpdate,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update evidence folder templates (admin only)."""
+    config_service = SystemConfigService(db)
+    try:
+        # Convert Pydantic models to dictionaries
+        templates_dict = {}
+        for key, template in templates_data.templates.items():
+            templates_dict[key] = template.model_dump()
+
+        await config_service.update_evidence_folder_templates(
+            templates=templates_dict,
+            current_user=current_user,
+        )
+        # Return updated templates
+        updated_templates = await config_service.get_evidence_folder_templates()
+        return system_config_schema.EvidenceFolderTemplatesResponse(
+            templates=updated_templates
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))

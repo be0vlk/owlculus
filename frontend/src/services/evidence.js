@@ -89,4 +89,11 @@ export const evidenceService = {
     const response = await api.get(`/api/evidence/${evidenceId}/metadata`)
     return response.data
   },
+
+  async applyFolderTemplate(caseId, templateName) {
+    const response = await api.post(`/api/evidence/case/${caseId}/apply-template`, null, {
+      params: { template_name: templateName },
+    })
+    return response.data
+  },
 }

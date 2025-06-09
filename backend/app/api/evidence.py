@@ -234,3 +234,19 @@ async def extract_evidence_metadata(
         }
 
     return metadata_result
+
+
+@router.post("/case/{case_id}/apply-template", response_model=list[schemas.Evidence])
+async def apply_folder_template(
+    case_id: int,
+    template_name: str,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """Apply a folder template to create folder structure for a case."""
+    evidence_service = EvidenceService(db)
+    return await evidence_service.create_folders_from_template(
+        case_id=case_id,
+        template_name=template_name,
+        current_user=current_user,
+    )
