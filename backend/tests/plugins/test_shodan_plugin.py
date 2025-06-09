@@ -8,6 +8,8 @@ from typing import Dict, Any, List
 
 from app.plugins.shodan_plugin import ShodanPlugin
 from app.services.system_config_service import SystemConfigService
+from app.services.entity_service import EntityService
+from app.schemas.entity_schema import EntityCreate, IpAddressData
 
 
 class TestShodanPlugin:
@@ -452,3 +454,269 @@ class TestShodanPlugin:
         assert "save_to_case" in params
         assert params["save_to_case"]["type"] == "boolean"
         assert params["save_to_case"]["default"] is False
+
+    def test_extract_unique_ips_from_results(self, plugin):
+        """Test IP extraction from various result types"""
+        # Mock evidence results with different search types
+        plugin._evidence_results = [
+            {
+                "ip": "8.8.8.8",
+                "organization": "Google LLC",
+                "country": "United States",
+                "city": "Mountain View",
+                "search_type": "host_lookup",
+                "ports": [53, 443],
+            },
+            {
+                "ip": "1.1.1.1",
+                "organization": "Cloudflare",
+                "country": "Australia", 
+                "city": "Sydney",
+                "search_type": "hostname_search",
+                "port": 443,
+                "service": "Cloudflare",
+                "transport": "tcp",
+            },
+            {
+                "ip": "8.8.8.8",  # Duplicate - should be ignored
+                "organization": "Google LLC",
+                "search_type": "general_search",
+            },
+            {
+                "ip": "invalid-ip",  # Invalid IP - should be ignored
+                "organization": "Test",
+            },
+            {
+                "no_ip_field": "test",  # No IP field - should be ignored
+            }
+        ]
+
+        unique_ips = plugin._extract_unique_ips_from_results()
+        
+        # Should extract 2 unique IPs (8.8.8.8 and 1.1.1.1)
+        assert len(unique_ips) == 2
+        
+        # Check that IPs are present
+        ips = [ip_data["ip"] for ip_data in unique_ips]
+        assert "8.8.8.8" in ips
+        assert "1.1.1.1" in ips
+        
+        # Check that descriptions are generated
+        for ip_data in unique_ips:
+            assert "description" in ip_data
+            assert "Discovered via Shodan" in ip_data["description"]
+
+    def test_generate_ip_description(self, plugin):
+        """Test IP description generation with various data combinations"""
+        # Test host lookup description
+        result = {
+            "ip": "8.8.8.8",
+            "organization": "Google LLC",
+            "country": "United States",
+            "city": "Mountain View",
+            "search_type": "host_lookup",
+            "ports": [53, 443, 80],
+            "vulns": ["CVE-2024-1234"]
+        }
+        
+        description = plugin._generate_ip_description(result)
+        assert "Discovered via Shodan IP lookup" in description
+        assert "Org: Google LLC" in description
+        assert "Location: Mountain View, United States" in description
+        assert "Ports: 53, 443, 80" in description
+        assert "Vulnerability: CVE-2024-1234" in description
+
+        # Test hostname search description
+        result = {
+            "ip": "1.1.1.1",
+            "organization": "Cloudflare",
+            "country": "Australia",
+            "search_type": "hostname_search",
+            "port": 443,
+            "service": "Cloudflare",
+            "version": "1.0",
+            "transport": "tcp",
+        }
+        
+        description = plugin._generate_ip_description(result)
+        assert "Discovered via Shodan hostname search" in description
+        assert "Org: Cloudflare" in description
+        assert "Location: Australia" in description
+        assert "Services: 443/tcp:Cloudflare 1.0" in description
+
+        # Test general search with multiple vulnerabilities
+        result = {
+            "ip": "192.168.1.1",
+            "search_type": "general_search",
+            "vulns": ["CVE-2024-1234", "CVE-2024-5678", "CVE-2024-9999"]
+        }
+        
+        description = plugin._generate_ip_description(result)
+        assert "Discovered via Shodan general search" in description
+        assert "Vulnerabilities: 3 found" in description
+
+    @pytest.mark.asyncio
+    @patch('app.plugins.shodan_plugin.get_db')
+    async def test_create_ip_entities_from_results_success(
+        self, mock_get_db, plugin, mock_db_session
+    ):
+        """Test successful IP entity creation from results"""
+        # Setup plugin state
+        plugin._current_params = {
+            "save_to_case": True,
+            "case_id": 123
+        }
+        plugin._current_user = Mock()
+        plugin._current_user.id = 1
+        plugin._evidence_results = [
+            {
+                "ip": "8.8.8.8",
+                "organization": "Google LLC",
+                "search_type": "host_lookup",
+            },
+            {
+                "ip": "1.1.1.1", 
+                "organization": "Cloudflare",
+                "search_type": "hostname_search",
+            }
+        ]
+
+        # Setup mocks
+        mock_get_db.return_value = iter([mock_db_session])
+        mock_entity_service = Mock(spec=EntityService)
+        mock_entity_service.create_entity = AsyncMock()
+        
+        with patch('app.plugins.shodan_plugin.EntityService', return_value=mock_entity_service):
+            await plugin._create_ip_entities_from_results()
+
+        # Verify entity service was called correctly
+        assert mock_entity_service.create_entity.call_count == 2
+        
+        # Check the calls were made with correct data
+        calls = mock_entity_service.create_entity.call_args_list
+        for call in calls:
+            args, kwargs = call
+            assert kwargs["case_id"] == 123
+            assert kwargs["current_user"] == plugin._current_user
+            assert kwargs["entity"].entity_type == "ip_address"
+            
+            # Check that IP addresses are in the call data
+            ip_address = kwargs["entity"].data["ip_address"]
+            assert ip_address in ["8.8.8.8", "1.1.1.1"]
+
+    @pytest.mark.asyncio
+    @patch('app.plugins.shodan_plugin.get_db')
+    async def test_create_ip_entities_from_results_partial_failure(
+        self, mock_get_db, plugin, mock_db_session
+    ):
+        """Test IP entity creation with some failures (e.g., duplicates)"""
+        # Setup plugin state
+        plugin._current_params = {
+            "save_to_case": True,
+            "case_id": 123
+        }
+        plugin._current_user = Mock()
+        plugin._evidence_results = [
+            {"ip": "8.8.8.8", "search_type": "host_lookup"},
+            {"ip": "1.1.1.1", "search_type": "hostname_search"}
+        ]
+
+        # Setup mocks - first call succeeds, second fails (duplicate)
+        mock_get_db.return_value = iter([mock_db_session])
+        mock_entity_service = Mock(spec=EntityService)
+        mock_entity_service.create_entity = AsyncMock()
+        mock_entity_service.create_entity.side_effect = [
+            Mock(),  # First call succeeds
+            Exception("Duplicate entity")  # Second call fails
+        ]
+        
+        with patch('app.plugins.shodan_plugin.EntityService', return_value=mock_entity_service), \
+             patch('builtins.print') as mock_print:
+            
+            await plugin._create_ip_entities_from_results()
+
+        # Verify both entities were attempted
+        assert mock_entity_service.create_entity.call_count == 2
+        
+        # Verify feedback messages were printed
+        mock_print.assert_any_call("✅ Created 1 IP address entities from Shodan results")
+        mock_print.assert_any_call("⚠️ Failed to create 1 IP address entities (may be duplicates)")
+
+    @pytest.mark.asyncio
+    @patch('app.plugins.shodan_plugin.get_db')
+    async def test_create_ip_entities_no_save_to_case(
+        self, mock_get_db, plugin
+    ):
+        """Test that entities are not created when save_to_case is False"""
+        # Setup plugin state with save_to_case disabled
+        plugin._current_params = {
+            "save_to_case": False,
+            "case_id": 123
+        }
+        plugin._evidence_results = [
+            {"ip": "8.8.8.8", "search_type": "host_lookup"}
+        ]
+
+        mock_entity_service = Mock(spec=EntityService)
+        
+        with patch('app.plugins.shodan_plugin.EntityService', return_value=mock_entity_service):
+            await plugin._create_ip_entities_from_results()
+
+        # Verify no entities were created
+        mock_entity_service.create_entity.assert_not_called()
+
+    @pytest.mark.asyncio
+    @patch('app.plugins.shodan_plugin.get_db')
+    async def test_create_ip_entities_no_case_id(
+        self, mock_get_db, plugin
+    ):
+        """Test that entities are not created when case_id is missing"""
+        # Setup plugin state without case_id
+        plugin._current_params = {
+            "save_to_case": True,
+            # Missing case_id
+        }
+        plugin._evidence_results = [
+            {"ip": "8.8.8.8", "search_type": "host_lookup"}
+        ]
+
+        mock_entity_service = Mock(spec=EntityService)
+        
+        with patch('app.plugins.shodan_plugin.EntityService', return_value=mock_entity_service):
+            await plugin._create_ip_entities_from_results()
+
+        # Verify no entities were created
+        mock_entity_service.create_entity.assert_not_called()
+
+    @pytest.mark.asyncio
+    @patch('app.plugins.shodan_plugin.get_db')
+    async def test_save_collected_evidence_enhanced(
+        self, mock_get_db, plugin, mock_db_session
+    ):
+        """Test enhanced save_collected_evidence calls both parent and entity creation"""
+        # Setup plugin state
+        plugin._current_params = {
+            "save_to_case": True,
+            "case_id": 123
+        }
+        plugin._current_user = Mock()
+        plugin._evidence_results = [
+            {"ip": "8.8.8.8", "search_type": "host_lookup"}
+        ]
+
+        # Setup mocks
+        mock_get_db.return_value = iter([mock_db_session])
+        mock_entity_service = Mock(spec=EntityService)
+        mock_entity_service.create_entity = AsyncMock()
+        
+        with patch('app.plugins.shodan_plugin.EntityService', return_value=mock_entity_service), \
+             patch.object(plugin.__class__.__bases__[0], 'save_collected_evidence') as mock_parent_save:
+            
+            mock_parent_save.return_value = AsyncMock()
+            await plugin.save_collected_evidence()
+
+        # Verify parent method was called
+        mock_parent_save.assert_called_once()
+        
+        # Verify entity creation was attempted
+        mock_entity_service.create_entity.assert_called_once()

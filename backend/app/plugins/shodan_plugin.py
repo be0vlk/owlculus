@@ -5,10 +5,12 @@ Shodan plugin for searching hosts and services using Shodan API
 import asyncio
 import ipaddress
 import time
-from typing import AsyncGenerator, Dict, Any, Optional
+from typing import AsyncGenerator, Dict, Any, Optional, Set
 
 from .base_plugin import BasePlugin
 from app.services.system_config_service import SystemConfigService
+from app.services.entity_service import EntityService
+from app.schemas.entity_schema import EntityCreate, IpAddressData
 from app.core.dependencies import get_db
 
 
@@ -290,3 +292,162 @@ class ShodanPlugin(BasePlugin):
             }
         finally:
             db.close()
+
+    async def save_collected_evidence(self) -> None:
+        """Enhanced evidence saving with automatic IP entity creation"""
+        # Step 1: Call parent method to save raw evidence
+        await super().save_collected_evidence()
+        
+        # Step 2: Extract and create IP entities if save_to_case is enabled
+        if (self._current_params and 
+            self._current_params.get("save_to_case", False) and 
+            self._current_params.get("case_id") and 
+            self._evidence_results):
+            
+            await self._create_ip_entities_from_results()
+
+    async def _create_ip_entities_from_results(self) -> None:
+        """Extract IP addresses from results and create entities"""
+        case_id = self._current_params.get("case_id")
+        if not case_id:
+            return
+
+        # Extract unique IP addresses from results
+        discovered_ips = self._extract_unique_ips_from_results()
+        
+        if not discovered_ips:
+            return
+
+        # Get database session
+        db = next(get_db())
+        try:
+            entity_service = EntityService(db)
+            created_count = 0
+            failed_count = 0
+            
+            for ip_data in discovered_ips:
+                try:
+                    # Create IP address entity
+                    entity_create = EntityCreate(
+                        entity_type="ip_address",
+                        data=IpAddressData(
+                            ip_address=ip_data["ip"],
+                            description=ip_data["description"]
+                        ).model_dump()
+                    )
+                    
+                    await entity_service.create_entity(
+                        case_id=case_id,
+                        entity=entity_create,
+                        current_user=self._current_user
+                    )
+                    created_count += 1
+                    
+                except Exception as e:
+                    # Log error but continue with other IPs
+                    failed_count += 1
+                    continue
+            
+            # Provide feedback on entity creation
+            if created_count > 0:
+                print(f"✅ Created {created_count} IP address entities from Shodan results")
+            if failed_count > 0:
+                print(f"⚠️ Failed to create {failed_count} IP address entities (may be duplicates)")
+                
+        except Exception as e:
+            # Don't break evidence saving if entity creation fails completely
+            print(f"❌ Entity creation failed: {str(e)}")
+        finally:
+            db.close()
+
+    def _extract_unique_ips_from_results(self) -> list[dict]:
+        """Extract unique IP addresses with metadata from collected results"""
+        ip_data_map = {}  # Use dict to avoid duplicates while preserving rich data
+        
+        for result in self._evidence_results:
+            ip_address = result.get("ip")
+            if not ip_address or not self._is_ip_address(ip_address):
+                continue
+                
+            # Skip if we already have this IP with better data
+            if ip_address in ip_data_map:
+                continue
+                
+            # Generate description based on available Shodan data
+            description = self._generate_ip_description(result)
+            
+            ip_data_map[ip_address] = {
+                "ip": ip_address,
+                "description": description
+            }
+        
+        return list(ip_data_map.values())
+
+    def _generate_ip_description(self, result: dict) -> str:
+        """Generate a descriptive string for the IP address entity"""
+        components = []
+        
+        # Add search type context
+        search_type = result.get("search_type", "unknown")
+        if search_type == "host_lookup":
+            components.append("Discovered via Shodan IP lookup")
+        elif search_type == "hostname_search":
+            components.append("Discovered via Shodan hostname search")
+        elif search_type == "general_search":
+            components.append("Discovered via Shodan general search")
+        else:
+            components.append("Discovered via Shodan search")
+        
+        # Add organization if available
+        organization = result.get("organization")
+        if organization and organization != "Unknown":
+            components.append(f"Org: {organization}")
+        
+        # Add location if available
+        location_parts = []
+        city = result.get("city")
+        country = result.get("country")
+        if city and city != "Unknown":
+            location_parts.append(city)
+        if country and country != "Unknown":
+            location_parts.append(country)
+        if location_parts:
+            components.append(f"Location: {', '.join(location_parts)}")
+        
+        # Add services information
+        services = []
+        
+        # Handle single service (from search results)
+        if result.get("port") and result.get("service"):
+            service_info = result.get("service", "Unknown")
+            if result.get("version"):
+                service_info += f" {result.get('version')}"
+            services.append(f"{result.get('port')}/{result.get('transport', 'tcp')}:{service_info}")
+        
+        # Handle multiple services (from host lookup)
+        if result.get("services") and isinstance(result.get("services"), list):
+            for service in result.get("services", [])[:3]:  # Limit to first 3 services
+                service_info = service.get("service", "Unknown")
+                if service.get("version"):
+                    service_info += f" {service.get('version')}"
+                services.append(f"{service.get('port')}/{service.get('transport', 'tcp')}:{service_info}")
+        
+        # Handle ports list (from host lookup)
+        elif result.get("ports") and isinstance(result.get("ports"), list):
+            port_list = result.get("ports", [])[:5]  # Limit to first 5 ports
+            if port_list:
+                services.append(f"Ports: {', '.join(map(str, port_list))}")
+        
+        if services:
+            components.append(f"Services: {', '.join(services)}")
+        
+        # Add vulnerability information if available
+        vulns = result.get("vulns")
+        if vulns and isinstance(vulns, list) and len(vulns) > 0:
+            vuln_count = len(vulns)
+            if vuln_count == 1:
+                components.append(f"Vulnerability: {vulns[0]}")
+            else:
+                components.append(f"Vulnerabilities: {vuln_count} found")
+        
+        return " | ".join(components)
