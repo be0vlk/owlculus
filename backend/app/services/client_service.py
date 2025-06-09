@@ -31,7 +31,7 @@ class ClientService:
             admin_user_id=current_user.id,
             action="create_client",
             client_name=client.name,
-            event_type="client_creation_attempt"
+            event_type="client_creation_attempt",
         )
 
         try:
@@ -39,8 +39,7 @@ class ClientService:
             existing = await crud.get_client_by_email(self.db, email=client.email)
             if existing:
                 client_logger.bind(
-                    event_type="client_creation_failed",
-                    failure_reason="email_exists"
+                    event_type="client_creation_failed", failure_reason="email_exists"
                 ).warning("Client creation failed: email already registered")
                 raise HTTPException(status_code=400, detail="Email already registered")
 
@@ -49,7 +48,7 @@ class ClientService:
             client_logger.bind(
                 client_id=new_client.id,
                 client_email=new_client.email,
-                event_type="client_creation_success"
+                event_type="client_creation_success",
             ).info("Client created successfully")
 
             return new_client
@@ -58,8 +57,7 @@ class ClientService:
             raise
         except Exception as e:
             client_logger.bind(
-                event_type="client_creation_error",
-                error_type="system_error"
+                event_type="client_creation_error", error_type="system_error"
             ).error(f"Client creation error: {str(e)}")
             raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -78,21 +76,20 @@ class ClientService:
         client_id: int,
         client_update: schemas.ClientUpdate,
         *,
-        current_user: models.User
+        current_user: models.User,
     ) -> models.Client:
         client_logger = get_security_logger(
             admin_user_id=current_user.id,
             client_id=client_id,
             action="update_client",
-            event_type="client_update_attempt"
+            event_type="client_update_attempt",
         )
 
         try:
             db_client = await crud.get_client(self.db, client_id=client_id)
             if not db_client:
                 client_logger.bind(
-                    event_type="client_update_failed",
-                    failure_reason="client_not_found"
+                    event_type="client_update_failed", failure_reason="client_not_found"
                 ).warning("Client update failed: client not found")
                 raise HTTPException(status_code=404, detail="Client not found")
 
@@ -103,18 +100,18 @@ class ClientService:
                 )
                 if existing:
                     client_logger.bind(
-                        event_type="client_update_failed",
-                        failure_reason="email_taken"
+                        event_type="client_update_failed", failure_reason="email_taken"
                     ).warning("Client update failed: email already registered")
-                    raise HTTPException(status_code=400, detail="Email already registered")
+                    raise HTTPException(
+                        status_code=400, detail="Email already registered"
+                    )
 
             updated_client = await crud.update_client(
                 self.db, client_id=client_id, client=client_update
             )
 
             client_logger.bind(
-                client_name=updated_client.name,
-                event_type="client_update_success"
+                client_name=updated_client.name, event_type="client_update_success"
             ).info("Client updated successfully")
 
             return updated_client
@@ -123,8 +120,7 @@ class ClientService:
             raise
         except Exception as e:
             client_logger.bind(
-                event_type="client_update_error",
-                error_type="system_error"
+                event_type="client_update_error", error_type="system_error"
             ).error(f"Client update error: {str(e)}")
             raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -134,7 +130,7 @@ class ClientService:
             admin_user_id=current_user.id,
             client_id=client_id,
             action="delete_client",
-            event_type="client_deletion_attempt"
+            event_type="client_deletion_attempt",
         )
 
         try:
@@ -142,7 +138,7 @@ class ClientService:
             if not db_client:
                 client_logger.bind(
                     event_type="client_deletion_failed",
-                    failure_reason="client_not_found"
+                    failure_reason="client_not_found",
                 ).warning("Client deletion failed: client not found")
                 raise HTTPException(status_code=404, detail="Client not found")
 
@@ -156,7 +152,7 @@ class ClientService:
                 client_logger.bind(
                     event_type="client_deletion_failed",
                     failure_reason="has_associated_cases",
-                    case_count=len(cases_for_client)
+                    case_count=len(cases_for_client),
                 ).warning("Client deletion failed: client has associated cases")
                 raise HTTPException(
                     status_code=400,
@@ -166,15 +162,13 @@ class ClientService:
             await crud.delete_client(self.db, client_id=client_id)
 
             client_logger.bind(
-                client_name=db_client.name,
-                event_type="client_deletion_success"
+                client_name=db_client.name, event_type="client_deletion_success"
             ).info("Client deleted successfully")
 
         except HTTPException:
             raise
         except Exception as e:
             client_logger.bind(
-                event_type="client_deletion_error",
-                error_type="system_error"
+                event_type="client_deletion_error", error_type="system_error"
             ).error(f"Client deletion error: {str(e)}")
             raise HTTPException(status_code=500, detail="Internal server error")

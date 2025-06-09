@@ -12,7 +12,7 @@ export function useConfirmationDialog() {
   const cancelButtonText = ref('Cancel')
   const loading = ref(false)
   const warningText = ref('')
-  
+
   // Store the resolve/reject functions for the promise
   let resolveFunction = null
   let rejectFunction = null
@@ -33,7 +33,7 @@ export function useConfirmationDialog() {
       confirmButtonColor.value = options.confirmColor || 'error'
       cancelButtonText.value = options.cancelText || 'Cancel'
       warningText.value = options.warning || ''
-      
+
       // Show the dialog
       showDialog.value = true
     })
@@ -67,11 +67,11 @@ export function useConfirmationDialog() {
   const closeDialog = () => {
     showDialog.value = false
     loading.value = false
-    
+
     // Clear the promise functions
     resolveFunction = null
     rejectFunction = null
-    
+
     // Reset to defaults
     dialogTitle.value = ''
     dialogMessage.value = ''
@@ -92,7 +92,7 @@ export function useConfirmationDialog() {
       iconColor: 'error',
       confirmText: 'Delete',
       confirmColor: 'error',
-      warning: 'This action cannot be undone.'
+      warning: 'This action cannot be undone.',
     })
   }
 
@@ -101,7 +101,7 @@ export function useConfirmationDialog() {
       title: `Confirm ${action}`,
       message: `Are you sure you want to ${action.toLowerCase()} ${itemName}?`,
       confirmText: action,
-      confirmColor: 'primary'
+      confirmColor: 'primary',
     })
   }
 
@@ -117,15 +117,15 @@ export function useConfirmationDialog() {
     cancelButtonText,
     loading,
     warningText,
-    
+
     // Methods
     confirm,
     handleConfirm,
     handleCancel,
     closeDialog,
-    
+
     // Convenience methods
     confirmDelete,
-    confirmAction
+    confirmAction,
   }
 }

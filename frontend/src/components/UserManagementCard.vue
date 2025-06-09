@@ -197,9 +197,7 @@ const emit = defineEmits(['notification', 'confirmDelete'])
 
 const {
   // State
-  users,
   loading,
-  error,
   searchQuery,
   
   // Modal state

@@ -16,12 +16,12 @@ export const useAuthStore = defineStore('auth', () => {
     if (isInitialized.value) {
       return
     }
-    
+
     // If initialization is in progress, return the existing promise
     if (initPromise.value) {
       return initPromise.value
     }
-    
+
     // Start initialization
     initPromise.value = (async () => {
       if (isAuthenticated.value) {
@@ -36,7 +36,7 @@ export const useAuthStore = defineStore('auth', () => {
       }
       isInitialized.value = true
     })()
-    
+
     return initPromise.value
   }
 

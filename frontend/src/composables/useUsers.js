@@ -5,7 +5,7 @@ import { formatDate } from '@/composables/dateUtils'
 
 export function useUsers() {
   const authStore = useAuthStore()
-  
+
   // State
   const users = ref([])
   const loading = ref(true)
@@ -13,20 +13,20 @@ export function useUsers() {
   const searchQuery = ref('')
   const sortKey = ref('username')
   const sortOrder = ref('asc')
-  
+
   // Modal state
   const showNewUserModal = ref(false)
   const editingUser = ref(null)
   const showPasswordResetModal = ref(false)
   const selectedUserForPasswordReset = ref(null)
-  
+
   // Vuetify table headers
   const vuetifyHeaders = [
     { title: 'Username', key: 'username', sortable: true },
     { title: 'Email', key: 'email', sortable: true },
     { title: 'Role', key: 'role', sortable: true },
     { title: 'Created', key: 'created_at', sortable: true },
-    { title: 'Actions', key: 'actions', sortable: false }
+    { title: 'Actions', key: 'actions', sortable: false },
   ]
 
   // Computed
@@ -36,10 +36,11 @@ export function useUsers() {
     // Apply search filter
     if (searchQuery.value) {
       const query = searchQuery.value.toLowerCase()
-      filteredUsers = users.value.filter(user =>
-        (user.username || '').toLowerCase().includes(query) ||
-        (user.email || '').toLowerCase().includes(query) ||
-        (user.role || '').toLowerCase().includes(query)
+      filteredUsers = users.value.filter(
+        (user) =>
+          (user.username || '').toLowerCase().includes(query) ||
+          (user.email || '').toLowerCase().includes(query) ||
+          (user.role || '').toLowerCase().includes(query),
       )
     }
 
@@ -59,16 +60,16 @@ export function useUsers() {
   const canDeleteUser = (targetUser) => {
     const currentUser = authStore.user
     if (!currentUser) return false
-    
+
     // Cannot delete yourself
     if (currentUser.id === targetUser.id) return false
-    
+
     // Cannot delete superadmin users
     if (targetUser.is_superadmin) return false
-    
+
     // Only superadmin can delete admin users
     if (targetUser.role === 'Admin' && !currentUser.is_superadmin) return false
-    
+
     // Regular admins can delete non-admin users
     return true
   }
@@ -76,10 +77,10 @@ export function useUsers() {
   const canResetPassword = (targetUser) => {
     const currentUser = authStore.user
     if (!currentUser) return false
-    
+
     // Only superadmin can reset superadmin passwords
     if (targetUser.is_superadmin && !currentUser.is_superadmin) return false
-    
+
     // All admins can reset non-superadmin passwords
     return true
   }
@@ -87,10 +88,10 @@ export function useUsers() {
   const canEditUser = (targetUser) => {
     const currentUser = authStore.user
     if (!currentUser) return false
-    
+
     // Only superadmin can edit superadmin users
     if (targetUser.is_superadmin && !currentUser.is_superadmin) return false
-    
+
     // All admins can edit non-superadmin users
     return true
   }
@@ -113,7 +114,7 @@ export function useUsers() {
 
   const getEmptyStateMessage = () => {
     if (searchQuery.value) {
-      return 'Try adjusting your search terms to find the user you\'re looking for.'
+      return "Try adjusting your search terms to find the user you're looking for."
     } else if ((users.value || []).length === 0) {
       return 'Get started by adding your first user to begin managing the system.'
     } else {
@@ -143,7 +144,7 @@ export function useUsers() {
   const deleteUser = async (userId) => {
     try {
       await userService.deleteUser(userId)
-      users.value = users.value.filter(u => u.id !== userId)
+      users.value = users.value.filter((u) => u.id !== userId)
       return true
     } catch (err) {
       console.error('Error deleting user:', err)
@@ -164,7 +165,7 @@ export function useUsers() {
 
   const handleUserSaved = (user) => {
     if (editingUser.value) {
-      const index = users.value.findIndex(u => u.id === user.id)
+      const index = users.value.findIndex((u) => u.id === user.id)
       if (index !== -1) {
         users.value[index] = user
       }
@@ -196,41 +197,41 @@ export function useUsers() {
     searchQuery,
     sortKey,
     sortOrder,
-    
+
     // Modal state
     showNewUserModal,
     editingUser,
     showPasswordResetModal,
     selectedUserForPasswordReset,
-    
+
     // Constants
     vuetifyHeaders,
-    
+
     // Computed
     sortedAndFilteredUsers,
-    
+
     // Permission functions
     canDeleteUser,
     canResetPassword,
     canEditUser,
-    
+
     // Helper functions
     getRoleColor,
     getEmptyStateTitle,
     getEmptyStateMessage,
     shouldShowCreateButton,
     formatDate,
-    
+
     // CRUD operations
     loadUsers,
     deleteUser,
-    
+
     // Modal management
     editUser,
     closeUserModal,
     handleUserSaved,
     resetPassword,
     closePasswordResetModal,
-    handlePasswordResetSaved
+    handlePasswordResetSaved,
   }
 }

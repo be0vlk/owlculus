@@ -13,13 +13,15 @@ export function useSystemConfiguration() {
   // Configuration options
   const templateOptions = [
     { display_name: 'Monthly Reset (YYMM-NN)', value: 'YYMM-NN' },
-    { display_name: 'Prefix + Monthly Reset (PREFIX-YYMM-NN)', value: 'PREFIX-YYMM-NN' }
+    { display_name: 'Prefix + Monthly Reset (PREFIX-YYMM-NN)', value: 'PREFIX-YYMM-NN' },
   ]
 
   // Computed properties
   const isConfigChanged = computed(() => {
-    return selectedTemplate.value !== originalTemplate.value ||
-           caseNumberPrefix.value !== originalPrefix.value
+    return (
+      selectedTemplate.value !== originalTemplate.value ||
+      caseNumberPrefix.value !== originalPrefix.value
+    )
   })
 
   const isConfigValid = computed(() => {
@@ -49,7 +51,7 @@ export function useSystemConfiguration() {
 
     try {
       const params = new URLSearchParams({
-        template: selectedTemplate.value
+        template: selectedTemplate.value,
       })
 
       if (selectedTemplate.value === 'PREFIX-YYMM-NN' && caseNumberPrefix.value) {
@@ -99,7 +101,8 @@ export function useSystemConfiguration() {
     try {
       const configData = {
         case_number_template: selectedTemplate.value,
-        case_number_prefix: selectedTemplate.value === 'PREFIX-YYMM-NN' ? caseNumberPrefix.value : null
+        case_number_prefix:
+          selectedTemplate.value === 'PREFIX-YYMM-NN' ? caseNumberPrefix.value : null,
       }
 
       await api.put('/api/admin/configuration', configData)
@@ -130,23 +133,23 @@ export function useSystemConfiguration() {
     originalPrefix,
     configLoading,
     exampleCaseNumber,
-    
+
     // Constants
     templateOptions,
-    
+
     // Computed
     isConfigChanged,
     isConfigValid,
-    
+
     // Validation
     validatePrefix,
-    
+
     // Methods
     updatePreview,
     onTemplateChange,
     onPrefixChange,
     loadConfiguration,
     saveConfiguration,
-    resetConfiguration
+    resetConfiguration,
   }
 }

@@ -192,9 +192,7 @@ const emit = defineEmits(['notification', 'confirmDelete'])
 
 const {
   // State
-  invites,
   loading,
-  error,
   inviteSearchQuery,
   cleanupLoading,
   

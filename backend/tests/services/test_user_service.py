@@ -743,9 +743,7 @@ class TestUserService:
             mock_get_user.return_value = admin
 
             with pytest.raises(HTTPException) as exc_info:
-                await user_service_instance.delete_user(
-                    admin.id, current_user=admin
-                )
+                await user_service_instance.delete_user(admin.id, current_user=admin)
 
             assert exc_info.value.status_code == 403
             assert "Cannot delete your own account" in exc_info.value.detail
@@ -822,9 +820,7 @@ class TestUserService:
             mock_decorator.return_value = side_effect
 
             with pytest.raises(HTTPException) as exc_info:
-                await user_service_instance.delete_user(
-                    999, current_user=test_user
-                )
+                await user_service_instance.delete_user(999, current_user=test_user)
 
             assert exc_info.value.status_code == 403
 
@@ -856,7 +852,10 @@ class TestUserService:
                 )
 
             assert exc_info.value.status_code == 403
-            assert "Only superadmin can reset superadmin passwords" in exc_info.value.detail
+            assert (
+                "Only superadmin can reset superadmin passwords"
+                in exc_info.value.detail
+            )
 
     @pytest.mark.asyncio
     async def test_admin_reset_password_superadmin_can_reset_superadmin(
@@ -880,7 +879,9 @@ class TestUserService:
         with patch("app.services.user_service.crud.get_user") as mock_get_user:
             mock_get_user.return_value = superadmin_target
 
-            with patch("app.services.user_service.crud.admin_reset_password") as mock_reset:
+            with patch(
+                "app.services.user_service.crud.admin_reset_password"
+            ) as mock_reset:
                 updated_user = Mock()
                 mock_reset.return_value = updated_user
 
@@ -892,7 +893,7 @@ class TestUserService:
                 mock_reset.assert_called_once_with(
                     user_service_instance.db,
                     user=superadmin_target,
-                    new_password="newpassword"
+                    new_password="newpassword",
                 )
 
     @pytest.mark.asyncio
@@ -952,13 +953,19 @@ class TestUserService:
         with patch("app.services.user_service.crud.get_user") as mock_get_user:
             mock_get_user.return_value = superadmin_target
 
-            with patch("app.services.user_service.crud.get_user_by_username") as mock_get_username:
+            with patch(
+                "app.services.user_service.crud.get_user_by_username"
+            ) as mock_get_username:
                 mock_get_username.return_value = None  # Username not taken
 
-                with patch("app.services.user_service.crud.get_user_by_email") as mock_get_email:
+                with patch(
+                    "app.services.user_service.crud.get_user_by_email"
+                ) as mock_get_email:
                     mock_get_email.return_value = None  # Email not taken
 
-                    with patch("app.services.user_service.crud.update_user") as mock_update:
+                    with patch(
+                        "app.services.user_service.crud.update_user"
+                    ) as mock_update:
                         updated_user = Mock()
                         updated_user.username = user_update.username
                         mock_update.return_value = updated_user
@@ -969,7 +976,9 @@ class TestUserService:
 
                         assert result.username == user_update.username
                         mock_update.assert_called_once_with(
-                            user_service_instance.db, user_id=superadmin_target.id, user=user_update
+                            user_service_instance.db,
+                            user_id=superadmin_target.id,
+                            user=user_update,
                         )
 
     @pytest.mark.asyncio
@@ -990,13 +999,17 @@ class TestUserService:
             password="password123",
             role="Admin",
             is_active=True,
-            is_superadmin=True  # Attempting to create superadmin
+            is_superadmin=True,  # Attempting to create superadmin
         )
 
-        with patch("app.services.user_service.crud.get_user_by_username") as mock_get_username:
+        with patch(
+            "app.services.user_service.crud.get_user_by_username"
+        ) as mock_get_username:
             mock_get_username.return_value = None  # Username not taken
 
-            with patch("app.services.user_service.crud.get_user_by_email") as mock_get_email:
+            with patch(
+                "app.services.user_service.crud.get_user_by_email"
+            ) as mock_get_email:
                 mock_get_email.return_value = None  # Email not taken
 
                 with pytest.raises(HTTPException) as exc_info:
@@ -1005,7 +1018,10 @@ class TestUserService:
                     )
 
                 assert exc_info.value.status_code == 403
-                assert "Only superadmin can create superadmin users" in exc_info.value.detail
+                assert (
+                    "Only superadmin can create superadmin users"
+                    in exc_info.value.detail
+                )
 
     @pytest.mark.asyncio
     async def test_create_user_superadmin_can_create_superadmin(
@@ -1025,13 +1041,17 @@ class TestUserService:
             password="password123",
             role="Admin",
             is_active=True,
-            is_superadmin=True
+            is_superadmin=True,
         )
 
-        with patch("app.services.user_service.crud.get_user_by_username") as mock_get_username:
+        with patch(
+            "app.services.user_service.crud.get_user_by_username"
+        ) as mock_get_username:
             mock_get_username.return_value = None  # Username not taken
 
-            with patch("app.services.user_service.crud.get_user_by_email") as mock_get_email:
+            with patch(
+                "app.services.user_service.crud.get_user_by_email"
+            ) as mock_get_email:
                 mock_get_email.return_value = None  # Email not taken
 
                 with patch("app.services.user_service.crud.create_user") as mock_create:
@@ -1084,7 +1104,10 @@ class TestUserService:
                 )
 
             assert exc_info.value.status_code == 403
-            assert "Only superadmin can promote users to superadmin" in exc_info.value.detail
+            assert (
+                "Only superadmin can promote users to superadmin"
+                in exc_info.value.detail
+            )
 
     @pytest.mark.asyncio
     async def test_update_user_superadmin_can_promote_to_superadmin(
@@ -1111,13 +1134,19 @@ class TestUserService:
         with patch("app.services.user_service.crud.get_user") as mock_get_user:
             mock_get_user.return_value = target_user
 
-            with patch("app.services.user_service.crud.get_user_by_username") as mock_get_username:
+            with patch(
+                "app.services.user_service.crud.get_user_by_username"
+            ) as mock_get_username:
                 mock_get_username.return_value = None  # Username not taken
 
-                with patch("app.services.user_service.crud.get_user_by_email") as mock_get_email:
+                with patch(
+                    "app.services.user_service.crud.get_user_by_email"
+                ) as mock_get_email:
                     mock_get_email.return_value = None  # Email not taken
 
-                    with patch("app.services.user_service.crud.update_user") as mock_update:
+                    with patch(
+                        "app.services.user_service.crud.update_user"
+                    ) as mock_update:
                         updated_user = Mock()
                         updated_user.is_superadmin = True
                         mock_update.return_value = updated_user
@@ -1128,5 +1157,7 @@ class TestUserService:
 
                         assert result.is_superadmin is True
                         mock_update.assert_called_once_with(
-                            user_service_instance.db, user_id=target_user.id, user=user_update
+                            user_service_instance.db,
+                            user_id=target_user.id,
+                            user=user_update,
                         )

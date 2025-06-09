@@ -37,6 +37,12 @@
           <!-- System Configuration -->
           <SystemConfigurationCard @notification="handleNotification" />
 
+          <!-- API Key Management -->
+          <ApiKeyManagementCard 
+            @notification="handleNotification"
+            @confirmDelete="handleConfirmDelete"
+          />
+
           <!-- User and Invite Management -->
           <v-card variant="outlined">
             <!-- Header -->
@@ -111,6 +117,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useNotifications } from '@/composables/useNotifications'
 import Sidebar from '@/components/Sidebar.vue'
 import SystemConfigurationCard from '@/components/SystemConfigurationCard.vue'
+import ApiKeyManagementCard from '@/components/ApiKeyManagementCard.vue'
 import UserManagementCard from '@/components/UserManagementCard.vue'
 import InviteManagementCard from '@/components/InviteManagementCard.vue'
 import ConfirmationDialog from '@/components/ConfirmationDialog.vue'
@@ -148,7 +155,7 @@ const handleConfirmDelete = async ({ title, message, warning, onConfirm }) => {
     
     // Execute the confirmation action
     await onConfirm()
-  } catch (error) {
+  } catch {
     // User cancelled or action failed
     console.log('Delete action cancelled or failed')
   }

@@ -21,31 +21,29 @@ class AuthService:
         Authenticate a user and return an access token
         """
         auth_logger = get_security_logger(
-            username=username, 
-            action="authenticate",
-            event_type="login_attempt"
+            username=username, action="authenticate", event_type="login_attempt"
         )
         auth_logger.info("Authentication attempt started")
-        
+
         try:
             user = await crud.get_user_by_username(self.db, username=username)
             if not user:
                 auth_logger.warning(
                     "Authentication failed: user not found",
                     event_type="login_failed",
-                    failure_reason="user_not_found"
+                    failure_reason="user_not_found",
                 )
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Incorrect username or password",
                     headers={"Authorization": "Bearer"},
                 )
-            
+
             if not security.verify_password(password, user.password_hash):
                 auth_logger.bind(
                     user_id=user.id,
                     event_type="login_failed",
-                    failure_reason="invalid_password"
+                    failure_reason="invalid_password",
                 ).warning("Authentication failed: invalid password")
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -53,28 +51,28 @@ class AuthService:
                     headers={"Authorization": "Bearer"},
                 )
 
-            access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+            access_token_expires = timedelta(
+                minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
+            )
             access_token = security.create_access_token(
                 data={"sub": user.username}, expires_delta=access_token_expires
             )
 
             auth_logger.bind(
-                user_id=user.id, 
-                role=user.role,
-                event_type="login_success"
+                user_id=user.id, role=user.role, event_type="login_success"
             ).info("Authentication successful")
-            
+
             return {"access_token": access_token, "token_type": "bearer"}
-            
+
         except HTTPException:
             raise
         except Exception as e:
             auth_logger.error(
                 f"Authentication error: {str(e)}",
                 event_type="login_error",
-                error_type="system_error"
+                error_type="system_error",
             )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Authentication service error"
+                detail="Authentication service error",
             )

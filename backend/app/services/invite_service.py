@@ -22,7 +22,7 @@ class InviteService:
             admin_user_id=current_user.id,
             action="create_invite",
             target_role=invite.role,
-            event_type="invite_creation_attempt"
+            event_type="invite_creation_attempt",
         )
 
         try:
@@ -44,15 +44,14 @@ class InviteService:
                 invite_id=new_invite.id,
                 invite_role=new_invite.role,
                 expires_at=new_invite.expires_at.isoformat(),
-                event_type="invite_creation_success"
+                event_type="invite_creation_success",
             ).info("Invite created successfully")
 
             return new_invite
 
         except Exception as e:
             invite_logger.bind(
-                event_type="invite_creation_error",
-                error_type="system_error"
+                event_type="invite_creation_error", error_type="system_error"
             ).error(f"Invite creation error: {str(e)}")
             raise HTTPException(status_code=400, detail=str(e))
 
@@ -109,7 +108,7 @@ class InviteService:
         invite_logger = get_security_logger(
             action="register_with_invite",
             username=registration.username,
-            event_type="invite_registration_attempt"
+            event_type="invite_registration_attempt",
         )
 
         try:
@@ -119,7 +118,7 @@ class InviteService:
                 invite_logger.bind(
                     event_type="invite_registration_failed",
                     failure_reason="invalid_invite",
-                    validation_error=validation.error
+                    validation_error=validation.error,
                 ).warning("User registration failed: invalid invite")
                 raise HTTPException(status_code=400, detail=validation.error)
 
@@ -128,7 +127,7 @@ class InviteService:
             if not invite:
                 invite_logger.bind(
                     event_type="invite_registration_failed",
-                    failure_reason="invite_not_found"
+                    failure_reason="invite_not_found",
                 ).warning("User registration failed: invite not found")
                 raise HTTPException(status_code=400, detail="Invalid invite token")
 
@@ -139,16 +138,18 @@ class InviteService:
             if existing_user:
                 invite_logger.bind(
                     event_type="invite_registration_failed",
-                    failure_reason="username_taken"
+                    failure_reason="username_taken",
                 ).warning("User registration failed: username already taken")
                 raise HTTPException(status_code=400, detail="Username already taken")
 
             # Check for existing email
-            existing_user = await crud.get_user_by_email(self.db, email=registration.email)
+            existing_user = await crud.get_user_by_email(
+                self.db, email=registration.email
+            )
             if existing_user:
                 invite_logger.bind(
                     event_type="invite_registration_failed",
-                    failure_reason="email_taken"
+                    failure_reason="email_taken",
                 ).warning("User registration failed: email already registered")
                 raise HTTPException(status_code=400, detail="Email already registered")
 
@@ -168,7 +169,7 @@ class InviteService:
                 user_id=user.id,
                 invite_id=invite.id,
                 user_role=user.role,
-                event_type="invite_registration_success"
+                event_type="invite_registration_success",
             ).info("User registered successfully with invite")
 
             return schemas.UserRegistrationResponse(
@@ -184,13 +185,12 @@ class InviteService:
         except ValueError as e:
             invite_logger.bind(
                 event_type="invite_registration_failed",
-                failure_reason="validation_error"
+                failure_reason="validation_error",
             ).warning(f"User registration failed: {str(e)}")
             raise HTTPException(status_code=400, detail=str(e))
         except Exception as e:
             invite_logger.bind(
-                event_type="invite_registration_error",
-                error_type="system_error"
+                event_type="invite_registration_error", error_type="system_error"
             ).error(f"User registration error: {str(e)}")
             raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -200,7 +200,7 @@ class InviteService:
             admin_user_id=current_user.id,
             invite_id=invite_id,
             action="delete_invite",
-            event_type="invite_deletion_attempt"
+            event_type="invite_deletion_attempt",
         )
 
         try:
@@ -209,7 +209,7 @@ class InviteService:
             if not invite:
                 invite_logger.bind(
                     event_type="invite_deletion_failed",
-                    failure_reason="invite_not_found"
+                    failure_reason="invite_not_found",
                 ).warning("Invite deletion failed: invite not found")
                 raise HTTPException(status_code=404, detail="Invite not found")
 
@@ -217,7 +217,7 @@ class InviteService:
                 invite_logger.bind(
                     event_type="invite_deletion_failed",
                     failure_reason="not_authorized",
-                    invite_creator_id=invite.created_by_id
+                    invite_creator_id=invite.created_by_id,
                 ).warning("Invite deletion failed: not authorized")
                 raise HTTPException(
                     status_code=403, detail="Not authorized to delete this invite"
@@ -227,15 +227,14 @@ class InviteService:
                 invite_logger.bind(
                     event_type="invite_deletion_failed",
                     failure_reason="invite_already_used",
-                    used_at=invite.used_at.isoformat()
+                    used_at=invite.used_at.isoformat(),
                 ).warning("Invite deletion failed: cannot delete used invite")
                 raise HTTPException(status_code=400, detail="Cannot delete used invite")
 
             result = await crud.delete_invite(self.db, invite_id=invite_id)
 
             invite_logger.bind(
-                invite_role=invite.role,
-                event_type="invite_deletion_success"
+                invite_role=invite.role, event_type="invite_deletion_success"
             ).info("Invite deleted successfully")
 
             return result
@@ -244,14 +243,12 @@ class InviteService:
             raise
         except ValueError as e:
             invite_logger.bind(
-                event_type="invite_deletion_failed",
-                failure_reason="validation_error"
+                event_type="invite_deletion_failed", failure_reason="validation_error"
             ).warning(f"Invite deletion failed: {str(e)}")
             raise HTTPException(status_code=404, detail=str(e))
         except Exception as e:
             invite_logger.bind(
-                event_type="invite_deletion_error",
-                error_type="system_error"
+                event_type="invite_deletion_error", error_type="system_error"
             ).error(f"Invite deletion error: {str(e)}")
             raise HTTPException(status_code=500, detail="Internal server error")
 

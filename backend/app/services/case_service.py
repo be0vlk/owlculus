@@ -60,8 +60,8 @@ class CaseService:
         case_logger = get_security_logger(
             admin_user_id=current_user.id,
             action="create_case",
-            case_name=case.case_name,
-            event_type="case_creation_attempt"
+            case_name=case.title,
+            event_type="case_creation_attempt",
         )
 
         try:
@@ -82,15 +82,14 @@ class CaseService:
                 case_id=new_case.id,
                 case_number=new_case.case_number,
                 client_id=new_case.client_id,
-                event_type="case_creation_success"
+                event_type="case_creation_success",
             ).info("Case created successfully")
 
             return new_case
 
         except Exception as e:
             case_logger.bind(
-                event_type="case_creation_error",
-                error_type="system_error"
+                event_type="case_creation_error", error_type="system_error"
             ).error(f"Case creation error: {str(e)}")
             raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -143,30 +142,32 @@ class CaseService:
             user_id=current_user.id,
             case_id=case_id,
             action="update_case",
-            event_type="case_update_attempt"
+            event_type="case_update_attempt",
         )
 
         try:
             db_case = await crud.get_case(self.db, case_id=case_id)
             if not db_case:
                 case_logger.bind(
-                    event_type="case_update_failed",
-                    failure_reason="case_not_found"
+                    event_type="case_update_failed", failure_reason="case_not_found"
                 ).warning("Case update failed: case not found")
                 raise HTTPException(status_code=404, detail="Case not found")
 
             # Admin can update any case
             if current_user.role != "Admin" and current_user not in db_case.users:
                 case_logger.bind(
-                    event_type="case_update_failed",
-                    failure_reason="not_authorized"
+                    event_type="case_update_failed", failure_reason="not_authorized"
                 ).warning("Case update failed: not authorized")
                 raise HTTPException(
-                    status_code=403, detail="You do not have permission to update this case"
+                    status_code=403,
+                    detail="You do not have permission to update this case",
                 )
 
             # Check case number uniqueness if being updated
-            if case_update.case_number and case_update.case_number != db_case.case_number:
+            if (
+                case_update.case_number
+                and case_update.case_number != db_case.case_number
+            ):
                 existing_case = await crud.get_case_by_number(
                     self.db, case_number=case_update.case_number
                 )
@@ -174,7 +175,7 @@ class CaseService:
                     case_logger.bind(
                         event_type="case_update_failed",
                         failure_reason="case_number_exists",
-                        requested_case_number=case_update.case_number
+                        requested_case_number=case_update.case_number,
                     ).warning("Case update failed: case number already exists")
                     raise HTTPException(
                         status_code=400, detail="Case number already exists"
@@ -185,8 +186,7 @@ class CaseService:
             )
 
             case_logger.bind(
-                case_number=updated_case.case_number,
-                event_type="case_update_success"
+                case_number=updated_case.case_number, event_type="case_update_success"
             ).info("Case updated successfully")
 
             return updated_case
@@ -195,8 +195,7 @@ class CaseService:
             raise
         except Exception as e:
             case_logger.bind(
-                event_type="case_update_error",
-                error_type="system_error"
+                event_type="case_update_error", error_type="system_error"
             ).error(f"Case update error: {str(e)}")
             raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -209,7 +208,7 @@ class CaseService:
             case_id=case_id,
             target_user_id=user_id,
             action="add_user_to_case",
-            event_type="case_user_add_attempt"
+            event_type="case_user_add_attempt",
         )
 
         try:
@@ -217,25 +216,25 @@ class CaseService:
             db_case = await crud.get_case(self.db, case_id=case_id)
             if not db_case:
                 case_logger.bind(
-                    event_type="case_user_add_failed",
-                    failure_reason="case_not_found"
+                    event_type="case_user_add_failed", failure_reason="case_not_found"
                 ).warning("Add user to case failed: case not found")
                 raise HTTPException(status_code=404, detail="Case not found")
 
             db_user = await crud.get_user(self.db, user_id=user_id)
             if not db_user:
                 case_logger.bind(
-                    event_type="case_user_add_failed",
-                    failure_reason="user_not_found"
+                    event_type="case_user_add_failed", failure_reason="user_not_found"
                 ).warning("Add user to case failed: user not found")
                 raise HTTPException(status_code=404, detail="User not found")
 
-            updated_case = await crud.add_user_to_case(self.db, case=db_case, user=db_user)
+            updated_case = await crud.add_user_to_case(
+                self.db, case=db_case, user=db_user
+            )
 
             case_logger.bind(
                 case_number=db_case.case_number,
                 username=db_user.username,
-                event_type="case_user_add_success"
+                event_type="case_user_add_success",
             ).info("User added to case successfully")
 
             return updated_case
@@ -244,8 +243,7 @@ class CaseService:
             raise
         except Exception as e:
             case_logger.bind(
-                event_type="case_user_add_error",
-                error_type="system_error"
+                event_type="case_user_add_error", error_type="system_error"
             ).error(f"Add user to case error: {str(e)}")
             raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -258,7 +256,7 @@ class CaseService:
             case_id=case_id,
             target_user_id=user_id,
             action="remove_user_from_case",
-            event_type="case_user_remove_attempt"
+            event_type="case_user_remove_attempt",
         )
 
         try:
@@ -267,7 +265,7 @@ class CaseService:
             if not db_case:
                 case_logger.bind(
                     event_type="case_user_remove_failed",
-                    failure_reason="case_not_found"
+                    failure_reason="case_not_found",
                 ).warning("Remove user from case failed: case not found")
                 raise HTTPException(status_code=404, detail="Case not found")
 
@@ -275,16 +273,18 @@ class CaseService:
             if not db_user:
                 case_logger.bind(
                     event_type="case_user_remove_failed",
-                    failure_reason="user_not_found"
+                    failure_reason="user_not_found",
                 ).warning("Remove user from case failed: user not found")
                 raise HTTPException(status_code=404, detail="User not found")
 
-            updated_case = await crud.remove_user_from_case(self.db, case=db_case, user=db_user)
+            updated_case = await crud.remove_user_from_case(
+                self.db, case=db_case, user=db_user
+            )
 
             case_logger.bind(
                 case_number=db_case.case_number,
                 username=db_user.username,
-                event_type="case_user_remove_success"
+                event_type="case_user_remove_success",
             ).info("User removed from case successfully")
 
             return updated_case
@@ -293,7 +293,6 @@ class CaseService:
             raise
         except Exception as e:
             case_logger.bind(
-                event_type="case_user_remove_error",
-                error_type="system_error"
+                event_type="case_user_remove_error", error_type="system_error"
             ).error(f"Remove user from case error: {str(e)}")
             raise HTTPException(status_code=500, detail="Internal server error")
