@@ -1,10 +1,20 @@
 import pytest
+import os
 from sqlmodel import Session, SQLModel, create_engine
 from fastapi.testclient import TestClient
 from fastapi.security import OAuth2PasswordBearer
 from datetime import timedelta
 from fastapi import HTTPException
 from app.database import crud
+
+# Set test environment variables before importing app
+os.environ.setdefault("SECRET_KEY", "test_secret_key_for_testing_only")
+os.environ.setdefault("POSTGRES_USER", "test_user")
+os.environ.setdefault("POSTGRES_PASSWORD", "test_password")
+os.environ.setdefault("POSTGRES_HOST", "localhost")
+os.environ.setdefault("POSTGRES_PORT", "5432")
+os.environ.setdefault("POSTGRES_DB", "test_db")
+os.environ.setdefault("FRONTEND_URL", "http://localhost:3000")
 
 from app.main import app
 from app.database import models
@@ -62,6 +72,24 @@ def test_admin_fixture(session):
         password_hash=get_password_hash("adminpass"),
         role="Admin",
         is_active=True,
+        is_superadmin=True,
+    )
+    session.add(admin_user)
+    session.commit()
+    session.refresh(admin_user)
+    return admin_user
+
+
+@pytest.fixture(name="admin_user")
+def admin_user_fixture(session):
+    """Alias for test_admin fixture for compatibility"""
+    admin_user = models.User(
+        email="admin@test.com",
+        username="admin",
+        password_hash=get_password_hash("adminpass"),
+        role="Admin",
+        is_active=True,
+        is_superadmin=True,
     )
     session.add(admin_user)
     session.commit()

@@ -20,16 +20,16 @@ def get_client_ip(request: Request) -> str:
     if forwarded_for:
         # Take the first IP in the chain (original client)
         return forwarded_for.split(",")[0].strip()
-    
+
     # Check for X-Real-IP header (another common proxy header)
     real_ip = request.headers.get("X-Real-IP")
     if real_ip:
         return real_ip.strip()
-    
+
     # Fall back to direct client IP
     if request.client:
         return request.client.host
-    
+
     return "unknown"
 
 

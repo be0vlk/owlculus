@@ -36,6 +36,7 @@ if settings.BACKEND_CORS_ORIGINS:
         allow_headers=["*"],
     )
 
+
 # Middleware to capture client IP and user agent for logging
 @app.middleware("http")
 async def request_info_middleware(request: Request, call_next):
@@ -45,6 +46,7 @@ async def request_info_middleware(request: Request, call_next):
     user_agent_context.set(user_agent)
     response = await call_next(request)
     return response
+
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
 

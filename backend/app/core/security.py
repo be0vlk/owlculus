@@ -7,6 +7,8 @@ import filetype
 from werkzeug.utils import secure_filename
 from fastapi import UploadFile, HTTPException
 import os
+from cryptography.fernet import Fernet
+import base64
 
 from .config import settings
 from .utils import get_utc_now
@@ -161,3 +163,36 @@ def secure_filename_with_path(filename: str, base_path: Path) -> str:
         raise HTTPException(status_code=400, detail="Invalid file path")
 
     return final_name
+
+
+# API Key Encryption
+def _get_encryption_key() -> bytes:
+    """Get or generate encryption key from secret."""
+    secret = settings.SECRET_KEY.get_secret_value()
+    # Use first 32 bytes of secret key hash for Fernet
+    key = base64.urlsafe_b64encode(secret.encode()[:32].ljust(32, b"0"))
+    return key
+
+
+def encrypt_api_key(api_key: str) -> str:
+    """Encrypt an API key for database storage."""
+    if not api_key:
+        return ""
+
+    fernet = Fernet(_get_encryption_key())
+    encrypted = fernet.encrypt(api_key.encode())
+    return encrypted.decode()
+
+
+def decrypt_api_key(encrypted_key: str) -> str:
+    """Decrypt an API key from database storage."""
+    if not encrypted_key:
+        return ""
+
+    try:
+        fernet = Fernet(_get_encryption_key())
+        decrypted = fernet.decrypt(encrypted_key.encode())
+        return decrypted.decode()
+    except Exception:
+        # Return empty string if decryption fails
+        return ""

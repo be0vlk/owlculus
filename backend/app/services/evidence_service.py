@@ -36,7 +36,7 @@ class EvidenceService:
             case_id=evidence.case_id,
             action="create_evidence",
             evidence_type=evidence.evidence_type,
-            event_type="evidence_creation_attempt"
+            event_type="evidence_creation_attempt",
         )
 
         try:
@@ -47,7 +47,7 @@ class EvidenceService:
             if not case:
                 evidence_logger.bind(
                     event_type="evidence_creation_failed",
-                    failure_reason="case_not_found"
+                    failure_reason="case_not_found",
                 ).warning("Evidence creation failed: case not found")
                 raise HTTPException(status_code=404, detail="Case not found")
 
@@ -62,8 +62,10 @@ class EvidenceService:
                 if not existing_folders:
                     evidence_logger.bind(
                         event_type="evidence_creation_failed",
-                        failure_reason="no_folders_exist"
-                    ).warning("Evidence creation failed: no folders exist for file upload")
+                        failure_reason="no_folders_exist",
+                    ).warning(
+                        "Evidence creation failed: no folders exist for file upload"
+                    )
                     raise HTTPException(
                         status_code=400,
                         detail="Cannot upload files without any folders. Create a folder first to organize evidence.",
@@ -74,10 +76,13 @@ class EvidenceService:
                 if not file:
                     evidence_logger.bind(
                         event_type="evidence_creation_failed",
-                        failure_reason="file_required"
-                    ).warning("Evidence creation failed: file required for file-type evidence")
+                        failure_reason="file_required",
+                    ).warning(
+                        "Evidence creation failed: file required for file-type evidence"
+                    )
                     raise HTTPException(
-                        status_code=400, detail="File is required for file-type evidence"
+                        status_code=400,
+                        detail="File is required for file-type evidence",
                     )
                 try:
                     # Save the file and get its path and hash
@@ -93,7 +98,7 @@ class EvidenceService:
                 except Exception as e:
                     evidence_logger.bind(
                         event_type="evidence_creation_failed",
-                        failure_reason="file_save_error"
+                        failure_reason="file_save_error",
                     ).warning(f"Evidence creation failed: error saving file: {str(e)}")
                     raise HTTPException(
                         status_code=500, detail=f"Error saving file: {str(e)}"
@@ -124,7 +129,7 @@ class EvidenceService:
                 evidence_id=db_evidence.id,
                 evidence_title=db_evidence.title,
                 evidence_category=db_evidence.category,
-                event_type="evidence_creation_success"
+                event_type="evidence_creation_success",
             ).info("Evidence created successfully")
 
             return db_evidence
@@ -139,8 +144,7 @@ class EvidenceService:
                 except:
                     pass
             evidence_logger.bind(
-                event_type="evidence_creation_error",
-                error_type="system_error"
+                event_type="evidence_creation_error", error_type="system_error"
             ).error(f"Evidence creation error: {str(e)}")
             raise HTTPException(
                 status_code=500, detail=f"Error creating evidence: {str(e)}"
@@ -187,7 +191,7 @@ class EvidenceService:
             user_id=current_user.id,
             evidence_id=evidence_id,
             action="update_evidence",
-            event_type="evidence_update_attempt"
+            event_type="evidence_update_attempt",
         )
 
         try:
@@ -196,7 +200,7 @@ class EvidenceService:
             if not db_evidence:
                 evidence_logger.bind(
                     event_type="evidence_update_failed",
-                    failure_reason="evidence_not_found"
+                    failure_reason="evidence_not_found",
                 ).warning("Evidence update failed: evidence not found")
                 raise HTTPException(status_code=404, detail="Evidence not found")
 
@@ -209,8 +213,10 @@ class EvidenceService:
                 if db_evidence.evidence_type == "file":
                     evidence_logger.bind(
                         event_type="evidence_update_failed",
-                        failure_reason="file_content_not_updatable"
-                    ).warning("Evidence update failed: cannot update content of file-type evidence")
+                        failure_reason="file_content_not_updatable",
+                    ).warning(
+                        "Evidence update failed: cannot update content of file-type evidence"
+                    )
                     raise HTTPException(
                         status_code=400,
                         detail="Cannot update content of file-type evidence",
@@ -230,7 +236,7 @@ class EvidenceService:
             evidence_logger.bind(
                 case_id=db_evidence.case_id,
                 evidence_title=db_evidence.title,
-                event_type="evidence_update_success"
+                event_type="evidence_update_success",
             ).info("Evidence updated successfully")
 
             return db_evidence
@@ -240,8 +246,7 @@ class EvidenceService:
         except Exception as e:
             self.db.rollback()
             evidence_logger.bind(
-                event_type="evidence_update_error",
-                error_type="system_error"
+                event_type="evidence_update_error", error_type="system_error"
             ).error(f"Evidence update error: {str(e)}")
             raise HTTPException(
                 status_code=500, detail=f"Error updating evidence: {str(e)}"
@@ -255,7 +260,7 @@ class EvidenceService:
             user_id=current_user.id,
             evidence_id=evidence_id,
             action="delete_evidence",
-            event_type="evidence_deletion_attempt"
+            event_type="evidence_deletion_attempt",
         )
 
         try:
@@ -268,8 +273,10 @@ class EvidenceService:
                 except Exception as e:
                     evidence_logger.bind(
                         event_type="evidence_deletion_failed",
-                        failure_reason="file_deletion_error"
-                    ).warning(f"Evidence deletion failed: error deleting file: {str(e)}")
+                        failure_reason="file_deletion_error",
+                    ).warning(
+                        f"Evidence deletion failed: error deleting file: {str(e)}"
+                    )
                     raise HTTPException(
                         status_code=500, detail=f"Error deleting file: {str(e)}"
                     )
@@ -282,7 +289,7 @@ class EvidenceService:
                 case_id=evidence.case_id,
                 evidence_title=evidence.title,
                 evidence_type=evidence.evidence_type,
-                event_type="evidence_deletion_success"
+                event_type="evidence_deletion_success",
             ).info("Evidence deleted successfully")
 
             return evidence
@@ -292,8 +299,7 @@ class EvidenceService:
         except Exception as e:
             self.db.rollback()
             evidence_logger.bind(
-                event_type="evidence_deletion_error",
-                error_type="system_error"
+                event_type="evidence_deletion_error", error_type="system_error"
             ).error(f"Evidence deletion error: {str(e)}")
             raise HTTPException(
                 status_code=500, detail=f"Error deleting evidence: {str(e)}"
@@ -308,7 +314,7 @@ class EvidenceService:
             user_id=current_user.id,
             evidence_id=evidence_id,
             action="download_evidence",
-            event_type="evidence_download_attempt"
+            event_type="evidence_download_attempt",
         )
 
         try:
@@ -319,7 +325,7 @@ class EvidenceService:
             if not evidence:
                 evidence_logger.bind(
                     event_type="evidence_download_failed",
-                    failure_reason="evidence_not_found"
+                    failure_reason="evidence_not_found",
                 ).warning("Evidence download failed: evidence not found")
                 raise HTTPException(status_code=404, detail="Evidence not found")
 
@@ -330,7 +336,7 @@ class EvidenceService:
             if not case:
                 evidence_logger.bind(
                     event_type="evidence_download_failed",
-                    failure_reason="case_not_found"
+                    failure_reason="case_not_found",
                 ).warning("Evidence download failed: case not found")
                 raise HTTPException(status_code=404, detail="Case not found")
 
@@ -345,7 +351,7 @@ class EvidenceService:
                     evidence_logger.bind(
                         event_type="evidence_download_failed",
                         failure_reason="file_not_found",
-                        file_path=str(file_path)
+                        file_path=str(file_path),
                     ).warning("Evidence download failed: file not found on disk")
                     raise HTTPException(status_code=404, detail="File not found")
 
@@ -353,7 +359,7 @@ class EvidenceService:
                     case_id=evidence.case_id,
                     evidence_title=evidence.title,
                     filename=file_path.name,
-                    event_type="evidence_download_success"
+                    event_type="evidence_download_success",
                 ).info("Evidence downloaded successfully")
 
                 return FileResponse(
@@ -365,8 +371,10 @@ class EvidenceService:
             evidence_logger.bind(
                 event_type="evidence_download_failed",
                 failure_reason="unsupported_evidence_type",
-                evidence_type=evidence.evidence_type
-            ).warning("Evidence download failed: evidence type does not support downloading")
+                evidence_type=evidence.evidence_type,
+            ).warning(
+                "Evidence download failed: evidence type does not support downloading"
+            )
             raise HTTPException(
                 status_code=400, detail="Evidence type does not support downloading"
             )
@@ -375,8 +383,7 @@ class EvidenceService:
             raise
         except Exception as e:
             evidence_logger.bind(
-                event_type="evidence_download_error",
-                error_type="system_error"
+                event_type="evidence_download_error", error_type="system_error"
             ).error(f"Evidence download error: {str(e)}")
             raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -391,7 +398,7 @@ class EvidenceService:
             case_id=folder_data.case_id,
             action="create_folder",
             folder_title=folder_data.title,
-            event_type="folder_creation_attempt"
+            event_type="folder_creation_attempt",
         )
 
         try:
@@ -401,21 +408,24 @@ class EvidenceService:
             ).first()
             if not case:
                 folder_logger.bind(
-                    event_type="folder_creation_failed",
-                    failure_reason="case_not_found"
+                    event_type="folder_creation_failed", failure_reason="case_not_found"
                 ).warning("Folder creation failed: case not found")
                 raise HTTPException(status_code=404, detail="Case not found")
 
             # Build folder path
             folder_path = folder_data.folder_path or ""
             if folder_data.parent_folder_id:
-                parent_folder = self.db.get(models.Evidence, folder_data.parent_folder_id)
+                parent_folder = self.db.get(
+                    models.Evidence, folder_data.parent_folder_id
+                )
                 if not parent_folder or not parent_folder.is_folder:
                     folder_logger.bind(
                         event_type="folder_creation_failed",
-                        failure_reason="parent_folder_not_found"
+                        failure_reason="parent_folder_not_found",
                     ).warning("Folder creation failed: parent folder not found")
-                    raise HTTPException(status_code=404, detail="Parent folder not found")
+                    raise HTTPException(
+                        status_code=404, detail="Parent folder not found"
+                    )
                 if parent_folder.folder_path:
                     folder_path = f"{parent_folder.folder_path}/{folder_data.title}"
                 else:
@@ -431,8 +441,10 @@ class EvidenceService:
             except Exception as e:
                 folder_logger.bind(
                     event_type="folder_creation_failed",
-                    failure_reason="physical_folder_error"
-                ).warning(f"Folder creation failed: error creating physical folder: {str(e)}")
+                    failure_reason="physical_folder_error",
+                ).warning(
+                    f"Folder creation failed: error creating physical folder: {str(e)}"
+                )
                 raise HTTPException(
                     status_code=500, detail=f"Error creating folder: {str(e)}"
                 )
@@ -460,7 +472,7 @@ class EvidenceService:
             folder_logger.bind(
                 folder_id=db_folder.id,
                 folder_path=folder_path,
-                event_type="folder_creation_success"
+                event_type="folder_creation_success",
             ).info("Folder created successfully")
 
             return db_folder
@@ -474,8 +486,7 @@ class EvidenceService:
             except:
                 pass
             folder_logger.bind(
-                event_type="folder_creation_error",
-                error_type="system_error"
+                event_type="folder_creation_error", error_type="system_error"
             ).error(f"Folder creation error: {str(e)}")
             raise HTTPException(
                 status_code=500, detail=f"Error creating folder record: {str(e)}"
@@ -507,15 +518,14 @@ class EvidenceService:
             user_id=current_user.id,
             folder_id=folder_id,
             action="update_folder",
-            event_type="folder_update_attempt"
+            event_type="folder_update_attempt",
         )
 
         try:
             db_folder = self.db.get(models.Evidence, folder_id)
             if not db_folder or not db_folder.is_folder:
                 folder_logger.bind(
-                    event_type="folder_update_failed",
-                    failure_reason="folder_not_found"
+                    event_type="folder_update_failed", failure_reason="folder_not_found"
                 ).warning("Folder update failed: folder not found")
                 raise HTTPException(status_code=404, detail="Folder not found")
 
@@ -536,7 +546,7 @@ class EvidenceService:
             folder_logger.bind(
                 case_id=db_folder.case_id,
                 folder_title=db_folder.title,
-                event_type="folder_update_success"
+                event_type="folder_update_success",
             ).info("Folder updated successfully")
 
             return db_folder
@@ -546,8 +556,7 @@ class EvidenceService:
         except Exception as e:
             self.db.rollback()
             folder_logger.bind(
-                event_type="folder_update_error",
-                error_type="system_error"
+                event_type="folder_update_error", error_type="system_error"
             ).error(f"Folder update error: {str(e)}")
             raise HTTPException(
                 status_code=500, detail=f"Error updating folder: {str(e)}"
@@ -562,7 +571,7 @@ class EvidenceService:
             user_id=current_user.id,
             folder_id=folder_id,
             action="delete_folder",
-            event_type="folder_deletion_attempt"
+            event_type="folder_deletion_attempt",
         )
 
         try:
@@ -570,7 +579,7 @@ class EvidenceService:
             if not db_folder or not db_folder.is_folder:
                 folder_logger.bind(
                     event_type="folder_deletion_failed",
-                    failure_reason="folder_not_found"
+                    failure_reason="folder_not_found",
                 ).warning("Folder deletion failed: folder not found")
                 raise HTTPException(status_code=404, detail="Folder not found")
 
@@ -581,8 +590,10 @@ class EvidenceService:
                 except Exception as e:
                     folder_logger.bind(
                         event_type="folder_deletion_failed",
-                        failure_reason="physical_folder_error"
-                    ).warning(f"Folder deletion failed: error deleting physical folder: {str(e)}")
+                        failure_reason="physical_folder_error",
+                    ).warning(
+                        f"Folder deletion failed: error deleting physical folder: {str(e)}"
+                    )
                     raise HTTPException(
                         status_code=500, detail=f"Error deleting folder: {str(e)}"
                     )
@@ -608,7 +619,7 @@ class EvidenceService:
                 case_id=db_folder.case_id,
                 folder_title=db_folder.title,
                 subfolder_count=len(subfolder_evidence),
-                event_type="folder_deletion_success"
+                event_type="folder_deletion_success",
             ).info("Folder deleted successfully")
 
             return db_folder
@@ -618,8 +629,7 @@ class EvidenceService:
         except Exception as e:
             self.db.rollback()
             folder_logger.bind(
-                event_type="folder_deletion_error",
-                error_type="system_error"
+                event_type="folder_deletion_error", error_type="system_error"
             ).error(f"Folder deletion error: {str(e)}")
             raise HTTPException(
                 status_code=500, detail=f"Error deleting folder record: {str(e)}"

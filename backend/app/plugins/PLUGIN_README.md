@@ -512,6 +512,180 @@ docker compose exec backend pytest backend/tests/plugins/test_mytool_plugin.py
 - **Validate input parameters** properly
 - **Use proper error handling** to avoid exposing system information
 - **Follow principle of least privilege** for external tool access
+- **Use the centralized API key system** instead of hardcoding keys or environment variables
+
+## API Key Integration
+
+Owlculus provides a centralized, secure API key management system that plugins should use instead of hardcoding keys or relying on environment variables.
+
+### 1. Retrieving API Keys in Plugins
+
+```python
+from app.services.system_config_service import SystemConfigService
+
+class ShodanPlugin(BasePlugin):
+    """Example plugin that uses Shodan API"""
+
+    def __init__(self):
+        super().__init__(display_name="Shodan Search")
+        self.description = "Search for hosts and services using Shodan"
+        self.category = "Network"
+        self.evidence_category = "Network Assets"
+        # No need to define API key parameters - handled centrally
+
+    async def run(self, params: Optional[Dict[str, Any]] = None) -> AsyncGenerator[Dict[str, Any], None]:
+        """Execute Shodan search"""
+        # Get database session (this should be passed in via dependency injection in practice)
+        from app.core.dependencies import get_db
+        db = next(get_db())
+        
+        try:
+            # Retrieve API key using the centralized system
+            config_service = SystemConfigService(db)
+            shodan_api_key = config_service.get_api_key("shodan")
+            
+            if not shodan_api_key:
+                yield {
+                    "type": "error", 
+                    "data": {"message": "Shodan API key not configured. Please add it in Admin → Configuration → API Keys"}
+                }
+                return
+
+            # Use the API key for your service
+            import shodan
+            api = shodan.Shodan(shodan_api_key)
+            
+            # Your plugin logic here...
+            query = params.get("query", "")
+            results = api.search(query)
+            
+            for result in results['matches']:
+                yield {
+                    "type": "data",
+                    "data": {
+                        "ip": result.get("ip_str"),
+                        "port": result.get("port"),
+                        "organization": result.get("org"),
+                        "location": result.get("location", {}).get("country_name"),
+                        "timestamp": result.get("timestamp")
+                    }
+                }
+                
+        except Exception as e:
+            yield {
+                "type": "error",
+                "data": {"message": f"Shodan API error: {str(e)}"}
+            }
+        finally:
+            db.close()
+```
+
+### 2. Supported API Key Providers
+
+The system supports any API provider. Common examples:
+- `openai` - OpenAI GPT APIs
+- `anthropic` - Claude APIs  
+- `shodan` - Shodan search API
+- `virustotal` - VirusTotal API
+- `censys` - Censys search API
+- `hunter` - Hunter.io email finder
+- `haveibeenpwned` - Have I Been Pwned API
+- `whoisxml` - WhoisXML API
+
+### 3. API Key Configuration
+
+**For Administrators**: API keys are configured through the admin interface at:
+- **Web UI**: Admin Dashboard → Configuration → API Keys
+- **API Endpoints**: 
+  - `PUT /api/admin/configuration/api-keys/{provider}` - Set/update key
+  - `GET /api/admin/configuration/api-keys` - List configured keys
+  - `DELETE /api/admin/configuration/api-keys/{provider}` - Remove key
+
+**For Plugin Users**: If a plugin requires an API key that isn't configured, it will show a clear error message directing them to the admin configuration.
+
+### 4. Environment Variable Fallback
+
+The system automatically falls back to environment variables if no database key is configured:
+- `SHODAN_API_KEY` → `shodan` provider
+- `OPENAI_API_KEY` → `openai` provider  
+- `VIRUSTOTAL_API_KEY` → `virustotal` provider
+
+### 5. Best Practices for API Key Usage
+
+```python
+async def run(self, params: Optional[Dict[str, Any]] = None) -> AsyncGenerator[Dict[str, Any], None]:
+    # ✅ GOOD: Use centralized API key system
+    config_service = SystemConfigService(db)
+    api_key = config_service.get_api_key("provider_name")
+    
+    if not api_key:
+        yield {
+            "type": "error", 
+            "data": {"message": "Provider API key not configured. Please add it in Admin → Configuration → API Keys"}
+        }
+        return
+    
+    # ❌ BAD: Hardcoded API keys
+    # api_key = "sk-hardcoded-key-123"
+    
+    # ❌ BAD: Direct environment variable access
+    # api_key = os.environ.get("PROVIDER_API_KEY")
+    
+    # Use the API key...
+```
+
+### 6. Security Features
+
+- **Encryption**: All API keys are encrypted at rest using Fernet encryption
+- **Admin-only access**: Only admin users can view/modify API keys
+- **Secure transport**: Keys are never exposed in logs or API responses
+- **Environment fallback**: Graceful fallback to environment variables for backward compatibility
+
+### 7. Plugin Development Workflow
+
+1. **Develop your plugin** using the centralized API key system
+2. **Test locally** by setting environment variables or using the admin interface
+3. **Document required API keys** in your plugin's docstring or description
+4. **Provide clear error messages** when API keys are missing
+
+### Example Plugin with Multiple API Keys
+
+```python
+class MultiServicePlugin(BasePlugin):
+    """Plugin that uses multiple external APIs"""
+    
+    async def run(self, params: Optional[Dict[str, Any]] = None) -> AsyncGenerator[Dict[str, Any], None]:
+        config_service = SystemConfigService(db)
+        
+        # Check multiple API keys
+        required_keys = {
+            "shodan": "Shodan API key",
+            "virustotal": "VirusTotal API key"
+        }
+        
+        missing_keys = []
+        api_keys = {}
+        
+        for provider, description in required_keys.items():
+            key = config_service.get_api_key(provider)
+            if not key:
+                missing_keys.append(f"{description} ({provider})")
+            else:
+                api_keys[provider] = key
+        
+        if missing_keys:
+            yield {
+                "type": "error",
+                "data": {
+                    "message": f"Missing API keys: {', '.join(missing_keys)}. "
+                              "Please configure them in Admin → Configuration → API Keys"
+                }
+            }
+            return
+        
+        # Use the API keys...
+        # Your multi-service logic here
+```
 
 ## Examples
 

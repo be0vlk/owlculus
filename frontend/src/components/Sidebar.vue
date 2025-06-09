@@ -67,12 +67,11 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useDarkMode } from '@/composables/useDarkMode'
 
 const drawer = ref(true)
-const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const { isDark, toggleDark } = useDarkMode()

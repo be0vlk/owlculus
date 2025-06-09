@@ -93,6 +93,7 @@ class SystemConfiguration(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     case_number_template: str = Field(default="YYMM-NN")
     case_number_prefix: Optional[str] = Field(default=None)
+    api_keys: Optional[dict] = Field(default=None, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=get_utc_now)
     updated_at: datetime = Field(default_factory=get_utc_now)
 

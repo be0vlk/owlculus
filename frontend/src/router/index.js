@@ -73,9 +73,9 @@ router.beforeEach(async (to, from, next) => {
     next(false)
     return
   }
-  
+
   navigationInProgress = true
-  
+
   try {
     const authStore = useAuthStore()
 
@@ -84,37 +84,37 @@ router.beforeEach(async (to, from, next) => {
       await authStore.init()
     }
 
-  // Check if route requires authentication
-  if (to.matched.some((record) => record.meta.requiresAuth)) {
-    if (!authStore.isAuthenticated) {
-      next('/login')
-      return
+    // Check if route requires authentication
+    if (to.matched.some((record) => record.meta.requiresAuth)) {
+      if (!authStore.isAuthenticated) {
+        next('/login')
+        return
+      }
+
+      // Check if route requires admin privileges
+      if (to.matched.some((record) => record.meta.requiresAdmin)) {
+        if (authStore.user?.role !== 'Admin') {
+          next('/')
+          return
+        }
+      }
     }
 
-    // Check if route requires admin privileges
-    if (to.matched.some((record) => record.meta.requiresAdmin)) {
-      if (authStore.user?.role !== 'Admin') {
+    // Check if route is forbidden for analysts
+    if (to.matched.some((record) => record.meta.isAnalyst)) {
+      if (authStore.user?.role === 'Analyst') {
         next('/')
         return
       }
     }
-  }
 
-  // Check if route is forbidden for analysts
-  if (to.matched.some((record) => record.meta.isAnalyst)) {
-    if (authStore.user?.role === 'Analyst') {
-      next('/')
+    // If on login page and already authenticated, redirect to cases
+    if (to.path === '/login' && authStore.isAuthenticated) {
+      next('/cases')
       return
     }
-  }
 
-  // If on login page and already authenticated, redirect to cases
-  if (to.path === '/login' && authStore.isAuthenticated) {
-    next('/cases')
-    return
-  }
-
-  next()
+    next()
   } finally {
     // Reset navigation flag after a short delay
     setTimeout(() => {

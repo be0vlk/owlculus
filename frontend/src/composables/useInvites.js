@@ -9,7 +9,7 @@ export function useInvites() {
   const error = ref(null)
   const inviteSearchQuery = ref('')
   const cleanupLoading = ref(false)
-  
+
   // Modal state
   const showNewInviteModal = ref(false)
 
@@ -19,7 +19,7 @@ export function useInvites() {
     { title: 'Status', key: 'status', sortable: true },
     { title: 'Created', key: 'created_at', sortable: true },
     { title: 'Expires', key: 'expires_at', sortable: true },
-    { title: 'Actions', key: 'actions', sortable: false }
+    { title: 'Actions', key: 'actions', sortable: false },
   ]
 
   // Computed
@@ -29,8 +29,8 @@ export function useInvites() {
     // Apply search filter
     if (inviteSearchQuery.value) {
       const query = inviteSearchQuery.value.toLowerCase()
-      filteredInvites = invites.value.filter(invite =>
-        (invite.role || '').toLowerCase().includes(query)
+      filteredInvites = invites.value.filter((invite) =>
+        (invite.role || '').toLowerCase().includes(query),
       )
     }
 
@@ -76,7 +76,7 @@ export function useInvites() {
 
   const getInviteEmptyStateMessage = () => {
     if (inviteSearchQuery.value) {
-      return 'Try adjusting your search terms to find the invite you\'re looking for.'
+      return "Try adjusting your search terms to find the invite you're looking for."
     } else if ((invites.value || []).length === 0) {
       return 'Generate your first invite to allow new users to register.'
     } else {
@@ -106,7 +106,7 @@ export function useInvites() {
   const deleteInvite = async (invite) => {
     try {
       await inviteService.deleteInvite(invite.id)
-      invites.value = invites.value.filter(i => i.id !== invite.id)
+      invites.value = invites.value.filter((i) => i.id !== invite.id)
       return true
     } catch (err) {
       console.error('Error deleting invite:', err)
@@ -157,16 +157,16 @@ export function useInvites() {
     error,
     inviteSearchQuery,
     cleanupLoading,
-    
+
     // Modal state
     showNewInviteModal,
-    
+
     // Constants
     inviteHeaders,
-    
+
     // Computed
     sortedAndFilteredInvites,
-    
+
     // Helper functions
     getRoleColor,
     getInviteStatus,
@@ -175,15 +175,15 @@ export function useInvites() {
     getInviteEmptyStateMessage,
     shouldShowCreateInviteButton,
     formatDate,
-    
+
     // CRUD operations
     loadInvites,
     deleteInvite,
     cleanupExpiredInvites,
     copyInviteLink,
-    
+
     // Modal management
     closeInviteModal,
-    handleInviteCreated
+    handleInviteCreated,
   }
 }

@@ -6,7 +6,7 @@ export function useNotifications() {
     show: false,
     text: '',
     color: 'success',
-    timeout: 4000
+    timeout: 4000,
   })
 
   // Helper function to show notifications
@@ -42,13 +42,13 @@ export function useNotifications() {
   return {
     // State
     snackbar,
-    
+
     // Methods
     showNotification,
     showSuccess,
     showError,
     showWarning,
     showInfo,
-    closeNotification
+    closeNotification,
   }
 }

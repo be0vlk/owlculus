@@ -694,3 +694,358 @@ class TestSystemConfigAPI:
                     assert data["prefix"] == ""
         finally:
             app.dependency_overrides.clear()
+
+
+class TestAPIKeyManagementAPI:
+    """Test cases for generic API key management endpoints"""
+
+    # PUT /api/admin/configuration/api-keys/{provider} tests
+
+    def test_set_api_key_success(
+        self,
+        session: Session,
+        test_admin: User,
+        test_system_config: SystemConfiguration,
+    ):
+        """Test successful API key setting"""
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
+        )
+        app.dependency_overrides[get_db] = override_get_db_factory(session)
+
+        api_key_data = {"api_key": "sk-test123456789", "name": "OpenAI GPT-4"}
+
+        updated_config = SystemConfiguration(**test_system_config.model_dump())
+        updated_config.api_keys = {
+            "openai": {
+                "api_key": "encrypted_key",
+                "name": "OpenAI GPT-4",
+                "is_active": True,
+            }
+        }
+
+        try:
+            with patch(
+                "app.services.system_config_service.SystemConfigService.set_api_key"
+            ) as mock_set:
+                mock_set.return_value = updated_config
+
+                response = client.put(
+                    "/api/admin/configuration/api-keys/openai", json=api_key_data
+                )
+                assert response.status_code == status.HTTP_200_OK
+                data = response.json()
+                assert "api_keys_configured" in data
+                assert "openai" in data["api_keys_configured"]
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_set_api_key_forbidden_non_admin(self, session: Session, test_user: User):
+        """Test API key setting forbidden for non-admin"""
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_user
+        )
+        app.dependency_overrides[get_db] = override_get_db_factory(session)
+
+        api_key_data = {"api_key": "sk-test123456789", "name": "OpenAI API"}
+
+        try:
+            response = client.put(
+                "/api/admin/configuration/api-keys/openai", json=api_key_data
+            )
+            assert response.status_code == status.HTTP_403_FORBIDDEN
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_set_api_key_unauthorized(self):
+        """Test API key setting without authentication"""
+        api_key_data = {"api_key": "sk-test123456789", "name": "OpenAI API"}
+
+        response = client.put(
+            "/api/admin/configuration/api-keys/openai", json=api_key_data
+        )
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_set_api_key_missing_key(self, session: Session, test_admin: User):
+        """Test API key setting with missing key"""
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
+        )
+        app.dependency_overrides[get_db] = override_get_db_factory(session)
+
+        api_key_data = {"name": "OpenAI API"}  # Missing api_key
+
+        try:
+            response = client.put(
+                "/api/admin/configuration/api-keys/openai", json=api_key_data
+            )
+            assert response.status_code == status.HTTP_400_BAD_REQUEST
+        finally:
+            app.dependency_overrides.clear()
+
+    # DELETE /api/admin/configuration/api-keys/{provider} tests
+
+    def test_remove_api_key_success(
+        self,
+        session: Session,
+        test_admin: User,
+        test_system_config: SystemConfiguration,
+    ):
+        """Test successful API key removal"""
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
+        )
+        app.dependency_overrides[get_db] = override_get_db_factory(session)
+
+        updated_config = SystemConfiguration(**test_system_config.model_dump())
+        updated_config.api_keys = {}
+
+        try:
+            with patch(
+                "app.services.system_config_service.SystemConfigService.remove_api_key"
+            ) as mock_remove:
+                mock_remove.return_value = updated_config
+
+                response = client.delete("/api/admin/configuration/api-keys/openai")
+                assert response.status_code == status.HTTP_200_OK
+                data = response.json()
+                assert "api_keys_configured" in data
+                assert "openai" not in data["api_keys_configured"]
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_remove_api_key_forbidden_non_admin(
+        self, session: Session, test_user: User
+    ):
+        """Test API key removal forbidden for non-admin"""
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_user
+        )
+        app.dependency_overrides[get_db] = override_get_db_factory(session)
+
+        try:
+            response = client.delete("/api/admin/configuration/api-keys/openai")
+            assert response.status_code == status.HTTP_403_FORBIDDEN
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_remove_api_key_unauthorized(self):
+        """Test API key removal without authentication"""
+        response = client.delete("/api/admin/configuration/api-keys/openai")
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    # GET /api/admin/configuration/api-keys tests
+
+    def test_list_api_keys_success(self, session: Session, test_admin: User):
+        """Test successful API keys listing"""
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
+        )
+        app.dependency_overrides[get_db] = override_get_db_factory(session)
+
+        mock_api_keys = {
+            "openai": {
+                "name": "OpenAI GPT-4",
+                "is_configured": True,
+                "created_at": "2023-06-15T12:00:00Z",
+            },
+            "anthropic": {
+                "name": "Claude API",
+                "is_configured": True,
+                "created_at": "2023-06-15T13:00:00Z",
+            },
+        }
+
+        try:
+            with patch(
+                "app.services.system_config_service.SystemConfigService.list_api_keys"
+            ) as mock_list:
+                mock_list.return_value = mock_api_keys
+
+                response = client.get("/api/admin/configuration/api-keys")
+                assert response.status_code == status.HTTP_200_OK
+                data = response.json()
+                assert "openai" in data
+                assert "anthropic" in data
+                assert data["openai"]["name"] == "OpenAI GPT-4"
+                assert data["anthropic"]["name"] == "Claude API"
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_list_api_keys_empty(self, session: Session, test_admin: User):
+        """Test API keys listing when none configured"""
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
+        )
+        app.dependency_overrides[get_db] = override_get_db_factory(session)
+
+        try:
+            with patch(
+                "app.services.system_config_service.SystemConfigService.list_api_keys"
+            ) as mock_list:
+                mock_list.return_value = {}
+
+                response = client.get("/api/admin/configuration/api-keys")
+                assert response.status_code == status.HTTP_200_OK
+                data = response.json()
+                assert data == {}
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_list_api_keys_forbidden_non_admin(self, session: Session, test_user: User):
+        """Test API keys listing forbidden for non-admin"""
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_user
+        )
+        app.dependency_overrides[get_db] = override_get_db_factory(session)
+
+        try:
+            response = client.get("/api/admin/configuration/api-keys")
+            assert response.status_code == status.HTTP_403_FORBIDDEN
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_list_api_keys_unauthorized(self):
+        """Test API keys listing without authentication"""
+        response = client.get("/api/admin/configuration/api-keys")
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    # GET /api/admin/configuration/api-keys/{provider}/status tests
+
+    def test_get_api_key_status_configured(self, session: Session, test_admin: User):
+        """Test API key status when provider is configured"""
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
+        )
+        app.dependency_overrides[get_db] = override_get_db_factory(session)
+
+        try:
+            with patch(
+                "app.services.system_config_service.SystemConfigService.is_provider_configured"
+            ) as mock_configured:
+                mock_configured.return_value = True
+
+                response = client.get("/api/admin/configuration/api-keys/openai/status")
+                assert response.status_code == status.HTTP_200_OK
+                data = response.json()
+                assert data["provider"] == "openai"
+                assert data["is_configured"] is True
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_get_api_key_status_not_configured(
+        self, session: Session, test_admin: User
+    ):
+        """Test API key status when provider is not configured"""
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
+        )
+        app.dependency_overrides[get_db] = override_get_db_factory(session)
+
+        try:
+            with patch(
+                "app.services.system_config_service.SystemConfigService.is_provider_configured"
+            ) as mock_configured:
+                mock_configured.return_value = False
+
+                response = client.get(
+                    "/api/admin/configuration/api-keys/anthropic/status"
+                )
+                assert response.status_code == status.HTTP_200_OK
+                data = response.json()
+                assert data["provider"] == "anthropic"
+                assert data["is_configured"] is False
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_get_api_key_status_forbidden_non_admin(
+        self, session: Session, test_user: User
+    ):
+        """Test API key status forbidden for non-admin"""
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_user
+        )
+        app.dependency_overrides[get_db] = override_get_db_factory(session)
+
+        try:
+            response = client.get("/api/admin/configuration/api-keys/openai/status")
+            assert response.status_code == status.HTTP_403_FORBIDDEN
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_get_api_key_status_unauthorized(self):
+        """Test API key status without authentication"""
+        response = client.get("/api/admin/configuration/api-keys/openai/status")
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    # Integration tests
+
+    def test_api_key_workflow_integration(
+        self,
+        session: Session,
+        test_admin: User,
+        test_system_config: SystemConfiguration,
+    ):
+        """Test complete API key management workflow"""
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
+        )
+        app.dependency_overrides[get_db] = override_get_db_factory(session)
+
+        try:
+            # Mock the service methods for the workflow
+            with patch(
+                "app.services.system_config_service.SystemConfigService.set_api_key"
+            ) as mock_set, patch(
+                "app.services.system_config_service.SystemConfigService.list_api_keys"
+            ) as mock_list, patch(
+                "app.services.system_config_service.SystemConfigService.is_provider_configured"
+            ) as mock_configured, patch(
+                "app.services.system_config_service.SystemConfigService.remove_api_key"
+            ) as mock_remove:
+
+                # 1. Set an API key
+                config_with_key = SystemConfiguration(**test_system_config.model_dump())
+                config_with_key.api_keys = {
+                    "openai": {
+                        "api_key": "encrypted",
+                        "name": "OpenAI",
+                        "is_active": True,
+                    }
+                }
+                mock_set.return_value = config_with_key
+
+                api_key_data = {"api_key": "sk-test123", "name": "OpenAI API"}
+                response = client.put(
+                    "/api/admin/configuration/api-keys/openai", json=api_key_data
+                )
+                assert response.status_code == status.HTTP_200_OK
+
+                # 2. List API keys
+                mock_list.return_value = {
+                    "openai": {"name": "OpenAI API", "is_configured": True}
+                }
+                response = client.get("/api/admin/configuration/api-keys")
+                assert response.status_code == status.HTTP_200_OK
+                data = response.json()
+                assert "openai" in data
+
+                # 3. Check status
+                mock_configured.return_value = True
+                response = client.get("/api/admin/configuration/api-keys/openai/status")
+                assert response.status_code == status.HTTP_200_OK
+                data = response.json()
+                assert data["is_configured"] is True
+
+                # 4. Remove API key
+                config_without_key = SystemConfiguration(
+                    **test_system_config.model_dump()
+                )
+                config_without_key.api_keys = {}
+                mock_remove.return_value = config_without_key
+
+                response = client.delete("/api/admin/configuration/api-keys/openai")
+                assert response.status_code == status.HTTP_200_OK
+
+        finally:
+            app.dependency_overrides.clear()

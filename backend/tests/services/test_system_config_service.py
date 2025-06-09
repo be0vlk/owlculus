@@ -1,4 +1,5 @@
 import pytest
+import os
 from sqlmodel import Session, select
 from datetime import datetime
 from unittest.mock import patch
@@ -538,3 +539,237 @@ class TestErrorHandling:
 
             # Results should be identical
             assert result1 == result2 == "2306-01"
+
+
+class TestGenericAPIKeyManagement:
+    """Test generic API key management methods"""
+
+    @pytest.mark.asyncio
+    async def test_set_api_key(
+        self, config_service: SystemConfigService, admin_user: models.User
+    ):
+        """Test setting an API key for a provider"""
+        api_key = "sk-test123456789"
+        config = await config_service.set_api_key(
+            provider="openai",
+            api_key=api_key,
+            name="OpenAI GPT-4",
+            current_user=admin_user,
+        )
+
+        assert config.api_keys is not None
+        assert "openai" in config.api_keys
+        assert config.api_keys["openai"]["name"] == "OpenAI GPT-4"
+        assert config.api_keys["openai"]["is_active"] is True
+
+    @pytest.mark.asyncio
+    async def test_set_multiple_api_keys(
+        self, config_service: SystemConfigService, admin_user: models.User
+    ):
+        """Test setting multiple API keys for different providers"""
+        # Set OpenAI key
+        await config_service.set_api_key(
+            provider="openai",
+            api_key="sk-openai-key",
+            name="OpenAI API",
+            current_user=admin_user,
+        )
+
+        # Set Anthropic key
+        config = await config_service.set_api_key(
+            provider="anthropic",
+            api_key="sk-ant-key",
+            name="Claude API",
+            current_user=admin_user,
+        )
+
+        assert "openai" in config.api_keys
+        assert "anthropic" in config.api_keys
+        assert config.api_keys["openai"]["name"] == "OpenAI API"
+        assert config.api_keys["anthropic"]["name"] == "Claude API"
+
+    @pytest.mark.asyncio
+    async def test_remove_api_key(
+        self, config_service: SystemConfigService, admin_user: models.User
+    ):
+        """Test removing an API key for a provider"""
+        # First set a key
+        await config_service.set_api_key(
+            provider="openai",
+            api_key="sk-test123",
+            name="OpenAI API",
+            current_user=admin_user,
+        )
+
+        # Then remove it
+        config = await config_service.remove_api_key(
+            provider="openai", current_user=admin_user
+        )
+        assert config.api_keys is not None
+        assert "openai" not in config.api_keys
+
+    @pytest.mark.asyncio
+    async def test_remove_nonexistent_api_key(
+        self, config_service: SystemConfigService, admin_user: models.User
+    ):
+        """Test removing a non-existent API key doesn't cause errors"""
+        config = await config_service.remove_api_key(
+            provider="nonexistent", current_user=admin_user
+        )
+        assert config is not None
+
+    def test_get_api_key_from_database(
+        self, config_service: SystemConfigService, session: Session
+    ):
+        """Test getting API key from database"""
+        from app.core.security import encrypt_api_key
+
+        # Create config with encrypted API key
+        config = models.SystemConfiguration(
+            case_number_template="YYMM-NN",
+            api_keys={
+                "openai": {
+                    "api_key": encrypt_api_key("sk-database-key"),
+                    "name": "OpenAI API",
+                    "is_active": True,
+                }
+            },
+        )
+        session.add(config)
+        session.commit()
+
+        api_key = config_service.get_api_key("openai")
+        assert api_key == "sk-database-key"
+
+    @patch.dict(os.environ, {"OPENAI_API_KEY": "sk-env-key"})
+    def test_get_api_key_fallback_to_env(self, config_service: SystemConfigService):
+        """Test getting API key falls back to environment variable"""
+        api_key = config_service.get_api_key("openai")
+        assert api_key == "sk-env-key"
+
+    def test_get_api_key_database_priority(
+        self, config_service: SystemConfigService, session: Session
+    ):
+        """Test that database key takes priority over environment variable"""
+        from app.core.security import encrypt_api_key
+
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "sk-env-key"}):
+            # Create config with encrypted API key
+            config = models.SystemConfiguration(
+                case_number_template="YYMM-NN",
+                api_keys={
+                    "openai": {
+                        "api_key": encrypt_api_key("sk-database-key"),
+                        "name": "OpenAI API",
+                        "is_active": True,
+                    }
+                },
+            )
+            session.add(config)
+            session.commit()
+
+            api_key = config_service.get_api_key("openai")
+            assert api_key == "sk-database-key"
+
+    def test_is_provider_configured_true_with_database_key(
+        self, config_service: SystemConfigService, session: Session
+    ):
+        """Test is_provider_configured returns True when database has key"""
+        from app.core.security import encrypt_api_key
+
+        config = models.SystemConfiguration(
+            case_number_template="YYMM-NN",
+            api_keys={
+                "openai": {
+                    "api_key": encrypt_api_key("sk-test123"),
+                    "name": "OpenAI API",
+                    "is_active": True,
+                }
+            },
+        )
+        session.add(config)
+        session.commit()
+
+        assert config_service.is_provider_configured("openai") is True
+
+    @patch.dict(os.environ, {"OPENAI_API_KEY": "sk-env-key"})
+    def test_is_provider_configured_true_with_env_key(
+        self, config_service: SystemConfigService
+    ):
+        """Test is_provider_configured returns True when env has key"""
+        assert config_service.is_provider_configured("openai") is True
+
+    def test_is_provider_configured_false_no_key(
+        self, config_service: SystemConfigService
+    ):
+        """Test is_provider_configured returns False when no key is available"""
+        with patch.dict(os.environ, {}, clear=True):
+            assert config_service.is_provider_configured("openai") is False
+
+    def test_list_api_keys_empty(self, config_service: SystemConfigService):
+        """Test listing API keys when none are configured"""
+        api_keys = config_service.list_api_keys()
+        assert api_keys == {}
+
+    def test_list_api_keys_with_keys(
+        self, config_service: SystemConfigService, session: Session
+    ):
+        """Test listing API keys when multiple are configured"""
+        from app.core.security import encrypt_api_key
+
+        config = models.SystemConfiguration(
+            case_number_template="YYMM-NN",
+            api_keys={
+                "openai": {
+                    "api_key": encrypt_api_key("sk-openai-key"),
+                    "name": "OpenAI GPT-4",
+                    "is_active": True,
+                    "created_at": "2023-06-15T12:00:00Z",
+                },
+                "anthropic": {
+                    "api_key": encrypt_api_key("sk-ant-key"),
+                    "name": "Claude API",
+                    "is_active": True,
+                    "created_at": "2023-06-15T13:00:00Z",
+                },
+            },
+        )
+        session.add(config)
+        session.commit()
+
+        api_keys = config_service.list_api_keys()
+        assert len(api_keys) == 2
+        assert "openai" in api_keys
+        assert "anthropic" in api_keys
+        assert api_keys["openai"]["name"] == "OpenAI GPT-4"
+        assert api_keys["anthropic"]["name"] == "Claude API"
+        assert api_keys["openai"]["is_configured"] is True
+
+    def test_get_configured_providers(
+        self, config_service: SystemConfigService, session: Session
+    ):
+        """Test getting list of configured provider names"""
+        from app.core.security import encrypt_api_key
+
+        config = models.SystemConfiguration(
+            case_number_template="YYMM-NN",
+            api_keys={
+                "openai": {
+                    "api_key": encrypt_api_key("sk-openai-key"),
+                    "name": "OpenAI API",
+                    "is_active": True,
+                },
+                "google": {
+                    "api_key": encrypt_api_key("sk-google-key"),
+                    "name": "Google API",
+                    "is_active": True,
+                },
+            },
+        )
+        session.add(config)
+        session.commit()
+
+        providers = config_service.get_configured_providers()
+        assert len(providers) == 2
+        assert "openai" in providers
+        assert "google" in providers

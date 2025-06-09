@@ -15,5 +15,6 @@ holehe
 pyexiftool==0.5.6
 python-whois
 loguru
+cryptography
 pytest
 pytest-asyncio
