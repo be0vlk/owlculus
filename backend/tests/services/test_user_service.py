@@ -971,3 +971,162 @@ class TestUserService:
                         mock_update.assert_called_once_with(
                             user_service_instance.db, user_id=superadmin_target.id, user=user_update
                         )
+
+    @pytest.mark.asyncio
+    async def test_create_user_admin_cannot_create_superadmin(
+        self,
+        user_service_instance: UserService,
+    ):
+        """Test that regular admin cannot create superadmin users"""
+        # Create regular admin user
+        admin = Mock()
+        admin.id = 1
+        admin.role = "Admin"
+        admin.is_superadmin = False
+
+        user_data = schemas.UserCreate(
+            username="newsuperadmin",
+            email="newsuperadmin@example.com",
+            password="password123",
+            role="Admin",
+            is_active=True,
+            is_superadmin=True  # Attempting to create superadmin
+        )
+
+        with patch("app.services.user_service.crud.get_user_by_username") as mock_get_username:
+            mock_get_username.return_value = None  # Username not taken
+
+            with patch("app.services.user_service.crud.get_user_by_email") as mock_get_email:
+                mock_get_email.return_value = None  # Email not taken
+
+                with pytest.raises(HTTPException) as exc_info:
+                    await user_service_instance.create_user(
+                        user_data, current_user=admin
+                    )
+
+                assert exc_info.value.status_code == 403
+                assert "Only superadmin can create superadmin users" in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_create_user_superadmin_can_create_superadmin(
+        self,
+        user_service_instance: UserService,
+    ):
+        """Test that superadmin can create superadmin users"""
+        # Create superadmin user
+        superadmin = Mock()
+        superadmin.id = 1
+        superadmin.role = "Admin"
+        superadmin.is_superadmin = True
+
+        user_data = schemas.UserCreate(
+            username="newsuperadmin",
+            email="newsuperadmin@example.com",
+            password="password123",
+            role="Admin",
+            is_active=True,
+            is_superadmin=True
+        )
+
+        with patch("app.services.user_service.crud.get_user_by_username") as mock_get_username:
+            mock_get_username.return_value = None  # Username not taken
+
+            with patch("app.services.user_service.crud.get_user_by_email") as mock_get_email:
+                mock_get_email.return_value = None  # Email not taken
+
+                with patch("app.services.user_service.crud.create_user") as mock_create:
+                    created_user = Mock()
+                    created_user.id = 2
+                    created_user.username = user_data.username
+                    created_user.email = user_data.email
+                    created_user.role = user_data.role
+                    created_user.is_superadmin = True
+                    mock_create.return_value = created_user
+
+                    result = await user_service_instance.create_user(
+                        user_data, current_user=superadmin
+                    )
+
+                    assert result.username == user_data.username
+                    assert result.is_superadmin is True
+                    mock_create.assert_called_once_with(
+                        user_service_instance.db, user=user_data
+                    )
+
+    @pytest.mark.asyncio
+    async def test_update_user_admin_cannot_promote_to_superadmin(
+        self,
+        user_service_instance: UserService,
+    ):
+        """Test that regular admin cannot promote users to superadmin"""
+        # Create regular admin user
+        admin = Mock()
+        admin.id = 1
+        admin.role = "Admin"
+        admin.is_superadmin = False
+
+        # Create regular user to promote
+        target_user = Mock()
+        target_user.id = 2
+        target_user.username = "regularuser"
+        target_user.email = "regular@example.com"
+        target_user.role = "Investigator"
+        target_user.is_superadmin = False
+
+        user_update = schemas.UserUpdate(is_superadmin=True)
+
+        with patch("app.services.user_service.crud.get_user") as mock_get_user:
+            mock_get_user.return_value = target_user
+
+            with pytest.raises(HTTPException) as exc_info:
+                await user_service_instance.update_user(
+                    target_user.id, user_update, current_user=admin
+                )
+
+            assert exc_info.value.status_code == 403
+            assert "Only superadmin can promote users to superadmin" in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_update_user_superadmin_can_promote_to_superadmin(
+        self,
+        user_service_instance: UserService,
+    ):
+        """Test that superadmin can promote users to superadmin"""
+        # Create superadmin user
+        superadmin = Mock()
+        superadmin.id = 1
+        superadmin.role = "Admin"
+        superadmin.is_superadmin = True
+
+        # Create regular user to promote
+        target_user = Mock()
+        target_user.id = 2
+        target_user.username = "regularuser"
+        target_user.email = "regular@example.com"
+        target_user.role = "Investigator"
+        target_user.is_superadmin = False
+
+        user_update = schemas.UserUpdate(is_superadmin=True)
+
+        with patch("app.services.user_service.crud.get_user") as mock_get_user:
+            mock_get_user.return_value = target_user
+
+            with patch("app.services.user_service.crud.get_user_by_username") as mock_get_username:
+                mock_get_username.return_value = None  # Username not taken
+
+                with patch("app.services.user_service.crud.get_user_by_email") as mock_get_email:
+                    mock_get_email.return_value = None  # Email not taken
+
+                    with patch("app.services.user_service.crud.update_user") as mock_update:
+                        updated_user = Mock()
+                        updated_user.is_superadmin = True
+                        mock_update.return_value = updated_user
+
+                        result = await user_service_instance.update_user(
+                            target_user.id, user_update, current_user=superadmin
+                        )
+
+                        assert result.is_superadmin is True
+                        mock_update.assert_called_once_with(
+                            user_service_instance.db, user_id=target_user.id, user=user_update
+                        )

@@ -43,6 +43,15 @@ class UserService:
                 ).warning("User creation failed: email already registered")
                 raise HTTPException(status_code=400, detail="Email already registered")
 
+            # Only superadmin can create superadmin users
+            if user.is_superadmin and not current_user.is_superadmin:
+                user_logger.bind(
+                    event_type="user_creation_failed",
+                    failure_reason="cannot_create_superadmin",
+                    target_username=user.username
+                ).warning("User creation failed: only superadmin can create superadmin users")
+                raise HTTPException(status_code=403, detail="Only superadmin can create superadmin users")
+
             new_user = await crud.create_user(self.db, user=user)
             
             user_logger.bind(
@@ -102,6 +111,15 @@ class UserService:
                     target_username=db_user.username
                 ).warning("User update failed: only superadmin can edit superadmin users")
                 raise HTTPException(status_code=403, detail="Only superadmin can edit superadmin users")
+
+            # Only superadmin can promote users to superadmin
+            if user_update.is_superadmin and not current_user.is_superadmin:
+                user_logger.bind(
+                    event_type="user_update_failed",
+                    failure_reason="cannot_promote_to_superadmin",
+                    target_username=db_user.username
+                ).warning("User update failed: only superadmin can promote users to superadmin")
+                raise HTTPException(status_code=403, detail="Only superadmin can promote users to superadmin")
 
             # Check username uniqueness if being updated
             if user_update.username and user_update.username != db_user.username:
