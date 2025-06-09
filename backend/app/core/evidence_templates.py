@@ -8,63 +8,63 @@ SOCIAL_MEDIA_SUBFOLDERS = [
     {
         "name": "Bluesky",
         "description": "Bluesky posts and profile evidence",
-        "subfolders": []
+        "subfolders": [],
     },
     {
         "name": "Discord",
         "description": "Discord messages and server evidence",
-        "subfolders": []
+        "subfolders": [],
     },
     {
         "name": "Facebook",
         "description": "Facebook posts and profile evidence",
-        "subfolders": []
+        "subfolders": [],
     },
     {
         "name": "Instagram",
         "description": "Instagram posts and stories evidence",
-        "subfolders": []
+        "subfolders": [],
     },
     {
         "name": "LinkedIn",
         "description": "LinkedIn profile and professional evidence",
-        "subfolders": []
+        "subfolders": [],
     },
     {
         "name": "Reddit",
         "description": "Reddit posts and comment evidence",
-        "subfolders": []
+        "subfolders": [],
     },
     {
         "name": "Telegram",
         "description": "Telegram messages and channel evidence",
-        "subfolders": []
+        "subfolders": [],
     },
     {
         "name": "TikTok",
         "description": "TikTok videos and profile evidence",
-        "subfolders": []
+        "subfolders": [],
     },
     {
         "name": "Twitch",
         "description": "Twitch streams and chat evidence",
-        "subfolders": []
+        "subfolders": [],
     },
     {
         "name": "X",
         "description": "X (Twitter) posts and profile evidence",
-        "subfolders": []
+        "subfolders": [],
     },
     {
         "name": "YouTube",
         "description": "YouTube videos and channel evidence",
-        "subfolders": []
+        "subfolders": [],
     },
     {
         "name": "Other",
         "description": "Other social media platform evidence",
-        "subfolders": []
-    }
+        "subfolders": [],
+    },
 ]
 
 # Reusable associates template
@@ -72,43 +72,31 @@ ASSOCIATES_SUBFOLDERS = [
     {
         "name": "Children",
         "description": "Evidence related to children",
-        "subfolders": []
+        "subfolders": [],
     },
     {
         "name": "Colleagues",
         "description": "Evidence related to work colleagues",
-        "subfolders": []
+        "subfolders": [],
     },
-    {
-        "name": "Father",
-        "description": "Evidence related to father",
-        "subfolders": []
-    },
-    {
-        "name": "Friends",
-        "description": "Evidence related to friends",
-        "subfolders": []
-    },
-    {
-        "name": "Mother",
-        "description": "Evidence related to mother",
-        "subfolders": []
-    },
+    {"name": "Father", "description": "Evidence related to father", "subfolders": []},
+    {"name": "Friends", "description": "Evidence related to friends", "subfolders": []},
+    {"name": "Mother", "description": "Evidence related to mother", "subfolders": []},
     {
         "name": "Partner/Spouse",
         "description": "Evidence related to partner or spouse",
-        "subfolders": []
+        "subfolders": [],
     },
     {
         "name": "Siblings",
         "description": "Evidence related to siblings",
-        "subfolders": []
+        "subfolders": [],
     },
     {
         "name": "Other",
         "description": "Evidence related to other associates",
-        "subfolders": []
-    }
+        "subfolders": [],
+    },
 ]
 
 # Reusable person investigation folder structure
@@ -116,18 +104,18 @@ PERSON_SUBFOLDERS = [
     {
         "name": "Social Media",
         "description": "Social media platform evidence",
-        "subfolders": SOCIAL_MEDIA_SUBFOLDERS.copy()
+        "subfolders": SOCIAL_MEDIA_SUBFOLDERS.copy(),
     },
     {
         "name": "Associates",
         "description": "Evidence related to associates and relationships",
-        "subfolders": ASSOCIATES_SUBFOLDERS.copy()
+        "subfolders": ASSOCIATES_SUBFOLDERS.copy(),
     },
     {
         "name": "Other",
         "description": "Other evidence not categorized elsewhere",
-        "subfolders": []
-    }
+        "subfolders": [],
+    },
 ]
 
 THREAT_INTEL_TEMPLATE = {
@@ -137,7 +125,7 @@ THREAT_INTEL_TEMPLATE = {
         {
             "name": "Screenshots",
             "description": "Screenshots and images from investigations",
-            "subfolders": []
+            "subfolders": [],
         },
         {
             "name": "Network Logs",
@@ -146,24 +134,20 @@ THREAT_INTEL_TEMPLATE = {
                 {
                     "name": "PCAP Files",
                     "description": "Network packet captures",
-                    "subfolders": []
+                    "subfolders": [],
                 },
-                {
-                    "name": "DNS Logs", 
-                    "description": "DNS query logs",
-                    "subfolders": []
-                },
+                {"name": "DNS Logs", "description": "DNS query logs", "subfolders": []},
                 {
                     "name": "Firewall Logs",
                     "description": "Firewall and security logs",
-                    "subfolders": []
-                }
-            ]
+                    "subfolders": [],
+                },
+            ],
         },
         {
             "name": "Malware Samples",
             "description": "Malware files and related artifacts",
-            "subfolders": []
+            "subfolders": [],
         },
         {
             "name": "Analysis Reports",
@@ -172,26 +156,26 @@ THREAT_INTEL_TEMPLATE = {
                 {
                     "name": "Sandbox Reports",
                     "description": "Automated analysis reports",
-                    "subfolders": []
+                    "subfolders": [],
                 },
                 {
-                    "name": "Manual Analysis", 
+                    "name": "Manual Analysis",
                     "description": "Manual analysis documentation",
-                    "subfolders": []
-                }
-            ]
+                    "subfolders": [],
+                },
+            ],
         },
         {
             "name": "IOC Lists",
             "description": "Indicator of compromise files and lists",
-            "subfolders": []
+            "subfolders": [],
         },
         {
             "name": "External Reports",
             "description": "Third-party intelligence reports",
-            "subfolders": []
-        }
-    ]
+            "subfolders": [],
+        },
+    ],
 }
 
 COMPANY_TEMPLATE = {
@@ -205,52 +189,52 @@ COMPANY_TEMPLATE = {
                 {
                     "name": "CEO",
                     "description": "Evidence related to Chief Executive Officer",
-                    "subfolders": []
+                    "subfolders": [],
                 },
                 {
                     "name": "CFO",
                     "description": "Evidence related to Chief Financial Officer",
-                    "subfolders": []
+                    "subfolders": [],
                 },
                 {
                     "name": "CTO",
                     "description": "Evidence related to Chief Technology Officer",
-                    "subfolders": []
+                    "subfolders": [],
                 },
                 {
                     "name": "CMO",
                     "description": "Evidence related to Chief Marketing Officer",
-                    "subfolders": []
+                    "subfolders": [],
                 },
                 {
                     "name": "COO",
                     "description": "Evidence related to Chief Operating Officer",
-                    "subfolders": []
+                    "subfolders": [],
                 },
                 {
                     "name": "Other",
                     "description": "Evidence related to other executives",
-                    "subfolders": []
-                }
-            ]
+                    "subfolders": [],
+                },
+            ],
         },
         {
             "name": "Affiliates",
             "description": "Evidence related to affiliated companies and relationships",
-            "subfolders": []
+            "subfolders": [],
         },
         {
             "name": "Social Media",
             "description": "Company social media platform evidence",
-            "subfolders": SOCIAL_MEDIA_SUBFOLDERS.copy()
-        }
-    ]
+            "subfolders": SOCIAL_MEDIA_SUBFOLDERS.copy(),
+        },
+    ],
 }
 
 PERSON_TEMPLATE = {
-    "name": "Person Investigation", 
+    "name": "Person Investigation",
     "description": "Folder structure for individual investigations",
-    "folders": PERSON_SUBFOLDERS.copy()
+    "folders": PERSON_SUBFOLDERS.copy(),
 }
 
 # Template registry

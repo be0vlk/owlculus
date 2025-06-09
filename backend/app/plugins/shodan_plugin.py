@@ -19,7 +19,9 @@ class ShodanPlugin(BasePlugin):
 
     def __init__(self):
         super().__init__(display_name="Shodan Search")
-        self.description = "Search for hosts and services using Shodan's comprehensive database"
+        self.description = (
+            "Search for hosts and services using Shodan's comprehensive database"
+        )
         self.category = "Network"
         self.evidence_category = "Network Assets"
         self.save_to_case = False
@@ -81,10 +83,12 @@ class ShodanPlugin(BasePlugin):
             api = shodan.Shodan(api_key)
 
             # Determine search strategy based on type and query
-            if search_type == "ip" or (search_type == "general" and self._is_ip_address(query)):
+            if search_type == "ip" or (
+                search_type == "general" and self._is_ip_address(query)
+            ):
                 # Direct IP lookup using host() method
                 yield {"type": "status", "data": {"message": f"Looking up IP: {query}"}}
-                
+
                 try:
                     host_info = api.host(query)
                     yield {
@@ -104,7 +108,11 @@ class ShodanPlugin(BasePlugin):
                                     "transport": service.get("transport", "tcp"),
                                     "service": service.get("product", "Unknown"),
                                     "version": service.get("version", ""),
-                                    "banner": service.get("data", "")[:200] + "..." if len(service.get("data", "")) > 200 else service.get("data", ""),
+                                    "banner": (
+                                        service.get("data", "")[:200] + "..."
+                                        if len(service.get("data", "")) > 200
+                                        else service.get("data", "")
+                                    ),
                                 }
                                 for service in host_info.get("data", [])
                             ],
@@ -116,25 +124,38 @@ class ShodanPlugin(BasePlugin):
                     if "No information available" in str(e):
                         yield {
                             "type": "error",
-                            "data": {"message": f"No information available for IP {query} in Shodan database"},
+                            "data": {
+                                "message": f"No information available for IP {query} in Shodan database"
+                            },
                         }
                     else:
                         yield {
                             "type": "error",
-                            "data": {"message": f"Shodan API error for IP {query}: {str(e)}"},
+                            "data": {
+                                "message": f"Shodan API error for IP {query}: {str(e)}"
+                            },
                         }
-                    
-            elif search_type == "hostname" or (search_type == "general" and self._is_hostname(query)):
+
+            elif search_type == "hostname" or (
+                search_type == "general" and self._is_hostname(query)
+            ):
                 # Hostname search - first resolve then search
-                yield {"type": "status", "data": {"message": f"Searching for hostname: {query}"}}
-                
+                yield {
+                    "type": "status",
+                    "data": {"message": f"Searching for hostname: {query}"},
+                }
+
                 try:
-                    results = api.search(f"hostname:{query}", limit=min(int(limit), 100))
-                    
+                    results = api.search(
+                        f"hostname:{query}", limit=min(int(limit), 100)
+                    )
+
                     if results["total"] == 0:
                         yield {
                             "type": "error",
-                            "data": {"message": f"No results found for hostname: {query}"},
+                            "data": {
+                                "message": f"No results found for hostname: {query}"
+                            },
                         }
                     else:
                         for match in results["matches"]:
@@ -144,13 +165,21 @@ class ShodanPlugin(BasePlugin):
                                     "ip": match.get("ip_str"),
                                     "hostnames": match.get("hostnames", []),
                                     "organization": match.get("org", "Unknown"),
-                                    "country": match.get("location", {}).get("country_name", "Unknown"),
-                                    "city": match.get("location", {}).get("city", "Unknown"),
+                                    "country": match.get("location", {}).get(
+                                        "country_name", "Unknown"
+                                    ),
+                                    "city": match.get("location", {}).get(
+                                        "city", "Unknown"
+                                    ),
                                     "port": match.get("port"),
                                     "transport": match.get("transport", "tcp"),
                                     "service": match.get("product", "Unknown"),
                                     "version": match.get("version", ""),
-                                    "banner": match.get("data", "")[:200] + "..." if len(match.get("data", "")) > 200 else match.get("data", ""),
+                                    "banner": (
+                                        match.get("data", "")[:200] + "..."
+                                        if len(match.get("data", "")) > 200
+                                        else match.get("data", "")
+                                    ),
                                     "last_update": match.get("timestamp", "Unknown"),
                                     "search_type": "hostname_search",
                                     "timestamp": time.time(),
@@ -159,16 +188,21 @@ class ShodanPlugin(BasePlugin):
                 except shodan.APIError as e:
                     yield {
                         "type": "error",
-                        "data": {"message": f"Shodan API error for hostname {query}: {str(e)}"},
+                        "data": {
+                            "message": f"Shodan API error for hostname {query}: {str(e)}"
+                        },
                     }
-                    
+
             else:
                 # General search using Shodan query syntax
-                yield {"type": "status", "data": {"message": f"Searching Shodan: {query}"}}
-                
+                yield {
+                    "type": "status",
+                    "data": {"message": f"Searching Shodan: {query}"},
+                }
+
                 try:
                     results = api.search(query, limit=min(int(limit), 100))
-                    
+
                     if results["total"] == 0:
                         yield {
                             "type": "error",
@@ -177,9 +211,11 @@ class ShodanPlugin(BasePlugin):
                     else:
                         yield {
                             "type": "status",
-                            "data": {"message": f"Found {results['total']} results (showing {len(results['matches'])})"},
+                            "data": {
+                                "message": f"Found {results['total']} results (showing {len(results['matches'])})"
+                            },
                         }
-                        
+
                         for match in results["matches"]:
                             yield {
                                 "type": "data",
@@ -187,13 +223,21 @@ class ShodanPlugin(BasePlugin):
                                     "ip": match.get("ip_str"),
                                     "hostnames": match.get("hostnames", []),
                                     "organization": match.get("org", "Unknown"),
-                                    "country": match.get("location", {}).get("country_name", "Unknown"),
-                                    "city": match.get("location", {}).get("city", "Unknown"),
+                                    "country": match.get("location", {}).get(
+                                        "country_name", "Unknown"
+                                    ),
+                                    "city": match.get("location", {}).get(
+                                        "city", "Unknown"
+                                    ),
                                     "port": match.get("port"),
                                     "transport": match.get("transport", "tcp"),
                                     "service": match.get("product", "Unknown"),
                                     "version": match.get("version", ""),
-                                    "banner": match.get("data", "")[:200] + "..." if len(match.get("data", "")) > 200 else match.get("data", ""),
+                                    "banner": (
+                                        match.get("data", "")[:200] + "..."
+                                        if len(match.get("data", "")) > 200
+                                        else match.get("data", "")
+                                    ),
                                     "last_update": match.get("timestamp", "Unknown"),
                                     "vulns": list(match.get("vulns", [])),
                                     "search_type": "general_search",
@@ -204,17 +248,26 @@ class ShodanPlugin(BasePlugin):
                     if "Invalid API key" in str(e):
                         yield {
                             "type": "error",
-                            "data": {"message": "Invalid Shodan API key. Please check your API key in Admin → Configuration → API Keys"},
+                            "data": {
+                                "message": "Invalid Shodan API key. Please check your API key in Admin → Configuration → API Keys"
+                            },
                         }
                     elif "API rate limit" in str(e) or "rate limited" in str(e):
                         yield {
                             "type": "error",
-                            "data": {"message": "Shodan API rate limit exceeded. Please wait before making more requests"},
+                            "data": {
+                                "message": "Shodan API rate limit exceeded. Please wait before making more requests"
+                            },
                         }
-                    elif "Query credits" in str(e) or "insufficient query credits" in str(e).lower():
+                    elif (
+                        "Query credits" in str(e)
+                        or "insufficient query credits" in str(e).lower()
+                    ):
                         yield {
                             "type": "error",
-                            "data": {"message": "Insufficient Shodan query credits. Please check your account plan"},
+                            "data": {
+                                "message": "Insufficient Shodan query credits. Please check your account plan"
+                            },
                         }
                     else:
                         yield {
@@ -225,7 +278,9 @@ class ShodanPlugin(BasePlugin):
         except ImportError:
             yield {
                 "type": "error",
-                "data": {"message": "Shodan library not installed. Please install the 'shodan' package"},
+                "data": {
+                    "message": "Shodan library not installed. Please install the 'shodan' package"
+                },
             }
         except Exception as e:
             yield {
@@ -246,7 +301,10 @@ class ShodanPlugin(BasePlugin):
             Dictionary containing search results or errors
         """
         if not params or "query" not in params:
-            yield {"type": "error", "data": {"message": "Search query parameter is required"}}
+            yield {
+                "type": "error",
+                "data": {"message": "Search query parameter is required"},
+            }
             return
 
         # Extract parameters
@@ -282,7 +340,9 @@ class ShodanPlugin(BasePlugin):
                     search_type = "hostname"
 
             # Perform the search
-            async for result in self._search_shodan(shodan_api_key, query, search_type, limit):
+            async for result in self._search_shodan(
+                shodan_api_key, query, search_type, limit
+            ):
                 yield result
 
         except Exception as e:
@@ -297,13 +357,15 @@ class ShodanPlugin(BasePlugin):
         """Enhanced evidence saving with automatic IP entity creation"""
         # Step 1: Call parent method to save raw evidence
         await super().save_collected_evidence()
-        
+
         # Step 2: Extract and create IP entities if save_to_case is enabled
-        if (self._current_params and 
-            self._current_params.get("save_to_case", False) and 
-            self._current_params.get("case_id") and 
-            self._evidence_results):
-            
+        if (
+            self._current_params
+            and self._current_params.get("save_to_case", False)
+            and self._current_params.get("case_id")
+            and self._evidence_results
+        ):
+
             await self._create_ip_entities_from_results()
 
     async def _create_ip_entities_from_results(self) -> None:
@@ -314,7 +376,7 @@ class ShodanPlugin(BasePlugin):
 
         # Extract unique IP addresses from results
         discovered_ips = self._extract_unique_ips_from_results()
-        
+
         if not discovered_ips:
             return
 
@@ -325,23 +387,23 @@ class ShodanPlugin(BasePlugin):
             created_count = 0
             enriched_count = 0
             failed_count = 0
-            
+
             for ip_data in discovered_ips:
                 try:
                     ip_address = ip_data["ip"]
                     description = ip_data["description"]
-                    
+
                     # Check if IP entity already exists
                     existing_entity = await entity_service.find_entity_by_ip_address(
                         case_id, ip_address
                     )
-                    
+
                     if existing_entity:
                         # Enrich existing entity with new Shodan data
                         await entity_service.enrich_entity_description(
                             existing_entity.id,
                             description,
-                            current_user=self._current_user
+                            current_user=self._current_user,
                         )
                         enriched_count += 1
                     else:
@@ -349,25 +411,24 @@ class ShodanPlugin(BasePlugin):
                         entity_create = EntityCreate(
                             entity_type="ip_address",
                             data=IpAddressData(
-                                ip_address=ip_address,
-                                description=description
-                            ).model_dump()
+                                ip_address=ip_address, description=description
+                            ).model_dump(),
                         )
-                        
+
                         await entity_service.create_entity(
                             case_id=case_id,
                             entity=entity_create,
-                            current_user=self._current_user
+                            current_user=self._current_user,
                         )
                         created_count += 1
-                    
+
                 except Exception as e:
                     # Log error but continue with other IPs
                     failed_count += 1
                     continue
-            
+
             # Entity operations completed silently
-                
+
         except Exception as e:
             # Don't break evidence saving if entity creation fails completely
             pass
@@ -377,34 +438,33 @@ class ShodanPlugin(BasePlugin):
     def _extract_unique_ips_from_results(self) -> list[dict]:
         """Extract unique IP addresses with metadata from collected results"""
         ip_data_map = {}  # Use dict to avoid duplicates while preserving rich data
-        
+
         # Get the original query from current params
-        original_query = self._current_params.get("query", "") if self._current_params else ""
-        
+        original_query = (
+            self._current_params.get("query", "") if self._current_params else ""
+        )
+
         for result in self._evidence_results:
             ip_address = result.get("ip")
             if not ip_address or not self._is_ip_address(ip_address):
                 continue
-                
+
             # Skip if we already have this IP with better data
             if ip_address in ip_data_map:
                 continue
-                
+
             # Generate description based on available Shodan data
             description = self._generate_ip_description(result, original_query)
-            
-            ip_data_map[ip_address] = {
-                "ip": ip_address,
-                "description": description
-            }
-        
+
+            ip_data_map[ip_address] = {"ip": ip_address, "description": description}
+
         return list(ip_data_map.values())
 
     def _generate_ip_description(self, result: dict, original_query: str = "") -> str:
         """Generate a descriptive string for the IP address entity"""
         search_type = result.get("search_type", "unknown")
         query_part = f" for '{original_query}'" if original_query else ""
-        
+
         if search_type == "host_lookup":
             return f"Discovered via Shodan IP lookup{query_part}"
         elif search_type == "hostname_search":

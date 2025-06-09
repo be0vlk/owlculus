@@ -22,10 +22,10 @@ export function useNoteEditor(props, emit) {
 
   const saveNotes = async () => {
     if (!editor.value) return
-    
+
     const content = editor.value.getHTML()
     if (content === lastSaved.value) return
-    
+
     try {
       saving.value = true
       await caseService.updateCase(props.caseId, { notes: content })

@@ -161,17 +161,17 @@ class EntityService:
             raise HTTPException(status_code=404, detail="Entity not found")
 
         current_description = db_entity.data.get("description", "")
-        
+
         if current_description:
             # Append new description with separator
             enriched_description = f"{current_description}\n\n--- Additional Info ---\n{additional_description}"
         else:
             enriched_description = additional_description
-        
+
         # Update the entity data with enriched description
         updated_data = db_entity.data.copy()
         updated_data["description"] = enriched_description
-        
+
         db_entity.data = updated_data
         db_entity.updated_at = get_utc_now()
 
