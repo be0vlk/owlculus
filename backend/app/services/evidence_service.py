@@ -181,10 +181,10 @@ class EvidenceService:
         evidence = self.db.get(models.Evidence, evidence_id)
         if not evidence:
             raise HTTPException(status_code=404, detail="Evidence not found")
-        
+
         # Check case access
         check_case_access(self.db, evidence.case_id, current_user)
-        
+
         return evidence
 
     @no_analyst()
@@ -210,7 +210,7 @@ class EvidenceService:
                     failure_reason="evidence_not_found",
                 ).warning("Evidence update failed: evidence not found")
                 raise HTTPException(status_code=404, detail="Evidence not found")
-            
+
             # Check case access
             try:
                 check_case_access(self.db, db_evidence.case_id, current_user)
@@ -431,23 +431,21 @@ class EvidenceService:
         )
 
         try:
-            # Check if case exists
-            case = self.db.exec(
-                select(models.Case).where(models.Case.id == folder_data.case_id)
-            ).first()
-            if not case:
-                folder_logger.bind(
-                    event_type="folder_creation_failed", failure_reason="case_not_found"
-                ).warning("Folder creation failed: case not found")
-                raise HTTPException(status_code=404, detail="Case not found")
-            
-            # Check if user has access to the case
-            if current_user.role != "Admin" and current_user not in case.users:
-                folder_logger.bind(
-                    event_type="folder_creation_failed",
-                    failure_reason="not_authorized",
-                ).warning("Folder creation failed: not authorized")
-                raise HTTPException(status_code=403, detail="Not authorized to create folders in this case")
+            # Check case access
+            try:
+                check_case_access(self.db, folder_data.case_id, current_user)
+            except HTTPException as e:
+                if e.status_code == 404:
+                    folder_logger.bind(
+                        event_type="folder_creation_failed",
+                        failure_reason="case_not_found",
+                    ).warning("Folder creation failed: case not found")
+                else:
+                    folder_logger.bind(
+                        event_type="folder_creation_failed",
+                        failure_reason="not_authorized",
+                    ).warning("Folder creation failed: not authorized")
+                raise
 
             # Build folder path
             folder_path = folder_data.folder_path or ""
@@ -533,16 +531,8 @@ class EvidenceService:
         self, case_id: int, current_user: models.User
     ) -> List[models.Evidence]:
         """Get the folder tree structure for a case."""
-        # Check if case exists
-        case = self.db.exec(
-            select(models.Case).where(models.Case.id == case_id)
-        ).first()
-        if not case:
-            raise HTTPException(status_code=404, detail="Case not found")
-        
-        # Check if user has access to the case
-        if current_user.role != "Admin" and current_user not in case.users:
-            raise HTTPException(status_code=403, detail="Not authorized to view folders for this case")
+        # Check case access
+        check_case_access(self.db, case_id, current_user)
 
         # Get all evidence including folders for the case
         query = select(models.Evidence).where(models.Evidence.case_id == case_id)
@@ -570,7 +560,7 @@ class EvidenceService:
                     event_type="folder_update_failed", failure_reason="folder_not_found"
                 ).warning("Folder update failed: folder not found")
                 raise HTTPException(status_code=404, detail="Folder not found")
-            
+
             # Check case access
             try:
                 check_case_access(self.db, db_folder.case_id, current_user)
@@ -640,7 +630,7 @@ class EvidenceService:
                     failure_reason="folder_not_found",
                 ).warning("Folder deletion failed: folder not found")
                 raise HTTPException(status_code=404, detail="Folder not found")
-            
+
             # Check case access
             try:
                 check_case_access(self.db, db_folder.case_id, current_user)
@@ -725,24 +715,21 @@ class EvidenceService:
         )
 
         try:
-            # Check if case exists
-            case = self.db.exec(
-                select(models.Case).where(models.Case.id == case_id)
-            ).first()
-            if not case:
-                template_logger.bind(
-                    event_type="folder_template_apply_failed",
-                    failure_reason="case_not_found",
-                ).warning("Folder template apply failed: case not found")
-                raise HTTPException(status_code=404, detail="Case not found")
-
-            # Check user permissions
-            if current_user.role != "Admin" and current_user not in case.users:
-                template_logger.bind(
-                    event_type="folder_template_apply_failed",
-                    failure_reason="not_authorized",
-                ).warning("Folder template apply failed: not authorized")
-                raise HTTPException(status_code=403, detail="Not authorized to apply templates to this case")
+            # Check case access
+            try:
+                check_case_access(self.db, case_id, current_user)
+            except HTTPException as e:
+                if e.status_code == 404:
+                    template_logger.bind(
+                        event_type="folder_template_apply_failed",
+                        failure_reason="case_not_found",
+                    ).warning("Folder template apply failed: case not found")
+                else:
+                    template_logger.bind(
+                        event_type="folder_template_apply_failed",
+                        failure_reason="not_authorized",
+                    ).warning("Folder template apply failed: not authorized")
+                raise
 
             # Get templates from system configuration
             from app.services.system_config_service import SystemConfigService

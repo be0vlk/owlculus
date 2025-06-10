@@ -172,7 +172,7 @@ watch(dialogOpen, (newValue) => {
 
 <style scoped>
 .template-preview {
-  background-color: rgb(var(--v-theme-surface-variant));
+  background-color: rgb(var(--v-theme-surface));
   padding: 12px;
   border-radius: 4px;
   font-family: monospace;

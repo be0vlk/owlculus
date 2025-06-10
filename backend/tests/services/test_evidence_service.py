@@ -913,7 +913,9 @@ async def test_bulk_evidence_operations(
 @pytest.fixture(name="unassigned_case")
 def unassigned_case_fixture(session: Session, test_admin: models.User):
     """Create a case that investigators/analysts are not assigned to"""
-    client = models.Client(name="Unassigned Client", contact_email="unassigned@example.com")
+    client = models.Client(
+        name="Unassigned Client", contact_email="unassigned@example.com"
+    )
     session.add(client)
     session.commit()
     session.refresh(client)
@@ -933,7 +935,9 @@ def unassigned_case_fixture(session: Session, test_admin: models.User):
 
 
 @pytest.fixture(name="assigned_case")
-def assigned_case_fixture(session: Session, test_admin: models.User, test_investigator: models.User):
+def assigned_case_fixture(
+    session: Session, test_admin: models.User, test_investigator: models.User
+):
     """Create a case that is assigned to the investigator"""
     client = models.Client(name="Assigned Client", contact_email="assigned@example.com")
     session.add(client)
@@ -951,7 +955,7 @@ def assigned_case_fixture(session: Session, test_admin: models.User, test_invest
     session.add(case)
     session.commit()
     session.refresh(case)
-    
+
     # Assign investigator to case
     case.users.append(test_investigator)
     session.add(case)
@@ -978,7 +982,9 @@ async def test_create_evidence_unauthorized_access(
     )
 
     with pytest.raises(HTTPException) as excinfo:
-        await evidence_service_instance.create_evidence(evidence_data, test_investigator)
+        await evidence_service_instance.create_evidence(
+            evidence_data, test_investigator
+        )
     assert excinfo.value.status_code == 403
     assert "Not authorized" in excinfo.value.detail
 
@@ -1002,7 +1008,7 @@ async def test_create_evidence_authorized_access(
     created_evidence = await evidence_service_instance.create_evidence(
         evidence_data, test_investigator
     )
-    
+
     assert created_evidence.title == "Authorized Evidence"
     assert created_evidence.case_id == assigned_case.id
     assert created_evidence.created_by_id == test_investigator.id
@@ -1027,7 +1033,7 @@ async def test_create_evidence_admin_access_any_case(
     created_evidence = await evidence_service_instance.create_evidence(
         evidence_data, test_admin
     )
-    
+
     assert created_evidence.title == "Admin Evidence"
     assert created_evidence.case_id == unassigned_case.id
 
@@ -1041,7 +1047,9 @@ async def test_get_case_evidence_unauthorized_access(
 ):
     """Test that investigators cannot view evidence from unassigned cases"""
     with pytest.raises(HTTPException) as excinfo:
-        await evidence_service_instance.get_case_evidence(unassigned_case.id, test_investigator)
+        await evidence_service_instance.get_case_evidence(
+            unassigned_case.id, test_investigator
+        )
     assert excinfo.value.status_code == 403
     assert "Not authorized to access this case" in excinfo.value.detail
 
@@ -1077,9 +1085,11 @@ async def test_get_evidence_unauthorized_access(
         category="Other",
         content="Protected content",
     )
-    
-    evidence = await evidence_service_instance.create_evidence(evidence_data, test_admin)
-    
+
+    evidence = await evidence_service_instance.create_evidence(
+        evidence_data, test_admin
+    )
+
     # Investigator tries to access it
     with pytest.raises(HTTPException) as excinfo:
         await evidence_service_instance.get_evidence(evidence.id, test_investigator)
@@ -1104,11 +1114,15 @@ async def test_get_evidence_authorized_access(
         category="Other",
         content="Accessible content",
     )
-    
-    evidence = await evidence_service_instance.create_evidence(evidence_data, test_admin)
-    
+
+    evidence = await evidence_service_instance.create_evidence(
+        evidence_data, test_admin
+    )
+
     # Investigator can access it
-    retrieved_evidence = await evidence_service_instance.get_evidence(evidence.id, test_investigator)
+    retrieved_evidence = await evidence_service_instance.get_evidence(
+        evidence.id, test_investigator
+    )
     assert retrieved_evidence.id == evidence.id
     assert retrieved_evidence.title == "Accessible Evidence"
 
@@ -1138,9 +1152,11 @@ def test_update_evidence_unauthorized_access(
     evidence_service_instance.db.refresh(evidence)
 
     update_data = schemas.EvidenceUpdate(title="Updated Title")
-    
+
     with pytest.raises(HTTPException) as excinfo:
-        evidence_service_instance.update_evidence(evidence.id, update_data, test_investigator)
+        evidence_service_instance.update_evidence(
+            evidence.id, update_data, test_investigator
+        )
     assert excinfo.value.status_code == 403
     assert "Not authorized to access this case" in excinfo.value.detail
 
@@ -1169,7 +1185,7 @@ async def test_delete_evidence_unauthorized_access(
     evidence_service_instance.db.add(evidence)
     evidence_service_instance.db.commit()
     evidence_service_instance.db.refresh(evidence)
-    
+
     with pytest.raises(HTTPException) as excinfo:
         await evidence_service_instance.delete_evidence(evidence.id, test_investigator)
     assert excinfo.value.status_code == 403
@@ -1200,9 +1216,11 @@ async def test_download_evidence_unauthorized_access(
     evidence_service_instance.db.add(evidence)
     evidence_service_instance.db.commit()
     evidence_service_instance.db.refresh(evidence)
-    
+
     with pytest.raises(HTTPException) as excinfo:
-        await evidence_service_instance.download_evidence(evidence.id, test_investigator)
+        await evidence_service_instance.download_evidence(
+            evidence.id, test_investigator
+        )
     assert excinfo.value.status_code == 403
     assert "Not authorized to access this case" in excinfo.value.detail
 
@@ -1235,7 +1253,9 @@ async def test_get_folder_tree_unauthorized_access(
 ):
     """Test that investigators cannot view folder tree from unassigned cases"""
     with pytest.raises(HTTPException) as excinfo:
-        await evidence_service_instance.get_folder_tree(unassigned_case.id, test_investigator)
+        await evidence_service_instance.get_folder_tree(
+            unassigned_case.id, test_investigator
+        )
     assert excinfo.value.status_code == 403
     assert "Not authorized" in excinfo.value.detail
 
@@ -1267,9 +1287,11 @@ async def test_update_folder_unauthorized_access(
     evidence_service_instance.db.refresh(folder)
 
     update_data = schemas.FolderUpdate(title="Updated Folder")
-    
+
     with pytest.raises(HTTPException) as excinfo:
-        await evidence_service_instance.update_folder(folder.id, update_data, test_investigator)
+        await evidence_service_instance.update_folder(
+            folder.id, update_data, test_investigator
+        )
     assert excinfo.value.status_code == 403
     assert "Not authorized to access this case" in excinfo.value.detail
 
@@ -1299,7 +1321,7 @@ async def test_delete_folder_unauthorized_access(
     evidence_service_instance.db.add(folder)
     evidence_service_instance.db.commit()
     evidence_service_instance.db.refresh(folder)
-    
+
     with pytest.raises(HTTPException) as excinfo:
         await evidence_service_instance.delete_folder(folder.id, test_investigator)
     assert excinfo.value.status_code == 403
@@ -1332,7 +1354,7 @@ async def test_analyst_can_read_assigned_case_evidence(
     session.add(case)
     session.commit()
     session.refresh(case)
-    
+
     # Assign analyst to case
     case.users.append(test_analyst)
     session.add(case)
@@ -1347,13 +1369,19 @@ async def test_analyst_can_read_assigned_case_evidence(
         category="Other",
         content="Readable content",
     )
-    
-    evidence = await evidence_service_instance.create_evidence(evidence_data, test_admin)
-    
+
+    evidence = await evidence_service_instance.create_evidence(
+        evidence_data, test_admin
+    )
+
     # Analyst should be able to read
-    retrieved_evidence = await evidence_service_instance.get_evidence(evidence.id, test_analyst)
+    retrieved_evidence = await evidence_service_instance.get_evidence(
+        evidence.id, test_analyst
+    )
     assert retrieved_evidence.id == evidence.id
-    
+
     # Analyst should be able to view case evidence
-    case_evidence = await evidence_service_instance.get_case_evidence(case.id, test_analyst)
+    case_evidence = await evidence_service_instance.get_case_evidence(
+        case.id, test_analyst
+    )
     assert len(case_evidence) >= 1

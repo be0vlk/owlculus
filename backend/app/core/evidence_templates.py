@@ -228,6 +228,11 @@ COMPANY_TEMPLATE = {
             "description": "Company social media platform evidence",
             "subfolders": SOCIAL_MEDIA_SUBFOLDERS.copy(),
         },
+        {
+            "name": "Network Assets",
+            "description": "Evidence related to network assets",
+            "subfolders": [],
+        },
     ],
 }
 

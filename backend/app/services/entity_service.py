@@ -9,7 +9,7 @@ from typing import Optional
 from app.database import models
 from app import schemas
 from app.core.utils import get_utc_now
-from app.core.dependencies import no_analyst, case_must_be_open
+from app.core.dependencies import no_analyst, case_must_be_open, check_case_access
 from app.database import crud
 
 
@@ -25,10 +25,8 @@ class EntityService:
         skip: int = 0,
         limit: int = 100,
     ) -> list[models.Entity]:
-        # Validate the case exists
-        case = self.db.get(models.Case, case_id)
-        if case is None:
-            raise HTTPException(status_code=404, detail="Case not found")
+        # Check case access
+        check_case_access(self.db, case_id, current_user)
 
         query = select(models.Entity).where(models.Entity.case_id == case_id)
 
@@ -46,10 +44,8 @@ class EntityService:
         entity: schemas.EntityCreate,
         current_user: models.User,
     ) -> models.Entity:
-        # Validate the case exists
-        case = self.db.get(models.Case, case_id)
-        if case is None:
-            raise HTTPException(status_code=404, detail="Case not found")
+        # Check case access
+        check_case_access(self.db, case_id, current_user)
 
         # Check for duplicates using crud function
         await crud.check_entity_duplicates(self.db, case_id, entity)
@@ -78,6 +74,9 @@ class EntityService:
         db_entity = self.db.get(models.Entity, entity_id)
         if not db_entity:
             raise HTTPException(status_code=404, detail="Entity not found")
+
+        # Check case access
+        check_case_access(self.db, db_entity.case_id, current_user)
 
         # Add entity type to update data for validation
         entity_update_dict = entity_update.model_dump()
@@ -113,16 +112,18 @@ class EntityService:
         if not db_entity:
             raise HTTPException(status_code=404, detail="Entity not found")
 
+        # Check case access
+        check_case_access(self.db, db_entity.case_id, current_user)
+
         self.db.delete(db_entity)
         self.db.commit()
 
     async def find_entity_by_ip_address(
-        self, case_id: int, ip_address: str
+        self, case_id: int, ip_address: str, current_user: models.User
     ) -> Optional[models.Entity]:
         """Find an existing IP address entity in the given case"""
-        case = self.db.get(models.Case, case_id)
-        if case is None:
-            raise HTTPException(status_code=404, detail="Case not found")
+        # Check case access
+        check_case_access(self.db, case_id, current_user)
 
         query = select(models.Entity).where(
             models.Entity.case_id == case_id,
@@ -133,12 +134,11 @@ class EntityService:
         return result.first()
 
     async def find_entity_by_domain(
-        self, case_id: int, domain: str
+        self, case_id: int, domain: str, current_user: models.User
     ) -> Optional[models.Entity]:
         """Find an existing domain entity in the given case (case-insensitive)"""
-        case = self.db.get(models.Case, case_id)
-        if case is None:
-            raise HTTPException(status_code=404, detail="Case not found")
+        # Check case access
+        check_case_access(self.db, case_id, current_user)
 
         query = select(models.Entity).where(
             models.Entity.case_id == case_id,
@@ -159,6 +159,9 @@ class EntityService:
         db_entity = self.db.get(models.Entity, entity_id)
         if not db_entity:
             raise HTTPException(status_code=404, detail="Entity not found")
+
+        # Check case access
+        check_case_access(self.db, db_entity.case_id, current_user)
 
         current_description = db_entity.data.get("description", "")
 

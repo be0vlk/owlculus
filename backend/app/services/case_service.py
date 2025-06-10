@@ -9,7 +9,7 @@ from datetime import datetime
 from app.database import models, crud
 from app import schemas
 from app.core.utils import get_utc_now
-from app.core.dependencies import admin_only, no_analyst
+from app.core.dependencies import admin_only, no_analyst, check_case_access
 from app.core.file_storage import create_case_directory
 from app.core.logging import get_security_logger
 from app.services.system_config_service import SystemConfigService
@@ -121,18 +121,8 @@ class CaseService:
         return result.all()
 
     async def get_case(self, case_id: int, current_user: models.User) -> models.Case:
-        db_case = await crud.get_case(self.db, case_id=case_id)
-        if not db_case:
-            raise HTTPException(status_code=404, detail="Case not found")
-
-        # Admin can access any case
-        if current_user.role == "Admin":
-            return db_case
-
-        # For non-admin users, check if they are associated with the case
-        if current_user not in db_case.users:
-            raise HTTPException(status_code=403, detail="Not authorized")
-        return db_case
+        # Check case access and return the case if authorized
+        return check_case_access(self.db, case_id, current_user)
 
     @no_analyst()
     async def update_case(
@@ -146,22 +136,19 @@ class CaseService:
         )
 
         try:
-            db_case = await crud.get_case(self.db, case_id=case_id)
-            if not db_case:
-                case_logger.bind(
-                    event_type="case_update_failed", failure_reason="case_not_found"
-                ).warning("Case update failed: case not found")
-                raise HTTPException(status_code=404, detail="Case not found")
-
-            # Admin can update any case
-            if current_user.role != "Admin" and current_user not in db_case.users:
-                case_logger.bind(
-                    event_type="case_update_failed", failure_reason="not_authorized"
-                ).warning("Case update failed: not authorized")
-                raise HTTPException(
-                    status_code=403,
-                    detail="You do not have permission to update this case",
-                )
+            # Check case access
+            try:
+                db_case = check_case_access(self.db, case_id, current_user)
+            except HTTPException as e:
+                if e.status_code == 404:
+                    case_logger.bind(
+                        event_type="case_update_failed", failure_reason="case_not_found"
+                    ).warning("Case update failed: case not found")
+                else:
+                    case_logger.bind(
+                        event_type="case_update_failed", failure_reason="not_authorized"
+                    ).warning("Case update failed: not authorized")
+                raise
 
             # Check case number uniqueness if being updated
             if (
@@ -245,10 +232,13 @@ class CaseService:
             # Check if this is a duplicate user error
             if "UNIQUE constraint failed" in str(e) and "caseuserlink" in str(e):
                 case_logger.bind(
-                    event_type="case_user_add_failed", failure_reason="user_already_assigned"
+                    event_type="case_user_add_failed",
+                    failure_reason="user_already_assigned",
                 ).warning("Add user to case failed: user already assigned to case")
-                raise HTTPException(status_code=400, detail="User is already assigned to this case")
-            
+                raise HTTPException(
+                    status_code=400, detail="User is already assigned to this case"
+                )
+
             case_logger.bind(
                 event_type="case_user_add_error", error_type="system_error"
             ).error(f"Add user to case error: {str(e)}")

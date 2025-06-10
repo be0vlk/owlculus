@@ -103,26 +103,29 @@ def no_analyst():
 
     def decorator(func):
         import inspect
-        
+
         if inspect.iscoroutinefunction(func):
+
             @wraps(func)
             async def async_wrapper(*args, **kwargs):
                 # Try to get current_user from kwargs first
                 current_user = kwargs.get("current_user")
-                
+
                 # If not in kwargs, try to extract from positional args
                 # For service methods, current_user is typically the last positional argument
                 if not current_user and args:
                     # Look for User object in args
                     from app.database.models import User
+
                     for arg in args:
                         if isinstance(arg, User):
                             current_user = arg
                             break
-                
+
                 if not current_user:
                     raise HTTPException(
-                        status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authorized"
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Not authorized",
                     )
 
                 if current_user.role == "Analyst":
@@ -130,27 +133,30 @@ def no_analyst():
                         status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized"
                     )
                 return await func(*args, **kwargs)
-            
+
             return async_wrapper
         else:
+
             @wraps(func)
             def sync_wrapper(*args, **kwargs):
                 # Try to get current_user from kwargs first
                 current_user = kwargs.get("current_user")
-                
+
                 # If not in kwargs, try to extract from positional args
                 # For service methods, current_user is typically the last positional argument
                 if not current_user and args:
                     # Look for User object in args
                     from app.database.models import User
+
                     for arg in args:
                         if isinstance(arg, User):
                             current_user = arg
                             break
-                
+
                 if not current_user:
                     raise HTTPException(
-                        status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authorized"
+                        status_code=status.HTTP_401_UNAUTHORIZED,
+                        detail="Not authorized",
                     )
 
                 if current_user.role == "Analyst":
@@ -158,7 +164,7 @@ def no_analyst():
                         status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized"
                     )
                 return func(*args, **kwargs)
-            
+
             return sync_wrapper
 
     return decorator
@@ -201,15 +207,15 @@ def case_must_be_open():
 def check_case_access(db: Session, case_id: int, current_user: User) -> Case:
     """
     Utility function to check if user has access to a case.
-    
+
     Args:
         db: Database session
         case_id: ID of the case to check access for
         current_user: Current authenticated user
-        
+
     Returns:
         Case object if user has access
-        
+
     Raises:
         HTTPException: If case not found or user doesn't have access
     """
@@ -217,11 +223,11 @@ def check_case_access(db: Session, case_id: int, current_user: User) -> Case:
     case = db.exec(select(Case).where(Case.id == case_id)).first()
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
-    
+
     # Check if user has access to the case
     if current_user.role != "Admin" and current_user not in case.users:
-        raise HTTPException(status_code=403, detail="Not authorized to access this case")
-    
+        raise HTTPException(
+            status_code=403, detail="Not authorized to access this case"
+        )
+
     return case
-
-

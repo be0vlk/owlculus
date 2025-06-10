@@ -395,7 +395,7 @@ class ShodanPlugin(BasePlugin):
 
                     # Check if IP entity already exists
                     existing_entity = await entity_service.find_entity_by_ip_address(
-                        case_id, ip_address
+                        case_id, ip_address, current_user=self._current_user
                     )
 
                     if existing_entity:

@@ -19,7 +19,7 @@ class SystemConfigurationCreate(SystemConfigurationBase):
     @field_validator("case_number_prefix")
     @classmethod
     def validate_prefix(cls, v, info):
-        if hasattr(info, 'data') and info.data:
+        if hasattr(info, "data") and info.data:
             template = info.data.get("case_number_template")
             if template == "PREFIX-YYMM-NN":
                 if not v:

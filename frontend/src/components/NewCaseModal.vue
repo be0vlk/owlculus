@@ -58,7 +58,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { clientService } from '../services/client'
 import { caseService } from '../services/case'
 import { useAuthStore } from '../stores/auth'
@@ -106,6 +106,13 @@ const loadClients = async () => {
   }
 }
 
+// Auto-select client when only one exists
+watch(clients, (newClients) => {
+  if (newClients && newClients.length === 1 && !formData.client_id) {
+    formData.client_id = newClients[0].id
+  }
+})
+
 const closeModal = () => {
   // Reset form
   formData.title = ''
@@ -133,6 +140,13 @@ const handleSubmit = async () => {
     isSubmitting.value = false
   }
 }
+
+// Load clients when modal opens
+watch(() => props.isOpen, (newVal) => {
+  if (newVal) {
+    loadClients()
+  }
+})
 
 onMounted(loadClients)
 </script>
