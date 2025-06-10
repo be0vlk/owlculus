@@ -903,10 +903,10 @@ async def test_add_duplicate_user_to_case(
 ):
     """Test adding a user who is already assigned to the case"""
     # User is already assigned via sample_case_link
-    # Try to add them again - this should fail with IntegrityError
-    from sqlalchemy.exc import IntegrityError
-
-    with pytest.raises(IntegrityError):
+    # Try to add them again - this should fail with HTTP 400
+    with pytest.raises(HTTPException) as excinfo:
         await case_service_instance.add_user_to_case(
             sample_case.id, test_user.id, current_user=test_admin
         )
+    assert excinfo.value.status_code == 400
+    assert "already assigned" in excinfo.value.detail

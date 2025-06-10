@@ -127,6 +127,21 @@ def test_analyst_fixture(session):
     return analyst
 
 
+@pytest.fixture(name="test_investigator")
+def test_investigator_fixture(session):
+    investigator = models.User(
+        email="investigator@test.com",
+        username="investigator",
+        password_hash=get_password_hash("investigatorpass"),
+        role="Investigator",
+        is_active=True,
+    )
+    session.add(investigator)
+    session.commit()
+    session.refresh(investigator)
+    return investigator
+
+
 @pytest.fixture(name="admin_token")
 def admin_token_fixture(test_admin):
     access_token = create_access_token(

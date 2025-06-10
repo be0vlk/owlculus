@@ -18,13 +18,14 @@ from app.core.file_storage import (
     normalize_folder_path,
     UPLOAD_DIR,
 )
-from app.core.dependencies import no_analyst
+from app.core.dependencies import check_case_access, no_analyst
 
 
 class EvidenceService:
     def __init__(self, db: Session):
         self.db = db
 
+    @no_analyst()
     async def create_evidence(
         self,
         evidence: schemas.EvidenceCreate,
@@ -40,16 +41,21 @@ class EvidenceService:
         )
 
         try:
-            # Check if case exists
-            case = self.db.exec(
-                select(models.Case).where(models.Case.id == evidence.case_id)
-            ).first()
-            if not case:
-                evidence_logger.bind(
-                    event_type="evidence_creation_failed",
-                    failure_reason="case_not_found",
-                ).warning("Evidence creation failed: case not found")
-                raise HTTPException(status_code=404, detail="Case not found")
+            # Check case access
+            try:
+                case = check_case_access(self.db, evidence.case_id, current_user)
+            except HTTPException as e:
+                if e.status_code == 404:
+                    evidence_logger.bind(
+                        event_type="evidence_creation_failed",
+                        failure_reason="case_not_found",
+                    ).warning("Evidence creation failed: case not found")
+                else:
+                    evidence_logger.bind(
+                        event_type="evidence_creation_failed",
+                        failure_reason="not_authorized",
+                    ).warning("Evidence creation failed: not authorized")
+                raise
 
             # Check if folders exist before allowing file uploads (excluding folder creation itself)
             if evidence.evidence_type == "file" and not evidence.is_folder:
@@ -157,12 +163,8 @@ class EvidenceService:
         skip: int = 0,
         limit: int = 100,
     ) -> List[models.Evidence]:
-        # Check if case exists
-        case = self.db.exec(
-            select(models.Case).where(models.Case.id == case_id)
-        ).first()
-        if not case:
-            raise HTTPException(status_code=404, detail="Case not found")
+        # Check case access
+        check_case_access(self.db, case_id, current_user)
 
         # Get evidence for the case
         query = (
@@ -179,8 +181,13 @@ class EvidenceService:
         evidence = self.db.get(models.Evidence, evidence_id)
         if not evidence:
             raise HTTPException(status_code=404, detail="Evidence not found")
+        
+        # Check case access
+        check_case_access(self.db, evidence.case_id, current_user)
+        
         return evidence
 
+    @no_analyst()
     def update_evidence(
         self,
         evidence_id: int,
@@ -203,6 +210,22 @@ class EvidenceService:
                     failure_reason="evidence_not_found",
                 ).warning("Evidence update failed: evidence not found")
                 raise HTTPException(status_code=404, detail="Evidence not found")
+            
+            # Check case access
+            try:
+                check_case_access(self.db, db_evidence.case_id, current_user)
+            except HTTPException as e:
+                if e.status_code == 404:
+                    evidence_logger.bind(
+                        event_type="evidence_update_failed",
+                        failure_reason="case_not_found",
+                    ).warning("Evidence update failed: case not found")
+                else:
+                    evidence_logger.bind(
+                        event_type="evidence_update_failed",
+                        failure_reason="not_authorized",
+                    ).warning("Evidence update failed: not authorized")
+                raise
 
             # Update fields if provided
             if evidence_update.title is not None:
@@ -329,16 +352,21 @@ class EvidenceService:
                 ).warning("Evidence download failed: evidence not found")
                 raise HTTPException(status_code=404, detail="Evidence not found")
 
-            # Check if user has access to the case
-            case = self.db.exec(
-                select(models.Case).where(models.Case.id == evidence.case_id)
-            ).first()
-            if not case:
-                evidence_logger.bind(
-                    event_type="evidence_download_failed",
-                    failure_reason="case_not_found",
-                ).warning("Evidence download failed: case not found")
-                raise HTTPException(status_code=404, detail="Case not found")
+            # Check case access
+            try:
+                check_case_access(self.db, evidence.case_id, current_user)
+            except HTTPException as e:
+                if e.status_code == 404:
+                    evidence_logger.bind(
+                        event_type="evidence_download_failed",
+                        failure_reason="case_not_found",
+                    ).warning("Evidence download failed: case not found")
+                else:
+                    evidence_logger.bind(
+                        event_type="evidence_download_failed",
+                        failure_reason="not_authorized",
+                    ).warning("Evidence download failed: not authorized")
+                raise
 
             # For file evidence, return a FileResponse
             if evidence.evidence_type == "file":
@@ -387,6 +415,7 @@ class EvidenceService:
             ).error(f"Evidence download error: {str(e)}")
             raise HTTPException(status_code=500, detail="Internal server error")
 
+    @no_analyst()
     async def create_folder(
         self,
         folder_data: schemas.FolderCreate,
@@ -411,6 +440,14 @@ class EvidenceService:
                     event_type="folder_creation_failed", failure_reason="case_not_found"
                 ).warning("Folder creation failed: case not found")
                 raise HTTPException(status_code=404, detail="Case not found")
+            
+            # Check if user has access to the case
+            if current_user.role != "Admin" and current_user not in case.users:
+                folder_logger.bind(
+                    event_type="folder_creation_failed",
+                    failure_reason="not_authorized",
+                ).warning("Folder creation failed: not authorized")
+                raise HTTPException(status_code=403, detail="Not authorized to create folders in this case")
 
             # Build folder path
             folder_path = folder_data.folder_path or ""
@@ -502,11 +539,16 @@ class EvidenceService:
         ).first()
         if not case:
             raise HTTPException(status_code=404, detail="Case not found")
+        
+        # Check if user has access to the case
+        if current_user.role != "Admin" and current_user not in case.users:
+            raise HTTPException(status_code=403, detail="Not authorized to view folders for this case")
 
         # Get all evidence including folders for the case
         query = select(models.Evidence).where(models.Evidence.case_id == case_id)
         return list(self.db.exec(query))
 
+    @no_analyst()
     async def update_folder(
         self,
         folder_id: int,
@@ -528,6 +570,22 @@ class EvidenceService:
                     event_type="folder_update_failed", failure_reason="folder_not_found"
                 ).warning("Folder update failed: folder not found")
                 raise HTTPException(status_code=404, detail="Folder not found")
+            
+            # Check case access
+            try:
+                check_case_access(self.db, db_folder.case_id, current_user)
+            except HTTPException as e:
+                if e.status_code == 404:
+                    folder_logger.bind(
+                        event_type="folder_update_failed",
+                        failure_reason="case_not_found",
+                    ).warning("Folder update failed: case not found")
+                else:
+                    folder_logger.bind(
+                        event_type="folder_update_failed",
+                        failure_reason="not_authorized",
+                    ).warning("Folder update failed: not authorized")
+                raise
 
             # Update fields if provided
             if folder_update.title is not None:
@@ -582,6 +640,22 @@ class EvidenceService:
                     failure_reason="folder_not_found",
                 ).warning("Folder deletion failed: folder not found")
                 raise HTTPException(status_code=404, detail="Folder not found")
+            
+            # Check case access
+            try:
+                check_case_access(self.db, db_folder.case_id, current_user)
+            except HTTPException as e:
+                if e.status_code == 404:
+                    folder_logger.bind(
+                        event_type="folder_deletion_failed",
+                        failure_reason="case_not_found",
+                    ).warning("Folder deletion failed: case not found")
+                else:
+                    folder_logger.bind(
+                        event_type="folder_deletion_failed",
+                        failure_reason="not_authorized",
+                    ).warning("Folder deletion failed: not authorized")
+                raise
 
             # Delete physical folder and contents
             if db_folder.folder_path:
@@ -668,7 +742,7 @@ class EvidenceService:
                     event_type="folder_template_apply_failed",
                     failure_reason="not_authorized",
                 ).warning("Folder template apply failed: not authorized")
-                raise HTTPException(status_code=403, detail="Not authorized")
+                raise HTTPException(status_code=403, detail="Not authorized to apply templates to this case")
 
             # Get templates from system configuration
             from app.services.system_config_service import SystemConfigService

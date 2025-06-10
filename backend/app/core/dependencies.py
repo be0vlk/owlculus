@@ -1,13 +1,13 @@
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
-from sqlmodel import Session
+from sqlmodel import Session, select
 from functools import wraps
 
 
 from app.core import security
 from app.database import crud
 from app.database.connection import get_db
-from app.database.models import User
+from app.database.models import User, Case
 from app.core.config import settings
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
@@ -102,21 +102,64 @@ def no_analyst():
     """Decorator to check if user is not an analyst"""
 
     def decorator(func):
-        @wraps(func)
-        async def wrapper(*args, **kwargs):
-            current_user = kwargs.get("current_user")
-            if not current_user:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authorized"
-                )
+        import inspect
+        
+        if inspect.iscoroutinefunction(func):
+            @wraps(func)
+            async def async_wrapper(*args, **kwargs):
+                # Try to get current_user from kwargs first
+                current_user = kwargs.get("current_user")
+                
+                # If not in kwargs, try to extract from positional args
+                # For service methods, current_user is typically the last positional argument
+                if not current_user and args:
+                    # Look for User object in args
+                    from app.database.models import User
+                    for arg in args:
+                        if isinstance(arg, User):
+                            current_user = arg
+                            break
+                
+                if not current_user:
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authorized"
+                    )
 
-            if current_user.role == "Analyst":
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized"
-                )
-            return await func(*args, **kwargs)
+                if current_user.role == "Analyst":
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized"
+                    )
+                return await func(*args, **kwargs)
+            
+            return async_wrapper
+        else:
+            @wraps(func)
+            def sync_wrapper(*args, **kwargs):
+                # Try to get current_user from kwargs first
+                current_user = kwargs.get("current_user")
+                
+                # If not in kwargs, try to extract from positional args
+                # For service methods, current_user is typically the last positional argument
+                if not current_user and args:
+                    # Look for User object in args
+                    from app.database.models import User
+                    for arg in args:
+                        if isinstance(arg, User):
+                            current_user = arg
+                            break
+                
+                if not current_user:
+                    raise HTTPException(
+                        status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authorized"
+                    )
 
-        return wrapper
+                if current_user.role == "Analyst":
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized"
+                    )
+                return func(*args, **kwargs)
+            
+            return sync_wrapper
 
     return decorator
 
@@ -153,3 +196,32 @@ def case_must_be_open():
         return wrapper
 
     return decorator
+
+
+def check_case_access(db: Session, case_id: int, current_user: User) -> Case:
+    """
+    Utility function to check if user has access to a case.
+    
+    Args:
+        db: Database session
+        case_id: ID of the case to check access for
+        current_user: Current authenticated user
+        
+    Returns:
+        Case object if user has access
+        
+    Raises:
+        HTTPException: If case not found or user doesn't have access
+    """
+    # Check if case exists
+    case = db.exec(select(Case).where(Case.id == case_id)).first()
+    if not case:
+        raise HTTPException(status_code=404, detail="Case not found")
+    
+    # Check if user has access to the case
+    if current_user.role != "Admin" and current_user not in case.users:
+        raise HTTPException(status_code=403, detail="Not authorized to access this case")
+    
+    return case
+
+

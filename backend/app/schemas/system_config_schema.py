@@ -1,4 +1,4 @@
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, field_validator, ConfigDict
 from typing import Optional, List, Dict
 from datetime import datetime
 
@@ -9,20 +9,23 @@ class SystemConfigurationBase(BaseModel):
 
 
 class SystemConfigurationCreate(SystemConfigurationBase):
-    @validator("case_number_template")
+    @field_validator("case_number_template")
+    @classmethod
     def validate_template(cls, v):
         if v not in ["YYMM-NN", "PREFIX-YYMM-NN"]:
             raise ValueError('Template must be either "YYMM-NN" or "PREFIX-YYMM-NN"')
         return v
 
-    @validator("case_number_prefix")
-    def validate_prefix(cls, v, values):
-        template = values.get("case_number_template")
-        if template == "PREFIX-YYMM-NN":
-            if not v:
-                raise ValueError("Prefix is required for PREFIX-YYMM-NN template")
-            if not v.isalnum() or len(v) < 2 or len(v) > 8:
-                raise ValueError("Prefix must be 2-8 alphanumeric characters")
+    @field_validator("case_number_prefix")
+    @classmethod
+    def validate_prefix(cls, v, info):
+        if hasattr(info, 'data') and info.data:
+            template = info.data.get("case_number_template")
+            if template == "PREFIX-YYMM-NN":
+                if not v:
+                    raise ValueError("Prefix is required for PREFIX-YYMM-NN template")
+                if not v.isalnum() or len(v) < 2 or len(v) > 8:
+                    raise ValueError("Prefix must be 2-8 alphanumeric characters")
         return v
 
 
@@ -55,8 +58,7 @@ class SystemConfigurationResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
     @classmethod
     def from_model(cls, config):

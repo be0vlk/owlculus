@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, field_validator, ConfigDict
 from typing import Optional, Literal
 from datetime import datetime
 
@@ -16,8 +16,7 @@ class InviteResponse(BaseModel):
     used_at: Optional[datetime] = None
     created_by_id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class InviteListResponse(BaseModel):
@@ -29,8 +28,7 @@ class InviteListResponse(BaseModel):
     is_expired: bool
     is_used: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class InviteValidation(BaseModel):
@@ -70,5 +68,4 @@ class UserRegistrationResponse(BaseModel):
     role: str
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

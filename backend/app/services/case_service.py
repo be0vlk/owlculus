@@ -242,6 +242,13 @@ class CaseService:
         except HTTPException:
             raise
         except Exception as e:
+            # Check if this is a duplicate user error
+            if "UNIQUE constraint failed" in str(e) and "caseuserlink" in str(e):
+                case_logger.bind(
+                    event_type="case_user_add_failed", failure_reason="user_already_assigned"
+                ).warning("Add user to case failed: user already assigned to case")
+                raise HTTPException(status_code=400, detail="User is already assigned to this case")
+            
             case_logger.bind(
                 event_type="case_user_add_error", error_type="system_error"
             ).error(f"Add user to case error: {str(e)}")
