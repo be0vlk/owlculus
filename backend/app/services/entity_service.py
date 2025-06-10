@@ -11,6 +11,7 @@ from app import schemas
 from app.core.utils import get_utc_now
 from app.core.dependencies import no_analyst, case_must_be_open, check_case_access
 from app.database import crud
+from app.database.db_utils import transaction
 
 
 class EntityService:
@@ -50,17 +51,19 @@ class EntityService:
         # Check for duplicates using crud function
         await crud.check_entity_duplicates(self.db, case_id, entity)
 
-        db_entity = models.Entity(
-            case_id=case_id,
-            entity_type=entity.entity_type,
-            data=entity.data,
-            created_by_id=current_user.id,
-            created_at=get_utc_now(),
-            updated_at=get_utc_now(),
-        )
+        # Use transaction for entity creation
+        with transaction(self.db):
+            db_entity = models.Entity(
+                case_id=case_id,
+                entity_type=entity.entity_type,
+                data=entity.data,
+                created_by_id=current_user.id,
+                created_at=get_utc_now(),
+                updated_at=get_utc_now(),
+            )
 
-        self.db.add(db_entity)
-        self.db.commit()
+            self.db.add(db_entity)
+
         self.db.refresh(db_entity)
         return db_entity
 
@@ -93,11 +96,13 @@ class EntityService:
             self.db, db_entity.case_id, validated_update, entity_id
         )
 
-        db_entity.data = validated_update.data
-        db_entity.updated_at = get_utc_now()
+        # Use transaction for entity update
+        with transaction(self.db):
+            db_entity.data = validated_update.data
+            db_entity.updated_at = get_utc_now()
 
-        self.db.add(db_entity)
-        self.db.commit()
+            self.db.add(db_entity)
+
         self.db.refresh(db_entity)
 
         return db_entity
@@ -115,8 +120,9 @@ class EntityService:
         # Check case access
         check_case_access(self.db, db_entity.case_id, current_user)
 
-        self.db.delete(db_entity)
-        self.db.commit()
+        # Use transaction for entity deletion
+        with transaction(self.db):
+            self.db.delete(db_entity)
 
     async def find_entity_by_ip_address(
         self, case_id: int, ip_address: str, current_user: models.User

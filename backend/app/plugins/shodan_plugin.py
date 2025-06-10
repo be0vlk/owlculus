@@ -12,13 +12,14 @@ from app.services.system_config_service import SystemConfigService
 from app.services.entity_service import EntityService
 from app.schemas.entity_schema import EntityCreate, IpAddressData
 from app.core.dependencies import get_db
+from sqlmodel import Session
 
 
 class ShodanPlugin(BasePlugin):
     """Shodan plugin for searching hosts and services using Shodan API"""
 
-    def __init__(self):
-        super().__init__(display_name="Shodan Search")
+    def __init__(self, db_session: Session = None):
+        super().__init__(display_name="Shodan Search", db_session=db_session)
         self.description = (
             "Search for hosts and services using Shodan's comprehensive database"
         )
@@ -316,8 +317,14 @@ class ShodanPlugin(BasePlugin):
             yield {"type": "error", "data": {"message": "Search query cannot be empty"}}
             return
 
-        # Get database session
-        db = next(get_db())
+        # Use injected session if available, otherwise get a new one
+        if self._db_session:
+            db = self._db_session
+            close_session = False
+        else:
+            db = next(get_db())
+            close_session = True
+
         try:
             # Retrieve Shodan API key using the centralized system
             config_service = SystemConfigService(db)
@@ -351,7 +358,9 @@ class ShodanPlugin(BasePlugin):
                 "data": {"message": f"Database error: {str(e)}"},
             }
         finally:
-            db.close()
+            # Only close if we created the session
+            if close_session:
+                db.close()
 
     async def save_collected_evidence(self) -> None:
         """Enhanced evidence saving with automatic IP entity creation"""
@@ -380,8 +389,14 @@ class ShodanPlugin(BasePlugin):
         if not discovered_ips:
             return
 
-        # Get database session
-        db = next(get_db())
+        # Use injected session if available, otherwise get a new one
+        if self._db_session:
+            db = self._db_session
+            close_session = False
+        else:
+            db = next(get_db())
+            close_session = True
+
         try:
             entity_service = EntityService(db)
             created_count = 0
@@ -433,7 +448,9 @@ class ShodanPlugin(BasePlugin):
             # Don't break evidence saving if entity creation fails completely
             pass
         finally:
-            db.close()
+            # Only close if we created the session
+            if close_session:
+                db.close()
 
     def _extract_unique_ips_from_results(self) -> list[dict]:
         """Extract unique IP addresses with metadata from collected results"""

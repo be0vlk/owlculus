@@ -7,6 +7,7 @@ import httpx
 import importlib
 import time
 from typing import AsyncGenerator, Dict, Any, Optional
+from sqlmodel import Session
 
 from .base_plugin import BasePlugin
 
@@ -14,8 +15,8 @@ from .base_plugin import BasePlugin
 class HolehePlugin(BasePlugin):
     """Plugin to check if email addresses are registered on various platforms using Holehe"""
 
-    def __init__(self):
-        super().__init__(display_name="Holehe")
+    def __init__(self, db_session: Session = None):
+        super().__init__(display_name="Holehe", db_session=db_session)
         self.description = "Check if email addresses are registered on 120+ platforms using account recovery verification"
         self.category = "Person"
         self.evidence_category = "Social Media"

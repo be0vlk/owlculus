@@ -14,8 +14,8 @@ from ..core.utils import get_utc_now
 class CorrelationScan(BasePlugin):
     """Plugin for finding matching entities across cases"""
 
-    def __init__(self):
-        super().__init__(display_name="Correlation Scan")
+    def __init__(self, db_session: Session = None):
+        super().__init__(display_name="Correlation Scan", db_session=db_session)
         self.description = "Finds matching entities and relationships across cases"
         self.category = "Other"
         self.evidence_category = "Documents"
@@ -39,12 +39,21 @@ class CorrelationScan(BasePlugin):
             yield {"type": "error", "data": {"message": "Parameters are required"}}
             return
 
-        db = next(get_db())
+        # Use injected session if available, otherwise get a new one
+        if self._db_session:
+            db = self._db_session
+            close_session = False
+        else:
+            db = next(get_db())
+            close_session = True
+
         try:
             async for result in self.execute(params, db):
                 yield result
         finally:
-            db.close()
+            # Only close if we created the session
+            if close_session:
+                db.close()
 
     async def execute(
         self, params: Dict[str, Any], db: Session

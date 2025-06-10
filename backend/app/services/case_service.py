@@ -13,6 +13,7 @@ from app.core.dependencies import admin_only, no_analyst, check_case_access
 from app.core.file_storage import create_case_directory
 from app.core.logging import get_security_logger
 from app.services.system_config_service import SystemConfigService
+from app.database.db_utils import transaction
 
 
 class CaseService:
@@ -65,17 +66,23 @@ class CaseService:
         )
 
         try:
-            # Always generate a new case number, ignoring any provided value
-            case_data = case.model_dump()
-            current_time = get_utc_now()
-            case_data["case_number"] = await self._generate_case_number(current_time)
+            # Use transaction to ensure atomicity
+            with transaction(self.db):
+                # Always generate a new case number, ignoring any provided value
+                case_data = case.model_dump()
+                current_time = get_utc_now()
+                case_data["case_number"] = await self._generate_case_number(
+                    current_time
+                )
 
-            # Create the case in the database
-            new_case = await crud.create_case(
-                self.db, case=schemas.CaseCreate(**case_data), current_user=current_user
-            )
+                # Create the case in the database
+                new_case = await crud.create_case(
+                    self.db,
+                    case=schemas.CaseCreate(**case_data),
+                    current_user=current_user,
+                )
 
-            # Create the case directory for file uploads
+            # Create the case directory for file uploads (outside transaction)
             create_case_directory(new_case.id)
 
             case_logger.bind(

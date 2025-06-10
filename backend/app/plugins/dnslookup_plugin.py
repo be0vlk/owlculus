@@ -8,6 +8,7 @@ import time
 import ipaddress
 import dns.asyncresolver
 from dns.rdatatype import RdataType
+from sqlmodel import Session
 from dns.exception import DNSException
 from dns.reversename import from_address
 
@@ -17,8 +18,8 @@ from .base_plugin import BasePlugin
 class DnsLookup(BasePlugin):
     """DNS lookup plugin for resolving domain names to IP addresses and performing reverse DNS lookups"""
 
-    def __init__(self):
-        super().__init__(display_name="DNS Lookup")
+    def __init__(self, db_session: Session = None):
+        super().__init__(display_name="DNS Lookup", db_session=db_session)
         self.description = "Resolves domain names to IP addresses and performs reverse DNS lookups for IP addresses"
         self.category = "Network"
         self.evidence_category = "Network Assets"

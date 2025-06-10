@@ -6,14 +6,15 @@ import asyncio
 import whois
 from datetime import datetime
 from typing import AsyncGenerator, Dict, Any, Optional, List
+from sqlmodel import Session
 from .base_plugin import BasePlugin
 
 
 class WhoisPlugin(BasePlugin):
     """Query domain Whois information"""
 
-    def __init__(self):
-        super().__init__(display_name="Whois Lookup")
+    def __init__(self, db_session: Session = None):
+        super().__init__(display_name="Whois Lookup", db_session=db_session)
         self.description = "Query domain registration and ownership information"
         self.category = "Network"
         self.evidence_category = "Network Assets"

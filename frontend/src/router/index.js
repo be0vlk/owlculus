@@ -1,7 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import Login from '../views/Login.vue'
-import SettingsView from '../views/Settings.vue'
 
 const routes = [
   {
@@ -11,7 +9,7 @@ const routes = [
   {
     path: '/login',
     name: 'Login',
-    component: Login,
+    component: () => import('../views/Login.vue'),
     meta: { requiresAuth: false },
   },
   {
@@ -47,7 +45,7 @@ const routes = [
   {
     path: '/settings',
     name: 'Settings',
-    component: SettingsView,
+    component: () => import('../views/Settings.vue'),
     meta: { requiresAuth: true },
   },
   {
@@ -72,42 +70,65 @@ const router = createRouter({
 // Navigation guard
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
+  const requiresAuth = to.matched.some((record) => record.meta.requiresAuth)
+  const requiresAdmin = to.matched.some((record) => record.meta.requiresAdmin)
 
-  // Wait for auth store to be initialized
-  if (!authStore.isInitialized) {
-    await authStore.init()
+  // Debug logging for navigation tracking
+  if (import.meta.env.DEV) {
+    console.log(`[Router] Navigating from ${from.path} to ${to.path}`, {
+      requiresAuth,
+      requiresAdmin,
+      isAuthenticated: authStore.isAuthenticated,
+      isInitialized: authStore.isInitialized,
+      userRole: authStore.user?.role
+    })
+  }
+
+  // Only initialize auth store if route requires authentication or we're checking login redirect
+  if (requiresAuth || to.path === '/login') {
+    if (!authStore.isInitialized) {
+      if (import.meta.env.DEV) {
+        console.log('[Router] Initializing auth store')
+      }
+      await authStore.init()
+    }
   }
 
   // Check if route requires authentication
-  if (to.matched.some((record) => record.meta.requiresAuth)) {
+  if (requiresAuth) {
     if (!authStore.isAuthenticated) {
+      if (import.meta.env.DEV) {
+        console.log('[Router] Redirecting to login - not authenticated')
+      }
       next('/login')
       return
     }
 
     // Check if route requires admin privileges
-    if (to.matched.some((record) => record.meta.requiresAdmin)) {
+    if (requiresAdmin) {
       if (authStore.user?.role !== 'Admin') {
-        next('/')
+        if (import.meta.env.DEV) {
+          console.log('[Router] Redirecting to cases - insufficient privileges')
+        }
+        // Redirect directly to cases instead of root to avoid extra redirect
+        next('/cases')
         return
       }
     }
   }
 
-  // Check if route is forbidden for analysts
-  if (to.matched.some((record) => record.meta.isAnalyst)) {
-    if (authStore.user?.role === 'Analyst') {
-      next('/')
-      return
-    }
-  }
-
   // If on login page and already authenticated, redirect to cases
   if (to.path === '/login' && authStore.isAuthenticated) {
+    if (import.meta.env.DEV) {
+      console.log('[Router] Redirecting to cases - already authenticated')
+    }
     next('/cases')
     return
   }
 
+  if (import.meta.env.DEV) {
+    console.log('[Router] Navigation allowed')
+  }
   next()
 })
 

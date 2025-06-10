@@ -35,19 +35,23 @@ class PluginService:
                         and issubclass(obj, BasePlugin)
                         and obj != BasePlugin
                     ):
-                        plugin = obj()
-                        self._plugins[plugin.name] = obj
+                        # Store the class, not an instance
+                        self._plugins[obj.__name__] = obj
 
     def get_plugin(self, name: str) -> BasePlugin:
-        """Get a plugin instance by name"""
+        """Get a plugin instance by name with database session"""
         if name not in self._plugins:
             raise ValueError(f"Plugin {name} not found")
-        return self._plugins[name]()
+        # Pass the database session to the plugin
+        return self._plugins[name](db_session=self.db)
 
     @no_analyst()
     async def list_plugins(self, *, current_user: User) -> Dict[str, Any]:
         """List all registered plugins and their metadata"""
-        return {name: plugin().get_metadata() for name, plugin in self._plugins.items()}
+        return {
+            name: plugin(db_session=self.db).get_metadata()
+            for name, plugin in self._plugins.items()
+        }
 
     @no_analyst()
     async def execute_plugin(
@@ -57,7 +61,3 @@ class PluginService:
         plugin = self.get_plugin(name)
         plugin._current_user = current_user
         return plugin.execute_with_evidence_collection(params or {})
-
-
-# Create a singleton instance
-plugin_service = PluginService(db=Session())

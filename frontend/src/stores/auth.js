@@ -24,15 +24,23 @@ export const useAuthStore = defineStore('auth', () => {
 
     // Start initialization
     initPromise.value = (async () => {
-      if (isAuthenticated.value) {
-        try {
+      try {
+        // Refresh authentication status from localStorage
+        const authStatus = authService.isAuthenticated()
+        isAuthenticated.value = authStatus
+        
+        if (authStatus) {
           const userData = await authService.getCurrentUser()
           user.value = userData
-        } catch (err) {
-          console.error('Failed to initialize user data:', err)
-          // If we fail to get user data, we should logout
-          logout()
+        } else {
+          user.value = null
         }
+      } catch (err) {
+        console.error('Failed to initialize user data:', err)
+        // Clear authentication state on initialization failure
+        user.value = null
+        isAuthenticated.value = false
+        authService.logout()
       }
       isInitialized.value = true
     })()
@@ -57,6 +65,10 @@ export const useAuthStore = defineStore('auth', () => {
     authService.logout()
     user.value = null
     isAuthenticated.value = false
+    // Reset initialization state to allow re-initialization
+    isInitialized.value = false
+    initPromise.value = null
+    error.value = null
   }
 
   async function changePassword(passwordData) {

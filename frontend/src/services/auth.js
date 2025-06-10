@@ -2,13 +2,22 @@ import axios from 'axios'
 
 const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
+// Create a separate axios instance for auth that doesn't have interceptors
+// to avoid circular dependencies with the main api instance
+const authApi = axios.create({
+  baseURL: baseURL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+})
+
 export const authService = {
   async login(username, password) {
     const formData = new FormData()
     formData.append('username', username)
     formData.append('password', password)
 
-    const response = await axios.post(`${baseURL}/api/auth/login`, formData, {
+    const response = await authApi.post('/api/auth/login', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -30,33 +39,58 @@ export const authService = {
     try {
       const token = this.getCurrentToken()
       const tokenType = this.getTokenType()
-      const response = await axios.get(`${baseURL}/api/users/me`, {
+      
+      if (!token) {
+        throw new Error('No authentication token available')
+      }
+
+      const response = await authApi.get('/api/users/me', {
         headers: {
           Authorization: `${tokenType} ${token}`,
-          'Content-Type': 'application/json',
         },
       })
       return response.data
     } catch (error) {
       console.error('Failed to fetch user data:', error)
-      return null
+      // Throw the error instead of silently returning null
+      // This allows calling code to handle auth failures properly
+      throw error
     }
   },
 
   logout() {
-    localStorage.removeItem('access_token')
-    localStorage.removeItem('token_type')
+    try {
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('token_type')
+    } catch (error) {
+      console.error('Failed to clear authentication tokens:', error)
+    }
   },
 
   getCurrentToken() {
-    return localStorage.getItem('access_token')
+    try {
+      return localStorage.getItem('access_token')
+    } catch (error) {
+      console.error('Failed to retrieve access token:', error)
+      return null
+    }
   },
 
   getTokenType() {
-    return localStorage.getItem('token_type') || 'bearer'
+    try {
+      return localStorage.getItem('token_type') || 'bearer'
+    } catch (error) {
+      console.error('Failed to retrieve token type:', error)
+      return 'bearer'
+    }
   },
 
   isAuthenticated() {
-    return !!localStorage.getItem('access_token')
+    try {
+      return !!localStorage.getItem('access_token')
+    } catch (error) {
+      console.error('Failed to check authentication status:', error)
+      return false
+    }
   },
 }

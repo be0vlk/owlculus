@@ -5,20 +5,10 @@
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
 import { useDarkMode } from '@/composables/useDarkMode'
-import { useAuthStore } from '@/stores/auth'
 
 // Initialize dark mode
 useDarkMode()
-
-// Ensure auth store is initialized on app mount
-onMounted(async () => {
-  const authStore = useAuthStore()
-  if (!authStore.isInitialized) {
-    await authStore.init()
-  }
-})
 </script>
 
 <style>

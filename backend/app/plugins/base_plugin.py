@@ -23,7 +23,9 @@ from sqlalchemy.orm import Session
 class BasePlugin(ABC):
     """Base class for all plugins to inherit from"""
 
-    def __init__(self, display_name: Optional[str] = None):
+    def __init__(
+        self, display_name: Optional[str] = None, db_session: Optional[Session] = None
+    ):
         self.name: str = self.__class__.__name__
         self.display_name: str = display_name or self.name
         self.description: str = ""
@@ -40,6 +42,7 @@ class BasePlugin(ABC):
             []
         )  # Collect results for evidence saving
         self._current_params: Optional[Dict[str, Any]] = None
+        self._db_session: Optional[Session] = db_session  # Injected database session
 
         # Validate evidence_category on initialization
         self._validate_evidence_category()
@@ -218,8 +221,14 @@ class BasePlugin(ABC):
         if not save_to_case or not case_id:
             return
 
-        # Get database session
-        db = next(get_db())
+        # Use injected session if available, otherwise get a new one
+        if self._db_session:
+            db = self._db_session
+            close_session = False
+        else:
+            db = next(get_db())
+            close_session = True
+
         try:
             # Format the evidence content
             content = self._format_evidence_content(
@@ -236,7 +245,9 @@ class BasePlugin(ABC):
                     save_to_case=True,
                 )
         finally:
-            db.close()
+            # Only close if we created the session
+            if close_session:
+                db.close()
 
     def _format_evidence_content(
         self, results: List[Dict[str, Any]], params: Dict[str, Any]
