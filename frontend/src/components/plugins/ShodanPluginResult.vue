@@ -280,7 +280,7 @@ const formatDate = (dateString) => {
     
     // Handle other formats
     return new Date(dateString).toLocaleDateString()
-  } catch (error) {
+  } catch {
     return dateString
   }
 }

@@ -39,7 +39,7 @@ export const authService = {
     try {
       const token = this.getCurrentToken()
       const tokenType = this.getTokenType()
-      
+
       if (!token) {
         throw new Error('No authentication token available')
       }

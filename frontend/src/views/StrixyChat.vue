@@ -1,5 +1,5 @@
 <template>
-  <v-app>
+  <div>
     <Sidebar />
     <v-main>
       <v-container fluid class="pa-6">
@@ -145,7 +145,7 @@
 
     <!-- Confirmation Dialog -->
     <ConfirmationDialog ref="confirmDialog" />
-  </v-app>
+  </div>
 </template>
 
 <script setup>

@@ -1,6 +1,6 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <template>
-  <v-app>
+  <div>
     <Sidebar />
     
     <v-main>
@@ -91,7 +91,7 @@
         </v-card>
       </v-container>
     </v-main>
-  </v-app>
+  </div>
 </template>
 
 <script setup>

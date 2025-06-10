@@ -1,5 +1,5 @@
 <template>
-  <v-app>
+  <div>
     <Sidebar />
     
     <v-main>
@@ -445,7 +445,7 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
-  </v-app>
+  </div>
 </template>
 
 <script setup>

@@ -3,11 +3,39 @@ import { ref } from 'vue'
 import api from '../services/api'
 import { authService } from '../services/auth'
 
+// Development-only state persistence to handle HMR reloads
+const DEV_STATE_KEY = '__owlculus_dev_auth_state__'
+
+const getDevPersistedState = () => {
+  if (import.meta.env.DEV) {
+    try {
+      const saved = sessionStorage.getItem(DEV_STATE_KEY)
+      return saved ? JSON.parse(saved) : null
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+const saveDevState = (state) => {
+  if (import.meta.env.DEV) {
+    try {
+      sessionStorage.setItem(DEV_STATE_KEY, JSON.stringify(state))
+    } catch {
+      // Ignore storage errors
+    }
+  }
+}
+
 export const useAuthStore = defineStore('auth', () => {
-  const user = ref(null)
-  const isAuthenticated = ref(authService.isAuthenticated())
-  const error = ref(null)
-  const isInitialized = ref(false)
+  // Try to restore state from development persistence
+  const persistedState = getDevPersistedState()
+
+  const user = ref(persistedState?.user || null)
+  const isAuthenticated = ref(persistedState?.isAuthenticated ?? authService.isAuthenticated())
+  const error = ref(persistedState?.error || null)
+  const isInitialized = ref(persistedState?.isInitialized || false)
   const initPromise = ref(null)
 
   // Initialize user data if already authenticated
@@ -28,7 +56,7 @@ export const useAuthStore = defineStore('auth', () => {
         // Refresh authentication status from localStorage
         const authStatus = authService.isAuthenticated()
         isAuthenticated.value = authStatus
-        
+
         if (authStatus) {
           const userData = await authService.getCurrentUser()
           user.value = userData
@@ -42,7 +70,16 @@ export const useAuthStore = defineStore('auth', () => {
         isAuthenticated.value = false
         authService.logout()
       }
+
       isInitialized.value = true
+
+      // Save state for development HMR persistence
+      saveDevState({
+        user: user.value,
+        isAuthenticated: isAuthenticated.value,
+        isInitialized: isInitialized.value,
+        error: error.value,
+      })
     })()
 
     return initPromise.value
@@ -54,6 +91,15 @@ export const useAuthStore = defineStore('auth', () => {
       const data = await authService.login(username, password)
       isAuthenticated.value = true
       user.value = data.user
+
+      // Save state for development HMR persistence
+      saveDevState({
+        user: user.value,
+        isAuthenticated: isAuthenticated.value,
+        isInitialized: isInitialized.value,
+        error: error.value,
+      })
+
       return data
     } catch (err) {
       error.value = err.response?.data?.detail || 'Login failed'
@@ -69,6 +115,15 @@ export const useAuthStore = defineStore('auth', () => {
     isInitialized.value = false
     initPromise.value = null
     error.value = null
+
+    // Clear development state persistence
+    if (import.meta.env.DEV) {
+      try {
+        sessionStorage.removeItem(DEV_STATE_KEY)
+      } catch {
+        // Ignore storage errors
+      }
+    }
   }
 
   async function changePassword(passwordData) {

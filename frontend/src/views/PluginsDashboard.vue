@@ -1,5 +1,5 @@
 <template>
-  <v-app>
+  <div>
     <Sidebar />
 
     <v-main>
@@ -297,7 +297,7 @@
       :execution-time="modalState.executionTime"
       @export="handleExportResults"
     />
-  </v-app>
+  </div>
 </template>
 
 <script setup>

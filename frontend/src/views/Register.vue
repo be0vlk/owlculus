@@ -1,6 +1,6 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <template>
-  <v-app>
+  <div>
     <v-main>
       <v-container class="fill-height" fluid>
         <v-row align="center" justify="center">
@@ -212,7 +212,7 @@
         </v-row>
       </v-container>
     </v-main>
-  </v-app>
+  </div>
 </template>
 
 <script setup>

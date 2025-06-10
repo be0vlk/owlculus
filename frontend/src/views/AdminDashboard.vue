@@ -1,5 +1,5 @@
 <template>
-  <v-app>
+  <div>
     <Sidebar />
 
     <v-main>
@@ -110,7 +110,7 @@
         </v-btn>
       </template>
     </v-snackbar>
-  </v-app>
+  </div>
 </template>
 
 <script setup>
