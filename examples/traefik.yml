@@ -1,0 +1,77 @@
+# Example Traefik configuration for Owlculus reverse proxy setup
+#
+# Instructions:
+# 1. Run Owlculus setup with reverse proxy option: ./setup.sh
+# 2. Choose "yes" when asked about reverse proxy  
+# 3. Enter your domain name (e.g., owlculus.example.com)
+# 4. Add these labels to your docker-compose.yml or create this file
+# 5. Replace "owlculus.example.com" with your actual domain
+# 6. Ensure Traefik is running and configured
+
+# Option 1: Add these labels directly to your docker-compose.yml services
+
+# For frontend service:
+# labels:
+#   - "traefik.enable=true"
+#   - "traefik.http.routers.owlculus-frontend.rule=Host(`owlculus.example.com`)"
+#   - "traefik.http.routers.owlculus-frontend.entrypoints=websecure"
+#   - "traefik.http.routers.owlculus-frontend.tls.certresolver=letsencrypt"
+#   - "traefik.http.services.owlculus-frontend.loadbalancer.server.port=80"
+
+# For backend service:
+# labels:
+#   - "traefik.enable=true"
+#   - "traefik.http.routers.owlculus-backend.rule=Host(`owlculus.example.com`) && PathPrefix(`/api`)"
+#   - "traefik.http.routers.owlculus-backend.entrypoints=websecure"
+#   - "traefik.http.routers.owlculus-backend.tls.certresolver=letsencrypt"
+#   - "traefik.http.services.owlculus-backend.loadbalancer.server.port=8000"
+
+# Option 2: Traefik dynamic configuration file (traefik-dynamic.yml)
+
+http:
+  routers:
+    owlculus-frontend:
+      rule: "Host(`owlculus.example.com`)"
+      service: owlculus-frontend
+      entrypoints:
+        - "websecure"
+      tls:
+        certResolver: "letsencrypt"
+    
+    owlculus-backend:
+      rule: "Host(`owlculus.example.com`) && PathPrefix(`/api`)"
+      service: owlculus-backend
+      entrypoints:
+        - "websecure"
+      tls:
+        certResolver: "letsencrypt"
+      middlewares:
+        - "api-stripprefix"
+
+  services:
+    owlculus-frontend:
+      loadBalancer:
+        servers:
+          - url: "http://frontend:80"
+    
+    owlculus-backend:
+      loadBalancer:
+        servers:
+          - url: "http://backend:8000"
+
+  middlewares:
+    api-stripprefix:
+      stripPrefix:
+        prefixes:
+          - "/api"
+    
+    security-headers:
+      headers:
+        customRequestHeaders:
+          X-Forwarded-Proto: "https"
+        customResponseHeaders:
+          X-Content-Type-Options: "nosniff"
+          X-Frame-Options: "SAMEORIGIN"
+          X-XSS-Protection: "1; mode=block"
+          Strict-Transport-Security: "max-age=31536000; includeSubDomains"
+          Referrer-Policy: "strict-origin-when-cross-origin"

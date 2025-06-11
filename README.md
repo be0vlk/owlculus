@@ -20,7 +20,7 @@ This project is now and will always be 100% free and open-source, no matter how 
 - **RESTful API**: Comprehensive backend for automation and integrations
 - **Rich Text Editing**: Note editor with formatting and organization
 - **Evidence Management**: Organized file storage with automatic folder structures
-- **Entity System**: Assign various types of entities to your case each which templated, self-contained notes
+- **Entity System**: Assign various types of entities to your case each with templated, self-contained notes
 - **Cross-Case Correlation**: Automatically discover connections between investigations (WIP)
 
 ### OSINT Plugin Ecosystem
@@ -33,12 +33,12 @@ This project is now and will always be 100% free and open-source, no matter how 
 ### System Features
 - **Configurable Case Numbers**: Customizable templates (YYMM-NN, PREFIX-YYMM-NN)
 - **Dark/Light Mode**: User preference themes
-- **Real-time Updates**: Live plugin execution with streaming results
+- **Manage Evidence Storage Templates**: Allows you to quickly apply folder structures from templates
 
 ## Technology Stack
 
 **Backend:**
-- FastAPI with SQLModel
+- FastAPI
 - PostgreSQL database
 - JWT authentication
 - Docker containerization
@@ -68,7 +68,9 @@ I will be very actively maintaining and improving this application and am always
 
 ## Installation
 
-Owlculus uses **Docker for easy, consistent installation** on any platform (Linux, macOS, Windows). The Docker setup handles all dependencies, database configuration, and service orchestration automatically.
+Owlculus uses **Docker for easy, consistent installation**. The Docker setup handles all dependencies, database configuration, and service orchestration automatically.
+
+It is technically cross-platform thanks to Docker, but I have only tested on Debian/Ubuntu Linux distros. The setup script is also Linux only. If you must be on Windows, I would *strongly* suggest at least using WSL.
 
 ### Quick Start
 
@@ -86,9 +88,7 @@ chmod +x setup.sh
 ./setup.sh
 ```
 
-The setup script will guide you through configuration options:
-- **Network settings:** Domain, frontend port (default: 80), backend port (default: 8000), database port (default: 5432)
-- **Admin account:** Username (default: admin), email, password (auto-generated if not provided)
+The setup script will guide you through configuration options.
 
 After setup, Owlculus will be available at your configured URLs (defaults shown):
 - **Frontend:** http://localhost
@@ -225,11 +225,11 @@ This is a key part of Owlculus functionality. Rather than defining case types up
 **Entity Features:**
 - **Template-Based Notes**: Each entity type comes with predefined, organized note templates
 - **Expandable Views**: Start with essential fields, expand to detailed templates as needed
-- **Rich Text Editing**: TipTap-powered notes with formatting, links, and structure
-- **Smart Relationships**: Automatic entity linking and relationship detection
-- **Cross-Case Visibility**: Entities can be discovered across multiple cases through correlation scanning
+- **Rich Text Editing**: TipTap-powered notes with formatting options
+- **Smart Relationships (WIP)**: Automatic entity linking and relationship detection within the same case
+- **Cross-Case Visibility**: Entities can be discovered across multiple cases through the correlation scanning plugin
 
-When you create an entity, you'll see a streamlined interface initially. Use "View Details" to access the full template with categorized note sections. The system intelligently recognizes relationships—mentioning "Jane Doe" in John Doe's family notes can automatically create and link a new Jane Doe entity.
+When you create an entity, the system intelligently recognizes relationships—mentioning "Jane Doe" in John Doe's family notes can automatically create and link a new Jane Doe entity.
 
 #### Evidence
 
@@ -254,7 +254,6 @@ Administrators can customize system-wide settings through the Settings page:
 **Case Number Configuration:**
 - **Templates**: Choose from preset formats (YYMM-NN, PREFIX-YYMM-NN)
 - **Custom Prefixes**: Set organization-specific prefixes for case numbers
-- **Auto-Incrementing**: Automatic sequential numbering within each format
 
 ### User Roles & Permissions
 

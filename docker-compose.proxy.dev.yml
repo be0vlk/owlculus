@@ -1,0 +1,18 @@
+# Docker Compose override for reverse proxy deployments (development mode)
+# This file removes port mappings when using external reverse proxy in dev mode
+# Usage: docker compose -f docker-compose.dev.yml -f docker-compose.proxy.dev.yml up -d
+
+services:
+  # Frontend - no port mapping (handled by reverse proxy)
+  frontend:
+    ports: []
+
+  # Backend API - no port mapping (handled by reverse proxy)  
+  backend:
+    ports: []
+
+  # Database - keep port mapping for external access (optional)
+  # Comment out the ports section below if you don't need external DB access
+  postgres:
+    ports:
+      - "${DB_PORT:-5432}:5432"

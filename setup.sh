@@ -43,6 +43,8 @@ DOMAIN=""
 ADMIN_USERNAME=""
 ADMIN_EMAIL=""
 ADMIN_PASSWORD=""
+USE_REVERSE_PROXY="false"
+USE_HTTPS="false"
 INTERACTIVE_MODE="true"
 
 # Function to check if command exists
@@ -103,33 +105,88 @@ interactive_config() {
         DEFAULT_FE_PORT="5173"
     fi
     
-    # Network Configuration
+    # Reverse Proxy Configuration
+    echo "Deployment Configuration:"
+    echo "------------------------"
+    
+    while true; do
+        echo -n "Are you using a reverse proxy (Caddy, nginx, Traefik, etc.)? [y/N]: "
+        read reverse_proxy_choice
+        case $reverse_proxy_choice in
+            [Yy]|[Yy][Ee][Ss]) 
+                USE_REVERSE_PROXY="true"
+                break 
+                ;;
+            [Nn]|[Nn][Oo]|"")
+                USE_REVERSE_PROXY="false"
+                break
+                ;;
+            *) echo "Please answer yes or no" ;;
+        esac
+    done
+    
+    if [ "$USE_REVERSE_PROXY" = "true" ]; then
+        while true; do
+            echo -n "Will your reverse proxy handle HTTPS/SSL? [Y/n]: "
+            read https_choice
+            case $https_choice in
+                [Nn]|[Nn][Oo])
+                    USE_HTTPS="false"
+                    break
+                    ;;
+                [Yy]|[Yy][Ee][Ss]|"")
+                    USE_HTTPS="true"
+                    break
+                    ;;
+                *) echo "Please answer yes or no" ;;
+            esac
+        done
+    fi
+    
+    echo ""
     echo "Network Configuration:"
     echo "---------------------"
     
-    while true; do
-        DOMAIN=$(prompt_with_default "Domain/Hostname (without port or protocol)" "$DEFAULT_DOMAIN")
-        if [ -n "$DOMAIN" ]; then
-            break
-        fi
-        print_error "Domain/Hostname cannot be empty"
-    done
+    if [ "$USE_REVERSE_PROXY" = "true" ]; then
+        while true; do
+            DOMAIN=$(prompt_with_default "Domain name (e.g., owlculus.example.com)" "owlculus.example.com")
+            if [ -n "$DOMAIN" ] && [[ "$DOMAIN" != "localhost" ]]; then
+                break
+            fi
+            print_error "Please enter a valid domain name (not localhost)"
+        done
+    else
+        while true; do
+            DOMAIN=$(prompt_with_default "Domain/Hostname (without port or protocol)" "$DEFAULT_DOMAIN")
+            if [ -n "$DOMAIN" ]; then
+                break
+            fi
+            print_error "Domain/Hostname cannot be empty"
+        done
+    fi
     
-    while true; do
-        FRONTEND_PORT=$(prompt_with_default "Frontend port" "$DEFAULT_FE_PORT")
-        if validate_port "$FRONTEND_PORT"; then
-            break
-        fi
-        print_error "Invalid port number. Please enter a number between 1-65535"
-    done
-    
-    while true; do
-        BACKEND_PORT=$(prompt_with_default "Backend API port" "$DEFAULT_BACKEND_PORT")
-        if validate_port "$BACKEND_PORT"; then
-            break
-        fi
-        print_error "Invalid port number. Please enter a number between 1-65535"
-    done
+    if [ "$USE_REVERSE_PROXY" = "false" ]; then
+        while true; do
+            FRONTEND_PORT=$(prompt_with_default "Frontend port" "$DEFAULT_FE_PORT")
+            if validate_port "$FRONTEND_PORT"; then
+                break
+            fi
+            print_error "Invalid port number. Please enter a number between 1-65535"
+        done
+        
+        while true; do
+            BACKEND_PORT=$(prompt_with_default "Backend API port" "$DEFAULT_BACKEND_PORT")
+            if validate_port "$BACKEND_PORT"; then
+                break
+            fi
+            print_error "Invalid port number. Please enter a number between 1-65535"
+        done
+    else
+        # Use internal ports for reverse proxy setup
+        FRONTEND_PORT="80"
+        BACKEND_PORT="8000"
+        print_status "Using internal ports (80 for frontend, 8000 for backend) - no host port binding"
+    fi
     
     while true; do
         DB_PORT=$(prompt_with_default "Database port" "$DEFAULT_DB_PORT")
@@ -151,15 +208,6 @@ interactive_config() {
         print_error "Username cannot be empty"
     done
     
-    while true; do
-        ADMIN_EMAIL=$(prompt_with_default "Admin email" "$DEFAULT_ADMIN_EMAIL")
-        if [[ "$ADMIN_EMAIL" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
-            break
-        fi
-        print_error "Please enter a valid email address"
-    done
-    
-    echo ""
     echo -n "Admin password (leave empty for auto-generated): "
     read -s ADMIN_PASSWORD
     echo ""
@@ -169,23 +217,51 @@ interactive_config() {
         print_status "Auto-generated secure admin password"
     fi
     
-    # Construct URLs from domain and ports
-    FRONTEND_URL="http://$DOMAIN:$FRONTEND_PORT"
-    BACKEND_API_URL="http://$DOMAIN:$BACKEND_PORT"
+    while true; do
+        ADMIN_EMAIL=$(prompt_with_default "Admin email" "$DEFAULT_ADMIN_EMAIL")
+        if [[ "$ADMIN_EMAIL" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+            break
+        fi
+        print_error "Please enter a valid email address"
+    done
     
-    # Clean up URLs if using standard ports
-    if [ "$FRONTEND_PORT" = "80" ]; then
-        FRONTEND_URL="http://$DOMAIN"
+    # Construct URLs based on reverse proxy configuration
+    if [ "$USE_REVERSE_PROXY" = "true" ]; then
+        if [ "$USE_HTTPS" = "true" ]; then
+            FRONTEND_URL="https://$DOMAIN"
+            BACKEND_API_URL="https://$DOMAIN/api"
+        else
+            FRONTEND_URL="http://$DOMAIN"
+            BACKEND_API_URL="http://$DOMAIN/api"
+        fi
+    else
+        # Direct access URLs with ports
+        FRONTEND_URL="http://$DOMAIN:$FRONTEND_PORT"
+        BACKEND_API_URL="http://$DOMAIN:$BACKEND_PORT"
+        
+        # Clean up URLs if using standard ports
+        if [ "$FRONTEND_PORT" = "80" ]; then
+            FRONTEND_URL="http://$DOMAIN"
+        fi
     fi
     
     echo ""
     echo "Configuration Summary:"
     echo "====================="
-    echo "Domain: $DOMAIN"
-    echo "Frontend URL: $FRONTEND_URL"
-    echo "Backend API URL: $BACKEND_API_URL"
-    echo "Frontend Port: $FRONTEND_PORT"
-    echo "Backend Port: $BACKEND_PORT"
+    echo "Deployment Type: $([ "$USE_REVERSE_PROXY" = "true" ] && echo "Reverse Proxy" || echo "Direct Access")"
+    if [ "$USE_REVERSE_PROXY" = "true" ]; then
+        echo "HTTPS Enabled: $([ "$USE_HTTPS" = "true" ] && echo "Yes" || echo "No")"
+        echo "Domain: $DOMAIN"
+        echo "Frontend URL: $FRONTEND_URL"
+        echo "Backend API URL: $BACKEND_API_URL"
+        echo "Note: Services will run on internal ports only"
+    else
+        echo "Domain: $DOMAIN"
+        echo "Frontend URL: $FRONTEND_URL"
+        echo "Backend API URL: $BACKEND_API_URL"
+        echo "Frontend Port: $FRONTEND_PORT"
+        echo "Backend Port: $BACKEND_PORT"
+    fi
     echo "Database Port: $DB_PORT"
     echo "Admin Username: $ADMIN_USERNAME"
     echo "Admin Email: $ADMIN_EMAIL"
@@ -300,6 +376,8 @@ set_defaults() {
     FRONTEND_PORT="$DEFAULT_FE_PORT"
     BACKEND_PORT="$DEFAULT_BACKEND_PORT"
     DB_PORT="$DEFAULT_DB_PORT"
+    USE_REVERSE_PROXY="false"
+    USE_HTTPS="false"
     
     # Construct URLs
     BACKEND_API_URL="http://$DOMAIN:$BACKEND_PORT"
@@ -388,9 +466,13 @@ FRONTEND_PORT=$FRONTEND_PORT
 BACKEND_PORT=$BACKEND_PORT
 DB_PORT=$DB_PORT
 
-# URL Configuration
+# URL Configuration  
 FRONTEND_URL=$FRONTEND_URL
 BACKEND_URL=$BACKEND_API_URL
+
+# Reverse Proxy Configuration
+USE_REVERSE_PROXY=$USE_REVERSE_PROXY
+USE_HTTPS=$USE_HTTPS
 EOF
         
         print_success ".env file created with configuration"
@@ -408,29 +490,41 @@ EOF
     
     print_success "Frontend configuration created with API URL: $BACKEND_API_URL"
     
-    # Determine compose file based on mode
+    # Determine compose files based on mode and reverse proxy
     if [ "$MODE" = "dev" ] || [ "$MODE" = "development" ]; then
         print_status "Starting Owlculus in development mode..."
-        COMPOSE_FILE="docker-compose.dev.yml"
+        BASE_COMPOSE_FILE="docker-compose.dev.yml"
+        if [ "$USE_REVERSE_PROXY" = "true" ]; then
+            COMPOSE_FILES="-f $BASE_COMPOSE_FILE -f docker-compose.proxy.dev.yml"
+            print_status "Using reverse proxy configuration (no host port binding)"
+        else
+            COMPOSE_FILES="-f $BASE_COMPOSE_FILE"
+        fi
     else
         print_status "Starting Owlculus in production mode..."
-        COMPOSE_FILE="docker-compose.yml"
+        BASE_COMPOSE_FILE="docker-compose.yml"
+        if [ "$USE_REVERSE_PROXY" = "true" ]; then
+            COMPOSE_FILES="-f $BASE_COMPOSE_FILE -f docker-compose.proxy.yml"
+            print_status "Using reverse proxy configuration (no host port binding)"
+        else
+            COMPOSE_FILES="-f $BASE_COMPOSE_FILE"
+        fi
     fi
     
     # Build Docker images
     print_status "Building Docker images..."
     if [ "$VERBOSE" = "true" ]; then
-        $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE build
+        $DOCKER_COMPOSE_CMD $COMPOSE_FILES build
     else
-        $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE build > /dev/null 2>&1
+        $DOCKER_COMPOSE_CMD $COMPOSE_FILES build > /dev/null 2>&1
     fi
     
     # Start services
     print_status "Starting services..."
     if [ "$VERBOSE" = "true" ]; then
-        $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE up -d
+        $DOCKER_COMPOSE_CMD $COMPOSE_FILES up -d
     else
-        $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE up -d > /dev/null 2>&1
+        $DOCKER_COMPOSE_CMD $COMPOSE_FILES up -d > /dev/null 2>&1
     fi
     
     # Wait for services to be healthy
@@ -441,18 +535,27 @@ EOF
     print_status "Checking service health..."
     sleep 5
     
-    # Test backend
-    if curl -f -s "$BACKEND_API_URL/" > /dev/null; then
-        print_success "Backend is running at $BACKEND_API_URL"
+    # Test services based on deployment type
+    if [ "$USE_REVERSE_PROXY" = "true" ]; then
+        print_status "Services are running internally - configure your reverse proxy to:"
+        echo "   - Forward requests to frontend container on port 80"
+        echo "   - Forward /api requests to backend container on port 8000"
+        print_success "Frontend URL (via reverse proxy): $FRONTEND_URL"
+        print_success "Backend API URL (via reverse proxy): $BACKEND_API_URL"
     else
-        print_warning "Backend may still be starting up at $BACKEND_API_URL"
-    fi
-    
-    # Test frontend
-    if curl -f -s "$FRONTEND_URL/" > /dev/null; then
-        print_success "Frontend is running at $FRONTEND_URL"
-    else
-        print_warning "Frontend may still be starting up at $FRONTEND_URL"
+        # Test backend
+        if curl -f -s "$BACKEND_API_URL/" > /dev/null; then
+            print_success "Backend is running at $BACKEND_API_URL"
+        else
+            print_warning "Backend may still be starting up at $BACKEND_API_URL"
+        fi
+        
+        # Test frontend
+        if curl -f -s "$FRONTEND_URL/" > /dev/null; then
+            print_success "Frontend is running at $FRONTEND_URL"
+        else
+            print_warning "Frontend may still be starting up at $FRONTEND_URL"
+        fi
     fi
     
     # Success message
@@ -465,11 +568,19 @@ EOF
     echo ""
     echo "Useful commands:"
     echo "   Show credentials: cat .env"
-    echo "   Stop services:    $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE down"
-    echo "   View logs:        $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE logs -f"
-    echo "   Restart services: $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE restart"
-    echo "   Shell access:     $DOCKER_COMPOSE_CMD -f $COMPOSE_FILE exec backend bash"
+    echo "   Stop services:    $DOCKER_COMPOSE_CMD $COMPOSE_FILES down"
+    echo "   View logs:        $DOCKER_COMPOSE_CMD $COMPOSE_FILES logs -f"
+    echo "   Restart services: $DOCKER_COMPOSE_CMD $COMPOSE_FILES restart"
+    echo "   Shell access:     $DOCKER_COMPOSE_CMD $COMPOSE_FILES exec backend bash"
     echo ""
+    
+    if [ "$USE_REVERSE_PROXY" = "true" ]; then
+        echo "Reverse Proxy Configuration:"
+        echo "   Frontend: Forward to http://localhost (container port 80)"
+        echo "   Backend:  Forward /api/* to http://localhost:8000 (container port 8000)"
+        echo "   Note: Services are NOT exposed on host ports"
+        echo ""
+    fi
     
     # Display admin credentials at the very end if they were generated
     if [ -n "$ADMIN_PASSWORD_TO_DISPLAY" ]; then

@@ -49,7 +49,6 @@
                 <!-- Notes Tab -->
                 <div v-if="section.isNoteEditor && !notesExpanded" class="note-editor-container">
                   <EditorToolbar
-                    v-if="isEditing"
                     :actions="noteEditorActions"
                     :saving="noteSaving"
                     :last-saved-time="noteLastSavedTime"
@@ -59,8 +58,8 @@
                   />
                   <v-card 
                     variant="outlined" 
-                    class="pa-4" 
-                    :class="{ 'mt-3': isEditing, 'read-only-notes': !isEditing }"
+                    class="pa-4 mt-3" 
+                    :class="{ 'read-only-notes': !isEditing }"
                   >
                     <editor-content :editor="noteEditor" class="tiptap-content" />
                   </v-card>
@@ -298,7 +297,6 @@
 
       <div class="flex-grow-1 d-flex flex-column overflow-hidden">
         <EditorToolbar
-          v-if="isEditing"
           :actions="noteEditorActions"
           :saving="noteSaving"
           :last-saved-time="noteLastSavedTime"
@@ -423,7 +421,7 @@ async function handleSubmit() {
     } else {
       emit('edit', updatedEntity)
     }
-  } catch (err) {
+  } catch {
     // Error handled in composable
   }
 }
@@ -432,7 +430,7 @@ async function handleSubmit() {
 
 <style scoped>
 .source-field :deep(.v-field) {
-  background-color: rgba(var(--v-theme-surface-variant), 0.4) !important;
+  background-color: rgba(var(--v-theme-surface-variant), 0.15) !important;
 }
 
 .source-field :deep(.v-label) {
@@ -531,11 +529,12 @@ async function handleSubmit() {
 
 /* Read-only styling */
 .read-only-notes {
-  opacity: 0.7;
+  background-color: rgba(var(--v-theme-surface-variant), 0.1) !important;
 }
 
 .read-only-notes .tiptap-content .ProseMirror {
   cursor: default;
+  background-color: rgba(var(--v-theme-surface-variant), 0.08) !important;
 }
 
 .read-only-notes .tiptap-content .ProseMirror * {
