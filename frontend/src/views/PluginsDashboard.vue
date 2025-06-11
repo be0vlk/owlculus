@@ -1,51 +1,30 @@
 <template>
-  <div>
-    <Sidebar />
+  <BaseDashboard 
+    title="Plugins" 
+    :loading="loading" 
+    :error="error"
+  >
+    <template #loading>
+      <v-card variant="outlined">
+        <v-card-title class="d-flex align-center pa-4 bg-surface">
+          <v-skeleton-loader type="text" width="200" />
+          <v-spacer />
+          <v-skeleton-loader type="button" width="120" />
+        </v-card-title>
+        <v-divider />
+        <v-card-text class="text-center pa-16">
+          <v-progress-circular
+            size="64"
+            width="4"
+            color="primary"
+            indeterminate
+          />
+          <div class="text-h6 mt-4">Loading plugins...</div>
+        </v-card-text>
+      </v-card>
+    </template>
 
-    <v-main>
-      <v-container fluid class="pa-6">
-        <!-- Page Header Card -->
-        <v-card class="mb-6 header-gradient">
-          <v-card-title class="d-flex align-center pa-6 text-white">
-            <div class="text-h4 font-weight-bold">Plugins</div>
-          </v-card-title>
-        </v-card>
-
-        <!-- Loading state -->
-        <v-card v-if="loading" variant="outlined">
-          <v-card-title class="d-flex align-center pa-4 bg-surface">
-            <v-skeleton-loader type="text" width="200" />
-            <v-spacer />
-            <v-skeleton-loader type="button" width="120" />
-          </v-card-title>
-          <v-divider />
-          <v-card-text class="text-center pa-16">
-            <v-progress-circular
-              size="64"
-              width="4"
-              color="primary"
-              indeterminate
-            />
-            <div class="text-h6 mt-4">Loading plugins...</div>
-          </v-card-text>
-        </v-card>
-
-        <!-- Error state -->
-        <v-alert
-          v-else-if="error"
-          type="error"
-          variant="tonal"
-          border="start"
-          prominent
-          icon="mdi-alert-circle"
-          class="mb-6"
-        >
-          <v-alert-title>Error Loading Plugins</v-alert-title>
-          {{ error }}
-        </v-alert>
-
-        <!-- Main Content -->
-        <div v-else>
+    <!-- Main Content -->
           <!-- Plugin Management Card -->
           <v-card variant="outlined">
             <!-- Header -->
@@ -305,11 +284,9 @@
               </div>
             </v-card-text>
           </v-card>
-        </div>
-      </v-container>
-    </v-main>
+  </BaseDashboard>
 
-    <!-- Results Modal -->
+  <!-- Results Modal -->
     <PluginResultsModal
       v-model="modalState.isOpen"
       :plugin-name="modalState.pluginName"
@@ -319,7 +296,6 @@
       :execution-time="modalState.executionTime"
       @export="handleExportResults"
     />
-  </div>
 </template>
 
 <script setup>
@@ -327,7 +303,7 @@ import { ref, onMounted, reactive, computed, watch, markRaw } from 'vue'
 import { pluginService } from '@/services/plugin'
 import { usePluginApiKeys } from '@/composables/usePluginApiKeys'
 import PluginResultsModal from '@/components/plugins/PluginResultsModal.vue'
-import Sidebar from '@/components/Sidebar.vue'
+import BaseDashboard from '@/components/BaseDashboard.vue'
 
 const plugins = ref({})
 const loading = ref(true)
@@ -533,7 +509,4 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.header-gradient {
-  background: linear-gradient(135deg, rgb(var(--v-theme-primary)) 0%, rgb(var(--v-theme-primary), 0.8) 100%) !important;
-}
 </style>

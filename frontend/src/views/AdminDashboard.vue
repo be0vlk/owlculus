@@ -1,39 +1,10 @@
 <template>
-  <div>
-    <Sidebar />
-
-    <v-main>
-      <v-container fluid class="pa-6">
-        <!-- Page Header Card -->
-        <v-card class="mb-6 header-gradient">
-          <v-card-title class="d-flex align-center pa-6 text-white">
-            <div class="text-h4 font-weight-bold">Admin</div>
-          </v-card-title>
-        </v-card>
-
-        <!-- Loading state -->
-        <v-card v-if="loading">
-          <v-card-title class="d-flex align-center justify-end pa-6">
-            <v-skeleton-loader type="text" width="300" />
-          </v-card-title>
-          <v-skeleton-loader
-            type="table"
-            class="ma-4"
-          />
-        </v-card>
-
-        <!-- Error state -->
-        <v-alert
-          v-else-if="error"
-          type="error"
-          class="ma-4"
-          :text="error"
-          prominent
-          border="start"
-        />
-
-        <!-- Main Content -->
-        <div v-else>
+  <BaseDashboard 
+    title="Admin" 
+    :loading="loading" 
+    :error="error"
+  >
+    <!-- Main Content -->
           <!-- User and Invite Management -->
           <v-card class="mb-6" variant="outlined">
             <!-- Header -->
@@ -86,11 +57,9 @@
 
           <!-- Evidence Template Management -->
           <EvidenceTemplateManagementCard @notification="handleNotification" />
-        </div>
-      </v-container>
-    </v-main>
+  </BaseDashboard>
 
-    <!-- Confirmation Dialog -->
+  <!-- Confirmation Dialog -->
     <ConfirmationDialog ref="confirmDialog" />
 
     <!-- Snackbar for notifications -->
@@ -110,7 +79,6 @@
         </v-btn>
       </template>
     </v-snackbar>
-  </div>
 </template>
 
 <script setup>
@@ -118,7 +86,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useNotifications } from '@/composables/useNotifications'
-import Sidebar from '@/components/Sidebar.vue'
+import BaseDashboard from '@/components/BaseDashboard.vue'
 import SystemConfigurationCard from '@/components/SystemConfigurationCard.vue'
 import ApiKeyManagementCard from '@/components/ApiKeyManagementCard.vue'
 import EvidenceTemplateManagementCard from '@/components/EvidenceTemplateManagementCard.vue'
@@ -176,9 +144,6 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.header-gradient {
-  background: linear-gradient(135deg, rgb(var(--v-theme-primary)) 0%, rgb(var(--v-theme-primary), 0.8) 100%) !important;
-}
 
 .admin-dashboard-table :deep(.v-data-table__tr:hover) {
   background-color: rgb(var(--v-theme-primary), 0.04) !important;

@@ -1,49 +1,29 @@
 <template>
-  <div>
-    <Sidebar />
+  <BaseDashboard 
+    title="Cases" 
+    :loading="loading" 
+    :error="error"
+  >
+    <template #loading>
+      <v-card variant="outlined">
+        <v-card-title class="d-flex align-center pa-4 bg-surface">
+          <v-skeleton-loader type="text" width="200" />
+          <v-spacer />
+          <div class="d-flex ga-2">
+            <v-skeleton-loader type="button" width="80" />
+            <v-skeleton-loader type="button" width="90" />
+            <v-skeleton-loader type="button" width="100" />
+          </div>
+          <v-skeleton-loader type="button" width="120" class="ml-4" />
+          <v-skeleton-loader type="text" width="200" class="ml-2" />
+        </v-card-title>
+        <v-divider />
+        <v-skeleton-loader type="table" class="pa-4" />
+      </v-card>
+    </template>
 
-    <v-main>
-      <v-container fluid class="pa-6">
-        <!-- Page Header Card -->
-        <v-card class="mb-6 header-gradient">
-          <v-card-title class="d-flex align-center pa-6 text-white">
-            <div class="text-h4 font-weight-bold">Cases</div>
-          </v-card-title>
-        </v-card>
-
-        <!-- Loading state -->
-        <v-card v-if="loading" variant="outlined">
-          <v-card-title class="d-flex align-center pa-4 bg-surface">
-            <v-skeleton-loader type="text" width="200" />
-            <v-spacer />
-            <div class="d-flex ga-2">
-              <v-skeleton-loader type="button" width="80" />
-              <v-skeleton-loader type="button" width="90" />
-              <v-skeleton-loader type="button" width="100" />
-            </div>
-            <v-skeleton-loader type="button" width="120" class="ml-4" />
-            <v-skeleton-loader type="text" width="200" class="ml-2" />
-          </v-card-title>
-          <v-divider />
-          <v-skeleton-loader type="table" class="pa-4" />
-        </v-card>
-
-        <!-- Error state -->
-        <v-alert
-          v-else-if="error"
-          type="error"
-          variant="tonal"
-          border="start"
-          prominent
-          icon="mdi-alert-circle"
-          class="mb-6"
-        >
-          <v-alert-title>Error Loading Cases</v-alert-title>
-          {{ error }}
-        </v-alert>
-
-        <!-- Cases data table -->
-        <v-card v-else variant="outlined">
+    <!-- Cases data table -->
+    <v-card variant="outlined">
           <!-- Header -->
           <v-card-title class="d-flex align-center pa-4 bg-surface">
             <v-icon icon="mdi-briefcase" color="primary" size="large" class="me-3" />
@@ -204,8 +184,7 @@
             </template>
           </v-data-table>
         </v-card>
-      </v-container>
-    </v-main>
+  </BaseDashboard>
 
     <NewCaseModal
       :is-open="isNewCaseModalOpen"
@@ -225,12 +204,11 @@
         <v-btn variant="text" @click="snackbar.show = false"> Close </v-btn>
       </template>
     </v-snackbar>
-  </div>
 </template>
 
 <script setup>
 import { onMounted, ref, computed } from 'vue'
-import Sidebar from '../components/Sidebar.vue'
+import BaseDashboard from '../components/BaseDashboard.vue'
 import NewCaseModal from '../components/NewCaseModal.vue'
 import { useDashboard } from '../composables/useDashboard'
 import { useRouter } from 'vue-router'
@@ -350,13 +328,6 @@ onMounted(loadData)
 </script>
 
 <style scoped>
-.header-gradient {
-  background: linear-gradient(
-    135deg,
-    rgb(var(--v-theme-primary)) 0%,
-    rgb(var(--v-theme-primary), 0.8) 100%
-  ) !important;
-}
 
 .case-dashboard-table :deep(.v-data-table__tr:hover) {
   background-color: rgb(var(--v-theme-primary), 0.04) !important;

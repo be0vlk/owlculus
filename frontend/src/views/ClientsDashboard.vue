@@ -1,47 +1,11 @@
 <template>
-  <div>
-    <Sidebar />
-
-    <v-main>
-      <v-container fluid class="pa-6">
-        <!-- Page Header Card -->
-        <v-card class="mb-6 header-gradient">
-          <v-card-title class="d-flex align-center pa-6 text-white">
-            <div class="text-h4 font-weight-bold">Clients</div>
-          </v-card-title>
-        </v-card>
-
-        <!-- Loading state -->
-        <v-card v-if="loading" variant="outlined">
-          <v-card-title class="d-flex align-center pa-4 bg-surface">
-            <v-skeleton-loader type="text" width="200" />
-            <v-spacer />
-            <v-skeleton-loader type="button" width="120" />
-            <v-skeleton-loader type="text" width="200" class="ml-2" />
-          </v-card-title>
-          <v-divider />
-          <v-skeleton-loader
-            type="table"
-            class="pa-4"
-          />
-        </v-card>
-
-        <!-- Error state -->
-        <v-alert
-          v-else-if="error"
-          type="error"
-          variant="tonal"
-          border="start"
-          prominent
-          icon="mdi-alert-circle"
-          class="mb-6"
-        >
-          <v-alert-title>Error Loading Clients</v-alert-title>
-          {{ error }}
-        </v-alert>
-
-        <!-- Clients Data Table -->
-        <v-card v-else variant="outlined">
+  <BaseDashboard 
+    title="Clients" 
+    :loading="loading" 
+    :error="error"
+  >
+    <!-- Clients Data Table -->
+    <v-card variant="outlined">
           <!-- Header -->
           <v-card-title class="d-flex align-center pa-4 bg-surface">
             <v-icon icon="mdi-account-group" color="primary" size="large" class="me-3" />
@@ -175,10 +139,9 @@
             </template>
           </v-data-table>
         </v-card>
-      </v-container>
-    </v-main>
+  </BaseDashboard>
 
-    <!-- New Client Modal -->
+  <!-- New Client Modal -->
     <NewClientModal
       :is-open="isNewClientModalOpen"
       @close="closeNewClientModal"
@@ -210,12 +173,11 @@
         </v-btn>
       </template>
     </v-snackbar>
-  </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import Sidebar from '../components/Sidebar.vue'
+import BaseDashboard from '../components/BaseDashboard.vue'
 import NewClientModal from '../components/NewClientModal.vue'
 import EditClientModal from '../components/EditClientModal.vue'
 import { useClients } from '../composables/useClients'
@@ -339,9 +301,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.header-gradient {
-  background: linear-gradient(135deg, rgb(var(--v-theme-primary)) 0%, rgb(var(--v-theme-primary), 0.8) 100%) !important;
-}
 
 .clients-dashboard-table :deep(.v-data-table__tr:hover) {
   background-color: rgb(var(--v-theme-primary), 0.04) !important;

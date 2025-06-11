@@ -1,63 +1,111 @@
 <template>
   <v-dialog v-model="dialogOpen" max-width="600px" persistent>
     <v-card>
-      <v-card-title class="d-flex align-center justify-space-between">
-        <span>Select Evidence Folder Template</span>
+      <v-card-title class="d-flex align-center pa-4 bg-surface">
+        <v-icon icon="mdi-folder-multiple" color="primary" size="large" class="me-3" />
+        <div class="flex-grow-1">
+          <div class="text-h6 font-weight-bold">Select Evidence Folder Template</div>
+          <div class="text-body-2 text-medium-emphasis">
+            Choose a predefined folder structure to organize your evidence
+          </div>
+        </div>
         <v-btn icon="mdi-close" variant="text" @click="closeDialog" />
       </v-card-title>
 
-      <v-card-text>
-        <div v-if="loading" class="text-center py-4">
-          <v-progress-circular indeterminate />
-          <p class="mt-2">Loading templates...</p>
+      <v-divider />
+
+      <v-card-text class="pa-6">
+        <div v-if="loading" class="text-center py-8">
+          <v-progress-circular 
+            size="64" 
+            width="4" 
+            color="primary" 
+            indeterminate 
+          />
+          <div class="text-h6 mt-4">Loading templates...</div>
         </div>
 
-        <div v-else-if="error" class="text-center py-4">
-          <v-alert type="error" class="mb-4">{{ error }}</v-alert>
-          <v-btn @click="loadTemplates" color="primary">Retry</v-btn>
+        <div v-else-if="error" class="text-center py-8">
+          <v-alert 
+            type="error" 
+            variant="tonal" 
+            prominent 
+            icon="mdi-alert-circle"
+            class="mb-6"
+          >
+            <v-alert-title>Error Loading Templates</v-alert-title>
+            {{ error }}
+          </v-alert>
+          <v-btn 
+            @click="loadTemplates" 
+            color="primary" 
+            prepend-icon="mdi-refresh"
+            variant="flat"
+          >
+            Retry
+          </v-btn>
         </div>
 
         <div v-else>
-          <p class="text-body-2 text-medium-emphasis mb-4">
-            Choose a predefined folder structure to organize your evidence.
-          </p>
 
           <v-select
             v-model="selectedTemplate"
             :items="templateOptions"
-            item-title="text"
+            item-title="name"
             item-value="value"
-            label="Template"
+            label="Select Template"
             variant="outlined"
+            density="comfortable"
+            prepend-inner-icon="mdi-folder-template"
             class="mb-4"
+            placeholder="Choose a folder template..."
           >
-            <template v-slot:selection="{ item }">
-              <span>{{ item.title }}</span>
-            </template>
             <template v-slot:item="{ props, item }">
-              <v-list-item v-bind="props">
-                <v-list-item-title>{{ item.title }}</v-list-item-title>
-                <v-list-item-subtitle>{{ item.raw.description }}</v-list-item-subtitle>
+              <v-list-item 
+                :key="item.value"
+                :value="item.value"
+                @click="props.onClick"
+              >
+                <template v-slot:prepend>
+                  <v-icon icon="mdi-folder-multiple" color="primary" class="me-3" />
+                </template>
+                <v-list-item-title>{{ item.raw.name }}</v-list-item-title>
+                <v-list-item-subtitle v-if="item.raw.description">
+                  {{ item.raw.description }}
+                </v-list-item-subtitle>
               </v-list-item>
             </template>
           </v-select>
 
           <div v-if="selectedTemplate && selectedTemplateData" class="mb-4">
             <v-card variant="outlined">
-              <v-card-title class="text-subtitle-1">Preview</v-card-title>
-              <v-card-text>
-                <div class="text-caption text-medium-emphasis mb-2">
+              <v-card-title class="d-flex align-center pa-4 bg-surface">
+                <v-icon icon="mdi-eye" color="primary" class="me-2" />
+                <span class="text-subtitle-1 font-weight-bold">Template Preview</span>
+              </v-card-title>
+              <v-divider />
+              <v-card-text class="pa-4">
+                <div v-if="selectedTemplateData.description" class="text-body-2 text-medium-emphasis mb-4">
                   {{ selectedTemplateData.description }}
                 </div>
                 <div v-if="selectedTemplateData.folders && selectedTemplateData.folders.length > 0">
-                  <div class="text-caption font-weight-medium mb-2">Folder Structure:</div>
+                  <div class="text-subtitle-2 font-weight-bold mb-3 d-flex align-center">
+                    <v-icon icon="mdi-folder-outline" size="small" class="me-2" />
+                    Folder Structure
+                  </div>
                   <div class="template-preview">
                     <template-folder-tree :folders="selectedTemplateData.folders" />
                   </div>
                 </div>
-                <div v-else class="text-caption text-medium-emphasis">
-                  <v-icon icon="mdi-information" size="small" class="mr-1" />
-                  This template is empty. You can configure it in Admin settings.
+                <div v-else>
+                  <v-alert 
+                    type="info" 
+                    variant="tonal" 
+                    density="compact"
+                    icon="mdi-information"
+                  >
+                    This template is empty. You can configure it in Admin settings.
+                  </v-alert>
                 </div>
               </v-card-text>
             </v-card>
@@ -65,12 +113,22 @@
         </div>
       </v-card-text>
 
-      <v-card-actions class="px-6 pb-4">
+      <v-divider />
+      
+      <v-card-actions class="pa-4">
         <v-spacer />
-        <v-btn @click="closeDialog" variant="text">Cancel</v-btn>
+        <v-btn 
+          @click="closeDialog" 
+          variant="text"
+          prepend-icon="mdi-close"
+        >
+          Cancel
+        </v-btn>
         <v-btn
           @click="applyTemplate"
           color="primary"
+          variant="flat"
+          prepend-icon="mdi-check"
           :disabled="!selectedTemplate || applying"
           :loading="applying"
         >
@@ -114,8 +172,7 @@ const dialogOpen = computed({
 const templateOptions = computed(() => {
   return Object.keys(templates.value).map(key => ({
     value: key,
-    text: templates.value[key].name,
-    title: templates.value[key].name,
+    name: templates.value[key].name,
     description: templates.value[key].description
   }))
 })
@@ -172,10 +229,12 @@ watch(dialogOpen, (newValue) => {
 
 <style scoped>
 .template-preview {
-  background-color: rgb(var(--v-theme-surface));
-  padding: 12px;
-  border-radius: 4px;
-  font-family: monospace;
+  background-color: rgb(var(--v-theme-surface-variant), 0.3);
+  border: 1px solid rgb(var(--v-theme-outline), 0.2);
+  padding: 16px;
+  border-radius: 8px;
+  font-family: 'Roboto Mono', monospace;
   font-size: 0.875rem;
+  line-height: 1.5;
 }
 </style>
