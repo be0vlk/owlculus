@@ -13,8 +13,8 @@ export function useEntityDetails(entity, caseId) {
     data: {
       address: {},
       social_media: {},
-      aliases: []
-    }
+      aliases: [],
+    },
   })
 
   const entitySchema = computed(() => {
@@ -23,10 +23,10 @@ export function useEntityDetails(entity, caseId) {
 
   const flattenNestedFields = (data, schema) => {
     const result = { ...data }
-    
+
     Object.entries(schema).forEach(([, section]) => {
       if (section.parentField && data[section.parentField]) {
-        section.fields.forEach(field => {
+        section.fields.forEach((field) => {
           const value = data[section.parentField][field.id]
           if (value !== undefined) {
             result[`${section.parentField}.${field.id}`] = value
@@ -34,18 +34,18 @@ export function useEntityDetails(entity, caseId) {
         })
       }
     })
-    
+
     return result
   }
 
   const restructureNestedFields = (data, schema) => {
     const result = { ...data }
-    
+
     Object.entries(schema).forEach(([, section]) => {
       if (section.parentField) {
         result[section.parentField] = result[section.parentField] || {}
-        
-        section.fields.forEach(field => {
+
+        section.fields.forEach((field) => {
           const dotKey = `${section.parentField}.${field.id}`
           if (dotKey in result) {
             result[section.parentField][field.id] = result[dotKey]
@@ -54,7 +54,7 @@ export function useEntityDetails(entity, caseId) {
         })
       }
     })
-    
+
     return result
   }
 
@@ -67,13 +67,13 @@ export function useEntityDetails(entity, caseId) {
       associates: entity.value.data.associates || {},
       executives: entity.value.data.executives || {},
       affiliates: entity.value.data.affiliates || {},
-      notes: entity.value.data.notes || ''
+      notes: entity.value.data.notes || '',
     }
 
     const flattenedData = flattenNestedFields(initialData, entitySchema.value)
 
     formData.value = {
-      data: flattenedData
+      data: flattenedData,
     }
     isEditing.value = true
   }
@@ -90,7 +90,7 @@ export function useEntityDetails(entity, caseId) {
 
       const cleanedData = cleanFormData({ ...formData.value.data })
       const restructuredData = restructureNestedFields(cleanedData, entitySchema.value)
-      
+
       const submitData = {
         data: {
           ...restructuredData,
@@ -100,13 +100,13 @@ export function useEntityDetails(entity, caseId) {
           executives: restructuredData.executives || {},
           affiliates: restructuredData.affiliates || {},
           address: restructuredData.address || {},
-          notes: restructuredData.notes || ''
-        }
+          notes: restructuredData.notes || '',
+        },
       }
 
       const updatedEntity = await entityService.updateEntity(caseId.value, entity.value.id, {
         entity_type: entity.value.entity_type,
-        data: submitData.data
+        data: submitData.data,
       })
 
       let createdAssociates = []
@@ -124,16 +124,19 @@ export function useEntityDetails(entity, caseId) {
     }
   }
 
-  watch(() => entity.value, (newEntity, oldEntity) => {
-    if (newEntity) {
-      formData.value.data.social_media = newEntity.data.social_media
-      formData.value.data.aliases = newEntity.data.aliases
-      // Only reset tab if this is a completely different entity (different ID)
-      if (!oldEntity || oldEntity.id !== newEntity.id) {
-        activeTab.value = Object.keys(entitySchema.value)[0]
+  watch(
+    () => entity.value,
+    (newEntity, oldEntity) => {
+      if (newEntity) {
+        formData.value.data.social_media = newEntity.data.social_media
+        formData.value.data.aliases = newEntity.data.aliases
+        // Only reset tab if this is a completely different entity (different ID)
+        if (!oldEntity || oldEntity.id !== newEntity.id) {
+          activeTab.value = Object.keys(entitySchema.value)[0]
+        }
       }
-    }
-  })
+    },
+  )
 
   return {
     error,
@@ -144,6 +147,6 @@ export function useEntityDetails(entity, caseId) {
     entitySchema,
     startEditing,
     cancelEdit,
-    updateEntity
+    updateEntity,
   }
 }

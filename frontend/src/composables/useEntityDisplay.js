@@ -10,7 +10,7 @@ export function useEntityDisplay(entity) {
 
   const getEntityTitle = computed(() => {
     if (!entity.value) return 'Entity Details'
-    
+
     if (entity.value.entity_type === 'person') {
       return `${entity.value.data.first_name} ${entity.value.data.last_name}`
     }
@@ -27,6 +27,6 @@ export function useEntityDisplay(entity) {
   return {
     getEntityDisplayName,
     getEntityTitle,
-    getFieldValue
+    getFieldValue,
   }
 }

@@ -47,12 +47,14 @@ class DomainData(EntityData):
     domain: str
     description: Optional[str] = None
     notes: Optional[str] = None
+    sources: Optional[Dict[str, str]] = None
 
 
 class IpAddressData(EntityData):
     ip_address: str
     description: Optional[str] = None
     notes: Optional[str] = None
+    sources: Optional[Dict[str, str]] = None
 
 
 class Associates(BaseModel):
@@ -80,6 +82,7 @@ class PersonData(EntityData):
     associates: Optional[Associates] = None
     other: Optional[str] = None
     notes: Optional[str] = None
+    sources: Optional[Dict[str, str]] = None
 
 
 class Executives(BaseModel):
@@ -108,6 +111,7 @@ class CompanyData(EntityData):
     ip_addresses: Optional[List[str]] = None
     other: Optional[str] = None
     notes: Optional[str] = None
+    sources: Optional[Dict[str, str]] = None
 
     @model_validator(mode="before")
     def validate_urls(cls, values):

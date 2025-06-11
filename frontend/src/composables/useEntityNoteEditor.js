@@ -28,22 +28,18 @@ export function useEntityNoteEditor(entity, caseId, isEditing, formData, emit) {
 
     try {
       saving.value = true
-      
-      const updatedEntity = await entityService.updateEntity(
-        caseId.value, 
-        entity.value.id, 
-        {
-          entity_type: entity.value.entity_type,
-          data: {
-            ...entity.value.data,
-            notes: content
-          }
-        }
-      )
-      
+
+      const updatedEntity = await entityService.updateEntity(caseId.value, entity.value.id, {
+        entity_type: entity.value.entity_type,
+        data: {
+          ...entity.value.data,
+          notes: content,
+        },
+      })
+
       lastSaved.value = content
       lastSavedTime.value = new Date()
-      
+
       if (emit) {
         emit('edit', updatedEntity)
       }
@@ -88,7 +84,9 @@ export function useEntityNoteEditor(entity, caseId, isEditing, formData, emit) {
           if (node.type.name === 'heading') {
             return "What's the title?"
           }
-          return isEditing.value ? 'Write your entity notes here... Use / for commands.' : 'Notes (read-only)'
+          return isEditing.value
+            ? 'Write your entity notes here... Use / for commands.'
+            : 'Notes (read-only)'
         },
       }),
     ],
@@ -177,25 +175,32 @@ export function useEntityNoteEditor(entity, caseId, isEditing, formData, emit) {
   }
 
   // Watch for entity changes and update editor content
-  watch(() => entity.value?.data?.notes, (newNotes) => {
-    if (newNotes !== undefined && editor.value) {
-      updateContent(newNotes)
-    }
-  }, { immediate: true })
+  watch(
+    () => entity.value?.data?.notes,
+    (newNotes) => {
+      if (newNotes !== undefined && editor.value) {
+        updateContent(newNotes)
+      }
+    },
+    { immediate: true },
+  )
 
   // Watch for editing state changes and update editor editability
-  watch(() => isEditing.value, (newEditingState, oldEditingState) => {
-    if (editor.value) {
-      // If exiting edit mode, save any pending changes first
-      if (oldEditingState && !newEditingState) {
-        const content = editor.value.getHTML()
-        if (content !== lastSaved.value) {
-          saveNotes()
+  watch(
+    () => isEditing.value,
+    (newEditingState, oldEditingState) => {
+      if (editor.value) {
+        // If exiting edit mode, save any pending changes first
+        if (oldEditingState && !newEditingState) {
+          const content = editor.value.getHTML()
+          if (content !== lastSaved.value) {
+            saveNotes()
+          }
         }
+        editor.value.setEditable(newEditingState)
       }
-      editor.value.setEditable(newEditingState)
-    }
-  })
+    },
+  )
 
   const cleanup = () => {
     clearTimeout(saveTimeout)

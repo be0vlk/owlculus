@@ -448,7 +448,8 @@ class EvidenceService:
                     evidence_type=evidence.evidence_type,
                 ).warning("Evidence content view failed: evidence is not a file")
                 raise HTTPException(
-                    status_code=400, detail="Evidence type does not support content viewing"
+                    status_code=400,
+                    detail="Evidence type does not support content viewing",
                 )
 
             from pathlib import Path
@@ -476,13 +477,30 @@ class EvidenceService:
                 ).warning("Evidence content view failed: file too large")
                 raise HTTPException(
                     status_code=400,
-                    detail=f"File too large for viewing. Maximum size: {max_size // 1024}KB"
+                    detail=f"File too large for viewing. Maximum size: {max_size // 1024}KB",
                 )
 
             # Check if file type is viewable as text
-            viewable_extensions = {'.txt', '.log', '.csv', '.json', '.md', '.yaml', '.yml', '.xml', '.html', '.css', '.js', '.py', '.sql', '.conf', '.ini', '.cfg'}
+            viewable_extensions = {
+                ".txt",
+                ".log",
+                ".csv",
+                ".json",
+                ".md",
+                ".yaml",
+                ".yml",
+                ".xml",
+                ".html",
+                ".css",
+                ".js",
+                ".py",
+                ".sql",
+                ".conf",
+                ".ini",
+                ".cfg",
+            }
             file_extension = file_path.suffix.lower()
-            
+
             if file_extension not in viewable_extensions:
                 evidence_logger.bind(
                     event_type="evidence_content_view_failed",
@@ -491,25 +509,25 @@ class EvidenceService:
                 ).warning("Evidence content view failed: unsupported file type")
                 raise HTTPException(
                     status_code=400,
-                    detail=f"File type '{file_extension}' is not supported for text viewing"
+                    detail=f"File type '{file_extension}' is not supported for text viewing",
                 )
 
             # Read file content with encoding detection
             try:
                 # First, detect encoding
-                with open(file_path, 'rb') as f:
+                with open(file_path, "rb") as f:
                     raw_content = f.read()
-                
+
                 encoding_result = chardet.detect(raw_content)
-                encoding = encoding_result.get('encoding', 'utf-8')
-                confidence = encoding_result.get('confidence', 0)
+                encoding = encoding_result.get("encoding", "utf-8")
+                confidence = encoding_result.get("confidence", 0)
 
                 # Try to decode with detected encoding, fallback to utf-8
                 try:
                     content = raw_content.decode(encoding)
                 except UnicodeDecodeError:
-                    content = raw_content.decode('utf-8', errors='replace')
-                    encoding = 'utf-8 (with errors replaced)'
+                    content = raw_content.decode("utf-8", errors="replace")
+                    encoding = "utf-8 (with errors replaced)"
                     confidence = 0
 
                 evidence_logger.bind(
@@ -532,7 +550,7 @@ class EvidenceService:
                         "encoding_confidence": confidence,
                         "line_count": len(content.splitlines()),
                         "char_count": len(content),
-                    }
+                    },
                 }
 
             except Exception as e:

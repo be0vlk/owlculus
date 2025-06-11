@@ -72,26 +72,61 @@
                     <v-row>
                       <template v-for="field in section.fields" :key="field.id">
                         <v-col :cols="field.gridCols === 2 ? 12 : 6">
-                          <v-textarea
-                            v-if="field.type === 'textarea'"
-                            v-model="formData.data[section.parentField ? `${section.parentField}.${field.id}` : field.id]"
-                            :label="field.label"
-                            variant="outlined"
-                            density="comfortable"
-                            rows="3"
-                            auto-grow
-                            clearable
-                          />
-                          <v-text-field
-                            v-else
-                            v-model="formData.data[section.parentField ? `${section.parentField}.${field.id}` : field.id]"
-                            :label="field.label"
-                            :type="field.type"
-                            variant="outlined"
-                            density="comfortable"
-                            clearable
-                            :prepend-inner-icon="getFieldIcon(field.type)"
-                          />
+                          <div v-if="field.hasSource" class="d-flex flex-column gap-2">
+                            <v-textarea
+                              v-if="field.type === 'textarea'"
+                              v-model="formData.data[section.parentField ? `${section.parentField}.${field.id}` : field.id]"
+                              :label="field.label"
+                              variant="outlined"
+                              density="comfortable"
+                              rows="3"
+                              auto-grow
+                              clearable
+                            />
+                            <v-text-field
+                              v-else
+                              v-model="formData.data[section.parentField ? `${section.parentField}.${field.id}` : field.id]"
+                              :label="field.label"
+                              :type="field.type"
+                              variant="outlined"
+                              density="comfortable"
+                              clearable
+                              :prepend-inner-icon="getFieldIcon(field.type)"
+                            />
+                            <v-text-field
+                              :model-value="getSourceValue(section.parentField, field.id)"
+                              @update:model-value="updateSourceValue(section.parentField, field.id, $event)"
+                              :label="`Source for ${field.label}`"
+                              variant="outlined"
+                              density="comfortable"
+                              clearable
+                              prepend-inner-icon="mdi-source-branch"
+                              placeholder="URL, description, or reference where this was found"
+                              class="source-field"
+                            />
+                          </div>
+                          <div v-else>
+                            <v-textarea
+                              v-if="field.type === 'textarea'"
+                              v-model="formData.data[section.parentField ? `${section.parentField}.${field.id}` : field.id]"
+                              :label="field.label"
+                              variant="outlined"
+                              density="comfortable"
+                              rows="3"
+                              auto-grow
+                              clearable
+                            />
+                            <v-text-field
+                              v-else
+                              v-model="formData.data[section.parentField ? `${section.parentField}.${field.id}` : field.id]"
+                              :label="field.label"
+                              :type="field.type"
+                              variant="outlined"
+                              density="comfortable"
+                              clearable
+                              :prepend-inner-icon="getFieldIcon(field.type)"
+                            />
+                          </div>
                         </v-col>
                       </template>
                     </v-row>
@@ -147,6 +182,18 @@
                             <v-chip v-else variant="text" color="grey" size="small">
                               Not provided
                             </v-chip>
+                            
+                            <!-- Source for URL fields -->
+                            <div v-if="field.hasSource && getSourceValue(section.parentField, field.id)" class="mt-2">
+                              <v-chip
+                                color="blue-grey"
+                                variant="tonal"
+                                size="small"
+                                prepend-icon="mdi-source-branch"
+                              >
+                                Source: {{ getSourceValue(section.parentField, field.id) }}
+                              </v-chip>
+                            </div>
                           </div>
                           
                           <!-- Regular Fields -->
@@ -157,6 +204,18 @@
                             <v-chip v-else variant="text" color="grey" size="small">
                               Not provided
                             </v-chip>
+                            
+                            <!-- Source for regular fields -->
+                            <div v-if="field.hasSource && getSourceValue(section.parentField, field.id)" class="mt-2">
+                              <v-chip
+                                color="blue-grey"
+                                variant="tonal"
+                                size="small"
+                                prepend-icon="mdi-source-branch"
+                              >
+                                Source: {{ getSourceValue(section.parentField, field.id) }}
+                              </v-chip>
+                            </div>
                           </div>
                         </v-card>
                       </v-col>
@@ -332,6 +391,29 @@ const {
   formatLastSaved: noteFormatLastSaved
 } = useEntityNoteEditor(entity, caseId, isEditing, formData, emit)
 
+// Source handling functions
+function getSourceValue(parentField, fieldId) {
+  // In edit mode, use formData; in view mode, use entity.data
+  const sources = isEditing.value ? formData.value.data.sources : entity.value.data.sources
+  if (!sources) return ''
+  
+  const sourceKey = parentField ? `${parentField}.${fieldId}` : fieldId
+  return sources[sourceKey] || ''
+}
+
+function updateSourceValue(parentField, fieldId, value) {
+  if (!formData.value.data.sources) {
+    formData.value.data.sources = {}
+  }
+  
+  const sourceKey = parentField ? `${parentField}.${fieldId}` : fieldId
+  if (value) {
+    formData.value.data.sources[sourceKey] = value
+  } else {
+    delete formData.value.data.sources[sourceKey]
+  }
+}
+
 async function handleSubmit() {
   try {
     const { updatedEntity, createdAssociates } = await updateEntity(processAssociates)
@@ -349,6 +431,19 @@ async function handleSubmit() {
 </script>
 
 <style scoped>
+.source-field :deep(.v-field) {
+  background-color: rgba(var(--v-theme-surface-variant), 0.4) !important;
+}
+
+.source-field :deep(.v-label) {
+  font-size: 0.875rem !important;
+  color: rgba(var(--v-theme-on-surface), 0.7) !important;
+}
+
+.gap-2 {
+  gap: 8px;
+}
+
 .note-editor-container .tiptap-content .ProseMirror {
   outline: none;
   min-height: 200px;

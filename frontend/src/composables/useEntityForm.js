@@ -17,6 +17,7 @@ export function useEntityForm(caseId) {
       },
       ip_addresses: [],
       subdomains: [],
+      sources: {},
     },
     loading: false,
     error: null,
@@ -28,6 +29,7 @@ export function useEntityForm(caseId) {
       social_media: baseSocialMedia,
       ip_addresses: [],
       subdomains: [],
+      sources: {},
     }
 
     switch (entityType) {
