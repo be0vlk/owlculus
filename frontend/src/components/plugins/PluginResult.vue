@@ -52,6 +52,9 @@ const props = defineProps({
 // Use shallowRef for better performance with async components
 const pluginComponent = shallowRef(null);
 
+// Use Vite's glob import for dynamic component loading
+const pluginModules = import.meta.glob('./*PluginResult.vue');
+
 const loadPluginComponent = async () => {
   // Get plugin name and ensure proper casing
   const name = props.pluginName
@@ -59,12 +62,19 @@ const loadPluginComponent = async () => {
     .replace(/^[a-z]/, c => c.toUpperCase()); // Ensure first letter is uppercase
   
   const componentName = `${name}PluginResult`;
+  const componentPath = `./${componentName}.vue`;
   
   try {
-    // Use relative path for dynamic imports
-    const module = await import(`./${componentName}.vue`);
-    pluginComponent.value = markRaw(module.default);
-  } catch {
+    // Use glob imports which work in both dev and production
+    const loader = pluginModules[componentPath];
+    if (loader) {
+      const module = await loader();
+      pluginComponent.value = markRaw(module.default);
+    } else {
+      pluginComponent.value = null;
+    }
+  } catch (error) {
+    console.warn(`Failed to load plugin component: ${componentName}`, error);
     pluginComponent.value = null;
   }
 };

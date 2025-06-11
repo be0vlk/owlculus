@@ -19,6 +19,9 @@ from fastapi import UploadFile
 from app.services.evidence_service import EvidenceService
 from sqlalchemy.orm import Session
 from app.services.system_config_service import SystemConfigService
+from app.services.entity_service import EntityService
+from app.schemas.entity_schema import EntityCreate, IpAddressData
+import ipaddress
 
 
 class BasePlugin(ABC):
@@ -246,6 +249,9 @@ class BasePlugin(ABC):
                     filename=f"{self.name}_results_{timestamp}.txt",
                     save_to_case=True,
                 )
+
+            # Auto-create IP entities if plugin supports it
+            await self._create_ip_entities_from_results()
         finally:
             # Only close if we created the session
             if close_session:
@@ -334,6 +340,101 @@ class BasePlugin(ABC):
             for provider, is_configured in api_key_status.items()
             if not is_configured
         ]
+
+    def _is_ip_address(self, value: str) -> bool:
+        """Check if the given value is a valid IP address"""
+        try:
+            ipaddress.ip_address(value)
+            return True
+        except ValueError:
+            return False
+
+    async def _create_ip_entities_from_results(self) -> None:
+        """Extract IP addresses from results and create or enrich entities (to be overridden by plugins)"""
+        case_id = self._current_params.get("case_id")
+        if not case_id:
+            return
+
+        # Extract unique IP addresses from results
+        discovered_ips = self._extract_unique_ips_from_results()
+
+        if not discovered_ips:
+            return
+
+        # Use injected session if available, otherwise get a new one
+        if self._db_session:
+            db = self._db_session
+            close_session = False
+        else:
+            db = next(get_db())
+            close_session = True
+
+        try:
+            entity_service = EntityService(db)
+            created_count = 0
+            enriched_count = 0
+            failed_count = 0
+
+            for ip_data in discovered_ips:
+                try:
+                    ip_address = ip_data["ip"]
+                    description = ip_data["description"]
+
+                    # Check if IP entity already exists
+                    existing_entity = await entity_service.find_entity_by_ip_address(
+                        case_id, ip_address, current_user=self._current_user
+                    )
+
+                    if existing_entity:
+                        # Enrich existing entity with new data
+                        await entity_service.enrich_entity_description(
+                            existing_entity.id,
+                            description,
+                            current_user=self._current_user,
+                        )
+                        enriched_count += 1
+                    else:
+                        # Create new IP address entity
+                        entity_create = EntityCreate(
+                            entity_type="ip_address",
+                            data=IpAddressData(
+                                ip_address=ip_address, description=description
+                            ).model_dump(),
+                        )
+
+                        await entity_service.create_entity(
+                            case_id=case_id,
+                            entity=entity_create,
+                            current_user=self._current_user,
+                        )
+                        created_count += 1
+
+                except Exception as e:
+                    # Log error but continue with other IPs
+                    failed_count += 1
+                    continue
+
+            # Entity operations completed silently
+
+        except Exception as e:
+            # Don't break evidence saving if entity creation fails completely
+            pass
+        finally:
+            # Only close if we created the session
+            if close_session:
+                db.close()
+
+    def _extract_unique_ips_from_results(self) -> list[dict]:
+        """Extract unique IP addresses with metadata from collected results (to be overridden by plugins)"""
+        # Default implementation - plugins should override this method
+        # to extract IPs specific to their result format
+        return []
+
+    def _generate_ip_description(self, ip_address: str, context: str = "") -> str:
+        """Generate a descriptive string for the IP address entity (can be overridden by plugins)"""
+        plugin_name = self.display_name
+        context_part = f" for '{context}'" if context else ""
+        return f"Discovered via {plugin_name} lookup{context_part}"
 
     def get_metadata(self) -> Dict[str, Any]:
         """Return plugin metadata with enhanced parameters"""

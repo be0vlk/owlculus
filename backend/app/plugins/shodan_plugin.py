@@ -9,8 +9,6 @@ from typing import AsyncGenerator, Dict, Any, Optional, Set
 
 from .base_plugin import BasePlugin
 from app.services.system_config_service import SystemConfigService
-from app.services.entity_service import EntityService
-from app.schemas.entity_schema import EntityCreate, IpAddressData
 from app.core.dependencies import get_db
 from sqlmodel import Session
 
@@ -50,14 +48,6 @@ class ShodanPlugin(BasePlugin):
     def parse_output(self, line: str) -> Optional[Dict[str, Any]]:
         """Not used as Shodan queries are handled directly via API"""
         return None
-
-    def _is_ip_address(self, value: str) -> bool:
-        """Check if the given value is a valid IP address"""
-        try:
-            ipaddress.ip_address(value)
-            return True
-        except ValueError:
-            return False
 
     def _is_hostname(self, value: str) -> bool:
         """Check if the given value appears to be a hostname"""
@@ -363,96 +353,6 @@ class ShodanPlugin(BasePlugin):
             if close_session:
                 db.close()
 
-    async def save_collected_evidence(self) -> None:
-        """Enhanced evidence saving with automatic IP entity creation"""
-        # Step 1: Call parent method to save raw evidence
-        await super().save_collected_evidence()
-
-        # Step 2: Extract and create IP entities if save_to_case is enabled
-        if (
-            self._current_params
-            and self._current_params.get("save_to_case", False)
-            and self._current_params.get("case_id")
-            and self._evidence_results
-        ):
-
-            await self._create_ip_entities_from_results()
-
-    async def _create_ip_entities_from_results(self) -> None:
-        """Extract IP addresses from results and create or enrich entities"""
-        case_id = self._current_params.get("case_id")
-        if not case_id:
-            return
-
-        # Extract unique IP addresses from results
-        discovered_ips = self._extract_unique_ips_from_results()
-
-        if not discovered_ips:
-            return
-
-        # Use injected session if available, otherwise get a new one
-        if self._db_session:
-            db = self._db_session
-            close_session = False
-        else:
-            db = next(get_db())
-            close_session = True
-
-        try:
-            entity_service = EntityService(db)
-            created_count = 0
-            enriched_count = 0
-            failed_count = 0
-
-            for ip_data in discovered_ips:
-                try:
-                    ip_address = ip_data["ip"]
-                    description = ip_data["description"]
-
-                    # Check if IP entity already exists
-                    existing_entity = await entity_service.find_entity_by_ip_address(
-                        case_id, ip_address, current_user=self._current_user
-                    )
-
-                    if existing_entity:
-                        # Enrich existing entity with new Shodan data
-                        await entity_service.enrich_entity_description(
-                            existing_entity.id,
-                            description,
-                            current_user=self._current_user,
-                        )
-                        enriched_count += 1
-                    else:
-                        # Create new IP address entity
-                        entity_create = EntityCreate(
-                            entity_type="ip_address",
-                            data=IpAddressData(
-                                ip_address=ip_address, description=description
-                            ).model_dump(),
-                        )
-
-                        await entity_service.create_entity(
-                            case_id=case_id,
-                            entity=entity_create,
-                            current_user=self._current_user,
-                        )
-                        created_count += 1
-
-                except Exception as e:
-                    # Log error but continue with other IPs
-                    failed_count += 1
-                    continue
-
-            # Entity operations completed silently
-
-        except Exception as e:
-            # Don't break evidence saving if entity creation fails completely
-            pass
-        finally:
-            # Only close if we created the session
-            if close_session:
-                db.close()
-
     def _extract_unique_ips_from_results(self) -> list[dict]:
         """Extract unique IP addresses with metadata from collected results"""
         ip_data_map = {}  # Use dict to avoid duplicates while preserving rich data
@@ -472,22 +372,37 @@ class ShodanPlugin(BasePlugin):
                 continue
 
             # Generate description based on available Shodan data
-            description = self._generate_ip_description(result, original_query)
+            description = self._generate_ip_description_from_shodan_result(
+                result, original_query
+            )
 
             ip_data_map[ip_address] = {"ip": ip_address, "description": description}
 
         return list(ip_data_map.values())
 
-    def _generate_ip_description(self, result: dict, original_query: str = "") -> str:
-        """Generate a descriptive string for the IP address entity"""
+    def _generate_ip_description_from_shodan_result(
+        self, result: dict, original_query: str = ""
+    ) -> str:
+        """Generate a descriptive string for the IP address entity based on Shodan result"""
         search_type = result.get("search_type", "unknown")
-        query_part = f" for '{original_query}'" if original_query else ""
 
         if search_type == "host_lookup":
-            return f"Discovered via Shodan IP lookup{query_part}"
+            context = (
+                f"IP lookup for '{original_query}'" if original_query else "IP lookup"
+            )
         elif search_type == "hostname_search":
-            return f"Discovered via Shodan hostname lookup{query_part}"
+            context = (
+                f"hostname lookup for '{original_query}'"
+                if original_query
+                else "hostname lookup"
+            )
         elif search_type == "general_search":
-            return f"Discovered via Shodan general lookup{query_part}"
+            context = (
+                f"general lookup for '{original_query}'"
+                if original_query
+                else "general lookup"
+            )
         else:
-            return f"Discovered via Shodan lookup{query_part}"
+            context = f"lookup for '{original_query}'" if original_query else "lookup"
+
+        return self._generate_ip_description("", context)

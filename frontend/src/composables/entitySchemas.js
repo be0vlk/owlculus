@@ -1,11 +1,24 @@
 // Common field templates to reduce duplication
 const commonFields = {
   address: [
-    { id: 'street', label: 'Street', type: 'text', parentField: 'address', gridCols: 2, hasSource: true },
+    {
+      id: 'street',
+      label: 'Street',
+      type: 'text',
+      parentField: 'address',
+      gridCols: 2,
+      hasSource: true,
+    },
     { id: 'city', label: 'City', type: 'text', parentField: 'address', hasSource: true },
     { id: 'state', label: 'State', type: 'text', parentField: 'address', hasSource: true },
     { id: 'country', label: 'Country', type: 'text', parentField: 'address', hasSource: true },
-    { id: 'postal_code', label: 'Postal Code', type: 'text', parentField: 'address', hasSource: true },
+    {
+      id: 'postal_code',
+      label: 'Postal Code',
+      type: 'text',
+      parentField: 'address',
+      hasSource: true,
+    },
   ],
   socialMedia: [
     { id: 'bluesky', label: 'Bluesky', type: 'url', hasSource: true },
@@ -94,7 +107,12 @@ export const entitySchemas = {
     affiliates: {
       title: 'Affiliates',
       fields: [
-        { id: 'affiliated_companies', label: 'Affiliated Companies', type: 'text', hasSource: true },
+        {
+          id: 'affiliated_companies',
+          label: 'Affiliated Companies',
+          type: 'text',
+          hasSource: true,
+        },
         { id: 'subsidiaries', label: 'Subsidiaries', type: 'text', hasSource: true },
         { id: 'parent_company', label: 'Parent Company', type: 'text', hasSource: true },
       ],

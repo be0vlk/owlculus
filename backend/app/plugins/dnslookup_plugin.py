@@ -274,3 +274,43 @@ class DnsLookup(BasePlugin):
                         "timestamp": time.time(),
                     },
                 }
+
+    def _extract_unique_ips_from_results(self) -> list[dict]:
+        """Extract unique IP addresses with metadata from collected DNS results"""
+        ip_data_map = {}  # Use dict to avoid duplicates while preserving rich data
+
+        # Get the original query from current params
+        original_query = (
+            self._current_params.get("domain", "") if self._current_params else ""
+        )
+
+        for result in self._evidence_results:
+            # result is already the "data" part from the yield
+            results = result.get("results", [])
+            target = result.get("target", "")
+            target_type = result.get("target_type", "")
+
+            # Process each DNS result
+            for dns_result in results:
+                records = dns_result.get("records", [])
+                record_type = dns_result.get("type", "")
+
+                # Extract IP addresses from A and AAAA records
+                if record_type in ["A", "AAAA"]:
+                    for record in records:
+                        if self._is_ip_address(record):
+                            # Skip if we already have this IP with better data
+                            if record in ip_data_map:
+                                continue
+
+                            # Generate description based on DNS lookup context
+                            description = self._generate_ip_description(
+                                record, f"{target} ({record_type} record)"
+                            )
+
+                            ip_data_map[record] = {
+                                "ip": record,
+                                "description": description,
+                            }
+
+        return list(ip_data_map.values())
