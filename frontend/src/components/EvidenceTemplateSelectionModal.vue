@@ -67,7 +67,7 @@
                 @click="props.onClick"
               >
                 <template v-slot:prepend>
-                  <v-icon icon="mdi-folder-multiple" color="primary" class="me-3" />
+                  <v-icon icon="mdi-folder-multiple" :color="getFolderColor()" class="me-3" />
                 </template>
                 <v-list-item-title>{{ item.raw.name }}</v-list-item-title>
                 <v-list-item-subtitle v-if="item.raw.description">
@@ -144,6 +144,9 @@ import { ref, computed, watch } from 'vue'
 import { systemService } from '@/services/system'
 import { evidenceService } from '@/services/evidence'
 import TemplateFolderTree from './TemplateFolderTree.vue'
+import { useFolderIcons } from '../composables/useFolderIcons'
+
+const { getFolderColor } = useFolderIcons()
 
 const props = defineProps({
   modelValue: {

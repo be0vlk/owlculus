@@ -29,7 +29,7 @@
           <v-card variant="outlined">
             <!-- Header -->
             <v-card-title class="d-flex align-center pa-4 bg-surface">
-              <v-icon icon="mdi-puzzle" color="primary" size="large" class="me-3" />
+              <v-icon icon="mdi-tools" color="primary" size="large" class="me-3" />
               <div class="flex-grow-1">
                 <div class="text-h6 font-weight-bold">Plugin Management</div>
                 <div class="text-body-2 text-medium-emphasis">Execute OSINT plugins and analyze results</div>

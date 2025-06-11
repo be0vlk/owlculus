@@ -365,6 +365,7 @@
                     @refresh="loadEvidence"
                     @upload-to-folder="handleUploadToFolder"
                     @extract-metadata="handleExtractMetadata"
+                    @view-text-content="handleViewTextContent"
                   />
                 </div>
 
@@ -443,6 +444,15 @@
       :error="metadataError"
     />
 
+    <TextContentModal
+      v-model="showTextContentModal"
+      :evidence-item="selectedEvidenceForTextContent"
+      :content="textContent"
+      :file-info="textFileInfo"
+      :loading="loadingTextContent"
+      :error="textContentError"
+    />
+
     <!-- Entity Creation Success Dialog -->
     <v-dialog 
       v-model="showEntityCreationSuccess" 
@@ -502,6 +512,7 @@ import NoteEditor from '../components/NoteEditor.vue';
 import EvidenceList from '../components/EvidenceList.vue';
 import UploadEvidenceModal from '../components/UploadEvidenceModal.vue';
 import MetadataModal from '../components/MetadataModal.vue';
+import TextContentModal from '../components/TextContentModal.vue';
 import { caseService } from '../services/case';
 import { clientService } from '../services/client';
 import { entityService } from '../services/entity';
@@ -534,6 +545,14 @@ const selectedEvidenceForMetadata = ref(null);
 const extractedMetadata = ref(null);
 const loadingMetadata = ref(false);
 const metadataError = ref('');
+
+// Text content viewing
+const showTextContentModal = ref(false);
+const selectedEvidenceForTextContent = ref(null);
+const textContent = ref('');
+const textFileInfo = ref(null);
+const loadingTextContent = ref(false);
+const textContentError = ref('');
 
 // Computed properties
 const userRole = computed(() => authStore.user?.role || 'Analyst');
@@ -725,6 +744,29 @@ const handleExtractMetadata = async (evidenceItem) => {
     metadataError.value = error.response?.data?.detail || error.message || 'Failed to extract metadata';
   } finally {
     loadingMetadata.value = false;
+  }
+};
+
+const handleViewTextContent = async (evidenceItem) => {
+  selectedEvidenceForTextContent.value = evidenceItem;
+  textContent.value = '';
+  textFileInfo.value = null;
+  textContentError.value = '';
+  loadingTextContent.value = true;
+  showTextContentModal.value = true;
+  
+  try {
+    const response = await evidenceService.getEvidenceContent(evidenceItem.id);
+    if (response.success) {
+      textContent.value = response.content;
+      textFileInfo.value = response.file_info;
+    } else {
+      textContentError.value = response.error || 'Failed to load file content';
+    }
+  } catch (error) {
+    textContentError.value = error.response?.data?.detail || error.message || 'Failed to load file content';
+  } finally {
+    loadingTextContent.value = false;
   }
 };
 

@@ -415,6 +415,143 @@ class EvidenceService:
             ).error(f"Evidence download error: {str(e)}")
             raise HTTPException(status_code=500, detail="Internal server error")
 
+    async def get_evidence_content(
+        self,
+        evidence_id: int,
+        current_user: models.User,
+    ) -> dict:
+        """Get text content of evidence file for viewing."""
+        evidence_logger = get_security_logger(
+            user_id=current_user.id,
+            evidence_id=evidence_id,
+            action="get_evidence_content",
+            event_type="evidence_content_view_attempt",
+        )
+
+        try:
+            # Get evidence
+            evidence = await self.get_evidence(evidence_id, current_user)
+
+            if evidence.is_folder:
+                evidence_logger.bind(
+                    event_type="evidence_content_view_failed",
+                    failure_reason="is_folder",
+                ).warning("Evidence content view failed: evidence is a folder")
+                raise HTTPException(
+                    status_code=400, detail="Cannot view content of folders"
+                )
+
+            if evidence.evidence_type != "file":
+                evidence_logger.bind(
+                    event_type="evidence_content_view_failed",
+                    failure_reason="not_file_type",
+                    evidence_type=evidence.evidence_type,
+                ).warning("Evidence content view failed: evidence is not a file")
+                raise HTTPException(
+                    status_code=400, detail="Evidence type does not support content viewing"
+                )
+
+            from pathlib import Path
+            from app.core.file_storage import UPLOAD_DIR
+            import chardet
+
+            file_path = UPLOAD_DIR / evidence.content
+            if not file_path.exists():
+                evidence_logger.bind(
+                    event_type="evidence_content_view_failed",
+                    failure_reason="file_not_found",
+                    file_path=str(file_path),
+                ).warning("Evidence content view failed: file not found on disk")
+                raise HTTPException(status_code=404, detail="File not found")
+
+            # Check file size (limit to 1MB for viewing)
+            file_size = file_path.stat().st_size
+            max_size = 1024 * 1024  # 1MB
+            if file_size > max_size:
+                evidence_logger.bind(
+                    event_type="evidence_content_view_failed",
+                    failure_reason="file_too_large",
+                    file_size=file_size,
+                    max_size=max_size,
+                ).warning("Evidence content view failed: file too large")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"File too large for viewing. Maximum size: {max_size // 1024}KB"
+                )
+
+            # Check if file type is viewable as text
+            viewable_extensions = {'.txt', '.log', '.csv', '.json', '.md', '.yaml', '.yml', '.xml', '.html', '.css', '.js', '.py', '.sql', '.conf', '.ini', '.cfg'}
+            file_extension = file_path.suffix.lower()
+            
+            if file_extension not in viewable_extensions:
+                evidence_logger.bind(
+                    event_type="evidence_content_view_failed",
+                    failure_reason="unsupported_file_type",
+                    file_extension=file_extension,
+                ).warning("Evidence content view failed: unsupported file type")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"File type '{file_extension}' is not supported for text viewing"
+                )
+
+            # Read file content with encoding detection
+            try:
+                # First, detect encoding
+                with open(file_path, 'rb') as f:
+                    raw_content = f.read()
+                
+                encoding_result = chardet.detect(raw_content)
+                encoding = encoding_result.get('encoding', 'utf-8')
+                confidence = encoding_result.get('confidence', 0)
+
+                # Try to decode with detected encoding, fallback to utf-8
+                try:
+                    content = raw_content.decode(encoding)
+                except UnicodeDecodeError:
+                    content = raw_content.decode('utf-8', errors='replace')
+                    encoding = 'utf-8 (with errors replaced)'
+                    confidence = 0
+
+                evidence_logger.bind(
+                    case_id=evidence.case_id,
+                    evidence_title=evidence.title,
+                    file_size=file_size,
+                    encoding_detected=encoding,
+                    encoding_confidence=confidence,
+                    event_type="evidence_content_view_success",
+                ).info("Evidence content viewed successfully")
+
+                return {
+                    "success": True,
+                    "content": content,
+                    "file_info": {
+                        "filename": evidence.title,
+                        "file_extension": file_extension,
+                        "file_size": file_size,
+                        "encoding": encoding,
+                        "encoding_confidence": confidence,
+                        "line_count": len(content.splitlines()),
+                        "char_count": len(content),
+                    }
+                }
+
+            except Exception as e:
+                evidence_logger.bind(
+                    event_type="evidence_content_view_failed",
+                    failure_reason="file_read_error",
+                ).warning(f"Evidence content view failed: error reading file: {str(e)}")
+                raise HTTPException(
+                    status_code=500, detail=f"Error reading file content: {str(e)}"
+                )
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            evidence_logger.bind(
+                event_type="evidence_content_view_error", error_type="system_error"
+            ).error(f"Evidence content view error: {str(e)}")
+            raise HTTPException(status_code=500, detail="Internal server error")
+
     @no_analyst()
     async def create_folder(
         self,

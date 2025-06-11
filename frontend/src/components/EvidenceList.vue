@@ -96,15 +96,17 @@
                 />
                 <v-icon 
                   v-if="item.is_folder"
-                  :icon="open ? 'mdi-folder-open' : 'mdi-folder'"
-                  color="blue-darken-1"
+                  :icon="getFolderIcon(open)"
+                  :color="getFolderColor()"
                   @contextmenu.prevent="showContextMenu($event, item)"
                 />
                 <v-icon 
                   v-else
                   :icon="getFileIcon(item)"
                   color="grey-darken-1"
+                  :class="{ 'cursor-pointer': isTextFile(item) }"
                   @contextmenu.prevent="showContextMenu($event, item)"
+                  @dblclick="handleFileDoubleClick(item)"
                 />
               </div>
             </template>
@@ -112,7 +114,9 @@
             <template v-slot:title="{ item }">
               <span 
                 class="tree-item-title"
+                :class="{ 'text-file-title': isTextFile(item) }"
                 @contextmenu.prevent="showContextMenu($event, item)"
+                @dblclick="handleFileDoubleClick(item)"
               >
                 {{ item.title }}
               </span>
@@ -268,6 +272,7 @@ import CreateFolderDialog from './CreateFolderDialog.vue'
 import FolderContextMenu from './FolderContextMenu.vue'
 import EvidenceTemplateSelectionModal from './EvidenceTemplateSelectionModal.vue'
 import RenameDialog from './RenameDialog.vue'
+import { useFolderIcons } from '../composables/useFolderIcons'
 
 const props = defineProps({
   evidenceList: {
@@ -292,7 +297,10 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['download', 'delete', 'refresh', 'upload-to-folder', 'extract-metadata'])
+const emit = defineEmits(['download', 'delete', 'refresh', 'upload-to-folder', 'extract-metadata', 'view-text-content'])
+
+// Composables
+const { getFolderColor, getFolderIcon } = useFolderIcons()
 
 // Reactive data
 const showCreateFolder = ref(false)
@@ -394,6 +402,21 @@ const getFileIcon = (item) => {
       return 'mdi-file-document-outline'
     default:
       return 'mdi-file-document'
+  }
+}
+
+const isTextFile = (item) => {
+  if (item.is_folder || item.evidence_type !== 'file') return false
+  
+  const fileExtension = item.title.split('.').pop()?.toLowerCase()
+  const textExtensions = ['txt', 'log', 'csv', 'json', 'md', 'yaml', 'yml', 'xml', 'html', 'css', 'js', 'py', 'sql', 'conf', 'ini', 'cfg']
+  
+  return textExtensions.includes(fileExtension)
+}
+
+const handleFileDoubleClick = (item) => {
+  if (isTextFile(item)) {
+    emit('view-text-content', item)
   }
 }
 
@@ -522,6 +545,20 @@ watch(() => props.evidenceList, () => {
 
 .tree-item-title:hover {
   text-decoration: underline;
+}
+
+.text-file-title {
+  color: rgb(var(--v-theme-primary));
+  font-weight: 500;
+}
+
+.text-file-title:hover {
+  color: rgb(var(--v-theme-primary-darken-1));
+  text-decoration: underline;
+}
+
+.cursor-pointer {
+  cursor: pointer;
 }
 
 .evidence-container {

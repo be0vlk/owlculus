@@ -104,6 +104,20 @@ async def download_evidence(
     )
 
 
+@router.get("/{evidence_id}/content")
+async def get_evidence_content(
+    evidence_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """Get text content of evidence file for viewing."""
+    evidence_service = EvidenceService(db)
+    return await evidence_service.get_evidence_content(
+        evidence_id=evidence_id,
+        current_user=current_user,
+    )
+
+
 @router.put("/{evidence_id}", response_model=schemas.Evidence)
 async def update_evidence(
     evidence_id: int,

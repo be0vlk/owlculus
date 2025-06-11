@@ -121,6 +121,9 @@
 import { ref, onMounted } from 'vue'
 import { systemService } from '@/services/system'
 import FolderEditor from './FolderEditor.vue'
+import { useFolderIcons } from '../composables/useFolderIcons'
+
+const { getFolderColor } = useFolderIcons()
 
 const loading = ref(false)
 const saving = ref(false)

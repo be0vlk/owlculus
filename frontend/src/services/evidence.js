@@ -90,6 +90,11 @@ export const evidenceService = {
     return response.data
   },
 
+  async getEvidenceContent(evidenceId) {
+    const response = await api.get(`/api/evidence/${evidenceId}/content`)
+    return response.data
+  },
+
   async applyFolderTemplate(caseId, templateName) {
     const response = await api.post(`/api/evidence/case/${caseId}/apply-template`, null, {
       params: { template_name: templateName },

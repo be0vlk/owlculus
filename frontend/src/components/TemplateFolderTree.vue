@@ -2,7 +2,7 @@
   <div class="folder-tree">
     <template v-for="(folder, index) in folders" :key="index">
       <div class="folder-item">
-        <v-icon icon="mdi-folder" size="small" class="mr-2" color="blue-darken-1" />
+        <v-icon :icon="getFolderIcon()" size="small" class="mr-2" :color="getFolderColor()" />
         <span>{{ folder.name }}</span>
         <span v-if="folder.description" class="text-caption text-medium-emphasis ml-2">
           ({{ folder.description }})
@@ -16,6 +16,10 @@
 </template>
 
 <script setup>
+import { useFolderIcons } from '../composables/useFolderIcons'
+
+const { getFolderColor, getFolderIcon } = useFolderIcons()
+
 defineProps({
   folders: {
     type: Array,

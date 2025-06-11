@@ -80,7 +80,7 @@
           </v-chip>
           <v-chip
             v-if="item.is_superadmin"
-            color="purple"
+            color="orange-darken-2"
             size="small"
             variant="flat"
           >
@@ -115,7 +115,7 @@
           </v-btn>
           <v-btn
             v-if="canResetPassword(item)"
-            color="warning"
+            color="amber-darken-1"
             size="small"
             variant="outlined"
             icon

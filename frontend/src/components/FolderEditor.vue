@@ -4,8 +4,8 @@
       <div class="folder-content">
         <div class="folder-icon">
           <v-icon 
-            :icon="expanded ? 'mdi-folder-open' : 'mdi-folder'" 
-            :color="level === 0 ? 'blue-darken-1' : 'blue-lighten-1'"
+            :icon="getFolderIcon(expanded)" 
+            :color="getFolderColor(level)"
             size="small"
           />
         </div>
@@ -82,6 +82,9 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { useFolderIcons } from '../composables/useFolderIcons'
+
+const { getFolderColor, getFolderIcon } = useFolderIcons()
 
 const props = defineProps({
   folder: {
