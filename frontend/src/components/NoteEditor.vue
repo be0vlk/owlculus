@@ -1,21 +1,67 @@
 <template>
-  <v-card variant="outlined" class="note-editor">
-    <EditorToolbar
-      :actions="editorActions"
-      :saving="saving"
-      :last-saved-time="lastSavedTime"
-      :format-last-saved="formatLastSaved"
-    />
+  <div>
+    <!-- Normal Card View -->
+    <v-card v-if="!expanded" variant="outlined" class="note-editor">
+      <EditorToolbar
+        :actions="editorActions"
+        :saving="saving"
+        :last-saved-time="lastSavedTime"
+        :format-last-saved="formatLastSaved"
+        :expanded="expanded"
+        @toggle-expand="expanded = !expanded"
+      />
 
-    <v-card-text class="pa-4" style="min-height: 200px;">
-      <editor-content :editor="editor" class="tiptap-content" />
-    </v-card-text>
-  </v-card>
+      <v-card-text class="pa-4" style="min-height: 200px;">
+        <editor-content :editor="editor" class="tiptap-content" />
+      </v-card-text>
+    </v-card>
+
+    <!-- Full Screen Dialog View -->
+    <v-dialog
+      v-model="expanded"
+      fullscreen
+      transition="dialog-bottom-transition"
+      :scrim="true"
+    >
+      <v-card class="d-flex flex-column" style="height: 100vh;">
+        <v-toolbar color="primary" dark>
+          <v-toolbar-title>
+            <v-icon start>mdi-note-text</v-icon>
+            Case Notes Editor
+          </v-toolbar-title>
+          <v-spacer />
+          <v-btn
+            icon="mdi-close"
+            @click="expanded = false"
+          />
+        </v-toolbar>
+
+        <div class="flex-grow-1 d-flex flex-column overflow-hidden">
+          <EditorToolbar
+            :actions="editorActions"
+            :saving="saving"
+            :last-saved-time="lastSavedTime"
+            :format-last-saved="formatLastSaved"
+            :expanded="expanded"
+            @toggle-expand="expanded = !expanded"
+          />
+
+          <v-container fluid class="flex-grow-1 overflow-auto pa-6">
+            <v-row justify="center">
+              <v-col cols="12" lg="10" xl="8">
+                <editor-content :editor="editor" class="tiptap-content fullscreen-editor" />
+              </v-col>
+            </v-row>
+          </v-container>
+        </div>
+      </v-card>
+    </v-dialog>
+  </div>
 </template>
 
 <script setup>
 import { EditorContent } from '@tiptap/vue-3'
-import { watch, defineEmits, defineProps } from 'vue'
+import { watch, defineEmits, defineProps, ref } from 'vue'
 import { useNoteEditor } from '../composables/useNoteEditor'
 import EditorToolbar from './editor/EditorToolbar.vue'
 
@@ -31,6 +77,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:modelValue'])
+
+const expanded = ref(false)
 
 const {
   editor,
@@ -133,4 +181,24 @@ watch(() => props.modelValue, updateContent)
   opacity: 0.6;
 }
 
+/* Full screen editor styles */
+.fullscreen-editor .ProseMirror {
+  outline: none;
+  min-height: 400px;
+  background: rgb(var(--v-theme-surface));
+  border-radius: 4px;
+  padding: 24px;
+}
+
+.fullscreen-editor .ProseMirror:focus {
+  box-shadow: 0 0 0 2px rgba(var(--v-theme-primary), 0.2);
+}
+
+.fullscreen-editor .ProseMirror p.is-editor-empty:first-child::before {
+  color: rgb(var(--v-theme-on-surface-variant));
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
 </style>

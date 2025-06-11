@@ -1,89 +1,80 @@
 <template>
-  <div>
-    <Sidebar />
-    
-    <v-main>
-      <v-container fluid class="pa-6">
-        <!-- Loading state -->
-        <v-row v-if="loading" justify="center" align="center" class="fill-height">
-          <v-col cols="12" class="text-center">
-            <v-card variant="outlined" class="pa-8 mx-auto" max-width="400">
-              <v-progress-circular
-                size="64"
-                width="4"
-                color="primary"
-                indeterminate
-                class="mb-4"
-              />
-              <div class="text-h6">Loading case...</div>
-              <div class="text-body-2 text-medium-emphasis">Please wait while we load your case data</div>
-            </v-card>
-          </v-col>
-        </v-row>
+  <BaseDashboard 
+    :title="caseData ? `Case: ${caseData.case_number}` : 'Case Details'" 
+    :loading="loading" 
+    :error="error"
+  >
+    <template #header-actions>
+      <div v-if="caseData" class="d-flex align-center ga-4">
+        <v-btn-group variant="outlined" divided>
+          <v-btn
+            color="white"
+            prepend-icon="mdi-pencil"
+            @click="showEditModal = true"
+          >
+            Edit Case
+          </v-btn>
+          <v-btn
+            color="white"
+            prepend-icon="mdi-account-plus"
+            @click="showAddUserModal = true"
+          >
+            Add User
+          </v-btn>
+        </v-btn-group>
+      </div>
+    </template>
 
-        <!-- Error state -->
-        <v-row v-else-if="error" justify="center">
-          <v-col cols="12" md="8" lg="6">
-            <v-alert
-              type="error"
-              variant="tonal"
-              border="start"
-              prominent
-              icon="mdi-alert-circle"
-              class="ma-4"
-            >
-              <v-alert-title>Error Loading Case</v-alert-title>
-              {{ error }}
-            </v-alert>
-          </v-col>
-        </v-row>
+    <template #loading>
+      <v-card variant="outlined" class="pa-8 mx-auto" max-width="400">
+        <v-progress-circular
+          size="64"
+          width="4"
+          color="primary"
+          indeterminate
+          class="mb-4 d-block mx-auto"
+        />
+        <div class="text-h6 text-center">Loading case...</div>
+        <div class="text-body-2 text-medium-emphasis text-center">Please wait while we load your case data</div>
+      </v-card>
+    </template>
 
-        <!-- Case Content -->
-        <div v-else-if="caseData">
-          <!-- Page Header Card -->
-          <v-card class="mb-6" variant="outlined">
-            <v-card-title class="d-flex align-center pa-6">
-              <v-icon start size="large" color="primary">mdi-briefcase</v-icon>
-              <div class="text-h4 font-weight-bold">
-                {{ caseData?.case_number }}
-              </div>
-              <v-spacer />
-              <v-btn-group variant="outlined" divided>
-                <v-btn
-                  color="primary"
-                  prepend-icon="mdi-pencil"
-                  @click="showEditModal = true"
-                >
-                  Edit Case
-                </v-btn>
-                <v-btn
-                  color="primary"
-                  prepend-icon="mdi-account-plus"
-                  @click="showAddUserModal = true"
-                >
-                  Add User
-                </v-btn>
-              </v-btn-group>
-            </v-card-title>
-          </v-card>
-          <!-- Case Details -->
-          <v-card class="mb-6" variant="outlined">
-            <v-card-title class="d-flex align-center">
-              <v-icon start>mdi-information</v-icon>
-              Case Information
-            </v-card-title>
-            <v-divider />
-            <v-card-text class="pa-6">
-              <v-row>
-                <v-col cols="12" lg="8">
-                  <CaseDetail :case-data="caseData" :client="client" />
-                </v-col>
-              </v-row>
-            </v-card-text>
-          </v-card>
+    <!-- Case Content -->
+    <div v-if="caseData">
+      <!-- Case Information Card -->
+      <v-card class="mb-6" variant="outlined">
+        <!-- Header -->
+        <v-card-title class="d-flex align-center pa-4 bg-surface">
+          <v-icon icon="mdi-information" color="primary" size="large" class="me-3" />
+          <div class="flex-grow-1">
+            <div class="text-h6 font-weight-bold">Case Information</div>
+            <div class="text-body-2 text-medium-emphasis">Details and metadata for this investigation</div>
+          </div>
+        </v-card-title>
+        
+        <v-divider />
+        
+        <v-card-text class="pa-6">
+          <v-row>
+            <v-col cols="12" lg="8">
+              <CaseDetail :case-data="caseData" :client="client" />
+            </v-col>
+          </v-row>
+        </v-card-text>
+      </v-card>
 
-          <!-- Case Tabs -->
-          <v-card variant="outlined">
+      <!-- Case Tabs Card -->
+      <v-card variant="outlined">
+        <!-- Header -->
+        <v-card-title class="d-flex align-center pa-4 bg-surface">
+          <v-icon icon="mdi-tab" color="primary" size="large" class="me-3" />
+          <div class="flex-grow-1">
+            <div class="text-h6 font-weight-bold">Case Management</div>
+            <div class="text-body-2 text-medium-emphasis">Manage entities, evidence, and notes</div>
+          </div>
+        </v-card-title>
+        
+        <v-divider />
             <CaseTabs
               :tabs="[
                 { name: 'entities', label: 'Entities' },
@@ -154,12 +145,20 @@
                             </template>
                           </EntityListItem>
                         </div>
-                        <v-empty-state
-                          v-else
-                          icon="mdi-account-outline"
-                          title="No People Found"
-                          text="No person entities have been added to this case yet."
-                        />
+                        <div v-else class="text-center pa-12">
+                          <v-icon
+                            icon="mdi-account-outline"
+                            size="64"
+                            color="grey-lighten-1"
+                            class="mb-4"
+                          />
+                          <h3 class="text-h6 font-weight-medium mb-2">
+                            No People Found
+                          </h3>
+                          <p class="text-body-2 text-medium-emphasis">
+                            No person entities have been added to this case yet.
+                          </p>
+                        </div>
                       </div>
 
                       <!-- Company Entities -->
@@ -178,12 +177,20 @@
                             </template>
                           </EntityListItem>
                         </div>
-                        <v-empty-state
-                          v-else
-                          icon="mdi-domain"
-                          title="No Companies Found"
-                          text="No company entities have been added to this case yet."
-                        />
+                        <div v-else class="text-center pa-12">
+                          <v-icon
+                            icon="mdi-domain"
+                            size="64"
+                            color="grey-lighten-1"
+                            class="mb-4"
+                          />
+                          <h3 class="text-h6 font-weight-medium mb-2">
+                            No Companies Found
+                          </h3>
+                          <p class="text-body-2 text-medium-emphasis">
+                            No company entities have been added to this case yet.
+                          </p>
+                        </div>
                       </div>
 
                       <!-- Domain Entities -->
@@ -202,12 +209,20 @@
                             </template>
                           </EntityListItem>
                         </div>
-                        <v-empty-state
-                          v-else
-                          icon="mdi-web"
-                          title="No Domains Found"
-                          text="No domain entities have been added to this case yet."
-                        />
+                        <div v-else class="text-center pa-12">
+                          <v-icon
+                            icon="mdi-web"
+                            size="64"
+                            color="grey-lighten-1"
+                            class="mb-4"
+                          />
+                          <h3 class="text-h6 font-weight-medium mb-2">
+                            No Domains Found
+                          </h3>
+                          <p class="text-body-2 text-medium-emphasis">
+                            No domain entities have been added to this case yet.
+                          </p>
+                        </div>
                       </div>
 
                       <!-- IP Address Entities -->
@@ -226,12 +241,20 @@
                             </template>
                           </EntityListItem>
                         </div>
-                        <v-empty-state
-                          v-else
-                          icon="mdi-ip"
-                          title="No IP Addresses Found"
-                          text="No IP address entities have been added to this case yet."
-                        />
+                        <div v-else class="text-center pa-12">
+                          <v-icon
+                            icon="mdi-ip"
+                            size="64"
+                            color="grey-lighten-1"
+                            class="mb-4"
+                          />
+                          <h3 class="text-h6 font-weight-medium mb-2">
+                            No IP Addresses Found
+                          </h3>
+                          <p class="text-body-2 text-medium-emphasis">
+                            No IP address entities have been added to this case yet.
+                          </p>
+                        </div>
                       </div>
 
                       <!-- Network Assets Entities -->
@@ -250,12 +273,20 @@
                             </template>
                           </EntityListItem>
                         </div>
-                        <v-empty-state
-                          v-else
-                          icon="mdi-server-network"
-                          title="No Network Assets Found"
-                          text="No network asset entities have been added to this case yet."
-                        />
+                        <div v-else class="text-center pa-12">
+                          <v-icon
+                            icon="mdi-server-network"
+                            size="64"
+                            color="grey-lighten-1"
+                            class="mb-4"
+                          />
+                          <h3 class="text-h6 font-weight-medium mb-2">
+                            No Network Assets Found
+                          </h3>
+                          <p class="text-body-2 text-medium-emphasis">
+                            No network asset entities have been added to this case yet.
+                          </p>
+                        </div>
                       </div>
 
                       <!-- Network Entities -->
@@ -283,12 +314,20 @@
                             </template>
                           </EntityListItem>
                         </div>
-                        <v-empty-state
-                          v-else
-                          icon="mdi-server-network"
-                          title="No Network Entities Found"
-                          text="No network entities have been added to this case yet."
-                        />
+                        <div v-else class="text-center pa-12">
+                          <v-icon
+                            icon="mdi-server-network"
+                            size="64"
+                            color="grey-lighten-1"
+                            class="mb-4"
+                          />
+                          <h3 class="text-h6 font-weight-medium mb-2">
+                            No Network Entities Found
+                          </h3>
+                          <p class="text-body-2 text-medium-emphasis">
+                            No network entities have been added to this case yet.
+                          </p>
+                        </div>
                       </div>
                     </template>
                   </EntityTabs>
@@ -350,8 +389,7 @@
             </CaseTabs>
           </v-card>
         </div>
-      </v-container>
-    </v-main>
+      </BaseDashboard>
 
     <!-- Modals -->
     <EditCaseModal
@@ -445,14 +483,13 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
-  </div>
 </template>
 
 <script setup>
 import { ref, onMounted, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
-import Sidebar from '../components/Sidebar.vue';
+import BaseDashboard from '../components/BaseDashboard.vue';
 import CaseDetail from '../components/CaseDetail.vue';
 import EntityListItem from '../components/EntityListItem.vue';
 import EntityTabs from '../components/EntityTabs.vue';

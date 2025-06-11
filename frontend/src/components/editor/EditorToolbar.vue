@@ -15,7 +15,7 @@
     
     <v-spacer />
     
-    <div class="text-caption text-medium-emphasis">
+    <div class="text-caption text-medium-emphasis mr-3">
       <v-progress-circular
         v-if="saving"
         size="16"
@@ -26,6 +26,14 @@
       <span v-if="saving">Saving...</span>
       <span v-else-if="lastSavedTime">Last saved: {{ formatLastSaved }}</span>
     </div>
+    
+    <v-btn
+      :icon="expanded ? 'mdi-arrow-collapse' : 'mdi-arrow-expand'"
+      size="small"
+      variant="text"
+      :title="expanded ? 'Exit fullscreen' : 'Expand to fullscreen'"
+      @click="$emit('toggle-expand')"
+    />
   </v-toolbar>
 </template>
 
@@ -47,5 +55,11 @@ defineProps({
     type: String,
     default: '',
   },
+  expanded: {
+    type: Boolean,
+    default: false,
+  },
 })
+
+defineEmits(['toggle-expand'])
 </script>
