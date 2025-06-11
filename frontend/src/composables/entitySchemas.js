@@ -57,6 +57,11 @@ export const entitySchemas = {
       ],
       parentField: 'associates',
     },
+    notes: {
+      title: 'Notes',
+      fields: [],
+      isNoteEditor: true,
+    },
   },
   company: {
     basicInfo: {
@@ -107,6 +112,11 @@ export const entitySchemas = {
       ],
       parentField: 'social_media',
     },
+    notes: {
+      title: 'Notes',
+      fields: [],
+      isNoteEditor: true,
+    },
   },
   domain: {
     basicInfo: {
@@ -126,6 +136,11 @@ export const entitySchemas = {
           placeholder: 'Add any notes or context about this domain',
         },
       ],
+    },
+    notes: {
+      title: 'Notes',
+      fields: [],
+      isNoteEditor: true,
     },
   },
   ip_address: {
@@ -147,6 +162,11 @@ export const entitySchemas = {
         },
       ],
     },
+    notes: {
+      title: 'Notes',
+      fields: [],
+      isNoteEditor: true,
+    },
   },
   network_assets: {
     basicInfo: {
@@ -160,6 +180,11 @@ export const entitySchemas = {
           placeholder: 'Enter subdomain and press Enter',
         },
       ],
+    },
+    notes: {
+      title: 'Notes',
+      fields: [],
+      isNoteEditor: true,
     },
   },
 }

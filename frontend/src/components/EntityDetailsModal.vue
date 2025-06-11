@@ -46,8 +46,28 @@
                 :key="key"
                 :value="key"
               >
+                <!-- Notes Tab -->
+                <div v-if="section.isNoteEditor && !notesExpanded" class="note-editor-container">
+                  <EditorToolbar
+                    v-if="isEditing"
+                    :actions="noteEditorActions"
+                    :saving="noteSaving"
+                    :last-saved-time="noteLastSavedTime"
+                    :format-last-saved="noteFormatLastSaved"
+                    :expanded="notesExpanded"
+                    @toggle-expand="notesExpanded = !notesExpanded"
+                  />
+                  <v-card 
+                    variant="outlined" 
+                    class="pa-4" 
+                    :class="{ 'mt-3': isEditing, 'read-only-notes': !isEditing }"
+                  >
+                    <editor-content :editor="noteEditor" class="tiptap-content" />
+                  </v-card>
+                </div>
+
                 <!-- Edit Mode Form -->
-                <v-form v-if="isEditing" @submit.prevent="handleSubmit" ref="formRef">
+                <v-form v-else-if="isEditing" @submit.prevent="handleSubmit" ref="formRef">
                   <v-container fluid class="pa-0">
                     <v-row>
                       <template v-for="field in section.fields" :key="field.id">
@@ -196,15 +216,60 @@
       </v-card-actions>
     </v-card>
   </v-dialog>
+
+  <!-- Fullscreen Notes Editor -->
+  <v-dialog
+    v-model="notesExpanded"
+    fullscreen
+    transition="dialog-bottom-transition"
+    :scrim="true"
+  >
+    <v-card class="d-flex flex-column" style="height: 100vh;">
+      <v-toolbar color="primary" dark>
+        <v-toolbar-title>
+          <v-icon start>mdi-note-text</v-icon>
+          {{ getEntityTitle }} - Notes
+        </v-toolbar-title>
+        <v-spacer />
+        <v-btn
+          icon="mdi-close"
+          @click="notesExpanded = false"
+        />
+      </v-toolbar>
+
+      <div class="flex-grow-1 d-flex flex-column overflow-hidden">
+        <EditorToolbar
+          v-if="isEditing"
+          :actions="noteEditorActions"
+          :saving="noteSaving"
+          :last-saved-time="noteLastSavedTime"
+          :format-last-saved="noteFormatLastSaved"
+          :expanded="notesExpanded"
+          @toggle-expand="notesExpanded = !notesExpanded"
+        />
+
+        <v-container fluid class="flex-grow-1 overflow-auto pa-6">
+          <v-row justify="center">
+            <v-col cols="12" lg="10" xl="8">
+              <editor-content :editor="noteEditor" class="tiptap-content fullscreen-editor" />
+            </v-col>
+          </v-row>
+        </v-container>
+      </div>
+    </v-card>
+  </v-dialog>
 </template>
 
 <script setup>
 import { ref, computed, toRef } from 'vue'
+import { EditorContent } from '@tiptap/vue-3'
 import EntityTag from './EntityTag.vue'
+import EditorToolbar from './editor/EditorToolbar.vue'
 import { useEntityDetails } from '../composables/useEntityDetails'
 import { useEntityAssociates } from '../composables/useEntityAssociates'
 import { useEntityIcons } from '../composables/useEntityIcons'
 import { useEntityDisplay } from '../composables/useEntityDisplay'
+import { useEntityNoteEditor } from '../composables/useEntityNoteEditor'
 
 const props = defineProps({
   show: { type: Boolean, required: true, default: false },
@@ -214,6 +279,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'edit', 'viewEntity'])
+
+const notesExpanded = ref(false)
 
 const dialogVisible = computed({
   get: () => props.show,
@@ -257,6 +324,14 @@ const {
   getFieldValue
 } = useEntityDisplay(entity)
 
+const {
+  editor: noteEditor,
+  editorActions: noteEditorActions,
+  saving: noteSaving,
+  lastSavedTime: noteLastSavedTime,
+  formatLastSaved: noteFormatLastSaved
+} = useEntityNoteEditor(entity, caseId, isEditing, formData, emit)
+
 async function handleSubmit() {
   try {
     const { updatedEntity, createdAssociates } = await updateEntity(processAssociates)
@@ -272,3 +347,124 @@ async function handleSubmit() {
 }
 
 </script>
+
+<style scoped>
+.note-editor-container .tiptap-content .ProseMirror {
+  outline: none;
+  min-height: 200px;
+}
+
+.note-editor-container .tiptap-content .ProseMirror p.is-editor-empty:first-child::before {
+  color: rgb(var(--v-theme-on-surface-variant));
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.note-editor-container .tiptap-content h1,
+.note-editor-container .tiptap-content h2,
+.note-editor-container .tiptap-content h3 {
+  margin: 16px 0 8px;
+  line-height: 1.2;
+  font-weight: 600;
+}
+
+.note-editor-container .tiptap-content h1 { font-size: 1.5rem; }
+.note-editor-container .tiptap-content h2 { font-size: 1.3rem; }
+.note-editor-container .tiptap-content h3 { font-size: 1.1rem; }
+
+.note-editor-container .tiptap-content ul,
+.note-editor-container .tiptap-content ol {
+  padding-left: 24px;
+  margin: 8px 0;
+}
+
+.note-editor-container .tiptap-content blockquote {
+  border-left: 4px solid rgb(var(--v-theme-primary));
+  margin: 16px 0;
+  padding-left: 16px;
+  font-style: italic;
+  color: rgb(var(--v-theme-on-surface-variant));
+}
+
+.note-editor-container .tiptap-content a {
+  color: rgb(var(--v-theme-primary));
+  text-decoration: underline;
+}
+
+.note-editor-container .tiptap-content p {
+  margin: 8px 0;
+}
+
+.note-editor-container .tiptap-content mark {
+  background-color: rgb(var(--v-theme-warning));
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+.note-editor-container .tiptap-content .task-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+.note-editor-container .tiptap-content .task-item {
+  display: flex;
+  align-items: flex-start;
+  margin: 4px 0;
+}
+
+.note-editor-container .tiptap-content .task-item > label {
+  flex: 0 0 auto;
+  margin-right: 8px;
+  margin-top: 2px;
+  user-select: none;
+}
+
+.note-editor-container .tiptap-content .task-item > div {
+  flex: 1 1 auto;
+}
+
+.note-editor-container .tiptap-content .task-item input[type="checkbox"] {
+  margin: 0;
+}
+
+.note-editor-container .tiptap-content .task-item[data-checked="true"] > div {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+/* Read-only styling */
+.read-only-notes {
+  opacity: 0.7;
+}
+
+.read-only-notes .tiptap-content .ProseMirror {
+  cursor: default;
+}
+
+.read-only-notes .tiptap-content .ProseMirror * {
+  pointer-events: none;
+}
+
+/* Full screen editor styles */
+.fullscreen-editor .ProseMirror {
+  outline: none;
+  min-height: 400px;
+  background: rgb(var(--v-theme-surface));
+  border-radius: 4px;
+  padding: 24px;
+}
+
+.fullscreen-editor .ProseMirror:focus {
+  box-shadow: 0 0 0 2px rgba(var(--v-theme-primary), 0.2);
+}
+
+.fullscreen-editor .ProseMirror p.is-editor-empty:first-child::before {
+  color: rgb(var(--v-theme-on-surface-variant));
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+</style>

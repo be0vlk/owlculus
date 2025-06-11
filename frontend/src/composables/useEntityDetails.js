@@ -66,7 +66,8 @@ export function useEntityDetails(entity, caseId) {
       social_media: entity.value.data.social_media || {},
       associates: entity.value.data.associates || {},
       executives: entity.value.data.executives || {},
-      affiliates: entity.value.data.affiliates || {}
+      affiliates: entity.value.data.affiliates || {},
+      notes: entity.value.data.notes || ''
     }
 
     const flattenedData = flattenNestedFields(initialData, entitySchema.value)
@@ -98,7 +99,8 @@ export function useEntityDetails(entity, caseId) {
           associates: restructuredData.associates || {},
           executives: restructuredData.executives || {},
           affiliates: restructuredData.affiliates || {},
-          address: restructuredData.address || {}
+          address: restructuredData.address || {},
+          notes: restructuredData.notes || ''
         }
       }
 
@@ -122,11 +124,14 @@ export function useEntityDetails(entity, caseId) {
     }
   }
 
-  watch(() => entity.value, (newEntity) => {
+  watch(() => entity.value, (newEntity, oldEntity) => {
     if (newEntity) {
       formData.value.data.social_media = newEntity.data.social_media
       formData.value.data.aliases = newEntity.data.aliases
-      activeTab.value = Object.keys(entitySchema.value)[0]
+      // Only reset tab if this is a completely different entity (different ID)
+      if (!oldEntity || oldEntity.id !== newEntity.id) {
+        activeTab.value = Object.keys(entitySchema.value)[0]
+      }
     }
   })
 
