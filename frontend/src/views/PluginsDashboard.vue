@@ -354,7 +354,7 @@ const categories = ['Person', 'Network', 'Company', 'Other']
 const selectedCategories = ref(['All'])
 
 // Plugin API key checking
-const { checkPluginApiKeys, getMissingApiKeys, getApiKeyWarningMessage } = usePluginApiKeys()
+const { checkPluginApiKeys, getApiKeyWarningMessage } = usePluginApiKeys()
 
 // Watch for changes in category selection to handle "All" logic
 watch(selectedCategories, (newCategories, oldCategories) => {

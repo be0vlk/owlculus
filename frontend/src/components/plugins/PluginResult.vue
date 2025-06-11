@@ -64,7 +64,7 @@ const loadPluginComponent = async () => {
     // Use relative path for dynamic imports
     const module = await import(`./${componentName}.vue`);
     pluginComponent.value = markRaw(module.default);
-  } catch (error) {
+  } catch {
     pluginComponent.value = null;
   }
 };

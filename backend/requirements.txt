@@ -20,3 +20,4 @@ openai
 shodan
 pytest
 pytest-asyncio
+peopledatalabs

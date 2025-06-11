@@ -1,27 +1,18 @@
 {
-  "extends": [
-    "stylelint-config-standard",
-    "stylelint-config-recommended-vue"
-  ],
+  "extends": ["stylelint-config-standard", "stylelint-config-recommended-vue"],
   "rules": {
     "custom-property-pattern": null,
     "selector-class-pattern": null,
     "property-no-unknown": [
       true,
       {
-        "ignoreProperties": [
-          "/^--v-/"
-        ]
+        "ignoreProperties": ["/^--v-/"]
       }
     ],
     "function-no-unknown": [
       true,
       {
-        "ignoreFunctions": [
-          "rgb",
-          "rgba",
-          "var"
-        ]
+        "ignoreFunctions": ["rgb", "rgba", "var"]
       }
     ]
   }

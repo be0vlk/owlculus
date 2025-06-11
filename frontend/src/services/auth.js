@@ -5,7 +5,7 @@ const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 // Create a separate axios instance for auth that doesn't have interceptors
 // to avoid circular dependencies with the main api instance
 const authApi = axios.create({
-  baseURL: baseURL,
+  baseURL,
   headers: {
     'Content-Type': 'application/json',
   },

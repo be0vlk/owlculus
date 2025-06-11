@@ -13,7 +13,7 @@ export function useStrixyChat() {
   const addMessage = (message, role) => {
     messages.value.push({
       content: message,
-      role: role,
+      role,
       timestamp: new Date(),
     })
   }
