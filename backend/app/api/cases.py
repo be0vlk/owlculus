@@ -2,7 +2,7 @@
 Case management API
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
 from sqlmodel import Session
 from typing import List
 from typing import Optional
@@ -17,7 +17,7 @@ from app.services.entity_service import EntityService
 router = APIRouter()
 
 
-@router.post("/", response_model=schemas.Case)
+@router.post("/", response_model=schemas.Case, status_code=status.HTTP_201_CREATED)
 async def create_case(
     case: schemas.CaseCreate,
     db: Session = Depends(get_db),
@@ -112,7 +112,7 @@ async def get_case_entities(
     )
 
 
-@router.post("/{case_id}/entities", response_model=schemas.Entity, tags=["entities"])
+@router.post("/{case_id}/entities", response_model=schemas.Entity, tags=["entities"], status_code=status.HTTP_201_CREATED)
 async def create_entity(
     case_id: int,
     entity: schemas.EntityCreate,
@@ -143,7 +143,7 @@ async def update_entity(
     )
 
 
-@router.delete("/{case_id}/entities/{entity_id}", tags=["entities"])
+@router.delete("/{case_id}/entities/{entity_id}", tags=["entities"], status_code=status.HTTP_204_NO_CONTENT)
 async def delete_entity(
     case_id: int,
     entity_id: int,
@@ -152,4 +152,4 @@ async def delete_entity(
 ):
     entity_service = EntityService(db)
     await entity_service.delete_entity(entity_id=entity_id, current_user=current_user)
-    return {"status": "success", "message": "Entity deleted"}
+    return {"message": "Entity deleted successfully"}

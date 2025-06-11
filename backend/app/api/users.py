@@ -2,7 +2,7 @@
 User management API
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
 from sqlmodel import Session
 
 from app.database.connection import get_db
@@ -14,7 +14,7 @@ from app.services.user_service import UserService
 router = APIRouter()
 
 
-@router.post("/", response_model=schemas.User)
+@router.post("/", response_model=schemas.User, status_code=status.HTTP_201_CREATED)
 async def create_user(
     user: schemas.UserCreate,
     db: Session = Depends(get_db),
@@ -85,7 +85,7 @@ async def admin_reset_password(
     )
 
 
-@router.delete("/{user_id}")
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(
     user_id: int,
     db: Session = Depends(get_db),

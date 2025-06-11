@@ -161,7 +161,6 @@ const handleConfirmDelete = async ({ title, message, warning, onConfirm }) => {
     await onConfirm()
   } catch {
     // User cancelled or action failed
-    console.log('Delete action cancelled or failed')
   }
 }
 

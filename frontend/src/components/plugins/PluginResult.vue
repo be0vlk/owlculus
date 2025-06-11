@@ -65,7 +65,6 @@ const loadPluginComponent = async () => {
     const module = await import(`./${componentName}.vue`);
     pluginComponent.value = markRaw(module.default);
   } catch (error) {
-    console.log(`No custom component found for plugin: ${componentName}`, error);
     pluginComponent.value = null;
   }
 };

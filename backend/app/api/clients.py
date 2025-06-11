@@ -2,7 +2,7 @@
 Client management API
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
 from sqlmodel import Session
 
 from app.database.connection import get_db
@@ -27,7 +27,7 @@ async def read_clients(
     )
 
 
-@router.post("/", response_model=schemas.Client)
+@router.post("/", response_model=schemas.Client, status_code=status.HTTP_201_CREATED)
 async def create_client(
     client: schemas.ClientCreate,
     db: Session = Depends(get_db),
@@ -62,7 +62,7 @@ async def update_client(
     )
 
 
-@router.delete("/{client_id}")
+@router.delete("/{client_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_client(
     client_id: int,
     db: Session = Depends(get_db),

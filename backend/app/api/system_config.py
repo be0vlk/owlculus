@@ -5,7 +5,7 @@ from ..database.connection import get_db
 from ..database import models
 from ..schemas import system_config_schema
 from ..services.system_config_service import SystemConfigService
-from ..core.dependencies import get_current_user, admin_only
+from ..core.dependencies import get_current_active_user, admin_only
 
 router = APIRouter()
 
@@ -15,7 +15,7 @@ router = APIRouter()
 )
 @admin_only()
 async def get_configuration(
-    current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)
+    current_user: models.User = Depends(get_current_active_user), db: Session = Depends(get_db)
 ):
     """Get current system configuration (admin only)."""
     config_service = SystemConfigService(db)
@@ -29,7 +29,7 @@ async def get_configuration(
 @admin_only()
 async def update_configuration(
     config_data: system_config_schema.SystemConfigurationUpdate,
-    current_user: models.User = Depends(get_current_user),
+    current_user: models.User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
     """Update system configuration (admin only)."""
@@ -53,7 +53,7 @@ async def update_configuration(
 async def set_api_key(
     provider: str,
     api_key_data: system_config_schema.APIKeyUpdate,
-    current_user: models.User = Depends(get_current_user),
+    current_user: models.User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
     """Set or update an API key for a specific provider (admin only)."""
@@ -85,7 +85,7 @@ async def set_api_key(
 @admin_only()
 async def remove_api_key(
     provider: str,
-    current_user: models.User = Depends(get_current_user),
+    current_user: models.User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
     """Remove an API key for a specific provider (admin only)."""
@@ -103,7 +103,7 @@ async def remove_api_key(
 @router.get("/configuration/api-keys", response_model=dict)
 @admin_only()
 async def list_api_keys(
-    current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)
+    current_user: models.User = Depends(get_current_active_user), db: Session = Depends(get_db)
 ):
     """List all configured API keys with masked keys (admin only)."""
     config_service = SystemConfigService(db)
@@ -116,7 +116,7 @@ async def list_api_keys(
 )
 async def get_api_key_status(
     provider: str,
-    current_user: models.User = Depends(get_current_user),
+    current_user: models.User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
     """Check if a specific provider has an API key configured."""
@@ -132,7 +132,7 @@ async def get_api_key_status(
 async def preview_case_number_template(
     template: str,
     prefix: str = None,
-    current_user: models.User = Depends(get_current_user),
+    current_user: models.User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
     """Preview what a case number would look like with given template and prefix."""
@@ -159,7 +159,7 @@ async def preview_case_number_template(
 @router.get("/configuration/evidence-templates")
 @admin_only()
 async def get_evidence_folder_templates(
-    current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)
+    current_user: models.User = Depends(get_current_active_user), db: Session = Depends(get_db)
 ):
     """Get evidence folder templates (admin only)."""
     config_service = SystemConfigService(db)
@@ -171,7 +171,7 @@ async def get_evidence_folder_templates(
 @admin_only()
 async def update_evidence_folder_templates(
     templates_data: system_config_schema.EvidenceFolderTemplatesUpdate,
-    current_user: models.User = Depends(get_current_user),
+    current_user: models.User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
     """Update evidence folder templates (admin only)."""

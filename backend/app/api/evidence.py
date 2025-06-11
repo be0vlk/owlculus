@@ -2,7 +2,7 @@
 Evidence management API
 """
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
 from sqlmodel import Session
 from typing import Optional
 
@@ -16,7 +16,7 @@ from app.services.exiftool_service import ExifToolService
 router = APIRouter()
 
 
-@router.post("/", response_model=list[schemas.Evidence])
+@router.post("/", response_model=list[schemas.Evidence], status_code=status.HTTP_201_CREATED)
 async def create_evidence(
     title: str,
     case_id: int,
@@ -110,26 +110,27 @@ async def update_evidence(
     current_user: models.User = Depends(get_current_active_user),
 ):
     evidence_service = EvidenceService(db)
-    return evidence_service.update_evidence(
+    return await evidence_service.update_evidence(
         evidence_id=evidence_id,
         evidence_update=evidence,
         current_user=current_user,
     )
 
 
-@router.delete("/{evidence_id}", response_model=schemas.Evidence)
+@router.delete("/{evidence_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_evidence(
     evidence_id: int,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_active_user),
 ):
     evidence_service = EvidenceService(db)
-    return await evidence_service.delete_evidence(
+    await evidence_service.delete_evidence(
         evidence_id=evidence_id, current_user=current_user
     )
+    return {"message": "Evidence deleted successfully"}
 
 
-@router.post("/folders", response_model=schemas.Evidence)
+@router.post("/folders", response_model=schemas.Evidence, status_code=status.HTTP_201_CREATED)
 async def create_folder(
     folder_data: schemas.FolderCreate,
     db: Session = Depends(get_db),
@@ -168,16 +169,17 @@ async def update_folder(
     )
 
 
-@router.delete("/folders/{folder_id}", response_model=schemas.Evidence)
+@router.delete("/folders/{folder_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_folder(
     folder_id: int,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_active_user),
 ):
     evidence_service = EvidenceService(db)
-    return await evidence_service.delete_folder(
+    await evidence_service.delete_folder(
         folder_id=folder_id, current_user=current_user
     )
+    return {"message": "Folder deleted successfully"}
 
 
 @router.get("/{evidence_id}/metadata")
@@ -236,7 +238,7 @@ async def extract_evidence_metadata(
     return metadata_result
 
 
-@router.post("/case/{case_id}/apply-template", response_model=list[schemas.Evidence])
+@router.post("/case/{case_id}/apply-template", response_model=list[schemas.Evidence], status_code=status.HTTP_201_CREATED)
 async def apply_folder_template(
     case_id: int,
     template_name: str,

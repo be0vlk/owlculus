@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
 from sqlmodel import Session
 
 from app.database.connection import get_db
@@ -10,7 +10,7 @@ from app.services.invite_service import InviteService
 router = APIRouter()
 
 
-@router.post("/", response_model=schemas.InviteResponse)
+@router.post("/", response_model=schemas.InviteResponse, status_code=status.HTTP_201_CREATED)
 async def create_invite(
     invite: schemas.InviteCreate,
     db: Session = Depends(get_db),
@@ -42,7 +42,7 @@ async def validate_invite(
     return await invite_service.validate_invite(token=token)
 
 
-@router.post("/{token}/register", response_model=schemas.UserRegistrationResponse)
+@router.post("/{token}/register", response_model=schemas.UserRegistrationResponse, status_code=status.HTTP_201_CREATED)
 async def register_user(
     token: str,
     registration_data: schemas.UserRegistration,
@@ -60,7 +60,7 @@ async def register_user(
     )
 
 
-@router.delete("/{invite_id}")
+@router.delete("/{invite_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_invite(
     invite_id: int,
     db: Session = Depends(get_db),
