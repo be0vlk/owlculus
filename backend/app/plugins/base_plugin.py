@@ -18,6 +18,7 @@ from tempfile import SpooledTemporaryFile
 from fastapi import UploadFile
 from app.services.evidence_service import EvidenceService
 from sqlalchemy.orm import Session
+from app.services.system_config_service import SystemConfigService
 
 
 class BasePlugin(ABC):
@@ -34,6 +35,7 @@ class BasePlugin(ABC):
         self.evidence_category: str = "Other"  # Category for evidence storage
         self.parameters: Dict[str, Dict[str, Any]] = {}
         self.save_to_case: bool = False  # Whether to save plugin output as evidence
+        self.api_key_requirements: List[str] = []  # List of required API key providers
         self._executor = ThreadPoolExecutor(
             max_workers=3, thread_name_prefix=f"{self.name}_executor"
         )
@@ -308,16 +310,50 @@ class BasePlugin(ABC):
             # Save evidence at the end of execution
             await self.save_collected_evidence()
 
+    def check_api_key_requirements(self, db: Session) -> Dict[str, bool]:
+        """Check if required API keys are configured."""
+        if not self.api_key_requirements:
+            return {}
+
+        config_service = SystemConfigService(db)
+        api_key_status = {}
+
+        for provider in self.api_key_requirements:
+            api_key_status[provider] = config_service.is_provider_configured(provider)
+
+        return api_key_status
+
+    def get_missing_api_keys(self, db: Session) -> List[str]:
+        """Get list of missing API keys required by this plugin."""
+        if not self.api_key_requirements:
+            return []
+
+        api_key_status = self.check_api_key_requirements(db)
+        return [
+            provider
+            for provider, is_configured in api_key_status.items()
+            if not is_configured
+        ]
+
     def get_metadata(self) -> Dict[str, Any]:
         """Return plugin metadata with enhanced parameters"""
-        return {
+        metadata = {
             "name": self.name,
             "display_name": self.display_name,
             "description": self.description,
             "enabled": self.enabled,
             "category": self.category,
             "parameters": self._get_enhanced_parameters(),
+            "api_key_requirements": self.api_key_requirements,
         }
+
+        # Include API key status if we have a database session
+        if self._db_session:
+            metadata["api_key_status"] = self.check_api_key_requirements(
+                self._db_session
+            )
+
+        return metadata
 
     def __del__(self):
         """Cleanup thread pool on plugin deletion"""

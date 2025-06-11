@@ -137,6 +137,23 @@
                         </div>
                         <div class="d-flex align-center ga-2">
                           <v-chip
+                            v-if="plugin.api_key_requirements && plugin.api_key_requirements.length > 0 && plugin.api_key_status"
+                            :color="Object.values(plugin.api_key_status).every(status => status) ? 'success' : 'warning'"
+                            size="small"
+                            variant="tonal"
+                            prepend-icon="mdi-key"
+                          >
+                            <v-tooltip activator="parent" location="bottom">
+                              <template v-if="Object.values(plugin.api_key_status).every(status => status)">
+                                All required API keys configured
+                              </template>
+                              <template v-else>
+                                Missing API keys: {{ plugin.api_key_requirements.filter(p => !plugin.api_key_status[p]).join(', ') }}
+                              </template>
+                            </v-tooltip>
+                            API Keys
+                          </v-chip>
+                          <v-chip
                             :color="plugin.enabled ? 'success' : 'error'"
                             size="small"
                             variant="tonal"
@@ -220,7 +237,7 @@
                           <!-- Execute Button -->
                           <v-btn
                             :loading="executing[name]"
-                            :disabled="!plugin.enabled || executing[name]"
+                            :disabled="!plugin.enabled || executing[name] || (plugin.api_key_requirements && plugin.api_key_requirements.length > 0 && plugin.api_key_status && !Object.values(plugin.api_key_status).every(status => status))"
                             color="primary"
                             variant="flat"
                             block
@@ -228,7 +245,12 @@
                             prepend-icon="mdi-play"
                             @click.stop="executePlugin(name)"
                           >
-                            {{ executing[name] ? 'Executing...' : 'Execute Plugin' }}
+                            <template v-if="plugin.api_key_requirements && plugin.api_key_requirements.length > 0 && plugin.api_key_status && !Object.values(plugin.api_key_status).every(status => status)">
+                              API Key Required
+                            </template>
+                            <template v-else>
+                              {{ executing[name] ? 'Executing...' : 'Execute Plugin' }}
+                            </template>
                           </v-btn>
 
                           <!-- Results Available Indicator -->
@@ -303,6 +325,7 @@
 <script setup>
 import { ref, onMounted, reactive, computed, watch, markRaw } from 'vue'
 import { pluginService } from '@/services/plugin'
+import { usePluginApiKeys } from '@/composables/usePluginApiKeys'
 import PluginResultsModal from '@/components/plugins/PluginResultsModal.vue'
 import Sidebar from '@/components/Sidebar.vue'
 
@@ -329,6 +352,9 @@ const modalState = reactive({
 
 const categories = ['Person', 'Network', 'Company', 'Other']
 const selectedCategories = ref(['All'])
+
+// Plugin API key checking
+const { checkPluginApiKeys, getMissingApiKeys, getApiKeyWarningMessage } = usePluginApiKeys()
 
 // Watch for changes in category selection to handle "All" logic
 watch(selectedCategories, (newCategories, oldCategories) => {
@@ -425,6 +451,17 @@ const loadPlugins = async () => {
 }
 
 const executePlugin = async (name) => {
+  // Check API key requirements first
+  const plugin = plugins.value[name]
+  if (plugin.api_key_requirements && plugin.api_key_requirements.length > 0) {
+    const hasAllKeys = await checkPluginApiKeys(plugin)
+    if (!hasAllKeys) {
+      const warningMessage = getApiKeyWarningMessage(plugin)
+      pluginErrors[name] = warningMessage
+      return
+    }
+  }
+
   executing[name] = true
   pluginErrors[name] = null
   results[name] = null // Clear previous results

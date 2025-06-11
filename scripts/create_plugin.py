@@ -18,7 +18,7 @@ import os
 import sys
 import argparse
 import re
-from typing import Dict, Any
+from typing import Dict, Any, List, Tuple
 from pathlib import Path
 
 
@@ -34,6 +34,117 @@ class Colors:
     BOLD = "\033[1m"
     UNDERLINE = "\033[4m"
     END = "\033[0m"
+
+
+def print_status(level: str, message: str) -> None:
+    """Print a colored status message"""
+    color_map = {
+        "error": Colors.RED,
+        "success": Colors.GREEN,
+        "warning": Colors.YELLOW,
+        "info": Colors.CYAN,
+        "header": f"{Colors.CYAN}{Colors.BOLD}",
+    }
+    color = color_map.get(level, "")
+    prefix = level.upper() + ":" if level in ["error", "success", "warning"] else ""
+    print(
+        f"{color}{prefix}{Colors.END} {message}"
+        if prefix
+        else f"{color}{message}{Colors.END}"
+    )
+
+
+def get_plugin_file_paths(config: Dict[str, Any]) -> Dict[str, Path]:
+    """Generate all file paths for the plugin"""
+    project_root = Path(__file__).parent.parent
+    return {
+        "backend": project_root
+        / "backend"
+        / "app"
+        / "plugins"
+        / f"{config['name']}_plugin.py",
+        "params": project_root
+        / "frontend"
+        / "src"
+        / "components"
+        / "plugins"
+        / f"{config['class_name']}PluginParams.vue",
+        "result": project_root
+        / "frontend"
+        / "src"
+        / "components"
+        / "plugins"
+        / f"{config['class_name']}PluginResult.vue",
+        "test": project_root
+        / "backend"
+        / "tests"
+        / "plugins"
+        / f"test_{config['name']}_plugin.py",
+    }
+
+
+def validate_file_conflicts(file_paths: Dict[str, Path], args) -> None:
+    """Check for existing files and handle conflicts"""
+    if args.force:
+        return
+
+    existing_files = []
+
+    # Always check backend
+    if file_paths["backend"].exists():
+        existing_files.append(str(file_paths["backend"]))
+
+    # Check frontend components if not backend-only
+    if not args.backend_only:
+        for key in ["params", "result"]:
+            if file_paths[key].exists():
+                existing_files.append(str(file_paths[key]))
+
+    # Check test file if generating tests
+    if args.generate_tests and file_paths["test"].exists():
+        existing_files.append(str(file_paths["test"]))
+
+    if existing_files:
+        print_status("error", "The following files already exist:")
+        for f in existing_files:
+            print(f"   - {f}")
+        print_status("warning", "Use --force to overwrite existing files")
+        sys.exit(1)
+
+
+def write_files_safely(file_contents_map: Dict[Path, str]) -> None:
+    """Write multiple files safely with error handling"""
+    written_files = []
+    try:
+        for file_path, content in file_contents_map.items():
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(file_path, "w") as f:
+                f.write(content)
+            written_files.append(file_path)
+
+            # Determine file type for appropriate message
+            if "_plugin.py" in file_path.name:
+                file_type = "backend plugin"
+            elif "Params.vue" in file_path.name:
+                file_type = "parameter component"
+            elif "Result.vue" in file_path.name:
+                file_type = "result component"
+            elif "test_" in file_path.name:
+                file_type = "test file"
+            else:
+                file_type = "file"
+
+            print_status("success", f"Created {file_type}: {file_path}")
+
+    except Exception as e:
+        print_status("error", f"Error creating plugin files: {e}")
+        # Clean up any files that were written
+        for written_file in written_files:
+            try:
+                written_file.unlink()
+            except:
+                pass
+        sys.exit(1)
 
 
 # Valid categories as defined in the plugin documentation
@@ -63,23 +174,44 @@ def pascal_to_title(name: str) -> str:
 def generate_backend_plugin(config: Dict[str, Any]) -> str:
     """Generate the backend plugin Python file content"""
 
+    # Add API key requirements if specified
+    api_key_line = ""
+    if config.get("api_keys"):
+        api_key_list = ", ".join(f'"{key}"' for key in config["api_keys"])
+        api_key_line = f"\n        self.api_key_requirements = [{api_key_list}]  # Required API key providers"
+
+    # Simplified API key checking template
+    api_key_check = """        # Check API key requirements if any are defined
+        if hasattr(self, 'api_key_requirements') and self.api_key_requirements:
+            missing_keys = self.check_api_key_requirements()
+            if missing_keys:
+                yield {
+                    "type": "error",
+                    "data": {
+                        "message": f"API key{'s' if len(missing_keys) > 1 else ''} required for: {', '.join(missing_keys)}. "
+                                  "Please add them in Admin → Configuration → API Keys"
+                    }
+                }
+                return"""
+
     template = f'''"""
 {config['description']}
 """
 
 import asyncio
 from typing import AsyncGenerator, Dict, Any, Optional
+from sqlmodel import Session
 from .base_plugin import BasePlugin
 
 class {config['class_name']}Plugin(BasePlugin):
     """{config['description']}"""
 
-    def __init__(self):
-        super().__init__(display_name="{config['display_name']}")
+    def __init__(self, db_session: Session = None):
+        super().__init__(display_name="{config['display_name']}", db_session=db_session)
         self.description = "{config['description']}"
         self.category = "{config['category']}"  # {', '.join(UI_CATEGORIES)}
         self.evidence_category = "{config['evidence_category']}"  # {', '.join(EVIDENCE_CATEGORIES)}
-        self.save_to_case = False  # Whether to auto-save results as evidence
+        self.save_to_case = False  # Whether to auto-save results as evidence{api_key_line}
         self.parameters = {{
             # TODO: Define your plugin parameters here
             "target": {{
@@ -121,6 +253,8 @@ class {config['class_name']}Plugin(BasePlugin):
         target = params["target"]
         timeout = params.get("timeout", 30.0)
 
+{api_key_check}
+
         # TODO: Implement your plugin logic here
         # Example: API calls, tool execution, data processing
         
@@ -140,14 +274,6 @@ class {config['class_name']}Plugin(BasePlugin):
                 "timestamp": asyncio.get_event_loop().time(),
             }},
         }}
-
-        # Example: Yield additional results
-        # yield {{
-        #     "type": "data",
-        #     "data": {{
-        #         "additional_info": "More results...",
-        #     }},
-        # }}
 
         # Evidence saving is handled automatically by BasePlugin
         # No manual implementation needed - just yield data results
@@ -179,54 +305,24 @@ class {config['class_name']}Plugin(BasePlugin):
 
 
 def generate_params_component(config: Dict[str, Any]) -> str:
-    """Generate the frontend parameter component Vue file content"""
+    """Generate a minimal parameter component that just uses GenericPluginParams"""
 
     template = f"""<template>
-  <div class="d-flex flex-column ga-3">
-    <!-- About card with plugin description (always at top) -->
-    <v-card
-      v-if="pluginDescription"
-      color="blue-lighten-5"
-      elevation="0"
-      rounded="lg"
-      class="pa-3"
-    >
-      <div class="d-flex align-center ga-2 mb-2">
-        <v-icon color="blue">mdi-information</v-icon>
-        <span class="text-subtitle2 font-weight-medium">About</span>
-      </div>
-      <p class="text-body-2 mb-0">
-        {{{{ pluginDescription }}}}
-      </p>
-    </v-card>
-
-    <!-- TODO: Add your input fields here -->
-    <v-text-field
-      v-model="localParams.target"
-      label="Target"
-      placeholder="Enter target to analyze"
-      variant="outlined"
-      density="compact"
-      :rules="[v => !!v || 'Target is required']"
-      @update:model-value="updateParams"
-    />
-
-    <v-text-field
-      v-model.number="localParams.timeout"
-      label="Timeout (seconds)"
-      placeholder="30"
-      variant="outlined"
-      density="compact"
-      type="number"
-      @update:model-value="updateParams"
-    />
-  </div>
+  <!-- This plugin uses the automatic GenericPluginParams component -->
+  <!-- No custom parameter component needed unless you have special UI requirements -->
+  <GenericPluginParams
+    :parameters="parameters"
+    :model-value="modelValue"
+    :plugin-name="'{config['class_name']}Plugin'"
+    @update:model-value="$emit('update:modelValue', $event)"
+  />
 </template>
 
 <script setup>
-import {{ reactive, watch, computed }} from 'vue'
+import GenericPluginParams from './GenericPluginParams.vue'
 
-const props = defineProps({{
+// Standard props for all plugin parameter components
+defineProps({{
   parameters: {{
     type: Object,
     required: true
@@ -237,34 +333,26 @@ const props = defineProps({{
   }}
 }})
 
-const emit = defineEmits(['update:modelValue'])
+defineEmits(['update:modelValue'])
 
-// Extract plugin description from parameters
-const pluginDescription = computed(() => props.parameters?.description)
-
-// Local parameter state
-const localParams = reactive({{
-  target: props.modelValue.target || '',
-  timeout: props.modelValue.timeout || 30,
-}})
-
-// Emit parameter updates
-const updateParams = () => {{
-  emit('update:modelValue', {{ ...localParams }})
-}}
-
-// Watch for external changes
-watch(() => props.modelValue, (newValue) => {{
-  Object.assign(localParams, newValue)
-}}, {{ deep: true }})
-</script>
-"""
+// GenericPluginParams automatically handles:
+// - Parameter form generation based on backend schema
+// - API key warnings and validation
+// - Case selection for evidence saving
+// - All standard parameter types (string, number, boolean)
+//
+// Only customize this component if you need:
+// - Custom validation beyond basic required/optional
+// - Special UI elements (dropdowns, multi-select, etc.)
+// - Custom parameter layout or grouping
+// - Plugin-specific help text or examples
+</script>"""
 
     return template
 
 
 def generate_result_component(config: Dict[str, Any]) -> str:
-    """Generate the frontend result component Vue file content"""
+    """Generate a basic result component (most plugins should use the automatic fallback)"""
 
     icon = "mdi-magnify"
     if config["category"] == "Person":
@@ -276,6 +364,16 @@ def generate_result_component(config: Dict[str, Any]) -> str:
 
     template = f"""<template>
   <div class="d-flex flex-column ga-4">
+    <!-- TODO: Customize your result display here -->
+    <!-- 
+      This component is optional! The automatic PluginResult.vue provides
+      a good fallback display for most plugins. Only create this if you need:
+      - Custom formatting for specific data types
+      - Special visualization (charts, tables, etc.)
+      - Custom actions (copy buttons, links, etc.)
+      - Plugin-specific styling or layout
+    -->
+    
     <template v-for="(item, index) in parsedResults" :key="index">
       <!-- Data Results -->
       <v-card v-if="item.type === 'data'" elevation="2" rounded="lg">
@@ -284,52 +382,8 @@ def generate_result_component(config: Dict[str, Any]) -> str:
           {{{{ item.data.target || '{config['display_name']} Results' }}}}
         </v-card-title>
         <v-card-text>
-          <!-- TODO: Customize how your results are displayed -->
-          <div v-if="item.data.status" class="mb-3">
-            <span class="text-subtitle2">Status:</span>
-            <span class="ml-2">{{{{ item.data.status }}}}</span>
-          </div>
-          
-          <!-- Display findings if available -->
-          <div v-if="item.data.findings && item.data.findings.length">
-            <p class="text-subtitle2 mb-2">Findings:</p>
-            <v-list density="compact" class="pa-0">
-              <v-list-item
-                v-for="(finding, fIndex) in item.data.findings"
-                :key="fIndex"
-                class="px-0"
-              >
-                <v-list-item-title>
-                  <v-icon size="small" class="mr-2">mdi-chevron-right</v-icon>
-                  {{{{ finding.description }}}}
-                </v-list-item-title>
-              </v-list-item>
-            </v-list>
-          </div>
-          
-          <!-- Copy functionality for important data -->
-          <div v-if="item.data.target" class="d-flex align-center mt-3">
-            <v-btn
-              icon="mdi-content-copy"
-              size="small"
-              variant="text"
-              @click="copyToClipboard(item.data.target)"
-            >
-              <v-tooltip activator="parent">Copy target</v-tooltip>
-            </v-btn>
-          </div>
-          
-          <!-- Raw data view (for development/debugging) -->
-          <v-expansion-panels v-if="showRawData" class="mt-3">
-            <v-expansion-panel>
-              <v-expansion-panel-title>
-                <span class="text-caption">Raw Data</span>
-              </v-expansion-panel-title>
-              <v-expansion-panel-text>
-                <pre class="text-caption">{{{{ JSON.stringify(item.data, null, 2) }}}}</pre>
-              </v-expansion-panel-text>
-            </v-expansion-panel>
-          </v-expansion-panels>
+          <!-- Example: Display your plugin's specific data structure -->
+          <pre class="text-caption">{{{{ JSON.stringify(item.data, null, 2) }}}}</pre>
         </v-card-text>
       </v-card>
 
@@ -356,7 +410,7 @@ def generate_result_component(config: Dict[str, Any]) -> str:
 </template>
 
 <script setup>
-import {{ computed, ref }} from 'vue'
+import {{ computed }} from 'vue'
 
 const props = defineProps({{
   result: {{
@@ -364,9 +418,6 @@ const props = defineProps({{
     required: true,
   }}
 }})
-
-// Toggle for showing raw data (useful during development)
-const showRawData = ref(false)
 
 // Parse streaming results
 const parsedResults = computed(() => {{
@@ -382,25 +433,15 @@ const parsedResults = computed(() => {{
   
   return []
 }})
-
-const copyToClipboard = async (text) => {{
-  try {{
-    await navigator.clipboard.writeText(text)
-  }} catch (err) {{
-    console.error('Failed to copy text:', err)
-  }}
-}}
 </script>
 """
 
     return template
 
 
-def create_plugin(args):
-    """Main function to create plugin files"""
-
-    # Prepare configuration
-    config = {
+def prepare_plugin_config(args) -> Dict[str, Any]:
+    """Prepare the plugin configuration from arguments"""
+    return {
         "name": args.name.lower().replace("-", "_"),
         "class_name": snake_to_pascal(args.name.lower().replace("-", "_")),
         "display_name": args.display_name
@@ -410,146 +451,125 @@ def create_plugin(args):
         "evidence_category": args.evidence_category,
     }
 
-    # Define file paths
-    project_root = Path(__file__).parent.parent
-    backend_path = (
-        project_root / "backend" / "app" / "plugins" / f"{config['name']}_plugin.py"
-    )
-    params_path = (
-        project_root
-        / "frontend"
-        / "src"
-        / "components"
-        / "plugins"
-        / f"{config['class_name']}PluginParams.vue"
-    )
-    result_path = (
-        project_root
-        / "frontend"
-        / "src"
-        / "components"
-        / "plugins"
-        / f"{config['class_name']}PluginResult.vue"
-    )
-    test_path = (
-        project_root
-        / "backend"
-        / "tests"
-        / "plugins"
-        / f"test_{config['name']}_plugin.py"
-    )
 
-    # Check if files already exist
-    if not args.force:
-        existing_files = []
-        if backend_path.exists():
-            existing_files.append(str(backend_path))
-        if not args.backend_only:
-            if params_path.exists():
-                existing_files.append(str(params_path))
-            if result_path.exists():
-                existing_files.append(str(result_path))
-        if args.generate_tests and test_path.exists():
-            existing_files.append(str(test_path))
+def generate_all_content(config: Dict[str, Any], args) -> Dict[str, str]:
+    """Generate all file contents based on configuration"""
+    content = {
+        "backend": generate_backend_plugin(config),
+    }
 
-        if existing_files:
-            print(f"{Colors.RED}ERROR:{Colors.END} The following files already exist:")
-            for f in existing_files:
-                print(f"   - {f}")
-            print(
-                f"\n{Colors.YELLOW}Use --force to overwrite existing files{Colors.END}"
-            )
-            sys.exit(1)
+    if not args.backend_only:
+        content["params"] = generate_params_component(config)
+        content["result"] = generate_result_component(config)
 
-    # Generate file contents
-    backend_content = generate_backend_plugin(config)
-    params_content = generate_params_component(config)
-    result_content = generate_result_component(config)
-    test_content = generate_test_file(config) if args.generate_tests else None
+    if args.generate_tests:
+        content["test"] = generate_test_file(config)
 
-    # Create files
-    try:
-        # Write backend plugin
-        backend_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(backend_path, "w") as f:
-            f.write(backend_content)
-        print(
-            f"{Colors.GREEN}SUCCESS:{Colors.END} Created backend plugin: {backend_path}"
+    return content
+
+
+def display_completion_info(
+    config: Dict[str, Any], args, file_paths: Dict[str, Path]
+) -> None:
+    """Display completion information and next steps"""
+    print_status("header", f"Plugin '{config['display_name']}' created successfully!")
+    print()
+    print_status("info", "Next steps:")
+
+    # Build next steps list
+    steps = [f"Implement your plugin logic in: {file_paths['backend']}"]
+
+    if not args.backend_only:
+        steps.extend(
+            [
+                "Frontend UI is automatically handled by GenericPluginParams and PluginResult",
+                f"   Only customize if needed in: {file_paths['params']} or {file_paths['result']}",
+            ]
         )
 
-        # Write frontend components if requested
-        if not args.backend_only:
-            params_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(params_path, "w") as f:
-                f.write(params_content)
-            print(
-                f"{Colors.GREEN}SUCCESS:{Colors.END} Created parameter component: {params_path}"
-            )
+    if args.generate_tests:
+        steps.append(f"Complete the test implementation in: {file_paths['test']}")
 
-            with open(result_path, "w") as f:
-                f.write(result_content)
-            print(
-                f"{Colors.GREEN}SUCCESS:{Colors.END} Created result component: {result_path}"
-            )
-
-        # Write test file if requested
-        if args.generate_tests and test_content:
-            test_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(test_path, "w") as f:
-                f.write(test_content)
-            print(f"{Colors.GREEN}SUCCESS:{Colors.END} Created test file: {test_path}")
-
-        # Add dependencies to requirements.txt
-        if args.dependencies:
-            add_dependencies_to_requirements(args.dependencies)
-
-        # Print next steps
-        print(
-            f"\n{Colors.GREEN}{Colors.BOLD}Plugin '{config['display_name']}' created successfully!{Colors.END}"
+    if args.dependencies:
+        steps.append(
+            f"Install dependencies: docker compose exec backend pip install {' '.join(args.dependencies)}"
         )
-        print(f"\n{Colors.CYAN}Next steps:{Colors.END}")
-        print(f"1. Implement your plugin logic in: {backend_path}")
-        if not args.backend_only:
-            print(f"2. Customize the parameter UI in: {params_path}")
-            print(f"3. Customize the result display in: {result_path}")
-        if args.generate_tests:
-            print(
-                f"{'4' if args.backend_only else '4'}. Complete the test implementation in: {test_path}"
-            )
+    else:
+        steps.append("Add any required dependencies to: backend/requirements.txt")
 
-        next_step = "5" if args.backend_only else ("5" if args.generate_tests else "4")
-        if args.dependencies:
-            print(
-                f"{next_step}. Install dependencies: docker compose exec backend pip install {' '.join(args.dependencies)}"
-            )
-            next_step = str(int(next_step) + 1)
+    steps.extend(
+        [
+            "Restart the backend container: docker compose restart backend",
+            "Test your plugin in the Plugins dashboard",
+        ]
+    )
+
+    # Print numbered steps
+    for i, step in enumerate(steps, 1):
+        if step.startswith("   "):
+            print(f"   {step}")
         else:
-            print(
-                f"{next_step}. Add any required dependencies to: backend/requirements.txt"
-            )
-            next_step = str(int(next_step) + 1)
+            print(f"{i}. {step}")
 
+    # Print tips
+    if args.backend_only:
+        print()
+        print_status("warning", "Backend-only mode: UI will be automatically generated")
+    else:
+        print()
+        print_status("info", "Frontend components created as templates only")
         print(
-            f"{next_step}. Restart the backend container: docker compose restart backend"
+            "   • GenericPluginParams.vue handles 95% of parameter forms automatically"
         )
-        print(f"{str(int(next_step) + 1)}. Test your plugin in the Plugins dashboard")
+        print("   • PluginResult.vue provides good fallback display for all data types")
+        print(
+            "   • Only customize the generated components if you need special UI features"
+        )
 
-        if args.backend_only:
-            print(
-                f"\n{Colors.YELLOW}TIP:{Colors.END} The plugin will work without frontend components, but parameters"
-            )
-            print(
-                "   will be shown as raw JSON input and results as formatted JSON output."
-            )
+    if args.generate_tests:
+        print()
+        print_status(
+            "warning",
+            f"Run tests with: docker compose exec backend pytest {file_paths['test']}",
+        )
 
-        if args.generate_tests:
-            print(
-                f"\n{Colors.YELLOW}TIP:{Colors.END} Run tests with: docker compose exec backend pytest {test_path}"
-            )
+    print()
+    print_status(
+        "warning", "To require API keys, add to your plugin's __init__ method:"
+    )
+    print(
+        '   self.api_key_requirements = ["provider_name"]  # e.g., ["openai", "shodan"]'
+    )
 
-    except Exception as e:
-        print(f"{Colors.RED}ERROR:{Colors.END} Error creating plugin files: {e}")
-        sys.exit(1)
+
+def create_plugin(args):
+    """Main function to create plugin files"""
+    # Prepare configuration
+    config = prepare_plugin_config(args)
+
+    # Get file paths
+    file_paths = get_plugin_file_paths(config)
+
+    # Check for conflicts
+    validate_file_conflicts(file_paths, args)
+
+    # Generate all content
+    content_map = generate_all_content(config, args)
+
+    # Prepare files to write
+    files_to_write = {}
+    for content_type, content in content_map.items():
+        files_to_write[file_paths[content_type]] = content
+
+    # Add dependencies to requirements.txt
+    if args.dependencies:
+        add_dependencies_to_requirements(args.dependencies)
+
+    # Write all files
+    write_files_safely(files_to_write)
+
+    # Display completion information
+    display_completion_info(config, args, file_paths)
 
 
 def add_dependencies_to_requirements(dependencies):
@@ -797,8 +817,13 @@ def interactive_mode():
             print(f"{Colors.RED}ERROR:{Colors.END} Please enter a valid number")
 
     # Backend only option
-    backend_only_input = input("\nCreate backend only? (y/N): ").strip().lower()
-    backend_only = backend_only_input in ["y", "yes"]
+    print(f"\n{Colors.CYAN}Frontend Components:{Colors.END}")
+    print("Most plugins work great with the automatic UI generation.")
+    print("Frontend components are only needed for custom UI requirements.")
+    backend_only_input = (
+        input("Create backend only (recommended)? (Y/n): ").strip().lower()
+    )
+    backend_only = backend_only_input not in ["n", "no"]
 
     # Dependencies
     print(f"\n{Colors.CYAN}Dependencies:{Colors.END}")
@@ -895,7 +920,7 @@ Command Line Mode:
     parser.add_argument(
         "--backend-only",
         action="store_true",
-        help="Only create backend plugin file (skip frontend components)",
+        help="Only create backend plugin file (UI will be automatically generated)",
     )
 
     parser.add_argument("--force", action="store_true", help="Overwrite existing files")

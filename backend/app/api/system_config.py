@@ -15,7 +15,8 @@ router = APIRouter()
 )
 @admin_only()
 async def get_configuration(
-    current_user: models.User = Depends(get_current_active_user), db: Session = Depends(get_db)
+    current_user: models.User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
 ):
     """Get current system configuration (admin only)."""
     config_service = SystemConfigService(db)
@@ -103,7 +104,8 @@ async def remove_api_key(
 @router.get("/configuration/api-keys", response_model=dict)
 @admin_only()
 async def list_api_keys(
-    current_user: models.User = Depends(get_current_active_user), db: Session = Depends(get_db)
+    current_user: models.User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
 ):
     """List all configured API keys with masked keys (admin only)."""
     config_service = SystemConfigService(db)
@@ -159,7 +161,8 @@ async def preview_case_number_template(
 @router.get("/configuration/evidence-templates")
 @admin_only()
 async def get_evidence_folder_templates(
-    current_user: models.User = Depends(get_current_active_user), db: Session = Depends(get_db)
+    current_user: models.User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
 ):
     """Get evidence folder templates (admin only)."""
     config_service = SystemConfigService(db)

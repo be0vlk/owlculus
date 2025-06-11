@@ -48,10 +48,12 @@ class PluginService:
     @no_analyst()
     async def list_plugins(self, *, current_user: User) -> Dict[str, Any]:
         """List all registered plugins and their metadata"""
-        return {
-            name: plugin(db_session=self.db).get_metadata()
-            for name, plugin in self._plugins.items()
-        }
+        plugins_metadata = {}
+        for name, plugin_class in self._plugins.items():
+            plugin_instance = plugin_class(db_session=self.db)
+            metadata = plugin_instance.get_metadata()
+            plugins_metadata[name] = metadata
+        return plugins_metadata
 
     @no_analyst()
     async def execute_plugin(

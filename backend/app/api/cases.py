@@ -112,7 +112,12 @@ async def get_case_entities(
     )
 
 
-@router.post("/{case_id}/entities", response_model=schemas.Entity, tags=["entities"], status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{case_id}/entities",
+    response_model=schemas.Entity,
+    tags=["entities"],
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_entity(
     case_id: int,
     entity: schemas.EntityCreate,
@@ -143,7 +148,11 @@ async def update_entity(
     )
 
 
-@router.delete("/{case_id}/entities/{entity_id}", tags=["entities"], status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{case_id}/entities/{entity_id}",
+    tags=["entities"],
+    status_code=status.HTTP_204_NO_CONTENT,
+)
 async def delete_entity(
     case_id: int,
     entity_id: int,

@@ -16,7 +16,9 @@ from app.services.exiftool_service import ExifToolService
 router = APIRouter()
 
 
-@router.post("/", response_model=list[schemas.Evidence], status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/", response_model=list[schemas.Evidence], status_code=status.HTTP_201_CREATED
+)
 async def create_evidence(
     title: str,
     case_id: int,
@@ -130,7 +132,9 @@ async def delete_evidence(
     return {"message": "Evidence deleted successfully"}
 
 
-@router.post("/folders", response_model=schemas.Evidence, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/folders", response_model=schemas.Evidence, status_code=status.HTTP_201_CREATED
+)
 async def create_folder(
     folder_data: schemas.FolderCreate,
     db: Session = Depends(get_db),
@@ -176,9 +180,7 @@ async def delete_folder(
     current_user: models.User = Depends(get_current_active_user),
 ):
     evidence_service = EvidenceService(db)
-    await evidence_service.delete_folder(
-        folder_id=folder_id, current_user=current_user
-    )
+    await evidence_service.delete_folder(folder_id=folder_id, current_user=current_user)
     return {"message": "Folder deleted successfully"}
 
 
@@ -238,7 +240,11 @@ async def extract_evidence_metadata(
     return metadata_result
 
 
-@router.post("/case/{case_id}/apply-template", response_model=list[schemas.Evidence], status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/case/{case_id}/apply-template",
+    response_model=list[schemas.Evidence],
+    status_code=status.HTTP_201_CREATED,
+)
 async def apply_folder_template(
     case_id: int,
     template_name: str,

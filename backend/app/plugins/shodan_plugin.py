@@ -26,6 +26,7 @@ class ShodanPlugin(BasePlugin):
         self.category = "Network"
         self.evidence_category = "Network Assets"
         self.save_to_case = False
+        self.api_key_requirements = ["shodan"]
         self.parameters = {
             "query": {
                 "type": "string",

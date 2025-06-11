@@ -14,7 +14,7 @@ This will guide you through:
 - Description and categories
 - Required Python dependencies
 - Test file generation
-- Frontend component creation
+- Frontend component creation (optional - automatic UI works for most plugins)
 
 ### Command Line Mode
 ```bash
@@ -28,7 +28,7 @@ python scripts/create_plugin.py whois \
   --dependencies "python-whois" \
   --description "Query domain registration information"
 
-# Create backend-only plugin without tests
+# Create backend-only plugin (recommended - UI is automatic)
 python scripts/create_plugin.py api_tool \
   --backend-only \
   --no-tests \
@@ -36,7 +36,8 @@ python scripts/create_plugin.py api_tool \
 ```
 
 ### Generator Features
-- **Automatic File Creation**: Backend plugin, frontend components, and test files
+- **Automatic File Creation**: Backend plugin, frontend components (optional), and test files
+- **Automatic UI Generation**: GenericPluginParams and PluginResult handle 95% of UI needs
 - **Dependency Management**: Automatically adds packages to `requirements.txt`
 - **Category-Specific Templates**: Optimized templates based on plugin category
 - **Comprehensive Tests**: Generates test scaffolding with multiple test cases
@@ -46,7 +47,7 @@ python scripts/create_plugin.py api_tool \
 - `--category`: Person, Network, Company, Other
 - `--evidence-category`: Social Media, Associates, Network Assets, Communications, Documents, Other
 - `--dependencies`: Comma-separated list of Python packages
-- `--backend-only`: Skip frontend component generation
+- `--backend-only`: Skip frontend component generation (recommended - UI is automatic)
 - `--no-tests`: Skip test file generation
 - `--force`: Overwrite existing files
 
@@ -56,10 +57,47 @@ python scripts/create_plugin.py api_tool \
 
 Owlculus uses a plugin system that consists of:
 - **Backend Plugin**: Python class that handles the actual tool execution
-- **Frontend Parameter Component**: Vue component for user input (optional but recommended)
-- **Frontend Result Component**: Vue component for displaying results (optional but recommended)
+- **Frontend Parameter Component**: Vue component for user input (usually not needed - automatic UI handles 95% of cases)
+- **Frontend Result Component**: Vue component for displaying results (usually not needed - automatic fallback handles most cases)
 
-The system automatically discovers and loads plugins based on naming conventions.
+The system automatically discovers and loads plugins based on naming conventions and provides automatic UI generation through `GenericPluginParams.vue` and `PluginResult.vue`.
+
+## Automatic UI System
+
+**Most plugins don't need custom frontend components!** Owlculus provides a sophisticated automatic UI generation system:
+
+### GenericPluginParams.vue
+Automatically generates parameter forms based on your backend plugin's parameter schema:
+- **String parameters** → Text input fields with descriptions
+- **Number/Float parameters** → Number input fields with validation
+- **Boolean parameters** → Toggle switches
+- **Required validation** → Automatic based on schema
+- **Default values** → Pre-populated from schema
+- **API key warnings** → Automatic validation and user guidance
+- **Case selection** → Automatic for evidence saving
+
+### PluginResult.vue
+Provides intelligent fallback display for any result data structure:
+- **Automatic component loading** → Tries to load custom result component first
+- **Smart fallback** → Beautiful display for any JSON data structure
+- **Error handling** → Consistent error message display
+- **Empty states** → Proper "no results" messaging
+- **Data formatting** → Intelligent formatting for different data types
+
+### When to Create Custom Components
+**Parameter Component**: Only needed for:
+- Custom validation logic beyond required/optional
+- Special UI elements (dropdowns, file uploads, multi-select)
+- Custom parameter grouping or complex layouts
+- Plugin-specific help text or examples
+
+**Result Component**: Only needed for:
+- Custom data visualization (charts, tables, graphs)
+- Special formatting for specific data types  
+- Custom actions (copy buttons, download links)
+- Plugin-specific styling or layout requirements
+
+**Recommendation**: Start with the automatic UI (use `--backend-only`) and only add custom components if the automatic system doesn't meet your specific needs.
 
 ## Manual Plugin Development
 
@@ -244,54 +282,90 @@ def _format_evidence_content(self, results: List[Dict[str, Any]], params: Dict[s
     return "\n".join(content_lines)
 ```
 
-### 6. Dependencies
+### 6. API Key Requirements
+
+Plugins can declare required API keys that will be automatically validated:
+
+```python
+class MyPlugin(BasePlugin):
+    def __init__(self):
+        super().__init__()
+        self.api_key_requirements = ["provider_name"]  # e.g., ["openai", "shodan"]
+
+    async def run(self, params: Optional[Dict[str, Any]] = None) -> AsyncGenerator[Dict[str, Any], None]:
+        # Check API key requirements (automatically handled by BasePlugin)
+        if hasattr(self, 'api_key_requirements') and self.api_key_requirements:
+            missing_keys = self.check_api_key_requirements()
+            if missing_keys:
+                yield {
+                    "type": "error",
+                    "data": {
+                        "message": f"API key{'s' if len(missing_keys) > 1 else ''} required for: {', '.join(missing_keys)}. "
+                                  "Please add them in Admin → Configuration → API Keys"
+                    }
+                }
+                return
+        
+        # Your plugin logic here...
+```
+
+The system will:
+- Check if required API keys are configured before execution
+- Show warnings in the UI when keys are missing
+- Disable plugin execution until keys are configured
+- Direct admins to the configuration page
+- Provide simplified API key checking in generated plugins
+
+### 7. Dependencies
 Add any required packages to `/backend/requirements.txt`:
 ```txt
 your-package-name==version
 ```
 
-## Frontend Components (Optional but Recommended)
+## Frontend Components (Usually Not Needed - Automatic UI Available)
 
-### 1. Parameter Component
+### Automatic UI Generation (Recommended)
+
+**Most plugins don't need custom frontend components!** The system provides automatic UI generation:
+
+- **`GenericPluginParams.vue`**: Automatically generates parameter forms based on your backend plugin's parameter schema
+- **`PluginResult.vue`**: Provides intelligent fallback display for any result data structure
+
+**What's handled automatically:**
+- Parameter form generation (string, number, boolean types)
+- API key validation and warning messages
+- Case selection for evidence saving
+- Plugin description display
+- Error handling and validation
+
+### 1. Custom Parameter Component (Only If Needed)
 
 **Location**: `/frontend/src/components/plugins/YourPluginNamePluginParams.vue`
 
+**Only create this if you need:**
+- Custom validation beyond basic required/optional
+- Special UI elements (dropdowns, multi-select, file uploads)
+- Custom parameter layout or grouping
+- Plugin-specific help text or examples
+
 ```vue
 <template>
-  <div class="d-flex flex-column ga-3">
-    <!-- About card with plugin description (always at top) -->
-    <v-card
-      v-if="pluginDescription"
-      color="blue-lighten-5"
-      elevation="0"
-      rounded="lg"
-      class="pa-3"
-    >
-      <div class="d-flex align-center ga-2 mb-2">
-        <v-icon color="blue">mdi-information</v-icon>
-        <span class="text-subtitle2 font-weight-medium">About</span>
-      </div>
-      <p class="text-body-2 mb-0">
-        {{ pluginDescription }}
-      </p>
-    </v-card>
-
-    <!-- Input fields -->
-    <v-text-field
-      v-model="localParams.your_param"
-      label="Your Parameter"
-      placeholder="Enter value"
-      variant="outlined"
-      density="compact"
-      @update:model-value="updateParams"
-    />
-  </div>
+  <!-- Most plugins should just use GenericPluginParams -->
+  <GenericPluginParams
+    :parameters="parameters"
+    :model-value="modelValue"
+    :plugin-name="'YourPluginNamePlugin'"
+    @update:model-value="$emit('update:modelValue', $event)"
+  />
+  
+  <!-- Only add custom fields if GenericPluginParams doesn't meet your needs -->
 </template>
 
 <script setup>
-import { reactive, watch, computed } from 'vue'
+import GenericPluginParams from './GenericPluginParams.vue'
 
-const props = defineProps({
+// Standard props for all plugin parameter components
+defineProps({
   parameters: {
     type: Object,
     required: true
@@ -302,55 +376,47 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['update:modelValue'])
+defineEmits(['update:modelValue'])
 
-// Extract plugin description from parameters
-const pluginDescription = computed(() => props.parameters?.description)
-
-// Local parameter state
-const localParams = reactive({
-  your_param: props.modelValue.your_param || '',
-})
-
-// Emit parameter updates
-const updateParams = () => {
-  emit('update:modelValue', { ...localParams })
-}
-
-// Watch for external changes
-watch(() => props.modelValue, (newValue) => {
-  Object.assign(localParams, newValue)
-}, { deep: true })
+// GenericPluginParams automatically handles:
+// - Parameter form generation based on backend schema
+// - API key warnings and validation
+// - Case selection for evidence saving
+// - All standard parameter types (string, number, boolean)
 </script>
 ```
 
-### 2. Result Component
+### 2. Custom Result Component (Only If Needed)
 
 **Location**: `/frontend/src/components/plugins/YourPluginNamePluginResult.vue`
+
+**The automatic `PluginResult.vue` provides a good fallback display for all data types.** Only create a custom result component if you need:
+
+- Custom formatting for specific data types
+- Special visualization (charts, tables, graphs)
+- Custom actions (copy buttons, links, downloads)
+- Plugin-specific styling or layout
 
 ```vue
 <template>
   <div class="d-flex flex-column ga-4">
+    <!-- TODO: Customize your result display here -->
+    <!-- 
+      This component is optional! The automatic PluginResult.vue provides
+      a good fallback display for most plugins. Only create this if you need
+      special formatting or custom actions.
+    -->
+    
     <template v-for="(item, index) in parsedResults" :key="index">
       <!-- Data Results -->
       <v-card v-if="item.type === 'data'" elevation="2" rounded="lg">
         <v-card-title class="d-flex align-center">
           <v-icon icon="mdi-your-icon" class="mr-2" />
-          {{ item.data.title }}
+          {{ item.data.target || 'Plugin Results' }}
         </v-card-title>
         <v-card-text>
-          <!-- Display your results here -->
-          <div>{{ item.data.result_field }}</div>
-          
-          <!-- Copy functionality -->
-          <v-btn
-            icon="mdi-content-copy"
-            size="small"
-            variant="text"
-            @click="copyToClipboard(item.data.result_field)"
-          >
-            <v-tooltip activator="parent">Copy result</v-tooltip>
-          </v-btn>
+          <!-- Example: Display your plugin's specific data structure -->
+          <pre class="text-caption">{{ JSON.stringify(item.data, null, 2) }}</pre>
         </v-card-text>
       </v-card>
 
@@ -400,14 +466,6 @@ const parsedResults = computed(() => {
   
   return []
 })
-
-const copyToClipboard = async (text) => {
-  try {
-    await navigator.clipboard.writeText(text)
-  } catch (err) {
-    console.error('Failed to copy text:', err)
-  }
-}
 </script>
 ```
 
@@ -426,16 +484,19 @@ The system automatically:
 
 ## Development Workflow
 
-### Recommended: Use Plugin Generator
+### Recommended: Use Plugin Generator (Backend-Only)
 ```bash
-# Interactive mode (recommended for beginners)
+# Interactive mode (recommended - defaults to backend-only)
 python scripts/create_plugin.py
 
-# Command line mode (faster for experienced developers)
+# Command line mode with backend-only (recommended)
+python scripts/create_plugin.py my_tool --backend-only --dependencies "requests,beautifulsoup4"
+
+# Only create frontend components if you need custom UI features
 python scripts/create_plugin.py my_tool --dependencies "requests,beautifulsoup4"
 ```
 
-The generator handles all the boilerplate and follows best practices automatically.
+The generator handles all the boilerplate and follows best practices automatically. **Most plugins should use `--backend-only` since the automatic UI generation handles 95% of use cases.**
 
 ### Manual Development (Alternative)
 
@@ -453,12 +514,16 @@ touch backend/app/plugins/mytool_plugin.py
 docker compose exec backend pip install your-tool
 ```
 
-#### 2. Create Frontend Components (Optional)
+#### 2. Create Frontend Components (Usually Not Needed)
 ```bash
-# Create parameter component
+# Only create these if automatic UI doesn't meet your needs
+# GenericPluginParams.vue handles 95% of parameter forms
+# PluginResult.vue provides good fallback for all result types
+
+# Create parameter component (only if you need custom UI)
 touch frontend/src/components/plugins/MytoolPluginParams.vue
 
-# Create result component  
+# Create result component (only if you need custom visualization)
 touch frontend/src/components/plugins/MytoolPluginResult.vue
 ```
 
@@ -499,12 +564,13 @@ docker compose exec backend pytest backend/tests/plugins/test_mytool_plugin.py
 - **Keep output clean** - users want results, not progress updates
 
 ### Frontend
-- **Follow Vuetify patterns** for consistent UI
-- **Always place About card at top** of parameter components
-- **Provide clear parameter labels** and placeholders
-- **Include validation** for required fields
-- **Show copy functionality** for useful data
-- **Handle empty results** gracefully
+- **Use automatic UI generation** - GenericPluginParams and PluginResult handle most cases
+- **Only create custom components** when you need special UI features
+- **Follow Vuetify patterns** for consistent UI when customizing
+- **Provide clear parameter labels** and placeholders in custom components
+- **Include validation** for required fields in custom components
+- **Show copy functionality** for useful data in custom components
+- **Handle empty results** gracefully in custom components
 - **Use appropriate icons** from Material Design Icons
 
 ### Security

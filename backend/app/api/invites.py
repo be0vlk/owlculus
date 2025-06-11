@@ -10,7 +10,9 @@ from app.services.invite_service import InviteService
 router = APIRouter()
 
 
-@router.post("/", response_model=schemas.InviteResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/", response_model=schemas.InviteResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_invite(
     invite: schemas.InviteCreate,
     db: Session = Depends(get_db),
@@ -42,7 +44,11 @@ async def validate_invite(
     return await invite_service.validate_invite(token=token)
 
 
-@router.post("/{token}/register", response_model=schemas.UserRegistrationResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{token}/register",
+    response_model=schemas.UserRegistrationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def register_user(
     token: str,
     registration_data: schemas.UserRegistration,

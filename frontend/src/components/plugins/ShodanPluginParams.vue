@@ -1,6 +1,12 @@
 <template>
   <div class="d-flex flex-column ga-3">
     <PluginDescriptionCard :description="pluginDescription" />
+    
+    <!-- API Key Warning -->
+    <ApiKeyWarning
+      v-if="missingApiKeys.length > 0"
+      :missing-providers="missingApiKeys"
+    />
 
     <!-- Search Type Selection -->
     <v-radio-group
@@ -100,9 +106,11 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch, computed } from 'vue'
+import { ref, reactive, watch, computed, onMounted } from 'vue'
 import { useCaseSelection } from '@/composables/useCaseSelection'
+import { usePluginApiKeys } from '@/composables/usePluginApiKeys'
 import PluginDescriptionCard from './PluginDescriptionCard.vue'
+import ApiKeyWarning from './ApiKeyWarning.vue'
 
 const props = defineProps({
   parameters: {
@@ -173,6 +181,23 @@ const {
   caseItems,
   updateCaseParams
 } = useCaseSelection(props, emit)
+
+// Use plugin API keys composable
+const { checkPluginApiKeys, getMissingApiKeys } = usePluginApiKeys()
+const missingApiKeys = ref([])
+
+// Check API keys on mount
+onMounted(async () => {
+  // Check if plugin has API key requirements
+  if (props.parameters.api_key_requirements && props.parameters.api_key_requirements.length > 0) {
+    const plugin = {
+      name: 'ShodanPlugin',
+      api_key_requirements: props.parameters.api_key_requirements
+    }
+    await checkPluginApiKeys(plugin)
+    missingApiKeys.value = getMissingApiKeys(plugin)
+  }
+})
 
 // Update search type and related parameters
 const updateSearchType = () => {
