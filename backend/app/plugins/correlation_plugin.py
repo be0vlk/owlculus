@@ -2,13 +2,14 @@
 Plugin for scanning and correlating entity names across cases
 """
 
-from typing import Any, AsyncGenerator, Dict, List, Optional
+from typing import Any, AsyncGenerator, Dict, List, Optional, get_args, get_origin
 
 from sqlmodel import Session, select
 
 from ..core.dependencies import get_db
 from ..core.utils import get_utc_now
 from ..database.models import Case, CaseUserLink, Entity
+from ..schemas.entity_schema import ENTITY_TYPE_SCHEMAS
 from .base_plugin import BasePlugin
 
 
@@ -214,19 +215,80 @@ class CorrelationScan(BasePlugin):
 
         return matches
 
+    def _get_primary_fields_for_entity(self, entity_type: str) -> List[str]:
+        """Dynamically determine primary identifier fields for an entity type"""
+        if entity_type not in ENTITY_TYPE_SCHEMAS:
+            return []
+
+        schema_class = ENTITY_TYPE_SCHEMAS[entity_type]
+        annotations = getattr(schema_class, '__annotations__', {})
+        
+        # Look for required fields (non-Optional)
+        required_fields = []
+        name_like_fields = []
+        
+        for field_name, field_type in annotations.items():
+            # Skip complex types, focus on simple identifiers
+            if get_origin(field_type) is not None:
+                # This is a generic type like Optional[str], List[str], etc.
+                if get_origin(field_type) is type(Optional[str]):  # Union type (Optional)
+                    continue
+            
+            # Check if it's a simple string type (likely identifier)
+            if field_type == str:
+                required_fields.append(field_name)
+            
+            # Collect name-like fields for fallback
+            if any(keyword in field_name.lower() for keyword in ['name', 'domain', 'ip', 'address']):
+                name_like_fields.append(field_name)
+
+        # Special handling for person entities (combine first_name + last_name)
+        if entity_type == "person":
+            if "first_name" in annotations and "last_name" in annotations:
+                return ["first_name", "last_name"]
+        
+        # Use required fields if available
+        if required_fields:
+            return required_fields
+        
+        # Fallback to name-like fields
+        if name_like_fields:
+            return name_like_fields[:1]  # Take first name-like field
+        
+        # Final fallback: look for common identifier patterns
+        common_patterns = [entity_type, "name", "title", "identifier"]
+        for pattern in common_patterns:
+            if pattern in annotations:
+                return [pattern]
+        
+        return []
+
     def _get_display_name(self, data: dict, entity_type: str) -> str:
         """Extract display name from entity data based on type"""
         if not data:
             return ""
 
-        if entity_type == "company":
-            return data.get("name", "")
-        elif entity_type == "person":
-            first_name = data.get("first_name", "")
-            last_name = data.get("last_name", "")
-            return f"{first_name} {last_name}".strip()
-        else:
+        # Check if entity type is supported in schemas
+        if entity_type not in ENTITY_TYPE_SCHEMAS:
+            # Fallback for unknown entity types
             return data.get("Name", "")
+
+        # Dynamically get primary fields for this entity type
+        primary_fields = self._get_primary_fields_for_entity(entity_type)
+        
+        if not primary_fields:
+            # Fallback: try to use a field that matches the entity type name
+            return data.get(entity_type, data.get("name", ""))
+
+        # Extract values for primary fields
+        field_values = []
+        for field in primary_fields:
+            value = data.get(field, "")
+            if value:
+                field_values.append(str(value))
+
+        # Combine multiple fields with space (e.g., first_name + last_name)
+        return " ".join(field_values).strip()
 
     def _format_evidence_content(
         self, results: List[Dict[str, Any]], params: Dict[str, Any]
