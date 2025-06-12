@@ -2,13 +2,14 @@
 Plugin for scanning and correlating entity names across cases
 """
 
-from typing import AsyncGenerator, Dict, Any, Optional, List
-from sqlmodel import select, Session
+from typing import Any, AsyncGenerator, Dict, List, Optional
 
-from .base_plugin import BasePlugin
-from ..database.models import Entity, Case, CaseUserLink
+from sqlmodel import Session, select
+
 from ..core.dependencies import get_db
 from ..core.utils import get_utc_now
+from ..database.models import Case, CaseUserLink, Entity
+from .base_plugin import BasePlugin
 
 
 class CorrelationScan(BasePlugin):

@@ -2,15 +2,14 @@
 Tests for UserService functionality
 """
 
-import pytest
-from unittest.mock import Mock, patch, AsyncMock
-from fastapi import HTTPException
-from sqlmodel import Session
+from unittest.mock import Mock, patch
 
-from app.services.user_service import UserService
+import pytest
 from app.database import models
 from app.schemas import user_schema as schemas
-from app.core import security
+from app.services.user_service import UserService
+from fastapi import HTTPException
+from sqlmodel import Session
 
 
 class TestUserService:

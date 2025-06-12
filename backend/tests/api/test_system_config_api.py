@@ -2,16 +2,16 @@
 Comprehensive tests for system_config API endpoints
 """
 
-import pytest
-from fastapi.testclient import TestClient
-from fastapi import status
-from sqlmodel import Session
-from unittest.mock import patch
 from datetime import datetime, timezone
+from unittest.mock import patch
 
-from app.main import app
-from app.database.models import User, SystemConfiguration
+import pytest
 from app.core.dependencies import get_current_user, get_db
+from app.database.models import SystemConfiguration, User
+from app.main import app
+from fastapi import status
+from fastapi.testclient import TestClient
+from sqlmodel import Session
 
 client = TestClient(app)
 

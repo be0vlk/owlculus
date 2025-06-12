@@ -1,8 +1,9 @@
-from pydantic import EmailStr
-from sqlmodel import Field, SQLModel, Relationship
-from typing import List, Optional
 from datetime import datetime
-from sqlalchemy import Column, JSON
+from typing import List, Optional
+
+from pydantic import EmailStr
+from sqlalchemy import JSON, Column
+from sqlmodel import Field, Relationship, SQLModel
 
 from ..core.utils import get_utc_now
 

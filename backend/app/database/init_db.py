@@ -9,10 +9,10 @@ import sys
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
 sys.path.insert(0, project_root)
 
-from sqlmodel import Session, select
-from backend.app.database.connection import engine, create_db_and_tables
-from backend.app.database.models import User, Client
 from backend.app.core.security import get_password_hash
+from backend.app.database.connection import create_db_and_tables, engine
+from backend.app.database.models import Client, User
+from sqlmodel import Session, select
 
 
 def create_initial_data():

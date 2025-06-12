@@ -1,6 +1,7 @@
-from pydantic import BaseModel, EmailStr, field_validator, ConfigDict
-from typing import Optional, Literal
 from datetime import datetime
+from typing import Literal, Optional
+
+from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 
 
 class InviteCreate(BaseModel):
@@ -27,8 +28,13 @@ class InviteListResponse(BaseModel):
     used_at: Optional[datetime] = None
     is_expired: bool
     is_used: bool
+    created_by_username: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class InviteTokenValidation(BaseModel):
+    token: str
 
 
 class InviteValidation(BaseModel):

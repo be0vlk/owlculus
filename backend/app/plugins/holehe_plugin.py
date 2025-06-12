@@ -3,10 +3,10 @@ Holehe plugin for checking email account registrations across platforms
 """
 
 import asyncio
-import httpx
 import importlib
-import time
-from typing import AsyncGenerator, Dict, Any, Optional
+from typing import Any, AsyncGenerator, Dict, Optional
+
+import httpx
 from sqlmodel import Session
 
 from .base_plugin import BasePlugin
@@ -43,6 +43,7 @@ class HolehePlugin(BasePlugin):
         """Dynamically import all available holehe modules"""
         try:
             import pkgutil
+
             import holehe
 
             modules = []
@@ -66,13 +67,13 @@ class HolehePlugin(BasePlugin):
                     ):
                         modules.append((func_name, getattr(module, func_name)))
 
-                except (ImportError, AttributeError) as e:
+                except (ImportError, AttributeError):
                     # Skip modules that can't be imported or don't have the expected function
                     continue
 
             return modules
 
-        except ImportError as e:
+        except ImportError:
             return []
 
     async def _check_single_platform(

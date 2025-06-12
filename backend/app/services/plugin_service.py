@@ -2,14 +2,16 @@
 Service for managing and executing plugins
 """
 
-import os
 import importlib
 import inspect
-from typing import Dict, Type, AsyncGenerator, Any
-from ..plugins.base_plugin import BasePlugin
+import os
+from typing import Any, AsyncGenerator, Dict, Type
+
 from app.core.dependencies import no_analyst
-from ..database.models import User
 from sqlmodel import Session
+
+from ..database.models import User
+from ..plugins.base_plugin import BasePlugin
 
 
 class PluginService:

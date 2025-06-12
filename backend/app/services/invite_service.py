@@ -1,13 +1,13 @@
 import secrets
 from datetime import timedelta, timezone
-from sqlmodel import Session
-from fastapi import HTTPException
 
-from app.database import models, crud
 from app import schemas
 from app.core.dependencies import admin_only
 from app.core.logging import get_security_logger
 from app.core.utils import get_utc_now
+from app.database import crud, models
+from fastapi import HTTPException
+from sqlmodel import Session
 
 
 class InviteService:
@@ -59,9 +59,7 @@ class InviteService:
     async def get_invites(
         self, current_user: models.User, skip: int = 0, limit: int = 100
     ) -> list[schemas.InviteListResponse]:
-        invites = await crud.get_invites_by_creator(
-            self.db, creator_id=current_user.id, skip=skip, limit=limit
-        )
+        invites = await crud.get_all_invites(self.db, skip=skip, limit=limit)
 
         now = get_utc_now()
         result = []
@@ -204,7 +202,7 @@ class InviteService:
         )
 
         try:
-            # Get invite to check ownership
+            # Get invite
             invite = self.db.get(models.Invite, invite_id)
             if not invite:
                 invite_logger.bind(
@@ -212,16 +210,6 @@ class InviteService:
                     failure_reason="invite_not_found",
                 ).warning("Invite deletion failed: invite not found")
                 raise HTTPException(status_code=404, detail="Invite not found")
-
-            if invite.created_by_id != current_user.id:
-                invite_logger.bind(
-                    event_type="invite_deletion_failed",
-                    failure_reason="not_authorized",
-                    invite_creator_id=invite.created_by_id,
-                ).warning("Invite deletion failed: not authorized")
-                raise HTTPException(
-                    status_code=403, detail="Not authorized to delete this invite"
-                )
 
             if invite.used_at:
                 invite_logger.bind(
@@ -234,7 +222,9 @@ class InviteService:
             result = await crud.delete_invite(self.db, invite_id=invite_id)
 
             invite_logger.bind(
-                invite_role=invite.role, event_type="invite_deletion_success"
+                invite_role=invite.role,
+                original_creator_id=invite.created_by_id,
+                event_type="invite_deletion_success",
             ).info("Invite deleted successfully")
 
             return result

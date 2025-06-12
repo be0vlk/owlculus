@@ -3,10 +3,12 @@ Query domain Whois information using python-whois library
 """
 
 import asyncio
-import whois
 from datetime import datetime
-from typing import AsyncGenerator, Dict, Any, Optional, List
+from typing import Any, AsyncGenerator, Dict, List, Optional
+
+import whois
 from sqlmodel import Session
+
 from .base_plugin import BasePlugin
 
 

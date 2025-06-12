@@ -1,7 +1,9 @@
 import sys
-from pathlib import Path
 from contextvars import ContextVar
+from pathlib import Path
+
 from loguru import logger
+
 from .config import logging_settings
 
 # Context variables to store request info across async calls

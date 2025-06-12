@@ -2,14 +2,14 @@
 Tests for PluginService functionality
 """
 
+from typing import Any, AsyncGenerator, Dict, Optional
+from unittest.mock import Mock, patch
+
 import pytest
-from unittest.mock import Mock, patch, MagicMock, AsyncMock
-from sqlmodel import Session
-from app.services.plugin_service import PluginService
 from app.database import models
 from app.plugins.base_plugin import BasePlugin
-from typing import Dict, Any, Optional, AsyncGenerator
-import asyncio
+from app.services.plugin_service import PluginService
+from sqlmodel import Session
 
 
 # Mock plugin for testing

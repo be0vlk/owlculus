@@ -1,12 +1,11 @@
-import pytest
 import os
-from sqlmodel import Session, select
 from datetime import datetime
 from unittest.mock import patch
 
+import pytest
 from app.database import models
 from app.services.system_config_service import SystemConfigService
-from app.core.utils import get_utc_now
+from sqlmodel import Session, select
 
 
 @pytest.fixture(name="config_service")

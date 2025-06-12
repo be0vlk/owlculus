@@ -2,17 +2,16 @@
 Case management API
 """
 
-from fastapi import APIRouter, Depends, status
-from sqlmodel import Session
-from typing import List
-from typing import Optional
+from typing import List, Optional
 
-from app.database.connection import get_db
-from app.database import models
 from app import schemas
 from app.core.dependencies import get_current_active_user
+from app.database import models
+from app.database.connection import get_db
 from app.services.case_service import CaseService
 from app.services.entity_service import EntityService
+from fastapi import APIRouter, Depends, status
+from sqlmodel import Session
 
 router = APIRouter()
 

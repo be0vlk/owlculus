@@ -14,12 +14,11 @@ Example:
     python scripts/create_plugin.py whois --category Network --evidence-category "Network Assets"
 """
 
-import os
-import sys
 import argparse
 import re
-from typing import Dict, Any, List, Tuple
+import sys
 from pathlib import Path
+from typing import Any, Dict
 
 
 # ANSI color codes for terminal output
@@ -769,7 +768,7 @@ def interactive_mode():
         description = "Brief description of what this plugin does"
 
     # Get UI category
-    print(f"\nUI Categories:")
+    print("\nUI Categories:")
     for i, cat in enumerate(UI_CATEGORIES, 1):
         print(f"  {i}. {cat}")
 
@@ -793,7 +792,7 @@ def interactive_mode():
             print(f"{Colors.RED}ERROR:{Colors.END} Please enter a valid number")
 
     # Get evidence category
-    print(f"\nEvidence Categories:")
+    print("\nEvidence Categories:")
     for i, cat in enumerate(EVIDENCE_CATEGORIES, 1):
         print(f"  {i}. {cat}")
 
@@ -907,14 +906,14 @@ Command Line Mode:
         "--category",
         choices=UI_CATEGORIES,
         default="Other",
-        help=f"UI category for plugin organization (default: Other)",
+        help="UI category for plugin organization (default: Other)",
     )
 
     parser.add_argument(
         "--evidence-category",
         choices=EVIDENCE_CATEGORIES,
         default="Other",
-        help=f"Evidence storage category (default: Other)",
+        help="Evidence storage category (default: Other)",
     )
 
     parser.add_argument(

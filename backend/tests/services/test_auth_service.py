@@ -2,16 +2,16 @@
 Tests for AuthService functionality
 """
 
-import pytest
-from unittest.mock import Mock, patch, AsyncMock
 from datetime import timedelta
-from fastapi import HTTPException, status
-from sqlmodel import Session
+from unittest.mock import Mock, patch
 
-from app.services.auth_service import AuthService
-from app.database import models
+import pytest
 from app.core import security
 from app.core.config import settings
+from app.database import models
+from app.services.auth_service import AuthService
+from fastapi import HTTPException, status
+from sqlmodel import Session
 
 
 class TestAuthService:

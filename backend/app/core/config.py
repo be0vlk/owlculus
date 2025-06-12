@@ -1,7 +1,8 @@
-from pydantic_settings import BaseSettings
-from pydantic import AnyHttpUrl, SecretStr
-import dotenv
 import os
+
+import dotenv
+from pydantic import AnyHttpUrl, SecretStr
+from pydantic_settings import BaseSettings
 
 dotenv.load_dotenv()
 

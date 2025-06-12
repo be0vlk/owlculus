@@ -2,15 +2,17 @@
 API endpoints for plugin management and execution
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+import json
+from typing import Any, Dict
+
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
-from typing import Dict, Any
-from ..services.plugin_service import PluginService
-from ..schemas.plugin_schema import PluginMetadata
+from sqlalchemy.orm import Session
+
 from ..core.dependencies import get_current_active_user, get_db
 from ..database.models import User
-from sqlalchemy.orm import Session
-import json
+from ..schemas.plugin_schema import PluginMetadata
+from ..services.plugin_service import PluginService
 
 router = APIRouter(tags=["plugins"])
 

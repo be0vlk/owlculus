@@ -1,6 +1,7 @@
-from pydantic import BaseModel
-from typing import List, Literal
 from datetime import datetime
+from typing import List, Literal
+
+from pydantic import BaseModel
 
 
 class ChatMessage(BaseModel):

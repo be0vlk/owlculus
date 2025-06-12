@@ -3,13 +3,13 @@ Authentication service handling all auth-related business logic
 """
 
 from datetime import timedelta
-from fastapi import HTTPException, status
-from sqlmodel import Session
 
 from app.core import security
 from app.core.config import settings
 from app.core.logging import get_security_logger
 from app.database import crud
+from fastapi import HTTPException, status
+from sqlmodel import Session
 
 
 class AuthService:

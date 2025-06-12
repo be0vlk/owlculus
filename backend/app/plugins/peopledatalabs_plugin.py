@@ -2,9 +2,10 @@
 Enrich person and company data using People Data Labs API
 """
 
-import asyncio
-from typing import AsyncGenerator, Dict, Any, Optional, List
+from typing import Any, AsyncGenerator, Dict, List, Optional
+
 from sqlmodel import Session
+
 from .base_plugin import BasePlugin
 
 
@@ -120,8 +121,8 @@ class PeopledatalabsPlugin(BasePlugin):
 
         try:
             # Import People Data Labs client
-            from peopledatalabs import PDLPY
             from app.services.system_config_service import SystemConfigService
+            from peopledatalabs import PDLPY
 
             # Get API key from system configuration
             config_service = SystemConfigService(self.db_session)

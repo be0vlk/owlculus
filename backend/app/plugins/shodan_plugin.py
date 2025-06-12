@@ -2,15 +2,14 @@
 Shodan plugin for searching hosts and services using Shodan API
 """
 
-import asyncio
-import ipaddress
 import time
-from typing import AsyncGenerator, Dict, Any, Optional, Set
+from typing import Any, AsyncGenerator, Dict, Optional
+
+from app.core.dependencies import get_db
+from app.services.system_config_service import SystemConfigService
+from sqlmodel import Session
 
 from .base_plugin import BasePlugin
-from app.services.system_config_service import SystemConfigService
-from app.core.dependencies import get_db
-from sqlmodel import Session
 
 
 class ShodanPlugin(BasePlugin):

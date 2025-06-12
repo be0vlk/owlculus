@@ -1,12 +1,11 @@
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from typing import List
-
-from fastapi import HTTPException, status
-from openai import OpenAI
-from sqlmodel import Session
 
 from app.schemas.strixy_schema import ChatMessage, ChatResponse
 from app.services.system_config_service import SystemConfigService
+from fastapi import HTTPException, status
+from openai import OpenAI
+from sqlmodel import Session
 
 
 class StrixyService:

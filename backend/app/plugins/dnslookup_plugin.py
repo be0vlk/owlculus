@@ -2,15 +2,16 @@
 DNS lookup plugin for resolving domain names to IP addresses and performing reverse DNS lookups
 """
 
-from typing import AsyncGenerator, Dict, Any, Optional, List
 import asyncio
-import time
 import ipaddress
+import time
+from typing import Any, AsyncGenerator, Dict, List, Optional
+
 import dns.asyncresolver
-from dns.rdatatype import RdataType
-from sqlmodel import Session
 from dns.exception import DNSException
+from dns.rdatatype import RdataType
 from dns.reversename import from_address
+from sqlmodel import Session
 
 from .base_plugin import BasePlugin
 

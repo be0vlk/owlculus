@@ -1,10 +1,10 @@
-import pytest
 from unittest.mock import Mock, patch
-from fastapi.testclient import TestClient
-from fastapi import HTTPException
 
+import pytest
 from app.main import app
-from app.schemas.strixy_schema import ChatMessage, ChatResponse
+from app.schemas.strixy_schema import ChatResponse
+from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
 
 class TestStrixyAPI:

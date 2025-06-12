@@ -1,6 +1,7 @@
-from pydantic import BaseModel, field_validator, ConfigDict
-from typing import Optional, List, Dict
 from datetime import datetime
+from typing import Dict, List, Optional
+
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class SystemConfigurationBase(BaseModel):

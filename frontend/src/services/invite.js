@@ -17,15 +17,12 @@ export const inviteService = {
   },
 
   async validateInvite(token) {
-    const response = await api.get(`/api/invites/${token}/validate`)
+    const response = await api.post('/api/invites/validate', { token })
     return response.data
   },
 
   async registerUserWithInvite(registrationData) {
-    const response = await api.post(
-      `/api/invites/${registrationData.token}/register`,
-      registrationData,
-    )
+    const response = await api.post('/api/invites/register', registrationData)
     return response.data
   },
 

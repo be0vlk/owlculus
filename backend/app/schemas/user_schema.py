@@ -1,6 +1,8 @@
 from datetime import datetime
-from typing import Optional, Literal
-from pydantic import BaseModel, EmailStr, ConfigDict, Field
+from typing import Literal, Optional
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
+
 from ..core.utils import get_utc_now
 
 

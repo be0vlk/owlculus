@@ -4,13 +4,12 @@ Authentication API
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
-from fastapi.security import OAuth2PasswordRequestForm
-from sqlmodel import Session
-
 from app.database.connection import get_db
 from app.schemas.auth_schema import Token
 from app.services.auth_service import AuthService
+from fastapi import APIRouter, Depends
+from fastapi.security import OAuth2PasswordRequestForm
+from sqlmodel import Session
 
 router = APIRouter()
 

@@ -2,14 +2,13 @@
 Client management API
 """
 
-from fastapi import APIRouter, Depends, status
-from sqlmodel import Session
-
-from app.database.connection import get_db
-from app.database import models
 from app import schemas
 from app.core.dependencies import get_current_active_user
+from app.database import models
+from app.database.connection import get_db
 from app.services.client_service import ClientService
+from fastapi import APIRouter, Depends, status
+from sqlmodel import Session
 
 router = APIRouter()
 

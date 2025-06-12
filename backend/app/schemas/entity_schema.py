@@ -3,8 +3,10 @@ Pydantic models for entities.
 """
 
 from datetime import datetime
-from typing import Optional, Dict, Any, List
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator, AnyHttpUrl
+from typing import Any, Dict, List, Optional
+
+from pydantic import AnyHttpUrl, BaseModel, ConfigDict, EmailStr, Field, model_validator
+
 from ..core.utils import get_utc_now
 
 

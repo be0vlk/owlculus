@@ -3,13 +3,12 @@ Comprehensive tests for clients API endpoints
 """
 
 import pytest
-from fastapi.testclient import TestClient
-from fastapi import status
-from sqlmodel import Session
-
-from app.main import app
-from app.database.models import User, Client
 from app.core.dependencies import get_current_active_user, get_db
+from app.database.models import Client, User
+from app.main import app
+from fastapi import status
+from fastapi.testclient import TestClient
+from sqlmodel import Session
 
 client = TestClient(app)
 

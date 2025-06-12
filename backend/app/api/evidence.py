@@ -2,16 +2,16 @@
 Evidence management API
 """
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
-from sqlmodel import Session
 from typing import Optional
 
-from app.database.connection import get_db
-from app.database import models
-from app.schemas import evidence_schema as schemas
 from app.core.dependencies import get_current_active_user
+from app.database import models
+from app.database.connection import get_db
+from app.schemas import evidence_schema as schemas
 from app.services.evidence_service import EvidenceService
 from app.services.exiftool_service import ExifToolService
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from sqlmodel import Session
 
 router = APIRouter()
 
@@ -55,7 +55,7 @@ async def create_evidence(
                 evidence=evidence_data, current_user=current_user, file=file
             )
             results.append(evidence)
-        except Exception as e:
+        except Exception:
             # If one file fails, continue with the rest
             continue
 
@@ -226,7 +226,7 @@ async def extract_evidence_metadata(
     if not exiftool_service.is_supported_file(evidence.content):
         return {
             "success": False,
-            "error": f"Unsupported file type for metadata extraction",
+            "error": "Unsupported file type for metadata extraction",
             "supported_file": False,
             "file_extension": (
                 evidence.content.split(".")[-1]
@@ -236,7 +236,7 @@ async def extract_evidence_metadata(
         }
 
     # Construct full file path
-    from pathlib import Path
+
     from app.core.file_storage import UPLOAD_DIR
 
     full_file_path = UPLOAD_DIR / evidence.content

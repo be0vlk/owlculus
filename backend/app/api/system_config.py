@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 
-from ..database.connection import get_db
+from ..core.dependencies import admin_only, get_current_active_user
 from ..database import models
+from ..database.connection import get_db
 from ..schemas import system_config_schema
 from ..services.system_config_service import SystemConfigService
-from ..core.dependencies import get_current_active_user, admin_only
 
 router = APIRouter()
 

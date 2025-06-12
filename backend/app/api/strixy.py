@@ -1,10 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session
-
 from app.core.dependencies import get_current_active_user, get_db
 from app.database import models
 from app.schemas.strixy_schema import ChatRequest, ChatResponse
 from app.services.strixy_service import StrixyService
+from fastapi import APIRouter, Depends
+from sqlmodel import Session
 
 router = APIRouter()
 

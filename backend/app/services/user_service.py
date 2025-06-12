@@ -2,13 +2,12 @@
 User service layer handling all user-related business logic
 """
 
-from sqlmodel import Session
-from fastapi import HTTPException
-
-from app.database import models, crud
 from app import schemas
 from app.core.dependencies import admin_only
 from app.core.logging import get_security_logger
+from app.database import crud, models
+from fastapi import HTTPException
+from sqlmodel import Session
 
 
 class UserService:

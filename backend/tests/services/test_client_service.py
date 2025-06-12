@@ -1,10 +1,9 @@
 import pytest
-from sqlmodel import Session
-from fastapi import HTTPException
-
-from app.database import models, crud
 from app import schemas
+from app.database import crud, models
 from app.services.client_service import ClientService
+from fastapi import HTTPException
+from sqlmodel import Session
 
 
 # Helper function to create a client

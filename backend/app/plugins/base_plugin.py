@@ -2,26 +2,27 @@
 Base plugin class that all OSINT tools must inherit from
 """
 
-from abc import ABC, abstractmethod
 import asyncio
-import subprocess
-import shlex
-import json
-from concurrent.futures import ThreadPoolExecutor
-from typing import AsyncGenerator, Dict, Any, Optional, List, Union
-from app.schemas import evidence_schema as schemas
-from app.schemas.evidence_schema import EvidenceCreate
-from app.database import models
-from app.core.utils import get_utc_now
-from app.core.dependencies import get_db
-from tempfile import SpooledTemporaryFile
-from fastapi import UploadFile
-from app.services.evidence_service import EvidenceService
-from sqlalchemy.orm import Session
-from app.services.system_config_service import SystemConfigService
-from app.services.entity_service import EntityService
-from app.schemas.entity_schema import EntityCreate, IpAddressData
 import ipaddress
+import json
+import shlex
+import subprocess
+from abc import ABC, abstractmethod
+from concurrent.futures import ThreadPoolExecutor
+from tempfile import SpooledTemporaryFile
+from typing import Any, AsyncGenerator, Dict, List, Optional, Union
+
+from app.core.dependencies import get_db
+from app.core.utils import get_utc_now
+from app.database import models
+from app.schemas import evidence_schema as schemas
+from app.schemas.entity_schema import EntityCreate, IpAddressData
+from app.schemas.evidence_schema import EvidenceCreate
+from app.services.entity_service import EntityService
+from app.services.evidence_service import EvidenceService
+from app.services.system_config_service import SystemConfigService
+from fastapi import UploadFile
+from sqlalchemy.orm import Session
 
 
 class BasePlugin(ABC):
@@ -409,14 +410,14 @@ class BasePlugin(ABC):
                         )
                         created_count += 1
 
-                except Exception as e:
+                except Exception:
                     # Log error but continue with other IPs
                     failed_count += 1
                     continue
 
             # Entity operations completed silently
 
-        except Exception as e:
+        except Exception:
             # Don't break evidence saving if entity creation fails completely
             pass
         finally:

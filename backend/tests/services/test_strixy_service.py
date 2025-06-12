@@ -1,9 +1,9 @@
-import pytest
 from unittest.mock import Mock, patch
-from fastapi import HTTPException
 
-from app.services.strixy_service import StrixyService
+import pytest
 from app.schemas.strixy_schema import ChatMessage
+from app.services.strixy_service import StrixyService
+from fastapi import HTTPException
 
 
 class TestStrixyService:

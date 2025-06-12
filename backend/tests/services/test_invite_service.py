@@ -1,13 +1,13 @@
-import pytest
-from unittest.mock import Mock, patch
 from datetime import timedelta
-from fastapi import HTTPException
-from sqlmodel import Session
+from unittest.mock import Mock, patch
 
-from app.services.invite_service import InviteService
+import pytest
+from app.core.utils import get_utc_now
 from app.database import models
 from app.schemas import invite_schema as schemas
-from app.core.utils import get_utc_now
+from app.services.invite_service import InviteService
+from fastapi import HTTPException
+from sqlmodel import Session
 
 
 class TestInviteService:

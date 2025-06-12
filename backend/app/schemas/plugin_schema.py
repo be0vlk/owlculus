@@ -2,8 +2,9 @@
 Plugin schemas for request/response validation
 """
 
+from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel
-from typing import Dict, Any, Optional, List
 
 
 class PluginParameter(BaseModel):

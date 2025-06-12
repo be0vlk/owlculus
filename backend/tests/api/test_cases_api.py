@@ -1,11 +1,11 @@
 import pytest
+from app.core.config import settings
+from app.core.dependencies import get_current_active_user, get_db
+from app.database.models import Case, CaseUserLink, Client, Entity, User
+from app.main import app
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
-from sqlmodel import Session, select
-from app.main import app
-from app.database.models import User, Case, Client, Entity, CaseUserLink
-from app.core.dependencies import get_current_active_user, get_db
-from app.core.config import settings
+from sqlmodel import Session
 
 client = TestClient(app)
 
@@ -626,7 +626,6 @@ def test_error_response_format(override_dependencies):
 def test_concurrent_api_calls(override_dependencies, test_client: Client):
     """Test handling of concurrent API calls"""
     import threading
-    import time
 
     results = []
 

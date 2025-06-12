@@ -2,14 +2,12 @@
 Tests for the Shodan plugin
 """
 
-import pytest
-from unittest.mock import Mock, patch, AsyncMock
-from typing import Dict, Any, List
+from unittest.mock import AsyncMock, Mock, patch
 
+import pytest
 from app.plugins.shodan_plugin import ShodanPlugin
-from app.services.system_config_service import SystemConfigService
 from app.services.entity_service import EntityService
-from app.schemas.entity_schema import EntityCreate, IpAddressData
+from app.services.system_config_service import SystemConfigService
 
 
 class TestShodanPlugin:

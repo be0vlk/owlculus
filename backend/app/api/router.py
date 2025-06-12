@@ -1,14 +1,15 @@
 from fastapi import APIRouter
+
 from . import (
     auth,
-    users,
     cases,
     clients,
-    plugins,
     evidence,
-    system_config,
     invites,
+    plugins,
     strixy,
+    system_config,
+    users,
 )
 
 api_router = APIRouter()

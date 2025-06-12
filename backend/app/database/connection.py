@@ -1,7 +1,8 @@
-from sqlmodel import create_engine, Session
-from .models import SQLModel
+from sqlalchemy_utils import create_database, database_exists
+from sqlmodel import Session, create_engine
+
 from ..core.config import settings
-from sqlalchemy_utils import database_exists, create_database
+from .models import SQLModel
 
 # Configure connection pooling for better performance and connection management
 engine = create_engine(

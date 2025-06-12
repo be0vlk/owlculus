@@ -2,16 +2,15 @@
 Entity service layer handling all entity-related business logic
 """
 
-from sqlmodel import Session, select
-from fastapi import HTTPException
 from typing import Optional
 
-from app.database import models
 from app import schemas
+from app.core.dependencies import check_case_access, no_analyst
 from app.core.utils import get_utc_now
-from app.core.dependencies import no_analyst, case_must_be_open, check_case_access
-from app.database import crud
+from app.database import crud, models
 from app.database.db_utils import transaction
+from fastapi import HTTPException
+from sqlmodel import Session, select
 
 
 class EntityService:

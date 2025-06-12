@@ -3,12 +3,13 @@ Database utilities for session management and transactions
 """
 
 from contextlib import contextmanager
-from typing import Generator, TypeVar, Callable, Any
-from sqlmodel import Session
-from sqlalchemy.exc import SQLAlchemyError
-from fastapi import HTTPException
-from app.database.connection import engine
+from typing import Any, Callable, Generator, TypeVar
+
 from app.core.logging import get_logger_with_context
+from app.database.connection import engine
+from fastapi import HTTPException
+from sqlalchemy.exc import SQLAlchemyError
+from sqlmodel import Session
 
 logger = get_logger_with_context(module="db_utils")
 

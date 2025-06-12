@@ -1,12 +1,12 @@
 from contextlib import asynccontextmanager
+
+from app.api.router import api_router
+from app.core.config import settings
+from app.core.dependencies import get_client_ip, get_user_agent
+from app.core.logging import client_ip_context, setup_logging, user_agent_context
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
-
-from app.core.config import settings
-from app.core.logging import setup_logging, client_ip_context, user_agent_context
-from app.core.dependencies import get_client_ip, get_user_agent
-from app.api.router import api_router
 
 
 @asynccontextmanager

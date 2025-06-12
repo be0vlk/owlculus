@@ -1,12 +1,11 @@
-import pytest
-from sqlmodel import Session
-from fastapi import HTTPException
 from datetime import datetime
 
-from app.database import models
+import pytest
 from app import schemas
+from app.database import models
 from app.services import case_service
-from app.core.utils import get_utc_now
+from fastapi import HTTPException
+from sqlmodel import Session
 
 
 @pytest.fixture(name="case_service_instance")
@@ -743,7 +742,7 @@ async def test_case_date_filtering(
             client_id=client.id,
             title=f"Date Test Case {i}",
             status="Open",
-            notes=f"Created at different times",
+            notes="Created at different times",
         )
         case = await case_service_instance.create_case(
             case_data, current_user=test_admin

@@ -1,14 +1,14 @@
+import base64
+import os
 from datetime import timedelta
+from pathlib import Path
 
 import bcrypt
-import jwt
-from pathlib import Path
 import filetype
-from werkzeug.utils import secure_filename
-from fastapi import UploadFile, HTTPException
-import os
+import jwt
 from cryptography.fernet import Fernet
-import base64
+from fastapi import HTTPException, UploadFile
+from werkzeug.utils import secure_filename
 
 from .config import settings
 from .utils import get_utc_now
@@ -130,7 +130,7 @@ async def validate_file_security(file: UploadFile) -> None:
         except UnicodeDecodeError:
             pass
 
-    raise HTTPException(status_code=400, detail=f"File type not allowed")
+    raise HTTPException(status_code=400, detail="File type not allowed")
 
 
 def secure_filename_with_path(filename: str, base_path: Path) -> str:

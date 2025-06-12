@@ -1,11 +1,10 @@
-from fastapi import APIRouter, Depends, status
-from sqlmodel import Session
-
-from app.database.connection import get_db
-from app.database import models
 from app import schemas
 from app.core.dependencies import get_current_active_user
+from app.database import models
+from app.database.connection import get_db
 from app.services.invite_service import InviteService
+from fastapi import APIRouter, Depends, status
+from sqlmodel import Session
 
 router = APIRouter()
 
@@ -35,31 +34,24 @@ async def get_invites(
     )
 
 
-@router.get("/{token}/validate", response_model=schemas.InviteValidation)
+@router.post("/validate", response_model=schemas.InviteValidation)
 async def validate_invite(
-    token: str,
+    token_data: schemas.InviteTokenValidation,
     db: Session = Depends(get_db),
 ):
     invite_service = InviteService(db)
-    return await invite_service.validate_invite(token=token)
+    return await invite_service.validate_invite(token=token_data.token)
 
 
 @router.post(
-    "/{token}/register",
+    "/register",
     response_model=schemas.UserRegistrationResponse,
     status_code=status.HTTP_201_CREATED,
 )
 async def register_user(
-    token: str,
     registration_data: schemas.UserRegistration,
     db: Session = Depends(get_db),
 ):
-    # Ensure token in URL matches token in body
-    if token != registration_data.token:
-        from fastapi import HTTPException
-
-        raise HTTPException(status_code=400, detail="Token mismatch")
-
     invite_service = InviteService(db)
     return await invite_service.register_user_with_invite(
         registration=registration_data

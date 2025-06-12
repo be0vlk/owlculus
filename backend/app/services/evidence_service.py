@@ -2,23 +2,22 @@
 Evidence service for handling evidence-related operations.
 """
 
-from fastapi import HTTPException, UploadFile
-from sqlmodel import Session, select
 from typing import List, Optional
 
-from app.database import models
-from app.schemas import evidence_schema as schemas
-from app.core.utils import get_utc_now
-from app.core.logging import get_security_logger
+from app.core.dependencies import check_case_access, no_analyst
 from app.core.file_storage import (
-    save_upload_file,
-    delete_file,
     create_folder,
+    delete_file,
     delete_folder,
     normalize_folder_path,
-    UPLOAD_DIR,
+    save_upload_file,
 )
-from app.core.dependencies import check_case_access, no_analyst
+from app.core.logging import get_security_logger
+from app.core.utils import get_utc_now
+from app.database import models
+from app.schemas import evidence_schema as schemas
+from fastapi import HTTPException, UploadFile
+from sqlmodel import Session, select
 
 
 class EvidenceService:
@@ -99,7 +98,7 @@ class EvidenceService:
                     )
                     evidence.content = relative_path
                     evidence.file_hash = file_hash
-                except HTTPException as e:
+                except HTTPException:
                     raise
                 except Exception as e:
                     evidence_logger.bind(
@@ -370,9 +369,9 @@ class EvidenceService:
 
             # For file evidence, return a FileResponse
             if evidence.evidence_type == "file":
-                from fastapi.responses import FileResponse
-                from pathlib import Path
+
                 from app.core.file_storage import UPLOAD_DIR
+                from fastapi.responses import FileResponse
 
                 file_path = UPLOAD_DIR / evidence.content
                 if not file_path.exists():
@@ -452,9 +451,9 @@ class EvidenceService:
                     detail="Evidence type does not support content viewing",
                 )
 
-            from pathlib import Path
-            from app.core.file_storage import UPLOAD_DIR
+
             import chardet
+            from app.core.file_storage import UPLOAD_DIR
 
             file_path = UPLOAD_DIR / evidence.content
             if not file_path.exists():

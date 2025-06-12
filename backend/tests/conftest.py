@@ -1,11 +1,11 @@
-import pytest
 import os
-from sqlmodel import Session, SQLModel, create_engine
-from fastapi.testclient import TestClient
-from fastapi.security import OAuth2PasswordBearer
 from datetime import timedelta
-from fastapi import HTTPException
+
+import pytest
 from app.database import crud
+from fastapi import HTTPException
+from fastapi.testclient import TestClient
+from sqlmodel import Session, SQLModel, create_engine
 
 # Set test environment variables before importing app
 os.environ.setdefault("SECRET_KEY", "test_secret_key_for_testing_only")
@@ -16,15 +16,15 @@ os.environ.setdefault("POSTGRES_PORT", "5432")
 os.environ.setdefault("POSTGRES_DB", "test_db")
 os.environ.setdefault("FRONTEND_URL", "http://localhost:3000")
 
-from app.main import app
-from app.database import models
+from app.core.config import settings
+from app.core.dependencies import get_current_active_user, get_current_user
 from app.core.security import (
-    get_password_hash,
     create_access_token,
+    get_password_hash,
     verify_access_token,
 )
-from app.core.config import settings
-from app.core.dependencies import get_current_user, get_current_active_user
+from app.database import models
+from app.main import app
 
 # Use an in-memory SQLite database for testing
 SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"

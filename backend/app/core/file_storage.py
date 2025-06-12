@@ -2,13 +2,13 @@
 File storage utilities for handling evidence uploads
 """
 
-import os
 import hashlib
 from pathlib import Path
 from typing import Optional, Tuple
-from fastapi import UploadFile, HTTPException
 
-from .security import validate_file_security, secure_filename_with_path
+from fastapi import HTTPException, UploadFile
+
+from .security import secure_filename_with_path, validate_file_security
 
 UPLOAD_DIR = Path("uploads")
 if not UPLOAD_DIR.exists():

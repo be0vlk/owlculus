@@ -1,8 +1,10 @@
 from datetime import datetime
-from typing import Optional, Literal
+from typing import Literal, Optional
+
 from pydantic import BaseModel, ConfigDict, Field
-from .user_schema import User
+
 from ..core.utils import get_utc_now
+from .user_schema import User
 
 
 class CaseBase(BaseModel):

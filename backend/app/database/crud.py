@@ -1,17 +1,19 @@
-from sqlmodel import Session, select, or_
-from ..core.utils import get_utc_now
-from fastapi import HTTPException
 from typing import Optional
 
+from fastapi import HTTPException
+from sqlalchemy.orm import selectinload
+from sqlmodel import Session, or_, select
+
+from ..core.utils import get_utc_now
 from ..schemas import (
-    UserCreate,
-    UserUpdate,
-    ClientCreate,
-    ClientUpdate,
     CaseCreate,
     CaseUpdate,
+    ClientCreate,
+    ClientUpdate,
     EntityCreate,
     EntityUpdate,
+    UserCreate,
+    UserUpdate,
 )
 from . import models
 
@@ -38,6 +40,10 @@ async def create_user(db: Session, user: UserCreate):
     user_data = user.model_dump()
     from ..core.security import get_password_hash
 
+    # Validate that only Admin users can be superadmin
+    if user_data.get("is_superadmin", False) and user_data.get("role") != "Admin":
+        raise ValueError("Only users with Admin role can be superadmin")
+
     user_data["password_hash"] = get_password_hash(user_data.pop("password"))
     db_user = models.User(**user_data)
     db.add(db_user)
@@ -51,6 +57,10 @@ async def update_user(db: Session, user_id: int, user: UserUpdate):
     if db_user is None:
         raise ValueError(f"User with id {user_id} not found")
 
+    # Check if trying to downgrade a superadmin from Admin role
+    if user.role is not None and user.role != "Admin" and db_user.is_superadmin:
+        raise ValueError("Cannot change role of superadmin user away from Admin")
+
     if user.username is not None:
         db_user.username = user.username
     if user.email is not None:
@@ -60,6 +70,10 @@ async def update_user(db: Session, user_id: int, user: UserUpdate):
     if user.is_active is not None:
         db_user.is_active = user.is_active
     if user.is_superadmin is not None:
+        # Validate that only Admin users can be superadmin
+        final_role = user.role if user.role is not None else db_user.role
+        if user.is_superadmin and final_role != "Admin":
+            raise ValueError("Only users with Admin role can be superadmin")
         db_user.is_superadmin = user.is_superadmin
 
     db_user.updated_at = user.updated_at
@@ -70,7 +84,7 @@ async def update_user(db: Session, user_id: int, user: UserUpdate):
 async def change_user_password(
     db: Session, user: models.User, current_password: str, new_password: str
 ):
-    from ..core.security import verify_password, get_password_hash
+    from ..core.security import get_password_hash, verify_password
 
     if not verify_password(current_password, user.password_hash):
         raise ValueError("Current password is incorrect")
@@ -455,6 +469,17 @@ async def get_invites_by_creator(
     ).all()
 
 
+async def get_all_invites(db: Session, skip: int = 0, limit: int = 100):
+    statement = (
+        select(models.Invite)
+        .options(selectinload(models.Invite.creator))
+        .order_by(models.Invite.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    return db.exec(statement).all()
+
+
 async def mark_invite_used(db: Session, invite: models.Invite):
     invite.used_at = get_utc_now()
     db.commit()
@@ -472,7 +497,6 @@ async def delete_invite(db: Session, invite_id: int):
 
 
 async def delete_expired_invites(db: Session):
-    from datetime import datetime
 
     now = get_utc_now()
     expired_invites = db.exec(
@@ -498,6 +522,7 @@ async def create_user_from_invite(
         "email": email,
         "password_hash": get_password_hash(password),
         "role": role,
+        "is_superadmin": False,  # Invites cannot create superadmin users
     }
     db_user = models.User(**user_data)
     db.add(db_user)

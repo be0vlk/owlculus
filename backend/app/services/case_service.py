@@ -2,18 +2,18 @@
 Case service layer handling all case-related business logic
 """
 
-from sqlmodel import Session, select
-from fastapi import HTTPException
 from datetime import datetime
 
-from app.database import models, crud
 from app import schemas
-from app.core.utils import get_utc_now
-from app.core.dependencies import admin_only, no_analyst, check_case_access
+from app.core.dependencies import admin_only, check_case_access, no_analyst
 from app.core.file_storage import create_case_directory
 from app.core.logging import get_security_logger
-from app.services.system_config_service import SystemConfigService
+from app.core.utils import get_utc_now
+from app.database import crud, models
 from app.database.db_utils import transaction
+from app.services.system_config_service import SystemConfigService
+from fastapi import HTTPException
+from sqlmodel import Session, select
 
 
 class CaseService:

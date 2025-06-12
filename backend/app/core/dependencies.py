@@ -1,14 +1,13 @@
-from fastapi import Depends, HTTPException, status, Request
-from fastapi.security import OAuth2PasswordBearer
-from sqlmodel import Session, select
 from functools import wraps
 
-
 from app.core import security
+from app.core.config import settings
 from app.database import crud
 from app.database.connection import get_db
-from app.database.models import User, Case
-from app.core.config import settings
+from app.database.models import Case, User
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import OAuth2PasswordBearer
+from sqlmodel import Session, select
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
 

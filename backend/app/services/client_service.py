@@ -2,13 +2,12 @@
 Client service layer handling all client-related business logic
 """
 
-from sqlmodel import Session
-from fastapi import HTTPException
-
-from app.database import models, crud
 from app import schemas
 from app.core.dependencies import admin_only, no_analyst
 from app.core.logging import get_security_logger
+from app.database import crud, models
+from fastapi import HTTPException
+from sqlmodel import Session
 
 
 class ClientService:

@@ -3,8 +3,10 @@ Evidence schemas for the application.
 """
 
 from datetime import datetime
-from typing import Optional, ClassVar, List
+from typing import ClassVar, List, Optional
+
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
 from ..core.utils import get_utc_now
 
 

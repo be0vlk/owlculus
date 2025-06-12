@@ -3,12 +3,11 @@ Comprehensive test suite for EntityService
 """
 
 import pytest
+from app.database import models
+from app.schemas.entity_schema import EntityCreate, EntityUpdate
+from app.services.entity_service import EntityService
 from fastapi import HTTPException
 from sqlmodel import Session
-
-from app.services.entity_service import EntityService
-from app.schemas.entity_schema import EntityCreate, EntityUpdate
-from app.database import models
 
 
 @pytest.mark.asyncio

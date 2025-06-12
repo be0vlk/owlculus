@@ -2,8 +2,8 @@
 Tests for Peopledatalabs plugin
 """
 
+
 import pytest
-from unittest.mock import AsyncMock, patch
 from app.plugins.peopledatalabs_plugin import PeopledatalabsPlugin
 
 

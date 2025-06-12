@@ -1,15 +1,13 @@
-import pytest
-import tempfile
-import os
-from io import BytesIO
-from unittest.mock import Mock, patch, AsyncMock
-from sqlmodel import Session
-from fastapi import HTTPException, UploadFile
+from unittest.mock import AsyncMock, Mock, patch
 
-from app.database import models
-from app.schemas import evidence_schema as schemas, case_schema
-from app.services import evidence_service
+import pytest
 from app.core.utils import get_utc_now
+from app.database import models
+from app.schemas import case_schema
+from app.schemas import evidence_schema as schemas
+from app.services import evidence_service
+from fastapi import HTTPException, UploadFile
+from sqlmodel import Session
 
 
 @pytest.fixture(name="evidence_service_instance")

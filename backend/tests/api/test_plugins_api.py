@@ -2,17 +2,16 @@
 Comprehensive tests for plugins API endpoints
 """
 
-import pytest
 import json
-from fastapi.testclient import TestClient
-from fastapi import status
-from sqlmodel import Session
-from unittest.mock import patch, AsyncMock
-from typing import AsyncGenerator
+from unittest.mock import patch
 
-from app.main import app
-from app.database.models import User
+import pytest
 from app.core.dependencies import get_current_active_user, get_db
+from app.database.models import User
+from app.main import app
+from fastapi import status
+from fastapi.testclient import TestClient
+from sqlmodel import Session
 
 client = TestClient(app)
 

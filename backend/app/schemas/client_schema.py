@@ -1,8 +1,10 @@
 from datetime import datetime
-from typing import Optional, List
+from typing import List, Optional
+
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
-from .case_schema import Case
+
 from ..core.utils import get_utc_now
+from .case_schema import Case
 
 
 class ClientBase(BaseModel):
