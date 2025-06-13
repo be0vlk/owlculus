@@ -4,11 +4,14 @@ Enumerate subdomains via Certificate Transparency logs, HackerTarget, and Securi
 
 import asyncio
 import json
-from typing import AsyncGenerator, Dict, Any, Optional, List, Set
-from sqlmodel import Session
+from typing import Any, AsyncGenerator, Dict, List, Optional, Set
+
 import aiohttp
 import dns.asyncresolver
+from sqlmodel import Session
+
 from .base_plugin import BasePlugin
+
 
 class SubdomainEnumPlugin(BasePlugin):
     """Enumerate subdomains via Certificate Transparency logs, HackerTarget, and SecurityTrails with DNS verification"""
@@ -44,69 +47,71 @@ class SubdomainEnumPlugin(BasePlugin):
         """Query crt.sh Certificate Transparency logs for the domain."""
         query = f"%25.{domain}"
         url = f"https://crt.sh/?q={query}&output=json"
-        
+
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, timeout=30) as resp:
                     text = await resp.text()
-            
+
             entries = json.loads(text)
             subdomains = set()
-            
+
             for entry in entries:
                 for name in entry.get("name_value", "").split("\n"):
                     name = name.strip().lower()
                     if name.endswith(domain) and "*" not in name:
                         subdomains.add(name)
-            
+
             return subdomains
-        except Exception as e:
+        except Exception:
             return set()
 
     async def fetch_from_hackertarget(self, domain: str) -> Set[str]:
         """Query hackertarget.com hostsearch API for the domain."""
         url = f"https://api.hackertarget.com/hostsearch/?q={domain}"
-        
+
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, timeout=30) as resp:
                     text = await resp.text()
-            
+
             subdomains = set()
             for line in text.splitlines():
                 parts = line.split(",")
                 if parts and parts[0].endswith(domain):
                     subdomains.add(parts[0].strip().lower())
-            
+
             return subdomains
-        except Exception as e:
+        except Exception:
             return set()
 
     async def fetch_from_securitytrails(self, domain: str, api_key: str) -> Set[str]:
         """Query SecurityTrails API for subdomains of the domain."""
         if not api_key:
             return set()
-        
+
         url = f"https://api.securitytrails.com/v1/domain/{domain}/subdomains"
         headers = {"APIKEY": api_key}
-        
+
         try:
             async with aiohttp.ClientSession(headers=headers) as session:
                 async with session.get(url, timeout=30) as resp:
                     if resp.status != 200:
                         return set()
                     data = await resp.json()
-            
+
             subdomains = set()
             for sub in data.get("subdomains", []):
                 fqdn = f"{sub}.{domain}".lower()
                 subdomains.add(fqdn)
-            
+
             return subdomains
-        except Exception as e:
+        except Exception:
             return set()
 
-    async def resolve_subdomain(self, resolver, semaphore, fqdn: str) -> Optional[Dict[str, Any]]:
+    async def resolve_subdomain(
+        self, resolver, semaphore, fqdn: str
+    ) -> Optional[Dict[str, Any]]:
         """Resolve a subdomain and return its IP address if found."""
         try:
             async with semaphore:
@@ -115,7 +120,7 @@ class SubdomainEnumPlugin(BasePlugin):
             return {"subdomain": fqdn, "ip": ips[0] if ips else None, "resolved": True}
         except (dns.resolver.NoAnswer, dns.resolver.NXDOMAIN, dns.exception.Timeout):
             return None
-        except Exception as e:
+        except Exception:
             return None
 
     def parse_output(self, line: str) -> Optional[Dict[str, Any]]:
@@ -128,10 +133,10 @@ class SubdomainEnumPlugin(BasePlugin):
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Main plugin execution method
-        
+
         Args:
             params: User-provided parameters
-            
+
         Yields:
             Structured data results
         """
@@ -149,37 +154,41 @@ class SubdomainEnumPlugin(BasePlugin):
         if use_securitytrails:
             if self.db_session:
                 from app.services.system_config_service import SystemConfigService
+
                 config_service = SystemConfigService(self.db_session)
                 securitytrails_key = config_service.get_api_key("securitytrails")
-                
+
                 if not securitytrails_key:
                     yield {
                         "type": "error",
                         "data": {
                             "message": "SecurityTrails API key not configured. Please add it in Admin → Configuration → API Keys or disable SecurityTrails option"
-                        }
+                        },
                     }
                     return
 
         # Fetch subdomains from multiple sources
         crt_subs = await self.fetch_from_crt(domain)
         ht_subs = await self.fetch_from_hackertarget(domain)
-        
+
         st_subs = set()
         if use_securitytrails and securitytrails_key:
             st_subs = await self.fetch_from_securitytrails(domain, securitytrails_key)
 
         # Combine all discovered subdomains
         all_subdomains = crt_subs.union(ht_subs).union(st_subs)
-        
+
         if not all_subdomains:
-            yield {"type": "data", "data": {"status": "No subdomains found", "phase": "complete"}}
+            yield {
+                "type": "data",
+                "data": {"status": "No subdomains found", "phase": "complete"},
+            }
             return
-        
+
         # Prepare DNS resolver
         resolver = dns.asyncresolver.Resolver()
         semaphore = asyncio.Semaphore(concurrency)
-        
+
         # Track sources for each subdomain
         subdomain_sources = {}
         for sub in crt_subs:
@@ -188,40 +197,58 @@ class SubdomainEnumPlugin(BasePlugin):
             subdomain_sources.setdefault(sub, []).append("HackerTarget")
         for sub in st_subs:
             subdomain_sources.setdefault(sub, []).append("SecurityTrails")
-        
+
         # Resolve subdomains
-        
+
         # Create tasks for DNS resolution
         tasks = []
         for subdomain in sorted(all_subdomains):
             task = self.resolve_subdomain(resolver, semaphore, subdomain)
             tasks.append((subdomain, task))
-        
+
         # Execute DNS resolutions and yield results as they complete
         resolved_count = 0
         for subdomain, task in tasks:
             result = await task
             if result:
                 resolved_count += 1
-                result["source"] = ", ".join(subdomain_sources.get(subdomain, ["Unknown"]))
+                result["source"] = ", ".join(
+                    subdomain_sources.get(subdomain, ["Unknown"])
+                )
                 yield {"type": "data", "data": result}
-        
+            else:
+                # Yield unresolved subdomains too
+                yield {
+                    "type": "data",
+                    "data": {
+                        "subdomain": subdomain,
+                        "ip": None,
+                        "resolved": False,
+                        "source": ", ".join(
+                            subdomain_sources.get(subdomain, ["Unknown"])
+                        ),
+                    },
+                }
+
         # Final summary
         yield {
-            "type": "data", 
+            "type": "data",
             "data": {
                 "status": "complete",
                 "phase": "summary",
                 "total_discovered": len(all_subdomains),
                 "total_resolved": resolved_count,
-                "sources_used": ["crt.sh", "HackerTarget"] + (["SecurityTrails"] if use_securitytrails else [])
-            }
+                "sources_used": ["crt.sh", "HackerTarget"]
+                + (["SecurityTrails"] if use_securitytrails else []),
+            },
         }
 
         # Evidence saving is handled automatically by BasePlugin
         # No manual implementation needed - just yield data results
 
-    def _format_evidence_content(self, results: List[Dict[str, Any]], params: Dict[str, Any]) -> str:
+    def _format_evidence_content(
+        self, results: List[Dict[str, Any]], params: Dict[str, Any]
+    ) -> str:
         """Custom formatting for evidence content"""
         content_lines = [
             f"{self.display_name} Investigation Results",
@@ -231,12 +258,12 @@ class SubdomainEnumPlugin(BasePlugin):
             f"Execution Time: {params.get('execution_time', 'Unknown')}",
             "",
         ]
-        
+
         # Separate different types of results
         discovered_subdomains = []
         status_messages = []
         summary = None
-        
+
         for result in results:
             data = result.get("data", {})
             if "subdomain" in data and "ip" in data:
@@ -245,31 +272,35 @@ class SubdomainEnumPlugin(BasePlugin):
                 summary = data
             elif "status" in data:
                 status_messages.append(data.get("status", ""))
-        
+
         # Add summary
         if summary:
-            content_lines.extend([
-                "Summary:",
-                "-" * 20,
-                f"Total Unique Subdomains Found: {summary.get('total_discovered', 0)}",
-                f"Successfully Resolved: {summary.get('total_resolved', 0)}",
-                f"Sources Used: {', '.join(summary.get('sources_used', []))}",
-                "",
-            ])
-        
+            content_lines.extend(
+                [
+                    "Summary:",
+                    "-" * 20,
+                    f"Total Unique Subdomains Found: {summary.get('total_discovered', 0)}",
+                    f"Successfully Resolved: {summary.get('total_resolved', 0)}",
+                    f"Sources Used: {', '.join(summary.get('sources_used', []))}",
+                    "",
+                ]
+            )
+
         # Add resolved subdomains
         if discovered_subdomains:
-            content_lines.extend([
-                "Resolved Subdomains:",
-                "-" * 20,
-            ])
-            
+            content_lines.extend(
+                [
+                    "Resolved Subdomains:",
+                    "-" * 20,
+                ]
+            )
+
             # Sort by subdomain name
             discovered_subdomains.sort(key=lambda x: x.get("subdomain", ""))
-            
+
             for sub in discovered_subdomains:
                 content_lines.append(
                     f"{sub.get('subdomain', 'Unknown'):<50} → {sub.get('ip', 'N/A'):<15} (Source: {sub.get('source', 'Unknown')})"
                 )
-        
+
         return "\n".join(content_lines)
