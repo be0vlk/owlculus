@@ -162,19 +162,12 @@ class SubdomainEnumPlugin(BasePlugin):
                     return
 
         # Fetch subdomains from multiple sources
-        yield {"type": "data", "data": {"status": "Querying crt.sh...", "phase": "discovery"}}
         crt_subs = await self.fetch_from_crt(domain)
-        yield {"type": "data", "data": {"status": f"Found {len(crt_subs)} subdomains from crt.sh", "phase": "discovery"}}
-        
-        yield {"type": "data", "data": {"status": "Querying HackerTarget...", "phase": "discovery"}}
         ht_subs = await self.fetch_from_hackertarget(domain)
-        yield {"type": "data", "data": {"status": f"Found {len(ht_subs)} subdomains from HackerTarget", "phase": "discovery"}}
         
         st_subs = set()
         if use_securitytrails and securitytrails_key:
-            yield {"type": "data", "data": {"status": "Querying SecurityTrails...", "phase": "discovery"}}
             st_subs = await self.fetch_from_securitytrails(domain, securitytrails_key)
-            yield {"type": "data", "data": {"status": f"Found {len(st_subs)} subdomains from SecurityTrails", "phase": "discovery"}}
 
         # Combine all discovered subdomains
         all_subdomains = crt_subs.union(ht_subs).union(st_subs)
@@ -182,8 +175,6 @@ class SubdomainEnumPlugin(BasePlugin):
         if not all_subdomains:
             yield {"type": "data", "data": {"status": "No subdomains found", "phase": "complete"}}
             return
-
-        yield {"type": "data", "data": {"status": f"Total unique subdomains found: {len(all_subdomains)}", "phase": "discovery"}}
         
         # Prepare DNS resolver
         resolver = dns.asyncresolver.Resolver()
@@ -199,7 +190,6 @@ class SubdomainEnumPlugin(BasePlugin):
             subdomain_sources.setdefault(sub, []).append("SecurityTrails")
         
         # Resolve subdomains
-        yield {"type": "data", "data": {"status": f"Resolving {len(all_subdomains)} subdomains...", "phase": "resolution"}}
         
         # Create tasks for DNS resolution
         tasks = []
