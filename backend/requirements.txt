@@ -22,3 +22,6 @@ shodan
 pytest
 pytest-asyncio
 peopledatalabs
+
+aiohttp
+dnspython
