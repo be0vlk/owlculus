@@ -27,6 +27,7 @@ export function useApiKeys() {
   // Common API providers
   const commonProviders = [
     { text: 'OpenAI', value: 'openai', icon: 'mdi-robot' },
+    { text: 'People Data Labs', value: 'people_data_labs', icon: 'mdi-account-group' },
     { text: 'Shodan', value: 'shodan', icon: 'mdi-radar' },
     { text: 'Custom', value: 'custom', icon: 'mdi-plus' },
   ]

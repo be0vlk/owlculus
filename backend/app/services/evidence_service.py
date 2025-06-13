@@ -451,7 +451,6 @@ class EvidenceService:
                     detail="Evidence type does not support content viewing",
                 )
 
-
             import chardet
             from app.core.file_storage import UPLOAD_DIR
 

@@ -2,7 +2,6 @@
 Tests for Peopledatalabs plugin
 """
 
-
 import pytest
 from app.plugins.peopledatalabs_plugin import PeopledatalabsPlugin
 

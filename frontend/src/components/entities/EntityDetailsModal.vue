@@ -5,17 +5,17 @@
         <v-icon start :icon="getEntityIcon" color="primary" />
         <span class="text-h5">{{ getEntityTitle }}</span>
         <v-spacer />
-        <v-chip 
-          :color="isEditing ? 'warning' : 'primary'" 
-          variant="tonal" 
+        <v-chip
+          :color="isEditing ? 'warning' : 'primary'"
+          variant="tonal"
           size="small"
         >
           {{ isEditing ? 'Editing' : 'View Mode' }}
         </v-chip>
       </v-card-title>
-      
+
       <v-divider />
-      
+
       <v-card-text class="pa-0">
         <!-- Error Alert -->
         <v-alert v-if="error" type="error" variant="tonal" class="ma-4">
@@ -23,9 +23,9 @@
         </v-alert>
 
         <!-- Tabs -->
-        <v-tabs 
-          v-model="activeTab" 
-          color="primary" 
+        <v-tabs
+          v-model="activeTab"
+          color="primary"
           align-tabs="start"
           class="border-b"
         >
@@ -56,9 +56,9 @@
                     :expanded="notesExpanded"
                     @toggle-expand="notesExpanded = !notesExpanded"
                   />
-                  <v-card 
-                    variant="outlined" 
-                    class="pa-4 mt-3" 
+                  <v-card
+                    variant="outlined"
+                    class="pa-4 mt-3"
                     :class="{ 'read-only-notes': !isEditing }"
                   >
                     <editor-content :editor="noteEditor" class="tiptap-content" />
@@ -139,14 +139,14 @@
                       <v-col :cols="field.gridCols === 2 ? 12 : 6">
                         <v-card variant="outlined" class="pa-3">
                           <v-card-subtitle class="pa-0 pb-2">
-                            <v-icon 
-                              :icon="getFieldIcon(field.type)" 
-                              size="small" 
+                            <v-icon
+                              :icon="getFieldIcon(field.type)"
+                              size="small"
                               class="me-2"
                             />
                             {{ field.label }}
                           </v-card-subtitle>
-                          
+
                           <!-- Associates Section -->
                           <div v-if="section.parentField === 'associates'">
                             <div v-if="getAssociateEntities(field.id).length > 0" class="mb-2">
@@ -163,7 +163,7 @@
                               {{ getFieldValue(entity.data, section.parentField, field.id) || 'Not specified' }}
                             </v-chip>
                           </div>
-                          
+
                           <!-- URL Fields -->
                           <div v-else-if="field.type === 'url'">
                             <v-btn
@@ -181,7 +181,7 @@
                             <v-chip v-else variant="text" color="grey" size="small">
                               Not provided
                             </v-chip>
-                            
+
                             <!-- Source for URL fields -->
                             <div v-if="field.hasSource && getSourceValue(section.parentField, field.id)" class="mt-2">
                               <v-chip
@@ -194,7 +194,7 @@
                               </v-chip>
                             </div>
                           </div>
-                          
+
                           <!-- Regular Fields -->
                           <div v-else class="text-body-1">
                             <span v-if="getFieldValue(entity.data, section.parentField, field.id)">
@@ -203,7 +203,7 @@
                             <v-chip v-else variant="text" color="grey" size="small">
                               Not provided
                             </v-chip>
-                            
+
                             <!-- Source for regular fields -->
                             <div v-if="field.hasSource && getSourceValue(section.parentField, field.id)" class="mt-2">
                               <v-chip
@@ -225,12 +225,12 @@
             </v-tabs-window>
 
       </v-card-text>
-      
+
       <v-divider />
-      
+
       <v-card-actions class="pa-4">
         <v-spacer />
-        
+
         <!-- Edit Mode Actions -->
         <template v-if="isEditing">
           <v-btn
@@ -252,7 +252,7 @@
             {{ updating ? 'Saving...' : 'Save Changes' }}
           </v-btn>
         </template>
-        
+
         <!-- View Mode Actions -->
         <template v-else>
           <v-btn
@@ -321,12 +321,12 @@
 import { ref, computed, toRef } from 'vue'
 import { EditorContent } from '@tiptap/vue-3'
 import EntityTag from './EntityTag.vue'
-import EditorToolbar from './editor/EditorToolbar.vue'
-import { useEntityDetails } from '../composables/useEntityDetails'
-import { useEntityAssociates } from '../composables/useEntityAssociates'
-import { useEntityIcons } from '../composables/useEntityIcons'
-import { useEntityDisplay } from '../composables/useEntityDisplay'
-import { useEntityNoteEditor } from '../composables/useEntityNoteEditor'
+import EditorToolbar from '../editor/EditorToolbar.vue'
+import { useEntityDetails } from '../../composables/useEntityDetails.js'
+import { useEntityAssociates } from '../../composables/useEntityAssociates.js'
+import { useEntityIcons } from '../../composables/useEntityIcons.js'
+import { useEntityDisplay } from '../../composables/useEntityDisplay.js'
+import { useEntityNoteEditor } from '../../composables/useEntityNoteEditor.js'
 
 const props = defineProps({
   show: { type: Boolean, required: true, default: false },
@@ -394,7 +394,7 @@ function getSourceValue(parentField, fieldId) {
   // In edit mode, use formData; in view mode, use entity.data
   const sources = isEditing.value ? formData.value.data.sources : entity.value.data.sources
   if (!sources) return ''
-  
+
   const sourceKey = parentField ? `${parentField}.${fieldId}` : fieldId
   return sources[sourceKey] || ''
 }
@@ -403,7 +403,7 @@ function updateSourceValue(parentField, fieldId, value) {
   if (!formData.value.data.sources) {
     formData.value.data.sources = {}
   }
-  
+
   const sourceKey = parentField ? `${parentField}.${fieldId}` : fieldId
   if (value) {
     formData.value.data.sources[sourceKey] = value
@@ -415,7 +415,7 @@ function updateSourceValue(parentField, fieldId, value) {
 async function handleSubmit() {
   try {
     const { updatedEntity, createdAssociates } = await updateEntity(processAssociates)
-    
+
     if (createdAssociates.length > 0) {
       emit('edit', updatedEntity, createdAssociates)
     } else {

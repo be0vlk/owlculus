@@ -8,7 +8,6 @@ export function useEntityAssociates(entity, existingEntities, caseId) {
     return associateEntityMap.value.get(fieldId) || []
   }
 
-
   const findExistingCompany = (companyName) => {
     return existingEntities.value.find(
       (entity) =>
@@ -31,7 +30,6 @@ export function useEntityAssociates(entity, existingEntities, caseId) {
 
     return companyEntity
   }
-
 
   const processAssociates = async (submitData) => {
     if (!entity.value || entity.value.entity_type !== 'person') {
@@ -68,7 +66,7 @@ export function useEntityAssociates(entity, existingEntities, caseId) {
     if (employerName && employerName.trim()) {
       try {
         let companyEntity = findExistingCompany(employerName.trim())
-        
+
         if (!companyEntity) {
           // Create a temporary entity for display purposes
           companyEntity = {
@@ -79,7 +77,7 @@ export function useEntityAssociates(entity, existingEntities, caseId) {
             },
           }
         }
-        
+
         associateEntityMap.value.set('employer', [companyEntity])
       } catch (err) {
         console.error(`Failed to load employer entity for ${employerName}:`, err)

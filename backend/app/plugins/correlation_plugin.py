@@ -2,7 +2,7 @@
 Plugin for scanning and correlating entity names across cases
 """
 
-from typing import Any, AsyncGenerator, Dict, List, Optional, get_args, get_origin
+from typing import Any, AsyncGenerator, Dict, List, Optional, get_origin
 
 from sqlmodel import Session, select
 
@@ -221,46 +221,51 @@ class CorrelationScan(BasePlugin):
             return []
 
         schema_class = ENTITY_TYPE_SCHEMAS[entity_type]
-        annotations = getattr(schema_class, '__annotations__', {})
-        
+        annotations = getattr(schema_class, "__annotations__", {})
+
         # Look for required fields (non-Optional)
         required_fields = []
         name_like_fields = []
-        
+
         for field_name, field_type in annotations.items():
             # Skip complex types, focus on simple identifiers
             if get_origin(field_type) is not None:
                 # This is a generic type like Optional[str], List[str], etc.
-                if get_origin(field_type) is type(Optional[str]):  # Union type (Optional)
+                if get_origin(field_type) is type(
+                    Optional[str]
+                ):  # Union type (Optional)
                     continue
-            
+
             # Check if it's a simple string type (likely identifier)
             if field_type == str:
                 required_fields.append(field_name)
-            
+
             # Collect name-like fields for fallback
-            if any(keyword in field_name.lower() for keyword in ['name', 'domain', 'ip', 'address']):
+            if any(
+                keyword in field_name.lower()
+                for keyword in ["name", "domain", "ip", "address"]
+            ):
                 name_like_fields.append(field_name)
 
         # Special handling for person entities (combine first_name + last_name)
         if entity_type == "person":
             if "first_name" in annotations and "last_name" in annotations:
                 return ["first_name", "last_name"]
-        
+
         # Use required fields if available
         if required_fields:
             return required_fields
-        
+
         # Fallback to name-like fields
         if name_like_fields:
             return name_like_fields[:1]  # Take first name-like field
-        
+
         # Final fallback: look for common identifier patterns
         common_patterns = [entity_type, "name", "title", "identifier"]
         for pattern in common_patterns:
             if pattern in annotations:
                 return [pattern]
-        
+
         return []
 
     def _get_display_name(self, data: dict, entity_type: str) -> str:
@@ -275,7 +280,7 @@ class CorrelationScan(BasePlugin):
 
         # Dynamically get primary fields for this entity type
         primary_fields = self._get_primary_fields_for_entity(entity_type)
-        
+
         if not primary_fields:
             # Fallback: try to use a field that matches the entity type name
             return data.get(entity_type, data.get("name", ""))

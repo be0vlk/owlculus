@@ -1,7 +1,7 @@
 <template>
-  <BaseDashboard 
-    :title="caseData ? `Case: ${caseData.case_number}` : 'Case Details'" 
-    :loading="loading" 
+  <BaseDashboard
+    :title="caseData ? `Case: ${caseData.case_number}` : 'Case Details'"
+    :loading="loading"
     :error="error"
   >
     <template #header-actions>
@@ -51,9 +51,9 @@
             <div class="text-body-2 text-medium-emphasis">Details and metadata for this investigation</div>
           </div>
         </v-card-title>
-        
+
         <v-divider />
-        
+
         <v-card-text class="pa-6">
           <v-row>
             <v-col cols="12" lg="8">
@@ -73,7 +73,7 @@
             <div class="text-body-2 text-medium-emphasis">Manage entities, evidence, and notes</div>
           </div>
         </v-card-title>
-        
+
         <v-divider />
             <CaseTabs
               :tabs="[
@@ -454,9 +454,9 @@
     />
 
     <!-- Entity Creation Success Dialog -->
-    <v-dialog 
-      v-model="showEntityCreationSuccess" 
-      max-width="500px" 
+    <v-dialog
+      v-model="showEntityCreationSuccess"
+      max-width="500px"
       persistent
     >
       <v-card>
@@ -464,17 +464,17 @@
           <v-icon start color="success">mdi-check-circle</v-icon>
           Entity Created Successfully
         </v-card-title>
-        
+
         <v-card-text>
           <p class="text-body-1 mb-4">
             Your entity <strong>{{ getEntityDisplayName(createdEntity) }}</strong> has been created successfully.
           </p>
-          
+
           <p class="text-body-2 text-medium-emphasis">
             Would you like to open the entity details to add more information and edit its properties?
           </p>
         </v-card-text>
-        
+
         <v-card-actions>
           <v-spacer />
           <v-btn
@@ -501,13 +501,13 @@ import { useRoute } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import BaseDashboard from '../components/BaseDashboard.vue';
 import CaseDetail from '../components/CaseDetail.vue';
-import EntityListItem from '../components/EntityListItem.vue';
-import EntityTabs from '../components/EntityTabs.vue';
+import EntityListItem from '../components/entities/EntityListItem.vue';
+import EntityTabs from '../components/entities/EntityTabs.vue';
 import CaseTabs from '../components/CaseTabs.vue';
 import EditCaseModal from '../components/EditCaseModal.vue';
 import AddUserToCaseModal from '../components/AddUserToCaseModal.vue';
 import NewEntityModal from '../components/NewEntityModal.vue';
-import EntityDetailsModal from '../components/EntityDetailsModal.vue';
+import EntityDetailsModal from '../components/entities/EntityDetailsModal.vue';
 import NoteEditor from '../components/NoteEditor.vue';
 import EvidenceList from '../components/EvidenceList.vue';
 import UploadEvidenceModal from '../components/UploadEvidenceModal.vue';
@@ -574,12 +574,12 @@ async function handleEditEntity(updatedEntity, createdAssociates = []) {
     if (selectedEntity.value?.id === updatedEntity.id) {
       selectedEntity.value = { ...updatedEntity };
     }
-    
+
     // Add any newly created associate entities
     if (createdAssociates.length > 0) {
       entities.value = [...entities.value, ...createdAssociates];
     }
-    
+
     // Reload all entities to get updated relationships
     await loadEntities();
   }
@@ -736,7 +736,7 @@ const handleExtractMetadata = async (evidenceItem) => {
   metadataError.value = '';
   loadingMetadata.value = true;
   showMetadataModal.value = true;
-  
+
   try {
     const metadata = await evidenceService.extractMetadata(evidenceItem.id);
     extractedMetadata.value = metadata;
@@ -754,7 +754,7 @@ const handleViewTextContent = async (evidenceItem) => {
   textContentError.value = '';
   loadingTextContent.value = true;
   showTextContentModal.value = true;
-  
+
   try {
     const response = await evidenceService.getEvidenceContent(evidenceItem.id);
     if (response.success) {
