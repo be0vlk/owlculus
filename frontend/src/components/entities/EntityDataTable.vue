@@ -33,6 +33,7 @@
       :items-length="totalItems"
       :loading="loading"
       :search="search"
+      :density="density"
       item-value="id"
       class="elevation-1"
       :items-per-page-options="itemsPerPageOptions"
@@ -134,12 +135,9 @@
 
       <!-- Created Date Column -->
       <template v-slot:item.created_at="{ item }">
-        <v-tooltip location="top">
-          <template v-slot:activator="{ props }">
-            <span v-bind="props">{{ formatDate(item.created_at) }}</span>
-          </template>
-          {{ formatDateTime(item.created_at) }}
-        </v-tooltip>
+        <span class="text-body-2">
+          {{ formatDate(item.created_at) }}
+        </span>
       </template>
 
       <!-- Actions Column -->
@@ -149,12 +147,6 @@
           size="small"
           variant="text"
           @click="$emit('view', item)"
-        />
-        <v-btn
-          icon="mdi-pencil"
-          size="small"
-          variant="text"
-          @click="$emit('edit', item)"
         />
         <v-btn
           icon="mdi-delete"
@@ -241,6 +233,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
+import { formatDate } from '@/composables/dateUtils'
 
 const props = defineProps({
   caseId: {
@@ -253,7 +246,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['view', 'edit', 'create', 'deleted'])
+const emit = defineEmits(['view', 'create', 'deleted'])
 
 // Data table state
 const entities = ref([])
@@ -415,28 +408,6 @@ const getTypeColor = (type) => {
   return entityTypes.find(t => t.value === type)?.color || 'grey'
 }
 
-const formatDate = (dateString) => {
-  if (!dateString) return ''
-  const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  })
-}
-
-const formatDateTime = (dateString) => {
-  if (!dateString) return ''
-  const date = new Date(dateString)
-  return date.toLocaleString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true
-  })
-}
 
 const getNoDataMessage = () => {
   if (search.value) {
@@ -473,8 +444,37 @@ const performDelete = async () => {
 }
 
 const exportEntities = () => {
-  // TODO: Implement CSV export
-  console.log('Export entities')
+  try {
+    const filteredEntities = entities.value || []
+    
+    if (filteredEntities.length === 0) {
+      return
+    }
+
+    const headers = ['Type', 'Name', 'Description', 'Created']
+    const csvData = [
+      headers.join(','),
+      ...filteredEntities.map(entity => [
+        getTypeLabel(entity.entity_type),
+        `"${getEntityName(entity).replace(/"/g, '""')}"`,
+        `"${(entity.data.description || '').replace(/"/g, '""')}"`,
+        formatDate(entity.created_at)
+      ].join(','))
+    ].join('\n')
+
+    const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', `entities-${new Date().toISOString().split('T')[0]}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  } catch (error) {
+    console.error('Error exporting entities:', error)
+  }
 }
 
 // Expose methods for parent component
