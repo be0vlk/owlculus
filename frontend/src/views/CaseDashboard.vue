@@ -97,240 +97,15 @@
                     </v-col>
                   </v-row>
 
-                  <!-- Entities Loading -->
-                  <v-row v-if="loadingEntities" justify="center">
-                    <v-col cols="12" class="text-center">
-                      <v-card variant="outlined" class="pa-8">
-                        <v-progress-circular
-                          size="64"
-                          width="4"
-                          color="primary"
-                          indeterminate
-                          class="mb-4"
-                        />
-                        <div class="text-h6">Loading entities...</div>
-                      </v-card>
-                    </v-col>
-                  </v-row>
-
-                  <!-- Entities Error -->
-                  <v-alert
-                    v-else-if="entityError"
-                    type="error"
-                    variant="tonal"
-                    border="start"
-                    icon="mdi-alert-circle"
-                    class="mb-6"
-                  >
-                    <v-alert-title>Error Loading Entities</v-alert-title>
-                    {{ entityError }}
-                  </v-alert>
-
-                  <!-- Entity Types Tabs -->
-                  <EntityTabs v-else :entity-types="Object.keys(groupedEntities)">
-                    <template #default="{ activeType }">
-                      <!-- Person Entities -->
-                      <div v-if="activeType === 'person'">
-                        <div v-if="groupedEntities.person?.length">
-                          <EntityListItem
-                            v-for="entity in groupedEntities.person"
-                            :key="entity.id"
-                            @viewDetails="showEntityDetails(entity)"
-                          >
-                            <template #name>
-                              {{ entity.data.first_name }} {{ entity.data.last_name }}
-                            </template>
-                            <template #detail>
-                              {{ entity.data.email }}
-                            </template>
-                          </EntityListItem>
-                        </div>
-                        <div v-else class="text-center pa-12">
-                          <v-icon
-                            icon="mdi-account-outline"
-                            size="64"
-                            color="grey-lighten-1"
-                            class="mb-4"
-                          />
-                          <h3 class="text-h6 font-weight-medium mb-2">
-                            No People Found
-                          </h3>
-                          <p class="text-body-2 text-medium-emphasis">
-                            No person entities have been added to this case yet.
-                          </p>
-                        </div>
-                      </div>
-
-                      <!-- Company Entities -->
-                      <div v-if="activeType === 'company'">
-                        <div v-if="groupedEntities.company?.length">
-                          <EntityListItem
-                            v-for="entity in groupedEntities.company"
-                            :key="entity.id"
-                            @viewDetails="showEntityDetails(entity)"
-                          >
-                            <template #name>
-                              {{ entity.data.name }}
-                            </template>
-                            <template #detail>
-                              {{ entity.data.website }}
-                            </template>
-                          </EntityListItem>
-                        </div>
-                        <div v-else class="text-center pa-12">
-                          <v-icon
-                            icon="mdi-domain"
-                            size="64"
-                            color="grey-lighten-1"
-                            class="mb-4"
-                          />
-                          <h3 class="text-h6 font-weight-medium mb-2">
-                            No Companies Found
-                          </h3>
-                          <p class="text-body-2 text-medium-emphasis">
-                            No company entities have been added to this case yet.
-                          </p>
-                        </div>
-                      </div>
-
-                      <!-- Domain Entities -->
-                      <div v-if="activeType === 'domain'">
-                        <div v-if="groupedEntities.domain?.length">
-                          <EntityListItem
-                            v-for="entity in groupedEntities.domain"
-                            :key="entity.id"
-                            @viewDetails="showEntityDetails(entity)"
-                          >
-                            <template #name>
-                              {{ entity.data.domain }}
-                            </template>
-                            <template #detail>
-                              {{ entity.data.description || 'No description' }}
-                            </template>
-                          </EntityListItem>
-                        </div>
-                        <div v-else class="text-center pa-12">
-                          <v-icon
-                            icon="mdi-web"
-                            size="64"
-                            color="grey-lighten-1"
-                            class="mb-4"
-                          />
-                          <h3 class="text-h6 font-weight-medium mb-2">
-                            No Domains Found
-                          </h3>
-                          <p class="text-body-2 text-medium-emphasis">
-                            No domain entities have been added to this case yet.
-                          </p>
-                        </div>
-                      </div>
-
-                      <!-- IP Address Entities -->
-                      <div v-if="activeType === 'ip_address'">
-                        <div v-if="groupedEntities.ip_address?.length">
-                          <EntityListItem
-                            v-for="entity in groupedEntities.ip_address"
-                            :key="entity.id"
-                            @viewDetails="showEntityDetails(entity)"
-                          >
-                            <template #name>
-                              {{ entity.data.ip_address }}
-                            </template>
-                            <template #detail>
-                              {{ entity.data.description || 'No description' }}
-                            </template>
-                          </EntityListItem>
-                        </div>
-                        <div v-else class="text-center pa-12">
-                          <v-icon
-                            icon="mdi-ip"
-                            size="64"
-                            color="grey-lighten-1"
-                            class="mb-4"
-                          />
-                          <h3 class="text-h6 font-weight-medium mb-2">
-                            No IP Addresses Found
-                          </h3>
-                          <p class="text-body-2 text-medium-emphasis">
-                            No IP address entities have been added to this case yet.
-                          </p>
-                        </div>
-                      </div>
-
-                      <!-- Network Assets Entities -->
-                      <div v-if="activeType === 'network_assets'">
-                        <div v-if="groupedEntities.network_assets?.length">
-                          <EntityListItem
-                            v-for="entity in groupedEntities.network_assets"
-                            :key="entity.id"
-                            @viewDetails="showEntityDetails(entity)"
-                          >
-                            <template #name>
-                              {{ entity.data.domains?.length ? entity.data.domains[0] : 'Unnamed Network Asset' }}
-                            </template>
-                            <template #detail>
-                              {{ formatNetworkAssetDetails(entity.data) }}
-                            </template>
-                          </EntityListItem>
-                        </div>
-                        <div v-else class="text-center pa-12">
-                          <v-icon
-                            icon="mdi-server-network"
-                            size="64"
-                            color="grey-lighten-1"
-                            class="mb-4"
-                          />
-                          <h3 class="text-h6 font-weight-medium mb-2">
-                            No Network Assets Found
-                          </h3>
-                          <p class="text-body-2 text-medium-emphasis">
-                            No network asset entities have been added to this case yet.
-                          </p>
-                        </div>
-                      </div>
-
-                      <!-- Network Entities -->
-                      <div v-if="activeType === 'network'">
-                        <div v-if="groupedEntities.network?.length">
-                          <EntityListItem
-                            v-for="entity in groupedEntities.network"
-                            :key="entity.id"
-                            :has-detail="hasNetworkAssetDetails(entity)"
-                            @viewDetails="showEntityDetails(entity)"
-                          >
-                            <template #name>
-                              Network Asset
-                            </template>
-                            <template #detail>
-                              <div v-if="entity.data.domains?.length" class="mb-1">
-                                <strong>Domains:</strong> {{ entity.data.domains.join(', ') }}
-                              </div>
-                              <div v-if="entity.data.ip_addresses?.length" class="mb-1">
-                                <strong>IPs:</strong> {{ entity.data.ip_addresses.join(', ') }}
-                              </div>
-                              <div v-if="entity.data.email_addresses?.length">
-                                <strong>Emails:</strong> {{ entity.data.email_addresses.join(', ') }}
-                              </div>
-                            </template>
-                          </EntityListItem>
-                        </div>
-                        <div v-else class="text-center pa-12">
-                          <v-icon
-                            icon="mdi-server-network"
-                            size="64"
-                            color="grey-lighten-1"
-                            class="mb-4"
-                          />
-                          <h3 class="text-h6 font-weight-medium mb-2">
-                            No Network Entities Found
-                          </h3>
-                          <p class="text-body-2 text-medium-emphasis">
-                            No network entities have been added to this case yet.
-                          </p>
-                        </div>
-                      </div>
-                    </template>
-                  </EntityTabs>
+                  <!-- Entity Data Table -->
+                  <EntityDataTable
+                    :case-id="Number(route.params.id)"
+                    :entity-service="entityServiceRef"
+                    @view="showEntityDetails"
+                    @edit="showEntityDetails"
+                    @create="showNewEntityModal = true"
+                    @deleted="handleEntityDeleted"
+                  />
                 </div>
 
                 <!-- Evidence Tab -->
@@ -501,8 +276,7 @@ import { useRoute } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import BaseDashboard from '../components/BaseDashboard.vue';
 import CaseDetail from '../components/CaseDetail.vue';
-import EntityListItem from '../components/entities/EntityListItem.vue';
-import EntityTabs from '../components/entities/EntityTabs.vue';
+import EntityDataTable from '../components/entities/EntityDataTable.vue';
 import CaseTabs from '../components/CaseTabs.vue';
 import EditCaseModal from '../components/EditCaseModal.vue';
 import AddUserToCaseModal from '../components/AddUserToCaseModal.vue';
@@ -553,6 +327,9 @@ const textContent = ref('');
 const textFileInfo = ref(null);
 const loadingTextContent = ref(false);
 const textContentError = ref('');
+
+// Make entityService available to the template
+const entityServiceRef = entityService;
 
 // Computed properties
 const userRole = computed(() => authStore.user?.role || 'Analyst');
@@ -617,6 +394,11 @@ const handleSkipEditEntity = () => {
   createdEntity.value = null;
 };
 
+const handleEntityDeleted = (deletedEntities) => {
+  // This will be handled by the EntityDataTable refresh
+  console.log('Entities deleted:', deletedEntities);
+};
+
 // Computed property to group entities by type
 const groupedEntities = computed(() => {
   return entities.value.reduce((groups, entity) => {
@@ -664,20 +446,7 @@ const loadCaseData = async () => {
   }
 };
 
-const loadEntities = async () => {
-  try {
-    loadingEntities.value = true;
-    entityError.value = null;
-    const caseId = route.params.id;
-    const response = await entityService.getCaseEntities(caseId);
-    entities.value = response;
-  } catch (err) {
-    entityError.value = err.message || 'Failed to load entities';
-    console.error('Error loading entities:', err);
-  } finally {
-    loadingEntities.value = false;
-  }
-};
+// Entities are now handled by EntityDataTable component
 
 const loadEvidence = async () => {
   if (!route.params.id) return;
@@ -794,7 +563,6 @@ const getEntityDisplayName = (entity) => {
 
 onMounted(() => {
   loadCaseData();
-  loadEntities();
   loadEvidence();
 });
 </script>
