@@ -33,7 +33,7 @@
       :items-length="totalItems"
       :loading="loading"
       :search="search"
-      :density="density"
+      density="compact"
       item-value="id"
       class="elevation-1"
       :items-per-page-options="itemsPerPageOptions"
@@ -78,34 +78,9 @@
             size="small"
             prepend-icon="mdi-download"
             @click="exportEntities"
-            class="mr-2"
           >
             Export
           </v-btn>
-
-          <!-- Density Toggle -->
-          <v-btn-toggle
-            v-model="density"
-            density="compact"
-            divided
-            variant="outlined"
-          >
-            <v-btn
-              icon="mdi-view-list"
-              value="compact"
-              size="small"
-            />
-            <v-btn
-              icon="mdi-view-stream"
-              value="comfortable"
-              size="small"
-            />
-            <v-btn
-              icon="mdi-view-module"
-              value="default"
-              size="small"
-            />
-          </v-btn-toggle>
         </v-toolbar>
       </template>
 
@@ -131,6 +106,13 @@
             </div>
           </div>
         </div>
+      </template>
+
+      <!-- Description Column -->
+      <template v-slot:item.description="{ item }">
+        <span class="text-body-2">
+          {{ item.data.description || '' }}
+        </span>
       </template>
 
       <!-- Created Date Column -->
@@ -257,7 +239,6 @@ const itemsPerPage = ref(25)
 const sortBy = ref([])
 const search = ref('')
 const selected = ref([])
-const density = ref('comfortable')
 
 // Filter state
 const selectedTypes = ref([])

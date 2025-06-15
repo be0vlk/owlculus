@@ -99,6 +99,7 @@
 
                   <!-- Entity Data Table -->
                   <EntityDataTable
+                    ref="entityTableRef"
                     :case-id="Number(route.params.id)"
                     :entity-service="entityServiceRef"
                     @view="showEntityDetails"
@@ -301,6 +302,7 @@ const entityError = ref(null);
 const caseData = ref(null);
 const client = ref(null);
 const entities = ref([]);
+const entityTableRef = ref(null);
 const showEditModal = ref(false);
 const showAddUserModal = ref(false);
 const showNewEntityModal = ref(false);
@@ -379,6 +381,11 @@ const handleNewEntity = (newEntity) => {
   entities.value = [...entities.value, newEntity];
   showEntityCreationSuccess.value = true;
   createdEntity.value = newEntity;
+  
+  // Refresh the entity table to show the new entity
+  if (entityTableRef.value) {
+    entityTableRef.value.refresh();
+  }
 };
 
 // Handle entity creation success dialog actions
