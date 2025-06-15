@@ -11,6 +11,9 @@ import dns.asyncresolver
 from sqlmodel import Session
 
 from .base_plugin import BasePlugin
+from app.schemas.entity_schema import EntityCreate, EntityUpdate, IpAddressData, DomainData
+from app.services.entity_service import EntityService
+from app.core.dependencies import get_db
 
 
 class SubdomainEnumPlugin(BasePlugin):
@@ -304,3 +307,144 @@ class SubdomainEnumPlugin(BasePlugin):
                 )
 
         return "\n".join(content_lines)
+
+    def _extract_unique_ips_from_results(self) -> list[dict]:
+        """Extract unique IP addresses with metadata from collected subdomain enumeration results"""
+        ip_data_map = {}  # Use dict to avoid duplicates while preserving rich data
+
+        for result in self._evidence_results:
+            # Check if this result contains subdomain data
+            if "subdomain" in result and "ip" in result:
+                subdomain = result.get("subdomain", "")
+                ip = result.get("ip")
+                resolved = result.get("resolved", False)
+                source = result.get("source", "Unknown")
+
+                # Only process resolved subdomains with valid IPs
+                if resolved and ip and self._is_ip_address(ip):
+                    # Skip if we already have this IP
+                    if ip not in ip_data_map:
+                        # Generate description with subdomain context
+                        description = f"Resolved from subdomain '{subdomain}' (discovered via {source})"
+                        
+                        ip_data_map[ip] = {
+                            "ip": ip,
+                            "description": description,
+                        }
+
+        return list(ip_data_map.values())
+
+    async def _update_parent_domain_with_subdomains(self) -> None:
+        """Update parent domain entity with discovered subdomains"""
+        case_id = self._current_params.get("case_id")
+        if not case_id:
+            return
+
+        # Get the base domain from the query parameter
+        base_domain = self._current_params.get("domain", "").lower().strip()
+        if not base_domain:
+            return
+
+        # Collect all subdomain information
+        subdomain_list = []
+        for result in self._evidence_results:
+            if "subdomain" in result:
+                subdomain_info = {
+                    "subdomain": result.get("subdomain", ""),
+                    "ip": result.get("ip"),
+                    "resolved": result.get("resolved", False),
+                    "source": result.get("source", "Unknown"),
+                }
+                # Only add if it's a real subdomain (not the base domain itself)
+                if subdomain_info["subdomain"] and subdomain_info["subdomain"] != base_domain:
+                    subdomain_list.append(subdomain_info)
+
+        if not subdomain_list:
+            return
+
+        # Use injected session if available, otherwise get a new one
+        if self._db_session:
+            db = self._db_session
+            close_session = False
+        else:
+            db = next(get_db())
+            close_session = True
+
+        try:
+            entity_service = EntityService(db)
+            
+            # Check if parent domain entity already exists
+            existing_entity = await entity_service.find_entity_by_domain(
+                case_id, base_domain, current_user=self._current_user
+            )
+
+            if existing_entity:
+                # Update existing entity with new subdomains
+                current_data = existing_entity.data.copy()
+                existing_subdomains = current_data.get("subdomains", [])
+                
+                # Create a map of existing subdomains for deduplication
+                existing_subdomain_map = {
+                    sub["subdomain"]: sub for sub in existing_subdomains
+                }
+                
+                # Merge new subdomains
+                for new_sub in subdomain_list:
+                    subdomain_name = new_sub["subdomain"]
+                    if subdomain_name in existing_subdomain_map:
+                        # Update existing subdomain info if we have better data
+                        existing_sub = existing_subdomain_map[subdomain_name]
+                        if new_sub["resolved"] and not existing_sub.get("resolved", False):
+                            existing_subdomain_map[subdomain_name] = new_sub
+                    else:
+                        existing_subdomain_map[subdomain_name] = new_sub
+                
+                # Update entity data
+                current_data["subdomains"] = list(existing_subdomain_map.values())
+                
+                # Sort subdomains for consistent display
+                current_data["subdomains"].sort(key=lambda x: x["subdomain"])
+                
+                # Use the update_entity method
+                from app.schemas.entity_schema import EntityUpdate
+                entity_update = EntityUpdate(data=current_data)
+                await entity_service.update_entity(
+                    existing_entity.id,
+                    entity_update,
+                    current_user=self._current_user,
+                )
+            else:
+                # Create new parent domain entity with subdomains
+                # Sort subdomains for consistent display
+                subdomain_list.sort(key=lambda x: x["subdomain"])
+                
+                entity_create = EntityCreate(
+                    entity_type="domain",
+                    data=DomainData(
+                        domain=base_domain,
+                        description=f"Parent domain with {len(subdomain_list)} discovered subdomains",
+                        subdomains=subdomain_list
+                    ).model_dump(),
+                )
+
+                await entity_service.create_entity(
+                    case_id=case_id,
+                    entity=entity_create,
+                    current_user=self._current_user,
+                )
+
+        except Exception:
+            # Don't break if entity creation/update fails
+            pass
+        finally:
+            # Only close if we created the session
+            if close_session:
+                db.close()
+
+    async def save_collected_evidence(self) -> None:
+        """Override to save evidence and create both IP and domain entities"""
+        # Call parent method to save evidence and create IP entities
+        await super().save_collected_evidence()
+        
+        # Update parent domain with discovered subdomains
+        await self._update_parent_domain_with_subdomains()

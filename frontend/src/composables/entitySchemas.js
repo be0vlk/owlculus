@@ -150,6 +150,18 @@ export const entitySchemas = {
         },
       ],
     },
+    subdomains: {
+      title: 'Discovered Subdomains',
+      fields: [
+        {
+          id: 'subdomains',
+          label: 'Subdomains',
+          type: 'array',
+          isArray: true,
+          arrayFields: ['subdomain', 'ip', 'resolved', 'source'],
+        },
+      ],
+    },
     notes: {
       title: 'Notes',
       fields: [],

@@ -50,6 +50,7 @@ class DomainData(EntityData):
     description: Optional[str] = None
     notes: Optional[str] = None
     sources: Optional[Dict[str, str]] = None
+    subdomains: Optional[List[Dict[str, Any]]] = None
 
 
 class IpAddressData(EntityData):

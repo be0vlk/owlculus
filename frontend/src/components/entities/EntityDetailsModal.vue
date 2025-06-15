@@ -195,6 +195,43 @@
                             </div>
                           </div>
 
+                          <!-- Array Fields -->
+                          <div v-else-if="field.type === 'array' && field.isArray">
+                            <div v-if="getFieldValue(entity.data, section.parentField, field.id) && getFieldValue(entity.data, section.parentField, field.id).length > 0">
+                              <v-list density="compact" class="pa-0">
+                                <v-list-item
+                                  v-for="(item, index) in getFieldValue(entity.data, section.parentField, field.id)"
+                                  :key="index"
+                                  class="px-0"
+                                >
+                                  <v-card variant="outlined" class="mb-2 pa-2">
+                                    <div class="d-flex align-center mb-1">
+                                      <v-icon size="small" class="mr-2">mdi-subdirectory-arrow-right</v-icon>
+                                      <span class="font-weight-medium">{{ item.subdomain }}</span>
+                                    </div>
+                                    <div class="text-caption ml-6">
+                                      <div v-if="item.ip" class="d-flex align-center">
+                                        <v-icon size="x-small" class="mr-1">mdi-ip-network</v-icon>
+                                        IP: {{ item.ip }}
+                                      </div>
+                                      <div v-if="item.source" class="d-flex align-center">
+                                        <v-icon size="x-small" class="mr-1">mdi-source-branch</v-icon>
+                                        Source: {{ item.source }}
+                                      </div>
+                                      <div class="d-flex align-center">
+                                        <v-icon size="x-small" class="mr-1">mdi-check-circle</v-icon>
+                                        Resolved: {{ item.resolved ? 'Yes' : 'No' }}
+                                      </div>
+                                    </div>
+                                  </v-card>
+                                </v-list-item>
+                              </v-list>
+                            </div>
+                            <v-chip v-else variant="text" color="grey" size="small">
+                              No subdomains discovered
+                            </v-chip>
+                          </div>
+
                           <!-- Regular Fields -->
                           <div v-else class="text-body-1">
                             <span v-if="getFieldValue(entity.data, section.parentField, field.id)">
