@@ -359,8 +359,10 @@ async function handleEditEntity(updatedEntity, createdAssociates = []) {
       entities.value = [...entities.value, ...createdAssociates];
     }
 
-    // Reload all entities to get updated relationships
-    await loadEntities();
+    // Refresh the entity table to show updated entity and any new associates
+    if (entityTableRef.value) {
+      entityTableRef.value.refresh();
+    }
   }
 }
 

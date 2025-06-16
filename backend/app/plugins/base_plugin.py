@@ -380,6 +380,7 @@ class BasePlugin(ABC):
                 try:
                     ip_address = ip_data["ip"]
                     description = ip_data["description"]
+                    sources = ip_data.get("sources")
 
                     # Check if IP entity already exists
                     existing_entity = await entity_service.find_entity_by_ip_address(
@@ -396,11 +397,16 @@ class BasePlugin(ABC):
                         enriched_count += 1
                     else:
                         # Create new IP address entity
+                        ip_data_kwargs = {
+                            "ip_address": ip_address,
+                            "description": description,
+                        }
+                        if sources:
+                            ip_data_kwargs["sources"] = sources
+
                         entity_create = EntityCreate(
                             entity_type="ip_address",
-                            data=IpAddressData(
-                                ip_address=ip_address, description=description
-                            ).model_dump(),
+                            data=IpAddressData(**ip_data_kwargs).model_dump(),
                         )
 
                         await entity_service.create_entity(

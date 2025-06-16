@@ -8,12 +8,15 @@ from typing import Any, AsyncGenerator, Dict, List, Optional, Set
 
 import aiohttp
 import dns.asyncresolver
+from app.core.dependencies import get_db
+from app.schemas.entity_schema import (
+    DomainData,
+    EntityCreate,
+)
+from app.services.entity_service import EntityService
 from sqlmodel import Session
 
 from .base_plugin import BasePlugin
-from app.schemas.entity_schema import EntityCreate, EntityUpdate, IpAddressData, DomainData
-from app.services.entity_service import EntityService
-from app.core.dependencies import get_db
 
 
 class SubdomainEnumPlugin(BasePlugin):
@@ -155,10 +158,10 @@ class SubdomainEnumPlugin(BasePlugin):
         # Check for SecurityTrails API key if needed
         securitytrails_key = None
         if use_securitytrails:
-            if self.db_session:
+            if self._db_session:
                 from app.services.system_config_service import SystemConfigService
 
-                config_service = SystemConfigService(self.db_session)
+                config_service = SystemConfigService(self._db_session)
                 securitytrails_key = config_service.get_api_key("securitytrails")
 
                 if not securitytrails_key:
@@ -324,12 +327,13 @@ class SubdomainEnumPlugin(BasePlugin):
                 if resolved and ip and self._is_ip_address(ip):
                     # Skip if we already have this IP
                     if ip not in ip_data_map:
-                        # Generate description with subdomain context
-                        description = f"Resolved from subdomain '{subdomain}' (discovered via {source})"
-                        
+                        # Use subdomain as description, store discovery source separately
+                        description = subdomain
+
                         ip_data_map[ip] = {
                             "ip": ip,
                             "description": description,
+                            "sources": {"ip_address": source},
                         }
 
         return list(ip_data_map.values())
@@ -356,7 +360,10 @@ class SubdomainEnumPlugin(BasePlugin):
                     "source": result.get("source", "Unknown"),
                 }
                 # Only add if it's a real subdomain (not the base domain itself)
-                if subdomain_info["subdomain"] and subdomain_info["subdomain"] != base_domain:
+                if (
+                    subdomain_info["subdomain"]
+                    and subdomain_info["subdomain"] != base_domain
+                ):
                     subdomain_list.append(subdomain_info)
 
         if not subdomain_list:
@@ -372,7 +379,7 @@ class SubdomainEnumPlugin(BasePlugin):
 
         try:
             entity_service = EntityService(db)
-            
+
             # Check if parent domain entity already exists
             existing_entity = await entity_service.find_entity_by_domain(
                 case_id, base_domain, current_user=self._current_user
@@ -382,31 +389,34 @@ class SubdomainEnumPlugin(BasePlugin):
                 # Update existing entity with new subdomains
                 current_data = existing_entity.data.copy()
                 existing_subdomains = current_data.get("subdomains", [])
-                
+
                 # Create a map of existing subdomains for deduplication
                 existing_subdomain_map = {
                     sub["subdomain"]: sub for sub in existing_subdomains
                 }
-                
+
                 # Merge new subdomains
                 for new_sub in subdomain_list:
                     subdomain_name = new_sub["subdomain"]
                     if subdomain_name in existing_subdomain_map:
                         # Update existing subdomain info if we have better data
                         existing_sub = existing_subdomain_map[subdomain_name]
-                        if new_sub["resolved"] and not existing_sub.get("resolved", False):
+                        if new_sub["resolved"] and not existing_sub.get(
+                            "resolved", False
+                        ):
                             existing_subdomain_map[subdomain_name] = new_sub
                     else:
                         existing_subdomain_map[subdomain_name] = new_sub
-                
+
                 # Update entity data
                 current_data["subdomains"] = list(existing_subdomain_map.values())
-                
+
                 # Sort subdomains for consistent display
                 current_data["subdomains"].sort(key=lambda x: x["subdomain"])
-                
+
                 # Use the update_entity method
                 from app.schemas.entity_schema import EntityUpdate
+
                 entity_update = EntityUpdate(data=current_data)
                 await entity_service.update_entity(
                     existing_entity.id,
@@ -417,13 +427,13 @@ class SubdomainEnumPlugin(BasePlugin):
                 # Create new parent domain entity with subdomains
                 # Sort subdomains for consistent display
                 subdomain_list.sort(key=lambda x: x["subdomain"])
-                
+
                 entity_create = EntityCreate(
                     entity_type="domain",
                     data=DomainData(
                         domain=base_domain,
                         description=f"Parent domain with {len(subdomain_list)} discovered subdomains",
-                        subdomains=subdomain_list
+                        subdomains=subdomain_list,
                     ).model_dump(),
                 )
 
@@ -445,6 +455,6 @@ class SubdomainEnumPlugin(BasePlugin):
         """Override to save evidence and create both IP and domain entities"""
         # Call parent method to save evidence and create IP entities
         await super().save_collected_evidence()
-        
+
         # Update parent domain with discovered subdomains
         await self._update_parent_domain_with_subdomains()

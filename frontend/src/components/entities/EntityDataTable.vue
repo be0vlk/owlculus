@@ -265,7 +265,7 @@ const entityTypes = [
 
 const headers = computed(() => [
   { title: 'Type', key: 'entity_type', sortable: true },
-  { title: 'Name', key: 'name', sortable: false },
+  { title: 'Name', key: 'name', sortable: true },
   { title: 'Description', key: 'description', sortable: false },
   { title: 'Created', key: 'created_at', sortable: true },
   { title: 'Actions', key: 'actions', sortable: false, align: 'end' }
@@ -317,6 +317,9 @@ const loadItems = async (options = {}) => {
         } else if (sortKey === 'created_at') {
           aVal = new Date(a.created_at)
           bVal = new Date(b.created_at)
+        } else if (sortKey === 'name') {
+          aVal = getSortableValue(a)
+          bVal = getSortableValue(b)
         } else {
           aVal = getEntityName(a)
           bVal = getEntityName(b)
@@ -387,6 +390,22 @@ const getTypeLabel = (type) => {
 
 const getTypeColor = (type) => {
   return entityTypes.find(t => t.value === type)?.color || 'grey'
+}
+
+const getSortableValue = (entity) => {
+  const name = getEntityName(entity)
+  
+  // For IP addresses, convert to a comparable numeric value for proper sorting
+  if (entity.entity_type === 'ip_address') {
+    const ipParts = name.split('.').map(part => parseInt(part, 10))
+    if (ipParts.length === 4 && ipParts.every(part => !isNaN(part) && part >= 0 && part <= 255)) {
+      // Convert IP to a single number for comparison (IPv4)
+      return (ipParts[0] << 24) + (ipParts[1] << 16) + (ipParts[2] << 8) + ipParts[3]
+    }
+  }
+  
+  // For all other entity types, use lowercase string for alphabetical sorting
+  return name.toLowerCase()
 }
 
 
