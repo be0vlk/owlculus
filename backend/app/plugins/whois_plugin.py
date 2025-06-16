@@ -20,7 +20,7 @@ class WhoisPlugin(BasePlugin):
         self.description = "Query domain registration and ownership information"
         self.category = "Network"
         self.evidence_category = "Network Assets"
-        self.save_to_case = False
+        self.save_to_case = True
         self.parameters = {
             "domain": {
                 "type": "string",
