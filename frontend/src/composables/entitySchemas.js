@@ -151,7 +151,7 @@ export const entitySchemas = {
       ],
     },
     subdomains: {
-      title: 'Discovered Subdomains',
+      title: 'Subdomains',
       fields: [
         {
           id: 'subdomains',

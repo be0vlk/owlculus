@@ -40,9 +40,28 @@ export function useEntityIcons(entity) {
     return iconMap[fieldType] || 'mdi-form-textbox'
   }
 
+  const getSocialMediaIcon = (platform) => {
+    const iconMap = {
+      bluesky: 'mdi-cloud',
+      discord: 'mdi-message-text',
+      facebook: 'mdi-facebook',
+      instagram: 'mdi-instagram',
+      linkedin: 'mdi-linkedin',
+      reddit: 'mdi-reddit',
+      telegram: 'mdi-send',
+      tiktok: 'mdi-music-note',
+      twitch: 'mdi-twitch',
+      x: 'mdi-twitter',
+      youtube: 'mdi-youtube',
+      other: 'mdi-link-variant',
+    }
+    return iconMap[platform] || 'mdi-link'
+  }
+
   return {
     getEntityIcon,
     getSectionIcon,
     getFieldIcon,
+    getSocialMediaIcon,
   }
 }

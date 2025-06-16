@@ -1,5 +1,5 @@
 <template>
-  <v-dialog v-model="dialogVisible" max-width="900px" persistent scrollable>
+  <v-dialog v-model="dialogVisible" max-width="1200px" persistent scrollable>
     <v-card>
       <v-card-title class="d-flex align-center">
         <v-icon start :icon="getEntityIcon" color="primary" />
@@ -40,330 +40,66 @@
         </v-tabs>
 
         <!-- Tab Contents -->
-        <v-tabs-window v-model="activeTab" class="pa-4">
-              <v-tabs-window-item
-                v-for="(section, key) in entitySchema"
-                :key="key"
-                :value="key"
-              >
-                <!-- Notes Tab -->
-                <div v-if="section.isNoteEditor && !notesExpanded" class="note-editor-container">
-                  <EditorToolbar
-                    :actions="noteEditorActions"
-                    :saving="noteSaving"
-                    :last-saved-time="noteLastSavedTime"
-                    :format-last-saved="noteFormatLastSaved"
-                    :expanded="notesExpanded"
-                    @toggle-expand="notesExpanded = !notesExpanded"
-                  />
-                  <v-card
-                    variant="outlined"
-                    class="pa-4 mt-3"
-                    :class="{ 'read-only-notes': !isEditing }"
-                  >
-                    <editor-content :editor="noteEditor" class="tiptap-content" />
-                  </v-card>
-                </div>
-
-                <!-- Edit Mode Form -->
-                <v-form v-else-if="isEditing" @submit.prevent="handleSubmit" ref="formRef">
-                  <v-container fluid class="pa-0">
-                    <v-row>
-                      <template v-for="field in section.fields" :key="field.id">
-                        <v-col :cols="field.gridCols === 2 ? 12 : 6">
-                          <div v-if="field.hasSource" class="d-flex flex-column gap-2">
-                            <v-textarea
-                              v-if="field.type === 'textarea'"
-                              v-model="formData.data[section.parentField ? `${section.parentField}.${field.id}` : field.id]"
-                              :label="field.label"
-                              variant="outlined"
-                              density="comfortable"
-                              rows="3"
-                              auto-grow
-                              clearable
-                            />
-                            <v-text-field
-                              v-else
-                              v-model="formData.data[section.parentField ? `${section.parentField}.${field.id}` : field.id]"
-                              :label="field.label"
-                              :type="field.type"
-                              variant="outlined"
-                              density="comfortable"
-                              clearable
-                              :prepend-inner-icon="getFieldIcon(field.type)"
-                            />
-                            <v-text-field
-                              :model-value="getSourceValue(section.parentField, field.id)"
-                              @update:model-value="updateSourceValue(section.parentField, field.id, $event)"
-                              :label="`Source for ${field.label}`"
-                              variant="outlined"
-                              density="comfortable"
-                              clearable
-                              prepend-inner-icon="mdi-source-branch"
-                              placeholder="URL, description, or reference where this was found"
-                              class="source-field"
-                            />
-                          </div>
-                          <div v-else>
-                            <v-textarea
-                              v-if="field.type === 'textarea'"
-                              v-model="formData.data[section.parentField ? `${section.parentField}.${field.id}` : field.id]"
-                              :label="field.label"
-                              variant="outlined"
-                              density="comfortable"
-                              rows="3"
-                              auto-grow
-                              clearable
-                            />
-                            <v-text-field
-                              v-else
-                              v-model="formData.data[section.parentField ? `${section.parentField}.${field.id}` : field.id]"
-                              :label="field.label"
-                              :type="field.type"
-                              variant="outlined"
-                              density="comfortable"
-                              clearable
-                              :prepend-inner-icon="getFieldIcon(field.type)"
-                            />
-                          </div>
-                        </v-col>
-                      </template>
-                    </v-row>
-                  </v-container>
-                </v-form>
-
-                <!-- View Mode -->
-                <v-container v-else fluid class="pa-0">
-                  <v-row>
-                    <template v-for="field in section.fields" :key="field.id">
-                      <v-col :cols="field.gridCols === 2 ? 12 : 6">
-                        <v-card variant="outlined" class="pa-3">
-                          <v-card-subtitle class="pa-0 pb-2">
-                            <v-icon
-                              :icon="getFieldIcon(field.type)"
-                              size="small"
-                              class="me-2"
-                            />
-                            {{ field.label }}
-                          </v-card-subtitle>
-
-                          <!-- Associates Section -->
-                          <div v-if="section.parentField === 'associates'">
-                            <div v-if="getAssociateEntities(field.id).length > 0" class="mb-2">
-                              <EntityTag
-                                v-for="associate in getAssociateEntities(field.id)"
-                                :key="associate.id"
-                                @click="$emit('viewEntity', associate)"
-                                class="ma-1"
-                              >
-                                {{ getEntityDisplayName(associate) }}
-                              </EntityTag>
-                            </div>
-                            <v-chip v-else variant="text" color="grey" size="small">
-                              {{ getFieldValue(entity.data, section.parentField, field.id) || 'Not specified' }}
-                            </v-chip>
-                          </div>
-
-                          <!-- URL Fields -->
-                          <div v-else-if="field.type === 'url'">
-                            <v-btn
-                              v-if="getFieldValue(entity.data, section.parentField, field.id)"
-                              :href="getFieldValue(entity.data, section.parentField, field.id)"
-                              target="_blank"
-                              variant="outlined"
-                              color="primary"
-                              size="small"
-                              prepend-icon="mdi-open-in-new"
-                              class="ma-0"
-                            >
-                              {{ getFieldValue(entity.data, section.parentField, field.id) }}
-                            </v-btn>
-                            <v-chip v-else variant="text" color="grey" size="small">
-                              Not provided
-                            </v-chip>
-
-                            <!-- Source for URL fields -->
-                            <div v-if="field.hasSource && getSourceValue(section.parentField, field.id)" class="mt-2">
-                              <v-chip
-                                color="blue-grey"
-                                variant="tonal"
-                                size="small"
-                                prepend-icon="mdi-source-branch"
-                              >
-                                Source: {{ getSourceValue(section.parentField, field.id) }}
-                              </v-chip>
-                            </div>
-                          </div>
-
-                          <!-- Array Fields -->
-                          <div v-else-if="field.type === 'array' && field.isArray">
-                            <div v-if="getFieldValue(entity.data, section.parentField, field.id) && getFieldValue(entity.data, section.parentField, field.id).length > 0">
-                              <v-list density="compact" class="pa-0">
-                                <v-list-item
-                                  v-for="(item, index) in getFieldValue(entity.data, section.parentField, field.id)"
-                                  :key="index"
-                                  class="px-0"
-                                >
-                                  <v-card variant="outlined" class="mb-2 pa-2">
-                                    <div class="d-flex align-center mb-1">
-                                      <v-icon size="small" class="mr-2">mdi-subdirectory-arrow-right</v-icon>
-                                      <span class="font-weight-medium">{{ item.subdomain }}</span>
-                                    </div>
-                                    <div class="text-caption ml-6">
-                                      <div v-if="item.ip" class="d-flex align-center">
-                                        <v-icon size="x-small" class="mr-1">mdi-ip-network</v-icon>
-                                        IP: {{ item.ip }}
-                                      </div>
-                                      <div v-if="item.source" class="d-flex align-center">
-                                        <v-icon size="x-small" class="mr-1">mdi-source-branch</v-icon>
-                                        Source: {{ item.source }}
-                                      </div>
-                                      <div class="d-flex align-center">
-                                        <v-icon size="x-small" class="mr-1">mdi-check-circle</v-icon>
-                                        Resolved: {{ item.resolved ? 'Yes' : 'No' }}
-                                      </div>
-                                    </div>
-                                  </v-card>
-                                </v-list-item>
-                              </v-list>
-                            </div>
-                            <v-chip v-else variant="text" color="grey" size="small">
-                              No subdomains discovered
-                            </v-chip>
-                          </div>
-
-                          <!-- Regular Fields -->
-                          <div v-else class="text-body-1">
-                            <span v-if="getFieldValue(entity.data, section.parentField, field.id)">
-                              {{ getFieldValue(entity.data, section.parentField, field.id) }}
-                            </span>
-                            <v-chip v-else variant="text" color="grey" size="small">
-                              Not provided
-                            </v-chip>
-
-                            <!-- Source for regular fields -->
-                            <div v-if="field.hasSource && getSourceValue(section.parentField, field.id)" class="mt-2">
-                              <v-chip
-                                color="blue-grey"
-                                variant="tonal"
-                                size="small"
-                                prepend-icon="mdi-source-branch"
-                              >
-                                Source: {{ getSourceValue(section.parentField, field.id) }}
-                              </v-chip>
-                            </div>
-                          </div>
-                        </v-card>
-                      </v-col>
-                    </template>
-                  </v-row>
-                </v-container>
-              </v-tabs-window-item>
-            </v-tabs-window>
-
+        <EntityTabContent
+          :active-tab="activeTab"
+          :entity-schema="entitySchema"
+          :is-editing="isEditing"
+          :entity="entity"
+          :form-data="formData"
+          :notes-expanded="notesExpanded"
+          :note-editor="noteEditor"
+          :note-editor-actions="noteEditorActions"
+          :note-saving="noteSaving"
+          :note-last-saved-time="noteLastSavedTime"
+          :note-format-last-saved="noteFormatLastSaved"
+          :get-source-value="getSourceValue"
+          :update-source-value="updateSourceValue"
+          :get-associate-entities="getAssociateEntities"
+          :existing-entities="existingEntities"
+          @submit="handleSubmit"
+          @toggle-expand="notesExpanded = !notesExpanded"
+          @view-entity="$emit('viewEntity', $event)"
+          @update-field="handleFieldUpdate"
+        />
       </v-card-text>
 
       <v-divider />
 
-      <v-card-actions class="pa-4">
-        <v-spacer />
-
-        <!-- Edit Mode Actions -->
-        <template v-if="isEditing">
-          <v-btn
-            variant="text"
-            prepend-icon="mdi-close"
-            @click="cancelEdit"
-            :disabled="updating"
-          >
-            Cancel
-          </v-btn>
-          <v-btn
-            color="primary"
-            variant="flat"
-            prepend-icon="mdi-content-save"
-            @click="handleSubmit"
-            :disabled="updating"
-            :loading="updating"
-          >
-            {{ updating ? 'Saving...' : 'Save Changes' }}
-          </v-btn>
-        </template>
-
-        <!-- View Mode Actions -->
-        <template v-else>
-          <v-btn
-            variant="text"
-            prepend-icon="mdi-close"
-            @click="$emit('close')"
-          >
-            Close
-          </v-btn>
-          <v-btn
-            color="primary"
-            variant="flat"
-            prepend-icon="mdi-pencil"
-            @click="startEditing"
-          >
-            Edit Entity
-          </v-btn>
-        </template>
-      </v-card-actions>
+      <EntityModalActions
+        :is-editing="isEditing"
+        :updating="updating"
+        @close="$emit('close')"
+        @edit="startEditing"
+        @cancel="cancelEdit"
+        @save="handleSubmit"
+      />
     </v-card>
   </v-dialog>
 
   <!-- Fullscreen Notes Editor -->
-  <v-dialog
-    v-model="notesExpanded"
-    fullscreen
-    transition="dialog-bottom-transition"
-    :scrim="true"
-  >
-    <v-card class="d-flex flex-column" style="height: 100vh;">
-      <v-toolbar color="primary" dark>
-        <v-toolbar-title>
-          <v-icon start>mdi-note-text</v-icon>
-          {{ getEntityTitle }} - Notes
-        </v-toolbar-title>
-        <v-spacer />
-        <v-btn
-          icon="mdi-close"
-          @click="notesExpanded = false"
-        />
-      </v-toolbar>
-
-      <div class="flex-grow-1 d-flex flex-column overflow-hidden">
-        <EditorToolbar
-          :actions="noteEditorActions"
-          :saving="noteSaving"
-          :last-saved-time="noteLastSavedTime"
-          :format-last-saved="noteFormatLastSaved"
-          :expanded="notesExpanded"
-          @toggle-expand="notesExpanded = !notesExpanded"
-        />
-
-        <v-container fluid class="flex-grow-1 overflow-auto pa-6">
-          <v-row justify="center">
-            <v-col cols="12" lg="10" xl="8">
-              <editor-content :editor="noteEditor" class="tiptap-content fullscreen-editor" />
-            </v-col>
-          </v-row>
-        </v-container>
-      </div>
-    </v-card>
-  </v-dialog>
+  <EntityNotesFullscreen
+    v-model:show="notesExpanded"
+    :title="getEntityTitle"
+    :editor="noteEditor"
+    :editor-actions="noteEditorActions"
+    :saving="noteSaving"
+    :last-saved-time="noteLastSavedTime"
+    :format-last-saved="noteFormatLastSaved"
+    @close="notesExpanded = false"
+  />
 </template>
 
 <script setup>
 import { ref, computed, toRef } from 'vue'
-import { EditorContent } from '@tiptap/vue-3'
-import EntityTag from './EntityTag.vue'
-import EditorToolbar from '../editor/EditorToolbar.vue'
+import EntityTabContent from './EntityTabContent.vue'
+import EntityModalActions from './EntityModalActions.vue'
+import EntityNotesFullscreen from './EntityNotesFullscreen.vue'
 import { useEntityDetails } from '../../composables/useEntityDetails.js'
 import { useEntityAssociates } from '../../composables/useEntityAssociates.js'
 import { useEntityIcons } from '../../composables/useEntityIcons.js'
 import { useEntityDisplay } from '../../composables/useEntityDisplay.js'
 import { useEntityNoteEditor } from '../../composables/useEntityNoteEditor.js'
+import { useEntitySources } from '../../composables/useEntitySources.js'
 
 const props = defineProps({
   show: { type: Boolean, required: true, default: false },
@@ -408,14 +144,11 @@ const {
 
 const {
   getEntityIcon,
-  getSectionIcon,
-  getFieldIcon
+  getSectionIcon
 } = useEntityIcons(entity)
 
 const {
-  getEntityDisplayName,
-  getEntityTitle,
-  getFieldValue
+  getEntityTitle
 } = useEntityDisplay(entity)
 
 const {
@@ -426,27 +159,13 @@ const {
   formatLastSaved: noteFormatLastSaved
 } = useEntityNoteEditor(entity, caseId, isEditing, formData, emit)
 
-// Source handling functions
-function getSourceValue(parentField, fieldId) {
-  // In edit mode, use formData; in view mode, use entity.data
-  const sources = isEditing.value ? formData.value.data.sources : entity.value.data.sources
-  if (!sources) return ''
+const {
+  getSourceValue,
+  updateSourceValue
+} = useEntitySources(entity, formData, isEditing)
 
-  const sourceKey = parentField ? `${parentField}.${fieldId}` : fieldId
-  return sources[sourceKey] || ''
-}
-
-function updateSourceValue(parentField, fieldId, value) {
-  if (!formData.value.data.sources) {
-    formData.value.data.sources = {}
-  }
-
-  const sourceKey = parentField ? `${parentField}.${fieldId}` : fieldId
-  if (value) {
-    formData.value.data.sources[sourceKey] = value
-  } else {
-    delete formData.value.data.sources[sourceKey]
-  }
+function handleFieldUpdate(fieldPath, value) {
+  formData.value.data[fieldPath] = value
 }
 
 async function handleSubmit() {
@@ -465,137 +184,3 @@ async function handleSubmit() {
 
 </script>
 
-<style scoped>
-.source-field :deep(.v-field) {
-  background-color: rgba(var(--v-theme-surface-variant), 0.15) !important;
-}
-
-.source-field :deep(.v-label) {
-  font-size: 0.875rem !important;
-  color: rgba(var(--v-theme-on-surface), 0.7) !important;
-}
-
-.gap-2 {
-  gap: 8px;
-}
-
-.note-editor-container .tiptap-content .ProseMirror {
-  outline: none;
-  min-height: 200px;
-}
-
-.note-editor-container .tiptap-content .ProseMirror p.is-editor-empty:first-child::before {
-  color: rgb(var(--v-theme-on-surface-variant));
-  content: attr(data-placeholder);
-  float: left;
-  height: 0;
-  pointer-events: none;
-}
-
-.note-editor-container .tiptap-content h1,
-.note-editor-container .tiptap-content h2,
-.note-editor-container .tiptap-content h3 {
-  margin: 16px 0 8px;
-  line-height: 1.2;
-  font-weight: 600;
-}
-
-.note-editor-container .tiptap-content h1 { font-size: 1.5rem; }
-.note-editor-container .tiptap-content h2 { font-size: 1.3rem; }
-.note-editor-container .tiptap-content h3 { font-size: 1.1rem; }
-
-.note-editor-container .tiptap-content ul,
-.note-editor-container .tiptap-content ol {
-  padding-left: 24px;
-  margin: 8px 0;
-}
-
-.note-editor-container .tiptap-content blockquote {
-  border-left: 4px solid rgb(var(--v-theme-primary));
-  margin: 16px 0;
-  padding-left: 16px;
-  font-style: italic;
-  color: rgb(var(--v-theme-on-surface-variant));
-}
-
-.note-editor-container .tiptap-content a {
-  color: rgb(var(--v-theme-primary));
-  text-decoration: underline;
-}
-
-.note-editor-container .tiptap-content p {
-  margin: 8px 0;
-}
-
-.note-editor-container .tiptap-content mark {
-  background-color: rgb(var(--v-theme-warning));
-  padding: 0 2px;
-  border-radius: 2px;
-}
-
-.note-editor-container .tiptap-content .task-list {
-  list-style: none;
-  padding-left: 0;
-}
-
-.note-editor-container .tiptap-content .task-item {
-  display: flex;
-  align-items: flex-start;
-  margin: 4px 0;
-}
-
-.note-editor-container .tiptap-content .task-item > label {
-  flex: 0 0 auto;
-  margin-right: 8px;
-  margin-top: 2px;
-  user-select: none;
-}
-
-.note-editor-container .tiptap-content .task-item > div {
-  flex: 1 1 auto;
-}
-
-.note-editor-container .tiptap-content .task-item input[type="checkbox"] {
-  margin: 0;
-}
-
-.note-editor-container .tiptap-content .task-item[data-checked="true"] > div {
-  text-decoration: line-through;
-  opacity: 0.6;
-}
-
-/* Read-only styling */
-.read-only-notes {
-  background-color: rgba(var(--v-theme-surface-variant), 0.1) !important;
-}
-
-.read-only-notes .tiptap-content .ProseMirror {
-  cursor: default;
-  background-color: rgba(var(--v-theme-surface-variant), 0.08) !important;
-}
-
-.read-only-notes .tiptap-content .ProseMirror * {
-  pointer-events: none;
-}
-
-/* Full screen editor styles */
-.fullscreen-editor .ProseMirror {
-  outline: none;
-  min-height: 400px;
-  background: rgb(var(--v-theme-surface));
-  border-radius: 4px;
-  padding: 24px;
-}
-
-.fullscreen-editor .ProseMirror:focus {
-  box-shadow: 0 0 0 2px rgba(var(--v-theme-primary), 0.2);
-}
-
-.fullscreen-editor .ProseMirror p.is-editor-empty:first-child::before {
-  color: rgb(var(--v-theme-on-surface-variant));
-  content: attr(data-placeholder);
-  float: left;
-  height: 0;
-  pointer-events: none;
-}
-</style>
