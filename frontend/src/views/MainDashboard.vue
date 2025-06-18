@@ -81,15 +81,18 @@
 
               <!-- Controls -->
               <v-col cols="12" md="4">
-                <div class="d-flex align-center ga-4 justify-end">
+                <div class="d-flex align-center ga-2 justify-end flex-wrap">
                   <!-- Show Closed Cases Switch -->
-                  <v-switch
-                    v-model="showClosedCases"
-                    label="Show Closed"
-                    color="primary"
-                    hide-details
-                    density="comfortable"
-                  />
+                  <div class="d-flex align-center flex-shrink-0">
+                    <v-switch
+                      v-model="showClosedCases"
+                      color="primary"
+                      hide-details
+                      density="comfortable"
+                      class="me-2"
+                    />
+                    <span class="text-body-2 text-no-wrap">Show Closed</span>
+                  </div>
 
                   <!-- Search Field -->
                   <v-text-field
@@ -99,7 +102,8 @@
                     variant="outlined"
                     density="comfortable"
                     hide-details
-                    style="min-width: 280px"
+                    style="min-width: 200px; max-width: 280px;"
+                    class="flex-grow-1"
                     clearable
                   />
                 </div>

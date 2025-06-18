@@ -112,7 +112,7 @@ const { domainRule } = usePluginValidation()
 // Local parameter state for plugin-specific params
 const localParams = reactive({
   domain: props.modelValue.domain || '',
-  concurrency: props.modelValue.concurrency || 50,
+  concurrency: props.modelValue.concurrency || 5,
   use_securitytrails: props.modelValue.use_securitytrails || false
 })
 
@@ -136,7 +136,7 @@ const updateParams = () => {
 watch(() => props.modelValue, (newValue) => {
   Object.assign(localParams, {
     domain: newValue.domain || '',
-    concurrency: newValue.concurrency || 50,
+    concurrency: newValue.concurrency || 5,
     use_securitytrails: newValue.use_securitytrails || false
   })
 }, { deep: true })

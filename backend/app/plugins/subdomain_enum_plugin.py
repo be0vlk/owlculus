@@ -37,7 +37,7 @@ class SubdomainEnumPlugin(BasePlugin):
             "concurrency": {
                 "type": "float",
                 "description": "Maximum concurrent DNS queries",
-                "default": 50.0,
+                "default": 5.0,
                 "required": False,
             },
             "use_securitytrails": {
