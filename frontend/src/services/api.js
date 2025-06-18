@@ -31,6 +31,11 @@ api.interceptors.response.use(
       // Token is invalid or expired
       authService.logout()
 
+      // Show user notification about session expiration
+      window.dispatchEvent(new CustomEvent('api:sessionExpired', {
+        detail: { message: 'Your session has expired. Please log in again.' }
+      }))
+
       // Emit a global event for 401 errors instead of directly redirecting
       // This breaks the circular dependency with router
       window.dispatchEvent(new CustomEvent('api:unauthorized'))

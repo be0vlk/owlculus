@@ -31,7 +31,7 @@ def normalize_folder_path(folder_path: str) -> str:
     """
     Normalize and validate a folder path to prevent directory traversal attacks.
     Returns a safe, normalized folder path.
-    
+
     OWASP-compliant path sanitization that:
     - Removes dangerous path components (., .., null bytes)
     - Sanitizes filenames to alphanumeric + safe chars only
@@ -42,11 +42,11 @@ def normalize_folder_path(folder_path: str) -> str:
 
     # Remove leading/trailing whitespace and slashes
     path = folder_path.strip().strip("/\\")
-    
+
     # Additional security: check for null bytes and other dangerous chars
     if "\x00" in path or any(ord(c) < 32 for c in path if c not in " "):
         return ""
-    
+
     # Limit path length to prevent resource exhaustion
     if len(path) > 255:
         return ""
@@ -57,10 +57,10 @@ def normalize_folder_path(folder_path: str) -> str:
         part = part.strip()
         if not part or part in (".", "..", "..."):
             continue
-        
+
         # More restrictive sanitization - only allow safe characters
         sanitized = "".join(c for c in part if c.isalnum() or c in "._- ")
-        
+
         # Ensure component isn't empty after sanitization and has reasonable length
         if sanitized and len(sanitized) <= 100:
             parts.append(sanitized)
@@ -158,13 +158,13 @@ async def save_upload_file(
         )
 
     await validate_file_security(upload_file)
-    
+
     # Log successful file upload validation for security monitoring
     security_logger = get_security_logger(
         event="file_upload_validated",
         filename=upload_file.filename,
         case_id=case_id,
-        file_size=upload_file.size if hasattr(upload_file, 'size') else None
+        file_size=upload_file.size if hasattr(upload_file, "size") else None,
     )
     security_logger.info(f"File upload validated: {upload_file.filename}")
 
@@ -182,12 +182,11 @@ async def save_upload_file(
 
         # Read file content once with size check
         content = await upload_file.read()
-        
+
         # Check file size after reading (additional safety check)
         if len(content) > 15 * 1024 * 1024:  # 15MB limit
             raise HTTPException(
-                status_code=400,
-                detail=f"File too large. Maximum size is 15MB"
+                status_code=400, detail="File too large. Maximum size is 15MB"
             )
 
         # Calculate hash
@@ -199,17 +198,19 @@ async def save_upload_file(
 
         # Return the relative path and hash
         relative_path = str(file_path.relative_to(UPLOAD_DIR))
-        
+
         # Log successful file upload for security monitoring
         security_logger = get_security_logger(
             event="file_upload_complete",
             filename=upload_file.filename,
             case_id=case_id,
             relative_path=relative_path,
-            file_hash=file_hash
+            file_hash=file_hash,
         )
-        security_logger.info(f"File uploaded successfully: {upload_file.filename} to {relative_path}")
-        
+        security_logger.info(
+            f"File uploaded successfully: {upload_file.filename} to {relative_path}"
+        )
+
         return relative_path, file_hash
     except HTTPException:
         raise
@@ -227,18 +228,17 @@ async def save_upload_file(
         except Exception as cleanup_error:
             # Log cleanup failures for monitoring
             security_logger = get_security_logger(
-                event="file_cleanup_error",
-                case_id=case_id
+                event="file_cleanup_error", case_id=case_id
             )
-            security_logger.warning(f"Failed to cleanup after file save error: {cleanup_error}")
+            security_logger.warning(
+                f"Failed to cleanup after file save error: {cleanup_error}"
+            )
         # Log the actual error for debugging
         security_logger = get_security_logger(
-            event="file_upload_error",
-            filename=upload_file.filename,
-            case_id=case_id
+            event="file_upload_error", filename=upload_file.filename, case_id=case_id
         )
         security_logger.error(f"Failed to save file {upload_file.filename}: {str(e)}")
-        
+
         raise HTTPException(
             status_code=500,
             detail="Could not save file. Please try again or contact support.",
@@ -267,23 +267,23 @@ async def delete_file(relative_path: str) -> None:
         # Security: Check for path traversal attempts before normalization
         if not relative_path:
             raise HTTPException(status_code=400, detail="Invalid file path")
-            
+
         # Decode URL encoded strings
         decoded_path = urllib.parse.unquote(relative_path)
-        
+
         # Check for various path traversal patterns
         if (
-            ".." in decoded_path or 
-            relative_path.startswith("/") or 
-            "\x00" in decoded_path or  # Null bytes
-            "..." in decoded_path  # Multiple dots
+            ".." in decoded_path
+            or relative_path.startswith("/")
+            or "\x00" in decoded_path  # Null bytes
+            or "..." in decoded_path  # Multiple dots
         ):
             raise HTTPException(status_code=400, detail="Invalid file path")
-        
+
         normalized_path = normalize_folder_path(relative_path)
         if not normalized_path:
             raise HTTPException(status_code=400, detail="Invalid file path")
-        
+
         base_dir = UPLOAD_DIR.resolve()
         file_path = (base_dir / normalized_path).resolve()
 
@@ -297,26 +297,28 @@ async def delete_file(relative_path: str) -> None:
             raise HTTPException(status_code=400, detail="Invalid file path")
         if file_path.exists() and file_path.is_file():
             file_path.unlink()
-            
+
             # Log successful file deletion for security monitoring
             security_logger = get_security_logger(
-                event="file_delete_complete",
-                file_path=relative_path
+                event="file_delete_complete", file_path=relative_path
             )
             security_logger.info(f"File deleted successfully: {relative_path}")
         parent_dir = file_path.parent
-        while parent_dir != base_dir and parent_dir.exists() and not any(parent_dir.iterdir()):
+        while (
+            parent_dir != base_dir
+            and parent_dir.exists()
+            and not any(parent_dir.iterdir())
+        ):
             parent_dir.rmdir()
             parent_dir = parent_dir.parent
-            
+
     except HTTPException:
         raise
     except Exception as e:
         # Log the actual error for debugging
         security_logger = get_security_logger(
-            event="file_delete_error",
-            file_path=relative_path
+            event="file_delete_error", file_path=relative_path
         )
         security_logger.error(f"Failed to delete file {relative_path}: {str(e)}")
-        
+
         raise HTTPException(status_code=500, detail="Could not delete file")

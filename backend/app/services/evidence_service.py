@@ -99,7 +99,7 @@ class EvidenceService:
                     evidence.content = relative_path
                     evidence.file_hash = file_hash
                     # Update title to show actual saved filename (handles duplicates)
-                    evidence.title = relative_path.split('/')[-1]
+                    evidence.title = relative_path.split("/")[-1]
                 except HTTPException:
                     raise
                 except Exception as e:
