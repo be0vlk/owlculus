@@ -126,7 +126,7 @@ async def update_evidence(
     current_user: models.User = Depends(get_current_active_user),
 ):
     evidence_service = EvidenceService(db)
-    return await evidence_service.update_evidence(
+    return evidence_service.update_evidence(
         evidence_id=evidence_id,
         evidence_update=evidence,
         current_user=current_user,

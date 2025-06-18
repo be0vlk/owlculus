@@ -131,6 +131,7 @@
                     </v-col>
                   </v-row>
                   <EvidenceList
+                    ref="evidenceListRef"
                     :evidence-list="evidence"
                     :loading="loadingEvidence"
                     :error="evidenceError"
@@ -142,6 +143,7 @@
                     @upload-to-folder="handleUploadToFolder"
                     @extract-metadata="handleExtractMetadata"
                     @view-text-content="handleViewTextContent"
+                    @evidence-moved="handleEvidenceMoved"
                   />
                 </div>
 
@@ -344,6 +346,7 @@ const caseData = ref(null);
 const client = ref(null);
 const entities = ref([]);
 const entityTableRef = ref(null);
+const evidenceListRef = ref(null);
 const showEditModal = ref(false);
 const showAddUserModal = ref(false);
 const showNewEntityModal = ref(false);
@@ -576,6 +579,17 @@ const handleDeleteEvidence = async (evidenceItem) => {
 const handleEvidenceUpload = async (newEvidenceList) => {
   evidence.value = [...evidence.value, ...newEvidenceList];
 };
+
+const handleEvidenceMoved = (updatedEvidenceList, openState) => {
+  // Update the evidence list with optimistic changes
+  evidence.value = updatedEvidenceList;
+  
+  // Restore the folder open state if provided
+  if (openState && evidenceListRef.value) {
+    evidenceListRef.value.restoreOpenState(openState);
+  }
+};
+
 
 const handleUploadToFolder = (folder) => {
   uploadTargetFolder.value = folder;

@@ -101,4 +101,11 @@ export const evidenceService = {
     })
     return response.data
   },
+
+  async moveEvidence(evidenceId, targetFolderId) {
+    const response = await api.put(`/api/evidence/${evidenceId}`, {
+      parent_folder_id: targetFolderId,
+    })
+    return response.data
+  },
 }

@@ -113,14 +113,26 @@
             </template>
             
             <template v-slot:title="{ item }">
-              <span 
-                class="tree-item-title"
-                :class="{ 'text-file-title': isTextFile(item) }"
-                @contextmenu.prevent="showContextMenu($event, item)"
-                @dblclick="handleFileDoubleClick(item)"
+              <div 
+                class="tree-item-title-wrapper"
+                :class="getDragClasses(item)"
+                :draggable="!item.is_folder && userRole !== 'Analyst'"
+                @dragstart="onDragStart($event, item)"
+                @dragend="onDragEnd"
+                @dragenter="onDragEnter($event, item)"
+                @dragover="onDragOver($event, item)"
+                @dragleave="onDragLeave($event, item)"
+                @drop="onDrop($event, item)"
               >
-                {{ item.title }}
-              </span>
+                <span 
+                  class="tree-item-title"
+                  :class="{ 'text-file-title': isTextFile(item) }"
+                  @contextmenu.prevent="showContextMenu($event, item)"
+                  @dblclick="handleFileDoubleClick(item)"
+                >
+                  {{ item.title }}
+                </span>
+              </div>
             </template>
             
             <template v-slot:append="{ item }">
@@ -274,6 +286,7 @@ import FolderContextMenu from './FolderContextMenu.vue'
 import EvidenceTemplateSelectionModal from './EvidenceTemplateSelectionModal.vue'
 import RenameDialog from './RenameDialog.vue'
 import { useFolderIcons } from '../composables/useFolderIcons'
+import { useDragAndDrop } from '../composables/useDragAndDrop'
 
 const props = defineProps({
   evidenceList: {
@@ -298,10 +311,19 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['download', 'delete', 'refresh', 'upload-to-folder', 'extract-metadata', 'view-text-content'])
+const emit = defineEmits(['download', 'delete', 'refresh', 'upload-to-folder', 'extract-metadata', 'view-text-content', 'evidence-moved'])
 
 // Composables
 const { getFolderColor, getFolderIcon } = useFolderIcons()
+const {
+  handleDragStart,
+  handleDragEnter,
+  handleDragOver,
+  handleDragLeave,
+  handleDrop,
+  handleDragEnd,
+  getDragClasses
+} = useDragAndDrop()
 
 // Reactive data
 const showCreateFolder = ref(false)
@@ -315,6 +337,17 @@ const newFolderParent = ref(null)
 const renameTargetItem = ref(null)
 const deleteTargetItem = ref(null)
 const openItems = ref([])
+
+// Function to preserve open state during evidence updates
+const preserveOpenState = () => {
+  // Get currently open items from the treeview
+  return [...openItems.value]
+}
+
+// Function to restore open state after evidence updates
+const restoreOpenState = (savedOpenItems) => {
+  openItems.value = savedOpenItems
+}
 const selectedItems = ref([])
 
 // Context menu
@@ -532,10 +565,94 @@ const handleTemplateApplied = () => {
   emit('refresh')
 }
 
+// Drag and drop functionality
+const handleMoveEvidence = async (draggedItem, targetFolder) => {
+  // Store original evidence list and open state for potential rollback
+  const originalEvidenceList = [...props.evidenceList]
+  const savedOpenState = preserveOpenState()
+  
+  try {
+    // Optimistically update the evidence list
+    const updatedEvidenceList = moveItemOptimistically(draggedItem, targetFolder, props.evidenceList)
+    
+    emit('evidence-moved', updatedEvidenceList, savedOpenState)
+    await evidenceService.moveEvidence(draggedItem.id, targetFolder.id)
+    
+    return { success: true }
+  } catch (error) {
+    console.error('Failed to move evidence:', error)
+    
+    // Revert the optimistic update on failure
+    emit('evidence-moved', originalEvidenceList, savedOpenState)
+    
+    return { 
+      success: false, 
+      error: error.response?.data?.detail || error.message || 'Failed to move file'
+    }
+  }
+}
+
+// Helper function to optimistically move an item in the evidence list
+const moveItemOptimistically = (draggedItem, targetFolder, evidenceList) => {
+  const updatedList = evidenceList.map(item => {
+    if (item.id === draggedItem.id) {
+      return {
+        ...item,
+        parent_folder_id: targetFolder.id
+      }
+    }
+    return item
+  })
+  
+  return updatedList
+}
+
+const onDragStart = (event, item) => {
+  return handleDragStart(event, item, props.userRole)
+}
+
+const onDragEnter = (event, item) => {
+  if (item.is_folder) {
+    handleDragEnter(event, item, props.userRole)
+  }
+}
+
+const onDragOver = (event, item) => {
+  if (item.is_folder) {
+    handleDragOver(event, item, props.userRole)
+  }
+}
+
+const onDragLeave = (event, item) => {
+  if (item.is_folder) {
+    handleDragLeave(event, item)
+  }
+}
+
+const onDrop = async (event, item) => {
+  if (item.is_folder) {
+    const result = await handleDrop(event, item, props.userRole, handleMoveEvidence)
+    
+    if (!result.success && result.error) {
+      console.error('Drop failed:', result.error)
+    }
+  }
+}
+
+const onDragEnd = () => {
+  handleDragEnd()
+}
+
 // Watch for evidence list changes to maintain open state
 watch(() => props.evidenceList, () => {
   // Maintain open folders
 }, { deep: true })
+
+// Expose methods to parent component
+defineExpose({
+  restoreOpenState,
+  preserveOpenState
+})
 </script>
 
 <style scoped>
@@ -587,5 +704,93 @@ watch(() => props.evidenceList, () => {
 
 :deep(.v-treeview-item:hover) {
   background-color: rgb(var(--v-theme-on-surface), 0.05);
+}
+
+/* Drag and Drop Styles */
+.evidence-dragging {
+  opacity: 0.5;
+  background-color: rgb(var(--v-theme-primary), 0.1);
+  border: 2px dashed rgb(var(--v-theme-primary));
+  border-radius: 4px;
+}
+
+.evidence-drag-over {
+  background-color: rgb(var(--v-theme-success), 0.15);
+  border: 2px solid rgb(var(--v-theme-success));
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(var(--v-theme-success), 0.3);
+}
+
+.evidence-invalid-drop {
+  background-color: rgb(var(--v-theme-error), 0.1);
+  border: 2px dashed rgb(var(--v-theme-error));
+  border-radius: 4px;
+}
+
+.draggable-item {
+  cursor: grab;
+}
+
+.draggable-item:active {
+  cursor: grabbing;
+}
+
+/* Enhanced drag feedback for tree items */
+:deep(.v-treeview-item.evidence-dragging) {
+  opacity: 0.5;
+  transform: scale(0.98);
+  transition: all 0.2s ease;
+}
+
+:deep(.v-treeview-item.evidence-drag-over) {
+  background-color: rgb(var(--v-theme-success), 0.1) !important;
+  border-left: 4px solid rgb(var(--v-theme-success));
+  padding-left: 8px;
+  transition: all 0.2s ease;
+}
+
+:deep(.v-treeview-item.evidence-invalid-drop) {
+  background-color: rgb(var(--v-theme-error), 0.1) !important;
+  border-left: 4px solid rgb(var(--v-theme-error));
+  padding-left: 8px;
+}
+
+/* Drag ghost styling */
+.drag-ghost {
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 8px 12px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  font-size: 14px;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 200px;
+}
+
+/* Folder icon highlighting for valid drop targets */
+.v-icon.drop-target-highlight {
+  color: rgb(var(--v-theme-success)) !important;
+  transform: scale(1.1);
+  transition: all 0.2s ease;
+}
+
+/* Tree item title wrapper */
+.tree-item-title-wrapper {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.tree-item-title-wrapper[draggable="true"] {
+  cursor: grab;
+}
+
+.tree-item-title-wrapper[draggable="true"]:active {
+  cursor: grabbing;
 }
 </style>

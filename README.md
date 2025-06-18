@@ -66,7 +66,7 @@ chmod +x setup.sh
 
 The setup script will guide you through configuration options.
 
-After setup, Owlculus will be available at your configured URLs (defaults shown):
+After setup, Owlculus will be available at your configured URLs (defaults shown). If you are just running this locally, I recommend leaving the defaults:
 - **Frontend:** http://localhost
 - **Backend API:** http://localhost:8000
 - **Login:** Your configured admin credentials
