@@ -337,7 +337,7 @@ defineEmits(['update:modelValue'])
 // GenericPluginParams automatically handles:
 // - Parameter form generation based on backend schema
 // - API key warnings and validation
-// - Case selection for evidence saving
+// - Case selection for evidence saving (via CaseEvidenceToggle component)
 // - All standard parameter types (string, number, boolean)
 //
 // Only customize this component if you need:

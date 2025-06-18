@@ -34,14 +34,10 @@
       </template>
     </v-select>
 
-    <!-- Save to Case Option -->
-    <v-switch
-      v-model="localParams.save_to_case"
-      label="Save to case evidence"
-      persistent-hint
-      color="primary"
-      density="compact"
-      @update:model-value="updateParams"
+    <!-- Case Evidence Toggle -->
+    <CaseEvidenceToggle
+      :model-value="props.modelValue"
+      @update:model-value="emit('update:modelValue', $event)"
     />
 
   </div>
@@ -51,6 +47,7 @@
 import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { caseService } from '@/services/case'
 import PluginDescriptionCard from './PluginDescriptionCard.vue'
+import CaseEvidenceToggle from './CaseEvidenceToggle.vue'
 
 const props = defineProps({
   parameters: {
@@ -76,8 +73,7 @@ const loadingCases = ref(true)
 
 // Local parameter state
 const localParams = reactive({
-  case_id: props.modelValue.case_id || null,
-  save_to_case: props.modelValue.save_to_case !== undefined ? props.modelValue.save_to_case : false
+  case_id: props.modelValue.case_id || null
 })
 
 // Computed properties

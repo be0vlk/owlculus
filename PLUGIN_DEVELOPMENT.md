@@ -74,7 +74,7 @@ Automatically generates parameter forms based on your backend plugin's parameter
 - **Required validation** → Automatic based on schema
 - **Default values** → Pre-populated from schema
 - **API key warnings** → Automatic validation and user guidance
-- **Case selection** → Automatic for evidence saving
+- **Case selection** → Automatic for evidence saving (via centralized CaseEvidenceToggle component)
 
 ### PluginResult.vue
 Provides intelligent fallback display for any result data structure:
@@ -348,6 +348,28 @@ your-package-name==version
 - Custom parameter layout or grouping
 - Plugin-specific help text or examples
 
+**Note**: If you create a custom parameter component and need case evidence saving functionality, use the `CaseEvidenceToggle` component:
+
+```vue
+<template>
+  <div class="d-flex flex-column ga-3">
+    <!-- Your custom parameters here -->
+    
+    <!-- Add case evidence saving functionality -->
+    <CaseEvidenceToggle 
+      :model-value="modelValue"
+      @update:model-value="$emit('update:modelValue', $event)"
+    />
+  </div>
+</template>
+
+<script setup>
+import CaseEvidenceToggle from './CaseEvidenceToggle.vue'
+
+// Your component logic here
+</script>
+```
+
 ```vue
 <template>
   <!-- Most plugins should just use GenericPluginParams -->
@@ -381,7 +403,7 @@ defineEmits(['update:modelValue'])
 // GenericPluginParams automatically handles:
 // - Parameter form generation based on backend schema
 // - API key warnings and validation
-// - Case selection for evidence saving
+// - Case selection for evidence saving (via CaseEvidenceToggle component)
 // - All standard parameter types (string, number, boolean)
 </script>
 ```
