@@ -78,6 +78,7 @@
         
         <template v-else>
           <v-treeview
+            :key="`treeview-${treeItems.length}`"
             :items="treeItems"
             :open="openItems"
             item-value="id"
