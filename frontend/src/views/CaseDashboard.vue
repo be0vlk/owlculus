@@ -151,15 +151,56 @@
                     <v-card-title class="d-flex align-center">
                       <v-icon start>mdi-note-text</v-icon>
                       Case Notes
+                      <v-spacer />
+                      <v-chip
+                        :color="isEditingNotes ? 'warning' : 'primary'"
+                        variant="tonal"
+                        size="small"
+                        class="me-3"
+                      >
+                        {{ isEditingNotes ? 'Editing' : 'View Mode' }}
+                      </v-chip>
                     </v-card-title>
                     <v-divider />
                     <v-card-text class="pa-0">
-                      <NoteEditor
+                      <CaseNoteEditor
                         v-model="caseData.notes"
                         :case-id="Number(route.params.id)"
+                        :is-editing="isEditingNotes"
                         @update:modelValue="handleNotesUpdate"
                       />
                     </v-card-text>
+                    <v-divider />
+                    <v-card-actions class="pa-4">
+                      <v-spacer />
+                      <div v-if="!isEditingNotes">
+                        <v-btn
+                          color="primary"
+                          variant="flat"
+                          prepend-icon="mdi-pencil"
+                          @click="startEditingNotes"
+                        >
+                          Edit Notes
+                        </v-btn>
+                      </div>
+                      <div v-else class="d-flex ga-2">
+                        <v-btn
+                          variant="text"
+                          @click="cancelEditingNotes"
+                        >
+                          Cancel
+                        </v-btn>
+                        <v-btn
+                          color="primary"
+                          variant="flat"
+                          prepend-icon="mdi-content-save"
+                          @click="saveNotes"
+                          :loading="savingNotes"
+                        >
+                          Save
+                        </v-btn>
+                      </div>
+                    </v-card-actions>
                   </v-card>
                 </div>
               </template>
@@ -283,7 +324,7 @@ import EditCaseModal from '../components/EditCaseModal.vue';
 import AddUserToCaseModal from '../components/AddUserToCaseModal.vue';
 import NewEntityModal from '../components/NewEntityModal.vue';
 import EntityDetailsModal from '../components/entities/EntityDetailsModal.vue';
-import NoteEditor from '../components/NoteEditor.vue';
+import CaseNoteEditor from '../components/CaseNoteEditor.vue';
 import EvidenceList from '../components/EvidenceList.vue';
 import UploadEvidenceModal from '../components/UploadEvidenceModal.vue';
 import MetadataModal from '../components/MetadataModal.vue';
@@ -330,6 +371,11 @@ const textFileInfo = ref(null);
 const loadingTextContent = ref(false);
 const textContentError = ref('');
 
+// Notes editing state
+const isEditingNotes = ref(false);
+const savingNotes = ref(false);
+const originalNotes = ref('');
+
 // Make entityService available to the template
 const entityServiceRef = entityService;
 
@@ -375,6 +421,34 @@ const handleCaseUpdate = (updatedCase) => {
 const handleNotesUpdate = (notes) => {
   if (caseData.value) {
     caseData.value.notes = notes;
+  }
+};
+
+// Notes editing functions
+const startEditingNotes = () => {
+  originalNotes.value = caseData.value?.notes || '';
+  isEditingNotes.value = true;
+};
+
+const cancelEditingNotes = () => {
+  if (caseData.value) {
+    caseData.value.notes = originalNotes.value;
+  }
+  isEditingNotes.value = false;
+};
+
+const saveNotes = async () => {
+  if (!caseData.value) return;
+  
+  try {
+    savingNotes.value = true;
+    await caseService.updateCase(route.params.id, { notes: caseData.value.notes });
+    originalNotes.value = caseData.value.notes;
+    isEditingNotes.value = false;
+  } catch (error) {
+    console.error('Failed to save notes:', error);
+  } finally {
+    savingNotes.value = false;
   }
 };
 
