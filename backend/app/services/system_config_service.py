@@ -15,12 +15,10 @@ class SystemConfigService:
         self.db = db
 
     async def get_configuration(self) -> models.SystemConfiguration:
-        """Get the system configuration. Creates default if none exists."""
         stmt = select(models.SystemConfiguration)
         config = self.db.exec(stmt).first()
 
         if not config:
-            # Create default configuration
             config = models.SystemConfiguration(
                 case_number_template="YYMM-NN",
                 case_number_prefix=None,
@@ -39,7 +37,6 @@ class SystemConfigService:
         case_number_prefix: Optional[str] = None,
         current_user: models.User = None,
     ) -> models.SystemConfiguration:
-        """Update the system configuration."""
         config_logger = get_security_logger(
             admin_user_id=current_user.id if current_user else None,
             action="update_system_config",
@@ -48,7 +45,6 @@ class SystemConfigService:
         )
 
         try:
-            # Validate template
             if case_number_template not in ["YYMM-NN", "PREFIX-YYMM-NN"]:
                 config_logger.bind(
                     event_type="system_config_update_failed",
@@ -56,7 +52,6 @@ class SystemConfigService:
                 ).warning("System config update failed: invalid case number template")
                 raise ValueError("Invalid case number template")
 
-            # Validate prefix for PREFIX template
             if case_number_template == "PREFIX-YYMM-NN":
                 if not case_number_prefix:
                     config_logger.bind(
@@ -79,7 +74,7 @@ class SystemConfigService:
                     )
                     raise ValueError("Prefix must be 2-8 alphanumeric characters")
             else:
-                case_number_prefix = None  # Clear prefix for non-prefix templates
+                case_number_prefix = None
 
             config = await self.get_configuration()
             old_template = config.case_number_template
@@ -112,7 +107,6 @@ class SystemConfigService:
             raise
 
     def get_template_display_name(self, template: str) -> str:
-        """Get user-friendly display name for template."""
         template_names = {
             "YYMM-NN": "Monthly Reset (YYMM-NN)",
             "PREFIX-YYMM-NN": "Prefix + Monthly Reset (PREFIX-YYMM-NN)",
@@ -122,9 +116,8 @@ class SystemConfigService:
     def generate_example_case_number(
         self, template: str, prefix: Optional[str] = None
     ) -> str:
-        """Generate an example case number for preview purposes."""
         current_time = get_utc_now()
-        year = str(current_time.year)[2:]  # Last 2 digits
+        year = str(current_time.year)[2:]
         month = str(current_time.month).zfill(2)
 
         if template == "PREFIX-YYMM-NN" and prefix:
@@ -139,11 +132,8 @@ class SystemConfigService:
         name: str,
         current_user: models.User,
     ) -> models.SystemConfiguration:
-        """Set or update an API key for a specific provider."""
         config = await self.get_configuration()
         current_keys = config.api_keys.copy() if config.api_keys else {}
-
-        # Determine if this is a new key addition or update
         is_new_key = provider not in current_keys
         operation_type = "add" if is_new_key else "update"
 
@@ -178,7 +168,6 @@ class SystemConfigService:
                     ),
                 }
 
-                # Enhanced logging for updates
                 config_logger = config_logger.bind(
                     old_name=old_name,
                     new_name=name,
@@ -186,7 +175,6 @@ class SystemConfigService:
                     metadata_only=not key_being_updated,
                 )
             else:
-                # New provider - API key is required
                 if not api_key:
                     config_logger.bind(
                         event_type="api_key_add_failed",
@@ -211,7 +199,6 @@ class SystemConfigService:
             self.db.commit()
             self.db.refresh(config)
 
-            # Success logging with operation-specific details
             success_event_type = f"api_key_{operation_type}_success"
             if is_new_key:
                 config_logger.bind(event_type=success_event_type).info(
@@ -225,7 +212,6 @@ class SystemConfigService:
             return config
 
         except ValueError as e:
-            # Log validation failures
             config_logger.bind(
                 event_type=f"api_key_{operation_type}_failed",
                 failure_reason="validation_error",
@@ -233,7 +219,6 @@ class SystemConfigService:
             ).warning(f"API key {operation_type} failed for {provider}: {str(e)}")
             raise
         except Exception as e:
-            # Log system errors
             config_logger.bind(
                 event_type=f"api_key_{operation_type}_error",
                 error_type="system_error",
@@ -244,10 +229,8 @@ class SystemConfigService:
     async def remove_api_key(
         self, provider: str, current_user: models.User
     ) -> models.SystemConfiguration:
-        """Remove an API key for a specific provider."""
         config = await self.get_configuration()
 
-        # Get existing key details for logging
         existing_key_data = None
         if config.api_keys and provider in config.api_keys:
             existing_key_data = config.api_keys[provider]
@@ -263,7 +246,6 @@ class SystemConfigService:
 
         try:
             if config.api_keys and provider in config.api_keys:
-                # Create a new dictionary to ensure SQLAlchemy detects the change
                 current_keys = config.api_keys.copy()
                 removed_key_data = current_keys[provider]
                 del current_keys[provider]
@@ -298,13 +280,11 @@ class SystemConfigService:
             raise
 
     def get_api_key(self, provider: str) -> Optional[str]:
-        """Get decrypted API key for a specific provider."""
         try:
             stmt = select(models.SystemConfiguration)
             config = self.db.exec(stmt).first()
 
             if not config or not config.api_keys or provider not in config.api_keys:
-                # Fallback to environment variable
                 env_var = f"{provider.upper()}_API_KEY"
                 return os.environ.get(env_var)
 
@@ -315,12 +295,10 @@ class SystemConfigService:
             return None
 
         except Exception:
-            # Fallback to environment variable on any error
             env_var = f"{provider.upper()}_API_KEY"
             return os.environ.get(env_var)
 
     def list_api_keys(self) -> Dict[str, dict]:
-        """List all configured API keys with masked keys."""
         try:
             stmt = select(models.SystemConfiguration)
             config = self.db.exec(stmt).first()
@@ -343,24 +321,19 @@ class SystemConfigService:
             return {}
 
     def is_provider_configured(self, provider: str) -> bool:
-        """Check if a specific provider has an API key configured."""
         api_key = self.get_api_key(provider)
         return bool(api_key)
 
     def get_configured_providers(self) -> List[str]:
-        """Get list of all configured provider names."""
         api_keys = self.list_api_keys()
         return list(api_keys.keys())
 
     def _get_default_templates(self) -> dict:
-        """Get default evidence folder templates."""
         return DEFAULT_TEMPLATES.copy()
 
     async def get_evidence_folder_templates(self) -> dict:
-        """Get evidence folder templates."""
         config = await self.get_configuration()
         if not config.evidence_folder_templates:
-            # Initialize with defaults if empty
             config.evidence_folder_templates = self._get_default_templates()
             config.updated_at = get_utc_now()
             self.db.add(config)
@@ -371,7 +344,6 @@ class SystemConfigService:
     async def update_evidence_folder_templates(
         self, templates: dict, current_user: models.User
     ) -> models.SystemConfiguration:
-        """Update evidence folder templates."""
         config_logger = get_security_logger(
             admin_user_id=current_user.id,
             action="update_evidence_templates",
@@ -386,7 +358,6 @@ class SystemConfigService:
                 else {}
             )
 
-            # Validate template structure
             for template_key, template_data in templates.items():
                 if not isinstance(template_data, dict):
                     raise ValueError(f"Invalid template structure for {template_key}")

@@ -14,7 +14,6 @@ from .config import settings
 from .utils import get_utc_now
 
 
-# Password Hashing
 def get_password_hash(password: str) -> str:
     salt = bcrypt.gensalt()
     return bcrypt.hashpw(password.encode(), salt).decode()
@@ -55,26 +54,21 @@ def verify_access_token(token: str, credentials_exception) -> str:
         raise credentials_exception
 
 
-# File Security
 MAX_FILE_SIZE = 15 * 1024 * 1024  # 15MB in bytes
 
 ALLOWED_MIME_TYPES = {
-    # Documents
     "application/pdf",
     "application/msword",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "text/plain",
-    # Images
     "image/jpeg",
     "image/png",
     "image/gif",
     "image/bmp",
-    # Videos
     "video/mp4",
     "video/quicktime",
     "video/x-msvideo",
     "video/x-ms-wmv",
-    # Audio
     "audio/mpeg",
     "audio/wav",
     "audio/ogg",
@@ -89,12 +83,9 @@ async def validate_file_security(file: UploadFile) -> None:
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file name provided")
 
-    # Check file size
     file_size = 0
     chunk_size = 1024 * 1024  # 1MB chunks
     content = b""
-
-    # Save the current position
     current_pos = await file.seek(0)
 
     while True:
@@ -110,10 +101,8 @@ async def validate_file_security(file: UploadFile) -> None:
                 detail=f"File too large. Maximum size is {MAX_FILE_SIZE / (1024 * 1024)}MB",
             )
 
-    # Reset file position
     await file.seek(0)
 
-    # First try filetype detection
     kind = filetype.guess(content)
 
     if kind and kind.mime in ALLOWED_MIME_TYPES:
@@ -123,7 +112,6 @@ async def validate_file_security(file: UploadFile) -> None:
     # check if it might be a text file
     if file.content_type == "text/plain":
         try:
-            # Try to decode as text
             content.decode("utf-8")
             # If we got here, it's valid UTF-8 text
             return
@@ -139,18 +127,13 @@ def secure_filename_with_path(filename: str, base_path: Path) -> str:
     Uses werkzeug's secure_filename for basic sanitization.
     If the filename already exists, appends a counter.
     """
-    # Get a basic sanitized filename
     safe_name = secure_filename(filename)
     if not safe_name:
         safe_name = "unnamed_file"
-
-    # Ensure the path is absolute and normalized
     abs_base = base_path.absolute().resolve()
 
-    # Split filename into name and extension
     name, ext = os.path.splitext(safe_name)
 
-    # Handle duplicates by appending counter
     counter = 1
     final_name = safe_name
     while (abs_base / final_name).exists():
@@ -169,7 +152,6 @@ def secure_filename_with_path(filename: str, base_path: Path) -> str:
 def _get_encryption_key() -> bytes:
     """Get or generate encryption key from secret."""
     secret = settings.SECRET_KEY.get_secret_value()
-    # Use first 32 bytes of secret key hash for Fernet
     key = base64.urlsafe_b64encode(secret.encode()[:32].ljust(32, b"0"))
     return key
 
@@ -194,5 +176,4 @@ def decrypt_api_key(encrypted_key: str) -> str:
         decrypted = fernet.decrypt(encrypted_key.encode())
         return decrypted.decode()
     except Exception:
-        # Return empty string if decryption fails
         return ""

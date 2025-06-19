@@ -1,5 +1,5 @@
 """
-Base plugin class that all OSINT tools must inherit from
+Base plugin class that all plugins must inherit from
 """
 
 import asyncio
@@ -48,9 +48,8 @@ class BasePlugin(ABC):
             []
         )  # Collect results for evidence saving
         self._current_params: Optional[Dict[str, Any]] = None
-        self._db_session: Optional[Session] = db_session  # Injected database session
+        self._db_session: Optional[Session] = db_session
 
-        # Validate evidence_category on initialization
         self._validate_evidence_category()
 
     def _validate_evidence_category(self) -> None:
@@ -111,7 +110,6 @@ class BasePlugin(ABC):
         returncode = await loop.run_in_executor(self._executor, process.wait)
 
         if returncode != 0:
-            # Read error asynchronously if process failed
             error = await loop.run_in_executor(self._executor, process.stderr.read)
             yield {"error": error}
 
@@ -304,17 +302,15 @@ class BasePlugin(ABC):
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """Execute plugin with automatic evidence collection"""
         self._current_params = params or {}
-        self._evidence_results = []  # Reset evidence collection
+        self._evidence_results = []
 
         try:
             async for result in self.run(params):
-                # Collect data results for evidence saving
                 if result.get("type") == "data":
                     self.add_evidence_result(result.get("data", {}))
 
                 yield result
         finally:
-            # Save evidence at the end of execution
             await self.save_collected_evidence()
 
     def check_api_key_requirements(self, db: Session) -> Dict[str, bool]:
@@ -356,7 +352,6 @@ class BasePlugin(ABC):
         if not case_id:
             return
 
-        # Extract unique IP addresses from results
         discovered_ips = self._extract_unique_ips_from_results()
 
         if not discovered_ips:
@@ -417,17 +412,12 @@ class BasePlugin(ABC):
                         created_count += 1
 
                 except Exception:
-                    # Log error but continue with other IPs
                     failed_count += 1
                     continue
 
-            # Entity operations completed silently
-
         except Exception:
-            # Don't break evidence saving if entity creation fails completely
             pass
         finally:
-            # Only close if we created the session
             if close_session:
                 db.close()
 

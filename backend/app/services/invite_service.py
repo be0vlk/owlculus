@@ -26,10 +26,7 @@ class InviteService:
         )
 
         try:
-            # Generate secure token
             token = secrets.token_urlsafe(32)
-
-            # Set expiration to 48 hours from now
             expires_at = get_utc_now() + timedelta(hours=48)
 
             new_invite = await crud.create_invite(
@@ -110,7 +107,6 @@ class InviteService:
         )
 
         try:
-            # Validate invite first
             validation = await self.validate_invite(registration.token)
             if not validation.valid:
                 invite_logger.bind(
@@ -120,7 +116,6 @@ class InviteService:
                 ).warning("User registration failed: invalid invite")
                 raise HTTPException(status_code=400, detail=validation.error)
 
-            # Get the invite
             invite = await crud.get_invite_by_token(self.db, token=registration.token)
             if not invite:
                 invite_logger.bind(
@@ -129,7 +124,6 @@ class InviteService:
                 ).warning("User registration failed: invite not found")
                 raise HTTPException(status_code=400, detail="Invalid invite token")
 
-            # Check for existing username
             existing_user = await crud.get_user_by_username(
                 self.db, username=registration.username
             )
@@ -140,7 +134,6 @@ class InviteService:
                 ).warning("User registration failed: username already taken")
                 raise HTTPException(status_code=400, detail="Username already taken")
 
-            # Check for existing email
             existing_user = await crud.get_user_by_email(
                 self.db, email=registration.email
             )
@@ -151,7 +144,6 @@ class InviteService:
                 ).warning("User registration failed: email already registered")
                 raise HTTPException(status_code=400, detail="Email already registered")
 
-            # Create user with role from invite
             user = await crud.create_user_from_invite(
                 db=self.db,
                 username=registration.username,
@@ -160,7 +152,6 @@ class InviteService:
                 role=invite.role,
             )
 
-            # Mark invite as used
             await crud.mark_invite_used(self.db, invite)
 
             invite_logger.bind(
@@ -202,7 +193,6 @@ class InviteService:
         )
 
         try:
-            # Get invite
             invite = self.db.get(models.Invite, invite_id)
             if not invite:
                 invite_logger.bind(

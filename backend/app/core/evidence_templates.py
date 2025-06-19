@@ -3,7 +3,6 @@ Default evidence folder templates for different investigation types.
 These templates define the standard folder structures for organizing evidence.
 """
 
-# Reusable social media template
 SOCIAL_MEDIA_SUBFOLDERS = [
     {
         "name": "Bluesky",
@@ -67,7 +66,6 @@ SOCIAL_MEDIA_SUBFOLDERS = [
     },
 ]
 
-# Reusable associates template
 ASSOCIATES_SUBFOLDERS = [
     {
         "name": "Children",
@@ -99,7 +97,6 @@ ASSOCIATES_SUBFOLDERS = [
     },
 ]
 
-# Reusable person investigation folder structure
 PERSON_SUBFOLDERS = [
     {
         "name": "Social Media",

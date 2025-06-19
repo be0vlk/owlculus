@@ -2,6 +2,7 @@ from functools import wraps
 
 from app.core import security
 from app.core.config import settings
+from app.core.roles import UserRole
 from app.database import crud
 from app.database.connection import get_db
 from app.database.models import Case, User
@@ -13,19 +14,13 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login
 
 
 def get_client_ip(request: Request) -> str:
-    """Extract client IP address from request, handling proxies."""
-    # Check for X-Forwarded-For header (common with reverse proxies)
     forwarded_for = request.headers.get("X-Forwarded-For")
     if forwarded_for:
-        # Take the first IP in the chain (original client)
         return forwarded_for.split(",")[0].strip()
 
-    # Check for X-Real-IP header (another common proxy header)
     real_ip = request.headers.get("X-Real-IP")
     if real_ip:
         return real_ip.strip()
-
-    # Fall back to direct client IP
     if request.client:
         return request.client.host
 
@@ -33,7 +28,6 @@ def get_client_ip(request: Request) -> str:
 
 
 def get_user_agent(request: Request) -> str:
-    """Extract user agent from request headers."""
     user_agent = request.headers.get("User-Agent")
     return user_agent if user_agent else "unknown"
 
@@ -86,7 +80,7 @@ def admin_only():
                     status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authorized"
                 )
 
-            if current_user.role != "Admin":
+            if current_user.role != UserRole.ADMIN.value:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized"
                 )
@@ -107,13 +101,8 @@ def no_analyst():
 
             @wraps(func)
             async def async_wrapper(*args, **kwargs):
-                # Try to get current_user from kwargs first
                 current_user = kwargs.get("current_user")
-
-                # If not in kwargs, try to extract from positional args
-                # For service methods, current_user is typically the last positional argument
                 if not current_user and args:
-                    # Look for User object in args
                     from app.database.models import User
 
                     for arg in args:
@@ -127,7 +116,7 @@ def no_analyst():
                         detail="Not authorized",
                     )
 
-                if current_user.role == "Analyst":
+                if current_user.role == UserRole.ANALYST.value:
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized"
                     )
@@ -138,13 +127,8 @@ def no_analyst():
 
             @wraps(func)
             def sync_wrapper(*args, **kwargs):
-                # Try to get current_user from kwargs first
                 current_user = kwargs.get("current_user")
-
-                # If not in kwargs, try to extract from positional args
-                # For service methods, current_user is typically the last positional argument
                 if not current_user and args:
-                    # Look for User object in args
                     from app.database.models import User
 
                     for arg in args:
@@ -158,7 +142,7 @@ def no_analyst():
                         detail="Not authorized",
                     )
 
-                if current_user.role == "Analyst":
+                if current_user.role == UserRole.ANALYST.value:
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized"
                     )
@@ -204,27 +188,11 @@ def case_must_be_open():
 
 
 def check_case_access(db: Session, case_id: int, current_user: User) -> Case:
-    """
-    Utility function to check if user has access to a case.
-
-    Args:
-        db: Database session
-        case_id: ID of the case to check access for
-        current_user: Current authenticated user
-
-    Returns:
-        Case object if user has access
-
-    Raises:
-        HTTPException: If case not found or user doesn't have access
-    """
-    # Check if case exists
+    """Utility function to check if user has access to a case."""
     case = db.exec(select(Case).where(Case.id == case_id)).first()
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
-
-    # Check if user has access to the case
-    if current_user.role != "Admin" and current_user not in case.users:
+    if current_user.role != UserRole.ADMIN.value and current_user not in case.users:
         raise HTTPException(
             status_code=403, detail="Not authorized to access this case"
         )

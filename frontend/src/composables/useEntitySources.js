@@ -22,6 +22,6 @@ export function useEntitySources(entity, formData, isEditing) {
 
   return {
     getSourceValue,
-    updateSourceValue
+    updateSourceValue,
   }
 }

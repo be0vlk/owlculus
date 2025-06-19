@@ -43,12 +43,12 @@ export function useDragAndDrop() {
   // Check if targetItem is a descendant of parentItem
   const isDescendant = (targetItem, parentItem, evidenceList = []) => {
     if (!targetItem.parent_folder_id) return false
-    
-    const parent = evidenceList.find(item => item.id === targetItem.parent_folder_id)
+
+    const parent = evidenceList.find((item) => item.id === targetItem.parent_folder_id)
     if (!parent) return false
-    
+
     if (parent.id === parentItem.id) return true
-    
+
     return isDescendant(parent, parentItem, evidenceList)
   }
 
@@ -67,17 +67,20 @@ export function useDragAndDrop() {
     }
     draggedItem.value = item
     isDragging.value = true
-    
+
     // Set drag data
-    event.dataTransfer.setData('text/plain', JSON.stringify({
-      id: item.id,
-      title: item.title,
-      type: 'evidence-item'
-    }))
-    
+    event.dataTransfer.setData(
+      'text/plain',
+      JSON.stringify({
+        id: item.id,
+        title: item.title,
+        type: 'evidence-item',
+      }),
+    )
+
     // Set drag effect
     event.dataTransfer.effectAllowed = 'move'
-    
+
     // Create custom drag image
     const dragImage = createDragImage(item)
     if (dragImage) {
@@ -95,7 +98,7 @@ export function useDragAndDrop() {
 
   const handleDragEnter = (event, item, userRole) => {
     event.preventDefault()
-    
+
     if (!draggedItem.value || !canDropOnTarget(draggedItem.value, item, userRole)) {
       return
     }
@@ -107,7 +110,7 @@ export function useDragAndDrop() {
 
   const handleDragOver = (event, item, userRole) => {
     event.preventDefault()
-    
+
     if (!draggedItem.value || !canDropOnTarget(draggedItem.value, item, userRole)) {
       event.dataTransfer.dropEffect = 'none'
       isValidDropTarget.value = false
@@ -131,11 +134,11 @@ export function useDragAndDrop() {
 
   const handleDrop = async (event, targetItem, userRole, moveCallback) => {
     event.preventDefault()
-    
+
     try {
       // Get drag data
       const dragData = JSON.parse(event.dataTransfer.getData('text/plain'))
-      
+
       if (dragData.type !== 'evidence-item' || !draggedItem.value) {
         return { success: false, error: 'Invalid drag data' }
       }
@@ -146,7 +149,7 @@ export function useDragAndDrop() {
 
       // Perform the move operation
       const result = await moveCallback(draggedItem.value, targetItem)
-      
+
       return result
     } catch (error) {
       console.error('Drop error:', error)
@@ -188,7 +191,7 @@ export function useDragAndDrop() {
     dragImage.style.top = '-1000px'
     dragImage.style.left = '-1000px'
     dragImage.style.pointerEvents = 'none'
-    
+
     document.body.appendChild(dragImage)
     return dragImage.firstElementChild
   }
@@ -206,7 +209,7 @@ export function useDragAndDrop() {
     return {
       'evidence-dragging': isDragging.value && draggedItem.value?.id === item.id,
       'evidence-drag-over': activeDropZones.value.has(item.id) && isValidDropTarget.value,
-      'evidence-invalid-drop': activeDropZones.value.has(item.id) && !isValidDropTarget.value
+      'evidence-invalid-drop': activeDropZones.value.has(item.id) && !isValidDropTarget.value,
     }
   }
 
@@ -225,7 +228,7 @@ export function useDragAndDrop() {
     isDragging,
     isValidDropTarget,
     activeDropZones,
-    
+
     // Methods
     canDropOnTarget,
     handleDragStart,
@@ -235,10 +238,10 @@ export function useDragAndDrop() {
     handleDrop,
     handleDragEnd,
     resetDragState,
-    
+
     // Computed
     getDragClasses,
     isDraggedItem,
-    isDropTarget
+    isDropTarget,
   }
 }

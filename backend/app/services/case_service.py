@@ -22,10 +22,8 @@ class CaseService:
         self.config_service = SystemConfigService(db)
 
     async def _generate_case_number(self, current_time: datetime) -> str:
-        # Get system configuration
         config = await self.config_service.get_configuration()
 
-        # Extract year and month from current time
         year = str(current_time.year)[2:]
         month = str(current_time.month).zfill(2)
 
@@ -37,11 +35,9 @@ class CaseService:
             search_pattern = f"{config.case_number_prefix}-{year}{month}-%"
             base_format = f"{config.case_number_prefix}-{year}{month}"
         else:
-            # Default to YYMM-NN format
             search_pattern = f"{year}{month}-%"
             base_format = f"{year}{month}"
 
-        # Find the highest case number for this month
         stmt = select(models.Case).where(models.Case.case_number.like(search_pattern))
         cases = self.db.exec(stmt).all()
 
@@ -75,14 +71,12 @@ class CaseService:
                     current_time
                 )
 
-                # Create the case in the database
                 new_case = await crud.create_case(
                     self.db,
                     case=schemas.CaseCreate(**case_data),
                     current_user=current_user,
                 )
 
-            # Create the case directory for file uploads (outside transaction)
             create_case_directory(new_case.id)
 
             case_logger.bind(
@@ -128,7 +122,6 @@ class CaseService:
         return result.all()
 
     async def get_case(self, case_id: int, current_user: models.User) -> models.Case:
-        # Check case access and return the case if authorized
         return check_case_access(self.db, case_id, current_user)
 
     @no_analyst()
@@ -143,7 +136,6 @@ class CaseService:
         )
 
         try:
-            # Check case access
             try:
                 db_case = check_case_access(self.db, case_id, current_user)
             except HTTPException as e:
@@ -157,7 +149,6 @@ class CaseService:
                     ).warning("Case update failed: not authorized")
                 raise
 
-            # Check case number uniqueness if being updated
             if (
                 case_update.case_number
                 and case_update.case_number != db_case.case_number
@@ -206,7 +197,6 @@ class CaseService:
         )
 
         try:
-            # Check if case exists first
             db_case = await crud.get_case(self.db, case_id=case_id)
             if not db_case:
                 case_logger.bind(
@@ -236,7 +226,6 @@ class CaseService:
         except HTTPException:
             raise
         except Exception as e:
-            # Check if this is a duplicate user error
             if "UNIQUE constraint failed" in str(e) and "caseuserlink" in str(e):
                 case_logger.bind(
                     event_type="case_user_add_failed",
@@ -264,7 +253,6 @@ class CaseService:
         )
 
         try:
-            # Check if case exists first
             db_case = await crud.get_case(self.db, case_id=case_id)
             if not db_case:
                 case_logger.bind(

@@ -1,9 +1,11 @@
 from typing import Optional
 
 from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, or_, select
 
+from ..core.roles import UserRole
 from ..core.utils import get_utc_now
 from ..schemas import (
     CaseCreate,
@@ -17,9 +19,8 @@ from ..schemas import (
 )
 from . import models
 
+
 # --- User ---
-
-
 async def get_user(db: Session, user_id: int):
     return db.get(models.User, user_id)
 
@@ -40,16 +41,28 @@ async def create_user(db: Session, user: UserCreate):
     user_data = user.model_dump()
     from ..core.security import get_password_hash
 
-    # Validate that only Admin users can be superadmin
-    if user_data.get("is_superadmin", False) and user_data.get("role") != "Admin":
+    if (
+        user_data.get("is_superadmin", False)
+        and user_data.get("role") != UserRole.ADMIN.value
+    ):
         raise ValueError("Only users with Admin role can be superadmin")
 
     user_data["password_hash"] = get_password_hash(user_data.pop("password"))
     db_user = models.User(**user_data)
     db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
-    return db_user
+
+    try:
+        db.commit()
+        db.refresh(db_user)
+        return db_user
+    except IntegrityError as e:
+        db.rollback()
+        if "username" in str(e.orig).lower():
+            raise ValueError("Username already exists")
+        elif "email" in str(e.orig).lower():
+            raise ValueError("Email already exists")
+        else:
+            raise ValueError("Database constraint violation")
 
 
 async def update_user(db: Session, user_id: int, user: UserUpdate):
@@ -57,8 +70,11 @@ async def update_user(db: Session, user_id: int, user: UserUpdate):
     if db_user is None:
         raise ValueError(f"User with id {user_id} not found")
 
-    # Check if trying to downgrade a superadmin from Admin role
-    if user.role is not None and user.role != "Admin" and db_user.is_superadmin:
+    if (
+        user.role is not None
+        and user.role != UserRole.ADMIN.value
+        and db_user.is_superadmin
+    ):
         raise ValueError("Cannot change role of superadmin user away from Admin")
 
     if user.username is not None:
@@ -70,15 +86,24 @@ async def update_user(db: Session, user_id: int, user: UserUpdate):
     if user.is_active is not None:
         db_user.is_active = user.is_active
     if user.is_superadmin is not None:
-        # Validate that only Admin users can be superadmin
         final_role = user.role if user.role is not None else db_user.role
-        if user.is_superadmin and final_role != "Admin":
+        if user.is_superadmin and final_role != UserRole.ADMIN.value:
             raise ValueError("Only users with Admin role can be superadmin")
         db_user.is_superadmin = user.is_superadmin
 
     db_user.updated_at = user.updated_at
-    db.commit()
-    return db_user
+
+    try:
+        db.commit()
+        return db_user
+    except IntegrityError as e:
+        db.rollback()
+        if "username" in str(e.orig).lower():
+            raise ValueError("Username already exists")
+        elif "email" in str(e.orig).lower():
+            raise ValueError("Email already exists")
+        else:
+            raise ValueError("Database constraint violation")
 
 
 async def change_user_password(
@@ -115,8 +140,6 @@ async def delete_user(db: Session, user_id: int):
 
 
 # --- Client ---
-
-
 async def get_client(db: Session, client_id: int):
     return db.get(models.Client, client_id)
 
@@ -167,8 +190,6 @@ async def delete_client(db: Session, client_id: int):
 
 
 # --- Case ---
-
-
 async def get_case(db: Session, case_id: int):
     return db.get(models.Case, case_id)
 
@@ -225,7 +246,6 @@ async def update_case(
 async def add_user_to_case(
     db: Session, case: models.Case, user: models.User
 ) -> models.Case:
-    """Add a user to a case"""
     case.users.append(user)
     case.updated_at = get_utc_now()
     db.add(case)
@@ -237,7 +257,6 @@ async def add_user_to_case(
 async def remove_user_from_case(
     db: Session, case: models.Case, user: models.User
 ) -> models.Case:
-    """Remove a user from a case"""
     case.users.remove(user)
     case.updated_at = get_utc_now()
     db.add(case)
@@ -253,9 +272,6 @@ async def check_entity_duplicates(
     entity: EntityCreate | EntityUpdate,
     entity_id: Optional[int] = None,
 ):
-    """Consolidated function to check for entity duplicates"""
-
-    # Get entity type either directly or from validation dict
     entity_dict = entity.model_dump()
     entity_type = (
         getattr(entity, "entity_type", None)
@@ -436,8 +452,6 @@ def delete_component(db: Session, component_id: int):
 
 
 # --- Invite ---
-
-
 async def create_invite(
     db: Session, token: str, role: str, expires_at, created_by_id: int
 ):
