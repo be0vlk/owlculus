@@ -3,9 +3,11 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 
+from ..core.roles import UserRole
+
 
 class InviteCreate(BaseModel):
-    role: Literal["Admin", "Investigator", "Analyst"]
+    role: Literal[UserRole.ADMIN, UserRole.INVESTIGATOR, UserRole.ANALYST]
 
 
 class InviteResponse(BaseModel):

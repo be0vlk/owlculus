@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 
-from ..core.dependencies import admin_only, get_current_active_user
+from ..core.dependencies import get_current_active_user
 from ..database import models
 from ..database.connection import get_db
 from ..schemas import system_config_schema
@@ -13,21 +13,19 @@ router = APIRouter()
 @router.get(
     "/configuration", response_model=system_config_schema.SystemConfigurationResponse
 )
-@admin_only()
 async def get_configuration(
     current_user: models.User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
     """Get current system configuration (admin only)."""
     config_service = SystemConfigService(db)
-    config = await config_service.get_configuration()
+    config = await config_service.get_configuration_admin(current_user=current_user)
     return system_config_schema.SystemConfigurationResponse.from_model(config)
 
 
 @router.put(
     "/configuration", response_model=system_config_schema.SystemConfigurationResponse
 )
-@admin_only()
 async def update_configuration(
     config_data: system_config_schema.SystemConfigurationUpdate,
     current_user: models.User = Depends(get_current_active_user),
@@ -50,7 +48,6 @@ async def update_configuration(
     "/configuration/api-keys/{provider}",
     response_model=system_config_schema.SystemConfigurationResponse,
 )
-@admin_only()
 async def set_api_key(
     provider: str,
     api_key_data: system_config_schema.APIKeyUpdate,
@@ -83,7 +80,6 @@ async def set_api_key(
     "/configuration/api-keys/{provider}",
     response_model=system_config_schema.SystemConfigurationResponse,
 )
-@admin_only()
 async def remove_api_key(
     provider: str,
     current_user: models.User = Depends(get_current_active_user),
@@ -102,14 +98,13 @@ async def remove_api_key(
 
 
 @router.get("/configuration/api-keys", response_model=dict)
-@admin_only()
 async def list_api_keys(
     current_user: models.User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
     """List all configured API keys with masked keys (admin only)."""
     config_service = SystemConfigService(db)
-    return config_service.list_api_keys()
+    return await config_service.list_api_keys(current_user=current_user)
 
 
 @router.get(
@@ -130,7 +125,6 @@ async def get_api_key_status(
 
 
 @router.get("/configuration/preview")
-@admin_only()
 async def preview_case_number_template(
     template: str,
     prefix: str = None,
@@ -159,7 +153,6 @@ async def preview_case_number_template(
 
 
 @router.get("/configuration/evidence-templates")
-@admin_only()
 async def get_evidence_folder_templates(
     current_user: models.User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
@@ -171,7 +164,6 @@ async def get_evidence_folder_templates(
 
 
 @router.put("/configuration/evidence-templates")
-@admin_only()
 async def update_evidence_folder_templates(
     templates_data: system_config_schema.EvidenceFolderTemplatesUpdate,
     current_user: models.User = Depends(get_current_active_user),

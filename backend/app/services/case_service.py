@@ -8,6 +8,7 @@ from app import schemas
 from app.core.dependencies import admin_only, check_case_access, no_analyst
 from app.core.file_storage import create_case_directory
 from app.core.logging import get_security_logger
+from app.core.roles import UserRole
 from app.core.utils import get_utc_now
 from app.database import crud, models
 from app.database.db_utils import transaction
@@ -101,7 +102,7 @@ class CaseService:
         limit: int = 100,
         status: str | None = None,
     ) -> list[models.Case]:
-        if current_user.role == "Admin":
+        if current_user.role == UserRole.ADMIN.value:
             stmt = select(models.Case)
             if status:
                 stmt = stmt.where(models.Case.status == status)

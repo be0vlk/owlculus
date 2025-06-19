@@ -9,6 +9,7 @@ import sys
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
 sys.path.insert(0, project_root)
 
+from backend.app.core.roles import UserRole
 from backend.app.core.security import get_password_hash
 from backend.app.database.connection import create_db_and_tables, engine
 from backend.app.database.models import Client, User
@@ -30,7 +31,7 @@ def create_initial_data():
                 username=admin_username,
                 email=admin_email,
                 password_hash=get_password_hash(admin_password),
-                role="Admin",
+                role=UserRole.ADMIN,
                 is_superadmin=True,
             )
             session.add(admin_account)

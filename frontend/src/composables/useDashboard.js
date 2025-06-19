@@ -43,18 +43,16 @@ export function useDashboard() {
       const casesData = await caseService.getCases(params)
       cases.value = casesData
 
-      // Only try to load clients if user is admin
-      if (authStore.requiresAdmin()) {
-        try {
-          const clientsData = await clientService.getClients()
-          clients.value = clientsData.reduce((acc, client) => {
-            acc[client.id] = client
-            return acc
-          }, {})
-        } catch (err) {
-          console.error('Failed to load clients:', err)
-          // Don't set error state since this is expected for non-admin users
-        }
+      // Load clients for all authenticated users since read ops are not sensitive
+      try {
+        const clientsData = await clientService.getClients()
+        clients.value = clientsData.reduce((acc, client) => {
+          acc[client.id] = client
+          return acc
+        }, {})
+      } catch (err) {
+        console.error('Failed to load clients:', err)
+        // Don't set error state for client loading failures
       }
 
       loading.value = false

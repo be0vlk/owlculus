@@ -3,13 +3,16 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
+from ..core.roles import UserRole
 from ..core.utils import get_utc_now
 
 
 class UserBase(BaseModel):
     username: str
     email: EmailStr
-    role: Literal["Admin", "Investigator", "Analyst"] = "Analyst"
+    role: Literal[UserRole.ADMIN, UserRole.INVESTIGATOR, UserRole.ANALYST] = (
+        UserRole.ANALYST
+    )
     is_active: bool
     is_superadmin: bool = False
 
@@ -21,7 +24,9 @@ class UserCreate(UserBase):
 class UserUpdate(BaseModel):
     username: Optional[str] = None
     email: Optional[EmailStr] = None
-    role: Optional[Literal["Admin", "Investigator", "Analyst"]] = None
+    role: Optional[Literal[UserRole.ADMIN, UserRole.INVESTIGATOR, UserRole.ANALYST]] = (
+        None
+    )
     is_active: Optional[bool] = None
     is_superadmin: Optional[bool] = None
     updated_at: datetime = Field(default_factory=get_utc_now)

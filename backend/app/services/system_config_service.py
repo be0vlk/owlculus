@@ -3,6 +3,7 @@ from typing import Dict, List, Optional
 
 from sqlmodel import Session, select
 
+from ..core.dependencies import admin_only
 from ..core.evidence_templates import DEFAULT_TEMPLATES
 from ..core.logging import get_security_logger
 from ..core.security import decrypt_api_key, encrypt_api_key
@@ -14,7 +15,9 @@ class SystemConfigService:
     def __init__(self, db: Session):
         self.db = db
 
-    async def get_configuration(self) -> models.SystemConfiguration:
+    async def get_configuration(
+        self, current_user: models.User = None
+    ) -> models.SystemConfiguration:
         stmt = select(models.SystemConfiguration)
         config = self.db.exec(stmt).first()
 
@@ -31,14 +34,22 @@ class SystemConfigService:
 
         return config
 
+    @admin_only()
+    async def get_configuration_admin(
+        self, current_user: models.User
+    ) -> models.SystemConfiguration:
+        """Admin-only method to get configuration."""
+        return await self.get_configuration()
+
+    @admin_only()
     async def update_configuration(
         self,
         case_number_template: str,
+        current_user: models.User,
         case_number_prefix: Optional[str] = None,
-        current_user: models.User = None,
     ) -> models.SystemConfiguration:
         config_logger = get_security_logger(
-            admin_user_id=current_user.id if current_user else None,
+            admin_user_id=current_user.id,
             action="update_system_config",
             template=case_number_template,
             event_type="system_config_update_attempt",
@@ -125,6 +136,7 @@ class SystemConfigService:
         else:
             return f"{year}{month}-01"
 
+    @admin_only()
     async def set_api_key(
         self,
         provider: str,
@@ -147,12 +159,10 @@ class SystemConfigService:
         )
 
         try:
-            # If updating existing provider, preserve existing data
             if provider in current_keys:
                 existing_data = current_keys[provider].copy()
                 old_name = existing_data.get("name", "Unknown")
 
-                # Check if key is being updated or just metadata
                 key_being_updated = api_key is not None
 
                 current_keys[provider] = {
@@ -226,6 +236,7 @@ class SystemConfigService:
             ).error(f"API key {operation_type} error for {provider}: {str(e)}")
             raise
 
+    @admin_only()
     async def remove_api_key(
         self, provider: str, current_user: models.User
     ) -> models.SystemConfiguration:
@@ -298,7 +309,8 @@ class SystemConfigService:
             env_var = f"{provider.upper()}_API_KEY"
             return os.environ.get(env_var)
 
-    def list_api_keys(self) -> Dict[str, dict]:
+    @admin_only()
+    async def list_api_keys(self, current_user: models.User) -> Dict[str, dict]:
         try:
             stmt = select(models.SystemConfiguration)
             config = self.db.exec(stmt).first()
@@ -341,6 +353,7 @@ class SystemConfigService:
             self.db.refresh(config)
         return config.evidence_folder_templates
 
+    @admin_only()
     async def update_evidence_folder_templates(
         self, templates: dict, current_user: models.User
     ) -> models.SystemConfiguration:
