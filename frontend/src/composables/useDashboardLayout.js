@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 
-export function useDashboardLayout() {
+export function useDashboardLayout () {
   const loading = ref(false)
   const error = ref(null)
   const searchQuery = ref('')
@@ -26,7 +26,7 @@ export function useDashboardLayout() {
   const createCardHeader = (icon, title, subtitle) => ({
     icon,
     title,
-    subtitle,
+    subtitle
   })
 
   const sortBy = (key) => {
@@ -85,6 +85,6 @@ export function useDashboardLayout() {
     sortBy,
     applySorting,
     applySearch,
-    processItems,
+    processItems
   }
 }

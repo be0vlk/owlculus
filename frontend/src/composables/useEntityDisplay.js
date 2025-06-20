@@ -1,6 +1,6 @@
 import { computed } from 'vue'
 
-export function useEntityDisplay(entity) {
+export function useEntityDisplay (entity) {
   const getEntityDisplayName = (targetEntity) => {
     if (targetEntity.entity_type === 'person') {
       return `${targetEntity.data.first_name} ${targetEntity.data.last_name}`.trim()
@@ -27,6 +27,6 @@ export function useEntityDisplay(entity) {
   return {
     getEntityDisplayName,
     getEntityTitle,
-    getFieldValue,
+    getFieldValue
   }
 }

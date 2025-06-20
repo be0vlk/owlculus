@@ -2,9 +2,11 @@ import { watch } from 'vue'
 import { caseService } from '../services/case'
 import { useBaseNoteEditor } from './useBaseNoteEditor'
 
-export function useCaseNoteAutoSave(props, emit) {
+export function useCaseNoteSave (props, emit, options = {}) {
+  const { saveMode = 'auto', saveDelay = 1000 } = options
+
   const saveNotes = async () => {
-    if (!editor.value) return
+    if (!editor.value || saveMode !== 'auto') return
 
     const content = editor.value.getHTML()
     if (content === lastSaved.value) return
@@ -30,17 +32,23 @@ export function useCaseNoteAutoSave(props, emit) {
     formatLastSaved,
     updateContent,
     cleanup,
-    triggerSave,
+    triggerSave
   } = useBaseNoteEditor({
     initialContent: props.modelValue || '',
-    placeholder: 'Write your case notes here... Use / for commands.',
-    editable: true,
+    placeholder: props.isEditing !== false
+      ? 'Write your case notes here... Use / for commands.'
+      : 'Notes (read-only)',
+    editable: props.isEditing !== false,
     onUpdate: (editor) => {
       const content = editor.getHTML()
-      emit('update:modelValue', content)
-      triggerSave(saveNotes)
+      if (props.isEditing !== false) {
+        emit('update:modelValue', content)
+        if (saveMode === 'auto') {
+          triggerSave(saveNotes)
+        }
+      }
     },
-    saveDelay: 1000,
+    saveDelay: saveMode === 'auto' ? saveDelay : null
   })
 
   // Watch for prop changes
@@ -48,12 +56,28 @@ export function useCaseNoteAutoSave(props, emit) {
     () => props.modelValue,
     (newVal) => {
       updateContent(newVal)
-    },
+    }
   )
 
-  // Override cleanup to include save
+  // Watch for editing state changes and update editor editability
+  if (props.isEditing !== undefined) {
+    watch(
+      () => props.isEditing,
+      (newEditingState) => {
+        if (editor.value) {
+          editor.value.setEditable(newEditingState)
+        }
+      }
+    )
+  }
+
+  // Override cleanup to include save for auto-save mode
   const enhancedCleanup = () => {
-    cleanup(saveNotes)
+    if (saveMode === 'auto') {
+      cleanup(saveNotes)
+    } else {
+      cleanup()
+    }
   }
 
   return {
@@ -63,6 +87,6 @@ export function useCaseNoteAutoSave(props, emit) {
     lastSavedTime,
     formatLastSaved,
     updateContent,
-    cleanup: enhancedCleanup,
+    cleanup: enhancedCleanup
   }
 }

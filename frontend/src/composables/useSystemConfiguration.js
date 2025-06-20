@@ -1,7 +1,7 @@
 import { ref, computed } from 'vue'
 import api from '@/services/api'
 
-export function useSystemConfiguration() {
+export function useSystemConfiguration () {
   // State
   const selectedTemplate = ref('YYMM-NN')
   const caseNumberPrefix = ref('')
@@ -13,7 +13,7 @@ export function useSystemConfiguration() {
   // Configuration options
   const templateOptions = [
     { display_name: 'Monthly Reset (YYMM-NN)', value: 'YYMM-NN' },
-    { display_name: 'Prefix + Monthly Reset (PREFIX-YYMM-NN)', value: 'PREFIX-YYMM-NN' },
+    { display_name: 'Prefix + Monthly Reset (PREFIX-YYMM-NN)', value: 'PREFIX-YYMM-NN' }
   ]
 
   // Computed properties
@@ -51,7 +51,7 @@ export function useSystemConfiguration() {
 
     try {
       const params = new URLSearchParams({
-        template: selectedTemplate.value,
+        template: selectedTemplate.value
       })
 
       if (selectedTemplate.value === 'PREFIX-YYMM-NN' && caseNumberPrefix.value) {
@@ -102,7 +102,7 @@ export function useSystemConfiguration() {
       const configData = {
         case_number_template: selectedTemplate.value,
         case_number_prefix:
-          selectedTemplate.value === 'PREFIX-YYMM-NN' ? caseNumberPrefix.value : null,
+          selectedTemplate.value === 'PREFIX-YYMM-NN' ? caseNumberPrefix.value : null
       }
 
       await api.put('/api/admin/configuration', configData)
@@ -150,6 +150,6 @@ export function useSystemConfiguration() {
     onPrefixChange,
     loadConfiguration,
     saveConfiguration,
-    resetConfiguration,
+    resetConfiguration
   }
 }

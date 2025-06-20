@@ -1,7 +1,7 @@
 import { ref, watch } from 'vue'
 import { entityService } from '../services/entity'
 
-export function useEntityAssociates(entity, existingEntities, caseId) {
+export function useEntityAssociates (entity, existingEntities, caseId) {
   const associateEntityMap = ref(new Map())
 
   const getAssociateEntities = (fieldId) => {
@@ -12,7 +12,7 @@ export function useEntityAssociates(entity, existingEntities, caseId) {
     return existingEntities.value.find(
       (entity) =>
         entity.entity_type === 'company' &&
-        entity.data.name?.toLowerCase() === companyName.toLowerCase(),
+        entity.data.name?.toLowerCase() === companyName.toLowerCase()
     )
   }
 
@@ -23,8 +23,8 @@ export function useEntityAssociates(entity, existingEntities, caseId) {
       companyEntity = await entityService.createEntity(caseId.value, {
         entity_type: 'company',
         data: {
-          name: companyName,
-        },
+          name: companyName
+        }
       })
     }
 
@@ -73,8 +73,8 @@ export function useEntityAssociates(entity, existingEntities, caseId) {
             id: `temp_employer_${employerName}`,
             entity_type: 'company',
             data: {
-              name: employerName.trim(),
-            },
+              name: employerName.trim()
+            }
           }
         }
 
@@ -91,6 +91,6 @@ export function useEntityAssociates(entity, existingEntities, caseId) {
     associateEntityMap,
     getAssociateEntities,
     processAssociates,
-    loadAssociateEntities,
+    loadAssociateEntities
   }
 }

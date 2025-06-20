@@ -2,7 +2,7 @@ import { reactive, watch } from 'vue'
 import { entityService } from '../services/entity'
 import { cleanFormData } from '../utils/cleanFormData'
 
-export function useEntityForm(caseId) {
+export function useEntityForm (caseId) {
   const state = reactive({
     entityType: 'person',
     data: {
@@ -13,14 +13,14 @@ export function useEntityForm(caseId) {
         instagram: '',
         tiktok: '',
         reddit: '',
-        other: '',
+        other: ''
       },
       ip_addresses: [],
       subdomains: [],
-      sources: {},
+      sources: {}
     },
     loading: false,
-    error: null,
+    error: null
   })
 
   const resetFormData = (entityType) => {
@@ -29,31 +29,31 @@ export function useEntityForm(caseId) {
       social_media: baseSocialMedia,
       ip_addresses: [],
       subdomains: [],
-      sources: {},
+      sources: {}
     }
 
     switch (entityType) {
       case 'person':
         Object.assign(state.data, {
           first_name: '',
-          last_name: '',
+          last_name: ''
         })
         break
       case 'company':
         Object.assign(state.data, {
-          name: '',
+          name: ''
         })
         break
       case 'domain':
         Object.assign(state.data, {
           domain: '',
-          description: '',
+          description: ''
         })
         break
       case 'ip_address':
         Object.assign(state.data, {
           ip_address: '',
-          description: '',
+          description: ''
         })
         break
     }
@@ -75,7 +75,7 @@ export function useEntityForm(caseId) {
     try {
       const submitData = {
         entity_type: state.entityType,
-        data: cleanFormData({ ...state.data }),
+        data: cleanFormData({ ...state.data })
       }
 
       const response = await entityService.createEntity(caseId, submitData)
@@ -99,7 +99,7 @@ export function useEntityForm(caseId) {
     () => state.entityType,
     (newType) => {
       resetFormData(newType)
-    },
+    }
   )
 
   return {
@@ -107,6 +107,6 @@ export function useEntityForm(caseId) {
     setEntityType,
     updateData,
     submitEntity,
-    reset,
+    reset
   }
 }

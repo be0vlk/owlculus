@@ -3,7 +3,7 @@ import { entityService } from '../services/entity'
 import { entitySchemas } from './entitySchemas'
 import { cleanFormData } from '../utils/cleanFormData'
 
-export function useEntityDetails(entity, caseId) {
+export function useEntityDetails (entity, caseId) {
   const error = ref('')
   const isEditing = ref(false)
   const updating = ref(false)
@@ -13,8 +13,8 @@ export function useEntityDetails(entity, caseId) {
     data: {
       address: {},
       social_media: {},
-      aliases: [],
-    },
+      aliases: []
+    }
   })
 
   const entitySchema = computed(() => {
@@ -67,13 +67,13 @@ export function useEntityDetails(entity, caseId) {
       associates: entity.value.data.associates || {},
       executives: entity.value.data.executives || {},
       affiliates: entity.value.data.affiliates || {},
-      notes: entity.value.data.notes || '',
+      notes: entity.value.data.notes || ''
     }
 
     const flattenedData = flattenNestedFields(initialData, entitySchema.value)
 
     formData.value = {
-      data: flattenedData,
+      data: flattenedData
     }
     isEditing.value = true
   }
@@ -100,13 +100,13 @@ export function useEntityDetails(entity, caseId) {
           executives: restructuredData.executives || {},
           affiliates: restructuredData.affiliates || {},
           address: restructuredData.address || {},
-          notes: restructuredData.notes || '',
-        },
+          notes: restructuredData.notes || ''
+        }
       }
 
       const updatedEntity = await entityService.updateEntity(caseId.value, entity.value.id, {
         entity_type: entity.value.entity_type,
-        data: submitData.data,
+        data: submitData.data
       })
 
       let createdAssociates = []
@@ -135,7 +135,7 @@ export function useEntityDetails(entity, caseId) {
           activeTab.value = Object.keys(entitySchema.value)[0]
         }
       }
-    },
+    }
   )
 
   return {
@@ -147,6 +147,6 @@ export function useEntityDetails(entity, caseId) {
     entitySchema,
     startEditing,
     cancelEdit,
-    updateEntity,
+    updateEntity
   }
 }

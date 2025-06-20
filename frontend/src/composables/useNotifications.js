@@ -1,12 +1,12 @@
 import { ref } from 'vue'
 
-export function useNotifications() {
+export function useNotifications () {
   // Snackbar state
   const snackbar = ref({
     show: false,
     text: '',
     color: 'success',
-    timeout: 4000,
+    timeout: 4000
   })
 
   // Helper function to show notifications
@@ -49,6 +49,6 @@ export function useNotifications() {
     showError,
     showWarning,
     showInfo,
-    closeNotification,
+    closeNotification
   }
 }

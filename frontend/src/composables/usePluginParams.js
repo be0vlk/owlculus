@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 
-export function usePluginParams(initialParams = {}, emit) {
+export function usePluginParams (initialParams = {}, emit) {
   const localParams = ref({ ...initialParams })
 
   const updateParams = () => {
@@ -21,11 +21,11 @@ export function usePluginParams(initialParams = {}, emit) {
     localParams,
     updateParams,
     resetParams,
-    setParam,
+    setParam
   }
 }
 
-export function usePluginValidation() {
+export function usePluginValidation () {
   const emailRule = (value) => {
     if (!value) return 'Email is required'
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -48,6 +48,6 @@ export function usePluginValidation() {
   return {
     emailRule,
     domainRule,
-    ipRule,
+    ipRule
   }
 }

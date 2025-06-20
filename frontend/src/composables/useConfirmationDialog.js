@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 
-export function useConfirmationDialog() {
+export function useConfirmationDialog () {
   // Dialog state
   const showDialog = ref(false)
   const dialogTitle = ref('')
@@ -92,7 +92,7 @@ export function useConfirmationDialog() {
       iconColor: 'error',
       confirmText: 'Delete',
       confirmColor: 'error',
-      warning: 'This action cannot be undone.',
+      warning: 'This action cannot be undone.'
     })
   }
 
@@ -101,7 +101,7 @@ export function useConfirmationDialog() {
       title: `Confirm ${action}`,
       message: `Are you sure you want to ${action.toLowerCase()} ${itemName}?`,
       confirmText: action,
-      confirmColor: 'primary',
+      confirmColor: 'primary'
     })
   }
 
@@ -126,6 +126,6 @@ export function useConfirmationDialog() {
 
     // Convenience methods
     confirmDelete,
-    confirmAction,
+    confirmAction
   }
 }

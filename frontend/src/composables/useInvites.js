@@ -2,7 +2,7 @@ import { ref, computed } from 'vue'
 import { inviteService } from '@/services/invite'
 import { formatDate } from '@/composables/dateUtils'
 
-export function useInvites() {
+export function useInvites () {
   // State
   const invites = ref([])
   const loading = ref(true)
@@ -19,7 +19,7 @@ export function useInvites() {
     { title: 'Status', key: 'status', sortable: true },
     { title: 'Created', key: 'created_at', sortable: true },
     { title: 'Expires', key: 'expires_at', sortable: true },
-    { title: 'Actions', key: 'actions', sortable: false },
+    { title: 'Actions', key: 'actions', sortable: false }
   ]
 
   // Computed
@@ -30,7 +30,7 @@ export function useInvites() {
     if (inviteSearchQuery.value) {
       const query = inviteSearchQuery.value.toLowerCase()
       filteredInvites = invites.value.filter((invite) =>
-        (invite.role || '').toLowerCase().includes(query),
+        (invite.role || '').toLowerCase().includes(query)
       )
     }
 
@@ -184,6 +184,6 @@ export function useInvites() {
 
     // Modal management
     closeInviteModal,
-    handleInviteCreated,
+    handleInviteCreated
   }
 }

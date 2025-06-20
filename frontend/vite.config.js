@@ -11,23 +11,23 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
-      vue: 'vue/dist/vue.esm-bundler.js',
-    },
+      vue: 'vue/dist/vue.esm-bundler.js'
+    }
   },
   server: {
     hmr: {
       // Reduce HMR aggressiveness during navigation
-      overlay: false,
-    },
+      overlay: false
+    }
   },
   build: {
     rollupOptions: {
       output: {
         manualChunks: {
           // Separate auth-related modules to reduce HMR impact
-          auth: ['./src/stores/auth.js', './src/services/auth.js'],
-        },
-      },
-    },
-  },
+          auth: ['./src/stores/auth.js', './src/services/auth.js']
+        }
+      }
+    }
+  }
 })

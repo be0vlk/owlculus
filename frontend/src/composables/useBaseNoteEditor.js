@@ -9,12 +9,12 @@ import Placeholder from '@tiptap/extension-placeholder'
 import { ref, computed, onBeforeUnmount } from 'vue'
 import { formatDistanceToNow } from 'date-fns'
 
-export function useBaseNoteEditor({
+export function useBaseNoteEditor ({
   initialContent = '',
   placeholder = 'Write your notes here... Use / for commands.',
   editable = true,
   onUpdate = null,
-  saveDelay = 1000,
+  saveDelay = 1000
 }) {
   const lastSaved = ref(null)
   const lastSavedTime = ref(null)
@@ -38,23 +38,23 @@ export function useBaseNoteEditor({
     editable,
     extensions: [
       StarterKit.configure({
-        taskList: false,
+        taskList: false
       }),
       Underline,
       Link,
       Highlight.configure({
-        multicolor: true,
+        multicolor: true
       }),
       TaskList.configure({
         HTMLAttributes: {
-          class: 'task-list',
-        },
+          class: 'task-list'
+        }
       }),
       TaskItem.configure({
         nested: true,
         HTMLAttributes: {
-          class: 'task-item',
-        },
+          class: 'task-item'
+        }
       }),
       Placeholder.configure({
         placeholder: ({ node }) => {
@@ -62,8 +62,8 @@ export function useBaseNoteEditor({
             return "What's the title?"
           }
           return placeholder
-        },
-      }),
+        }
+      })
     ],
     shouldRerenderOnTransaction: false,
     onUpdate: ({ editor }) => {
@@ -74,9 +74,9 @@ export function useBaseNoteEditor({
     editorProps: {
       attributes: {
         class: 'tiptap-editor focus:outline-none',
-        style: 'min-height: 150px;',
-      },
-    },
+        style: 'min-height: 150px;'
+      }
+    }
   })
 
   const editorActions = computed(() => [
@@ -84,56 +84,56 @@ export function useBaseNoteEditor({
       icon: 'mdi-format-bold',
       title: 'Bold (Ctrl+B)',
       action: () => editor.value?.chain().focus().toggleBold().run(),
-      isActive: () => editor.value?.isActive('bold'),
+      isActive: () => editor.value?.isActive('bold')
     },
     {
       icon: 'mdi-format-italic',
       title: 'Italic (Ctrl+I)',
       action: () => editor.value?.chain().focus().toggleItalic().run(),
-      isActive: () => editor.value?.isActive('italic'),
+      isActive: () => editor.value?.isActive('italic')
     },
     {
       icon: 'mdi-format-underline',
       title: 'Underline (Ctrl+U)',
       action: () => editor.value?.chain().focus().toggleUnderline().run(),
-      isActive: () => editor.value?.isActive('underline'),
+      isActive: () => editor.value?.isActive('underline')
     },
     {
       icon: 'mdi-format-strikethrough',
       title: 'Strikethrough',
       action: () => editor.value?.chain().focus().toggleStrike().run(),
-      isActive: () => editor.value?.isActive('strike'),
+      isActive: () => editor.value?.isActive('strike')
     },
     {
       icon: 'mdi-marker',
       title: 'Highlight',
       action: () => editor.value?.chain().focus().toggleHighlight().run(),
-      isActive: () => editor.value?.isActive('highlight'),
+      isActive: () => editor.value?.isActive('highlight')
     },
     {
       icon: 'mdi-format-list-bulleted',
       title: 'Bullet List',
       action: () => editor.value?.chain().focus().toggleBulletList().run(),
-      isActive: () => editor.value?.isActive('bulletList'),
+      isActive: () => editor.value?.isActive('bulletList')
     },
     {
       icon: 'mdi-format-list-numbered',
       title: 'Ordered List',
       action: () => editor.value?.chain().focus().toggleOrderedList().run(),
-      isActive: () => editor.value?.isActive('orderedList'),
+      isActive: () => editor.value?.isActive('orderedList')
     },
     {
       icon: 'mdi-format-list-checks',
       title: 'Task List',
       action: () => editor.value?.chain().focus().toggleTaskList().run(),
-      isActive: () => editor.value?.isActive('taskList'),
+      isActive: () => editor.value?.isActive('taskList')
     },
     {
       icon: 'mdi-format-quote-close',
       title: 'Blockquote',
       action: () => editor.value?.chain().focus().toggleBlockquote().run(),
-      isActive: () => editor.value?.isActive('blockquote'),
-    },
+      isActive: () => editor.value?.isActive('blockquote')
+    }
   ])
 
   const updateContent = (newVal) => {
@@ -165,6 +165,6 @@ export function useBaseNoteEditor({
     formatLastSaved,
     updateContent,
     cleanup,
-    triggerSave,
+    triggerSave
   }
 }

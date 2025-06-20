@@ -1,13 +1,13 @@
 import { computed } from 'vue'
 
-export function useEntityIcons(entity) {
+export function useEntityIcons (entity) {
   const getEntityIcon = computed(() => {
     const iconMap = {
       person: 'mdi-account',
       company: 'mdi-domain',
       domain: 'mdi-web',
       ip_address: 'mdi-ip',
-      network: 'mdi-server-network',
+      network: 'mdi-server-network'
     }
     return iconMap[entity.value?.entity_type] || 'mdi-help-circle'
   })
@@ -22,7 +22,7 @@ export function useEntityIcons(entity) {
       affiliates: 'mdi-handshake',
       contact: 'mdi-phone',
       technical: 'mdi-server',
-      notes: 'mdi-note-text',
+      notes: 'mdi-note-text'
     }
     return iconMap[sectionKey] || 'mdi-folder'
   }
@@ -35,7 +35,7 @@ export function useEntityIcons(entity) {
       textarea: 'mdi-text',
       text: 'mdi-form-textbox',
       number: 'mdi-numeric',
-      date: 'mdi-calendar',
+      date: 'mdi-calendar'
     }
     return iconMap[fieldType] || 'mdi-form-textbox'
   }
@@ -53,7 +53,7 @@ export function useEntityIcons(entity) {
       twitch: 'mdi-twitch',
       x: 'mdi-twitter',
       youtube: 'mdi-youtube',
-      other: 'mdi-link-variant',
+      other: 'mdi-link-variant'
     }
     return iconMap[platform] || 'mdi-link'
   }
@@ -62,6 +62,6 @@ export function useEntityIcons(entity) {
     getEntityIcon,
     getSectionIcon,
     getFieldIcon,
-    getSocialMediaIcon,
+    getSocialMediaIcon
   }
 }

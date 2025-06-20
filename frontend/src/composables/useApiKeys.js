@@ -1,7 +1,7 @@
 import { ref, computed } from 'vue'
 import api from '@/services/api'
 
-export function useApiKeys() {
+export function useApiKeys () {
   // State
   const apiKeys = ref([])
   const loading = ref(false)
@@ -16,12 +16,12 @@ export function useApiKeys() {
   const newKeyForm = ref({
     provider: '',
     name: '',
-    api_key: '',
+    api_key: ''
   })
   const editKeyForm = ref({
     provider: '',
     name: '',
-    api_key: '',
+    api_key: ''
   })
 
   // Common API providers
@@ -30,7 +30,7 @@ export function useApiKeys() {
     { text: 'Security Trails', value: 'securitytrails', icon: 'mdi-magnify-scan' },
     { text: 'People Data Labs', value: 'people_data_labs', icon: 'mdi-account-group' },
     { text: 'Shodan', value: 'shodan', icon: 'mdi-radar' },
-    { text: 'Custom', value: 'custom', icon: 'mdi-plus' },
+    { text: 'Custom', value: 'custom', icon: 'mdi-plus' }
   ]
 
   // Computed properties
@@ -83,7 +83,7 @@ export function useApiKeys() {
         name: data.name || `${provider.charAt(0).toUpperCase() + provider.slice(1)} API`,
         is_configured: data.is_configured !== false,
         created_at: data.created_at,
-        masked_key: '••••••••••••',
+        masked_key: '••••••••••••'
       }))
     } catch (err) {
       console.error('Error loading API keys:', err)
@@ -101,7 +101,7 @@ export function useApiKeys() {
     try {
       const payload = {
         api_key: newKeyForm.value.api_key,
-        name: newKeyForm.value.name,
+        name: newKeyForm.value.name
       }
 
       await api.put(`/api/admin/configuration/api-keys/${newKeyForm.value.provider}`, payload)
@@ -125,7 +125,7 @@ export function useApiKeys() {
     saving.value = true
     try {
       const payload = {
-        name: editKeyForm.value.name,
+        name: editKeyForm.value.name
       }
 
       // Only include API key if provided
@@ -171,7 +171,7 @@ export function useApiKeys() {
     editKeyForm.value = {
       provider: apiKey.provider,
       name: apiKey.name,
-      api_key: '', // Don't pre-fill the API key for security
+      api_key: '' // Don't pre-fill the API key for security
     }
     showEditDialog.value = true
   }
@@ -187,7 +187,7 @@ export function useApiKeys() {
     editKeyForm.value = {
       provider: '',
       name: '',
-      api_key: '',
+      api_key: ''
     }
   }
 
@@ -195,7 +195,7 @@ export function useApiKeys() {
     newKeyForm.value = {
       provider: '',
       name: '',
-      api_key: '',
+      api_key: ''
     }
   }
 
@@ -262,6 +262,6 @@ export function useApiKeys() {
     handleProviderChange,
     maskApiKey,
     getProviderIcon,
-    getProviderDisplayName,
+    getProviderDisplayName
   }
 }

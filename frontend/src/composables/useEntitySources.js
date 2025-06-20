@@ -1,5 +1,5 @@
-export function useEntitySources(entity, formData, isEditing) {
-  function getSourceValue(parentField, fieldId) {
+export function useEntitySources (entity, formData, isEditing) {
+  function getSourceValue (parentField, fieldId) {
     const sources = isEditing.value ? formData.value.data.sources : entity.value.data.sources
     if (!sources) return ''
 
@@ -7,7 +7,7 @@ export function useEntitySources(entity, formData, isEditing) {
     return sources[sourceKey] || ''
   }
 
-  function updateSourceValue(parentField, fieldId, value) {
+  function updateSourceValue (parentField, fieldId, value) {
     if (!formData.value.data.sources) {
       formData.value.data.sources = {}
     }
@@ -22,6 +22,6 @@ export function useEntitySources(entity, formData, isEditing) {
 
   return {
     getSourceValue,
-    updateSourceValue,
+    updateSourceValue
   }
 }

@@ -1,7 +1,7 @@
 import { ref, computed } from 'vue'
 import { systemService } from '@/services/system'
 
-export function usePluginApiKeys() {
+export function usePluginApiKeys () {
   const apiKeyStatuses = ref({})
   const loading = ref(false)
   const error = ref(null)
@@ -74,6 +74,6 @@ export function usePluginApiKeys() {
     checkPluginApiKeys,
     getMissingApiKeys,
     getApiKeyWarningMessage,
-    hasAllRequiredApiKeys,
+    hasAllRequiredApiKeys
   }
 }

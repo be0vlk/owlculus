@@ -3,7 +3,7 @@ import { useAuthStore } from '@/stores/auth'
 import { userService } from '@/services/user'
 import { formatDate } from '@/composables/dateUtils'
 
-export function useUsers() {
+export function useUsers () {
   const authStore = useAuthStore()
 
   // State
@@ -26,7 +26,7 @@ export function useUsers() {
     { title: 'Email', key: 'email', sortable: true },
     { title: 'Role', key: 'role', sortable: true },
     { title: 'Created', key: 'created_at', sortable: true },
-    { title: 'Actions', key: 'actions', sortable: false },
+    { title: 'Actions', key: 'actions', sortable: false }
   ]
 
   // Computed
@@ -40,7 +40,7 @@ export function useUsers() {
         (user) =>
           (user.username || '').toLowerCase().includes(query) ||
           (user.email || '').toLowerCase().includes(query) ||
-          (user.role || '').toLowerCase().includes(query),
+          (user.role || '').toLowerCase().includes(query)
       )
     }
 
@@ -232,6 +232,6 @@ export function useUsers() {
     handleUserSaved,
     resetPassword,
     closePasswordResetModal,
-    handlePasswordResetSaved,
+    handlePasswordResetSaved
   }
 }

@@ -1,6 +1,6 @@
 import { computed } from 'vue'
 
-export function usePluginResults(result) {
+export function usePluginResults (result) {
   const parsedResults = computed(() => {
     if (!result.value) return []
 
@@ -21,11 +21,11 @@ export function usePluginResults(result) {
   })
 
   const statusMessages = computed(() =>
-    parsedResults.value.filter((item) => item.type === 'status'),
+    parsedResults.value.filter((item) => item.type === 'status')
   )
 
   const completionMessages = computed(() =>
-    parsedResults.value.filter((item) => item.type === 'complete'),
+    parsedResults.value.filter((item) => item.type === 'complete')
   )
 
   const errorMessages = computed(() => parsedResults.value.filter((item) => item.type === 'error'))
@@ -41,6 +41,6 @@ export function usePluginResults(result) {
     completionMessages,
     errorMessages,
     dataResults,
-    hasResults,
+    hasResults
   }
 }

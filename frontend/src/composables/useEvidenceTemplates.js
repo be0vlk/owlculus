@@ -2,7 +2,7 @@ import { ref } from 'vue'
 import { systemService } from '@/services/system'
 import { evidenceService } from '@/services/evidence'
 
-export function useEvidenceTemplates() {
+export function useEvidenceTemplates () {
   const loading = ref(false)
   const error = ref('')
   const templates = ref({})
@@ -59,7 +59,7 @@ export function useEvidenceTemplates() {
       value: key,
       text: templates.value[key].name,
       title: templates.value[key].name,
-      description: templates.value[key].description,
+      description: templates.value[key].description
     }))
   }
 
@@ -84,7 +84,7 @@ export function useEvidenceTemplates() {
 
     return {
       isValid: errors.length === 0,
-      errors,
+      errors
     }
   }
 
@@ -92,7 +92,7 @@ export function useEvidenceTemplates() {
     return {
       name: 'New Template',
       description: 'Template description',
-      folders: [],
+      folders: []
     }
   }
 
@@ -100,7 +100,7 @@ export function useEvidenceTemplates() {
     return {
       name: 'New Folder',
       description: '',
-      subfolders: [],
+      subfolders: []
     }
   }
 
@@ -118,6 +118,6 @@ export function useEvidenceTemplates() {
     getTemplate,
     validateTemplate,
     createDefaultTemplate,
-    createDefaultFolder,
+    createDefaultFolder
   }
 }

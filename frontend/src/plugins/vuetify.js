@@ -26,8 +26,8 @@ const owlculusTheme = {
     // OSINT-specific colors
     'case-status': '#26A69A',
     evidence: '#FF9800',
-    entity: '#9C27B0',
-  },
+    entity: '#9C27B0'
+  }
 }
 
 const owlculusDarkTheme = {
@@ -49,42 +49,42 @@ const owlculusDarkTheme = {
     warning: '#FF9800',
     'case-status': '#26A69A',
     evidence: '#FF9800',
-    entity: '#BA68C8',
-  },
+    entity: '#BA68C8'
+  }
 }
 
 export default createVuetify({
   components: {
     ...components,
-    VTreeview,
+    VTreeview
   },
   directives,
   theme: {
     defaultTheme: 'owlculusLight',
     themes: {
       owlculusLight: owlculusTheme,
-      owlculusDark: owlculusDarkTheme,
-    },
+      owlculusDark: owlculusDarkTheme
+    }
   },
   defaults: {
     VBtn: {
       variant: 'flat',
-      style: 'text-transform: none;',
+      style: 'text-transform: none;'
     },
     VCard: {
-      elevation: 2,
+      elevation: 2
     },
     VTextField: {
       variant: 'outlined',
-      density: 'comfortable',
+      density: 'comfortable'
     },
     VSelect: {
       variant: 'outlined',
-      density: 'comfortable',
+      density: 'comfortable'
     },
     VTextarea: {
       variant: 'outlined',
-      density: 'comfortable',
-    },
-  },
+      density: 'comfortable'
+    }
+  }
 })

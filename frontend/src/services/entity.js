@@ -1,12 +1,12 @@
 import api from './api'
 
 export const entityService = {
-  async getCaseEntities(caseId) {
+  async getCaseEntities (caseId) {
     const response = await api.get(`/api/cases/${caseId}/entities`)
     return response.data
   },
 
-  async getCaseEntitiesPaginated(caseId, params = {}) {
+  async getCaseEntitiesPaginated (caseId, params = {}) {
     const queryParams = new URLSearchParams()
 
     // Add pagination params
@@ -36,21 +36,21 @@ export const entityService = {
       items,
       total: parseInt(total),
       page: Math.floor((params.skip || 0) / (params.limit || 25)) + 1,
-      pages: Math.ceil(parseInt(total) / (params.limit || 25)),
+      pages: Math.ceil(parseInt(total) / (params.limit || 25))
     }
   },
 
-  async createEntity(caseId, entityData) {
+  async createEntity (caseId, entityData) {
     const response = await api.post(`/api/cases/${caseId}/entities`, entityData)
     return response.data
   },
 
-  async updateEntity(caseId, entityId, entityData) {
+  async updateEntity (caseId, entityId, entityData) {
     const response = await api.put(`/api/cases/${caseId}/entities/${entityId}`, entityData)
     return response.data
   },
 
-  async deleteEntity(entityId) {
+  async deleteEntity (entityId) {
     await api.delete(`/api/entities/${entityId}`)
-  },
+  }
 }

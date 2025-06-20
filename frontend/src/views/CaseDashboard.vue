@@ -165,10 +165,12 @@
                     </v-card-title>
                     <v-divider />
                     <v-card-text class="pa-0">
-                      <CaseNoteEditor
+                      <NoteEditor
                         v-model="caseData.notes"
                         :case-id="Number(route.params.id)"
                         :is-editing="isEditingNotes"
+                        :save-mode="'manual'"
+                        :variant="'plain'"
                         @update:modelValue="handleNotesUpdate"
                       />
                     </v-card-text>
@@ -326,7 +328,7 @@ import EditCaseModal from '../components/EditCaseModal.vue';
 import AddUserToCaseModal from '../components/AddUserToCaseModal.vue';
 import NewEntityModal from '../components/NewEntityModal.vue';
 import EntityDetailsModal from '../components/entities/EntityDetailsModal.vue';
-import CaseNoteEditor from '../components/CaseNoteEditor.vue';
+import NoteEditor from '../components/NoteEditor.vue';
 import EvidenceList from '../components/EvidenceList.vue';
 import UploadEvidenceModal from '../components/UploadEvidenceModal.vue';
 import MetadataModal from '../components/MetadataModal.vue';
