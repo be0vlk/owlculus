@@ -140,10 +140,11 @@ async def delete_evidence(
     current_user: models.User = Depends(get_current_active_user),
 ):
     evidence_service = EvidenceService(db)
-    await evidence_service.delete_evidence(
+    result = await evidence_service.delete_evidence(
         evidence_id=evidence_id, current_user=current_user
     )
-    return {"message": "Evidence deleted successfully"}
+    # If result is None, the evidence was already deleted (race condition)
+    # Still return 204 as the end state is what the client wanted
 
 
 @router.post(
@@ -194,8 +195,11 @@ async def delete_folder(
     current_user: models.User = Depends(get_current_active_user),
 ):
     evidence_service = EvidenceService(db)
-    await evidence_service.delete_folder(folder_id=folder_id, current_user=current_user)
-    return {"message": "Folder deleted successfully"}
+    result = await evidence_service.delete_folder(
+        folder_id=folder_id, current_user=current_user
+    )
+    # If result is None, the folder was already deleted (race condition)
+    # Still return 204 as the end state is what the client wanted
 
 
 @router.get("/{evidence_id}/metadata")

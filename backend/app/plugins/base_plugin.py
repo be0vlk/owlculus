@@ -10,14 +10,14 @@ import subprocess
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from tempfile import SpooledTemporaryFile
-from typing import Any, AsyncGenerator, Dict, List, Optional, Union
+from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple, Union
 
 from app.core.dependencies import get_db
 from app.core.utils import get_utc_now
 from app.database import models
 from app.schemas import evidence_schema as schemas
 from app.schemas.entity_schema import EntityCreate, IpAddressData
-from app.schemas.evidence_schema import EvidenceCreate
+from app.schemas.evidence_schema import EvidenceCreate, FolderCreate
 from app.services.entity_service import EntityService
 from app.services.evidence_service import EvidenceService
 from app.services.system_config_service import SystemConfigService
@@ -141,6 +141,108 @@ class BasePlugin(ABC):
         """
         pass
 
+    async def _ensure_evidence_folder_exists(
+        self, db: Session, case_id: int
+    ) -> Optional[Tuple[str, Optional[int]]]:
+        """
+        Ensure that evidence folders exist for plugin results.
+        If no folders exist, create a default folder structure based on evidence categories.
+
+        Args:
+            db: Database session
+            case_id: ID of the case to check/create folders for
+
+        Returns:
+            Tuple of (folder_path, parent_folder_id) to use for saving evidence
+        """
+        from sqlmodel import select
+
+        # Check if any folders exist for this case
+        existing_folders = db.exec(
+            select(models.Evidence).where(
+                models.Evidence.case_id == case_id,
+                models.Evidence.is_folder == True,
+            )
+        ).first()
+
+        if existing_folders:
+            # Folders already exist, find the best match for our evidence category
+            return await self._get_best_folder_path(db, case_id)
+
+        # No folders exist, create a default folder for this plugin's evidence category
+        evidence_service = EvidenceService(db)
+
+        # Create evidence category folder
+        folder_data = FolderCreate(
+            case_id=case_id,
+            title=self.evidence_category,
+            description=f"Auto-created folder for {self.evidence_category} evidence",
+            folder_path=None,  # Will be set to title by the service
+            parent_folder_id=None,
+        )
+
+        try:
+            created_folder = await evidence_service.create_folder(
+                folder_data=folder_data,
+                current_user=self._current_user,
+            )
+            # Return the folder path and ID of the newly created folder
+            if created_folder:
+                return created_folder.folder_path, created_folder.id
+            else:
+                return self.evidence_category, None
+        except Exception:
+            # If folder creation fails, return None to save to root
+            return None, None
+
+    async def _get_best_folder_path(
+        self, db: Session, case_id: int
+    ) -> Optional[Tuple[str, Optional[int]]]:
+        """
+        Find the best folder path for saving plugin evidence when folders already exist.
+
+        Args:
+            db: Database session
+            case_id: ID of the case to find folders for
+
+        Returns:
+            Tuple of (folder_path, parent_folder_id) to use, or (None, None) if no suitable folder found
+        """
+        from sqlmodel import select
+
+        # First, try to find a folder that matches our evidence category exactly
+        category_folder = db.exec(
+            select(models.Evidence).where(
+                models.Evidence.case_id == case_id,
+                models.Evidence.is_folder == True,
+                models.Evidence.title == self.evidence_category,
+            )
+        ).first()
+
+        if category_folder:
+            return category_folder.folder_path, category_folder.id
+
+        # If no exact match, try to find a folder with similar category
+        folders = db.exec(
+            select(models.Evidence).where(
+                models.Evidence.case_id == case_id,
+                models.Evidence.is_folder == True,
+            )
+        ).all()
+
+        # Look for folders with category-related names
+        category_keywords = self.evidence_category.lower().split()
+        for folder in folders:
+            folder_title = folder.title.lower()
+            if any(keyword in folder_title for keyword in category_keywords):
+                return folder.folder_path, folder.id
+
+        # If no good match found, use the first available folder
+        if folders:
+            return folders[0].folder_path, folders[0].id
+
+        return None, None
+
     async def _save_evidence_to_case(
         self,
         db: Session,
@@ -162,6 +264,13 @@ class BasePlugin(ABC):
         if not save_to_case or not content:
             return
 
+        # Ensure folder structure exists and get the correct folder path and parent ID
+        folder_info = await self._ensure_evidence_folder_exists(db, case_id)
+        if folder_info:
+            folder_path, parent_folder_id = folder_info
+        else:
+            folder_path, parent_folder_id = None, None
+
         # Create a temporary file with the content
         temp_file = SpooledTemporaryFile()
         temp_file.write(content.encode("utf-8"))
@@ -175,14 +284,15 @@ class BasePlugin(ABC):
             headers={"content-type": "text/plain"},
         )
 
-        # Create evidence schema
+        # Create evidence schema with resolved folder path and parent folder ID
         evidence_create = schemas.EvidenceCreate(
             case_id=case_id,
             title=f"{self.display_name} results.txt",
             description=f"Output generated by {self.display_name} plugin",
-            source=self.name,
-            type="plugin_output",
+            evidence_type="file",
             category=self.evidence_category,
+            folder_path=folder_path,  # Use the resolved folder path
+            parent_folder_id=parent_folder_id,  # Set the parent folder ID for proper tree display
         )
 
         # Save evidence using evidence service

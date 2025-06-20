@@ -288,7 +288,24 @@ class EvidenceService:
         )
 
         try:
-            evidence = await self.get_evidence(evidence_id, current_user)
+            # Try to get the evidence directly first
+            evidence = self.db.get(models.Evidence, evidence_id)
+            if not evidence:
+                # If not found, it may have already been deleted (race condition in mass delete)
+                evidence_logger.bind(
+                    event_type="evidence_already_deleted",
+                ).info("Evidence already deleted or not found")
+                return None
+
+            # Check case access
+            try:
+                check_case_access(self.db, evidence.case_id, current_user)
+            except HTTPException:
+                evidence_logger.bind(
+                    event_type="evidence_deletion_failed",
+                    failure_reason="not_authorized",
+                ).warning("Evidence deletion failed: not authorized")
+                raise
 
             # Delete the file if it's a file-type evidence and has content
             if evidence.evidence_type == "file" and evidence.content:
@@ -779,11 +796,18 @@ class EvidenceService:
 
         try:
             db_folder = self.db.get(models.Evidence, folder_id)
-            if not db_folder or not db_folder.is_folder:
+            if not db_folder:
+                # If not found, it may have already been deleted (race condition in mass delete)
+                folder_logger.bind(
+                    event_type="folder_already_deleted",
+                ).info("Folder already deleted or not found")
+                return None
+
+            if not db_folder.is_folder:
                 folder_logger.bind(
                     event_type="folder_deletion_failed",
-                    failure_reason="folder_not_found",
-                ).warning("Folder deletion failed: folder not found")
+                    failure_reason="not_a_folder",
+                ).warning("Folder deletion failed: not a folder")
                 raise HTTPException(status_code=404, detail="Folder not found")
 
             # Check case access
