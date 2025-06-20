@@ -72,7 +72,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { usePluginParamsAdvanced } from '@/composables/usePluginParams'
 import PluginDescriptionCard from './PluginDescriptionCard.vue'
 import CaseEvidenceToggle from './CaseEvidenceToggle.vue'
 
@@ -89,9 +90,26 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 
-// Plugin description from backend
-const pluginDescription = computed(() => {
-  return props.parameters?.description || ''
+// Use advanced plugin params composable
+const {
+  pluginDescription,
+  localParams,
+  updateParams
+} = usePluginParamsAdvanced(props, emit, {
+  parameterDefaults: {
+    domain: '',
+    timeout: 5.0,
+    nameservers: '',
+    lookup_mode: 'forward'
+  },
+  customUpdateLogic: (updatedValue, params) => {
+    // Handle record_types based on lookup mode
+    if (params.lookup_mode === 'reverse') {
+      delete updatedValue.record_types
+    } else if (selectedRecordTypes.value && params.lookup_mode === 'forward') {
+      updatedValue.record_types = selectedRecordTypes.value.join(',')
+    }
+  }
 })
 
 // DNS record types
@@ -104,8 +122,14 @@ const dnsRecordTypes = [
   { title: 'CNAME Records (Canonical Name)', value: 'CNAME' }
 ]
 
-// Lookup mode state
-const lookupMode = ref(props.modelValue.lookup_mode || 'forward')
+// Lookup mode state (computed from localParams)
+const lookupMode = computed({
+  get: () => localParams.lookup_mode,
+  set: (value) => {
+    localParams.lookup_mode = value
+    updateMode()
+  }
+})
 
 // Dynamic input labels based on mode
 const inputLabel = computed(() => {
@@ -118,14 +142,6 @@ const inputPlaceholder = computed(() => {
     : 'Enter IP addresses (e.g., 8.8.8.8, 1.1.1.1)'
 })
 
-// Local parameter state for plugin-specific params
-const localParams = reactive({
-  domain: props.modelValue.domain || '',
-  timeout: props.modelValue.timeout || 5.0,
-  nameservers: props.modelValue.nameservers || '',
-  lookup_mode: lookupMode.value
-})
-
 // Selected record types as array
 const selectedRecordTypes = ref(
   props.modelValue.record_types 
@@ -135,57 +151,23 @@ const selectedRecordTypes = ref(
 
 // Update mode and clear inappropriate parameters
 const updateMode = () => {
-  localParams.lookup_mode = lookupMode.value
-  
-  if (lookupMode.value === 'reverse') {
-    // For reverse DNS, we don't need record types (only PTR)
-    delete localParams.record_types
-  } else {
-    // For forward DNS, ensure we have record types
-    updateRecordTypes()
-  }
-  
   updateParams()
 }
 
 // Update record types parameter when selection changes
 const updateRecordTypes = () => {
-  if (lookupMode.value === 'forward') {
-    localParams.record_types = selectedRecordTypes.value.join(',')
-  }
   updateParams()
 }
 
-// Emit parameter updates for plugin-specific params
-const updateParams = () => {
-  emit('update:modelValue', { 
-    ...props.modelValue,
-    ...localParams 
-  })
-}
+// Watch for external changes to record_types
+watch(() => props.modelValue.record_types, (newValue) => {
+  if (newValue && lookupMode.value === 'forward') {
+    selectedRecordTypes.value = newValue.split(',').map(t => t.trim())
+  }
+})
 
 // Initialize record_types on mount for forward mode
-if (lookupMode.value === 'forward' && !localParams.record_types) {
+if (lookupMode.value === 'forward' && !props.modelValue.record_types) {
   updateRecordTypes()
 }
-
-// Watch for external changes to modelValue
-watch(() => props.modelValue, (newValue) => {
-  Object.assign(localParams, {
-    domain: newValue.domain || '',
-    timeout: newValue.timeout || 5.0,
-    nameservers: newValue.nameservers || '',
-    lookup_mode: newValue.lookup_mode || 'forward'
-  })
-  
-  // Update lookup mode
-  if (newValue.lookup_mode) {
-    lookupMode.value = newValue.lookup_mode
-  }
-  
-  // Update record types if in forward mode
-  if (newValue.record_types && lookupMode.value === 'forward') {
-    selectedRecordTypes.value = newValue.record_types.split(',').map(t => t.trim())
-  }
-}, { deep: true })
 </script>

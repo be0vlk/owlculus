@@ -165,6 +165,7 @@ chromedriver.exe
 uploads/
 .claude/
 CLAUDE.md
+.serena/
 
 # Sensitive data
 secrets/

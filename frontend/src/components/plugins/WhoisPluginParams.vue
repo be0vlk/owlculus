@@ -32,8 +32,7 @@
 </template>
 
 <script setup>
-import { reactive, watch, computed } from 'vue'
-import { usePluginValidation } from '@/composables/usePluginParams'
+import { usePluginValidation, usePluginParamsAdvanced, pluginParamConfigs } from '@/composables/usePluginParams'
 import PluginDescriptionCard from './PluginDescriptionCard.vue'
 import CaseEvidenceToggle from './CaseEvidenceToggle.vue'
 
@@ -50,27 +49,17 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 
-const { domainRule } = usePluginValidation()
-
-const pluginDescription = computed(() => props.parameters?.description)
-
-
-// Local parameter state
-const localParams = reactive({
-  domain: props.modelValue.domain || '',
-  timeout: props.modelValue.timeout || 30,
+// Use advanced plugin params composable with domain configuration
+const {
+  pluginDescription,
+  localParams,
+  updateParams
+} = usePluginParamsAdvanced(props, emit, {
+  parameterDefaults: {
+    ...pluginParamConfigs.domain(),
+    timeout: 30
+  }
 })
 
-// Emit parameter updates
-const updateParams = () => {
-  emit('update:modelValue', { 
-    ...props.modelValue,
-    ...localParams 
-  })
-}
-
-// Watch for external changes
-watch(() => props.modelValue, (newValue) => {
-  Object.assign(localParams, newValue)
-}, { deep: true })
+const { domainRule } = usePluginValidation()
 </script>

@@ -69,7 +69,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch, computed, onMounted } from 'vue'
+import { computed } from 'vue'
+import { usePluginParamsAdvanced, pluginParamConfigs } from '@/composables/usePluginParams'
 import { usePluginApiKeys } from '@/composables/usePluginApiKeys'
 import PluginDescriptionCard from './PluginDescriptionCard.vue'
 import ApiKeyWarning from './ApiKeyWarning.vue'
@@ -88,13 +89,40 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 
-// Plugin description from backend
-const pluginDescription = computed(() => {
-  return props.parameters?.description || ''
+// Use advanced plugin params composable with search configuration
+const {
+  pluginDescription,
+  localParams,
+  updateParams,
+  missingApiKeys
+} = usePluginParamsAdvanced(props, emit, {
+  parameterDefaults: {
+    ...pluginParamConfigs.searchQuery(),
+    search_type: 'general',
+    limit: 10
+  },
+  apiKeyRequirements: props.parameters.api_key_requirements,
+  onApiKeyCheck: async (requirements) => {
+    const { checkPluginApiKeys, getMissingApiKeys } = usePluginApiKeys()
+    const plugin = {
+      name: 'ShodanPlugin',
+      api_key_requirements: requirements
+    }
+    await checkPluginApiKeys(plugin)
+    return {
+      missing: getMissingApiKeys(plugin)
+    }
+  }
 })
 
-// Search type state
-const searchType = ref(props.modelValue.search_type || 'general')
+// Search type state (computed from localParams)
+const searchType = computed({
+  get: () => localParams.search_type,
+  set: (value) => {
+    localParams.search_type = value
+    updateParams()
+  }
+})
 
 // Dynamic labels and hints based on search type
 const queryLabel = computed(() => {
@@ -130,56 +158,8 @@ const queryHint = computed(() => {
   }
 })
 
-// Local parameter state for plugin-specific params
-const localParams = reactive({
-  query: props.modelValue.query || '',
-  search_type: searchType.value,
-  limit: props.modelValue.limit || 10
-})
-
-
-// Use plugin API keys composable
-const { checkPluginApiKeys, getMissingApiKeys } = usePluginApiKeys()
-const missingApiKeys = ref([])
-
-// Check API keys on mount
-onMounted(async () => {
-  // Check if plugin has API key requirements
-  if (props.parameters.api_key_requirements && props.parameters.api_key_requirements.length > 0) {
-    const plugin = {
-      name: 'ShodanPlugin',
-      api_key_requirements: props.parameters.api_key_requirements
-    }
-    await checkPluginApiKeys(plugin)
-    missingApiKeys.value = getMissingApiKeys(plugin)
-  }
-})
-
-// Update search type and related parameters
+// Update search type
 const updateSearchType = () => {
-  localParams.search_type = searchType.value
   updateParams()
 }
-
-// Emit parameter updates for plugin-specific params
-const updateParams = () => {
-  emit('update:modelValue', { 
-    ...props.modelValue,
-    ...localParams 
-  })
-}
-
-// Watch for external changes to modelValue
-watch(() => props.modelValue, (newValue) => {
-  Object.assign(localParams, {
-    query: newValue.query || '',
-    search_type: newValue.search_type || 'general',
-    limit: newValue.limit || 10
-  })
-  
-  // Update search type
-  if (newValue.search_type) {
-    searchType.value = newValue.search_type
-  }
-}, { deep: true })
 </script>

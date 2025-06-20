@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 
 export function usePluginParams (initialParams = {}, emit) {
   const localParams = ref({ ...initialParams })
@@ -22,6 +22,101 @@ export function usePluginParams (initialParams = {}, emit) {
     updateParams,
     resetParams,
     setParam
+  }
+}
+
+/**
+ * Enhanced composable for standardized plugin parameter management
+ * Eliminates boilerplate code duplication across plugin parameter components
+ */
+export function usePluginParamsAdvanced(props, emit, config = {}) {
+  const {
+    parameterDefaults = {},
+    apiKeyRequirements = null,
+    onApiKeyCheck = null,
+    customUpdateLogic = null
+  } = config
+
+  // Plugin description from backend
+  const pluginDescription = computed(() => {
+    return props.parameters?.description || ''
+  })
+
+  // Local parameter state for plugin-specific params
+  const localParams = reactive({
+    ...parameterDefaults,
+    ...Object.fromEntries(
+      Object.keys(parameterDefaults).map(key => [
+        key, 
+        props.modelValue[key] ?? parameterDefaults[key]
+      ])
+    )
+  })
+
+  // API key state (if plugin requires API keys)
+  const missingApiKeys = ref([])
+  const apiKeyError = ref(null)
+
+  // Emit parameter updates for plugin-specific params
+  const updateParams = () => {
+    const updatedValue = {
+      ...props.modelValue,
+      ...localParams
+    }
+    
+    // Allow custom update logic if provided
+    if (customUpdateLogic) {
+      customUpdateLogic(updatedValue, localParams)
+    }
+    
+    emit('update:modelValue', updatedValue)
+  }
+
+  // Watch for external changes to modelValue
+  watch(() => props.modelValue, (newValue) => {
+    Object.assign(localParams, {
+      ...Object.fromEntries(
+        Object.keys(parameterDefaults).map(key => [
+          key,
+          newValue[key] ?? parameterDefaults[key]
+        ])
+      )
+    })
+  }, { deep: true })
+
+  // API key checking (if configured)
+  const checkApiKeys = async () => {
+    if (!apiKeyRequirements || !onApiKeyCheck) return
+
+    try {
+      const result = await onApiKeyCheck(apiKeyRequirements)
+      missingApiKeys.value = result.missing || []
+      apiKeyError.value = result.error || null
+    } catch (error) {
+      console.error('Failed to check API keys:', error)
+      apiKeyError.value = 'Failed to validate API keys'
+    }
+  }
+
+  // Initialize API key checking on mount if configured
+  onMounted(() => {
+    if (apiKeyRequirements && props.parameters.api_key_requirements) {
+      checkApiKeys()
+    }
+  })
+
+  return {
+    // Computed
+    pluginDescription,
+    
+    // State
+    localParams,
+    missingApiKeys,
+    apiKeyError,
+    
+    // Methods
+    updateParams,
+    checkApiKeys
   }
 }
 
@@ -50,4 +145,48 @@ export function usePluginValidation () {
     domainRule,
     ipRule
   }
+}
+
+/**
+ * Configuration helper for common parameter types
+ */
+export const pluginParamConfigs = {
+  // Domain-based plugins
+  domain: (defaultDomain = '') => ({
+    domain: defaultDomain
+  }),
+  
+  // Domain with concurrency
+  domainWithConcurrency: (defaultDomain = '', defaultConcurrency = 5) => ({
+    domain: defaultDomain,
+    concurrency: defaultConcurrency
+  }),
+  
+  // Domain with SecurityTrails option
+  domainWithSecurityTrails: (defaultDomain = '', defaultConcurrency = 5) => ({
+    domain: defaultDomain,
+    concurrency: defaultConcurrency,
+    use_securitytrails: false
+  }),
+  
+  // Email-based plugins
+  email: (defaultEmail = '') => ({
+    email: defaultEmail
+  }),
+  
+  // IP-based plugins
+  ip: (defaultIp = '') => ({
+    ip_address: defaultIp
+  }),
+  
+  // Search-based plugins
+  searchQuery: (defaultQuery = '') => ({
+    query: defaultQuery
+  }),
+  
+  // Multiple search types
+  multiSearch: (searchTypes = [], defaultType = '') => ({
+    search_type: defaultType,
+    query: ''
+  })
 }

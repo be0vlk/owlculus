@@ -47,8 +47,7 @@
 </template>
 
 <script setup>
-import { reactive, watch, computed } from 'vue'
-import { usePluginValidation } from '@/composables/usePluginParams'
+import { usePluginValidation, usePluginParamsAdvanced, pluginParamConfigs } from '@/composables/usePluginParams'
 import PluginDescriptionCard from './PluginDescriptionCard.vue'
 import CaseEvidenceToggle from './CaseEvidenceToggle.vue'
 
@@ -65,34 +64,14 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 
-// Plugin description from backend
-const pluginDescription = computed(() => {
-  return props.parameters?.description || ''
+// Use advanced plugin params composable with domain/concurrency/securitytrails configuration
+const {
+  pluginDescription,
+  localParams,
+  updateParams
+} = usePluginParamsAdvanced(props, emit, {
+  parameterDefaults: pluginParamConfigs.domainWithSecurityTrails()
 })
 
 const { domainRule } = usePluginValidation()
-
-// Local parameter state for plugin-specific params
-const localParams = reactive({
-  domain: props.modelValue.domain || '',
-  concurrency: props.modelValue.concurrency || 5,
-  use_securitytrails: props.modelValue.use_securitytrails || false
-})
-
-// Emit parameter updates for plugin-specific params
-const updateParams = () => {
-  emit('update:modelValue', { 
-    ...props.modelValue,
-    ...localParams 
-  })
-}
-
-// Watch for external changes to modelValue
-watch(() => props.modelValue, (newValue) => {
-  Object.assign(localParams, {
-    domain: newValue.domain || '',
-    concurrency: newValue.concurrency || 5,
-    use_securitytrails: newValue.use_securitytrails || false
-  })
-}, { deep: true })
 </script>

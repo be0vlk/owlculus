@@ -37,8 +37,7 @@
 </template>
 
 <script setup>
-import { reactive, watch, computed } from 'vue'
-import { usePluginValidation } from '@/composables/usePluginParams'
+import { usePluginValidation, usePluginParamsAdvanced, pluginParamConfigs } from '@/composables/usePluginParams'
 import PluginDescriptionCard from './PluginDescriptionCard.vue'
 import CaseEvidenceToggle from './CaseEvidenceToggle.vue'
 
@@ -55,33 +54,17 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 
-// Plugin description from backend
-const pluginDescription = computed(() => {
-  return props.parameters?.description || ''
+// Use advanced plugin params composable with email configuration
+const {
+  pluginDescription,
+  localParams,
+  updateParams
+} = usePluginParamsAdvanced(props, emit, {
+  parameterDefaults: {
+    ...pluginParamConfigs.email(),
+    timeout: 10.0
+  }
 })
 
 const { emailRule } = usePluginValidation()
-
-// Local parameter state for plugin-specific params
-const localParams = reactive({
-  email: props.modelValue.email || '',
-  timeout: props.modelValue.timeout || 10.0
-})
-
-
-// Emit parameter updates for plugin-specific params
-const updateParams = () => {
-  emit('update:modelValue', { 
-    ...props.modelValue,
-    ...localParams 
-  })
-}
-
-// Watch for external changes to modelValue
-watch(() => props.modelValue, (newValue) => {
-  Object.assign(localParams, {
-    email: newValue.email || '',
-    timeout: newValue.timeout || 10.0
-  })
-}, { deep: true })
 </script>

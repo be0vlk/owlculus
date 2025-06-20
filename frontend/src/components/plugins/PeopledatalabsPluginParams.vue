@@ -165,7 +165,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch, computed, onMounted } from 'vue'
+import { computed } from 'vue'
+import { usePluginParamsAdvanced } from '@/composables/usePluginParams'
 import { usePluginApiKeys } from '@/composables/usePluginApiKeys'
 import PluginDescriptionCard from './PluginDescriptionCard.vue'
 import ApiKeyWarning from './ApiKeyWarning.vue'
@@ -184,75 +185,49 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 
-// Plugin description from backend
-const pluginDescription = computed(() => {
-  return props.parameters?.description || ''
-})
-
-// Search type state
-const searchType = ref(props.modelValue.search_type || 'person')
-
-// Local parameter state for plugin-specific params
-const localParams = reactive({
-  search_type: searchType.value,
-  email: props.modelValue.email || '',
-  phone: props.modelValue.phone || '',
-  name: props.modelValue.name || '',
-  company: props.modelValue.company || '',
-  website: props.modelValue.website || '',
-  domain: props.modelValue.domain || '',
-  location: props.modelValue.location || '',
-  linkedin: props.modelValue.linkedin || ''
-})
-
-// Use plugin API keys composable
-const { checkPluginApiKeys, getMissingApiKeys } = usePluginApiKeys()
-const missingApiKeys = ref([])
-
-// Check API keys on mount
-onMounted(async () => {
-  // Check if plugin has API key requirements
-  if (props.parameters.api_key_requirements && props.parameters.api_key_requirements.length > 0) {
+// Use advanced plugin params composable with multi-search configuration
+const {
+  pluginDescription,
+  localParams,
+  updateParams,
+  missingApiKeys
+} = usePluginParamsAdvanced(props, emit, {
+  parameterDefaults: {
+    search_type: 'person',
+    email: '',
+    phone: '',
+    name: '',
+    company: '',
+    website: '',
+    domain: '',
+    location: '',
+    linkedin: ''
+  },
+  apiKeyRequirements: props.parameters.api_key_requirements,
+  onApiKeyCheck: async (requirements) => {
+    const { checkPluginApiKeys, getMissingApiKeys } = usePluginApiKeys()
     const plugin = {
       name: 'PeopledatalabsPlugin',
-      api_key_requirements: props.parameters.api_key_requirements
+      api_key_requirements: requirements
     }
     await checkPluginApiKeys(plugin)
-    missingApiKeys.value = getMissingApiKeys(plugin)
+    return {
+      missing: getMissingApiKeys(plugin)
+    }
   }
 })
 
-// Update search type and related parameters
+// Search type state (computed from localParams)
+const searchType = computed({
+  get: () => localParams.search_type,
+  set: (value) => {
+    localParams.search_type = value
+    updateParams()
+  }
+})
+
+// Update search type
 const updateSearchType = () => {
-  localParams.search_type = searchType.value
   updateParams()
 }
-
-// Emit parameter updates for plugin-specific params
-const updateParams = () => {
-  emit('update:modelValue', { 
-    ...props.modelValue,
-    ...localParams 
-  })
-}
-
-// Watch for external changes to modelValue
-watch(() => props.modelValue, (newValue) => {
-  Object.assign(localParams, {
-    search_type: newValue.search_type || 'person',
-    email: newValue.email || '',
-    phone: newValue.phone || '',
-    name: newValue.name || '',
-    company: newValue.company || '',
-    website: newValue.website || '',
-    domain: newValue.domain || '',
-    location: newValue.location || '',
-    linkedin: newValue.linkedin || ''
-  })
-  
-  // Update search type
-  if (newValue.search_type) {
-    searchType.value = newValue.search_type
-  }
-}, { deep: true })
 </script>
