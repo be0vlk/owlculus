@@ -6,10 +6,16 @@ import Highlight from '@tiptap/extension-highlight'
 import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
 import Placeholder from '@tiptap/extension-placeholder'
-import { ref, computed, watch, onBeforeUnmount } from 'vue'
+import { ref, computed, onBeforeUnmount } from 'vue'
 import { formatDistanceToNow } from 'date-fns'
 
-export function useCaseNoteEditor(props, emit) {
+export function useBaseNoteEditor({
+  initialContent = '',
+  placeholder = 'Write your notes here... Use / for commands.',
+  editable = true,
+  onUpdate = null,
+  saveDelay = 1000,
+}) {
   const lastSaved = ref(null)
   const lastSavedTime = ref(null)
   const saving = ref(false)
@@ -19,12 +25,17 @@ export function useCaseNoteEditor(props, emit) {
     return formatDistanceToNow(lastSavedTime.value, { addSuffix: true })
   })
 
-  // For case notes, we don't auto-save like entity notes
-  // The parent component handles saving via the Save button
+  let saveTimeout
+  const triggerSave = (saveCallback) => {
+    clearTimeout(saveTimeout)
+    if (saveCallback) {
+      saveTimeout = setTimeout(saveCallback, saveDelay)
+    }
+  }
 
   const editor = useEditor({
-    content: props.modelValue || '',
-    editable: props.isEditing,
+    content: initialContent,
+    editable,
     extensions: [
       StarterKit.configure({
         taskList: false,
@@ -50,22 +61,19 @@ export function useCaseNoteEditor(props, emit) {
           if (node.type.name === 'heading') {
             return "What's the title?"
           }
-          return props.isEditing
-            ? 'Write your case notes here... Use / for commands.'
-            : 'Notes (read-only)'
+          return placeholder
         },
       }),
     ],
     shouldRerenderOnTransaction: false,
     onUpdate: ({ editor }) => {
-      const content = editor.getHTML()
-      if (props.isEditing) {
-        emit('update:modelValue', content)
+      if (onUpdate) {
+        onUpdate(editor)
       }
     },
     editorProps: {
       attributes: {
-        class: `tiptap-editor focus:outline-none`,
+        class: 'tiptap-editor focus:outline-none',
         style: 'min-height: 150px;',
       },
     },
@@ -132,35 +140,31 @@ export function useCaseNoteEditor(props, emit) {
     const currentContent = editor.value?.getHTML()
     if (newVal !== currentContent && editor.value) {
       editor.value.commands.setContent(newVal || '', false)
-      lastSaved.value = newVal || ''
     }
   }
 
-  // Watch for editing state changes and update editor editability
-  watch(
-    () => props.isEditing,
-    (newEditingState) => {
-      if (editor.value) {
-        editor.value.setEditable(newEditingState)
-      }
-    },
-  )
-
-  const cleanup = () => {
+  const cleanup = (saveCallback) => {
+    clearTimeout(saveTimeout)
     if (editor.value) {
+      const content = editor.value.getHTML()
+      if (content !== lastSaved.value && saveCallback) {
+        saveCallback()
+      }
       editor.value.destroy()
     }
   }
 
-  onBeforeUnmount(cleanup)
+  onBeforeUnmount(() => cleanup())
 
   return {
     editor,
     editorActions,
     saving,
+    lastSaved,
     lastSavedTime,
     formatLastSaved,
     updateContent,
     cleanup,
+    triggerSave,
   }
 }

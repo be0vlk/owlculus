@@ -1,6 +1,9 @@
 # Development Dockerfile for Vue.js frontend with hot reload
 FROM node:18-alpine
 
+# Create a non-root user
+RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
+
 # Set working directory
 WORKDIR /app
 
@@ -10,6 +13,12 @@ RUN npm ci
 
 # Copy source code (will be overridden by volume in dev)
 COPY . .
+
+# Change ownership to nodejs user
+RUN chown -R nodejs:nodejs /app
+
+# Switch to non-root user
+USER nodejs
 
 # Expose port
 EXPOSE 5173

@@ -1,25 +1,8 @@
-import { useEditor } from '@tiptap/vue-3'
-import StarterKit from '@tiptap/starter-kit'
-import Underline from '@tiptap/extension-underline'
-import Link from '@tiptap/extension-link'
-import Highlight from '@tiptap/extension-highlight'
-import TaskList from '@tiptap/extension-task-list'
-import TaskItem from '@tiptap/extension-task-item'
-import Placeholder from '@tiptap/extension-placeholder'
-import { ref, computed, watch, onBeforeUnmount } from 'vue'
+import { watch } from 'vue'
 import { entityService } from '../services/entity'
-import { formatDistanceToNow } from 'date-fns'
+import { useBaseNoteEditor } from './useBaseNoteEditor'
 
 export function useEntityNoteEditor(entity, caseId, isEditing, formData, emit) {
-  const lastSaved = ref(null)
-  const lastSavedTime = ref(null)
-  const saving = ref(false)
-
-  const formatLastSaved = computed(() => {
-    if (!lastSavedTime.value) return ''
-    return formatDistanceToNow(lastSavedTime.value, { addSuffix: true })
-  })
-
   const saveNotes = async () => {
     if (!editor.value || !entity.value || !isEditing.value) return
 
@@ -50,129 +33,34 @@ export function useEntityNoteEditor(entity, caseId, isEditing, formData, emit) {
     }
   }
 
-  let saveTimeout
-  const triggerSave = () => {
-    clearTimeout(saveTimeout)
-    saveTimeout = setTimeout(saveNotes, 5000)
-  }
-
-  const editor = useEditor({
-    content: entity.value?.data?.notes || '',
+  const {
+    editor,
+    editorActions,
+    saving,
+    lastSaved,
+    lastSavedTime,
+    formatLastSaved,
+    updateContent,
+    cleanup,
+    triggerSave,
+  } = useBaseNoteEditor({
+    initialContent: entity.value?.data?.notes || '',
+    placeholder: isEditing.value
+      ? 'Write your entity notes here... Use / for commands.'
+      : 'Notes (read-only)',
     editable: isEditing.value,
-    extensions: [
-      StarterKit.configure({
-        taskList: false,
-      }),
-      Underline,
-      Link,
-      Highlight.configure({
-        multicolor: true,
-      }),
-      TaskList.configure({
-        HTMLAttributes: {
-          class: 'task-list',
-        },
-      }),
-      TaskItem.configure({
-        nested: true,
-        HTMLAttributes: {
-          class: 'task-item',
-        },
-      }),
-      Placeholder.configure({
-        placeholder: ({ node }) => {
-          if (node.type.name === 'heading') {
-            return "What's the title?"
-          }
-          return isEditing.value
-            ? 'Write your entity notes here... Use / for commands.'
-            : 'Notes (read-only)'
-        },
-      }),
-    ],
-    shouldRerenderOnTransaction: false,
-    onUpdate: ({ editor }) => {
+    onUpdate: (editor) => {
       const content = editor.getHTML()
       if (isEditing.value) {
         // Update the form data so main form save includes latest notes
         if (formData && formData.value) {
           formData.value.data.notes = content
         }
-        triggerSave()
+        triggerSave(saveNotes)
       }
     },
-    editorProps: {
-      attributes: {
-        class: `tiptap-editor focus:outline-none`,
-        style: 'min-height: 150px;',
-      },
-    },
+    saveDelay: 5000,
   })
-
-  const editorActions = computed(() => [
-    {
-      icon: 'mdi-format-bold',
-      title: 'Bold (Ctrl+B)',
-      action: () => editor.value?.chain().focus().toggleBold().run(),
-      isActive: () => editor.value?.isActive('bold'),
-    },
-    {
-      icon: 'mdi-format-italic',
-      title: 'Italic (Ctrl+I)',
-      action: () => editor.value?.chain().focus().toggleItalic().run(),
-      isActive: () => editor.value?.isActive('italic'),
-    },
-    {
-      icon: 'mdi-format-underline',
-      title: 'Underline (Ctrl+U)',
-      action: () => editor.value?.chain().focus().toggleUnderline().run(),
-      isActive: () => editor.value?.isActive('underline'),
-    },
-    {
-      icon: 'mdi-format-strikethrough',
-      title: 'Strikethrough',
-      action: () => editor.value?.chain().focus().toggleStrike().run(),
-      isActive: () => editor.value?.isActive('strike'),
-    },
-    {
-      icon: 'mdi-marker',
-      title: 'Highlight',
-      action: () => editor.value?.chain().focus().toggleHighlight().run(),
-      isActive: () => editor.value?.isActive('highlight'),
-    },
-    {
-      icon: 'mdi-format-list-bulleted',
-      title: 'Bullet List',
-      action: () => editor.value?.chain().focus().toggleBulletList().run(),
-      isActive: () => editor.value?.isActive('bulletList'),
-    },
-    {
-      icon: 'mdi-format-list-numbered',
-      title: 'Ordered List',
-      action: () => editor.value?.chain().focus().toggleOrderedList().run(),
-      isActive: () => editor.value?.isActive('orderedList'),
-    },
-    {
-      icon: 'mdi-format-list-checks',
-      title: 'Task List',
-      action: () => editor.value?.chain().focus().toggleTaskList().run(),
-      isActive: () => editor.value?.isActive('taskList'),
-    },
-    {
-      icon: 'mdi-format-quote-close',
-      title: 'Blockquote',
-      action: () => editor.value?.chain().focus().toggleBlockquote().run(),
-      isActive: () => editor.value?.isActive('blockquote'),
-    },
-  ])
-
-  const updateContent = (newVal) => {
-    const currentContent = editor.value?.getHTML()
-    if (newVal !== currentContent && editor.value) {
-      editor.value.commands.setContent(newVal || '', false)
-      lastSaved.value = newVal || ''
-    }
-  }
 
   // Watch for entity changes and update editor content
   watch(
@@ -180,6 +68,7 @@ export function useEntityNoteEditor(entity, caseId, isEditing, formData, emit) {
     (newNotes) => {
       if (newNotes !== undefined && editor.value) {
         updateContent(newNotes)
+        lastSaved.value = newNotes || ''
       }
     },
     { immediate: true },
@@ -202,18 +91,10 @@ export function useEntityNoteEditor(entity, caseId, isEditing, formData, emit) {
     },
   )
 
-  const cleanup = () => {
-    clearTimeout(saveTimeout)
-    if (editor.value) {
-      const content = editor.value.getHTML()
-      if (content !== lastSaved.value) {
-        saveNotes()
-      }
-      editor.value.destroy()
-    }
+  // Override cleanup to include save
+  const enhancedCleanup = () => {
+    cleanup(saveNotes)
   }
-
-  onBeforeUnmount(cleanup)
 
   return {
     editor,
@@ -222,7 +103,7 @@ export function useEntityNoteEditor(entity, caseId, isEditing, formData, emit) {
     lastSavedTime,
     formatLastSaved,
     updateContent,
-    cleanup,
+    cleanup: enhancedCleanup,
     saveNotes,
   }
 }

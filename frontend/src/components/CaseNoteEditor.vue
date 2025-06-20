@@ -72,7 +72,7 @@
 <script setup>
 import { EditorContent } from '@tiptap/vue-3'
 import { watch, defineEmits, defineProps, ref } from 'vue'
-import { useCaseNoteEditor } from '../composables/useCaseNoteEditor'
+import { useCaseNoteManualSave } from '../composables/useCaseNoteManualSave'
 import EditorToolbar from './editor/EditorToolbar.vue'
 
 const props = defineProps({
@@ -101,7 +101,7 @@ const {
   lastSavedTime,
   formatLastSaved,
   updateContent,
-} = useCaseNoteEditor(props, emit)
+} = useCaseNoteManualSave(props, emit)
 
 watch(() => props.modelValue, updateContent)
 </script>

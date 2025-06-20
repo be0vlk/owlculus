@@ -2,12 +2,12 @@
 
 /* Source field styling */
 .source-field .v-field {
-  background-color: rgba(var(--v-theme-surface-variant), 0.15) !important;
+  background-color: rgb(var(--v-theme-surface-variant), 0.15) !important;
 }
 
 .source-field .v-label {
   font-size: 0.875rem !important;
-  color: rgba(var(--v-theme-on-surface), 0.7) !important;
+  color: rgb(var(--v-theme-on-surface), 0.7) !important;
 }
 
 /* Utility classes */
@@ -103,12 +103,12 @@
 
 /* Read-only styling */
 .read-only-notes {
-  background-color: rgba(var(--v-theme-surface-variant), 0.1) !important;
+  background-color: rgb(var(--v-theme-surface-variant), 0.1) !important;
 }
 
 .read-only-notes .tiptap-content .ProseMirror {
   cursor: default;
-  background-color: rgba(var(--v-theme-surface-variant), 0.08) !important;
+  background-color: rgb(var(--v-theme-surface-variant), 0.08) !important;
 }
 
 .read-only-notes .tiptap-content .ProseMirror * {
@@ -125,7 +125,7 @@
 }
 
 .fullscreen-editor .ProseMirror:focus {
-  box-shadow: 0 0 0 2px rgba(var(--v-theme-primary), 0.2);
+  box-shadow: 0 0 0 2px rgb(var(--v-theme-primary), 0.2);
 }
 
 .fullscreen-editor .ProseMirror p.is-editor-empty:first-child::before {
