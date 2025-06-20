@@ -144,25 +144,5 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-
-.admin-dashboard-table :deep(.v-data-table__tr:hover) {
-  background-color: rgb(var(--v-theme-primary), 0.04) !important;
-  cursor: pointer;
-}
-
-.admin-dashboard-table :deep(.v-data-table__td) {
-  padding: 12px 16px !important;
-  border-bottom: 1px solid rgb(var(--v-theme-on-surface), 0.08) !important;
-}
-
-.admin-dashboard-table :deep(.v-data-table__th) {
-  padding: 16px !important;
-  font-weight: 600 !important;
-  color: rgb(var(--v-theme-on-surface), 0.87) !important;
-  border-bottom: 2px solid rgb(var(--v-theme-on-surface), 0.12) !important;
-}
-
-.admin-dashboard-table :deep(.v-data-table-rows-no-data) {
-  padding: 48px 16px !important;
-}
+@import '@/styles/admin-dashboard-table.css';
 </style>

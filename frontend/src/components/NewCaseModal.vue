@@ -11,7 +11,7 @@
       </v-card-title>
       
       <v-card-text>
-        <v-form ref="form" @submit.prevent="handleSubmit">
+        <v-form ref="form" v-model="isFormValid" @submit.prevent="handleSubmit">
           <v-text-field
             v-model="formData.title"
             label="Title"
@@ -36,23 +36,15 @@
         </v-form>
       </v-card-text>
 
-      <v-card-actions>
-        <v-spacer />
-        <v-btn
-          variant="text"
-          @click="closeModal"
-          :disabled="isSubmitting"
-        >
-          Cancel
-        </v-btn>
-        <v-btn
-          color="primary"
-          :loading="isSubmitting"
-          @click="handleSubmit"
-        >
-          {{ isSubmitting ? 'Creating...' : 'Create Case' }}
-        </v-btn>
-      </v-card-actions>
+      <ModalActions
+        submit-text="Create Case"
+        loading-text="Creating..."
+        submit-icon="mdi-folder-plus"
+        :submit-disabled="!isFormValid"
+        :loading="isSubmitting"
+        @cancel="closeModal"
+        @submit="handleSubmit"
+      />
     </v-card>
   </v-dialog>
 </template>
@@ -62,6 +54,7 @@ import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { clientService } from '../services/client'
 import { caseService } from '../services/case'
 import { useAuthStore } from '../stores/auth'
+import ModalActions from './ModalActions.vue'
 
 const props = defineProps({
   isOpen: {
@@ -84,6 +77,7 @@ const emit = defineEmits(['close', 'created'])
 const authStore = useAuthStore()
 const clients = ref([])
 const isSubmitting = ref(false)
+const isFormValid = ref(false)
 const form = ref(null)
 const formData = reactive({
   title: '',

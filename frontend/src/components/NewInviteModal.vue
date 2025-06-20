@@ -74,28 +74,17 @@
 
       <v-divider />
       
-      <v-card-actions class="pa-4">
-        <v-spacer />
-        <v-btn
-          variant="text"
-          prepend-icon="mdi-close"
-          @click="handleClose"
-          :disabled="loading"
-        >
-          {{ inviteLink ? 'Done' : 'Cancel' }}
-        </v-btn>
-        <v-btn
-          v-if="!inviteLink"
-          color="primary"
-          variant="flat"
-          prepend-icon="mdi-email-plus"
-          @click="handleSubmit"
-          :disabled="loading || !isFormValid"
-          :loading="loading"
-        >
-          {{ loading ? 'Generating...' : 'Generate Invite' }}
-        </v-btn>
-      </v-card-actions>
+      <modal-actions
+        :cancel-text="inviteLink ? 'Done' : 'Cancel'"
+        submit-text="Generate Invite"
+        loading-text="Generating..."
+        submit-icon="mdi-email-plus"
+        :show-submit="!inviteLink"
+        :submit-disabled="!isFormValid"
+        :loading="loading"
+        @cancel="handleClose"
+        @submit="handleSubmit"
+      />
     </v-card>
   </v-dialog>
 </template>
@@ -103,6 +92,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { inviteService } from '../services/invite'
+import ModalActions from './ModalActions.vue'
 
 const props = defineProps({
   show: {

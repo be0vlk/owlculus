@@ -90,25 +90,14 @@
 
       <v-divider />
 
-      <v-card-actions>
-        <v-spacer />
-        <v-btn
-          variant="text"
-          @click="$emit('close')"
-          :disabled="updating"
-        >
-          Cancel
-        </v-btn>
-        <v-btn
-          color="primary"
-          variant="flat"
-          @click="handleSubmit"
-          :disabled="updating || !isFormValid"
-          :loading="updating"
-        >
-          Save Changes
-        </v-btn>
-      </v-card-actions>
+      <ModalActions
+        submit-text="Save Changes"
+        submit-icon="mdi-content-save"
+        :submit-disabled="updating || !isFormValid"
+        :loading="updating"
+        @cancel="$emit('close')"
+        @submit="handleSubmit"
+      />
     </v-card>
   </v-dialog>
 </template>
@@ -117,6 +106,7 @@
 import { ref, watch, computed } from 'vue'
 import api from '../services/api'
 import { formatDate } from '../composables/dateUtils'
+import ModalActions from './ModalActions.vue'
 
 const props = defineProps({
   show: {

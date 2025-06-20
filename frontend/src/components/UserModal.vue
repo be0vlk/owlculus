@@ -108,27 +108,14 @@
 
       <v-divider />
       
-      <v-card-actions class="pa-4">
-        <v-spacer />
-        <v-btn
-          variant="text"
-          prepend-icon="mdi-close"
-          @click="$emit('close')"
-          :disabled="loading"
-        >
-          Cancel
-        </v-btn>
-        <v-btn
-          color="primary"
-          variant="flat"
-          :prepend-icon="user ? 'mdi-content-save' : 'mdi-account-plus'"
-          @click="handleSubmit"
-          :disabled="loading || !isFormValid"
-          :loading="loading"
-        >
-          {{ loading ? 'Saving...' : (user ? 'Save Changes' : 'Create User') }}
-        </v-btn>
-      </v-card-actions>
+      <modal-actions
+        :submit-text="user ? 'Save Changes' : 'Create User'"
+        :submit-icon="user ? 'mdi-content-save' : 'mdi-account-plus'"
+        :submit-disabled="!isFormValid"
+        :loading="loading"
+        @cancel="$emit('close')"
+        @submit="handleSubmit"
+      />
     </v-card>
   </v-dialog>
 </template>
@@ -137,6 +124,7 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import { userService } from '../services/user'
 // Vuetify components are auto-imported
+import ModalActions from './ModalActions.vue'
 
 const props = defineProps({
   show: {

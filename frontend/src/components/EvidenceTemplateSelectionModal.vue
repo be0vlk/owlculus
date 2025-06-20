@@ -115,26 +115,14 @@
 
       <v-divider />
       
-      <v-card-actions class="pa-4">
-        <v-spacer />
-        <v-btn 
-          @click="closeDialog" 
-          variant="text"
-          prepend-icon="mdi-close"
-        >
-          Cancel
-        </v-btn>
-        <v-btn
-          @click="applyTemplate"
-          color="primary"
-          variant="flat"
-          prepend-icon="mdi-check"
-          :disabled="!selectedTemplate || applying"
-          :loading="applying"
-        >
-          Apply Template
-        </v-btn>
-      </v-card-actions>
+      <ModalActions
+        submit-text="Apply Template"
+        submit-icon="mdi-check"
+        :submit-disabled="!selectedTemplate || applying"
+        :loading="applying"
+        @cancel="closeDialog"
+        @submit="applyTemplate"
+      />
     </v-card>
   </v-dialog>
 </template>
@@ -145,6 +133,7 @@ import { systemService } from '@/services/system'
 import { evidenceService } from '@/services/evidence'
 import TemplateFolderTree from './TemplateFolderTree.vue'
 import { useFolderIcons } from '../composables/useFolderIcons'
+import ModalActions from './ModalActions.vue'
 
 const { getFolderColor } = useFolderIcons()
 

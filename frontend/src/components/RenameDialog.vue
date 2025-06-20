@@ -30,26 +30,14 @@
         </v-form>
       </v-card-text>
       
-      <v-card-actions>
-        <v-spacer></v-spacer>
-        <v-btn
-          color="grey"
-          variant="text"
-          @click="cancel"
-          :disabled="loading"
-        >
-          Cancel
-        </v-btn>
-        <v-btn
-          color="primary"
-          variant="flat"
-          @click="rename"
-          :loading="loading"
-          :disabled="!valid || !newName.trim() || newName === item?.title"
-        >
-          Rename
-        </v-btn>
-      </v-card-actions>
+      <modal-actions
+        submit-text="Rename"
+        submit-icon="mdi-rename-box"
+        :submit-disabled="!valid || !newName.trim() || newName === item?.title"
+        :loading="loading"
+        @cancel="cancel"
+        @submit="rename"
+      />
     </v-card>
   </v-dialog>
 </template>
@@ -57,6 +45,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { evidenceService } from '../services/evidence'
+import ModalActions from './ModalActions.vue'
 
 const props = defineProps({
   modelValue: {

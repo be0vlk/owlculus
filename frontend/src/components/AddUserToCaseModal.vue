@@ -70,25 +70,14 @@
 
       <v-divider />
 
-      <v-card-actions>
-        <v-spacer />
-        <v-btn
-          variant="text"
-          @click="$emit('close')"
-          :disabled="loading"
-        >
-          Cancel
-        </v-btn>
-        <v-btn
-          color="primary"
-          variant="flat"
-          @click="handleAddUser"
-          :disabled="!isFormValid || loading"
-          :loading="loading"
-        >
-          Add User
-        </v-btn>
-      </v-card-actions>
+      <ModalActions
+        submit-text="Add User"
+        submit-icon="mdi-account-plus"
+        :submit-disabled="!isFormValid || loading"
+        :loading="loading"
+        @cancel="$emit('close')"
+        @submit="handleAddUser"
+      />
     </v-card>
   </v-dialog>
 </template>
@@ -97,6 +86,7 @@
 import { ref, watch, computed } from 'vue';
 import { userService } from '@/services/user';
 import { caseService } from '@/services/case';
+import ModalActions from './ModalActions.vue';
 
 const props = defineProps({
   show: {

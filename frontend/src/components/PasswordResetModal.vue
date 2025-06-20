@@ -94,27 +94,15 @@
 
       <v-divider />
       
-      <v-card-actions class="pa-4">
-        <v-spacer />
-        <v-btn
-          variant="text"
-          prepend-icon="mdi-close"
-          @click="$emit('close')"
-          :disabled="loading"
-        >
-          Cancel
-        </v-btn>
-        <v-btn
-          color="warning"
-          variant="flat"
-          prepend-icon="mdi-key-variant"
-          @click="handlePasswordReset"
-          :disabled="!isPasswordValid || loading"
-          :loading="loading"
-        >
-          {{ loading ? 'Resetting...' : 'Reset Password' }}
-        </v-btn>
-      </v-card-actions>
+      <modal-actions
+        submit-text="Reset Password"
+        submit-icon="mdi-key-variant"
+        submit-color="warning"
+        :submit-disabled="!isPasswordValid"
+        :loading="loading"
+        @cancel="$emit('close')"
+        @submit="handlePasswordReset"
+      />
     </v-card>
   </v-dialog>
 </template>
@@ -123,6 +111,7 @@
 import { ref, computed } from 'vue'
 // Vuetify components are auto-imported
 import { userService } from '@/services/user'
+import ModalActions from './ModalActions.vue'
 
 const props = defineProps({
   show: {
