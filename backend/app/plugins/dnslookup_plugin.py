@@ -312,6 +312,7 @@ class DnsLookup(BasePlugin):
                             ip_data_map[record] = {
                                 "ip": record,
                                 "description": description,
+                                "sources": {"ip_address": "DNS Lookup"},
                             }
 
         return list(ip_data_map.values())

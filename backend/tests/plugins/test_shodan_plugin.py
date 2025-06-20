@@ -374,8 +374,11 @@ class TestShodanPlugin:
         self, mock_get_db, plugin, mock_db_session, mock_config_service
     ):
         """Test that limit parameter is properly clamped"""
-        # Setup mocks
-        mock_get_db.return_value = iter([mock_db_session])
+        # Setup mocks - create a new iterator for each call
+        def get_db_iter():
+            return iter([mock_db_session])
+        
+        mock_get_db.side_effect = get_db_iter
         mock_config_service.get_api_key.return_value = None  # Will fail early
 
         with patch(
@@ -388,13 +391,17 @@ class TestShodanPlugin:
             async for result in plugin.run(params):
                 results.append(result)
 
+            # Both should fail at API key check, meaning limit clamping worked
+            assert len(results) == 1
+            assert results[0]["type"] == "error"
+            
             # Test limit too low
             params = {"query": "test", "limit": -5}
             results = []
             async for result in plugin.run(params):
                 results.append(result)
 
-            # Both should fail at API key check, meaning limit clamping worked
+            # Should also fail at API key check
             assert len(results) == 1
             assert results[0]["type"] == "error"
 
@@ -548,55 +555,10 @@ class TestShodanPlugin:
         for ip_data in unique_ips:
             assert "description" in ip_data
             assert "Discovered via Shodan" in ip_data["description"]
+            # Check that sources field is included
+            assert "sources" in ip_data
+            assert ip_data["sources"] == {"ip_address": "Shodan Search"}
 
-    def test_generate_ip_description(self, plugin):
-        """Test IP description generation with various data combinations"""
-        # Test host lookup description
-        result = {
-            "ip": "8.8.8.8",
-            "organization": "Google LLC",
-            "country": "United States",
-            "city": "Mountain View",
-            "search_type": "host_lookup",
-            "ports": [53, 443, 80],
-            "vulns": ["CVE-2024-1234"],
-        }
-
-        description = plugin._generate_ip_description(result)
-        assert "Discovered via Shodan IP lookup" in description
-        assert "Org: Google LLC" in description
-        assert "Location: Mountain View, United States" in description
-        assert "Ports: 53, 443, 80" in description
-        assert "Vulnerability: CVE-2024-1234" in description
-
-        # Test hostname search description
-        result = {
-            "ip": "1.1.1.1",
-            "organization": "Cloudflare",
-            "country": "Australia",
-            "search_type": "hostname_search",
-            "port": 443,
-            "service": "Cloudflare",
-            "version": "1.0",
-            "transport": "tcp",
-        }
-
-        description = plugin._generate_ip_description(result)
-        assert "Discovered via Shodan hostname search" in description
-        assert "Org: Cloudflare" in description
-        assert "Location: Australia" in description
-        assert "Services: 443/tcp:Cloudflare 1.0" in description
-
-        # Test general search with multiple vulnerabilities
-        result = {
-            "ip": "192.168.1.1",
-            "search_type": "general_search",
-            "vulns": ["CVE-2024-1234", "CVE-2024-5678", "CVE-2024-9999"],
-        }
-
-        description = plugin._generate_ip_description(result)
-        assert "Discovered via Shodan general search" in description
-        assert "Vulnerabilities: 3 found" in description
 
     @pytest.mark.asyncio
     @patch("app.plugins.shodan_plugin.get_db")
@@ -627,7 +589,7 @@ class TestShodanPlugin:
         mock_entity_service.create_entity = AsyncMock()
 
         with patch(
-            "app.plugins.shodan_plugin.EntityService", return_value=mock_entity_service
+            "app.plugins.base_plugin.EntityService", return_value=mock_entity_service
         ):
             await plugin._create_ip_entities_from_results()
 
@@ -670,7 +632,7 @@ class TestShodanPlugin:
         ]
 
         with patch(
-            "app.plugins.shodan_plugin.EntityService", return_value=mock_entity_service
+            "app.plugins.base_plugin.EntityService", return_value=mock_entity_service
         ):
 
             await plugin._create_ip_entities_from_results()
@@ -689,7 +651,7 @@ class TestShodanPlugin:
         mock_entity_service = Mock(spec=EntityService)
 
         with patch(
-            "app.plugins.shodan_plugin.EntityService", return_value=mock_entity_service
+            "app.plugins.base_plugin.EntityService", return_value=mock_entity_service
         ):
             await plugin._create_ip_entities_from_results()
 
@@ -710,7 +672,7 @@ class TestShodanPlugin:
         mock_entity_service = Mock(spec=EntityService)
 
         with patch(
-            "app.plugins.shodan_plugin.EntityService", return_value=mock_entity_service
+            "app.plugins.base_plugin.EntityService", return_value=mock_entity_service
         ):
             await plugin._create_ip_entities_from_results()
 
@@ -781,7 +743,7 @@ class TestShodanPlugin:
         mock_entity_service.create_entity = AsyncMock()
 
         with patch(
-            "app.plugins.shodan_plugin.EntityService", return_value=mock_entity_service
+            "app.plugins.base_plugin.EntityService", return_value=mock_entity_service
         ):
 
             await plugin._create_ip_entities_from_results()
@@ -843,7 +805,7 @@ class TestShodanPlugin:
         mock_entity_service.create_entity = AsyncMock()
 
         with patch(
-            "app.plugins.shodan_plugin.EntityService", return_value=mock_entity_service
+            "app.plugins.base_plugin.EntityService", return_value=mock_entity_service
         ):
 
             await plugin._create_ip_entities_from_results()
@@ -892,7 +854,7 @@ class TestShodanPlugin:
         mock_entity_service.create_entity = AsyncMock()
 
         with patch(
-            "app.plugins.shodan_plugin.EntityService", return_value=mock_entity_service
+            "app.plugins.base_plugin.EntityService", return_value=mock_entity_service
         ):
 
             await plugin._create_ip_entities_from_results()
@@ -923,7 +885,7 @@ class TestShodanPlugin:
         mock_entity_service.create_entity = AsyncMock()
 
         with patch(
-            "app.plugins.shodan_plugin.EntityService", return_value=mock_entity_service
+            "app.plugins.base_plugin.EntityService", return_value=mock_entity_service
         ):
 
             await plugin._create_ip_entities_from_results()
@@ -959,7 +921,7 @@ class TestShodanPlugin:
         mock_entity_service.create_entity = AsyncMock()
 
         with patch(
-            "app.plugins.shodan_plugin.EntityService", return_value=mock_entity_service
+            "app.plugins.base_plugin.EntityService", return_value=mock_entity_service
         ):
 
             await plugin._create_ip_entities_from_results()

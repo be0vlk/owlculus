@@ -375,7 +375,11 @@ class ShodanPlugin(BasePlugin):
                 result, original_query
             )
 
-            ip_data_map[ip_address] = {"ip": ip_address, "description": description}
+            ip_data_map[ip_address] = {
+                "ip": ip_address,
+                "description": description,
+                "sources": {"ip_address": "Shodan Search"},
+            }
 
         return list(ip_data_map.values())
 
