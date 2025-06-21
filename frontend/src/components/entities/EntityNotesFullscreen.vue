@@ -33,10 +33,12 @@
         <v-container fluid class="flex-grow-1 overflow-auto pa-6">
           <v-row justify="center">
             <v-col cols="12" lg="10" xl="8">
-              <editor-content v-if="editor" :editor="editor" class="tiptap-content fullscreen-editor" />
-              <div v-else class="text-center pa-4 text-grey">
-                <v-icon size="64">mdi-note-text</v-icon>
-                <p>Loading notes editor...</p>
+              <div :class="{ 'read-only-notes': isEditing === false }">
+                <editor-content v-if="editor" :editor="editor" class="tiptap-content fullscreen-editor" />
+                <div v-else class="text-center pa-4 text-grey">
+                  <v-icon size="64">mdi-note-text</v-icon>
+                  <p>Loading notes editor...</p>
+                </div>
               </div>
             </v-col>
           </v-row>
@@ -57,7 +59,8 @@ defineProps({
   editorActions: { type: Array, default: () => [] },
   saving: { type: Boolean, default: false },
   lastSavedTime: { type: [Date, null], default: null },
-  formatLastSaved: { type: String, default: '' }
+  formatLastSaved: { type: String, default: '' },
+  isEditing: { type: Boolean, default: undefined }
 })
 
 defineEmits(['update:show', 'close'])
@@ -65,4 +68,14 @@ defineEmits(['update:show', 'close'])
 
 <style scoped>
 @import '../../styles/entity-editor.css';
+
+/* Read-only styling for fullscreen notes */
+.read-only-notes .tiptap-content .ProseMirror {
+  cursor: default;
+  background-color: rgb(var(--v-theme-surface-variant), 0.03) !important;
+}
+
+.read-only-notes .tiptap-content .ProseMirror * {
+  pointer-events: none;
+}
 </style>

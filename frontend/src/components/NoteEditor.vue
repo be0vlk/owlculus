@@ -235,12 +235,12 @@ const {
 
 /* Read-only styling */
 .read-only-notes {
-  background-color: rgb(var(--v-theme-surface-variant), 0.1) !important;
+  background-color: rgb(var(--v-theme-surface-variant), 0.05) !important;
 }
 
 .read-only-notes .tiptap-content .ProseMirror {
   cursor: default;
-  background-color: rgb(var(--v-theme-surface-variant), 0.08) !important;
+  background-color: rgb(var(--v-theme-surface-variant), 0.03) !important;
 }
 
 .read-only-notes .tiptap-content .ProseMirror * {

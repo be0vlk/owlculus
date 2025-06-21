@@ -85,6 +85,7 @@
     :saving="noteSaving"
     :last-saved-time="noteLastSavedTime"
     :format-last-saved="noteFormatLastSaved"
+    :is-editing="isEditing"
     @close="notesExpanded = false"
   />
 </template>
