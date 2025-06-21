@@ -7,7 +7,8 @@ export function useEntityIcons (entity) {
       company: 'mdi-domain',
       domain: 'mdi-web',
       ip_address: 'mdi-ip',
-      network: 'mdi-server-network'
+      network: 'mdi-server-network',
+      vehicle: 'mdi-car'
     }
     return iconMap[entity.value?.entity_type] || 'mdi-help-circle'
   })
@@ -22,7 +23,8 @@ export function useEntityIcons (entity) {
       affiliates: 'mdi-handshake',
       contact: 'mdi-phone',
       technical: 'mdi-server',
-      notes: 'mdi-note-text'
+      notes: 'mdi-note-text',
+      registration: 'mdi-card-text'
     }
     return iconMap[sectionKey] || 'mdi-folder'
   }

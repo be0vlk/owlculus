@@ -260,7 +260,8 @@ const entityTypes = [
   { value: 'person', text: 'Person', icon: 'mdi-account', color: 'blue' },
   { value: 'company', text: 'Company', icon: 'mdi-office-building', color: 'green' },
   { value: 'domain', text: 'Domain', icon: 'mdi-web', color: 'purple' },
-  { value: 'ip_address', text: 'IP Address', icon: 'mdi-ip', color: 'orange' }
+  { value: 'ip_address', text: 'IP Address', icon: 'mdi-ip', color: 'orange' },
+  { value: 'vehicle', text: 'Vehicle', icon: 'mdi-car', color: 'red' }
 ]
 
 const headers = computed(() => [
@@ -361,6 +362,10 @@ const getEntityName = (entity) => {
       return entity.data.domain || 'Unnamed Domain'
     case 'ip_address':
       return entity.data.ip_address || 'Unnamed IP'
+    case 'vehicle':
+      const make = entity.data.make || ''
+      const model = entity.data.model || ''
+      return `${make} ${model}`.trim() || 'Unnamed Vehicle'
     default:
       return 'Unknown Entity'
   }

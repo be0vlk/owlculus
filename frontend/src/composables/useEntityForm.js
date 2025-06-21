@@ -56,6 +56,19 @@ export function useEntityForm (caseId) {
           description: ''
         })
         break
+      case 'vehicle':
+        Object.assign(state.data, {
+          make: '',
+          model: '',
+          year: '',
+          vin: '',
+          license_plate: '',
+          color: '',
+          owner: '',
+          registration_state: '',
+          description: ''
+        })
+        break
     }
   }
 

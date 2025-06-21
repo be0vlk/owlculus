@@ -128,8 +128,22 @@ export function useEntityDetails (entity, caseId) {
     () => entity.value,
     (newEntity, oldEntity) => {
       if (newEntity) {
-        formData.value.data.social_media = newEntity.data.social_media
-        formData.value.data.aliases = newEntity.data.aliases
+        // Update all form data when entity changes, not just social_media and aliases
+        const flattenedData = flattenNestedFields({
+          ...newEntity.data,
+          aliases: Array.isArray(newEntity.data.aliases) ? [...newEntity.data.aliases] : [],
+          address: newEntity.data.address || {},
+          social_media: newEntity.data.social_media || {},
+          associates: newEntity.data.associates || {},
+          executives: newEntity.data.executives || {},
+          affiliates: newEntity.data.affiliates || {},
+          notes: newEntity.data.notes || ''
+        }, entitySchema.value)
+        
+        formData.value = {
+          data: flattenedData
+        }
+        
         // Only reset tab if this is a completely different entity (different ID)
         if (!oldEntity || oldEntity.id !== newEntity.id) {
           activeTab.value = Object.keys(entitySchema.value)[0]

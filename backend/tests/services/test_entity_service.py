@@ -383,6 +383,98 @@ class TestEntityService:
         assert entity2.data["ip_address"] == "192.168.1.100"
         assert entity2.case_id == case2.id
 
+    async def test_create_vehicle_entity_success(self, test_case, test_admin):
+        """Test creating a vehicle entity"""
+        entity_data = EntityCreate(
+            entity_type="vehicle",
+            data={
+                "make": "Toyota",
+                "model": "Camry",
+                "year": 2022,
+                "vin": "1HGCM82633A123456",
+                "license_plate": "ABC123",
+                "color": "Silver",
+                "owner": "John Doe",
+            },
+        )
+
+        entity = await self.service.create_entity(
+            test_case.id, entity_data, current_user=test_admin
+        )
+        assert entity.entity_type == "vehicle"
+        assert entity.data["make"] == "Toyota"
+        assert entity.data["model"] == "Camry"
+        assert entity.data["vin"] == "1HGCM82633A123456"
+        assert entity.case_id == test_case.id
+
+    async def test_create_entity_duplicate_vehicle_vin(self, test_case, test_admin):
+        """Test creating duplicate vehicle entity by VIN"""
+        # Create first vehicle
+        entity_data = EntityCreate(
+            entity_type="vehicle",
+            data={
+                "make": "Honda",
+                "model": "Civic",
+                "vin": "2HGCM82633A654321",
+                "license_plate": "XYZ789",
+            },
+        )
+        await self.service.create_entity(
+            test_case.id, entity_data, current_user=test_admin
+        )
+
+        # Try to create duplicate with same VIN but different plate
+        duplicate_data = EntityCreate(
+            entity_type="vehicle",
+            data={
+                "make": "Honda",
+                "model": "Accord",
+                "vin": "2hgcm82633a654321",  # lowercase to test case-insensitive
+                "license_plate": "DEF456",
+            },
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            await self.service.create_entity(
+                test_case.id, duplicate_data, current_user=test_admin
+            )
+        assert exc_info.value.status_code == 400
+        assert "already exists" in str(exc_info.value.detail)
+        assert "VIN" in str(exc_info.value.detail)
+
+    async def test_create_entity_duplicate_vehicle_license_plate(
+        self, test_case, test_admin
+    ):
+        """Test creating duplicate vehicle entity by license plate"""
+        # Create first vehicle
+        entity_data = EntityCreate(
+            entity_type="vehicle",
+            data={
+                "make": "Ford",
+                "model": "F-150",
+                "license_plate": "UNIQUE123",
+            },
+        )
+        await self.service.create_entity(
+            test_case.id, entity_data, current_user=test_admin
+        )
+
+        # Try to create duplicate with same plate but no VIN
+        duplicate_data = EntityCreate(
+            entity_type="vehicle",
+            data={
+                "make": "Chevy",
+                "model": "Silverado",
+                "license_plate": "unique123",  # lowercase to test case-insensitive
+            },
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            await self.service.create_entity(
+                test_case.id, duplicate_data, current_user=test_admin
+            )
+        assert exc_info.value.status_code == 400
+        assert "already exists" in str(exc_info.value.detail)
+        assert "license plate" in str(exc_info.value.detail)
+
     async def test_create_entity_case_not_found(self, test_user):
         """Test creating entity for non-existent case"""
         entity_data = EntityCreate(

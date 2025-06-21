@@ -140,7 +140,7 @@ const {
 const {
   getAssociateEntities,
   processAssociates
-} = useEntityAssociates(entity, existingEntities, caseId)
+} = useEntityAssociates(entity)
 
 const {
   getEntityIcon,

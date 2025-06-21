@@ -656,6 +656,8 @@ const getEntityDisplayName = (entity) => {
     return entity.data.domain;
   } else if (entity.entity_type === 'ip_address') {
     return entity.data.ip_address;
+  } else if (entity.entity_type === 'vehicle') {
+    return `${entity.data.make} ${entity.data.model}`.trim();
   }
   return 'Unknown Entity';
 };

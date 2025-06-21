@@ -63,6 +63,13 @@
                 @update:model-value="entityForm.updateData"
               />
             </v-tabs-window-item>
+
+            <v-tabs-window-item value="vehicle">
+              <VehicleForm
+                v-model="entityForm.state.data"
+                @update:model-value="entityForm.updateData"
+              />
+            </v-tabs-window-item>
           </v-tabs-window>
         </v-form>
       </v-card-text>
@@ -100,6 +107,7 @@ import PersonForm from './entities/PersonForm.vue'
 import CompanyForm from './entities/CompanyForm.vue'
 import DomainForm from './entities/DomainForm.vue'
 import IpAddressForm from './entities/IpAddressForm.vue'
+import VehicleForm from './entities/VehicleForm.vue'
 
 const props = defineProps({
   show: { type: Boolean, required: true, default: false },
@@ -113,7 +121,8 @@ const entityTypes = [
   { value: 'person', title: 'Person', icon: 'mdi-account' },
   { value: 'company', title: 'Company', icon: 'mdi-domain' },
   { value: 'domain', title: 'Domain', icon: 'mdi-web' },
-  { value: 'ip_address', title: 'IP Address', icon: 'mdi-ip' }
+  { value: 'ip_address', title: 'IP Address', icon: 'mdi-ip' },
+  { value: 'vehicle', title: 'Vehicle', icon: 'mdi-car' }
 ]
 
 // Reactive variables

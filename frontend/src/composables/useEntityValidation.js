@@ -24,6 +24,8 @@ export function useEntityValidation () {
         return data.domain && domainRule(data.domain) === true
       case 'ip_address':
         return data.ip_address && ipRule(data.ip_address) === true
+      case 'vehicle':
+        return data.make && data.model
       default:
         return false
     }

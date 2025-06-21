@@ -127,12 +127,27 @@ class CompanyData(EntityData):
         return values
 
 
+class VehicleData(EntityData):
+    make: Optional[str] = None
+    model: Optional[str] = None
+    year: Optional[int] = None
+    vin: Optional[str] = None
+    license_plate: Optional[str] = None
+    color: Optional[str] = None
+    owner: Optional[str] = None
+    registration_state: Optional[str] = None
+    description: Optional[str] = None
+    notes: Optional[str] = None
+    sources: Optional[Dict[str, str]] = None
+
+
 # Map entity types to their respective data schemas
 ENTITY_TYPE_SCHEMAS = {
     "person": PersonData,
     "company": CompanyData,
     "domain": DomainData,
     "ip_address": IpAddressData,
+    "vehicle": VehicleData,
 }
 
 

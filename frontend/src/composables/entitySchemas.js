@@ -214,5 +214,26 @@ export const entitySchemas = {
       fields: [],
       isNoteEditor: true
     }
+  },
+  vehicle: {
+    basicInfo: {
+      title: 'Vehicle Information',
+      fields: [
+        { id: 'make', label: 'Make', type: 'text', required: true, hasSource: true },
+        { id: 'model', label: 'Model', type: 'text', required: true, hasSource: true },
+        { id: 'year', label: 'Year', type: 'number', hasSource: true },
+        { id: 'vin', label: 'VIN', type: 'text', hasSource: true },
+        { id: 'license_plate', label: 'License Plate', type: 'text', hasSource: true },
+        { id: 'color', label: 'Color', type: 'text', hasSource: true },
+        { id: 'owner', label: 'Owner', type: 'text', hasSource: true },
+        { id: 'registration_state', label: 'Registration State', type: 'text', hasSource: true },
+        { id: 'description', label: 'Description', type: 'textarea', hasSource: true }
+      ]
+    },
+    notes: {
+      title: 'Notes',
+      fields: [],
+      isNoteEditor: true
+    }
   }
 }
