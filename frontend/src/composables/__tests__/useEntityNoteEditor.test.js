@@ -5,12 +5,12 @@ import { ref, nextTick } from 'vue'
 
 vi.mock('../../services/entity', () => ({
   entityService: {
-    updateEntity: vi.fn()
-  }
+    updateEntity: vi.fn(),
+  },
 }))
 
 vi.mock('../useBaseNoteEditor', () => ({
-  useBaseNoteEditor: vi.fn()
+  useBaseNoteEditor: vi.fn(),
 }))
 
 describe('useEntityNoteEditor', () => {
@@ -31,9 +31,9 @@ describe('useEntityNoteEditor', () => {
     mockEditor = {
       getHTML: vi.fn().mockReturnValue('<p>Test content</p>'),
       commands: {
-        setContent: vi.fn()
+        setContent: vi.fn(),
       },
-      setEditable: vi.fn()
+      setEditable: vi.fn(),
     }
 
     mockBaseReturn = {
@@ -45,7 +45,7 @@ describe('useEntityNoteEditor', () => {
       formatLastSaved: { value: '' },
       updateContent: vi.fn(),
       cleanup: vi.fn(),
-      triggerSave: vi.fn()
+      triggerSave: vi.fn(),
     }
 
     mockUseBaseNoteEditor.mockReturnValue(mockBaseReturn)
@@ -55,16 +55,16 @@ describe('useEntityNoteEditor', () => {
       entity_type: 'person',
       data: {
         name: 'John Doe',
-        notes: '<p>Initial entity notes</p>'
-      }
+        notes: '<p>Initial entity notes</p>',
+      },
     })
 
     caseId = ref(123)
     isEditing = ref(true)
     formData = ref({
       data: {
-        notes: ''
-      }
+        notes: '',
+      },
     })
     emit = vi.fn()
 
@@ -73,8 +73,8 @@ describe('useEntityNoteEditor', () => {
       entity_type: 'person',
       data: {
         name: 'John Doe',
-        notes: '<p>Updated notes</p>'
-      }
+        notes: '<p>Updated notes</p>',
+      },
     })
   })
 
@@ -93,7 +93,7 @@ describe('useEntityNoteEditor', () => {
       placeholder: 'Write your entity notes here... Use / for commands.',
       editable: true,
       onUpdate: expect.any(Function),
-      saveDelay: 5000
+      saveDelay: 5000,
     })
   })
 
@@ -167,15 +167,15 @@ describe('useEntityNoteEditor', () => {
       entity_type: 'person',
       data: {
         name: 'John Doe',
-        notes: content
-      }
+        notes: content,
+      },
     })
     expect(emit).toHaveBeenCalledWith(
       'edit',
       expect.objectContaining({
         id: 456,
-        entity_type: 'person'
-      })
+        entity_type: 'person',
+      }),
     )
   })
 

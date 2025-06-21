@@ -4,67 +4,67 @@ import { useAuthStore } from '../stores/auth'
 const routes = [
   {
     path: '/',
-    redirect: '/cases'
+    redirect: '/cases',
   },
   {
     path: '/login',
     name: 'Login',
     component: () => import('../views/Login.vue'),
-    meta: { requiresAuth: false }
+    meta: { requiresAuth: false },
   },
   {
     path: '/register',
     name: 'Register',
     component: () => import('../views/Register.vue'),
-    meta: { requiresAuth: false }
+    meta: { requiresAuth: false },
   },
   {
     path: '/cases',
     name: 'Cases',
     component: () => import('../views/MainDashboard.vue'),
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true },
   },
   {
     path: '/clients',
     name: 'Clients',
     component: () => import('../views/ClientsDashboard.vue'),
-    meta: { requiresAuth: true, requiresAdmin: true }
+    meta: { requiresAuth: true, requiresAdmin: true },
   },
   {
     path: '/plugins',
     name: 'Plugins',
     component: () => import('../views/PluginsDashboard.vue'),
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true },
   },
   {
     path: '/case/:id',
     name: 'CaseDetails',
     component: () => import('../views/CaseDashboard.vue'),
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true },
   },
   {
     path: '/settings',
     name: 'Settings',
     component: () => import('../views/Settings.vue'),
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true },
   },
   {
     path: '/strixy',
     name: 'StrixyChat',
     component: () => import('../views/StrixyChat.vue'),
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true },
   },
   {
     path: '/admin',
     name: 'Admin',
     component: () => import('../views/AdminDashboard.vue'),
-    meta: { requiresAuth: true, requiresAdmin: true }
-  }
+    meta: { requiresAuth: true, requiresAdmin: true },
+  },
 ]
 
 const router = createRouter({
   history: createWebHistory(),
-  routes
+  routes,
 })
 
 // Listen for unauthorized API responses and redirect to login

@@ -1,4 +1,4 @@
-export function useEntityValidation () {
+export function useEntityValidation() {
   const domainRule = (value) => {
     if (!value) return 'Domain is required'
     const domainPattern = /^[a-zA-Z0-9][a-zA-Z0-9-_]*\.{1}[a-zA-Z]{2,}$/
@@ -34,6 +34,6 @@ export function useEntityValidation () {
   return {
     domainRule,
     ipRule,
-    isFormValid
+    isFormValid,
   }
 }

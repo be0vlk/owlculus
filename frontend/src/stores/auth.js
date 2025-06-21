@@ -39,7 +39,7 @@ export const useAuthStore = defineStore('auth', () => {
   const initPromise = ref(null)
 
   // Initialize user data if already authenticated
-  async function init () {
+  async function init() {
     // If already initialized, return immediately
     if (isInitialized.value) {
       return
@@ -78,14 +78,14 @@ export const useAuthStore = defineStore('auth', () => {
         user: user.value,
         isAuthenticated: isAuthenticated.value,
         isInitialized: isInitialized.value,
-        error: error.value
+        error: error.value,
       })
     })()
 
     return initPromise.value
   }
 
-  async function login (username, password) {
+  async function login(username, password) {
     try {
       error.value = null
       const data = await authService.login(username, password)
@@ -97,7 +97,7 @@ export const useAuthStore = defineStore('auth', () => {
         user: user.value,
         isAuthenticated: isAuthenticated.value,
         isInitialized: isInitialized.value,
-        error: error.value
+        error: error.value,
       })
 
       return data
@@ -107,7 +107,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function logout () {
+  async function logout() {
     authService.logout()
     user.value = null
     isAuthenticated.value = false
@@ -126,7 +126,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function changePassword (passwordData) {
+  async function changePassword(passwordData) {
     try {
       await api.put('/api/users/me/password', passwordData)
     } catch (err) {
@@ -136,7 +136,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   // Helper function to check if user is admin
-  function requiresAdmin () {
+  function requiresAdmin() {
     return user.value?.role === 'Admin'
   }
 
@@ -152,6 +152,6 @@ export const useAuthStore = defineStore('auth', () => {
     isInitialized,
     initPromise,
     requiresAdmin,
-    changePassword
+    changePassword,
   }
 })

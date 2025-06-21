@@ -7,7 +7,7 @@ const commonFields = {
       type: 'text',
       parentField: 'address',
       gridCols: 2,
-      hasSource: true
+      hasSource: true,
     },
     { id: 'city', label: 'City', type: 'text', parentField: 'address', hasSource: true },
     { id: 'state', label: 'State', type: 'text', parentField: 'address', hasSource: true },
@@ -17,8 +17,8 @@ const commonFields = {
       label: 'Postal Code',
       type: 'text',
       parentField: 'address',
-      hasSource: true
-    }
+      hasSource: true,
+    },
   ],
   socialMedia: [
     { id: 'bluesky', label: 'Bluesky', type: 'url', hasSource: true },
@@ -32,8 +32,8 @@ const commonFields = {
     { id: 'twitch', label: 'Twitch', type: 'url', hasSource: true },
     { id: 'x', label: 'X', type: 'url', hasSource: true },
     { id: 'youtube', label: 'YouTube', type: 'url', hasSource: true },
-    { id: 'other', label: 'Other', type: 'text', hasSource: true }
-  ]
+    { id: 'other', label: 'Other', type: 'text', hasSource: true },
+  ],
 }
 
 export const entitySchemas = {
@@ -48,13 +48,13 @@ export const entitySchemas = {
         { id: 'phone', label: 'Phone', type: 'tel', hasSource: true },
         { id: 'employer', label: 'Employer', type: 'text', hasSource: true },
         { id: 'nationality', label: 'Nationality', type: 'text', hasSource: true },
-        ...commonFields.address
-      ]
+        ...commonFields.address,
+      ],
     },
     socialMedia: {
       title: 'Social Media',
       fields: commonFields.socialMedia,
-      parentField: 'social_media'
+      parentField: 'social_media',
     },
     associates: {
       title: 'Associates',
@@ -66,15 +66,15 @@ export const entitySchemas = {
         { id: 'mother', label: 'Mother', type: 'text', hasSource: true },
         { id: 'partner/spouse', label: 'Partner/Spouse', type: 'text', hasSource: true },
         { id: 'siblings', label: 'Siblings', type: 'text', hasSource: true },
-        { id: 'other', label: 'Other', type: 'text', hasSource: true }
+        { id: 'other', label: 'Other', type: 'text', hasSource: true },
       ],
-      parentField: 'associates'
+      parentField: 'associates',
     },
     notes: {
       title: 'Notes',
       fields: [],
-      isNoteEditor: true
-    }
+      isNoteEditor: true,
+    },
   },
   company: {
     basicInfo: {
@@ -86,11 +86,11 @@ export const entitySchemas = {
           label: 'Website',
           type: 'url',
           placeholder: 'example.com',
-          hasSource: true
+          hasSource: true,
         },
         { id: 'phone', label: 'Phone', type: 'tel', hasSource: true },
-        ...commonFields.address
-      ]
+        ...commonFields.address,
+      ],
     },
     executives: {
       title: 'Executives',
@@ -100,9 +100,9 @@ export const entitySchemas = {
         { id: 'cto', label: 'CTO', type: 'text', hasSource: true },
         { id: 'cmo', label: 'CMO', type: 'text', hasSource: true },
         { id: 'coo', label: 'COO', type: 'text', hasSource: true },
-        { id: 'other', label: 'Other', type: 'text', hasSource: true }
+        { id: 'other', label: 'Other', type: 'text', hasSource: true },
       ],
-      parentField: 'executives'
+      parentField: 'executives',
     },
     affiliates: {
       title: 'Affiliates',
@@ -111,23 +111,23 @@ export const entitySchemas = {
           id: 'affiliated_companies',
           label: 'Affiliated Companies',
           type: 'text',
-          hasSource: true
+          hasSource: true,
         },
         { id: 'subsidiaries', label: 'Subsidiaries', type: 'text', hasSource: true },
-        { id: 'parent_company', label: 'Parent Company', type: 'text', hasSource: true }
+        { id: 'parent_company', label: 'Parent Company', type: 'text', hasSource: true },
       ],
-      parentField: 'affiliates'
+      parentField: 'affiliates',
     },
     socialMedia: {
       title: 'Social Media',
       fields: commonFields.socialMedia,
-      parentField: 'social_media'
+      parentField: 'social_media',
     },
     notes: {
       title: 'Notes',
       fields: [],
-      isNoteEditor: true
-    }
+      isNoteEditor: true,
+    },
   },
   domain: {
     basicInfo: {
@@ -139,16 +139,16 @@ export const entitySchemas = {
           type: 'text',
           required: true,
           placeholder: 'example.com',
-          hasSource: true
+          hasSource: true,
         },
         {
           id: 'description',
           label: 'Description',
           type: 'textarea',
           placeholder: 'Add any notes or context about this domain',
-          hasSource: true
-        }
-      ]
+          hasSource: true,
+        },
+      ],
     },
     subdomains: {
       title: 'Subdomains',
@@ -158,15 +158,15 @@ export const entitySchemas = {
           label: 'Subdomains',
           type: 'array',
           isArray: true,
-          arrayFields: ['subdomain', 'ip', 'resolved', 'source']
-        }
-      ]
+          arrayFields: ['subdomain', 'ip', 'resolved', 'source'],
+        },
+      ],
     },
     notes: {
       title: 'Notes',
       fields: [],
-      isNoteEditor: true
-    }
+      isNoteEditor: true,
+    },
   },
   ip_address: {
     basicInfo: {
@@ -178,22 +178,22 @@ export const entitySchemas = {
           type: 'text',
           required: true,
           placeholder: '192.168.1.1',
-          hasSource: true
+          hasSource: true,
         },
         {
           id: 'description',
           label: 'Description',
           type: 'textarea',
           placeholder: 'Add any notes or context about this IP address',
-          hasSource: true
-        }
-      ]
+          hasSource: true,
+        },
+      ],
     },
     notes: {
       title: 'Notes',
       fields: [],
-      isNoteEditor: true
-    }
+      isNoteEditor: true,
+    },
   },
   network_assets: {
     basicInfo: {
@@ -205,15 +205,15 @@ export const entitySchemas = {
           type: 'text',
           isArray: true,
           placeholder: 'Enter subdomain and press Enter',
-          hasSource: true
-        }
-      ]
+          hasSource: true,
+        },
+      ],
     },
     notes: {
       title: 'Notes',
       fields: [],
-      isNoteEditor: true
-    }
+      isNoteEditor: true,
+    },
   },
   vehicle: {
     basicInfo: {
@@ -227,13 +227,13 @@ export const entitySchemas = {
         { id: 'color', label: 'Color', type: 'text', hasSource: true },
         { id: 'owner', label: 'Owner', type: 'text', hasSource: true },
         { id: 'registration_state', label: 'Registration State', type: 'text', hasSource: true },
-        { id: 'description', label: 'Description', type: 'textarea', hasSource: true }
-      ]
+        { id: 'description', label: 'Description', type: 'textarea', hasSource: true },
+      ],
     },
     notes: {
       title: 'Notes',
       fields: [],
-      isNoteEditor: true
-    }
-  }
+      isNoteEditor: true,
+    },
+  },
 }

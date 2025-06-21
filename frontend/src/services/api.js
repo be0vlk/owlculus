@@ -4,8 +4,8 @@ import { authService } from './auth'
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
   headers: {
-    'Content-Type': 'application/json'
-  }
+    'Content-Type': 'application/json',
+  },
 })
 
 // Add a request interceptor to include the token in requests
@@ -20,7 +20,7 @@ api.interceptors.request.use(
   },
   (error) => {
     return Promise.reject(error)
-  }
+  },
 )
 
 // Add a response interceptor to handle authentication errors
@@ -34,8 +34,8 @@ api.interceptors.response.use(
       // Show user notification about session expiration
       window.dispatchEvent(
         new CustomEvent('api:sessionExpired', {
-          detail: { message: 'Your session has expired. Please log in again.' }
-        })
+          detail: { message: 'Your session has expired. Please log in again.' },
+        }),
       )
 
       // Emit a global event for 401 errors instead of directly redirecting
@@ -43,7 +43,7 @@ api.interceptors.response.use(
       window.dispatchEvent(new CustomEvent('api:unauthorized'))
     }
     return Promise.reject(error)
-  }
+  },
 )
 
 export default api

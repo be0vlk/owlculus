@@ -4,12 +4,12 @@ import { caseService } from '../../services/case'
 
 vi.mock('../../services/case', () => ({
   caseService: {
-    updateCase: vi.fn()
-  }
+    updateCase: vi.fn(),
+  },
 }))
 
 vi.mock('../useBaseNoteEditor', () => ({
-  useBaseNoteEditor: vi.fn()
+  useBaseNoteEditor: vi.fn(),
 }))
 
 describe('useCaseNoteSave', () => {
@@ -27,9 +27,9 @@ describe('useCaseNoteSave', () => {
     mockEditor = {
       getHTML: vi.fn().mockReturnValue('<p>Test content</p>'),
       commands: {
-        setContent: vi.fn()
+        setContent: vi.fn(),
       },
-      setEditable: vi.fn()
+      setEditable: vi.fn(),
     }
 
     mockBaseReturn = {
@@ -41,14 +41,14 @@ describe('useCaseNoteSave', () => {
       formatLastSaved: { value: '' },
       updateContent: vi.fn(),
       cleanup: vi.fn(),
-      triggerSave: vi.fn()
+      triggerSave: vi.fn(),
     }
 
     mockUseBaseNoteEditor.mockReturnValue(mockBaseReturn)
 
     props = {
       modelValue: '<p>Initial content</p>',
-      caseId: 123
+      caseId: 123,
     }
 
     emit = vi.fn()
@@ -68,7 +68,7 @@ describe('useCaseNoteSave', () => {
         placeholder: 'Write your case notes here... Use / for commands.',
         editable: true,
         onUpdate: expect.any(Function),
-        saveDelay: 1000
+        saveDelay: 1000,
       })
     })
 
@@ -95,7 +95,7 @@ describe('useCaseNoteSave', () => {
       await saveNotes()
 
       expect(caseService.updateCase).toHaveBeenCalledWith(123, {
-        notes: '<p>Test content</p>'
+        notes: '<p>Test content</p>',
       })
     })
 
@@ -138,7 +138,7 @@ describe('useCaseNoteSave', () => {
         placeholder: 'Notes (read-only)',
         editable: false,
         onUpdate: expect.any(Function),
-        saveDelay: null
+        saveDelay: null,
       })
     })
 

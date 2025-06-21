@@ -7,10 +7,10 @@
  * @param {boolean} immediate If true, trigger the function on the leading edge instead of the trailing
  * @returns {Function} The debounced function
  */
-export function debounce (func, wait, immediate = false) {
+export function debounce(func, wait, immediate = false) {
   let timeout
 
-  return function executedFunction (...args) {
+  return function executedFunction(...args) {
     const later = () => {
       timeout = null
       if (!immediate) func(...args)
@@ -33,10 +33,10 @@ export function debounce (func, wait, immediate = false) {
  * @param {number} delay The minimum time between executions in milliseconds
  * @returns {Function} The throttled function
  */
-export function throttle (func, delay) {
+export function throttle(func, delay) {
   let lastCall = 0
 
-  return function executedFunction (...args) {
+  return function executedFunction(...args) {
     const now = Date.now()
 
     if (now - lastCall >= delay) {

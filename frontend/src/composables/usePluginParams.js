@@ -1,6 +1,6 @@
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 
-export function usePluginParams (initialParams = {}, emit) {
+export function usePluginParams(initialParams = {}, emit) {
   const localParams = ref({ ...initialParams })
 
   const updateParams = () => {
@@ -21,7 +21,7 @@ export function usePluginParams (initialParams = {}, emit) {
     localParams,
     updateParams,
     resetParams,
-    setParam
+    setParam,
   }
 }
 
@@ -34,7 +34,7 @@ export function usePluginParamsAdvanced(props, emit, config = {}) {
     parameterDefaults = {},
     apiKeyRequirements = null,
     onApiKeyCheck = null,
-    customUpdateLogic = null
+    customUpdateLogic = null,
   } = config
 
   // Plugin description from backend
@@ -46,11 +46,11 @@ export function usePluginParamsAdvanced(props, emit, config = {}) {
   const localParams = reactive({
     ...parameterDefaults,
     ...Object.fromEntries(
-      Object.keys(parameterDefaults).map(key => [
-        key, 
-        props.modelValue[key] ?? parameterDefaults[key]
-      ])
-    )
+      Object.keys(parameterDefaults).map((key) => [
+        key,
+        props.modelValue[key] ?? parameterDefaults[key],
+      ]),
+    ),
   })
 
   // API key state (if plugin requires API keys)
@@ -61,28 +61,32 @@ export function usePluginParamsAdvanced(props, emit, config = {}) {
   const updateParams = () => {
     const updatedValue = {
       ...props.modelValue,
-      ...localParams
+      ...localParams,
     }
-    
+
     // Allow custom update logic if provided
     if (customUpdateLogic) {
       customUpdateLogic(updatedValue, localParams)
     }
-    
+
     emit('update:modelValue', updatedValue)
   }
 
   // Watch for external changes to modelValue
-  watch(() => props.modelValue, (newValue) => {
-    Object.assign(localParams, {
-      ...Object.fromEntries(
-        Object.keys(parameterDefaults).map(key => [
-          key,
-          newValue[key] ?? parameterDefaults[key]
-        ])
-      )
-    })
-  }, { deep: true })
+  watch(
+    () => props.modelValue,
+    (newValue) => {
+      Object.assign(localParams, {
+        ...Object.fromEntries(
+          Object.keys(parameterDefaults).map((key) => [
+            key,
+            newValue[key] ?? parameterDefaults[key],
+          ]),
+        ),
+      })
+    },
+    { deep: true },
+  )
 
   // API key checking (if configured)
   const checkApiKeys = async () => {
@@ -108,19 +112,19 @@ export function usePluginParamsAdvanced(props, emit, config = {}) {
   return {
     // Computed
     pluginDescription,
-    
+
     // State
     localParams,
     missingApiKeys,
     apiKeyError,
-    
+
     // Methods
     updateParams,
-    checkApiKeys
+    checkApiKeys,
   }
 }
 
-export function usePluginValidation () {
+export function usePluginValidation() {
   const emailRule = (value) => {
     if (!value) return 'Email is required'
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -143,7 +147,7 @@ export function usePluginValidation () {
   return {
     emailRule,
     domainRule,
-    ipRule
+    ipRule,
   }
 }
 
@@ -153,40 +157,40 @@ export function usePluginValidation () {
 export const pluginParamConfigs = {
   // Domain-based plugins
   domain: (defaultDomain = '') => ({
-    domain: defaultDomain
+    domain: defaultDomain,
   }),
-  
+
   // Domain with concurrency
   domainWithConcurrency: (defaultDomain = '', defaultConcurrency = 5) => ({
     domain: defaultDomain,
-    concurrency: defaultConcurrency
+    concurrency: defaultConcurrency,
   }),
-  
+
   // Domain with SecurityTrails option
   domainWithSecurityTrails: (defaultDomain = '', defaultConcurrency = 5) => ({
     domain: defaultDomain,
     concurrency: defaultConcurrency,
-    use_securitytrails: false
+    use_securitytrails: false,
   }),
-  
+
   // Email-based plugins
   email: (defaultEmail = '') => ({
-    email: defaultEmail
+    email: defaultEmail,
   }),
-  
+
   // IP-based plugins
   ip: (defaultIp = '') => ({
-    ip_address: defaultIp
+    ip_address: defaultIp,
   }),
-  
+
   // Search-based plugins
   searchQuery: (defaultQuery = '') => ({
-    query: defaultQuery
+    query: defaultQuery,
   }),
-  
+
   // Multiple search types
   multiSearch: (searchTypes = [], defaultType = '') => ({
     search_type: defaultType,
-    query: ''
-  })
+    query: '',
+  }),
 }

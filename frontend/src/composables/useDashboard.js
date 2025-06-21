@@ -11,10 +11,10 @@ export const columns = [
   { key: 'client_name', label: 'Client' },
   { key: 'status', label: 'Status' },
   { key: 'created_at', label: 'Created' },
-  { key: 'users', label: 'Assigned To' }
+  { key: 'users', label: 'Assigned To' },
 ]
 
-export function useDashboard () {
+export function useDashboard() {
   const router = useRouter()
   const authStore = useAuthStore()
 
@@ -146,6 +146,6 @@ export function useDashboard () {
     toggleClosedCases,
 
     // Computed
-    sortedAndFilteredCases
+    sortedAndFilteredCases,
   }
 }

@@ -3,7 +3,7 @@
  * @param {string} url - The URL to format
  * @returns {string} - The URL with proper protocol
  */
-export function ensureProtocol (url) {
+export function ensureProtocol(url) {
   if (!url || typeof url !== 'string') {
     return url
   }
@@ -27,7 +27,7 @@ export function ensureProtocol (url) {
  * @param {string} url - The string to validate
  * @returns {boolean} - True if it looks like a URL
  */
-export function isValidUrl (url) {
+export function isValidUrl(url) {
   if (!url || typeof url !== 'string') {
     return false
   }

@@ -1,12 +1,12 @@
 import api from './api'
 
 export const evidenceService = {
-  async getEvidenceForCase (caseId) {
+  async getEvidenceForCase(caseId) {
     const response = await api.get(`/api/evidence/case/${caseId}`)
     return response.data
   },
 
-  async createEvidence ({ description, category, caseId, files, folderPath, parentFolderId }) {
+  async createEvidence({ description, category, caseId, files, folderPath, parentFolderId }) {
     const formData = new FormData()
     files.forEach((file) => {
       formData.append('files', file)
@@ -15,7 +15,7 @@ export const evidenceService = {
     const queryParams = new URLSearchParams({
       title: 'Multiple Files', // This will be overridden by filenames in backend
       case_id: caseId,
-      category
+      category,
     })
     if (description) {
       formData.append('description', description)
@@ -29,83 +29,83 @@ export const evidenceService = {
 
     const response = await api.post(`/api/evidence?${queryParams}`, formData, {
       headers: {
-        'Content-Type': 'multipart/form-data'
-      }
+        'Content-Type': 'multipart/form-data',
+      },
     })
     return response.data
   },
 
-  async downloadEvidence (evidenceId) {
+  async downloadEvidence(evidenceId) {
     const response = await api.get(`/api/evidence/${evidenceId}/download`, {
-      responseType: 'blob'
+      responseType: 'blob',
     })
     return response.data
   },
 
-  async deleteEvidence (evidenceId) {
+  async deleteEvidence(evidenceId) {
     await api.delete(`/api/evidence/${evidenceId}`)
   },
 
-  async getFolderTree (caseId) {
+  async getFolderTree(caseId) {
     const response = await api.get(`/api/evidence/case/${caseId}/folder-tree`)
     return response.data
   },
 
-  async createFolder ({ caseId, title, description, parentFolderId }) {
+  async createFolder({ caseId, title, description, parentFolderId }) {
     const response = await api.post('/api/evidence/folders', {
       case_id: caseId,
       title,
       description,
-      parent_folder_id: parentFolderId
+      parent_folder_id: parentFolderId,
     })
     return response.data
   },
 
-  async updateFolder (folderId, { title, description, parentFolderId }) {
+  async updateFolder(folderId, { title, description, parentFolderId }) {
     const response = await api.put(`/api/evidence/folders/${folderId}`, {
       title,
       description,
-      parent_folder_id: parentFolderId
+      parent_folder_id: parentFolderId,
     })
     return response.data
   },
 
-  async deleteFolder (folderId) {
+  async deleteFolder(folderId) {
     await api.delete(`/api/evidence/folders/${folderId}`)
   },
 
-  async updateEvidence (evidenceId, { title, description, category, folderPath, parentFolderId }) {
+  async updateEvidence(evidenceId, { title, description, category, folderPath, parentFolderId }) {
     const response = await api.put(`/api/evidence/${evidenceId}`, {
       title,
       description,
       category,
       folder_path: folderPath,
-      parent_folder_id: parentFolderId
+      parent_folder_id: parentFolderId,
     })
     return response.data
   },
 
-  async extractMetadata (evidenceId) {
+  async extractMetadata(evidenceId) {
     const response = await api.get(`/api/evidence/${evidenceId}/metadata`)
     return response.data
   },
 
-  async getEvidenceContent (evidenceId) {
+  async getEvidenceContent(evidenceId) {
     const response = await api.get(`/api/evidence/${evidenceId}/content`)
     return response.data
   },
 
-  async applyFolderTemplate (caseId, templateName) {
+  async applyFolderTemplate(caseId, templateName) {
     const response = await api.post(`/api/evidence/case/${caseId}/apply-template`, null, {
-      params: { template_name: templateName }
+      params: { template_name: templateName },
     })
     return response.data
   },
 
-  async moveEvidence (evidenceId, targetFolderId) {
+  async moveEvidence(evidenceId, targetFolderId) {
     const response = await api.put(`/api/evidence/${evidenceId}`, {
-      parent_folder_id: targetFolderId
+      parent_folder_id: targetFolderId,
     })
     return response.data
-  }
+  },
 }

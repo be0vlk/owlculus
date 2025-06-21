@@ -374,10 +374,11 @@ class TestShodanPlugin:
         self, mock_get_db, plugin, mock_db_session, mock_config_service
     ):
         """Test that limit parameter is properly clamped"""
+
         # Setup mocks - create a new iterator for each call
         def get_db_iter():
             return iter([mock_db_session])
-        
+
         mock_get_db.side_effect = get_db_iter
         mock_config_service.get_api_key.return_value = None  # Will fail early
 
@@ -394,7 +395,7 @@ class TestShodanPlugin:
             # Both should fail at API key check, meaning limit clamping worked
             assert len(results) == 1
             assert results[0]["type"] == "error"
-            
+
             # Test limit too low
             params = {"query": "test", "limit": -5}
             results = []
@@ -558,7 +559,6 @@ class TestShodanPlugin:
             # Check that sources field is included
             assert "sources" in ip_data
             assert ip_data["sources"] == {"ip_address": "Shodan Search"}
-
 
     @pytest.mark.asyncio
     @patch("app.plugins.shodan_plugin.get_db")

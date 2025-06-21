@@ -1,12 +1,11 @@
 import { ref, watch } from 'vue'
 
-export function useEntityAssociates (entity) {
+export function useEntityAssociates(entity) {
   const associateEntityMap = ref(new Map())
 
   const getAssociateEntities = (fieldId) => {
     return associateEntityMap.value.get(fieldId) || []
   }
-
 
   const processAssociates = async () => {
     if (!entity.value || entity.value.entity_type !== 'person') {
@@ -39,6 +38,6 @@ export function useEntityAssociates (entity) {
     associateEntityMap,
     getAssociateEntities,
     processAssociates,
-    loadAssociateEntities
+    loadAssociateEntities,
   }
 }

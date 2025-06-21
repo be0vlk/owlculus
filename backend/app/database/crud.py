@@ -401,11 +401,11 @@ async def check_entity_duplicates(
                     status_code=400,
                     detail="Network assets with overlapping domains, IP addresses, or subdomains already exist in this case",
                 )
-    
+
     elif entity_type == "vehicle":
         vin = entity.data.get("vin")
         license_plate = entity.data.get("license_plate")
-        
+
         if vin:
             query = select(models.Entity).where(
                 models.Entity.case_id == case_id,
@@ -414,13 +414,13 @@ async def check_entity_duplicates(
             )
             if entity_id:
                 query = query.where(models.Entity.id != entity_id)
-            
+
             if db.exec(query).first():
                 raise HTTPException(
                     status_code=400,
                     detail=f"A vehicle with VIN '{vin}' already exists in this case",
                 )
-        
+
         if license_plate:
             query = select(models.Entity).where(
                 models.Entity.case_id == case_id,
@@ -429,7 +429,7 @@ async def check_entity_duplicates(
             )
             if entity_id:
                 query = query.where(models.Entity.id != entity_id)
-            
+
             if db.exec(query).first():
                 raise HTTPException(
                     status_code=400,

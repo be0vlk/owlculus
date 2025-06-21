@@ -1,33 +1,33 @@
 import api from './api'
 
 export const inviteService = {
-  async getInvites () {
+  async getInvites() {
     const response = await api.get('/api/invites')
     return response.data
   },
 
-  async createInvite (inviteData) {
+  async createInvite(inviteData) {
     const response = await api.post('/api/invites', inviteData)
     return response.data
   },
 
-  async deleteInvite (id) {
+  async deleteInvite(id) {
     const response = await api.delete(`/api/invites/${id}`)
     return response.data
   },
 
-  async validateInvite (token) {
+  async validateInvite(token) {
     const response = await api.post('/api/invites/validate', { token })
     return response.data
   },
 
-  async registerUserWithInvite (registrationData) {
+  async registerUserWithInvite(registrationData) {
     const response = await api.post('/api/invites/register', registrationData)
     return response.data
   },
 
-  async cleanupExpiredInvites () {
+  async cleanupExpiredInvites() {
     const response = await api.post('/api/invites/cleanup')
     return response.data
-  }
+  },
 }

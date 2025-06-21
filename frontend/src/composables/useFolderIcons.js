@@ -2,12 +2,12 @@
  * Composable for managing folder icon colors consistently across the application
  * Uses Vuetify theme colors for consistency
  */
-export function useFolderIcons () {
+export function useFolderIcons() {
   // Centralized folder icon colors using Vuetify theme colors
   const folderColors = {
     primary: 'purple-darken-1',
     secondary: 'purple-lighten-1',
-    light: 'purple-lighten-3'
+    light: 'purple-lighten-3',
   }
 
   /**
@@ -36,6 +36,6 @@ export function useFolderIcons () {
   return {
     folderColors,
     getFolderColor,
-    getFolderIcon
+    getFolderIcon,
   }
 }

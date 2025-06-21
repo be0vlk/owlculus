@@ -1,5 +1,5 @@
 // utils/cleanFormData.js
-export function cleanFormData (data) {
+export function cleanFormData(data) {
   const cleanedData = { ...data }
   for (const key in cleanedData) {
     if (cleanedData[key] === '' || cleanedData[key] === null) {

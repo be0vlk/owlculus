@@ -3,7 +3,7 @@ import { useBaseNoteEditor } from '../useBaseNoteEditor'
 import { useEditor } from '@tiptap/vue-3'
 
 vi.mock('@tiptap/vue-3', () => ({
-  useEditor: vi.fn()
+  useEditor: vi.fn(),
 }))
 
 describe('useBaseNoteEditor', () => {
@@ -15,7 +15,7 @@ describe('useBaseNoteEditor', () => {
 
     mockEditor = {
       commands: {
-        setContent: vi.fn()
+        setContent: vi.fn(),
       },
       getHTML: vi.fn().mockReturnValue('<p>Test content</p>'),
       chain: vi.fn().mockReturnThis(),
@@ -32,7 +32,7 @@ describe('useBaseNoteEditor', () => {
       run: vi.fn().mockReturnThis(),
       isActive: vi.fn().mockReturnValue(false),
       destroy: vi.fn(),
-      setEditable: vi.fn()
+      setEditable: vi.fn(),
     }
 
     useEditor.mockImplementation((config) => {
@@ -71,9 +71,7 @@ describe('useBaseNoteEditor', () => {
     useBaseNoteEditor({ placeholder: customPlaceholder })
 
     const editorConfig = useEditor.mock.calls[0][0]
-    const placeholderExtension = editorConfig.extensions.find(
-      (ext) => ext.name === 'placeholder'
-    )
+    const placeholderExtension = editorConfig.extensions.find((ext) => ext.name === 'placeholder')
     expect(placeholderExtension).toBeDefined()
   })
 

@@ -7,20 +7,20 @@ const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 const authApi = axios.create({
   baseURL,
   headers: {
-    'Content-Type': 'application/json'
-  }
+    'Content-Type': 'application/json',
+  },
 })
 
 export const authService = {
-  async login (username, password) {
+  async login(username, password) {
     const formData = new FormData()
     formData.append('username', username)
     formData.append('password', password)
 
     const response = await authApi.post('/api/auth/login', formData, {
       headers: {
-        'Content-Type': 'multipart/form-data'
-      }
+        'Content-Type': 'multipart/form-data',
+      },
     })
 
     if (response.data.access_token) {
@@ -35,7 +35,7 @@ export const authService = {
     return response.data
   },
 
-  async getCurrentUser () {
+  async getCurrentUser() {
     try {
       const token = this.getCurrentToken()
       const tokenType = this.getTokenType()
@@ -46,8 +46,8 @@ export const authService = {
 
       const response = await authApi.get('/api/users/me', {
         headers: {
-          Authorization: `${tokenType} ${token}`
-        }
+          Authorization: `${tokenType} ${token}`,
+        },
       })
       return response.data
     } catch (error) {
@@ -58,7 +58,7 @@ export const authService = {
     }
   },
 
-  logout () {
+  logout() {
     try {
       localStorage.removeItem('access_token')
       localStorage.removeItem('token_type')
@@ -67,7 +67,7 @@ export const authService = {
     }
   },
 
-  getCurrentToken () {
+  getCurrentToken() {
     try {
       return localStorage.getItem('access_token')
     } catch (error) {
@@ -76,7 +76,7 @@ export const authService = {
     }
   },
 
-  getTokenType () {
+  getTokenType() {
     try {
       return localStorage.getItem('token_type') || 'bearer'
     } catch (error) {
@@ -85,12 +85,12 @@ export const authService = {
     }
   },
 
-  isAuthenticated () {
+  isAuthenticated() {
     try {
       return !!localStorage.getItem('access_token')
     } catch (error) {
       console.error('Failed to check authentication status:', error)
       return false
     }
-  }
+  },
 }

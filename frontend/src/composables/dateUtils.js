@@ -3,7 +3,7 @@
 // For example change en-US to en-GB and that's all you need to do!
 // Note: Times are always displayed in UTC to ensure consistency across timezones
 
-export function formatDate (dateString) {
+export function formatDate(dateString) {
   if (!dateString) return ''
   // Parse the datetime string directly - backend provides ISO format with timezone
   const date = new Date(dateString)
@@ -14,13 +14,13 @@ export function formatDate (dateString) {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
-    timeZone: 'UTC'
+    timeZone: 'UTC',
   })
     .format(date)
     .replace(',', '')
 }
 
-export function formatDateOnly (dateString) {
+export function formatDateOnly(dateString) {
   if (!dateString) return ''
   // Parse the datetime string directly - backend provides ISO format with timezone
   const date = new Date(dateString)
@@ -28,6 +28,6 @@ export function formatDateOnly (dateString) {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-    timeZone: 'UTC'
+    timeZone: 'UTC',
   }).format(date)
 }

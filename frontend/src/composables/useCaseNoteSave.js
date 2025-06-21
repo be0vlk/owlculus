@@ -2,7 +2,7 @@ import { watch } from 'vue'
 import { caseService } from '../services/case'
 import { useBaseNoteEditor } from './useBaseNoteEditor'
 
-export function useCaseNoteSave (props, emit, options = {}) {
+export function useCaseNoteSave(props, emit, options = {}) {
   const { saveMode = 'auto', saveDelay = 1000 } = options
 
   const saveNotes = async () => {
@@ -32,12 +32,13 @@ export function useCaseNoteSave (props, emit, options = {}) {
     formatLastSaved,
     updateContent,
     cleanup,
-    triggerSave
+    triggerSave,
   } = useBaseNoteEditor({
     initialContent: props.modelValue || '',
-    placeholder: props.isEditing !== false
-      ? 'Write your case notes here... Use / for commands.'
-      : 'Notes (read-only)',
+    placeholder:
+      props.isEditing !== false
+        ? 'Write your case notes here... Use / for commands.'
+        : 'Notes (read-only)',
     editable: props.isEditing !== false,
     onUpdate: (editor) => {
       const content = editor.getHTML()
@@ -48,7 +49,7 @@ export function useCaseNoteSave (props, emit, options = {}) {
         }
       }
     },
-    saveDelay: saveMode === 'auto' ? saveDelay : null
+    saveDelay: saveMode === 'auto' ? saveDelay : null,
   })
 
   // Watch for prop changes
@@ -56,7 +57,7 @@ export function useCaseNoteSave (props, emit, options = {}) {
     () => props.modelValue,
     (newVal) => {
       updateContent(newVal)
-    }
+    },
   )
 
   // Watch for editing state changes and update editor editability
@@ -67,7 +68,7 @@ export function useCaseNoteSave (props, emit, options = {}) {
         if (editor.value) {
           editor.value.setEditable(newEditingState)
         }
-      }
+      },
     )
   }
 
@@ -87,6 +88,6 @@ export function useCaseNoteSave (props, emit, options = {}) {
     lastSavedTime,
     formatLastSaved,
     updateContent,
-    cleanup: enhancedCleanup
+    cleanup: enhancedCleanup,
   }
 }

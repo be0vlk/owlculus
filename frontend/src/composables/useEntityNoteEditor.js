@@ -2,7 +2,7 @@ import { watch } from 'vue'
 import { entityService } from '../services/entity'
 import { useBaseNoteEditor } from './useBaseNoteEditor'
 
-export function useEntityNoteEditor (entity, caseId, isEditing, formData, emit) {
+export function useEntityNoteEditor(entity, caseId, isEditing, formData, emit) {
   const saveNotes = async () => {
     if (!editor.value || !entity.value || !isEditing.value) return
 
@@ -16,8 +16,8 @@ export function useEntityNoteEditor (entity, caseId, isEditing, formData, emit) 
         entity_type: entity.value.entity_type,
         data: {
           ...entity.value.data,
-          notes: content
-        }
+          notes: content,
+        },
       })
 
       lastSaved.value = content
@@ -42,7 +42,7 @@ export function useEntityNoteEditor (entity, caseId, isEditing, formData, emit) 
     formatLastSaved,
     updateContent,
     cleanup,
-    triggerSave
+    triggerSave,
   } = useBaseNoteEditor({
     initialContent: entity.value?.data?.notes || '',
     placeholder: isEditing.value
@@ -59,7 +59,7 @@ export function useEntityNoteEditor (entity, caseId, isEditing, formData, emit) 
         triggerSave(saveNotes)
       }
     },
-    saveDelay: 5000
+    saveDelay: 5000,
   })
 
   // Watch for entity changes and update editor content
@@ -71,7 +71,7 @@ export function useEntityNoteEditor (entity, caseId, isEditing, formData, emit) 
         lastSaved.value = newNotes || ''
       }
     },
-    { immediate: true }
+    { immediate: true },
   )
 
   // Watch for editing state changes and update editor editability
@@ -88,7 +88,7 @@ export function useEntityNoteEditor (entity, caseId, isEditing, formData, emit) 
         }
         editor.value.setEditable(newEditingState)
       }
-    }
+    },
   )
 
   // Override cleanup to include save
@@ -104,6 +104,6 @@ export function useEntityNoteEditor (entity, caseId, isEditing, formData, emit) 
     formatLastSaved,
     updateContent,
     cleanup: enhancedCleanup,
-    saveNotes
+    saveNotes,
   }
 }

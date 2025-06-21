@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
 
-export function useDragAndDrop () {
+export function useDragAndDrop() {
   // Drag state
   const draggedItem = ref(null)
   const dragOverItem = ref(null)
@@ -74,8 +74,8 @@ export function useDragAndDrop () {
       JSON.stringify({
         id: item.id,
         title: item.title,
-        type: 'evidence-item'
-      })
+        type: 'evidence-item',
+      }),
     )
 
     // Set drag effect
@@ -209,7 +209,7 @@ export function useDragAndDrop () {
     return {
       'evidence-dragging': isDragging.value && draggedItem.value?.id === item.id,
       'evidence-drag-over': activeDropZones.value.has(item.id) && isValidDropTarget.value,
-      'evidence-invalid-drop': activeDropZones.value.has(item.id) && !isValidDropTarget.value
+      'evidence-invalid-drop': activeDropZones.value.has(item.id) && !isValidDropTarget.value,
     }
   }
 
@@ -242,6 +242,6 @@ export function useDragAndDrop () {
     // Computed
     getDragClasses,
     isDraggedItem,
-    isDropTarget
+    isDropTarget,
   }
 }

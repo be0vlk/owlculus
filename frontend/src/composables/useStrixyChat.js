@@ -3,7 +3,7 @@ import { strixyService } from '@/services/strixy'
 import { systemService } from '@/services/system'
 import { useNotifications } from './useNotifications'
 
-export function useStrixyChat () {
+export function useStrixyChat() {
   const messages = ref([])
   const loading = ref(false)
   const currentMessage = ref('')
@@ -14,7 +14,7 @@ export function useStrixyChat () {
     messages.value.push({
       content: message,
       role,
-      timestamp: new Date()
+      timestamp: new Date(),
     })
   }
 
@@ -29,7 +29,7 @@ export function useStrixyChat () {
     try {
       const chatMessages = messages.value.map((msg) => ({
         role: msg.role,
-        content: msg.content
+        content: msg.content,
       }))
 
       const response = await strixyService.sendMessage(chatMessages)
@@ -81,7 +81,7 @@ export function useStrixyChat () {
     if (messages.value.length === 0) {
       addMessage(
         "Hello! I'm Strixy, your Owlculus Toolkit OSINT assistant. How can I help?",
-        'assistant'
+        'assistant',
       )
     }
   }
@@ -100,6 +100,6 @@ export function useStrixyChat () {
     sendMessage,
     initializeChat,
     clearChat,
-    scrollToBottom
+    scrollToBottom,
   }
 }

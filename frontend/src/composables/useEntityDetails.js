@@ -3,7 +3,7 @@ import { entityService } from '../services/entity'
 import { entitySchemas } from './entitySchemas'
 import { cleanFormData } from '../utils/cleanFormData'
 
-export function useEntityDetails (entity, caseId) {
+export function useEntityDetails(entity, caseId) {
   const error = ref('')
   const isEditing = ref(false)
   const updating = ref(false)
@@ -13,8 +13,8 @@ export function useEntityDetails (entity, caseId) {
     data: {
       address: {},
       social_media: {},
-      aliases: []
-    }
+      aliases: [],
+    },
   })
 
   const entitySchema = computed(() => {
@@ -67,13 +67,13 @@ export function useEntityDetails (entity, caseId) {
       associates: entity.value.data.associates || {},
       executives: entity.value.data.executives || {},
       affiliates: entity.value.data.affiliates || {},
-      notes: entity.value.data.notes || ''
+      notes: entity.value.data.notes || '',
     }
 
     const flattenedData = flattenNestedFields(initialData, entitySchema.value)
 
     formData.value = {
-      data: flattenedData
+      data: flattenedData,
     }
     isEditing.value = true
   }
@@ -100,13 +100,13 @@ export function useEntityDetails (entity, caseId) {
           executives: restructuredData.executives || {},
           affiliates: restructuredData.affiliates || {},
           address: restructuredData.address || {},
-          notes: restructuredData.notes || ''
-        }
+          notes: restructuredData.notes || '',
+        },
       }
 
       const updatedEntity = await entityService.updateEntity(caseId.value, entity.value.id, {
         entity_type: entity.value.entity_type,
-        data: submitData.data
+        data: submitData.data,
       })
 
       let createdAssociates = []
@@ -128,28 +128,34 @@ export function useEntityDetails (entity, caseId) {
     () => entity.value,
     (newEntity, oldEntity) => {
       if (newEntity) {
-        // Update all form data when entity changes, not just social_media and aliases
-        const flattenedData = flattenNestedFields({
-          ...newEntity.data,
-          aliases: Array.isArray(newEntity.data.aliases) ? [...newEntity.data.aliases] : [],
-          address: newEntity.data.address || {},
-          social_media: newEntity.data.social_media || {},
-          associates: newEntity.data.associates || {},
-          executives: newEntity.data.executives || {},
-          affiliates: newEntity.data.affiliates || {},
-          notes: newEntity.data.notes || ''
-        }, entitySchema.value)
-        
-        formData.value = {
-          data: flattenedData
+        // Only update form data if we're not currently editing
+        // or if it's a completely different entity
+        if (!isEditing.value || !oldEntity || oldEntity.id !== newEntity.id) {
+          const flattenedData = flattenNestedFields(
+            {
+              ...newEntity.data,
+              aliases: Array.isArray(newEntity.data.aliases) ? [...newEntity.data.aliases] : [],
+              address: newEntity.data.address || {},
+              social_media: newEntity.data.social_media || {},
+              associates: newEntity.data.associates || {},
+              executives: newEntity.data.executives || {},
+              affiliates: newEntity.data.affiliates || {},
+              notes: newEntity.data.notes || '',
+            },
+            entitySchema.value,
+          )
+
+          formData.value = {
+            data: flattenedData,
+          }
         }
-        
+
         // Only reset tab if this is a completely different entity (different ID)
         if (!oldEntity || oldEntity.id !== newEntity.id) {
           activeTab.value = Object.keys(entitySchema.value)[0]
         }
       }
-    }
+    },
   )
 
   return {
@@ -161,6 +167,6 @@ export function useEntityDetails (entity, caseId) {
     entitySchema,
     startEditing,
     cancelEdit,
-    updateEntity
+    updateEntity,
   }
 }

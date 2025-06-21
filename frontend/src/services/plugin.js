@@ -1,15 +1,15 @@
 import api from './api'
 
 export const pluginService = {
-  async listPlugins () {
+  async listPlugins() {
     const response = await api.get('/api/plugins')
     return response.data
   },
 
-  async executePlugin (name, params = {}) {
+  async executePlugin(name, params = {}) {
     const response = await api.post(`/api/plugins/${name}/execute`, params, {
       responseType: 'text',
-      transformResponse: [(data) => data] // Prevent automatic JSON parsing
+      transformResponse: [(data) => data], // Prevent automatic JSON parsing
     })
 
     // Try parsing as a single JSON object first
@@ -33,7 +33,7 @@ export const pluginService = {
 
       return results
     }
-  }
+  },
 }
 
 export default pluginService
