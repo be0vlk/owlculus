@@ -28,6 +28,7 @@
       v-model:items-per-page="itemsPerPage"
       v-model:page="page"
       v-model:sort-by="sortBy"
+      v-model="selected"
       :headers="headers"
       :items="entities"
       :items-length="totalItems"
@@ -38,6 +39,8 @@
       class="elevation-1"
       :items-per-page-options="itemsPerPageOptions"
       :hover="true"
+      show-select
+      return-object
       @update:options="loadItems"
     >
       <!-- Toolbar -->
@@ -57,8 +60,7 @@
           
           <v-spacer />
 
-          <!-- Bulk Actions (disabled for now) -->
-          <!--
+          <!-- Bulk Actions -->
           <v-btn
             v-if="selected.length > 0"
             color="error"
@@ -70,7 +72,6 @@
           >
             Delete ({{ selected.length }})
           </v-btn>
-          -->
 
           <!-- Export Button -->
           <v-btn
@@ -188,14 +189,19 @@
           Confirm Delete
         </v-card-title>
         <v-card-text>
-          Are you sure you want to delete this entity? 
+          <span v-if="itemsToDelete.length === 1">
+            Are you sure you want to delete this entity? 
+          </span>
+          <span v-else>
+            Are you sure you want to delete {{ itemsToDelete.length }} entities?
+          </span>
           This action cannot be undone.
         </v-card-text>
         <v-card-actions>
           <v-spacer />
           <v-btn
             variant="text"
-            @click="deleteDialog = false"
+            @click="cancelDelete"
           >
             Cancel
           </v-btn>
@@ -242,6 +248,9 @@ const search = ref('')
 // Filter state
 const selectedTypes = ref([])
 
+// Selection state
+const selected = ref([])
+
 // Dialog state
 const deleteDialog = ref(false)
 const itemsToDelete = ref([])
@@ -274,6 +283,7 @@ const headers = computed(() => [
 // Watch for filter changes
 watch([selectedTypes, search], () => {
   page.value = 1
+  selected.value = [] // Clear selection when filters change
   loadItems()
 })
 
@@ -431,6 +441,16 @@ const confirmDelete = (item) => {
   deleteDialog.value = true
 }
 
+const confirmBulkDelete = () => {
+  itemsToDelete.value = [...selected.value]
+  deleteDialog.value = true
+}
+
+const cancelDelete = () => {
+  deleteDialog.value = false
+  itemsToDelete.value = []
+}
+
 const performDelete = async () => {
   deleting.value = true
   
@@ -442,6 +462,7 @@ const performDelete = async () => {
     emit('deleted', itemsToDelete.value)
     deleteDialog.value = false
     itemsToDelete.value = []
+    selected.value = [] // Clear selection after successful deletion
     await loadItems()
   } catch (error) {
     console.error('Error deleting entities:', error)
