@@ -16,7 +16,7 @@ import { ref, reactive } from 'vue'
 import { clientService } from '../services/client'
 import BaseClientModal from './BaseClientModal.vue'
 
-const props = defineProps({
+defineProps({
   isOpen: {
     type: Boolean,
     required: true

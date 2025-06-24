@@ -27,7 +27,6 @@ export function usePluginParams(initialParams = {}, emit) {
 
 /**
  * Enhanced composable for standardized plugin parameter management
- * Eliminates boilerplate code duplication across plugin parameter components
  */
 export function usePluginParamsAdvanced(props, emit, config = {}) {
   const {
@@ -37,12 +36,10 @@ export function usePluginParamsAdvanced(props, emit, config = {}) {
     customUpdateLogic = null,
   } = config
 
-  // Plugin description from backend
   const pluginDescription = computed(() => {
     return props.parameters?.description || ''
   })
 
-  // Local parameter state for plugin-specific params
   const localParams = reactive({
     ...parameterDefaults,
     ...Object.fromEntries(
@@ -53,18 +50,15 @@ export function usePluginParamsAdvanced(props, emit, config = {}) {
     ),
   })
 
-  // API key state (if plugin requires API keys)
   const missingApiKeys = ref([])
   const apiKeyError = ref(null)
 
-  // Emit parameter updates for plugin-specific params
   const updateParams = () => {
     const updatedValue = {
       ...props.modelValue,
       ...localParams,
     }
 
-    // Allow custom update logic if provided
     if (customUpdateLogic) {
       customUpdateLogic(updatedValue, localParams)
     }
@@ -102,7 +96,6 @@ export function usePluginParamsAdvanced(props, emit, config = {}) {
     }
   }
 
-  // Initialize API key checking on mount if configured
   onMounted(() => {
     if (apiKeyRequirements && props.parameters.api_key_requirements) {
       checkApiKeys()
@@ -110,15 +103,11 @@ export function usePluginParamsAdvanced(props, emit, config = {}) {
   })
 
   return {
-    // Computed
     pluginDescription,
-
-    // State
     localParams,
     missingApiKeys,
     apiKeyError,
 
-    // Methods
     updateParams,
     checkApiKeys,
   }
@@ -155,41 +144,34 @@ export function usePluginValidation() {
  * Configuration helper for common parameter types
  */
 export const pluginParamConfigs = {
-  // Domain-based plugins
   domain: (defaultDomain = '') => ({
     domain: defaultDomain,
   }),
 
-  // Domain with concurrency
   domainWithConcurrency: (defaultDomain = '', defaultConcurrency = 5) => ({
     domain: defaultDomain,
     concurrency: defaultConcurrency,
   }),
 
-  // Domain with SecurityTrails option
   domainWithSecurityTrails: (defaultDomain = '', defaultConcurrency = 5) => ({
     domain: defaultDomain,
     concurrency: defaultConcurrency,
     use_securitytrails: false,
   }),
 
-  // Email-based plugins
   email: (defaultEmail = '') => ({
     email: defaultEmail,
   }),
 
-  // IP-based plugins
   ip: (defaultIp = '') => ({
     ip_address: defaultIp,
   }),
 
-  // Search-based plugins
   searchQuery: (defaultQuery = '') => ({
     query: defaultQuery,
   }),
 
-  // Multiple search types
-  multiSearch: (searchTypes = [], defaultType = '') => ({
+  multiSearch: (defaultType = '') => ({
     search_type: defaultType,
     query: '',
   }),

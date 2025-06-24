@@ -185,9 +185,7 @@ const props = defineProps({
   }
 })
 
-const { parsedResults, statusMessages, completionMessages, errorMessages, dataResults } = usePluginResults(toRef(props, 'result'))
-
-// No longer needed since we removed phase messages from backend
+const { statusMessages, completionMessages, errorMessages, dataResults } = usePluginResults(toRef(props, 'result'))
 
 // Extract subdomain results
 const subdomainResults = computed(() => {
@@ -207,10 +205,8 @@ const sortedSubdomains = computed(() => {
   return [...subdomainResults.value]
     .map(item => item.data)
     .sort((a, b) => {
-      // Resolved subdomains first
       if (a.resolved && !b.resolved) return -1
       if (!a.resolved && b.resolved) return 1
-      // Then alphabetically
       return a.subdomain.localeCompare(b.subdomain)
     })
 })

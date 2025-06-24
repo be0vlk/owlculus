@@ -341,9 +341,7 @@ import { evidenceService } from '../services/evidence';
 const route = useRoute();
 const authStore = useAuthStore();
 const loading = ref(false);
-const loadingEntities = ref(false);
 const error = ref(null);
-const entityError = ref(null);
 const caseData = ref(null);
 const client = ref(null);
 const entities = ref([]);
@@ -361,14 +359,12 @@ const showUploadEvidenceModal = ref(false);
 const uploadTargetFolder = ref(null);
 const showEntityCreationSuccess = ref(false);
 const createdEntity = ref(null);
-// Metadata extraction
 const showMetadataModal = ref(false);
 const selectedEvidenceForMetadata = ref(null);
 const extractedMetadata = ref(null);
 const loadingMetadata = ref(false);
 const metadataError = ref('');
 
-// Text content viewing
 const showTextContentModal = ref(false);
 const selectedEvidenceForTextContent = ref(null);
 const textContent = ref('');
@@ -376,22 +372,17 @@ const textFileInfo = ref(null);
 const loadingTextContent = ref(false);
 const textContentError = ref('');
 
-// Notes editing state
 const isEditingNotes = ref(false);
 const savingNotes = ref(false);
 const originalNotes = ref('');
-
-// Make entityService available to the template
 const entityServiceRef = entityService;
 
-// Computed properties
 const userRole = computed(() => authStore.user?.role || 'Analyst');
 
 const hasFolders = computed(() => {
   return evidence.value.some(item => item.is_folder);
 });
 
-// Entity details handling
 function showEntityDetails(entity) {
   selectedEntity.value = entity;
   showEntityDetailsModal.value = true;
@@ -405,31 +396,26 @@ async function handleEditEntity(updatedEntity, createdAssociates = []) {
       selectedEntity.value = { ...updatedEntity };
     }
 
-    // Add any newly created associate entities
     if (createdAssociates.length > 0) {
       entities.value = [...entities.value, ...createdAssociates];
     }
 
-    // Refresh the entity table to show updated entity and any new associates
     if (entityTableRef.value) {
       entityTableRef.value.refresh();
     }
   }
 }
 
-// Handle case update
 const handleCaseUpdate = (updatedCase) => {
   Object.assign(caseData.value, updatedCase);
 };
 
-// Handle notes update
 const handleNotesUpdate = (notes) => {
   if (caseData.value) {
     caseData.value.notes = notes;
   }
 };
 
-// Notes editing functions
 const startEditingNotes = () => {
   originalNotes.value = caseData.value?.notes || '';
   isEditingNotes.value = true;
@@ -457,19 +443,16 @@ const saveNotes = async () => {
   }
 };
 
-// Handle new entity creation
 const handleNewEntity = (newEntity) => {
   entities.value = [...entities.value, newEntity];
   showEntityCreationSuccess.value = true;
   createdEntity.value = newEntity;
   
-  // Refresh the entity table to show the new entity
   if (entityTableRef.value) {
     entityTableRef.value.refresh();
   }
 };
 
-// Handle entity creation success dialog actions
 const handleEditNewEntity = () => {
   selectedEntity.value = createdEntity.value;
   showEntityDetailsModal.value = true;
@@ -483,30 +466,8 @@ const handleSkipEditEntity = () => {
 };
 
 const handleEntityDeleted = (deletedEntities) => {
-  // This will be handled by the EntityDataTable refresh
-  console.log('Entities deleted:', deletedEntities);
 };
 
-// Computed property to group entities by type
-const groupedEntities = computed(() => {
-  return entities.value.reduce((groups, entity) => {
-    const type = entity.entity_type;
-    if (!groups[type]) {
-      groups[type] = [];
-    }
-    groups[type].push(entity);
-    return groups;
-  }, {});
-});
-
-// Computed property to check if a network asset has details
-const hasNetworkAssetDetails = (entity) => {
-  return (
-    entity.data.domains?.length ||
-    entity.data.ip_addresses?.length ||
-    entity.data.email_addresses?.length
-  );
-};
 
 const loadClientData = async (clientId) => {
   try {
@@ -636,14 +597,6 @@ const handleViewTextContent = async (evidenceItem) => {
   } finally {
     loadingTextContent.value = false;
   }
-};
-
-const formatNetworkAssetDetails = (data) => {
-  const details = [];
-  if (data.domains?.length > 1) details.push(`${data.domains.length} domains`);
-  if (data.ip_addresses?.length) details.push(`${data.ip_addresses.length} IPs`);
-  if (data.subdomains?.length) details.push(`${data.subdomains.length} subdomains`);
-  return details.join(', ') || 'No details';
 };
 
 const getEntityDisplayName = (entity) => {

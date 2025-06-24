@@ -85,7 +85,7 @@
       </template>
 
       <!-- Type Column -->
-      <template v-slot:item.entity_type="{ item }">
+      <template #[`item.entity_type`]="{ item }">
         <v-chip
           :color="getTypeColor(item.entity_type)"
           variant="flat"
@@ -97,7 +97,7 @@
       </template>
 
       <!-- Name Column -->
-      <template v-slot:item.name="{ item }">
+      <template #[`item.name`]="{ item }">
         <div class="d-flex align-center">
           <div>
             <div class="font-weight-medium">{{ getEntityName(item) }}</div>
@@ -109,21 +109,21 @@
       </template>
 
       <!-- Description Column -->
-      <template v-slot:item.description="{ item }">
+      <template #[`item.description`]="{ item }">
         <span class="text-body-2">
           {{ item.data.description || '' }}
         </span>
       </template>
 
       <!-- Created Date Column -->
-      <template v-slot:item.created_at="{ item }">
+      <template #[`item.created_at`]="{ item }">
         <span class="text-body-2">
           {{ formatDate(item.created_at) }}
         </span>
       </template>
 
       <!-- Actions Column -->
-      <template v-slot:item.actions="{ item }">
+      <template #[`item.actions`]="{ item }">
         <v-btn
           icon="mdi-eye"
           size="small"
@@ -238,7 +238,6 @@ const page = ref(1)
 const itemsPerPage = ref(25)
 const sortBy = ref([])
 const search = ref('')
-const selected = ref([])
 
 // Filter state
 const selectedTypes = ref([])
@@ -279,7 +278,7 @@ watch([selectedTypes, search], () => {
 })
 
 // Methods
-const loadItems = async (options = {}) => {
+const loadItems = async () => {
   loading.value = true
   
   try {
@@ -352,20 +351,22 @@ const loadItems = async (options = {}) => {
 
 const getEntityName = (entity) => {
   switch (entity.entity_type) {
-    case 'person':
+    case 'person': {
       const firstName = entity.data.first_name || ''
       const lastName = entity.data.last_name || ''
       return `${firstName} ${lastName}`.trim() || 'Unnamed Person'
+    }
     case 'company':
       return entity.data.name || 'Unnamed Company'
     case 'domain':
       return entity.data.domain || 'Unnamed Domain'
     case 'ip_address':
       return entity.data.ip_address || 'Unnamed IP'
-    case 'vehicle':
+    case 'vehicle': {
       const make = entity.data.make || ''
       const model = entity.data.model || ''
       return `${make} ${model}`.trim() || 'Unnamed Vehicle'
+    }
     default:
       return 'Unknown Entity'
   }
@@ -377,9 +378,10 @@ const getEntitySubtitle = (entity) => {
       return entity.data.email
     case 'company':
       return entity.data.website
-    case 'domain':
+    case 'domain': {
       const subdomainCount = entity.data.subdomains?.length || 0
       return subdomainCount > 0 ? `${subdomainCount} subdomains` : null
+    }
     default:
       return null
   }
@@ -434,7 +436,7 @@ const performDelete = async () => {
   
   try {
     for (const item of itemsToDelete.value) {
-      await props.entityService.deleteEntity(item.id)
+      await props.entityService.deleteEntity(props.caseId, item.id)
     }
     
     emit('deleted', itemsToDelete.value)

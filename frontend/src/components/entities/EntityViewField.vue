@@ -69,20 +69,20 @@
             :items-per-page="-1"
             class="elevation-0"
           >
-            <template v-slot:item.subdomain="{ item }">
+            <template #[`item.subdomain`]="{ item }">
               <div class="d-flex align-center">
                 <v-icon size="small" class="mr-2">mdi-subdirectory-arrow-right</v-icon>
                 <span class="font-weight-medium">{{ item.subdomain }}</span>
               </div>
             </template>
-            <template v-slot:item.ip="{ item }">
+            <template #[`item.ip`]="{ item }">
               <div v-if="item.ip" class="d-flex align-center">
                 <v-icon size="x-small" class="mr-1">mdi-ip-network</v-icon>
                 {{ item.ip }}
               </div>
               <span v-else class="text-grey">-</span>
             </template>
-            <template v-slot:item.resolved="{ item }">
+            <template #[`item.resolved`]="{ item }">
               <div class="d-flex align-center">
                 <v-icon 
                   size="x-small" 
@@ -94,7 +94,7 @@
                 {{ item.resolved ? 'Yes' : 'No' }}
               </div>
             </template>
-            <template v-slot:item.source="{ item }">
+            <template #[`item.source`]="{ item }">
               <div v-if="item.source" class="d-flex align-center">
                 <v-icon size="x-small" class="mr-1">mdi-source-branch</v-icon>
                 {{ item.source }}

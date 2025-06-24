@@ -64,3 +64,4 @@ build/
 tmp/
 temp/
 .claude/
+megalinter-reports/
