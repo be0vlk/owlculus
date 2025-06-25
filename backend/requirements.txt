@@ -24,3 +24,4 @@ pytest-asyncio
 peopledatalabs
 aiohttp
 dnspython
+vt-py

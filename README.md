@@ -6,9 +6,21 @@
 
 Owlculus is a comprehensive OSINT case management platform built for solo work or investigative teams. Manage cases, collaborate, and run OSINT tools directly in your browser.
 
-**IMPORTANT**: Never deploy the "dev" branch to a production environment
-
 This project is now and will always be 100% free and open-source, no matter how much it improves.
+
+## Active Development Notice
+
+Owlculus is under active development with frequent updates, improvements, and new features being added regularly. To ensure you have the latest features and security updates, please:
+
+1. **Check for updates** by pulling the latest changes from the repository:
+   ```bash
+   git pull origin main
+   ```
+2. **Review the changelog** for recent updates and breaking changes
+3. **Watch the repository** on GitHub to receive notifications about new releases and updates
+4. **Check the Roadmap section** below for upcoming features and changes
+
+**IMPORTANT**: Never deploy the "dev" branch to a production environment!
 
 ## Features
 
@@ -41,10 +53,11 @@ I will be very actively maintaining and improving this application and am always
 - **LLM Integration**: AI-powered analysis and insights (StrixyChat integration planned)
 - **Advanced Analytics**: Cross-case patterns, timeline analysis, and reporting dashboards
 - **API Enhancements**: Webhook support and third-party integrations
+- **Cloud-based Deployment**: Native support for cloud platforms like AWS, GCP, and Azure
 
 ## Installation
 
-Owlculus uses **Docker for easy, consistent installation**. The Docker setup handles all dependencies, database configuration, and service orchestration automatically.
+Owlculus uses Docker for easy, consistent installation. The Docker setup handles all dependencies, database configuration, and service orchestration automatically.
 
 It is technically cross-platform thanks to Docker, but I have only tested on Debian/Ubuntu Linux distros. The setup script is also Linux only. If you must be on Windows, I would *strongly* suggest at least using WSL.
 
@@ -184,22 +197,20 @@ Now, double-click directly on the case in the table and you'll be redirected to 
 This page displays the basic case information and allows you to create and view notes, upload/download evidence to the case folder, add users to the case, create entities (more on that below) and update the case status. When you first create a case, you will not see the entity tabs so don't worry if your screen looks a little different at first.
 
 #### Entities
-This is a key part of Owlculus functionality. Rather than defining case types upfront, you add individual entities to build your investigation dynamically. The system supports flexible entity types including `person`, `company`, `domain`, and `ip_address`, with JSON-based data storage allowing for extensible schemas.
+This is a key part of Owlculus functionality. Rather than defining case types upfront, you add individual entities to build your investigation dynamically. The system supports flexible entity types including `person`, `company`, `vehicle`, `domain`, and `ip_address`, with JSON-based data storage allowing for extensible schemas.
 
 **Entity Features:**
 - **Template-Based Notes**: Each entity type comes with predefined, organized note templates
-- **Expandable Views**: Start with essential fields, expand to detailed templates as needed
-- **Rich Text Editing**: TipTap-powered notes with formatting options
+- **Category-Based Organization**: Each entity type has its own set of categories in the form of tabs within the entity
+- **Rich Text Editing**: TipTap-powered notes with basic formatting options
 - **Smart Relationships (WIP)**: Automatic entity linking and relationship detection within the same case
 - **Cross-Case Visibility**: Entities can be discovered across multiple cases through the correlation scanning plugin
 
-When you create an entity, the system intelligently recognizes relationships—mentioning "Jane Doe" in John Doe's family notes can automatically create and link a new Jane Doe entity.
-
 #### Evidence
-This page allows you to upload and download evidence to the case folder. A default, organized virtual folder structure is created along with the case.
+This page allows you to upload and download evidence to the case folder. Cases are initially created with no folder structure but the app comes with pre-configured templates that can be applied. Admin users can also create new templates within the Admin dashboard.
 
 ### Plugins
-This page allows you to conveniently run certain OSINT tools right from the app.
+This page allows you to conveniently run a variety of OSINT tools right from the app.
 
 #### Correlation Plugin
 This plugin will scan for correlations between entities in cases.

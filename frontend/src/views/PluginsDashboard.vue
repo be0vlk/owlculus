@@ -351,20 +351,34 @@ watch(selectedCategories, (newCategories, oldCategories) => {
 }, { immediate: false })
 
 const filteredPlugins = computed(() => {
+  let result = {}
+  
   // If "All" is selected or no categories are selected, show all plugins
   if (selectedCategories.value.includes('All') || selectedCategories.value.length === 0) {
-    return plugins.value
+    result = plugins.value
+  } else {
+    result = Object.entries(plugins.value).reduce((acc, [name, plugin]) => {
+      // Get the plugin's category, defaulting to 'Other' if not set or not matching predefined categories
+      const pluginCategory = plugin.category && categories.includes(plugin.category) ? plugin.category : 'Other'
+      // Include plugins that match any of the selected categories
+      if (selectedCategories.value.includes(pluginCategory)) {
+        acc[name] = plugin
+      }
+      return acc
+    }, {})
   }
 
-  return Object.entries(plugins.value).reduce((acc, [name, plugin]) => {
-    // Get the plugin's category, defaulting to 'Other' if not set or not matching predefined categories
-    const pluginCategory = plugin.category && categories.includes(plugin.category) ? plugin.category : 'Other'
-    // Include plugins that match any of the selected categories
-    if (selectedCategories.value.includes(pluginCategory)) {
+  // Sort plugins alphabetically by display name or name
+  return Object.entries(result)
+    .sort(([nameA, pluginA], [nameB, pluginB]) => {
+      const displayNameA = pluginA.display_name || nameA
+      const displayNameB = pluginB.display_name || nameB
+      return displayNameA.localeCompare(displayNameB)
+    })
+    .reduce((acc, [name, plugin]) => {
       acc[name] = plugin
-    }
-    return acc
-  }, {})
+      return acc
+    }, {})
 })
 
 const initializeExpandedState = (pluginsList) => {

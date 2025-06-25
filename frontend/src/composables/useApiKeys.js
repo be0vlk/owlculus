@@ -30,6 +30,7 @@ export function useApiKeys() {
     { text: 'Security Trails', value: 'securitytrails', icon: 'mdi-magnify-scan' },
     { text: 'People Data Labs', value: 'people_data_labs', icon: 'mdi-account-group' },
     { text: 'Shodan', value: 'shodan', icon: 'mdi-radar' },
+    { text: 'VirusTotal', value: 'virustotal', icon: 'mdi-shield-bug' },
     { text: 'Custom', value: 'custom', icon: 'mdi-plus' },
   ]
 
