@@ -3,6 +3,16 @@ services:
   postgres:
     image: postgres:15-alpine
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: '1.0'
+        reservations:
+          memory: 256m
+          cpus: '0.25'
+    security_opt:
+      - no-new-privileges:true
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-owlculus}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-owlculus_secure_password}
@@ -10,15 +20,14 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
-    ports:
-      - "${DB_PORT:-5432}:5432"
+    # Database port not exposed to host for security
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-owlculus} -d ${POSTGRES_DB:-owlculus}"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
-      - owlculus-network
+      - owlculus-db-network
 
   # Backend API
   backend:
@@ -26,6 +35,16 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: '2.0'
+        reservations:
+          memory: 512m
+          cpus: '0.5'
+    security_opt:
+      - no-new-privileges:true
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-owlculus}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-owlculus_secure_password}
@@ -50,6 +69,7 @@ services:
       start_period: 40s
     networks:
       - owlculus-network
+      - owlculus-db-network
 
   # Database Initialization
   db-init:
@@ -73,7 +93,7 @@ services:
     volumes:
       - ./scripts/init_db_auto.py:/app/init_db_auto.py
     networks:
-      - owlculus-network
+      - owlculus-db-network
     restart: "no"
 
   # Frontend
@@ -83,6 +103,16 @@ services:
       dockerfile: Dockerfile
       target: production
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: '0.5'
+        reservations:
+          memory: 128m
+          cpus: '0.1'
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "${FRONTEND_PORT:-80}:80"
     depends_on:
@@ -104,3 +134,6 @@ volumes:
 networks:
   owlculus-network:
     driver: bridge
+  owlculus-db-network:
+    driver: bridge
+    internal: true

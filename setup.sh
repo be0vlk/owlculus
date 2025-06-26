@@ -188,13 +188,9 @@ interactive_config() {
         print_status "Using internal ports (80 for frontend, 8000 for backend) - no host port binding"
     fi
     
-    while true; do
-        DB_PORT=$(prompt_with_default "Database port" "$DEFAULT_DB_PORT")
-        if validate_port "$DB_PORT"; then
-            break
-        fi
-        print_error "Invalid port number. Please enter a number between 1-65535"
-    done
+    # Database port is not exposed for security - using internal port 5432
+    DB_PORT="5432"
+    print_status "Database using internal port 5432 (not exposed to host for security)"
     
     echo ""
     echo "Admin Account Configuration:"
@@ -262,7 +258,7 @@ interactive_config() {
         echo "Frontend Port: $FRONTEND_PORT"
         echo "Backend Port: $BACKEND_PORT"
     fi
-    echo "Database Port: $DB_PORT"
+    echo "Database Port: 5432 (internal only)"
     echo "Admin Username: $ADMIN_USERNAME"
     echo "Admin Email: $ADMIN_EMAIL"
     echo "Admin Password: [set]"
@@ -464,7 +460,8 @@ ADMIN_EMAIL=$ADMIN_EMAIL
 # Port Configuration
 FRONTEND_PORT=$FRONTEND_PORT
 BACKEND_PORT=$BACKEND_PORT
-DB_PORT=$DB_PORT
+# Database port is internal only for security
+DB_PORT=5432
 
 # URL Configuration  
 FRONTEND_URL=$FRONTEND_URL

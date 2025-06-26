@@ -3,6 +3,16 @@ services:
   postgres:
     image: postgres:15-alpine
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: '1.0'
+        reservations:
+          memory: 256m
+          cpus: '0.25'
+    security_opt:
+      - no-new-privileges:true
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-owlculus}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-owlculus_dev_password}
@@ -10,15 +20,14 @@ services:
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
       - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
-    ports:
-      - "${DB_PORT:-5432}:5432"
+    # Database port not exposed to host for security
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-owlculus} -d ${POSTGRES_DB:-owlculus_dev}"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
-      - owlculus-dev-network
+      - owlculus-dev-db-network
 
   # Backend API (Development with hot reload)
   backend:
@@ -26,6 +35,16 @@ services:
       context: ./backend
       dockerfile: Dockerfile.dev
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: '2.0'
+        reservations:
+          memory: 512m
+          cpus: '0.5'
+    security_opt:
+      - no-new-privileges:true
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-owlculus}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-owlculus_dev_password}
@@ -46,6 +65,7 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     networks:
       - owlculus-dev-network
+      - owlculus-dev-db-network
 
   # Database Initialization
   db-init:
@@ -70,7 +90,7 @@ services:
       postgres:
         condition: service_healthy
     networks:
-      - owlculus-dev-network
+      - owlculus-dev-db-network
     restart: "no"
 
   # Frontend (Development with hot reload)
@@ -79,6 +99,16 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.dev
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: '1.0'
+        reservations:
+          memory: 256m
+          cpus: '0.25'
+    security_opt:
+      - no-new-privileges:true
     environment:
       - NODE_ENV=development
     volumes:
@@ -99,3 +129,6 @@ volumes:
 networks:
   owlculus-dev-network:
     driver: bridge
+  owlculus-dev-db-network:
+    driver: bridge
+    internal: true
