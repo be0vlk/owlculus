@@ -150,6 +150,40 @@ class OwlculusAPI {
     });
   }
 
+  async uploadScreenshot(caseId, title, imageBlob, pageUrl, category = 'Other') {
+    try {
+      const folders = await this.getFolderTree(caseId);
+      if (!folders || folders.length === 0) {
+        await this.createFolder(caseId, 'Screenshots');
+      }
+    } catch (error) {
+      console.warn('Could not check/create folders:', error);
+    }
+
+    const formData = new FormData();
+    
+    const filename = `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_${Date.now()}.png`;
+    const file = new File([imageBlob], filename, { type: 'image/png' });
+    
+    formData.append('files', file);
+    
+    const description = `Screenshot captured from: ${pageUrl}`;
+    if (description) {
+      formData.append('description', description);
+    }
+
+    const queryParams = new URLSearchParams({
+      title: title,
+      case_id: caseId,
+      category: category
+    });
+
+    return this.request(`/api/evidence/?${queryParams}`, {
+      method: 'POST',
+      body: formData
+    });
+  }
+
   async logout() {
     await storage.remove([
       CONFIG_KEYS.AUTH_TOKEN,

@@ -67,6 +67,7 @@ function setupEventListeners() {
   });
 
   document.getElementById('capture-btn').addEventListener('click', captureCurrentPage);
+  document.getElementById('screenshot-btn').addEventListener('click', captureScreenshot);
 
   document.getElementById('case-select').addEventListener('change', async (e) => {
     if (e.target.value) {
@@ -199,6 +200,67 @@ async function captureCurrentPage() {
   } finally {
     captureBtn.disabled = false;
     btnText.textContent = 'Capture Page';
+    spinner.classList.add('hidden');
+  }
+}
+
+async function captureScreenshot() {
+  const screenshotBtn = document.getElementById('screenshot-btn');
+  const btnText = screenshotBtn.querySelector('.btn-text');
+  const spinner = screenshotBtn.querySelector('.spinner');
+  const resultDiv = document.getElementById('result');
+  
+  const caseId = parseInt(document.getElementById('case-select').value, 10);
+  if (!caseId) {
+    showResult('Please select a case', 'error');
+    return;
+  }
+  
+  screenshotBtn.disabled = true;
+  btnText.textContent = 'Capturing...';
+  spinner.classList.remove('hidden');
+  resultDiv.classList.add('hidden');
+  
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    
+    const dataUrl = await chrome.tabs.captureVisibleTab(null, {
+      format: 'png',
+      quality: 90
+    });
+    
+    btnText.textContent = 'Uploading...';
+    
+    const title = document.getElementById('title-input').value || `Screenshot - ${tab.title || 'Unknown Page'}`;
+    const category = 'Other';
+    
+    const response = await fetch(dataUrl);
+    const blob = await response.blob();
+    
+    const uploadResult = await api.uploadScreenshot(
+      caseId,
+      title,
+      blob,
+      tab.url,
+      category
+    );
+    
+    if (uploadResult && uploadResult.length > 0) {
+      showResult('Screenshot uploaded successfully!', 'success');
+      
+      setTimeout(() => {
+        window.close();
+      }, 2000);
+    } else {
+      throw new Error('Upload returned no results');
+    }
+    
+  } catch (error) {
+    console.error('Screenshot error:', error);
+    showResult(error.message || 'Failed to capture screenshot', 'error');
+  } finally {
+    screenshotBtn.disabled = false;
+    btnText.textContent = 'Screenshot';
     spinner.classList.add('hidden');
   }
 }
