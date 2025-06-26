@@ -51,42 +51,26 @@
 
             <v-divider />
 
-            <!-- Category Tabs Toolbar -->
-            <v-card-text class="pa-4">
-              <v-row align="center" class="mb-0">
-                <v-col cols="12">
-                  <div class="d-flex align-center ga-2">
-                    <span class="text-body-2 font-weight-medium me-2">Categories:</span>
-                    <v-chip-group
-                      v-model="selectedCategories"
-                      selected-class="text-primary"
-                      color="primary"
-                      variant="outlined"
-                      multiple
-                    >
-                      <v-chip
-                        value="All"
-                        filter
-                        size="small"
-                      >
-                        All
-                      </v-chip>
-                      <v-chip
-                        v-for="category in categories"
-                        :key="category"
-                        :value="category"
-                        filter
-                        size="small"
-                      >
-                        {{ category }}
-                      </v-chip>
-                    </v-chip-group>
-                  </div>
-                </v-col>
-              </v-row>
-            </v-card-text>
-
-            <v-divider />
+            <!-- Category Tabs -->
+            <v-tabs
+              v-model="selectedTab"
+              color="primary"
+              align-tabs="start"
+              class="border-b"
+            >
+              <v-tab value="all">
+                <v-icon icon="mdi-view-grid" class="me-2" />
+                All Plugins
+              </v-tab>
+              <v-tab
+                v-for="category in categories"
+                :key="category"
+                :value="category.toLowerCase()"
+              >
+                <v-icon :icon="getCategoryIcon(category)" class="me-2" />
+                {{ category }}
+              </v-tab>
+            </v-tabs>
 
             <!-- Plugin Grid -->
             <v-card-text class="pa-4">
@@ -299,7 +283,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, reactive, computed, watch, markRaw } from 'vue'
+import { ref, onMounted, reactive, computed, markRaw } from 'vue'
 import { pluginService } from '@/services/plugin'
 import { usePluginApiKeys } from '@/composables/usePluginApiKeys'
 import PluginResultsModal from '@/components/plugins/PluginResultsModal.vue'
@@ -327,45 +311,42 @@ const modalState = reactive({
 })
 
 const categories = ['Person', 'Network', 'Company', 'Other']
-const selectedCategories = ref(['All'])
+const selectedTab = ref('all')
 
 // Plugin API key checking
 const { checkPluginApiKeys, getApiKeyWarningMessage } = usePluginApiKeys()
 
-// Watch for changes in category selection to handle "All" logic
-watch(selectedCategories, (newCategories, oldCategories) => {
-  // If "All" was just selected
-  if (newCategories.includes('All') && !oldCategories.includes('All')) {
-    // Clear other selections and keep only "All"
-    selectedCategories.value = ['All']
+// Helper function to get category icons
+const getCategoryIcon = (category) => {
+  const iconMap = {
+    'Person': 'mdi-account',
+    'Network': 'mdi-lan',
+    'Company': 'mdi-domain',
+    'Other': 'mdi-puzzle'
   }
-  // If a specific category was selected while "All" was already selected
-  else if (oldCategories.includes('All') && newCategories.length > 1) {
-    // Remove "All" and keep only the newly selected categories
-    selectedCategories.value = newCategories.filter(cat => cat !== 'All')
-  }
-  // If no categories are selected, default to "All"
-  else if (newCategories.length === 0) {
-    selectedCategories.value = ['All']
-  }
-}, { immediate: false })
+  return iconMap[category] || 'mdi-puzzle'
+}
 
 const filteredPlugins = computed(() => {
   let result = {}
   
-  // If "All" is selected or no categories are selected, show all plugins
-  if (selectedCategories.value.includes('All') || selectedCategories.value.length === 0) {
+  // If "all" tab is selected, show all plugins
+  if (selectedTab.value === 'all') {
     result = plugins.value
   } else {
-    result = Object.entries(plugins.value).reduce((acc, [name, plugin]) => {
-      // Get the plugin's category, defaulting to 'Other' if not set or not matching predefined categories
-      const pluginCategory = plugin.category && categories.includes(plugin.category) ? plugin.category : 'Other'
-      // Include plugins that match any of the selected categories
-      if (selectedCategories.value.includes(pluginCategory)) {
-        acc[name] = plugin
-      }
-      return acc
-    }, {})
+    // Filter by the selected category tab
+    const selectedCategory = categories.find(cat => cat.toLowerCase() === selectedTab.value)
+    if (selectedCategory) {
+      result = Object.entries(plugins.value).reduce((acc, [name, plugin]) => {
+        // Get the plugin's category, defaulting to 'Other' if not set or not matching predefined categories
+        const pluginCategory = plugin.category && categories.includes(plugin.category) ? plugin.category : 'Other'
+        // Include plugins that match the selected category
+        if (pluginCategory === selectedCategory) {
+          acc[name] = plugin
+        }
+        return acc
+      }, {})
+    }
   }
 
   // Sort plugins alphabetically by display name or name
