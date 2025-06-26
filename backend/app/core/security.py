@@ -61,6 +61,7 @@ ALLOWED_MIME_TYPES = {
     "application/msword",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "text/plain",
+    "text/html",
     "image/jpeg",
     "image/png",
     "image/gif",
@@ -109,8 +110,8 @@ async def validate_file_security(file: UploadFile) -> None:
         return
 
     # If filetype couldn't detect the type or it's not in allowed types,
-    # check if it might be a text file
-    if file.content_type == "text/plain":
+    # check if it might be a text file (including HTML)
+    if file.content_type in ["text/plain", "text/html"]:
         try:
             content.decode("utf-8")
             # If we got here, it's valid UTF-8 text

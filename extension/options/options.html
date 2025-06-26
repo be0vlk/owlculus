@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Owlculus Extension Settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Owlculus Extension Settings</h1>
+    </header>
+
+    <main>
+      <section class="settings-section">
+        <h2>API Configuration</h2>
+        
+        <div class="form-group">
+          <label for="api-endpoint">API Endpoint URL:</label>
+          <input type="url" id="api-endpoint" class="form-control" placeholder="http://localhost:8000">
+          <small class="help-text">Enter the URL of your Owlculus backend server</small>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <h2>Authentication</h2>
+        
+        <div id="login-form" class="hidden">
+          <div class="form-group">
+            <label for="username">Username:</label>
+            <input type="text" id="username" class="form-control" placeholder="Enter your username">
+          </div>
+          
+          <div class="form-group">
+            <label for="password">Password:</label>
+            <input type="password" id="password" class="form-control" placeholder="Enter your password">
+          </div>
+          
+          <button id="login-btn" class="btn btn-primary">Login</button>
+        </div>
+
+        <div id="auth-status" class="hidden">
+          <div class="auth-info">
+            <p>Logged in as: <strong id="current-user"></strong></p>
+            <p>Role: <span id="user-role"></span></p>
+          </div>
+          <button id="logout-btn" class="btn btn-secondary">Logout</button>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <h2>About</h2>
+        <p>This extension allows you to capture web pages and send them as evidence to your Owlculus case management system.</p>
+        <p>Version: 1.0.0</p>
+      </section>
+
+      <div id="message" class="message hidden"></div>
+    </main>
+  </div>
+
+  <script type="module" src="options.js"></script>
+</body>
+</html>
