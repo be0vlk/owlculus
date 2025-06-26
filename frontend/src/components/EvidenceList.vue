@@ -105,7 +105,7 @@
                   v-else
                   :icon="getFileIcon(item)"
                   color="grey-darken-1"
-                  :class="{ 'cursor-pointer': isTextFile(item) }"
+                  :class="{ 'cursor-pointer': isTextFile(item) || isImageFile(item) }"
                   @contextmenu.prevent="showContextMenu($event, item)"
                   @dblclick="handleFileDoubleClick(item)"
                 />
@@ -126,7 +126,10 @@
               >
                 <span 
                   class="tree-item-title"
-                  :class="{ 'text-file-title': isTextFile(item) }"
+                  :class="{ 
+                    'text-file-title': isTextFile(item),
+                    'image-file-title': isImageFile(item)
+                  }"
                   @contextmenu.prevent="showContextMenu($event, item)"
                   @dblclick="handleFileDoubleClick(item)"
                 >
@@ -311,7 +314,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['download', 'delete', 'refresh', 'upload-to-folder', 'extract-metadata', 'view-text-content', 'evidence-moved'])
+const emit = defineEmits(['download', 'delete', 'refresh', 'upload-to-folder', 'extract-metadata', 'view-text-content', 'view-image-content', 'evidence-moved'])
 
 // Composables
 const { getFolderColor, getFolderIcon } = useFolderIcons()
@@ -448,9 +451,20 @@ const isTextFile = (item) => {
   return textExtensions.includes(fileExtension)
 }
 
+const isImageFile = (item) => {
+  if (item.is_folder || item.evidence_type !== 'file') return false
+  
+  const fileExtension = item.title.split('.').pop()?.toLowerCase()
+  const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg']
+  
+  return imageExtensions.includes(fileExtension)
+}
+
 const handleFileDoubleClick = (item) => {
   if (isTextFile(item)) {
     emit('view-text-content', item)
+  } else if (isImageFile(item)) {
+    emit('view-image-content', item)
   }
 }
 
@@ -672,6 +686,16 @@ defineExpose({
 
 .text-file-title:hover {
   color: rgb(var(--v-theme-primary-darken-1));
+  text-decoration: underline;
+}
+
+.image-file-title {
+  color: rgb(var(--v-theme-success));
+  font-weight: 500;
+}
+
+.image-file-title:hover {
+  color: rgb(var(--v-theme-success-darken-1));
   text-decoration: underline;
 }
 

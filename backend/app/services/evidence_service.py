@@ -587,6 +587,129 @@ class EvidenceService:
             ).error(f"Evidence content view error: {str(e)}")
             raise HTTPException(status_code=500, detail="Internal server error")
 
+    async def get_evidence_image(
+        self,
+        evidence_id: int,
+        current_user: models.User,
+    ):
+        """Get image file for viewing."""
+        evidence_logger = get_security_logger(
+            user_id=current_user.id,
+            evidence_id=evidence_id,
+            action="get_evidence_image",
+            event_type="evidence_image_view_attempt",
+        )
+
+        try:
+            # Get evidence
+            evidence = await self.get_evidence(evidence_id, current_user)
+
+            if evidence.is_folder:
+                evidence_logger.bind(
+                    event_type="evidence_image_view_failed",
+                    failure_reason="is_folder",
+                ).warning("Evidence image view failed: evidence is a folder")
+                raise HTTPException(
+                    status_code=400, detail="Cannot view images from folders"
+                )
+
+            if evidence.evidence_type != "file":
+                evidence_logger.bind(
+                    event_type="evidence_image_view_failed",
+                    failure_reason="not_file_type",
+                    evidence_type=evidence.evidence_type,
+                ).warning("Evidence image view failed: evidence is not a file")
+                raise HTTPException(
+                    status_code=400,
+                    detail="Evidence type does not support image viewing",
+                )
+
+            from app.core.file_storage import UPLOAD_DIR
+            from fastapi.responses import FileResponse
+
+            file_path = UPLOAD_DIR / evidence.content
+            if not file_path.exists():
+                evidence_logger.bind(
+                    event_type="evidence_image_view_failed",
+                    failure_reason="file_not_found",
+                    file_path=str(file_path),
+                ).warning("Evidence image view failed: file not found on disk")
+                raise HTTPException(status_code=404, detail="File not found")
+
+            # Check if file type is viewable as image
+            viewable_extensions = {
+                ".jpg",
+                ".jpeg",
+                ".png",
+                ".gif",
+                ".bmp",
+                ".webp",
+                ".svg",
+            }
+            file_extension = file_path.suffix.lower()
+
+            if file_extension not in viewable_extensions:
+                evidence_logger.bind(
+                    event_type="evidence_image_view_failed",
+                    failure_reason="unsupported_file_type",
+                    file_extension=file_extension,
+                ).warning("Evidence image view failed: unsupported file type")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"File type '{file_extension}' is not supported for image viewing",
+                )
+
+            # Check file size (limit to 10MB for viewing)
+            file_size = file_path.stat().st_size
+            max_size = 10 * 1024 * 1024  # 10MB
+            if file_size > max_size:
+                evidence_logger.bind(
+                    event_type="evidence_image_view_failed",
+                    failure_reason="file_too_large",
+                    file_size=file_size,
+                    max_size=max_size,
+                ).warning("Evidence image view failed: file too large")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Image too large for viewing. Maximum size: {max_size // 1024 // 1024}MB",
+                )
+
+            # Get media type based on extension
+            media_types = {
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".png": "image/png",
+                ".gif": "image/gif",
+                ".bmp": "image/bmp",
+                ".webp": "image/webp",
+                ".svg": "image/svg+xml",
+            }
+            media_type = media_types.get(file_extension, "application/octet-stream")
+
+            evidence_logger.bind(
+                case_id=evidence.case_id,
+                evidence_title=evidence.title,
+                filename=file_path.name,
+                event_type="evidence_image_view_success",
+            ).info("Evidence image viewed successfully")
+
+            return FileResponse(
+                path=str(file_path),
+                media_type=media_type,
+                headers={
+                    "Cache-Control": "max-age=3600",
+                    "X-Content-Type-Options": "nosniff",
+                }
+            )
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            evidence_logger.bind(
+                event_type="evidence_image_view_error", error_type="system_error"
+            ).error(f"Evidence image view error: {str(e)}")
+            raise HTTPException(status_code=500, detail="Internal server error")
+
     @no_analyst()
     async def create_folder(
         self,

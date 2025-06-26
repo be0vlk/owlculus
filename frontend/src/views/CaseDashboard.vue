@@ -143,6 +143,7 @@
                     @upload-to-folder="handleUploadToFolder"
                     @extract-metadata="handleExtractMetadata"
                     @view-text-content="handleViewTextContent"
+                    @view-image-content="handleViewImageContent"
                     @evidence-moved="handleEvidenceMoved"
                   />
                 </div>
@@ -274,6 +275,14 @@
       :error="textContentError"
     />
 
+    <ImageContentModal
+      v-model="showImageContentModal"
+      :evidence-item="selectedEvidenceForImageContent"
+      :file-info="imageFileInfo"
+      :loading="loadingImageContent"
+      :error="imageContentError"
+    />
+
     <!-- Entity Creation Success Dialog -->
     <v-dialog
       v-model="showEntityCreationSuccess"
@@ -333,6 +342,7 @@ import EvidenceList from '../components/EvidenceList.vue';
 import UploadEvidenceModal from '../components/UploadEvidenceModal.vue';
 import MetadataModal from '../components/MetadataModal.vue';
 import TextContentModal from '../components/TextContentModal.vue';
+import ImageContentModal from '../components/ImageContentModal.vue';
 import { caseService } from '../services/case';
 import { clientService } from '../services/client';
 import { entityService } from '../services/entity';
@@ -371,6 +381,12 @@ const textContent = ref('');
 const textFileInfo = ref(null);
 const loadingTextContent = ref(false);
 const textContentError = ref('');
+
+const showImageContentModal = ref(false);
+const selectedEvidenceForImageContent = ref(null);
+const imageFileInfo = ref(null);
+const loadingImageContent = ref(false);
+const imageContentError = ref('');
 
 const isEditingNotes = ref(false);
 const savingNotes = ref(false);
@@ -597,6 +613,20 @@ const handleViewTextContent = async (evidenceItem) => {
   } finally {
     loadingTextContent.value = false;
   }
+};
+
+const handleViewImageContent = async (evidenceItem) => {
+  selectedEvidenceForImageContent.value = evidenceItem;
+  imageFileInfo.value = null;
+  imageContentError.value = '';
+  loadingImageContent.value = false; // Set to false since ImageContentModal handles its own loading
+  showImageContentModal.value = true;
+
+  // Set basic file info that we have
+  imageFileInfo.value = {
+    filename: evidenceItem.title,
+    file_size: evidenceItem.file_size || 0, // This might need to be added to the evidence model
+  };
 };
 
 const getEntityDisplayName = (entity) => {
