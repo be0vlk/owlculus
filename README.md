@@ -32,6 +32,7 @@ Owlculus is under active development with frequent updates, improvements, and ne
 - **Evidence Management**: Organized file storage with optional automatic folder structures
 - **Entity System**: Assign various types of entities to your case each with templated, self-contained notes
 - **Cross-Case Correlation**: Automatically discover connections between investigations (WIP)
+- **Browser Extension**: Capture web pages as HTML or screenshots and save them directly to your cases as evidence
 
 ### OSINT Plugin Ecosystem
 Allows running popular and custom OSINT tools right within the app.
@@ -49,8 +50,8 @@ Allows running popular and custom OSINT tools right within the app.
 I will be very actively maintaining and improving this application and am always open to suggestions. If you have any of those, or come across any bugs, please feel free to open an issue right here on GitHub. Some things definitely planned are:
 
 - **Enhanced Plugin Library**: More OSINT tools and custom integrations
-- **Evidence Automation**: Browser extensions and automated collection workflows
-- **LLM Integration**: AI-powered analysis and insights (StrixyChat integration planned)
+- **Evidence Automation**: Automated collection workflows
+- **LLM Integration**: AI-powered analysis and insights (StrixyChat integration WIP)
 - **Advanced Analytics**: Cross-case patterns, timeline analysis, and reporting dashboards
 - **API Enhancements**: Webhook support and third-party integrations
 - **Cloud-based Deployment**: Native support for cloud platforms like AWS, GCP, and Azure
@@ -239,3 +240,40 @@ Administrators can customize system-wide settings through the Admin dashboard.
 - View notes and download evidence
 - Cannot edit data or run plugins
 - Cannot create cases or manage users
+
+## Browser Extension
+
+Owlculus includes a browser extension that enhances your OSINT workflow by allowing you to capture web pages and save them directly to your cases as evidence.
+
+### Features
+
+- Capture full HTML content of web pages
+- Automatic removal of scripts and sensitive data
+- Direct upload to Owlculus evidence storage
+- Case selection from available cases
+- Configurable API endpoint
+
+### Installation
+
+1. Open Chrome and navigate to `chrome://extensions/`
+2. Enable "Developer mode" in the top right
+3. Click "Load unpacked"
+4. Select the `extension` directory from the Owlculus repository
+
+### Configuration
+
+1. Click the extension icon and then "Open Settings"
+2. Configure your Owlculus API endpoint (e.g., `http://localhost:8000`)
+3. Login with your Owlculus credentials
+4. The extension will remember your authentication
+
+### Usage
+
+1. Navigate to any web page you want to capture
+2. Click the Owlculus extension icon
+3. Select a case from the dropdown
+4. Optionally modify the title and category
+5. Click "Capture Page"
+6. The page HTML will be uploaded as evidence to the selected case
+
+For more details, see the [extension's README](extension/README.md).

@@ -293,6 +293,7 @@ show_usage() {
     echo "  --verbose       Show all Docker build/start output"
     echo "  --non-interactive  Use default values without prompting"
     echo "  --clean         Remove all Owlculus Docker containers, images, and volumes before setup"
+    echo "  --testdata      Create test data after setup (Test Case 1, users, etc.)"
     echo
     echo "Examples:"
     echo "  $0                          # Interactive production setup"
@@ -301,6 +302,7 @@ show_usage() {
     echo "  $0 dev --verbose            # Development setup with full Docker output"
     echo "  $0 --clean                  # Clean setup (removes Owlculus Docker artifacts)"
     echo "  $0 dev --clean --verbose    # Clean dev setup with verbose output"
+    echo "  $0 dev --testdata           # Development setup with test data"
     echo
     echo "Requirements:"
     echo "  - Docker"
@@ -358,6 +360,41 @@ clean_docker_artifacts() {
     echo
 }
 
+# Function to create test data
+create_test_data() {
+    local MODE="$1"
+    local COMPOSE_FILES="$2"
+    
+    print_status "Creating test data..."
+    
+    # Wait a bit longer for services to be fully ready
+    sleep 5
+    
+    # Copy and run the test data script inside the backend container
+    if [ "$MODE" = "dev" ] || [ "$MODE" = "development" ]; then
+        $DOCKER_COMPOSE_CMD $COMPOSE_FILES cp scripts/create_test_data.py backend:/tmp/create_test_data.py
+        $DOCKER_COMPOSE_CMD $COMPOSE_FILES exec -w /app backend python3 /tmp/create_test_data.py
+    else
+        $DOCKER_COMPOSE_CMD $COMPOSE_FILES cp scripts/create_test_data.py backend:/tmp/create_test_data.py
+        $DOCKER_COMPOSE_CMD $COMPOSE_FILES exec -w /app backend python3 /tmp/create_test_data.py
+    fi
+    
+    if [ $? -eq 0 ]; then
+        print_success "Test data created successfully!"
+        echo ""
+        echo "Test data includes:"
+        echo "   • Test Case 1 with Personal client"
+        echo "   • John Doe person entity"
+        echo "   • Person evidence template folders"
+        echo "   • Additional test users:"
+        echo "     - analyst / anapassword1 (Analyst role)"
+        echo "     - investigator / invpassword1 (Investigator role)"
+        echo ""
+    else
+        print_warning "Test data creation encountered issues. Check the output above."
+    fi
+}
+
 # Function to set defaults for non-interactive mode
 set_defaults() {
     local MODE="$1"
@@ -394,6 +431,7 @@ setup_owlculus() {
     local MODE="${1:-production}"
     local VERBOSE="${2:-false}"
     local CLEAN="${3:-false}"
+    local CREATE_TESTDATA="${4:-false}"
     local ADMIN_PASSWORD_TO_DISPLAY=""
     
     # Run cleanup if requested
@@ -579,6 +617,12 @@ EOF
         echo ""
     fi
     
+    # Create test data if requested
+    if [ "$CREATE_TESTDATA" = "true" ]; then
+        echo ""
+        create_test_data "$MODE" "$COMPOSE_FILES"
+    fi
+    
     # Display admin credentials at the very end if they were generated
     if [ -n "$ADMIN_PASSWORD_TO_DISPLAY" ]; then
         echo "Generated admin credentials:"
@@ -594,6 +638,7 @@ EOF
 MODE="production"
 VERBOSE="false"
 CLEAN="false"
+CREATE_TESTDATA="false"
 
 # Parse arguments in order
 for arg in "$@"; do
@@ -606,6 +651,9 @@ for arg in "$@"; do
             ;;
         --clean)
             CLEAN="true"
+            ;;
+        --testdata)
+            CREATE_TESTDATA="true"
             ;;
         production|prod|dev|development|help)
             MODE="$arg"
@@ -621,10 +669,10 @@ fi
 # Main script logic
 case "$MODE" in
     production|prod)
-        setup_owlculus "production" "$VERBOSE" "$CLEAN"
+        setup_owlculus "production" "$VERBOSE" "$CLEAN" "$CREATE_TESTDATA"
         ;;
     development|dev)
-        setup_owlculus "dev" "$VERBOSE" "$CLEAN"
+        setup_owlculus "dev" "$VERBOSE" "$CLEAN" "$CREATE_TESTDATA"
         ;;
     help|--help|-h)
         show_usage
