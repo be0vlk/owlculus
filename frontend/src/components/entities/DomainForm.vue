@@ -34,22 +34,11 @@
 
 <script setup>
 import { usePluginValidation } from '@/composables/usePluginParams'
+import { entityFormProps, entityFormEmits, useEntityFormField } from '@/composables/useEntityForm'
 
-const props = defineProps({
-  modelValue: {
-    type: Object,
-    required: true
-  }
-})
-
-const emit = defineEmits(['update:modelValue'])
+const props = defineProps(entityFormProps)
+const emit = defineEmits(entityFormEmits)
 
 const { domainRule } = usePluginValidation()
-
-const updateField = (field, value) => {
-  emit('update:modelValue', {
-    ...props.modelValue,
-    [field]: value
-  })
-}
+const { updateField } = useEntityFormField(props, emit)
 </script>

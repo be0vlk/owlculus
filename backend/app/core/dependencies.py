@@ -97,57 +97,29 @@ def no_analyst():
     def decorator(func):
         import inspect
 
-        if inspect.iscoroutinefunction(func):
+        def _check_analyst_permission(current_user):
+            if not current_user:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authorized"
+                )
+            if current_user.role == UserRole.ANALYST.value:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized"
+                )
 
+        if inspect.iscoroutinefunction(func):
             @wraps(func)
             async def async_wrapper(*args, **kwargs):
                 current_user = kwargs.get("current_user")
-                if not current_user and args:
-                    from app.database.models import User
-
-                    for arg in args:
-                        if isinstance(arg, User):
-                            current_user = arg
-                            break
-
-                if not current_user:
-                    raise HTTPException(
-                        status_code=status.HTTP_401_UNAUTHORIZED,
-                        detail="Not authorized",
-                    )
-
-                if current_user.role == UserRole.ANALYST.value:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized"
-                    )
+                _check_analyst_permission(current_user)
                 return await func(*args, **kwargs)
-
             return async_wrapper
         else:
-
             @wraps(func)
             def sync_wrapper(*args, **kwargs):
                 current_user = kwargs.get("current_user")
-                if not current_user and args:
-                    from app.database.models import User
-
-                    for arg in args:
-                        if isinstance(arg, User):
-                            current_user = arg
-                            break
-
-                if not current_user:
-                    raise HTTPException(
-                        status_code=status.HTTP_401_UNAUTHORIZED,
-                        detail="Not authorized",
-                    )
-
-                if current_user.role == UserRole.ANALYST.value:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized"
-                    )
+                _check_analyst_permission(current_user)
                 return func(*args, **kwargs)
-
             return sync_wrapper
 
     return decorator

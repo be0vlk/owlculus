@@ -184,13 +184,13 @@ class YourPluginNamePlugin(BasePlugin):
 
 ### 3. Plugin Categories
 
-#### UI Categories (for plugin organization):
+#### UI Categories (for plugin organization)
 - **Person**: Email lookups, social media checks, people search
 - **Network**: DNS, IP analysis, network reconnaissance  
 - **Company**: Business intelligence, corporate research
 - **Other**: Miscellaneous tools
 
-#### Evidence Categories (for case storage):
+#### Evidence Categories (for case storage)
 - **Social Media**: Social platform related evidence
 - **Associates**: People/contacts related evidence  
 - **Network Assets**: IP addresses, domains, network infrastructure
@@ -228,13 +228,13 @@ self.evidence_category = "Network Assets"  # Evidence storage category
 
 Owlculus automatically handles evidence saving for all plugins:
 
-#### Automatic Features:
+#### Automatic Features
 - **Parameter Injection**: `save_to_case` parameter is automatically added to all plugins
 - **Result Collection**: All `"data"` type results are automatically collected during execution
 - **Database Handling**: Database sessions and evidence creation are handled centrally
 - **File Generation**: Evidence files are automatically created with timestamps
 
-#### Default Evidence Format:
+#### Default Evidence Format
 ```
 Plugin Name Results
 ==================================================
@@ -257,7 +257,7 @@ Result #1:
 }
 ```
 
-#### Custom Evidence Formatting:
+#### Custom Evidence Formatting
 Override `_format_evidence_content()` in your plugin for custom formatting:
 
 ```python
@@ -684,7 +684,7 @@ The system supports any API provider. Common examples:
 
 **For Administrators**: API keys are configured through the admin interface at:
 - **Web UI**: Admin Dashboard → Configuration → API Keys
-- **API Endpoints**: 
+- **API Endpoints**:
   - `PUT /api/admin/configuration/api-keys/{provider}` - Set/update key
   - `GET /api/admin/configuration/api-keys` - List configured keys
   - `DELETE /api/admin/configuration/api-keys/{provider}` - Remove key

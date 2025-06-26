@@ -35,19 +35,10 @@
 </template>
 
 <script setup>
-const props = defineProps({
-  modelValue: {
-    type: Object,
-    required: true
-  }
-})
+import { entityFormProps, entityFormEmits, useEntityFormField } from '@/composables/useEntityForm'
 
-const emit = defineEmits(['update:modelValue'])
+const props = defineProps(entityFormProps)
+const emit = defineEmits(entityFormEmits)
 
-const updateField = (field, value) => {
-  emit('update:modelValue', {
-    ...props.modelValue,
-    [field]: value
-  })
-}
+const { updateField } = useEntityFormField(props, emit)
 </script>

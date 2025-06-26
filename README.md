@@ -80,8 +80,8 @@ chmod +x setup.sh
 The setup script will guide you through configuration options.
 
 After setup, Owlculus will be available at your configured URLs (defaults shown). If you are just running this locally, I recommend leaving the defaults:
-- **Frontend:** http://localhost
-- **Backend API:** http://localhost:8000
+- **Frontend:** <http://localhost>
+- **Backend API:** <http://localhost:8000>
 - **Login:** Your configured admin credentials
 
 ### Setup Options
@@ -113,8 +113,8 @@ After setup, Owlculus will be available at your configured URLs (defaults shown)
 ### Development Setup
 
 Development mode includes:
-- **Frontend:** http://localhost:5173 (with hot-reload)
-- **Backend API:** http://localhost:8000 (with hot-reload)
+- **Frontend:** <http://localhost:5173> (with hot-reload)
+- **Backend API:** <http://localhost:8000> (with hot-reload)
 - Source code mounted as volumes for instant updates
 
 ### Management Commands
@@ -228,7 +228,7 @@ Administrators can customize system-wide settings through the Admin dashboard.
 - Run all plugins and access all case data
 - Configure system settings and case number formats
 
-**Investigator** 
+**Investigator**
 - Standard read/write access to assigned cases
 - Create and edit notes, upload evidence
 - Run plugins and analysis tools
