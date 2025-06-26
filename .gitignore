@@ -183,3 +183,4 @@ redis_data/
 megalinter-reports
 /.mega-linter.yml
 /.jscpd.json
+*plan.md

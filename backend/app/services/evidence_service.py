@@ -699,7 +699,7 @@ class EvidenceService:
                 headers={
                     "Cache-Control": "max-age=3600",
                     "X-Content-Type-Options": "nosniff",
-                }
+                },
             )
 
         except HTTPException:

@@ -108,18 +108,22 @@ def no_analyst():
                 )
 
         if inspect.iscoroutinefunction(func):
+
             @wraps(func)
             async def async_wrapper(*args, **kwargs):
                 current_user = kwargs.get("current_user")
                 _check_analyst_permission(current_user)
                 return await func(*args, **kwargs)
+
             return async_wrapper
         else:
+
             @wraps(func)
             def sync_wrapper(*args, **kwargs):
                 current_user = kwargs.get("current_user")
                 _check_analyst_permission(current_user)
                 return func(*args, **kwargs)
+
             return sync_wrapper
 
     return decorator

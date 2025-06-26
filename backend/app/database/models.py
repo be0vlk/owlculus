@@ -115,3 +115,54 @@ class Case(SQLModel, table=True):
     users: List["User"] = Relationship(back_populates="cases", link_model=CaseUserLink)
     evidence: List["Evidence"] = Relationship(back_populates="case")
     entities: List["Entity"] = Relationship(back_populates="case")
+    hunt_executions: List["HuntExecution"] = Relationship(back_populates="case")
+
+
+class Hunt(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(unique=True, index=True)
+    display_name: str
+    description: str
+    category: str
+    version: str = Field(default="1.0.0")
+    definition_json: dict = Field(sa_column=Column(JSON))
+    is_active: bool = Field(default=True)
+    created_at: datetime = Field(default_factory=get_utc_now)
+    updated_at: datetime = Field(default_factory=get_utc_now)
+
+    executions: List["HuntExecution"] = Relationship(back_populates="hunt")
+
+
+class HuntExecution(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    hunt_id: int = Field(foreign_key="hunt.id")
+    case_id: int = Field(foreign_key="case.id")
+    status: str = Field(default="pending")
+    progress: float = Field(default=0.0)
+    initial_parameters: dict = Field(sa_column=Column(JSON))
+    context_data: Optional[dict] = Field(default=None, sa_column=Column(JSON))
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=get_utc_now)
+    created_by_id: int = Field(foreign_key="user.id")
+
+    hunt: Hunt = Relationship(back_populates="executions")
+    case: Case = Relationship(back_populates="hunt_executions")
+    creator: User = Relationship()
+    steps: List["HuntStep"] = Relationship(back_populates="execution")
+
+
+class HuntStep(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    execution_id: int = Field(foreign_key="huntexecution.id")
+    step_id: str
+    plugin_name: str
+    status: str = Field(default="pending")
+    parameters: dict = Field(sa_column=Column(JSON))
+    output: Optional[dict] = Field(default=None, sa_column=Column(JSON))
+    error_details: Optional[str] = None
+    retry_count: int = Field(default=0)
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+
+    execution: HuntExecution = Relationship(back_populates="steps")
