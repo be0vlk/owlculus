@@ -237,7 +237,17 @@ class BasePlugin(ABC):
             if any(keyword in folder_title for keyword in category_keywords):
                 return folder.folder_path, folder.id
 
-        # If no good match found, use the first available folder
+        # If no good match found, prefer "Other" folder as fallback
+        other_folder = None
+        for folder in folders:
+            if folder.title.lower() == "other":
+                other_folder = folder
+                break
+
+        if other_folder:
+            return other_folder.folder_path, other_folder.id
+
+        # If no "Other" folder exists, use the first available folder
         if folders:
             return folders[0].folder_path, folders[0].id
 

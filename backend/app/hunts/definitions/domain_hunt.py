@@ -34,7 +34,7 @@ class DomainHunt(BaseHunt):
             ),
             HuntStepDefinition(
                 step_id="dns_records",
-                plugin_name="DnsLookupPlugin",
+                plugin_name="DnsLookup",
                 display_name="DNS records lookup",
                 description="Retrieve all DNS records for the domain",
                 parameter_mapping={"domain": "initial.domain"},

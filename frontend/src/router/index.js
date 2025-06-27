@@ -60,6 +60,24 @@ const routes = [
     component: () => import('../views/AdminDashboard.vue'),
     meta: { requiresAuth: true, requiresAdmin: true },
   },
+  {
+    path: '/hunts',
+    name: 'Hunts',
+    component: () => import('../views/HuntsDashboard.vue'),
+    meta: { requiresAuth: true, requiresNotAnalyst: true },
+  },
+  {
+    path: '/hunts/execution/:id',
+    name: 'HuntExecution',
+    component: () => import('../views/HuntExecution.vue'),
+    meta: { requiresAuth: true, requiresNotAnalyst: true },
+  },
+  {
+    path: '/hunts/execution/:id/results',
+    name: 'HuntExecutionResults',
+    component: () => import('../views/HuntResultsView.vue'),
+    meta: { requiresAuth: true, requiresNotAnalyst: true },
+  },
 ]
 
 const router = createRouter({
@@ -86,6 +104,7 @@ router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
   const requiresAuth = to.matched.some((record) => record.meta.requiresAuth)
   const requiresAdmin = to.matched.some((record) => record.meta.requiresAdmin)
+  const requiresNotAnalyst = to.matched.some((record) => record.meta.requiresNotAnalyst)
 
   // Only initialize auth store if route requires authentication or we're checking login redirect
   if (requiresAuth || to.path === '/login') {
@@ -105,6 +124,15 @@ router.beforeEach(async (to, from, next) => {
     if (requiresAdmin) {
       if (authStore.user?.role !== 'Admin') {
         // Redirect directly to cases instead of root to avoid extra redirect
+        next('/cases')
+        return
+      }
+    }
+
+    // Check if route restricts Analyst access
+    if (requiresNotAnalyst) {
+      if (authStore.user?.role === 'Analyst') {
+        // Redirect analysts to cases page
         next('/cases')
         return
       }
