@@ -79,13 +79,10 @@
         <!-- Hunt Name Column -->
         <template #[`item.hunt_display_name`]="{ item }">
           <div class="d-flex align-center">
-            <v-avatar :color="getCategoryColor(item.hunt_category)" size="32" class="me-3">
-              <v-icon :icon="getCategoryIcon(item.hunt_category)" color="white" size="small" />
+            <v-avatar :color="getCategoryColor(item.hunt_category)" size="32" variant="tonal" class="me-3">
+              <v-icon :icon="getCategoryIcon(item.hunt_category)" size="small" />
             </v-avatar>
-            <div>
-              <div class="text-body-2 font-weight-medium">{{ item.hunt_display_name }}</div>
-              <div class="text-caption text-medium-emphasis">{{ item.hunt_category }}</div>
-            </div>
+            <div class="text-body-2 font-weight-medium">{{ item.hunt_display_name }}</div>
           </div>
         </template>
 
@@ -102,7 +99,7 @@
             :color="getStatusColor(item.status)"
             :prepend-icon="getStatusIcon(item.status)"
             size="small"
-            variant="flat"
+            variant="tonal"
           >
             {{ getStatusText(item.status) }}
           </v-chip>
@@ -125,10 +122,7 @@
 
         <!-- Created At Column -->
         <template #[`item.created_at`]="{ item }">
-          <div>
-            <div class="text-body-2">{{ formatDate(item.created_at) }}</div>
-            <div class="text-caption text-medium-emphasis">{{ formatTime(item.created_at) }}</div>
-          </div>
+          <div class="text-body-2">{{ formatDate(item.created_at) }}</div>
         </template>
 
         <!-- Duration Column -->
@@ -138,50 +132,12 @@
 
         <!-- Actions Column -->
         <template #[`item.actions`]="{ item }">
-          <div class="d-flex align-center ga-1">
-            <v-btn
-              icon="mdi-eye"
-              size="small"
-              variant="text"
-              @click="$emit('view-details', item.id)"
-            />
-            <v-btn
-              v-if="item.status === 'completed' || item.status === 'partial'"
-              icon="mdi-file-document"
-              size="small"
-              variant="text"
-              @click="$emit('view-results', item.id)"
-            />
-            <v-menu>
-              <template #activator="{ props }">
-                <v-btn
-                  icon="mdi-dots-vertical"
-                  size="small"
-                  variant="text"
-                  v-bind="props"
-                />
-              </template>
-              <v-list density="compact">
-                <v-list-item
-                  prepend-icon="mdi-eye"
-                  title="View Details"
-                  @click="$emit('view-details', item.id)"
-                />
-                <v-list-item
-                  v-if="item.status === 'completed' || item.status === 'partial'"
-                  prepend-icon="mdi-file-document"
-                  title="View Results"
-                  @click="$emit('view-results', item.id)"
-                />
-                <v-list-item
-                  v-if="item.status === 'failed'"
-                  prepend-icon="mdi-refresh"
-                  title="Retry Execution"
-                  @click="$emit('retry-execution', item)"
-                />
-              </v-list>
-            </v-menu>
-          </div>
+          <v-btn
+            icon="mdi-eye"
+            size="small"
+            variant="text"
+            @click="$emit('view-details', item.id)"
+          />
         </template>
       </v-data-table>
     </v-card>
@@ -190,7 +146,8 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import { getHuntTargetSummary } from '@/utils/huntDisplayUtils'
+import { getHuntTargetSummary, getCategoryColor, getCategoryIcon } from '@/utils/huntDisplayUtils'
+import { formatDate } from '@/composables/dateUtils'
 
 const props = defineProps({
   executions: {
@@ -203,7 +160,7 @@ const props = defineProps({
   }
 })
 
-defineEmits(['view-details', 'view-results', 'retry-execution'])
+defineEmits(['view-details'])
 
 // Local state
 const searchQuery = ref('')
@@ -219,7 +176,7 @@ const headers = [
   { title: 'Progress', key: 'progress', sortable: true },
   { title: 'Started', key: 'created_at', sortable: true },
   { title: 'Duration', key: 'duration', sortable: false },
-  { title: 'Actions', key: 'actions', sortable: false, width: 120 }
+  { title: 'Actions', key: 'actions', sortable: false, width: 80 }
 ]
 
 // Filter options
@@ -275,31 +232,7 @@ const filteredExecutions = computed(() => {
 })
 
 // Methods
-const getCategoryIcon = (category) => {
-  const iconMap = {
-    person: 'mdi-account',
-    domain: 'mdi-web',
-    company: 'mdi-office-building',
-    ip: 'mdi-ip-network',
-    phone: 'mdi-phone',
-    email: 'mdi-email',
-    general: 'mdi-magnify'
-  }
-  return iconMap[category] || iconMap.general
-}
 
-const getCategoryColor = (category) => {
-  const colorMap = {
-    person: 'blue',
-    domain: 'green',
-    company: 'orange',
-    ip: 'purple',
-    phone: 'teal',
-    email: 'red',
-    general: 'grey'
-  }
-  return colorMap[category] || colorMap.general
-}
 
 const getStatusColor = (status) => {
   switch (status) {
@@ -337,17 +270,7 @@ const getStatusText = (status) => {
   }
 }
 
-const formatDate = (dateString) => {
-  if (!dateString) return ''
-  const date = new Date(dateString)
-  return date.toLocaleDateString()
-}
-
-const formatTime = (dateString) => {
-  if (!dateString) return ''
-  const date = new Date(dateString)
-  return date.toLocaleTimeString()
-}
+// formatDate and formatTimeOnly are now imported from dateUtils
 
 const calculateDuration = (execution) => {
   if (!execution.started_at) return 'N/A'
@@ -381,7 +304,28 @@ const getTargetDisplay = (execution) => {
   const initialParams = execution.initial_parameters || {}
   const huntCategory = execution.hunt_category || 'general'
   
-  return getHuntTargetSummary(initialParams, huntCategory)
+  // First try to get the target from the helper function
+  const target = getHuntTargetSummary(initialParams, huntCategory)
+  
+  // If we got a meaningful result, return it
+  if (target && target !== 'N/A') {
+    return target
+  }
+  
+  // Otherwise, try to extract any parameter value as fallback
+  const paramKeys = Object.keys(initialParams)
+  if (paramKeys.length > 0) {
+    // Get the first non-empty parameter value
+    for (const key of paramKeys) {
+      const value = initialParams[key]
+      if (value && typeof value === 'string' && value.trim()) {
+        // Truncate if too long
+        return value.length > 30 ? value.substring(0, 27) + '...' : value
+      }
+    }
+  }
+  
+  return 'N/A'
 }
 </script>
 

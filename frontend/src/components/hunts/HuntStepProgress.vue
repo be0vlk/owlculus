@@ -29,11 +29,11 @@
         <div class="d-flex align-center mb-2">
           <div v-if="step.started_at" class="me-4">
             <v-icon icon="mdi-clock-start" size="small" class="me-1" />
-            <span class="text-caption">Started: {{ formatTime(step.started_at) }}</span>
+            <span class="text-caption">Started: {{ formatTimeOnly(step.started_at) }}</span>
           </div>
           <div v-if="step.completed_at" class="me-4">
             <v-icon icon="mdi-clock-end" size="small" class="me-1" />
-            <span class="text-caption">Completed: {{ formatTime(step.completed_at) }}</span>
+            <span class="text-caption">Completed: {{ formatTimeOnly(step.completed_at) }}</span>
           </div>
           <div v-if="duration" class="me-4">
             <v-icon icon="mdi-timer" size="small" class="me-1" />
@@ -132,6 +132,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { formatTimeOnly } from '@/composables/dateUtils'
 
 const props = defineProps({
   step: {
@@ -212,11 +213,6 @@ const duration = computed(() => {
 })
 
 // Methods
-const formatTime = (timeString) => {
-  if (!timeString) return ''
-  const date = new Date(timeString)
-  return date.toLocaleTimeString()
-}
 
 const formatParameterValue = (value) => {
   if (value === null || value === undefined) return 'null'

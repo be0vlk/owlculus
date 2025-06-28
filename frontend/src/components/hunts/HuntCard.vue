@@ -86,18 +86,6 @@ const categoryIcon = computed(() => {
   return iconMap[props.hunt.category] || iconMap.general
 })
 
-const categoryColor = computed(() => {
-  const colorMap = {
-    person: 'primary',
-    domain: 'success', 
-    company: 'warning',
-    ip: 'info',
-    phone: 'primary',
-    email: 'error',
-    general: 'primary'
-  }
-  return colorMap[props.hunt.category] || 'primary'
-})
 
 const displayCategory = computed(() => {
   if (!props.hunt.category) return 'Other'

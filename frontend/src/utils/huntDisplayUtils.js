@@ -8,6 +8,8 @@
  * @param {string} huntCategory - The hunt category (domain, person, company, etc.)
  * @returns {string} Display-friendly parameter value or empty string
  */
+import { formatDate, formatTimeOnly } from '@/composables/dateUtils'
+
 export function extractHuntTargetDisplay(initialParameters, huntCategory) {
   if (!initialParameters || typeof initialParameters !== 'object') {
     return ''
@@ -157,28 +159,25 @@ export const getCategoryIcon = (category) => {
 // Category color mapping
 export const getCategoryColor = (category) => {
   const colorMap = {
-    person: 'blue',
-    domain: 'green',
-    company: 'orange',
-    ip: 'purple',
-    phone: 'teal',
-    email: 'red',
-    general: 'grey'
+    person: 'primary',
+    domain: 'info',
+    company: 'warning',
+    ip: 'secondary',
+    phone: 'primary-darken-1',
+    email: 'error',
+    general: 'secondary'
   }
   return colorMap[category] || colorMap.general
 }
 
 // Format date/time
 export const formatDateTime = (dateString) => {
-  if (!dateString) return 'N/A'
-  const date = new Date(dateString)
-  return date.toLocaleString()
+  return formatDate(dateString) || 'N/A'
 }
 
 // Format time only
 export const formatTime = (timestamp) => {
-  const date = new Date(timestamp)
-  return date.toLocaleTimeString()
+  return formatTimeOnly(timestamp)
 }
 
 // Calculate and format duration

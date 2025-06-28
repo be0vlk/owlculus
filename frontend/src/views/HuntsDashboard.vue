@@ -84,7 +84,6 @@
                     :cancelling="cancellingExecutions.has(execution.id)"
                     @cancel="handleCancelExecution"
                     @view-details="handleViewExecutionDetails"
-                    @view-results="handleViewExecutionResults"
                   />
                 </v-col>
               </v-row>
@@ -104,7 +103,6 @@
                   <HuntProgressCard
                     :execution="execution"
                     @view-details="handleViewExecutionDetails"
-                    @view-results="handleViewExecutionResults"
                   />
                 </v-col>
               </v-row>
@@ -131,8 +129,6 @@
               :executions="huntStore.executionHistory.filter(exec => exec.status !== 'running' && exec.status !== 'pending')"
               :loading="historyLoading"
               @view-details="handleViewExecutionDetails"
-              @view-results="handleViewExecutionResults"
-              @retry-execution="handleRetryExecution"
             />
           </div>
         </v-tabs-window-item>
@@ -299,15 +295,9 @@ const handleViewExecutionDetails = (executionId) => {
   router.push(`/hunts/execution/${executionId}`)
 }
 
-const handleViewExecutionResults = (executionId) => {
-  router.push(`/hunts/execution/${executionId}/results`)
-}
 
-const handleRetryExecution = async (execution) => {
-  // Pre-populate modal with previous execution data
-  selectedHunt.value = execution.hunt
-  showExecutionModal.value = true
-}
+
+
 
 // Lifecycle
 onMounted(async () => {

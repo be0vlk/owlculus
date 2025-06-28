@@ -73,6 +73,8 @@ class HuntExecutionResponse(BaseModel):
     # Related data
     hunt: Optional[HuntResponse] = None
     steps: Optional[List[HuntStepResponse]] = None
+    case: Optional[Dict[str, Any]] = None  # Simple case info
+    created_by: Optional[Dict[str, Any]] = None  # Simple user info
 
     class Config:
         orm_mode = True
@@ -86,6 +88,7 @@ class HuntExecutionListResponse(BaseModel):
     case_id: int
     status: str
     progress: float
+    initial_parameters: Dict[str, Any]
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     created_at: datetime

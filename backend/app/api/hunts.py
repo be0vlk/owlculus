@@ -133,6 +133,8 @@ async def get_execution_status(
 
     # Load related data
     hunt = db.get(models.Hunt, execution.hunt_id)
+    case = db.get(models.Case, execution.case_id)
+    created_by = db.get(models.User, execution.created_by_id)
     steps = None
 
     if include_steps:
@@ -153,6 +155,20 @@ async def get_execution_status(
         steps=(
             [schemas.HuntStepResponse(**step.__dict__) for step in steps]
             if steps
+            else None
+        ),
+        case=(
+            {"id": case.id, "title": case.title, "case_number": case.case_number}
+            if case
+            else None
+        ),
+        created_by=(
+            {
+                "id": created_by.id,
+                "email": created_by.email,
+                "username": created_by.username,
+            }
+            if created_by
             else None
         )
     )

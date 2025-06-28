@@ -117,7 +117,7 @@
                   Case
                 </v-list-item-subtitle>
                 <v-list-item-title class="text-body-1">
-                  Case #{{ execution.case_id }}
+                  {{ execution.case?.case_number || `Case #${execution.case_id}` }}
                 </v-list-item-title>
               </div>
             </v-col>
@@ -137,7 +137,7 @@
                   Started By
                 </v-list-item-subtitle>
                 <v-list-item-title class="text-body-1">
-                  User #{{ execution.created_by_id }}
+                  {{ execution.created_by?.username || `User #${execution.created_by_id}` }}
                 </v-list-item-title>
               </div>
             </v-col>
@@ -147,7 +147,7 @@
                   Started At
                 </v-list-item-subtitle>
                 <v-list-item-title class="text-body-1">
-                  {{ formatDateTime(execution.started_at) }}
+                  {{ formatDate(execution.started_at) }}
                 </v-list-item-title>
               </div>
             </v-col>
@@ -157,7 +157,7 @@
                   {{ execution.completed_at ? 'Completed At' : 'Duration' }}
                 </v-list-item-subtitle>
                 <v-list-item-title class="text-body-1">
-                  {{ execution.completed_at ? formatDateTime(execution.completed_at) : elapsedTime }}
+                  {{ execution.completed_at ? formatDate(execution.completed_at) : elapsedTime }}
                 </v-list-item-title>
               </div>
             </v-col>
@@ -196,138 +196,62 @@
         </v-card-text>
       </v-card>
 
-      <!-- Tabbed Interface -->
-      <v-tabs
-        v-model="activeTab"
-        class="mb-4"
-        color="primary"
-      >
-        <v-tab value="progress">
-          <v-icon start>mdi-play-box-multiple</v-icon>
-          Progress & Steps
-        </v-tab>
-        <v-tab v-if="hasResults" value="results">
-          <v-icon start>mdi-chart-box</v-icon>
-          Results
-        </v-tab>
-        <v-tab v-if="createdEvidence.length > 0" value="evidence">
-          <v-icon start>mdi-folder-multiple</v-icon>
-          Evidence
-        </v-tab>
-      </v-tabs>
-
-      <v-window v-model="activeTab">
-        <!-- Progress & Steps Tab -->
-        <v-window-item value="progress">
-          <!-- Hunt Steps -->
-          <v-card variant="outlined" class="mb-6">
-        <v-card-title class="pa-4">
-          <v-icon icon="mdi-play-box-multiple" class="me-2" />
-          Hunt Steps
-          <v-spacer />
-          <v-chip size="small" variant="outlined">
-            {{ execution.steps?.length || 0 }} steps
-          </v-chip>
-        </v-card-title>
-
-        <v-divider />
-
-        <v-card-text class="pa-0">
-          <div v-if="execution.steps && execution.steps.length > 0">
-            <HuntStepProgress
-              v-for="(step, index) in execution.steps"
-              :key="step.id"
-              :step="step"
-              :step-number="index + 1"
-              :is-last="index === execution.steps.length - 1"
-              @view-output="handleViewStepOutput"
-              @view-error="handleViewStepError"
-            />
-          </div>
-          <div v-else class="text-center pa-8">
-            <v-icon icon="mdi-information" size="48" color="grey" class="mb-2" />
-            <div class="text-body-1">No step information available</div>
-          </div>
-        </v-card-text>
-      </v-card>
-
-          <!-- Real-time Log -->
+      <!-- Main Content Section -->
+          <!-- Real-time Log (for running executions) -->
           <v-card v-if="execution.status === 'running'" variant="outlined" class="mb-6">
-        <v-card-title class="pa-4">
-          <v-icon icon="mdi-console" class="me-2" />
-          Live Execution Log
-          <v-spacer />
-          <v-btn
-            icon="mdi-refresh"
-            variant="text"
-            size="small"
-            @click="refreshLog"
-          />
-        </v-card-title>
-
-        <v-divider />
-
-        <v-card-text class="pa-0">
-          <div class="execution-log">
-            <div
-              v-for="(logEntry, index) in executionLog"
-              :key="index"
-              class="log-entry pa-3"
-              :class="getLogEntryClass(logEntry.type)"
-            >
-              <span class="text-caption">{{ formatLogTime(logEntry.timestamp) }}</span>
-              <span class="ml-2">{{ logEntry.message }}</span>
-            </div>
-            <div v-if="executionLog.length === 0" class="text-center pa-4 text-medium-emphasis">
-              Waiting for log entries...
-            </div>
-          </div>
-        </v-card-text>
-      </v-card>
-        </v-window-item>
-
-        <!-- Results Tab -->
-        <v-window-item v-if="hasResults" value="results">
-          <!-- Results Summary -->
-          <v-card variant="outlined" class="mb-6">
             <v-card-title class="pa-4">
-              <v-icon icon="mdi-chart-box" class="me-2" />
-              Results Summary
-            </v-card-title>
-
-            <v-divider />
-
-            <v-card-text class="pa-4">
-              <HuntResultsSummary
-                :execution="execution"
-                :context-data="execution.context_data"
-                @view-step-results="selectedStep = $event"
-                @view-evidence="viewEvidence"
-              />
-            </v-card-text>
-          </v-card>
-
-          <!-- Step-by-Step Results -->
-          <v-card variant="outlined" class="mb-6">
-            <v-card-title class="pa-4">
-              <v-icon icon="mdi-format-list-numbered" class="me-2" />
-              Step Results
+              <v-icon icon="mdi-console" class="me-2" />
+              Live Execution Log
               <v-spacer />
-              <v-btn-toggle
-                v-model="stepFilter"
-                variant="outlined"
-                density="compact"
-                divided
-              >
-                <v-btn value="all" size="small">All</v-btn>
-                <v-btn value="completed" size="small">Completed</v-btn>
-                <v-btn value="failed" size="small">Failed</v-btn>
-              </v-btn-toggle>
+              <v-btn
+                icon="mdi-refresh"
+                variant="text"
+                size="small"
+                @click="refreshLog"
+              />
             </v-card-title>
 
             <v-divider />
 
             <v-card-text class="pa-0">
+              <div class="execution-log">
+                <div
+                  v-for="(logEntry, index) in executionLog"
+                  :key="index"
+                  class="log-entry pa-3"
+                  :class="getLogEntryClass(logEntry.type)"
+                >
+                  <span class="text-caption">{{ formatLogTime(logEntry.timestamp) }}</span>
+                  <span class="ml-2">{{ logEntry.message }}</span>
+                </div>
+                <div v-if="executionLog.length === 0" class="text-center pa-4 text-medium-emphasis">
+                  Waiting for log entries...
+                </div>
+              </div>
+            </v-card-text>
+          </v-card>
+
+          <!-- Hunt Results -->
+          <v-card variant="outlined" class="mb-6">
+            <v-card-title class="pa-4">
+              <v-icon icon="mdi-chart-box" class="me-2" />
+              Hunt Results
+            </v-card-title>
+
+            <v-divider />
+
+            <v-card-text class="pa-4">
+              <!-- Summary Statistics -->
+              <HuntResultsSummary
+                :execution="execution"
+                :context-data="execution.context_data"
+                @view-evidence="viewEvidence"
+              />
+              
+              <!-- Step Results Section -->
+              <v-divider class="my-4" />
+              
+              <div class="text-h6 mb-3">Step Results</div>
               <div v-if="filteredSteps.length > 0">
                 <v-expansion-panels variant="accordion">
                   <v-expansion-panel
@@ -376,15 +300,13 @@
               </div>
               <div v-else class="text-center pa-8">
                 <v-icon icon="mdi-information" size="48" color="grey" class="mb-2" />
-                <div class="text-body-1">No {{ stepFilter }} steps found</div>
+                <div class="text-body-1">No steps available</div>
               </div>
             </v-card-text>
           </v-card>
-        </v-window-item>
 
-        <!-- Evidence Tab -->
-        <v-window-item v-if="createdEvidence.length > 0" value="evidence">
-          <v-card variant="outlined">
+          <!-- Created Evidence -->
+          <v-card v-if="createdEvidence.length > 0" variant="outlined" class="mb-6">
             <v-card-title class="pa-4">
               <v-icon icon="mdi-folder-multiple" class="me-2" />
               Created Evidence
@@ -416,8 +338,6 @@
               </v-list>
             </v-card-text>
           </v-card>
-        </v-window-item>
-      </v-window>
     </div>
 
     <!-- Step Output Modal -->
@@ -463,11 +383,11 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useHuntStore } from '@/stores/hunt'
 import { useNotifications } from '@/composables/useNotifications'
+import { formatDate } from '@/composables/dateUtils'
 import { 
   getStatusColor, 
   getStatusIcon, 
   getStatusText,
-  formatDateTime,
   formatTime,
   calculateDuration,
   formatParameterName,
@@ -476,7 +396,6 @@ import {
   formatFileSize
 } from '@/utils/huntDisplayUtils'
 import BaseDashboard from '@/components/BaseDashboard.vue'
-import HuntStepProgress from '@/components/hunts/HuntStepProgress.vue'
 import HuntResultsSummary from '@/components/hunts/HuntResultsSummary.vue'
 import HuntStepResults from '@/components/hunts/HuntStepResults.vue'
 
@@ -496,8 +415,6 @@ const showStepOutputModal = ref(false)
 const showStepErrorModal = ref(false)
 const executionLog = ref([])
 const elapsedTime = ref('')
-const activeTab = ref('overview')
-const stepFilter = ref('all')
 const exportingPDF = ref(false)
 let elapsedInterval = null
 
@@ -528,16 +445,7 @@ const hasResults = computed(() => {
 })
 
 const filteredSteps = computed(() => {
-  if (!execution.value?.steps) return []
-  
-  switch (stepFilter.value) {
-    case 'completed':
-      return execution.value.steps.filter(step => step.status === 'completed')
-    case 'failed':
-      return execution.value.steps.filter(step => step.status === 'failed')
-    default:
-      return execution.value.steps
-  }
+  return execution.value?.steps || []
 })
 
 const createdEvidence = computed(() => {
@@ -548,7 +456,9 @@ const createdEvidence = computed(() => {
 })
 
 const displayCategory = computed(() => {
-  if (!execution.value?.hunt_category) return 'N/A'
+  // Try hunt_category first, then hunt.category
+  const category = execution.value?.hunt_category || execution.value?.hunt?.category
+  if (!category) return 'N/A'
   
   // Map hunt categories to display categories (matching HuntCatalog filter logic)
   const categoryMapping = {
@@ -560,8 +470,8 @@ const displayCategory = computed(() => {
     'other': 'Other'
   }
   
-  return categoryMapping[execution.value.hunt_category.toLowerCase()] || 
-         execution.value.hunt_category.charAt(0).toUpperCase() + execution.value.hunt_category.slice(1).toLowerCase()
+  return categoryMapping[category.toLowerCase()] || 
+         category.charAt(0).toUpperCase() + category.slice(1).toLowerCase()
 })
 
 // Methods
@@ -602,15 +512,6 @@ const handleCancelExecution = async () => {
   }
 }
 
-const handleViewStepOutput = (step) => {
-  selectedStep.value = step
-  showStepOutputModal.value = true
-}
-
-const handleViewStepError = (step) => {
-  selectedStep.value = step
-  showStepErrorModal.value = true
-}
 
 const exportPDF = async () => {
   try {
@@ -711,10 +612,7 @@ watch(() => huntStore.activeExecutions[executionId.value], (updatedExecution) =>
     if (updatedExecution.status !== 'running') {
       stopElapsedTimer()
       
-      // Auto-switch to results tab when execution completes
-      if (updatedExecution.status === 'completed' || updatedExecution.status === 'partial') {
-        activeTab.value = 'results'
-      }
+      // No need to auto-switch since results is the default tab
     }
   }
 })

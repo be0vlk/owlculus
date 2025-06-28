@@ -62,44 +62,61 @@
       <div v-else-if="field.type === 'array' && field.isArray">
         <div v-if="arrayValue && arrayValue.length > 0">
           <v-data-table
+            v-model:page="currentPage"
+            v-model:items-per-page="itemsPerPage"
             :headers="subdomainHeaders"
             :items="arrayValue"
+            :items-length="arrayValue.length"
+            :items-per-page-options="[10, 25, 50, 100]"
             density="compact"
-            hide-default-footer
-            :items-per-page="-1"
-            class="elevation-0"
+            class="elevation-0 subdomain-table"
+            :loading="loading"
+            item-key="subdomain"
+            hover
+            items-per-page-text="Subdomains per page:"
           >
+            <template v-slot:top>
+              <v-toolbar flat class="px-4">
+                <v-spacer />
+                <v-btn
+                  variant="outlined"
+                  size="small"
+                  prepend-icon="mdi-download"
+                  @click="exportSubdomains"
+                >
+                  Export
+                </v-btn>
+              </v-toolbar>
+            </template>
             <template #[`item.subdomain`]="{ item }">
               <div class="d-flex align-center">
-                <v-icon size="small" class="mr-2">mdi-subdirectory-arrow-right</v-icon>
-                <span class="font-weight-medium">{{ item.subdomain }}</span>
+                <v-icon size="small" class="me-2">mdi-subdirectory-arrow-right</v-icon>
+                <span class="text-body-2 font-weight-medium">{{ item.subdomain }}</span>
               </div>
             </template>
             <template #[`item.ip`]="{ item }">
               <div v-if="item.ip" class="d-flex align-center">
-                <v-icon size="x-small" class="mr-1">mdi-ip-network</v-icon>
-                {{ item.ip }}
+                <v-icon size="x-small" class="me-1">mdi-ip-network</v-icon>
+                <span class="text-body-2">{{ item.ip }}</span>
               </div>
-              <span v-else class="text-grey">-</span>
+              <span v-else class="text-body-2 text-medium-emphasis">-</span>
             </template>
             <template #[`item.resolved`]="{ item }">
-              <div class="d-flex align-center">
-                <v-icon 
-                  size="x-small" 
-                  class="mr-1"
-                  :color="item.resolved ? 'success' : 'error'"
-                >
-                  {{ item.resolved ? 'mdi-check-circle' : 'mdi-close-circle' }}
-                </v-icon>
+              <v-chip
+                :color="item.resolved ? 'success' : 'error'"
+                :prepend-icon="item.resolved ? 'mdi-check-circle' : 'mdi-close-circle'"
+                size="small"
+                variant="tonal"
+              >
                 {{ item.resolved ? 'Yes' : 'No' }}
-              </div>
+              </v-chip>
             </template>
             <template #[`item.source`]="{ item }">
               <div v-if="item.source" class="d-flex align-center">
-                <v-icon size="x-small" class="mr-1">mdi-source-branch</v-icon>
-                {{ item.source }}
+                <v-icon size="x-small" class="me-1">mdi-source-branch</v-icon>
+                <span class="text-body-2">{{ item.source }}</span>
               </div>
-              <span v-else class="text-grey">-</span>
+              <span v-else class="text-body-2 text-medium-emphasis">-</span>
             </template>
           </v-data-table>
         </div>
@@ -134,7 +151,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import EntityTag from './EntityTag.vue'
 import { useEntityIcons } from '../../composables/useEntityIcons.js'
 import { useEntityDisplay } from '../../composables/useEntityDisplay.js'
@@ -158,9 +175,14 @@ const regularValue = computed(() =>
   getFieldValue(props.entity.data, props.section.parentField, props.field.id)
 )
 
+const currentPage = ref(1)
+const itemsPerPage = ref(10)
+const loading = ref(false)
+
 const arrayValue = computed(() => 
   getFieldValue(props.entity.data, props.section.parentField, props.field.id)
 )
+
 
 const subdomainHeaders = computed(() => [
   { title: 'Subdomain', value: 'subdomain', sortable: true },
@@ -168,4 +190,49 @@ const subdomainHeaders = computed(() => [
   { title: 'Resolved', value: 'resolved', sortable: true },
   { title: 'Source', value: 'source', sortable: true }
 ])
+
+const exportSubdomains = () => {
+  try {
+    const subdomains = arrayValue.value || []
+    
+    if (subdomains.length === 0) {
+      return
+    }
+
+    const headers = ['Subdomain', 'IP Address', 'Resolved', 'Source']
+    const csvData = [
+      headers.join(','),
+      ...subdomains.map(item => [
+        `"${(item.subdomain || '').replace(/"/g, '""')}"`,
+        `"${(item.ip || '').replace(/"/g, '""')}"`,
+        item.resolved ? 'Yes' : 'No',
+        `"${(item.source || '').replace(/"/g, '""')}"`
+      ].join(','))
+    ].join('\n')
+
+    const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', `subdomains-${props.field.label.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  } catch (error) {
+    console.error('Error exporting subdomains:', error)
+  }
+}
 </script>
+
+<style scoped>
+.subdomain-table :deep(.v-data-table__td) {
+  padding: 8px 16px;
+}
+
+.subdomain-table :deep(.v-data-table__th) {
+  padding: 8px 16px;
+  font-weight: 600;
+}
+</style>

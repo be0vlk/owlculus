@@ -31,3 +31,15 @@ export function formatDateOnly(dateString) {
     timeZone: 'UTC',
   }).format(date)
 }
+
+export function formatTimeOnly(dateString) {
+  if (!dateString) return ''
+  // Parse the datetime string directly - backend provides ISO format with timezone
+  const date = new Date(dateString)
+  return new Intl.DateTimeFormat('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'UTC',
+  }).format(date)
+}

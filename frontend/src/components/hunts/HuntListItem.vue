@@ -86,6 +86,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { getCategoryColor } from '@/utils/huntDisplayUtils'
 
 const props = defineProps({
   hunt: {
@@ -111,16 +112,7 @@ const categoryIcon = computed(() => {
 })
 
 const categoryColor = computed(() => {
-  const colorMap = {
-    person: 'blue',
-    domain: 'green',
-    company: 'orange',
-    ip: 'purple',
-    phone: 'teal',
-    email: 'red',
-    general: 'grey'
-  }
-  return colorMap[props.hunt.category] || colorMap.general
+  return getCategoryColor(props.hunt.category)
 })
 
 const requiredParams = computed(() => {

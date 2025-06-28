@@ -39,11 +39,11 @@
       <div class="d-flex align-center justify-space-between mb-4">
         <div class="d-flex align-center">
           <v-icon icon="mdi-clock-start" size="small" class="me-1" />
-          <span class="text-caption">Started: {{ formatDateTime(execution.started_at) }}</span>
+          <span class="text-caption">Started: {{ formatDate(execution.started_at) }}</span>
         </div>
         <div v-if="execution.completed_at" class="d-flex align-center">
           <v-icon icon="mdi-clock-end" size="small" class="me-1" />
-          <span class="text-caption">Completed: {{ formatDateTime(execution.completed_at) }}</span>
+          <span class="text-caption">Completed: {{ formatDate(execution.completed_at) }}</span>
         </div>
         <div v-else-if="execution.status === 'running'" class="d-flex align-center">
           <v-icon icon="mdi-clock" size="small" class="me-1" />
@@ -152,6 +152,7 @@
 <script setup>
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { formatHuntExecutionTitle } from '@/utils/huntDisplayUtils'
+import { formatDate } from '@/composables/dateUtils'
 
 const props = defineProps({
   execution: {
@@ -254,18 +255,7 @@ const getStepStatusIcon = (status) => {
   }
 }
 
-const formatDateTime = (dateString) => {
-  if (!dateString) return 'N/A'
-  
-  // Ensure the timestamp is parsed as UTC by appending 'Z' if it doesn't have timezone info
-  let dateStr = dateString
-  if (!dateStr.includes('Z') && !dateStr.includes('+') && !dateStr.includes('-', 10)) {
-    dateStr += 'Z'
-  }
-  
-  const date = new Date(dateStr)
-  return date.toLocaleString()
-}
+// formatDate is now imported from dateUtils
 
 const updateElapsedTime = () => {
   if (props.execution.status !== 'running' || !props.execution.started_at) {

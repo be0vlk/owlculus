@@ -62,7 +62,12 @@ class HuntService:
     def _sync_hunts_to_db(self):
         """Sync loaded hunt definitions to database"""
         for hunt_name, hunt_class in self._hunt_classes.items():
-            hunt_instance = hunt_class()
+            # Pass database session to hunt constructor for dynamic parameter configuration
+            try:
+                hunt_instance = hunt_class(db_session=self.db)
+            except TypeError:
+                # Fallback for hunts that don't accept db_session parameter
+                hunt_instance = hunt_class()
 
             # Check if hunt already exists
             existing_hunt = self.db.exec(
@@ -124,7 +129,12 @@ class HuntService:
 
         # Validate parameters if hunt class is available
         if hunt.name in self._hunt_classes:
-            hunt_instance = self._hunt_classes[hunt.name]()
+            # Pass database session to hunt constructor for dynamic parameter configuration
+            try:
+                hunt_instance = self._hunt_classes[hunt.name](db_session=self.db)
+            except TypeError:
+                # Fallback for hunts that don't accept db_session parameter
+                hunt_instance = self._hunt_classes[hunt.name]()
             validated_params = hunt_instance.validate_parameters(initial_parameters)
         else:
             validated_params = initial_parameters
