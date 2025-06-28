@@ -6,7 +6,7 @@
 
 Owlculus is a comprehensive OSINT case management platform built for solo work or investigative teams. Manage cases, collaborate, and run OSINT tools directly in your browser.
 
-This project is now and will always be 100% free and open-source, no matter how much it improves.
+This project is now and will always be 100% free and open-source, no matter how much it improves. 
 
 ## Active Development Notice
 
@@ -179,6 +179,29 @@ This plugin will scan for correlations between entities in cases.
 
 **NOTE:** This will only reveal correlations between cases that are assigned to the current user. Hypothetically, there could still be cases that are not assigned to the user but have a correlation. Admins have access to everything.
 
+### Hunts
+Hunts are automated OSINT investigation workflows that chain together multiple plugins to perform comprehensive research on specific targets.
+
+#### Features
+- **Automated Workflows**: Pre-configured sequences of OSINT tools that run automatically
+- **Multi-Step Execution**: Each hunt consists of multiple steps that build upon previous results
+- **Evidence Integration**: Hunt results are automatically saved as evidence in your cases
+- **Real-Time Progress**: Monitor hunt execution with live progress updates and step-by-step results
+- **Category-Based Organization**: Hunts are organized by target type (Person, Network, Company, Other)
+- **Parameterized Execution**: Customize hunt behavior with configurable parameters
+
+#### Available Hunt Types (WIP)
+- **Person Deep Dive**: Comprehensive investigation using email addresses and names
+- **Domain Investigation**: Network-focused research on domains and related infrastructure
+
+#### Hunt Management
+- **Browse & Execute**: View available hunts with detailed descriptions and parameter requirements
+- **Execution History**: Track all past hunt executions with detailed results and evidence
+- **Live Monitoring**: Watch hunts execute in real-time with progress indicators and step details
+- **Result Export**: Export hunt results as JSON or PDF reports
+
+**NOTE:** Hunt functionality is available to Admin and Investigator roles only. Analysts have read-only access to hunt results.
+
 ### System Configuration
 Administrators can customize system-wide settings through the Admin dashboard.
 
@@ -238,3 +261,9 @@ Owlculus includes a browser extension that enhances your OSINT workflow by allow
 6. The page HTML will be uploaded as evidence to the selected case
 
 For more details, see the [extension's README](extension/README.md).
+
+## Contributing
+If you find Owlculus useful, consider supporting me and its ongoing development through the link below. If you'd like to be more directly involved, I'm always open to suggestions which you can file as GitHub issues or pull requests!
+
+<br>
+<a href="https://www.buymeacoffee.com/be0vlk" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>

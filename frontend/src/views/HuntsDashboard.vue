@@ -8,7 +8,7 @@
     <template #header-actions>
       <div class="d-flex align-center ga-2">
         <v-btn
-          color="primary"
+          color="white"
           variant="text"
           prepend-icon="mdi-refresh"
           @click="refreshData"

@@ -58,3 +58,12 @@
 .ProseMirror p {
   margin: 8px 0;
 }
+
+/* Shared header gradient for consistent styling across components */
+.header-gradient {
+  background: linear-gradient(
+    135deg,
+    rgb(var(--v-theme-primary)) 0%,
+    rgb(var(--v-theme-primary), 0.8) 100%
+  ) !important;
+}

@@ -16,7 +16,7 @@
         <!-- Loading State -->
         <slot name="loading" v-if="loading">
           <v-card variant="outlined">
-            <v-card-title class="d-flex align-center pa-4 bg-surface">
+            <v-card-title class="d-flex align-center pa-4 header-gradient text-white">
               <v-skeleton-loader type="text" width="200" />
               <v-spacer />
               <v-skeleton-loader type="button" width="120" />
@@ -76,11 +76,5 @@ defineProps({
 </script>
 
 <style scoped>
-.header-gradient {
-  background: linear-gradient(
-    135deg,
-    rgb(var(--v-theme-primary)) 0%,
-    rgb(var(--v-theme-primary), 0.8) 100%
-  ) !important;
-}
+/* Styles are now in main.css for shared usage */
 </style>

@@ -72,12 +72,6 @@ const routes = [
     component: () => import('../views/HuntExecution.vue'),
     meta: { requiresAuth: true, requiresNotAnalyst: true },
   },
-  {
-    path: '/hunts/execution/:id/results',
-    name: 'HuntExecutionResults',
-    component: () => import('../views/HuntResultsView.vue'),
-    meta: { requiresAuth: true, requiresNotAnalyst: true },
-  },
 ]
 
 const router = createRouter({

@@ -7,9 +7,9 @@
     @click="$emit('view-details', hunt)"
   >
     <!-- Hunt Category Header -->
-    <v-card-title class="d-flex align-center pa-3 bg-surface">
-      <v-icon :icon="categoryIcon" :color="categoryColor" size="small" class="me-2" />
-      <span class="text-caption text-uppercase font-weight-bold">{{ hunt.category }}</span>
+    <v-card-title class="d-flex align-center pa-3 header-gradient text-white">
+      <v-icon :icon="categoryIcon" color="white" size="small" class="me-2" />
+      <span class="text-caption text-uppercase font-weight-bold">{{ displayCategory }}</span>
       <v-spacer />
       <v-chip
         :color="hunt.is_active ? 'success' : 'error'"
@@ -97,6 +97,23 @@ const categoryColor = computed(() => {
     general: 'primary'
   }
   return colorMap[props.hunt.category] || 'primary'
+})
+
+const displayCategory = computed(() => {
+  if (!props.hunt.category) return 'Other'
+  
+  // Map hunt categories to display categories (matching HuntCatalog filter logic)
+  const categoryMapping = {
+    'person': 'Person',
+    'domain': 'Network',
+    'network': 'Network', 
+    'company': 'Company',
+    'general': 'Other',
+    'other': 'Other'
+  }
+  
+  return categoryMapping[props.hunt.category.toLowerCase()] || 
+         props.hunt.category.charAt(0).toUpperCase() + props.hunt.category.slice(1).toLowerCase()
 })
 
 </script>

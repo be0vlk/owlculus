@@ -46,14 +46,14 @@
         >
           <v-expansion-panel-title>
             <div class="d-flex align-center">
-              <v-avatar :color="getStepStatusColor(stepResult.status)" size="24" class="me-3">
-                <v-icon :icon="getStepStatusIcon(stepResult.status)" color="white" size="x-small" />
+              <v-avatar :color="getStatusColor(stepResult.status)" size="24" class="me-3">
+                <v-icon :icon="getStatusIcon(stepResult.status)" color="white" size="x-small" />
               </v-avatar>
               <div class="flex-grow-1">
                 <div class="text-body-1 font-weight-medium">{{ stepResult.step_id }}</div>
                 <div class="text-caption text-medium-emphasis">{{ stepResult.plugin_name }}</div>
               </div>
-              <v-chip :color="getStepStatusColor(stepResult.status)" variant="flat" size="small" class="me-2">
+              <v-chip :color="getStatusColor(stepResult.status)" variant="flat" size="small" class="me-2">
                 {{ stepResult.status }}
               </v-chip>
               <div v-if="stepResult.result_count !== undefined" class="text-caption">
@@ -158,6 +158,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { getStatusColor, getStatusIcon, formatMetadataValue } from '@/utils/huntDisplayUtils'
 import HuntStepResults from './HuntStepResults.vue'
 
 const props = defineProps({
@@ -222,39 +223,8 @@ const contextMetadata = computed(() => {
 })
 
 // Methods
-const getStepStatusColor = (status) => {
-  switch (status) {
-    case 'pending': return 'grey'
-    case 'running': return 'primary'
-    case 'completed': return 'success'
-    case 'failed': return 'error'
-    case 'skipped': return 'warning'
-    case 'cancelled': return 'grey'
-    default: return 'grey'
-  }
-}
-
-const getStepStatusIcon = (status) => {
-  switch (status) {
-    case 'pending': return 'mdi-clock-outline'
-    case 'running': return 'mdi-play'
-    case 'completed': return 'mdi-check'
-    case 'failed': return 'mdi-close'
-    case 'skipped': return 'mdi-skip-next'
-    case 'cancelled': return 'mdi-stop'
-    default: return 'mdi-help'
-  }
-}
-
 const formatMetadataKey = (key) => {
   return key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
-}
-
-const formatMetadataValue = (value) => {
-  if (value === null || value === undefined) return 'N/A'
-  if (typeof value === 'object') return JSON.stringify(value)
-  if (typeof value === 'boolean') return value ? 'Yes' : 'No'
-  return String(value)
 }
 
 const viewFullStepResults = (stepResult) => {

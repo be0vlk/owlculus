@@ -6,11 +6,11 @@
   >
     <v-card>
       <!-- Header -->
-      <v-card-title class="d-flex align-center pa-4 bg-surface">
+      <v-card-title class="d-flex align-center pa-4 header-gradient text-white">
         <v-icon :icon="categoryIcon" :color="categoryColor" size="large" class="me-3" />
         <div class="flex-grow-1">
           <div class="text-h5 font-weight-bold">{{ hunt?.display_name }}</div>
-          <div class="text-subtitle-1 text-medium-emphasis">{{ hunt?.description }}</div>
+
         </div>
         <v-btn
           icon="mdi-close"
@@ -25,6 +25,12 @@
         <!-- Hunt Metadata -->
         <div class="mb-4">
           <div class="text-h6 mb-3">Hunt Information</div>
+          
+          <!-- Hunt Description -->
+          <div v-if="hunt?.description" class="mb-4">
+            <div class="text-body-1 text-medium-emphasis">{{ hunt.description }}</div>
+          </div>
+          
           <v-row>
             <v-col cols="6">
               <div class="d-flex align-center mb-2">
