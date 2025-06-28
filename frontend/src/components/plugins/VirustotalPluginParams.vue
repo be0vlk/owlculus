@@ -149,7 +149,7 @@ const targetPlaceholder = computed(() => {
   }
 })
 
-const targetHint = computed(() => {
+computed(() => {
   switch (localParams.analysis_type) {
     case 'file':
       return 'Analyze file by its hash value'

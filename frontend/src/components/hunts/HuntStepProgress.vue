@@ -148,7 +148,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['view-output', 'view-error'])
+defineEmits(['view-output', 'view-error'])
 
 // Computed properties
 const statusColor = computed(() => {

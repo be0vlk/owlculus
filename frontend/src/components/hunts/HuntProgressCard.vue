@@ -164,7 +164,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['cancel', 'view-details', 'view-results'])
+defineEmits(['cancel', 'view-details', 'view-results'])
 
 // Local state
 const elapsedTime = ref('')

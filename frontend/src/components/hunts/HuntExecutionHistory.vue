@@ -77,7 +77,7 @@
         item-value="id"
       >
         <!-- Hunt Name Column -->
-        <template #item.hunt_display_name="{ item }">
+        <template #[`item.hunt_display_name`]="{ item }">
           <div class="d-flex align-center">
             <v-avatar :color="getCategoryColor(item.hunt_category)" size="32" class="me-3">
               <v-icon :icon="getCategoryIcon(item.hunt_category)" color="white" size="small" />
@@ -90,14 +90,14 @@
         </template>
 
         <!-- Target Column -->
-        <template #item.target="{ item }">
+        <template #[`item.target`]="{ item }">
           <div class="text-body-2">
             {{ getTargetDisplay(item) }}
           </div>
         </template>
 
         <!-- Status Column -->
-        <template #item.status="{ item }">
+        <template #[`item.status`]="{ item }">
           <v-chip
             :color="getStatusColor(item.status)"
             :prepend-icon="getStatusIcon(item.status)"
@@ -109,7 +109,7 @@
         </template>
 
         <!-- Progress Column -->
-        <template #item.progress="{ item }">
+        <template #[`item.progress`]="{ item }">
           <div class="d-flex align-center">
             <v-progress-linear
               :model-value="item.progress * 100"
@@ -124,7 +124,7 @@
         </template>
 
         <!-- Created At Column -->
-        <template #item.created_at="{ item }">
+        <template #[`item.created_at`]="{ item }">
           <div>
             <div class="text-body-2">{{ formatDate(item.created_at) }}</div>
             <div class="text-caption text-medium-emphasis">{{ formatTime(item.created_at) }}</div>
@@ -132,12 +132,12 @@
         </template>
 
         <!-- Duration Column -->
-        <template #item.duration="{ item }">
+        <template #[`item.duration`]="{ item }">
           <span class="text-body-2">{{ calculateDuration(item) }}</span>
         </template>
 
         <!-- Actions Column -->
-        <template #item.actions="{ item }">
+        <template #[`item.actions`]="{ item }">
           <div class="d-flex align-center ga-1">
             <v-btn
               icon="mdi-eye"
@@ -203,7 +203,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['view-details', 'view-results', 'retry-execution'])
+defineEmits(['view-details', 'view-results', 'retry-execution'])
 
 // Local state
 const searchQuery = ref('')

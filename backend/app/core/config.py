@@ -22,13 +22,14 @@ class Settings(BaseSettings):
     SECRET_KEY: SecretStr = SecretStr(os.environ.get("SECRET_KEY"))
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 4  # 4 hours, adjust if you want
     DB_USER: str = os.environ.get("POSTGRES_USER")
-    DB_PASSWORD: str = os.environ.get("POSTGRES_PASSWORD")
+    DB_PASSWORD: SecretStr = SecretStr(os.environ.get("POSTGRES_PASSWORD"))
     DB_HOST: str = os.environ.get("POSTGRES_HOST")
     DB_PORT: str = os.environ.get("POSTGRES_PORT")
     DB_NAME: str = os.environ.get("POSTGRES_DB")
-    DATABASE_URI: str = (
-        f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-    )
+    
+    @property
+    def DATABASE_URI(self) -> str:
+        return f"postgresql://{self.DB_USER}:{self.DB_PASSWORD.get_secret_value()}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
     BACKEND_CORS_ORIGINS: list[str | AnyHttpUrl] = [
         os.environ.get("FRONTEND_URL", "http://localhost:5173"),
         "http://localhost",

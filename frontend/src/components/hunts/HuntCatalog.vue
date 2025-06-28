@@ -130,7 +130,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['execute', 'view-details', 'retry'])
+defineEmits(['execute', 'view-details', 'retry'])
 
 // Local state
 const searchQuery = ref('')

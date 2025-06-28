@@ -191,7 +191,7 @@ const handleExecute = async () => {
 
     const targetCaseId = props.caseId || selectedCaseId.value
     
-    const execution = await emit('execute', {
+    await emit('execute', {
       huntId: props.hunt.id,
       caseId: targetCaseId,
       parameters: parameterValues.value

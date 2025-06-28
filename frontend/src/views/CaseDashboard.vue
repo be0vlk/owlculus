@@ -571,7 +571,7 @@ const handleSkipEditEntity = () => {
   createdEntity.value = null;
 };
 
-const handleEntityDeleted = (deletedEntities) => {
+const handleEntityDeleted = () => {
 };
 
 

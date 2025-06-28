@@ -94,7 +94,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['execute', 'view-details'])
+defineEmits(['execute', 'view-details'])
 
 // Computed properties
 const categoryIcon = computed(() => {
