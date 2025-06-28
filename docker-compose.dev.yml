@@ -27,7 +27,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - owlculus-dev-db-network
+      - backend-network
 
   # Backend API (Development with hot reload)
   backend:
@@ -64,8 +64,8 @@ services:
         condition: service_healthy
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     networks:
-      - owlculus-dev-network
-      - owlculus-dev-db-network
+      - frontend-network
+      - backend-network
 
   # Database Initialization
   db-init:
@@ -90,7 +90,7 @@ services:
       postgres:
         condition: service_healthy
     networks:
-      - owlculus-dev-db-network
+      - backend-network
     restart: "no"
 
   # Frontend (Development with hot reload)
@@ -118,7 +118,7 @@ services:
       - "${FRONTEND_PORT:-5173}:5173"
     command: npm run dev -- --host 0.0.0.0
     networks:
-      - owlculus-dev-network
+      - frontend-network
 
 volumes:
   postgres_dev_data:
@@ -127,8 +127,8 @@ volumes:
     driver: local
 
 networks:
-  owlculus-dev-network:
+  frontend-network:
     driver: bridge
-  owlculus-dev-db-network:
+  backend-network:
     driver: bridge
     internal: true

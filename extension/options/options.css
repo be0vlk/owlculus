@@ -12,7 +12,7 @@ body {
   margin: 0 auto;
   background: white;
   min-height: 100vh;
-  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+  box-shadow: 0 0 10px rgb(0 0 0 / 10%);
 }
 
 header {
@@ -42,7 +42,7 @@ main {
 }
 
 .settings-section h2 {
-  margin: 0 0 20px 0;
+  margin: 0 0 20px;
   font-size: 18px;
   font-weight: 500;
   color: #2c3e50;
@@ -72,7 +72,7 @@ main {
 .form-control:focus {
   outline: none;
   border-color: #3498db;
-  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+  box-shadow: 0 0 0 2px rgb(52 152 219 / 20%);
 }
 
 .help-text {
@@ -164,6 +164,7 @@ main {
     transform: translateY(-10px);
     opacity: 0;
   }
+
   to {
     transform: translateY(0);
     opacity: 1;

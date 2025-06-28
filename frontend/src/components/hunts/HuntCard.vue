@@ -41,29 +41,6 @@
         </div>
       </div>
 
-      <!-- Required Parameters Preview -->
-      <div v-if="requiredParams.length > 0" class="mb-3">
-        <div class="text-caption font-weight-bold mb-1">Required Parameters:</div>
-        <div class="d-flex flex-wrap ga-1">
-          <v-chip
-            v-for="param in requiredParams.slice(0, 3)"
-            :key="param"
-            size="x-small"
-            variant="outlined"
-            color="primary"
-          >
-            {{ param }}
-          </v-chip>
-          <v-chip
-            v-if="requiredParams.length > 3"
-            size="x-small"
-            variant="text"
-            color="grey"
-          >
-            +{{ requiredParams.length - 3 }} more
-          </v-chip>
-        </div>
-      </div>
     </v-card-text>
 
     <!-- Actions -->
@@ -111,24 +88,17 @@ const categoryIcon = computed(() => {
 
 const categoryColor = computed(() => {
   const colorMap = {
-    person: 'blue',
-    domain: 'green',
-    company: 'orange',
-    ip: 'purple',
-    phone: 'teal',
-    email: 'red',
-    general: 'grey'
+    person: 'primary',
+    domain: 'success', 
+    company: 'warning',
+    ip: 'info',
+    phone: 'primary',
+    email: 'error',
+    general: 'primary'
   }
-  return colorMap[props.hunt.category] || colorMap.general
+  return colorMap[props.hunt.category] || 'primary'
 })
 
-const requiredParams = computed(() => {
-  if (!props.hunt.initial_parameters) return []
-  
-  return Object.keys(props.hunt.initial_parameters).filter(
-    key => props.hunt.initial_parameters[key]?.required
-  )
-})
 </script>
 
 <style scoped>

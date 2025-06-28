@@ -27,7 +27,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - owlculus-db-network
+      - backend-network
 
   # Backend API
   backend:
@@ -68,8 +68,8 @@ services:
       retries: 3
       start_period: 40s
     networks:
-      - owlculus-network
-      - owlculus-db-network
+      - frontend-network
+      - backend-network
 
   # Database Initialization
   db-init:
@@ -93,7 +93,7 @@ services:
     volumes:
       - ./scripts/init_db_auto.py:/app/init_db_auto.py
     networks:
-      - owlculus-db-network
+      - backend-network
     restart: "no"
 
   # Frontend
@@ -123,7 +123,7 @@ services:
       timeout: 10s
       retries: 3
     networks:
-      - owlculus-network
+      - frontend-network
 
 volumes:
   postgres_data:
@@ -132,8 +132,8 @@ volumes:
     driver: local
 
 networks:
-  owlculus-network:
+  frontend-network:
     driver: bridge
-  owlculus-db-network:
+  backend-network:
     driver: bridge
     internal: true

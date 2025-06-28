@@ -128,8 +128,8 @@ export function useEntityForm(caseId) {
 export const entityFormProps = {
   modelValue: {
     type: Object,
-    required: true
-  }
+    required: true,
+  },
 }
 
 export const entityFormEmits = ['update:modelValue']
@@ -139,11 +139,11 @@ export function useEntityFormField(props, emit) {
   const updateField = (field, value) => {
     emit('update:modelValue', {
       ...props.modelValue,
-      [field]: value
+      [field]: value,
     })
   }
 
   return {
-    updateField
+    updateField,
   }
 }

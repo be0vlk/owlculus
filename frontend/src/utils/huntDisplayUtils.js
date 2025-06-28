@@ -21,7 +21,7 @@ export function extractHuntTargetDisplay(initialParameters, huntCategory) {
     ip: ['ip_address', 'ip', 'host'],
     phone: ['phone_number', 'phone'],
     email: ['email', 'email_address'],
-    general: ['target', 'query', 'search_term']
+    general: ['target', 'query', 'search_term'],
   }
 
   // Get parameter priority for this hunt category, fallback to general
@@ -69,11 +69,11 @@ export function extractHuntTargetDisplay(initialParameters, huntCategory) {
  */
 export function formatHuntExecutionTitle(huntDisplayName, initialParameters, huntCategory) {
   const target = extractHuntTargetDisplay(initialParameters, huntCategory)
-  
+
   if (target) {
     return `${huntDisplayName} • ${target}`
   }
-  
+
   return huntDisplayName
 }
 
@@ -85,7 +85,7 @@ export function formatHuntExecutionTitle(huntDisplayName, initialParameters, hun
  */
 export function getHuntTargetSummary(initialParameters, huntCategory) {
   const target = extractHuntTargetDisplay(initialParameters, huntCategory)
-  
+
   if (!target) {
     return 'N/A'
   }
@@ -94,6 +94,6 @@ export function getHuntTargetSummary(initialParameters, huntCategory) {
   if (target.length > 30) {
     return target.substring(0, 27) + '...'
   }
-  
+
   return target
 }

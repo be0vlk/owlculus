@@ -86,27 +86,34 @@ const navigationItems = computed(() => {
     { name: 'Cases', href: '/cases', icon: 'mdi-folder-outline' },
   ]
 
+  // Add Clients for admin users
+  if (authStore.requiresAdmin()) {
+    items.push(
+      { name: 'Clients', href: '/clients', icon: 'mdi-account-group-outline' }
+    )
+  }
+
+  items.push(
+    { name: 'Plugins', href: '/plugins', icon: 'mdi-wrench-outline' }
+  )
+
   // Add Hunts for non-analyst users
   if (authStore.user?.role !== 'Analyst') {
     items.push({ name: 'Hunts', href: '/hunts', icon: 'mdi-target' })
   }
 
   items.push(
-    { name: 'Plugins', href: '/plugins', icon: 'mdi-wrench-outline' },
     { name: 'Strixy (WIP)', href: '/strixy', icon: 'mdi-robot' },
   )
 
-  // Add settings for non-admin users
-  if (!authStore.requiresAdmin()) {
-    items.push({ name: 'Settings', href: '/settings', icon: 'mdi-cog-outline' })
-  }
-
-  // Only show clients and admin sections for admin users
+  // Add Admin settings for admin users
   if (authStore.requiresAdmin()) {
     items.push(
-      { name: 'Clients', href: '/clients', icon: 'mdi-account-group-outline' },
       { name: 'Admin', href: '/admin', icon: 'mdi-shield-account-outline' }
     )
+  } else {
+    // Add regular settings for non-admin users
+    items.push({ name: 'Settings', href: '/settings', icon: 'mdi-cog-outline' })
   }
 
   return items

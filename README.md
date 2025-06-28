@@ -140,50 +140,11 @@ make status        # Show service status
 make clean         # Remove all containers and volumes (⚠️ destroys data)
 ```
 
-## Troubleshooting
-
-### Common Issues
-
-**Services won't start:**
-```bash
-# Check if ports are already in use
-sudo netstat -tulpn | grep -E ':80|:8000|:5432'
-
-# View service logs
-docker compose logs
-
-# Rebuild images if needed
-docker compose build --no-cache
-```
-
-**Database connection issues:**
-```bash
-# Check PostgreSQL container health
-docker compose ps
-
-# Reset database (⚠️ destroys all data)
-docker compose down -v
-docker compose up -d
-```
-
-**Permission errors on Linux:**
-```bash
-# Fix file permissions
-sudo chown -R $USER:$USER .
-chmod +x setup.sh
-```
-
-**Can't access the application:**
-- Ensure Docker containers are running: `docker compose ps`
-- Check firewall settings if accessing remotely
-- Wait 30-60 seconds for all services to fully start
-
 ### Getting Help
 
 If you encounter issues:
-1. Check the [troubleshooting section](#troubleshooting) above
-2. Review service logs: `docker compose logs -f`
-3. Open an issue on GitHub with logs and error details when possible
+1. Review service logs: `docker compose logs -f`
+2. Open an issue on GitHub with logs and error details when possible
 
 ## Usage
 
@@ -192,13 +153,13 @@ After logging in as the admin user, you'll be redirected to the main case dashbo
 
 **NOTE**: Non-admin users cannot interact with any cases they are not explicitly assigned to, and only admins can assign them. Cases that a user is not assigned to will not show up in the dashboard and will not be accessible via the API.
 
-Now, double-click directly on the case in the table and you'll be redirected to that case's detail page.
+Now, click directly on the case in the table and you'll be redirected to that case's detail page.
 
 ### Case Detail
-This page displays the basic case information and allows you to create and view notes, upload/download evidence to the case folder, add users to the case, create entities (more on that below) and update the case status. When you first create a case, you will not see the entity tabs so don't worry if your screen looks a little different at first.
+This page displays the basic case information and allows you to create and view notes, upload/download evidence to the case folder, add users to the case, create entities (more on that below) and update the case status.
 
 #### Entities
-This is a key part of Owlculus functionality. Rather than defining case types upfront, you add individual entities to build your investigation dynamically. The system supports flexible entity types including `person`, `company`, `vehicle`, `domain`, and `ip_address`, with JSON-based data storage allowing for extensible schemas.
+This is a key part of Owlculus functionality. Rather than defining case types upfront, you add individual entities to build your investigation dynamically. The system supports flexible entity types including `person`, `company`, `vehicle`, `domain`, and `ip_address`.
 
 **Entity Features:**
 - **Template-Based Notes**: Each entity type comes with predefined, organized note templates
@@ -208,7 +169,7 @@ This is a key part of Owlculus functionality. Rather than defining case types up
 - **Cross-Case Visibility**: Entities can be discovered across multiple cases through the correlation scanning plugin
 
 #### Evidence
-This page allows you to upload and download evidence to the case folder. Cases are initially created with no folder structure but the app comes with pre-configured templates that can be applied. Admin users can also create new templates within the Admin dashboard.
+This page allows you to upload and download evidence to the case folder. Cases are initially created with no folder structure but the app comes with pre-configured templates that can be applied, or you can create folders one-by-one. Admin users can also create new templates within the Admin dashboard.
 
 ### Plugins
 This page allows you to conveniently run a variety of OSINT tools right from the app.

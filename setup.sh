@@ -27,6 +27,39 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+if ! command_exists docker; then
+    print_status "Docker not found. Installing..."
+    sudo apt-get update
+    sudo apt-get install -qq -y docker.io
+    sudo systemctl enable --now docker
+    sudo usermod -aG docker $USER
+    print_success "Docker installed successfully"
+else
+    print_success "Docker is already installed"
+fi
+
+if command_exists docker-compose || command docker compose version &>/dev/null; then
+    print_success "Docker Compose is already installed"
+else
+    print_status "Docker Compose not found. Installing..."
+    
+    sudo apt-get update
+    sudo apt-get install -qq -y docker-compose-v2
+    
+    if command_exists docker-compose || command docker compose version &>/dev/null; then
+        print_success "Docker Compose installed successfully"
+    else
+        print_error "Failed to install Docker Compose v2"
+        exit 1
+    fi
+fi
+
+
+
 # Default configuration values
 DEFAULT_FRONTEND_PORT=80
 DEFAULT_BACKEND_PORT=8000

@@ -139,9 +139,10 @@ const viewMode = ref('grid')
 
 // Computed properties
 const categoryOptions = computed(() => {
-  const categories = [...new Set(props.hunts.map(hunt => hunt.category))]
+  // Use the same categories as plugins for consistency
+  const categories = ['Person', 'Network', 'Company', 'Other']
   return categories.map(category => ({
-    title: category.charAt(0).toUpperCase() + category.slice(1),
+    title: category,
     value: category
   }))
 })
@@ -161,7 +162,16 @@ const filteredHunts = computed(() => {
 
   // Filter by category
   if (selectedCategory.value) {
-    filtered = filtered.filter(hunt => hunt.category === selectedCategory.value)
+    // Map plugin categories to hunt categories
+    const categoryMapping = {
+      'Person': ['person'],
+      'Network': ['domain', 'network'],
+      'Company': ['company'],
+      'Other': ['general', 'other']
+    }
+    
+    const huntCategories = categoryMapping[selectedCategory.value] || [selectedCategory.value.toLowerCase()]
+    filtered = filtered.filter(hunt => huntCategories.includes(hunt.category.toLowerCase()))
   }
 
   // Sort by category, then by display name

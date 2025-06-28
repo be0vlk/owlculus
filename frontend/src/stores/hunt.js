@@ -14,7 +14,7 @@ export const useHuntStore = defineStore('hunt', () => {
   // Getters
   const huntsByCategory = computed(() => {
     const categorized = {}
-    availableHunts.value.forEach(hunt => {
+    availableHunts.value.forEach((hunt) => {
       if (!categorized[hunt.category]) {
         categorized[hunt.category] = []
       }
@@ -25,19 +25,19 @@ export const useHuntStore = defineStore('hunt', () => {
 
   const runningExecutions = computed(() => {
     return Object.values(activeExecutions.value).filter(
-      execution => execution.status === 'running'
+      (execution) => execution.status === 'running',
     )
   })
 
   const completedExecutions = computed(() => {
     return Object.values(activeExecutions.value).filter(
-      execution => execution.status === 'completed' || execution.status === 'partial'
+      (execution) => execution.status === 'completed' || execution.status === 'partial',
     )
   })
 
   const failedExecutions = computed(() => {
     return Object.values(activeExecutions.value).filter(
-      execution => execution.status === 'failed'
+      (execution) => execution.status === 'failed',
     )
   })
 
@@ -72,13 +72,13 @@ export const useHuntStore = defineStore('hunt', () => {
     try {
       error.value = null
       const execution = await huntService.executeHunt(huntId, caseId, parameters)
-      
+
       // Add to active executions
       activeExecutions.value[execution.id] = execution
-      
+
       // Start WebSocket monitoring
       subscribeToExecution(execution.id)
-      
+
       return execution
     } catch (err) {
       error.value = err.response?.data?.detail || 'Failed to execute hunt'
@@ -90,10 +90,10 @@ export const useHuntStore = defineStore('hunt', () => {
   async function getExecution(executionId, includeSteps = false) {
     try {
       const execution = await huntService.getExecution(executionId, includeSteps)
-      
+
       // Update active executions
       activeExecutions.value[execution.id] = execution
-      
+
       return execution
     } catch (err) {
       error.value = err.response?.data?.detail || 'Failed to fetch execution'
@@ -105,17 +105,17 @@ export const useHuntStore = defineStore('hunt', () => {
   async function getCaseExecutions(caseId) {
     try {
       const executions = await huntService.getCaseExecutions(caseId)
-      
+
       // Update execution history
       executionHistory.value = executions
-      
+
       // Add running/recent executions to active executions
-      executions.forEach(execution => {
+      executions.forEach((execution) => {
         if (execution.status === 'running' || execution.status === 'pending') {
           activeExecutions.value[execution.id] = execution
         }
       })
-      
+
       return executions
     } catch (err) {
       error.value = err.response?.data?.detail || 'Failed to fetch case executions'
@@ -127,17 +127,17 @@ export const useHuntStore = defineStore('hunt', () => {
   async function loadAllActiveExecutions(cases) {
     try {
       error.value = null
-      
+
       // Clear existing active executions
       activeExecutions.value = {}
-      
+
       // Load executions from all accessible cases
       const loadPromises = cases.map(async (caseItem) => {
         try {
           const executions = await huntService.getCaseExecutions(caseItem.id)
-          
+
           // Add active executions to the store
-          executions.forEach(execution => {
+          executions.forEach((execution) => {
             if (execution.status === 'running' || execution.status === 'pending') {
               activeExecutions.value[execution.id] = execution
               // Subscribe to real-time updates for running executions
@@ -146,22 +146,22 @@ export const useHuntStore = defineStore('hunt', () => {
               }
             }
           })
-          
+
           return executions
         } catch (err) {
           console.error(`Failed to load executions for case ${caseItem.id}:`, err)
           return []
         }
       })
-      
+
       const allExecutions = await Promise.all(loadPromises)
       const flatExecutions = allExecutions.flat()
-      
+
       // Update execution history with recent executions
-      executionHistory.value = flatExecutions.sort((a, b) => 
-        new Date(b.created_at) - new Date(a.created_at)
+      executionHistory.value = flatExecutions.sort(
+        (a, b) => new Date(b.created_at) - new Date(a.created_at),
       )
-      
+
       return flatExecutions
     } catch (err) {
       error.value = err.response?.data?.detail || 'Failed to load active executions'
@@ -174,17 +174,17 @@ export const useHuntStore = defineStore('hunt', () => {
     try {
       error.value = null
       const result = await huntService.cancelExecution(executionId)
-      
+
       // Update execution status
       const execution = activeExecutions.value[executionId]
       if (execution) {
         execution.status = 'cancelled'
         activeExecutions.value[executionId] = execution
       }
-      
+
       // Close WebSocket connection
       unsubscribeFromExecution(executionId)
-      
+
       return result
     } catch (err) {
       error.value = err.response?.data?.detail || 'Failed to cancel execution'
@@ -201,7 +201,7 @@ export const useHuntStore = defineStore('hunt', () => {
 
     const onMessage = (data) => {
       console.log('Hunt execution update:', data)
-      
+
       // Update execution in store based on WebSocket message
       const execution = activeExecutions.value[executionId]
       if (execution) {
@@ -227,7 +227,7 @@ export const useHuntStore = defineStore('hunt', () => {
             unsubscribeFromExecution(executionId)
             break
         }
-        
+
         activeExecutions.value[executionId] = { ...execution }
       }
     }
@@ -277,13 +277,13 @@ export const useHuntStore = defineStore('hunt', () => {
     executionHistory,
     loading,
     error,
-    
+
     // Getters
     huntsByCategory,
     runningExecutions,
     completedExecutions,
     failedExecutions,
-    
+
     // Actions
     fetchHunts,
     getHunt,
@@ -296,6 +296,6 @@ export const useHuntStore = defineStore('hunt', () => {
     unsubscribeFromExecution,
     clearError,
     removeExecution,
-    cleanup
+    cleanup,
   }
 })

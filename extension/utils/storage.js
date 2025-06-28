@@ -29,13 +29,13 @@ export const storage = {
         resolve();
       });
     });
-  }
+  },
 };
 
 export const CONFIG_KEYS = {
-  API_ENDPOINT: 'apiEndpoint',
-  AUTH_TOKEN: 'authToken',
-  TOKEN_TYPE: 'tokenType',
-  LAST_CASE_ID: 'lastCaseId',
-  USER_DATA: 'userData'
+  API_ENDPOINT: "apiEndpoint",
+  AUTH_TOKEN: "authToken",
+  TOKEN_TYPE: "tokenType",
+  LAST_CASE_ID: "lastCaseId",
+  USER_DATA: "userData",
 };

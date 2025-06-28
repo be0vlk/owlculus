@@ -25,3 +25,6 @@ peopledatalabs
 aiohttp
 dnspython
 vt-py
+python-multipart
+celery[redis]
+redis

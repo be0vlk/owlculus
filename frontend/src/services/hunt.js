@@ -33,7 +33,7 @@ export const huntService = {
   async executeHunt(huntId, caseId, parameters) {
     const response = await api.post(`/api/hunts/${huntId}/execute`, {
       case_id: caseId,
-      parameters: parameters || {}
+      parameters: parameters || {},
     })
     return response.data
   },
@@ -46,7 +46,7 @@ export const huntService = {
    */
   async getExecution(executionId, includeSteps = false) {
     const response = await api.get(`/api/hunts/executions/${executionId}`, {
-      params: { include_steps: includeSteps }
+      params: { include_steps: includeSteps },
     })
     return response.data
   },
@@ -81,13 +81,18 @@ export const huntService = {
   createExecutionStream(executionId, onMessage, onError) {
     const wsUrl = import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8000'
     const ws = new WebSocket(`${wsUrl}/api/hunts/executions/${executionId}/stream`)
-    
+
     ws.onopen = () => {
       console.log(`Hunt execution ${executionId} stream connected`)
     }
-    
+
     ws.onmessage = (event) => {
       try {
+        // Skip non-JSON messages like "pong" heartbeats
+        if (event.data === 'pong' || event.data === 'ping') {
+          return
+        }
+
         const data = JSON.parse(event.data)
         onMessage(data)
       } catch (error) {
@@ -95,16 +100,16 @@ export const huntService = {
         onError?.(error)
       }
     }
-    
+
     ws.onerror = (error) => {
       console.error('Hunt execution stream error:', error)
       onError?.(error)
     }
-    
+
     ws.onclose = (event) => {
       console.log(`Hunt execution ${executionId} stream closed:`, event.code, event.reason)
     }
-    
+
     // Add ping functionality to keep connection alive
     const pingInterval = setInterval(() => {
       if (ws.readyState === WebSocket.OPEN) {
@@ -113,10 +118,10 @@ export const huntService = {
         clearInterval(pingInterval)
       }
     }, 30000) // Ping every 30 seconds
-    
+
     // Store ping interval on WebSocket for cleanup
     ws._pingInterval = pingInterval
-    
+
     return ws
   },
 
@@ -133,7 +138,7 @@ export const huntService = {
         ws.close()
       }
     }
-  }
+  },
 }
 
 export default huntService

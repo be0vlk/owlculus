@@ -128,7 +128,7 @@
         <v-tabs-window-item value="history">
           <div class="pa-4">
             <HuntExecutionHistory
-              :executions="huntStore.executionHistory"
+              :executions="huntStore.executionHistory.filter(exec => exec.status !== 'running' && exec.status !== 'pending')"
               :loading="historyLoading"
               @view-details="handleViewExecutionDetails"
               @view-results="handleViewExecutionResults"

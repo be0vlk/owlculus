@@ -10,7 +10,7 @@
         <v-icon :icon="categoryIcon" :color="categoryColor" size="large" class="me-3" />
         <div class="flex-grow-1">
           <div class="text-h5 font-weight-bold">{{ hunt?.display_name }}</div>
-          <div class="text-subtitle-1 text-medium-emphasis">{{ hunt?.category }} Hunt</div>
+          <div class="text-subtitle-1 text-medium-emphasis">{{ hunt?.description }}</div>
         </div>
         <v-btn
           icon="mdi-close"
@@ -22,23 +22,11 @@
       <v-divider />
 
       <v-card-text class="pa-4">
-        <!-- Hunt Description -->
-        <div class="mb-4">
-          <div class="text-h6 mb-2">Description</div>
-          <div class="text-body-1">{{ hunt?.description }}</div>
-        </div>
-
         <!-- Hunt Metadata -->
         <div class="mb-4">
           <div class="text-h6 mb-3">Hunt Information</div>
           <v-row>
             <v-col cols="6">
-              <div class="d-flex align-center mb-2">
-                <v-icon icon="mdi-tag" size="small" class="me-2" />
-                <span class="text-body-2">
-                  <strong>Category:</strong> {{ hunt?.category }}
-                </span>
-              </div>
               <div class="d-flex align-center mb-2">
                 <v-icon icon="mdi-clock-outline" size="small" class="me-2" />
                 <span class="text-body-2">
@@ -193,15 +181,15 @@ const categoryIcon = computed(() => {
 
 const categoryColor = computed(() => {
   const colorMap = {
-    person: 'blue',
-    domain: 'green',
-    company: 'orange',
-    ip: 'purple',
-    phone: 'teal',
-    email: 'red',
-    general: 'grey'
+    person: 'primary',
+    domain: 'success', 
+    company: 'warning',
+    ip: 'info',
+    phone: 'primary',
+    email: 'error',
+    general: 'primary'
   }
-  return colorMap[props.hunt?.category] || colorMap.general
+  return colorMap[props.hunt?.category] || 'primary'
 })
 
 const huntSteps = computed(() => {
