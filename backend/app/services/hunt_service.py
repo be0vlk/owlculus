@@ -49,9 +49,6 @@ class HuntService:
                             and obj != BaseHunt
                         ):
                             self._hunt_classes[obj.__name__] = obj
-                            security_logger(
-                                action="hunt_definition_loaded", hunt_name=obj.__name__
-                            ).info(f"Loaded hunt definition: {obj.__name__}")
                 except Exception as e:
                     security_logger(
                         action="hunt_definition_load_failed",
