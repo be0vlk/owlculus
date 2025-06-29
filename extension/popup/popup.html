@@ -1,68 +1,64 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <title>Owlculus Evidence Collector</title>
-  <link rel="stylesheet" href="popup.css">
+    <meta charset="utf-8">
+    <title>Owlculus Evidence Collector</title>
+    <link href="popup.css" rel="stylesheet">
 </head>
 <body>
-  <div class="container">
+<div class="container">
     <header>
-      <h1>Owlculus Evidence</h1>
-      <div id="status" class="status"></div>
+        <h1>Owlculus Evidence Collector</h1>
+        <div class="status" id="status"></div>
     </header>
 
     <main>
-      <div id="login-section" class="section hidden">
-        <p class="info">Please configure your Owlculus connection in the extension settings.</p>
-        <button id="open-settings" class="btn btn-primary">Open Settings</button>
-      </div>
-
-      <div id="capture-section" class="section hidden">
-        <div class="user-info">
-          <span id="username"></span>
-          <button id="logout" class="btn-link">Logout</button>
+        <div class="section hidden" id="login-section">
+            <p class="info">Please configure your Owlculus connection in the extension settings.</p>
+            <button class="btn btn-primary" id="open-settings">Open Settings</button>
         </div>
 
-        <div class="form-group">
-          <label for="case-select">Select Case:</label>
-          <select id="case-select" class="form-control">
-            <option value="">Loading cases...</option>
-          </select>
-        </div>
+        <div class="section hidden" id="capture-section">
+            <div class="user-info">
+                <span id="username"></span>
+                <button class="btn-link" id="logout">Logout</button>
+            </div>
 
-        <div class="form-group">
-          <label for="title-input">Evidence Title:</label>
-          <input type="text" id="title-input" class="form-control" placeholder="Enter title or use page title">
-        </div>
+            <div class="form-group">
+                <label for="case-select">Select Case:</label>
+                <select class="form-control" id="case-select">
+                    <option value="">Loading cases...</option>
+                </select>
+            </div>
 
-        <div class="form-group">
-          <label for="category-select">Category:</label>
-          <select id="category-select" class="form-control">
-            <option value="Documents">Documents</option>
-            <option value="Social Media">Social Media</option>
-            <option value="Network Assets">Network Assets</option>
-            <option value="Communications">Communications</option>
-            <option value="Other">Other</option>
-          </select>
-        </div>
+            <div class="form-group">
+                <label for="title-input">Evidence Title:</label>
+                <input class="form-control" id="title-input" placeholder="Enter title or use page title" type="text">
+            </div>
 
-        <div class="button-group">
-          <button id="capture-btn" class="btn btn-primary">
-            <span class="btn-text">Capture Page</span>
-            <span class="spinner hidden"></span>
-          </button>
-          <button id="screenshot-btn" class="btn btn-secondary">
-            <span class="btn-text">Screenshot</span>
-            <span class="spinner hidden"></span>
-          </button>
-        </div>
+            <div class="form-group">
+                <label for="folder-select">Save to Folder:</label>
+                <select class="form-control" id="folder-select">
+                    <option value="">Loading folders...</option>
+                </select>
+            </div>
 
-        <div id="result" class="result hidden"></div>
-      </div>
+            <div class="button-group">
+                <button class="btn btn-primary" id="capture-btn">
+                    <span class="btn-text">Save Page</span>
+                    <span class="spinner hidden"></span>
+                </button>
+                <button class="btn btn-secondary" id="screenshot-btn">
+                    <span class="btn-text">Screenshot</span>
+                    <span class="spinner hidden"></span>
+                </button>
+            </div>
+
+            <div class="result hidden" id="result"></div>
+        </div>
     </main>
-  </div>
+</div>
 
-  <script type="module" src="popup.js"></script>
+<script src="popup.js" type="module"></script>
 </body>
 </html>
