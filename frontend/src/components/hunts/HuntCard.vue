@@ -62,6 +62,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { getDisplayCategory } from '@/utils/huntDisplayUtils'
 
 const props = defineProps({
   hunt: {
@@ -88,20 +89,7 @@ const categoryIcon = computed(() => {
 
 
 const displayCategory = computed(() => {
-  if (!props.hunt.category) return 'Other'
-  
-  // Map hunt categories to display categories (matching HuntCatalog filter logic)
-  const categoryMapping = {
-    'person': 'Person',
-    'domain': 'Network',
-    'network': 'Network', 
-    'company': 'Company',
-    'general': 'Other',
-    'other': 'Other'
-  }
-  
-  return categoryMapping[props.hunt.category.toLowerCase()] || 
-         props.hunt.category.charAt(0).toUpperCase() + props.hunt.category.slice(1).toLowerCase()
+  return getDisplayCategory(props.hunt.category)
 })
 
 </script>

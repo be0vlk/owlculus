@@ -233,6 +233,24 @@ export const getLogEntryClass = (type) => {
   return classMap[type] || 'log-default'
 }
 
+// Get display category name
+export const getDisplayCategory = (category) => {
+  if (!category) return 'Other'
+  
+  // Map hunt categories to display categories (matching HuntCatalog filter logic)
+  const categoryMapping = {
+    'person': 'Person',
+    'domain': 'Network',
+    'network': 'Network', 
+    'company': 'Company',
+    'general': 'Other',
+    'other': 'Other'
+  }
+  
+  return categoryMapping[category.toLowerCase()] || 
+         category.charAt(0).toUpperCase() + category.slice(1).toLowerCase()
+}
+
 // Export results to JSON
 export const exportToJSON = (data, filename) => {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })

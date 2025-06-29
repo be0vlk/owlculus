@@ -184,6 +184,7 @@ const showExecutionModal = ref(false)
 const showDetailsModal = ref(false)
 const cases = ref([])
 const cancellingExecutions = ref(new Set())
+let pollingInterval = null
 
 // Computed properties
 const userRole = computed(() => authStore.user?.role)
@@ -234,6 +235,29 @@ const refreshData = async () => {
   await loadData()
 }
 
+const refreshActiveExecutions = async () => {
+  await huntStore.refreshRunningExecutions()
+}
+
+const startPolling = () => {
+  // Stop any existing polling
+  stopPolling()
+  
+  // Poll every 5 seconds for active executions updates
+  pollingInterval = setInterval(() => {
+    if (activeTab.value === 'active' && huntStore.runningExecutions.length > 0) {
+      refreshActiveExecutions()
+    }
+  }, 5000)
+}
+
+const stopPolling = () => {
+  if (pollingInterval) {
+    clearInterval(pollingInterval)
+    pollingInterval = null
+  }
+}
+
 const handleExecuteHunt = (hunt) => {
   selectedHunt.value = hunt
   showExecutionModal.value = true
@@ -275,7 +299,10 @@ const handleViewHuntDetails = (hunt) => {
 
 const handleDetailsModalClose = () => {
   showDetailsModal.value = false
-  selectedHunt.value = null
+  // Don't clear selectedHunt if execution modal is open
+  if (!showExecutionModal.value) {
+    selectedHunt.value = null
+  }
 }
 
 const handleCancelExecution = async (executionId) => {
@@ -299,15 +326,40 @@ const handleViewExecutionDetails = (executionId) => {
 
 
 
+// Watch for tab changes to manage polling
+import { watch } from 'vue'
+watch(activeTab, (newTab) => {
+  if (newTab === 'active') {
+    startPolling()
+  } else {
+    stopPolling()
+  }
+})
+
+// Watch for changes in running executions to manage polling
+watch(() => huntStore.runningExecutions.length, (count) => {
+  if (count > 0 && activeTab.value === 'active') {
+    startPolling()
+  } else if (count === 0) {
+    stopPolling()
+  }
+})
+
 // Lifecycle
 onMounted(async () => {
   if (!checkAccess()) return
   
   await loadData()
+  
+  // Start polling if we're on the active tab and have running executions
+  if (activeTab.value === 'active' && huntStore.runningExecutions.length > 0) {
+    startPolling()
+  }
 })
 
 onUnmounted(() => {
-  // Cleanup WebSocket connections
+  // Cleanup
+  stopPolling()
   huntStore.cleanup()
 })
 </script>

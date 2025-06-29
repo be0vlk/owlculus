@@ -1,57 +1,52 @@
 <template>
   <v-card
     class="hunt-list-item"
+    :class="`category-${hunt.category}`"
     variant="outlined"
     hover
     @click="$emit('view-details', hunt)"
   >
-    <v-card-text class="pa-4">
+    <v-card-text class="pa-3">
       <v-row align="center">
         <!-- Hunt Icon and Basic Info -->
-        <v-col cols="12" sm="4" class="d-flex align-center">
-          <v-avatar :color="categoryColor" size="48" class="me-3">
-            <v-icon :icon="categoryIcon" color="white" />
+        <v-col cols="12" md="5" class="d-flex align-center">
+          <v-avatar :color="categoryColor" size="40" class="me-3">
+            <v-icon :icon="categoryIcon" size="small" color="white" />
           </v-avatar>
           <div>
-            <div class="text-h6 font-weight-bold">{{ hunt.display_name }}</div>
-            <div class="text-caption text-uppercase">{{ hunt.category }}</div>
+            <div class="d-flex align-center">
+              <span class="text-body-1 font-weight-bold">{{ hunt.display_name }}</span>
+              <v-icon 
+                v-if="!hunt.is_active" 
+                icon="mdi-alert-circle" 
+                size="x-small" 
+                color="error" 
+                class="ml-2"
+                :title="'Inactive'"
+              />
+            </div>
+            <div class="text-caption text-medium-emphasis">{{ displayCategory }}</div>
           </div>
         </v-col>
 
         <!-- Description -->
-        <v-col cols="12" sm="4">
+        <v-col cols="12" md="3">
           <div class="text-body-2 text-medium-emphasis hunt-description">
             {{ hunt.description }}
           </div>
         </v-col>
 
         <!-- Stats and Actions -->
-        <v-col cols="12" sm="4" class="d-flex align-center justify-end">
-          <div class="d-flex flex-column align-end me-4">
-            <!-- Status and Stats -->
-            <div class="d-flex align-center mb-1">
-              <v-chip
-                :color="hunt.is_active ? 'success' : 'error'"
-                size="small"
-                variant="flat"
-                class="me-2"
-              >
-                {{ hunt.is_active ? 'Active' : 'Inactive' }}
-              </v-chip>
-              <span class="text-caption">v{{ hunt.version }}</span>
-            </div>
-            
-            <!-- Step Count -->
-            <div class="d-flex align-center">
-              <v-icon icon="mdi-play-box-multiple" size="small" class="me-1" />
-              <span class="text-caption">{{ hunt.step_count || 0 }} steps</span>
-            </div>
+        <v-col cols="12" md="4" class="d-flex align-center justify-md-end justify-start">
+          <div class="text-caption text-medium-emphasis me-3">
+            {{ hunt.step_count || 0 }} steps
           </div>
-
+          
           <!-- Execute Button -->
           <v-btn
             color="primary"
-            variant="elevated"
+            variant="tonal"
+            size="small"
             @click.stop="$emit('execute', hunt)"
             :disabled="!hunt.is_active"
           >
@@ -61,32 +56,14 @@
         </v-col>
       </v-row>
 
-      <!-- Required Parameters (collapsed view) -->
-      <v-row v-if="requiredParams.length > 0" class="mt-2">
-        <v-col cols="12">
-          <div class="d-flex align-center">
-            <span class="text-caption font-weight-bold me-2">Required Parameters:</span>
-            <div class="d-flex flex-wrap ga-1">
-              <v-chip
-                v-for="param in requiredParams"
-                :key="param"
-                size="x-small"
-                variant="outlined"
-                color="primary"
-              >
-                {{ param }}
-              </v-chip>
-            </div>
-          </div>
-        </v-col>
-      </v-row>
+
     </v-card-text>
   </v-card>
 </template>
 
 <script setup>
 import { computed } from 'vue'
-import { getCategoryColor } from '@/utils/huntDisplayUtils'
+import { getCategoryColor, getDisplayCategory } from '@/utils/huntDisplayUtils'
 
 const props = defineProps({
   hunt: {
@@ -115,12 +92,8 @@ const categoryColor = computed(() => {
   return getCategoryColor(props.hunt.category)
 })
 
-const requiredParams = computed(() => {
-  if (!props.hunt.initial_parameters) return []
-  
-  return Object.keys(props.hunt.initial_parameters).filter(
-    key => props.hunt.initial_parameters[key]?.required
-  )
+const displayCategory = computed(() => {
+  return getDisplayCategory(props.hunt.category)
 })
 </script>
 
@@ -128,10 +101,45 @@ const requiredParams = computed(() => {
 .hunt-list-item {
   cursor: pointer;
   transition: all 0.2s ease-in-out;
+  border-left: 4px solid transparent;
+  position: relative;
+  overflow: hidden;
 }
 
 .hunt-list-item:hover {
-  border-color: rgb(var(--v-theme-primary));
+  transform: translateX(2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Category-specific left border colors */
+.hunt-list-item.category-person {
+  border-left-color: rgb(var(--v-theme-primary));
+}
+
+.hunt-list-item.category-domain,
+.hunt-list-item.category-network {
+  border-left-color: rgb(var(--v-theme-info));
+}
+
+.hunt-list-item.category-company {
+  border-left-color: rgb(var(--v-theme-warning));
+}
+
+.hunt-list-item.category-ip {
+  border-left-color: rgb(var(--v-theme-secondary));
+}
+
+.hunt-list-item.category-phone {
+  border-left-color: rgb(var(--v-theme-primary-darken-1));
+}
+
+.hunt-list-item.category-email {
+  border-left-color: rgb(var(--v-theme-error));
+}
+
+.hunt-list-item.category-general,
+.hunt-list-item.category-other {
+  border-left-color: rgb(var(--v-theme-secondary));
 }
 
 .hunt-description {
@@ -139,5 +147,18 @@ const requiredParams = computed(() => {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  line-height: 1.5;
+}
+
+/* Add subtle background on hover */
+.hunt-list-item:hover::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgb(var(--v-theme-primary), 0.02);
+  pointer-events: none;
 }
 </style>

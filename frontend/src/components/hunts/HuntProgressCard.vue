@@ -128,22 +128,15 @@
       
       <v-btn
         color="primary"
-        variant="text"
+        :variant="execution.status === 'completed' || execution.status === 'partial' ? 'elevated' : 'text'"
         size="small"
         @click="$emit('view-details', execution.id)"
       >
-        View Details
-      </v-btn>
-      
-      <v-btn
-        v-if="execution.status === 'completed' || execution.status === 'partial'"
-        color="primary"
-        variant="elevated"
-        size="small"
-        @click="$emit('view-results', execution.id)"
-      >
-        <v-icon icon="mdi-eye" start />
-        View Results
+        <v-icon 
+          :icon="execution.status === 'completed' || execution.status === 'partial' ? 'mdi-eye' : 'mdi-information'" 
+          start 
+        />
+        {{ execution.status === 'completed' || execution.status === 'partial' ? 'View Results' : 'View Details' }}
       </v-btn>
     </v-card-actions>
   </v-card>
@@ -165,7 +158,7 @@ const props = defineProps({
   }
 })
 
-defineEmits(['cancel', 'view-details', 'view-results'])
+defineEmits(['cancel', 'view-details'])
 
 // Local state
 const elapsedTime = ref('')
@@ -307,6 +300,7 @@ onUnmounted(() => {
 import { watch } from 'vue'
 watch(() => props.execution.status, (newStatus) => {
   if (newStatus === 'running' && !elapsedInterval) {
+    updateElapsedTime()
     elapsedInterval = setInterval(updateElapsedTime, 1000)
   } else if (newStatus !== 'running' && elapsedInterval) {
     clearInterval(elapsedInterval)

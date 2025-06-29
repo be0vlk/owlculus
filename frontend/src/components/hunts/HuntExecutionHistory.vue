@@ -73,6 +73,7 @@
         :items="filteredExecutions"
         :items-per-page="itemsPerPage"
         :items-per-page-options="[10, 25, 50, 100]"
+        :sort-by="[{ key: 'created_at', order: 'desc' }]"
         class="execution-history-table"
         item-value="id"
       >
@@ -227,8 +228,11 @@ const filteredExecutions = computed(() => {
     filtered = filtered.filter(exec => exec.hunt_category === categoryFilter.value)
   }
 
-  // Sort by created_at descending
-  return filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+  // Add computed properties for sorting
+  return filtered.map(exec => ({
+    ...exec,
+    target: getTargetDisplay(exec) // Add target as a sortable property
+  }))
 })
 
 // Methods
