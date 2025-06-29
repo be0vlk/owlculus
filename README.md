@@ -4,266 +4,112 @@
   <img src="https://i.imgur.com/Cuf4hMK.png" />
 </p>
 
-Owlculus is a comprehensive OSINT case management platform built for solo work or investigative teams. Manage cases, collaborate, and run OSINT tools directly in your browser.
+Owlculus is a comprehensive OSINT case management platform built for solo work or investigative teams. Manage cases,
+collaborate, and run OSINT tools directly in your browser.
 
-This project is now and will always be 100% free and open-source, no matter how much it improves. 
+**100% free and open-source forever, no matter what.**
 
-## Active Development Notice
-
-Owlculus is under active development with frequent updates, improvements, and new features being added regularly. To ensure you have the latest features and security updates, please:
-
-1. **Check for updates** by pulling the latest changes from the repository:
-   ```bash
-   git pull origin main
-   ```
-2. **Review the changelog** for recent updates and breaking changes
-3. **Watch the repository** on GitHub to receive notifications about new releases and updates
-4. **Check the Roadmap section** below for upcoming features and changes
-
-**IMPORTANT**: Never deploy the "dev" branch to a production environment!
+> **Active Development**: Note that Owlculus is under active development. Run `git pull` in the repo root regularly for
+> updates. Never deploy the "
+> dev" branch to production!
 
 ## Features
 
-### Core Platform
-- **Case Management**: Create and track cases with customizable report number formats
-- **Multi-User Collaboration**: Role-based permissions (Admin, Investigator, Analyst)
-- **RESTful API**: Comprehensive backend for automation and integrations
-- **Rich Text Editing**: Note editor with formatting and organization
-- **Evidence Management**: Organized file storage with optional automatic folder structures
-- **Entity System**: Assign various types of entities to your case each with templated, self-contained notes
-- **Cross-Case Correlation**: Automatically discover connections between investigations (WIP)
-- **Browser Extension**: Capture web pages as HTML or screenshots and save them directly to your cases as evidence
-
-### OSINT Plugin Ecosystem
-Allows running popular and custom OSINT tools right within the app.
-
-- **Extensible Framework**: Built on a modular architecture for straightforward custom tool integration
-- **Optional Evidence Saving**: Plugin results can be directly saved to case evidence folders
-
-### System Features
-- **Configurable Case Numbers**: Customizable templates (YYMM-NN, PREFIX-YYMM-NN)
-- **Dark/Light Mode**: User preference themes
-- **Manage Evidence Storage Templates**: Allows you to quickly apply folder structures from templates
+- **Case Management**: Create and track cases with customizable report numbering
+- **Multi-User Collaboration**: Role-based access controls (Admin, Investigator, Analyst)
+- **Entity System**: Track individual people, companies, domains, IP addresses, and vehicles each with dedicated
+  notetaking
+- **Evidence Management**: Organized file storage with folder templates and integration with the browser extension
+- **OSINT Plugin Ecosystem**: Run popular open-source and custom OSINT tools right in your browser
+- **Cross-Case Correlation**: Discover connections between investigations with the Correlation Scan plugin
+- **Automated Hunts**: Multi-step OSINT workflows for comprehensive research (WIP)
+- **Browser Extension**: Capture web pages as HTML or screenshots as you investigate and save directly to case evidence
+- **RESTful API**: Complete API backend for easy automation and integrations
 
 ## Roadmap
 
-I will be very actively maintaining and improving this application and am always open to suggestions. If you have any of those, or come across any bugs, please feel free to open an issue right here on GitHub. Some things definitely planned are:
+Planned features and improvements:
 
 - **Enhanced Plugin Library**: More OSINT tools and custom integrations
-- **Evidence Automation**: Automated collection workflows
-- **LLM Integration**: AI-powered analysis and insights (StrixyChat integration WIP)
-- **Advanced Analytics**: Cross-case patterns, timeline analysis, and reporting dashboards
+- **LLM Integration**: AI-powered analysis and insights
+- **Advanced Analytics**: Cross-case patterns and timeline analysis
 - **API Enhancements**: Webhook support and third-party integrations
-- **Cloud-based Deployment**: Native support for cloud platforms like AWS, GCP, and Azure
+- **Cloud Deployment**: Native support for AWS, GCP, and Azure
+- **Python SDK**: Making it even easier to integrate Owlculus into your flow
+
+Open to suggestions via GitHub issues!
 
 ## Installation
 
-Owlculus uses Docker for easy, consistent installation. The Docker setup handles all dependencies, database configuration, and service orchestration automatically.
+**Prerequisites:** [Docker](https://docs.docker.com/get-docker/)
+and [Docker Compose](https://docs.docker.com/compose/install/)
 
-It is technically cross-platform thanks to Docker, but I have only tested on Debian/Ubuntu Linux distros. The setup script is also Linux only. If you must be on Windows, I would *strongly* suggest at least using WSL.
-
-### Quick Start
-
-**Prerequisites:** [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/)
-
-1. Clone the repository:
 ```bash
 git clone https://github.com/be0vlk/owlculus.git
 cd owlculus
-```
-
-2. Run the interactive setup:
-```bash
 chmod +x setup.sh
 ./setup.sh
 ```
 
-The setup script will guide you through configuration options.
+**Access URLs:**
 
-After setup, Owlculus will be available at your configured URLs (defaults shown). If you are just running this locally, I recommend leaving the defaults:
-- **Frontend:** <http://localhost>
-- **Backend API:** <http://localhost:8000>
-- **Login:** Your configured admin credentials
+- Frontend: http://localhost
+- Backend API: http://localhost:8000
 
-### Setup Options
+**Setup Options:**
 
-**Interactive setup (default):**
-```bash
-./setup.sh                    # Production mode with interactive configuration
-./setup.sh dev                # Development mode with interactive configuration
-```
+*Tested on Linux only. Windows users should use WSL.*
 
-**Non-interactive setup:**
-```bash
-./setup.sh --non-interactive         # Uses all defaults
-./setup.sh dev --non-interactive     # Development mode with defaults
-```
+- `./setup.sh dev` - Development mode with hot-reload
+- `./setup.sh --clean` - Clean installation
+- `./setup.sh --non-interactive` - Use defaults
 
-**Clean installation:**
-```bash
-./setup.sh --clean                   # Remove all Owlculus Docker artifacts first
-./setup.sh dev --clean               # Clean development setup
-```
-
-**Verbose output:**
-```bash
-./setup.sh --verbose                 # Shows full Docker build output
-./setup.sh dev --verbose             # Development with verbose output
-```
-
-### Development Setup
-
-Development mode includes:
-- **Frontend:** <http://localhost:5173> (with hot-reload)
-- **Backend API:** <http://localhost:8000> (with hot-reload)
-- Source code mounted as volumes for instant updates
+If you're doing any development, you can add the `--testdata` flag to any setup mode to prepoulate some basic data for
+testing with.
 
 ### Management Commands
 
-Use the included Makefile for easy management:
-
 ```bash
-make help          # Show all available commands
-make setup         # Initial setup (production)
-make setup-dev     # Initial setup (development)
-make start         # Start production services
 make start-dev     # Start development services
 make stop          # Stop all services
-make restart       # Restart all services
 make logs          # View service logs
-make build         # Build Docker images
-make rebuild       # Rebuild images (no cache)
 make test          # Run backend tests
-make shell-backend # Open backend container shell
-make shell-db      # Open database shell
-make status        # Show service status
 make clean         # Remove all containers and volumes (⚠️ destroys data)
 ```
 
-### Getting Help
-
-If you encounter issues:
-1. Review service logs: `docker compose logs -f`
-2. Open an issue on GitHub with logs and error details when possible
-
-## Usage
-
-### Case Dashboard
-After logging in as the admin user, you'll be redirected to the main case dashboard where you can create your first case by clicking the aptly named "New Case" button. A modal will pop up asking for basic case details. Optionally, before you create the case, click "Clients" in the sidebar to add a client which you will then be able to add the case to. The database initialization script will have already created a client called "Personal" for any cases you are not working for a real client.
-
-**NOTE**: Non-admin users cannot interact with any cases they are not explicitly assigned to, and only admins can assign them. Cases that a user is not assigned to will not show up in the dashboard and will not be accessible via the API.
-
-Now, click directly on the case in the table and you'll be redirected to that case's detail page.
-
-### Case Detail
-This page displays the basic case information and allows you to create and view notes, upload/download evidence to the case folder, add users to the case, create entities (more on that below) and update the case status.
-
-#### Entities
-This is a key part of Owlculus functionality. Rather than defining case types upfront, you add individual entities to build your investigation dynamically. The system supports flexible entity types including `person`, `company`, `vehicle`, `domain`, and `ip_address`.
-
-**Entity Features:**
-- **Template-Based Notes**: Each entity type comes with predefined, organized note templates
-- **Category-Based Organization**: Each entity type has its own set of categories in the form of tabs within the entity
-- **Rich Text Editing**: TipTap-powered notes with basic formatting options
-- **Smart Relationships (WIP)**: Automatic entity linking and relationship detection within the same case
-- **Cross-Case Visibility**: Entities can be discovered across multiple cases through the correlation scanning plugin
-
-#### Evidence
-This page allows you to upload and download evidence to the case folder. Cases are initially created with no folder structure but the app comes with pre-configured templates that can be applied, or you can create folders one-by-one. Admin users can also create new templates within the Admin dashboard.
-
-### Plugins
-This page allows you to conveniently run a variety of OSINT tools right from the app.
-
-#### Correlation Plugin
-This plugin will scan for correlations between entities in cases.
-
-**NOTE:** This will only reveal correlations between cases that are assigned to the current user. Hypothetically, there could still be cases that are not assigned to the user but have a correlation. Admins have access to everything.
-
-### Hunts
-Hunts are automated OSINT investigation workflows that chain together multiple plugins to perform comprehensive research on specific targets.
-
-#### Features
-- **Automated Workflows**: Pre-configured sequences of OSINT tools that run automatically
-- **Multi-Step Execution**: Each hunt consists of multiple steps that build upon previous results
-- **Evidence Integration**: Hunt results are automatically saved as evidence in your cases
-- **Real-Time Progress**: Monitor hunt execution with live progress updates and step-by-step results
-- **Category-Based Organization**: Hunts are organized by target type (Person, Network, Company, Other)
-- **Parameterized Execution**: Customize hunt behavior with configurable parameters
-
-#### Available Hunt Types (WIP)
-- **Person Deep Dive**: Comprehensive investigation using email addresses and names
-- **Domain Investigation**: Network-focused research on domains and related infrastructure
-
-#### Hunt Management
-- **Browse & Execute**: View available hunts with detailed descriptions and parameter requirements
-- **Execution History**: Track all past hunt executions with detailed results and evidence
-- **Live Monitoring**: Watch hunts execute in real-time with progress indicators and step details
-- **Result Export**: Export hunt results as JSON or PDF reports
-
-**NOTE:** Hunt functionality is available to Admin and Investigator roles only. Analysts have read-only access to hunt results.
-
-### System Configuration
-Administrators can customize system-wide settings through the Admin dashboard.
-
-### User Roles & Permissions
-
-**Admin**
-- Full access to all system features and data
-- Create and manage cases, clients, and users
-- Run all plugins and access all case data
-- Configure system settings and case number formats
-
-**Investigator**
-- Standard read/write access to assigned cases
-- Create and edit notes, upload evidence
-- Run plugins and analysis tools
-- Cannot create cases or manage users
-
-**Analyst**
-- Read-only access to assigned cases
-- View notes and download evidence
-- Cannot edit data or run plugins
-- Cannot create cases or manage users
+See `make help` for all commands.
 
 ## Browser Extension
 
-Owlculus includes a browser extension that enhances your OSINT workflow by allowing you to capture web pages and save them directly to your cases as evidence.
+Capture web pages directly to case evidence.
 
-### Features
+**Installation:** Load unpacked extension from `extension/` directory in Chrome developer mode.
+**Usage:** Click extension icon, select case, capture page HTML.
 
-- Capture full HTML content of web pages
-- Automatic removal of scripts and sensitive data
-- Direct upload to Owlculus evidence storage
-- Case selection from available cases
-- Configurable API endpoint
+See [extension/README.md](extension/README.md) for details.
 
-### Installation
+## Quick Start
 
-1. Open Chrome and navigate to `chrome://extensions/`
-2. Enable "Developer mode" in the top right
-3. Click "Load unpacked"
-4. Select the `extension` directory from the Owlculus repository
+1. **Login** with admin credentials from setup
+2. **Create a case** using "New Case" button, then click on it in the table to access
+3. **Add entities** (person, company, domain, IP address, vehicle) which all come with templated notes
+4. **Upload evidence** in the "Evidence" tab using folder templates or custom structure
+5. **Run OSINT plugins** from the "Plugins" page with optional evidence saving
+6. **Execute hunts** for automated multi-step investigations (WIP)
 
-### Configuration
+## User Roles
 
-1. Click the extension icon and then "Open Settings"
-2. Configure your Owlculus API endpoint (e.g., `http://localhost:8000`)
-3. Login with your Owlculus credentials
-4. The extension will remember your authentication
-
-### Usage
-
-1. Navigate to any web page you want to capture
-2. Click the Owlculus extension icon
-3. Select a case from the dropdown
-4. Optionally modify the title and category
-5. Click "Capture Page"
-6. The page HTML will be uploaded as evidence to the selected case
-
-For more details, see the [extension's README](extension/README.md).
+| Role             | Access         | Permissions                                 |
+|------------------|----------------|---------------------------------------------|
+| **Admin**        | All cases      | Full access, user management, system config |
+| **Investigator** | Assigned cases | Read/write, run plugins, no user management |
+| **Analyst**      | Assigned cases | Read-only access                            |
 
 ## Contributing
-If you find Owlculus useful, consider supporting me and its ongoing development through the link below. If you'd like to be more directly involved, I'm always open to suggestions which you can file as GitHub issues or pull requests!
 
-<br>
+If you find the app useful and feel so inclined, please consider fueling my future coding sessions with a donation
+below. Anything and everything helps and is greatly appreciated :)
+
+GitHub Issues and Pull Requests always welcome too!
+
 <a href="https://www.buymeacoffee.com/be0vlk" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>

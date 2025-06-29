@@ -3,8 +3,18 @@
   "name": "Owlculus Evidence Collector",
   "version": "1.0.0",
   "description": "Capture and send web page content to Owlculus case management system",
-  "permissions": ["storage", "activeTab", "scripting", "tabs"],
-  "host_permissions": ["http://localhost:8000/*", "https://*/*"],
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting",
+    "tabs"
+  ],
+  "optional_host_permissions": [
+    "*://*/*"
+  ],
+  "host_permissions": [
+    "http://localhost:8000/*"
+  ],
   "action": {
     "default_popup": "popup/popup.html",
     "default_icon": {
