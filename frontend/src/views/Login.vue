@@ -1,10 +1,9 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <template>
-  <div>
-    <v-main>
-      <v-container class="fill-height" fluid>
-        <v-row align="center" justify="center">
-          <v-col cols="12" sm="8" md="6" lg="4" xl="3">
+  <v-main>
+    <v-container class="fill-height d-flex align-center justify-center" fluid>
+      <v-row align="center" class="fill-height" justify="center">
+        <v-col cols="12" lg="4" md="6" sm="8" xl="3">
             <v-card elevation="8" class="rounded-xl">
               <v-card-text class="pa-8">
                 <!-- Logo -->
@@ -69,14 +68,13 @@
         </v-row>
       </v-container>
     </v-main>
-  </div>
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
-import { useRouter } from 'vue-router'
-import { useAuthStore } from '../stores/auth'
-import { useDarkMode } from '../composables/useDarkMode'
+import {reactive, ref} from 'vue'
+import {useRouter} from 'vue-router'
+import {useAuthStore} from '../stores/auth'
+import {useDarkMode} from '../composables/useDarkMode'
 
 const router = useRouter()
 const authStore = useAuthStore()

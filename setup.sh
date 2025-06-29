@@ -79,6 +79,7 @@ ADMIN_PASSWORD=""
 USE_REVERSE_PROXY="false"
 USE_HTTPS="false"
 INTERACTIVE_MODE="true"
+DEPLOYMENT_TYPE=""
 
 # Function to check if command exists
 command_exists() {
@@ -129,45 +130,49 @@ interactive_config() {
     echo "Owlculus Interactive Setup"
     echo "=========================="
     echo ""
-    echo "Configure your Owlculus installation. Press Enter to use defaults."
+    
+    # First, determine the deployment type
+    echo "Select deployment type:"
+    echo "---------------------"
+    echo "1) Local development (with hot-reload)"
+    echo "2) Local production (direct access with ports)"
+    echo "3) Remote server (HTTPS with automatic certificates)"
     echo ""
     
-    # Adjust default frontend port for dev mode
-    local DEFAULT_FE_PORT="$DEFAULT_FRONTEND_PORT"
-    if [ "$MODE" = "dev" ] || [ "$MODE" = "development" ]; then
-        DEFAULT_FE_PORT="5173"
-    fi
-    
-    # Deployment Configuration
-    echo "Deployment Configuration:"
-    echo "------------------------"
-    
     while true; do
-        echo -n "Use reverse proxy with automatic HTTPS (Caddy)? [y/N]: "
-        read reverse_proxy_choice
-        case $reverse_proxy_choice in
-            [Yy]|[Yy][Ee][Ss]) 
-                USE_REVERSE_PROXY="true"
-                break 
-                ;;
-            [Nn]|[Nn][Oo]|"")
-                USE_REVERSE_PROXY="false"
+        echo -n "Choose deployment type [1-3]: "
+        read deployment_choice
+        case $deployment_choice in
+            1)
+                DEPLOYMENT_TYPE="local_dev"
+                MODE="dev"
                 break
                 ;;
-            *) echo "Please answer yes or no" ;;
+            2)
+                DEPLOYMENT_TYPE="local_prod"
+                MODE="production"
+                break
+                ;;
+            3)
+                DEPLOYMENT_TYPE="remote"
+                MODE="production"
+                USE_REVERSE_PROXY="true"
+                USE_HTTPS="true"
+                break
+                ;;
+            *)
+                print_error "Please enter 1, 2, or 3"
+                ;;
         esac
     done
     
-    if [ "$USE_REVERSE_PROXY" = "true" ]; then
-        USE_HTTPS="true"  # Caddy handles HTTPS automatically
-        print_status "Caddy will automatically handle HTTPS certificates"
-    fi
-    
     echo ""
-    echo "Network Configuration:"
-    echo "---------------------"
     
-    if [ "$USE_REVERSE_PROXY" = "true" ]; then
+    # Configure based on deployment type
+    if [ "$DEPLOYMENT_TYPE" = "remote" ]; then
+        echo "Remote Server Configuration:"
+        echo "---------------------------"
+        
         while true; do
             DOMAIN=$(prompt_with_default "Domain name (e.g., owlculus.example.com)" "owlculus.example.com")
             if [ -n "$DOMAIN" ] && [[ "$DOMAIN" != "localhost" ]]; then
@@ -175,42 +180,43 @@ interactive_config() {
             fi
             print_error "Please enter a valid domain name (not localhost)"
         done
-    else
-        while true; do
-            DOMAIN=$(prompt_with_default "Domain/Hostname (without port or protocol)" "$DEFAULT_DOMAIN")
-            if [ -n "$DOMAIN" ]; then
-                break
-            fi
-            print_error "Domain/Hostname cannot be empty"
-        done
-    fi
-    
-    if [ "$USE_REVERSE_PROXY" = "false" ]; then
-        while true; do
-            FRONTEND_PORT=$(prompt_with_default "Frontend port" "$DEFAULT_FE_PORT")
-            if validate_port "$FRONTEND_PORT"; then
-                break
-            fi
-            print_error "Invalid port number. Please enter a number between 1-65535"
-        done
         
-        while true; do
-            BACKEND_PORT=$(prompt_with_default "Backend API port" "$DEFAULT_BACKEND_PORT")
-            if validate_port "$BACKEND_PORT"; then
-                break
-            fi
-            print_error "Invalid port number. Please enter a number between 1-65535"
-        done
-    else
-        # Use internal ports for reverse proxy setup
+        # Set internal ports - not exposed to host
         FRONTEND_PORT="80"
         BACKEND_PORT="8000"
-        print_status "Using internal ports (80 for frontend, 8000 for backend) - no host port binding"
+        DB_PORT="5432"
+        
+        print_status "Services will be accessible via HTTPS at https://$DOMAIN"
+        print_status "Caddy will automatically obtain Let's Encrypt certificates"
+        
+    else
+        # Local deployment configuration - use defaults without prompting
+        echo "Local Configuration:"
+        echo "-------------------"
+        
+        # Set defaults based on mode
+        local DEFAULT_FE_PORT="$DEFAULT_FRONTEND_PORT"
+        if [ "$MODE" = "dev" ]; then
+            DEFAULT_FE_PORT="5173"
+        fi
+        
+        # Use localhost defaults for local deployments
+        DOMAIN="$DEFAULT_DOMAIN"
+        FRONTEND_PORT="$DEFAULT_FE_PORT"
+        BACKEND_PORT="$DEFAULT_BACKEND_PORT"
+        
+        # Database port is not exposed for security
+        DB_PORT="5432"
+        
+        print_status "Using localhost defaults:"
+        print_status "  Domain: $DOMAIN"
+        print_status "  Frontend port: $FRONTEND_PORT"
+        print_status "  Backend port: $BACKEND_PORT"
+        print_status "  Database: Internal port 5432 (not exposed to host for security)"
+        
+        USE_REVERSE_PROXY="false"
+        USE_HTTPS="false"
     fi
-    
-    # Database port is not exposed for security - using internal port 5432
-    DB_PORT="5432"
-    print_status "Database using internal port 5432 (not exposed to host for security)"
     
     echo ""
     echo "Admin Account Configuration:"
@@ -229,7 +235,7 @@ interactive_config() {
     echo ""
     
     if [ -z "$ADMIN_PASSWORD" ]; then
-        ADMIN_PASSWORD=$(openssl rand -base64 16 | tr -d /=+ | cut -c -12)
+        ADMIN_PASSWORD=$(openssl rand -base64 24 | tr -d /=+ | cut -c -12)
         print_status "Auto-generated secure admin password"
     fi
     
@@ -241,8 +247,12 @@ interactive_config() {
         print_error "Please enter a valid email address"
     done
     
-    # Construct URLs based on reverse proxy configuration
-    if [ "$USE_REVERSE_PROXY" = "true" ]; then
+    # Construct URLs based on deployment type
+    if [ "$DEPLOYMENT_TYPE" = "remote" ]; then
+        # Remote deployments always use HTTPS
+        FRONTEND_URL="https://$DOMAIN"
+        BACKEND_API_URL="https://$DOMAIN/api"
+    elif [ "$USE_REVERSE_PROXY" = "true" ]; then
         if [ "$USE_HTTPS" = "true" ]; then
             FRONTEND_URL="https://$DOMAIN"
             BACKEND_API_URL="https://$DOMAIN/api"
@@ -264,13 +274,24 @@ interactive_config() {
     echo ""
     echo "Configuration Summary:"
     echo "====================="
-    echo "Deployment Type: $([ "$USE_REVERSE_PROXY" = "true" ] && echo "Reverse Proxy" || echo "Direct Access")"
-    if [ "$USE_REVERSE_PROXY" = "true" ]; then
-        echo "HTTPS Enabled: $([ "$USE_HTTPS" = "true" ] && echo "Yes" || echo "No")"
+    
+    case "$DEPLOYMENT_TYPE" in
+        "local_dev")
+            echo "Deployment Type: Local Development (with hot-reload)"
+            ;;
+        "local_prod")
+            echo "Deployment Type: Local Production"
+            ;;
+        "remote")
+            echo "Deployment Type: Remote Server (HTTPS)"
+            ;;
+    esac
+    
+    if [ "$DEPLOYMENT_TYPE" = "remote" ]; then
         echo "Domain: $DOMAIN"
-        echo "Frontend URL: $FRONTEND_URL"
-        echo "Backend API URL: $BACKEND_API_URL"
-        echo "Note: Services will run on internal ports only"
+        echo "URL: https://$DOMAIN"
+        echo "HTTPS: Automatic via Let's Encrypt"
+        echo "Note: All services accessible through single HTTPS endpoint"
     else
         echo "Domain: $DOMAIN"
         echo "Frontend URL: $FRONTEND_URL"
@@ -278,7 +299,7 @@ interactive_config() {
         echo "Frontend Port: $FRONTEND_PORT"
         echo "Backend Port: $BACKEND_PORT"
     fi
-    echo "Database Port: 5432 (internal only)"
+    echo "Database: Internal only (not exposed)"
     echo "Admin Username: $ADMIN_USERNAME"
     echo "Admin Email: $ADMIN_EMAIL"
     echo "Admin Password: [set]"
@@ -315,13 +336,17 @@ show_usage() {
     echo "  --clean         Remove all Owlculus Docker containers, images, and volumes before setup"
     echo "  --testdata      Create test data after setup (Test Case 1, users, etc.)"
     echo
+    echo "Interactive Setup Options:"
+    echo "  1. Local development - Hot-reload enabled for development"
+    echo "  2. Local production - Direct access with custom ports"
+    echo "  3. Remote server - HTTPS with automatic certificates (recommended for servers)"
+    echo
     echo "Examples:"
-    echo "  $0                          # Interactive production setup"
+    echo "  $0                          # Interactive setup (choose deployment type)"
     echo "  $0 dev                      # Interactive development setup"
-    echo "  $0 --non-interactive        # Non-interactive production setup"
+    echo "  $0 --non-interactive        # Non-interactive local production setup"
     echo "  $0 dev --verbose            # Development setup with full Docker output"
     echo "  $0 --clean                  # Clean setup (removes Owlculus Docker artifacts)"
-    echo "  $0 dev --clean --verbose    # Clean dev setup with verbose output"
     echo "  $0 dev --testdata           # Development setup with test data"
     echo
     echo "Requirements:"
@@ -418,11 +443,16 @@ create_test_data() {
 # Function to set defaults for non-interactive mode
 set_defaults() {
     local MODE="$1"
+    
+    # For non-interactive mode, default to local production
+    DEPLOYMENT_TYPE="local_prod"
+    
     local DEFAULT_FE_PORT="$DEFAULT_FRONTEND_PORT"
     
     # Adjust default frontend port for dev mode
     if [ "$MODE" = "dev" ] || [ "$MODE" = "development" ]; then
         DEFAULT_FE_PORT="5173"
+        DEPLOYMENT_TYPE="local_dev"
     fi
     
     DOMAIN="$DEFAULT_DOMAIN"
@@ -491,6 +521,12 @@ setup_owlculus() {
     # Run interactive configuration or use defaults
     if [ "$INTERACTIVE_MODE" = "true" ]; then
         interactive_config "$MODE"
+        # MODE might have been changed by interactive_config
+        if [ "$DEPLOYMENT_TYPE" = "local_dev" ]; then
+            MODE="dev"
+        elif [ "$DEPLOYMENT_TYPE" = "local_prod" ] || [ "$DEPLOYMENT_TYPE" = "remote" ]; then
+            MODE="production"
+        fi
     else
         set_defaults "$MODE"
         print_status "Using default configuration values"
@@ -539,11 +575,19 @@ EOF
     # Create frontend .env file with API URL
     print_status "Creating frontend environment configuration..."
     
-    cat > frontend/.env << EOF
+    if [ "$DEPLOYMENT_TYPE" = "remote" ]; then
+        # For remote deployments, use relative paths (empty VITE_API_BASE_URL)
+        cat > frontend/.env << EOF
+VITE_API_BASE_URL=
+EOF
+        print_success "Frontend configured to use relative API paths for reverse proxy"
+    else
+        # For local deployments, use full URL
+        cat > frontend/.env << EOF
 VITE_API_BASE_URL=$BACKEND_API_URL
 EOF
-    
-    print_success "Frontend configuration created with API URL: $BACKEND_API_URL"
+        print_success "Frontend configuration created with API URL: $BACKEND_API_URL"
+    fi
     
     # Create Caddyfile if using reverse proxy
     if [ "$USE_REVERSE_PROXY" = "true" ]; then
@@ -559,25 +603,17 @@ EOF
         fi
     fi
     
-    # Determine compose files based on mode and reverse proxy
-    if [ "$MODE" = "dev" ] || [ "$MODE" = "development" ]; then
+    # Determine compose files based on deployment type
+    if [ "$DEPLOYMENT_TYPE" = "remote" ]; then
+        print_status "Starting Owlculus for remote deployment..."
+        COMPOSE_FILES="-f docker-compose.reverse-proxy.yml"
+        print_status "Using all-in-one configuration with Caddy reverse proxy"
+    elif [ "$MODE" = "dev" ] || [ "$MODE" = "development" ]; then
         print_status "Starting Owlculus in development mode..."
-        BASE_COMPOSE_FILE="docker-compose.dev.yml"
-        if [ "$USE_REVERSE_PROXY" = "true" ]; then
-            COMPOSE_FILES="-f $BASE_COMPOSE_FILE -f docker-compose.caddy.yml"
-            print_status "Using Caddy reverse proxy with automatic HTTPS"
-        else
-            COMPOSE_FILES="-f $BASE_COMPOSE_FILE"
-        fi
+        COMPOSE_FILES="-f docker-compose.dev.yml"
     else
         print_status "Starting Owlculus in production mode..."
-        BASE_COMPOSE_FILE="docker-compose.yml"
-        if [ "$USE_REVERSE_PROXY" = "true" ]; then
-            COMPOSE_FILES="-f $BASE_COMPOSE_FILE -f docker-compose.caddy.yml"
-            print_status "Using Caddy reverse proxy with automatic HTTPS"
-        else
-            COMPOSE_FILES="-f $BASE_COMPOSE_FILE"
-        fi
+        COMPOSE_FILES="-f docker-compose.yml"
     fi
     
     # Build Docker images
@@ -631,8 +667,23 @@ EOF
     print_success "Owlculus setup completed!"
     echo ""
     echo "Owlculus is now running!"
-    echo "   Frontend: $FRONTEND_URL"
-    echo "   Backend API: $BACKEND_API_URL"
+    
+    if [ "$DEPLOYMENT_TYPE" = "remote" ]; then
+        echo "   URL: https://$DOMAIN"
+        echo ""
+        echo "Remote Deployment Features:"
+        echo "   • Automatic HTTPS with Let's Encrypt certificates"
+        echo "   • All services accessible through single endpoint"
+        echo "   • Frontend: https://$DOMAIN"
+        echo "   • Backend API: https://$DOMAIN/api"
+        echo "   • No exposed ports except 80/443"
+        echo ""
+        print_warning "Important: Ensure DNS for $DOMAIN points to this server!"
+    else
+        echo "   Frontend: $FRONTEND_URL"
+        echo "   Backend API: $BACKEND_API_URL"
+    fi
+    
     echo ""
     echo "Useful commands:"
     echo "   Show credentials: cat .env"
@@ -641,17 +692,6 @@ EOF
     echo "   Restart services: $DOCKER_COMPOSE_CMD $COMPOSE_FILES restart"
     echo "   Shell access:     $DOCKER_COMPOSE_CMD $COMPOSE_FILES exec backend bash"
     echo ""
-    
-    if [ "$USE_REVERSE_PROXY" = "true" ]; then
-        echo "Caddy Reverse Proxy Configuration:"
-        echo "   • Automatic HTTPS certificates via Let's Encrypt"
-        echo "   • Frontend: Served via Caddy on ports 80/443"
-        echo "   • Backend API: Proxied to /api/* endpoints"
-        echo "   • Services run on internal Docker network only"
-        echo ""
-        echo "Important: Make sure DNS for $DOMAIN points to this server!"
-        echo ""
-    fi
     
     # Create test data if requested
     if [ "$CREATE_TESTDATA" = "true" ]; then

@@ -1,14 +1,14 @@
 # Example Caddyfile for Owlculus reverse proxy setup
 
 owlculus.example.com {
-    # Frontend - serve Vue.js app
-    handle /* {
-        reverse_proxy frontend:80
-    }
-    
     # Backend API - proxy API requests
     handle /api/* {
         reverse_proxy backend:8000
+    }
+    
+    # Frontend - serve Vue.js app (must come after API route)
+    handle {
+        reverse_proxy frontend:80
     }
     
     # Add security headers
