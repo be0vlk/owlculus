@@ -392,9 +392,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import { useAuthStore } from '../stores/auth';
+import {computed, onMounted, ref} from 'vue';
+import {useRoute, useRouter} from 'vue-router';
+import {useAuthStore} from '../stores/auth';
 import BaseDashboard from '../components/BaseDashboard.vue';
 import CaseDetail from '../components/CaseDetail.vue';
 import EntityDataTable from '../components/entities/EntityDataTable.vue';
@@ -409,12 +409,12 @@ import UploadEvidenceModal from '../components/UploadEvidenceModal.vue';
 import MetadataModal from '../components/MetadataModal.vue';
 import TextContentModal from '../components/TextContentModal.vue';
 import ImageContentModal from '../components/ImageContentModal.vue';
-import { caseService } from '../services/case';
-import { clientService } from '../services/client';
-import { entityService } from '../services/entity';
-import { evidenceService } from '../services/evidence';
-import { useHuntStore } from '../stores/hunt';
-import { formatHuntExecutionTitle } from '../utils/huntDisplayUtils';
+import {caseService} from '../services/case';
+import {clientService} from '../services/client';
+import {entityService} from '../services/entity';
+import {evidenceService} from '../services/evidence';
+import {useHuntStore} from '../stores/huntStore.js';
+import {formatHuntExecutionTitle} from '../utils/huntDisplayUtils';
 
 const route = useRoute();
 const router = useRouter();
@@ -474,14 +474,14 @@ const availableTabs = computed(() => {
     { name: 'entities', label: 'Entities' },
     { name: 'evidence', label: 'Evidence' },
   ];
-  
+
   // Add Hunts tab for non-analyst users
   if (userRole.value !== 'Analyst') {
     tabs.push({ name: 'hunts', label: 'Hunts' });
   }
-  
+
   tabs.push({ name: 'notes', label: 'Notes' });
-  
+
   return tabs;
 });
 
@@ -536,7 +536,7 @@ const cancelEditingNotes = () => {
 
 const saveNotes = async () => {
   if (!caseData.value) return;
-  
+
   try {
     savingNotes.value = true;
     await caseService.updateCase(route.params.id, { notes: caseData.value.notes });
@@ -553,7 +553,7 @@ const handleNewEntity = (newEntity) => {
   entities.value = [...entities.value, newEntity];
   showEntityCreationSuccess.value = true;
   createdEntity.value = newEntity;
-  
+
   if (entityTableRef.value) {
     entityTableRef.value.refresh();
   }
@@ -652,7 +652,7 @@ const handleEvidenceUpload = async (newEvidenceList) => {
 const handleEvidenceMoved = (updatedEvidenceList, openState) => {
   // Update the evidence list with optimistic changes
   evidence.value = updatedEvidenceList;
-  
+
   // Restore the folder open state if provided
   if (openState && evidenceListRef.value) {
     evidenceListRef.value.restoreOpenState(openState);
@@ -722,7 +722,7 @@ const handleViewImageContent = async (evidenceItem) => {
 // Hunt-related methods
 const loadCaseHuntExecutions = async () => {
   if (!route.params.id) return;
-  
+
   try {
     loadingHuntExecutions.value = true;
     const executions = await huntStore.getCaseExecutions(Number(route.params.id));
@@ -787,7 +787,7 @@ const getFormattedHuntTitle = (execution) => {
   const baseName = execution.hunt_display_name || 'Hunt Execution';
   const initialParams = execution.initial_parameters || {};
   const huntCategory = execution.hunt_category || 'general';
-  
+
   return formatHuntExecutionTitle(baseName, initialParams, huntCategory);
 };
 

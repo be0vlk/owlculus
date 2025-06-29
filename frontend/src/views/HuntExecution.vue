@@ -101,7 +101,7 @@
                 <v-list-item-subtitle class="text-subtitle-2 font-weight-medium mb-1">
                   Status
                 </v-list-item-subtitle>
-                <v-chip 
+                <v-chip
                   :color="statusColor"
                   size="small"
                   variant="tonal"
@@ -247,10 +247,10 @@
                 :context-data="execution.context_data"
                 @view-evidence="viewEvidence"
               />
-              
+
               <!-- Step Results Section -->
               <v-divider class="my-4" />
-              
+
               <div class="text-h6 mb-3">Step Results</div>
               <div v-if="filteredSteps.length > 0">
                 <v-expansion-panels variant="accordion">
@@ -379,21 +379,21 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { useHuntStore } from '@/stores/hunt'
-import { useNotifications } from '@/composables/useNotifications'
-import { formatDate } from '@/composables/dateUtils'
-import { 
-  getStatusColor, 
-  getStatusIcon, 
-  getStatusText,
-  formatTime,
+import {computed, onMounted, onUnmounted, ref, watch} from 'vue'
+import {useRoute, useRouter} from 'vue-router'
+import {useHuntStore} from '@/stores/huntStore.js'
+import {useNotifications} from '@/composables/useNotifications'
+import {formatDate} from '@/composables/dateUtils'
+import {
   calculateDuration,
-  formatParameterName,
-  getLogEntryClass,
   exportToJSON,
-  formatFileSize
+  formatFileSize,
+  formatParameterName,
+  formatTime,
+  getLogEntryClass,
+  getStatusColor,
+  getStatusIcon,
+  getStatusText
 } from '@/utils/huntDisplayUtils'
 import BaseDashboard from '@/components/BaseDashboard.vue'
 import HuntResultsSummary from '@/components/hunts/HuntResultsSummary.vue'
@@ -459,18 +459,18 @@ const displayCategory = computed(() => {
   // Try hunt_category first, then hunt.category
   const category = execution.value?.hunt_category || execution.value?.hunt?.category
   if (!category) return 'N/A'
-  
+
   // Map hunt categories to display categories (matching HuntCatalog filter logic)
   const categoryMapping = {
     'person': 'Person',
     'domain': 'Network',
-    'network': 'Network', 
+    'network': 'Network',
     'company': 'Company',
     'general': 'Other',
     'other': 'Other'
   }
-  
-  return categoryMapping[category.toLowerCase()] || 
+
+  return categoryMapping[category.toLowerCase()] ||
          category.charAt(0).toUpperCase() + category.slice(1).toLowerCase()
 })
 
@@ -479,9 +479,9 @@ const loadExecution = async () => {
   try {
     loading.value = true
     error.value = null
-    
+
     execution.value = await huntStore.getExecution(executionId.value, true)
-    
+
     // Subscribe to real-time updates if running
     if (execution.value.status === 'running') {
       huntStore.subscribeToExecution(executionId.value)
@@ -533,7 +533,7 @@ const exportJSON = () => {
       timestamp: new Date().toISOString(),
       export_version: '1.0'
     }
-    
+
     exportToJSON(data, `hunt_execution_${executionId.value}_results.json`)
     showNotification('Results exported successfully', 'success')
   } catch (error) {
@@ -573,7 +573,7 @@ const updateElapsedTime = () => {
 
   const minutes = Math.floor(diff / 60000)
   const seconds = Math.floor((diff % 60000) / 1000)
-  
+
   if (minutes > 0) {
     elapsedTime.value = `${minutes}m ${seconds}s`
   } else {
@@ -607,11 +607,11 @@ onUnmounted(() => {
 watch(() => huntStore.activeExecutions[executionId.value], (updatedExecution) => {
   if (updatedExecution) {
     execution.value = updatedExecution
-    
+
     // Stop timer if execution is no longer running
     if (updatedExecution.status !== 'running') {
       stopElapsedTimer()
-      
+
       // No need to auto-switch since results is the default tab
     }
   }

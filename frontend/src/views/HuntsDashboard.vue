@@ -155,18 +155,19 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, computed } from 'vue'
-import { useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
-import { useHuntStore } from '@/stores/hunt'
-import { useNotifications } from '@/composables/useNotifications'
+// Watch for tab changes to manage polling
+import {computed, onMounted, onUnmounted, ref, watch} from 'vue'
+import {useRouter} from 'vue-router'
+import {useAuthStore} from '@/stores/auth'
+import {useHuntStore} from '@/stores/huntStore.js'
+import {useNotifications} from '@/composables/useNotifications'
 import BaseDashboard from '@/components/BaseDashboard.vue'
 import HuntCatalog from '@/components/hunts/HuntCatalog.vue'
 import HuntProgressCard from '@/components/hunts/HuntProgressCard.vue'
 import HuntExecutionModal from '@/components/hunts/HuntExecutionModal.vue'
 import HuntDetailsModal from '@/components/hunts/HuntDetailsModal.vue'
 import HuntExecutionHistory from '@/components/hunts/HuntExecutionHistory.vue'
-import { caseService } from '@/services/case'
+import {caseService} from '@/services/case'
 
 // Store and router
 const router = useRouter()
@@ -204,13 +205,13 @@ const loadData = async () => {
   try {
     loading.value = true
     error.value = null
-    
+
     // Load hunts and cases first
     await Promise.all([
       huntStore.fetchHunts(),
       loadCases()
     ])
-    
+
     // Then load active executions from all accessible cases
     await huntStore.loadAllActiveExecutions(cases.value)
   } catch (err) {
@@ -242,7 +243,7 @@ const refreshActiveExecutions = async () => {
 const startPolling = () => {
   // Stop any existing polling
   stopPolling()
-  
+
   // Poll every 5 seconds for active executions updates
   pollingInterval = setInterval(() => {
     if (activeTab.value === 'active' && huntStore.runningExecutions.length > 0) {
@@ -270,16 +271,16 @@ const handleExecuteHuntSubmit = async (executionData) => {
       executionData.caseId,
       executionData.parameters
     )
-    
+
     showNotification(`Hunt "${selectedHunt.value.display_name}" started successfully`, 'success')
-    
+
     // Switch to active executions tab
     activeTab.value = 'active'
-    
+
     // Close modal
     showExecutionModal.value = false
     selectedHunt.value = null
-    
+
     return execution
   } catch (err) {
     showNotification(err.message || 'Failed to execute hunt', 'error')
@@ -308,7 +309,7 @@ const handleDetailsModalClose = () => {
 const handleCancelExecution = async (executionId) => {
   try {
     cancellingExecutions.value.add(executionId)
-    
+
     await huntStore.cancelExecution(executionId)
     showNotification('Hunt execution cancelled', 'info')
   } catch (err) {
@@ -323,11 +324,6 @@ const handleViewExecutionDetails = (executionId) => {
 }
 
 
-
-
-
-// Watch for tab changes to manage polling
-import { watch } from 'vue'
 watch(activeTab, (newTab) => {
   if (newTab === 'active') {
     startPolling()
@@ -348,9 +344,9 @@ watch(() => huntStore.runningExecutions.length, (count) => {
 // Lifecycle
 onMounted(async () => {
   if (!checkAccess()) return
-  
+
   await loadData()
-  
+
   // Start polling if we're on the active tab and have running executions
   if (activeTab.value === 'active' && huntStore.runningExecutions.length > 0) {
     startPolling()

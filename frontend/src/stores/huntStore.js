@@ -1,6 +1,6 @@
-import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
-import { huntService } from '../services/hunt'
+import {defineStore} from 'pinia'
+import {computed, ref} from 'vue'
+import {huntService} from '../services/hunt'
 
 export const useHuntStore = defineStore('hunt', () => {
   // State
@@ -159,12 +159,12 @@ export const useHuntStore = defineStore('hunt', () => {
                 // Fetch full execution details including steps
                 const fullExecution = await huntService.getExecution(execution.id, true)
                 activeExecutions.value[fullExecution.id] = fullExecution
-                
+
                 // Subscribe to real-time updates for running executions
                 if (fullExecution.status === 'running') {
                   subscribeToExecution(fullExecution.id)
                 }
-                
+
                 return fullExecution
               } catch (err) {
                 console.error(`Failed to load execution details for ${execution.id}:`, err)
@@ -176,7 +176,7 @@ export const useHuntStore = defineStore('hunt', () => {
                 return execution
               }
             })
-          
+
           await Promise.all(activeExecPromises)
 
           return executions
@@ -250,7 +250,7 @@ export const useHuntStore = defineStore('hunt', () => {
       if (execution) {
         // Create a new object to ensure reactivity
         const updatedExecution = { ...execution }
-        
+
         switch (data.event_type) {
           case 'progress':
             updatedExecution.progress = data.progress || execution.progress
@@ -295,7 +295,7 @@ export const useHuntStore = defineStore('hunt', () => {
             updatedExecution.status = 'completed'
             updatedExecution.progress = 1.0
             updatedExecution.completed_at = new Date().toISOString()
-            
+
             // Fetch the latest execution details with steps
             try {
               const fullExecution = await getExecution(executionId, true)
@@ -303,7 +303,7 @@ export const useHuntStore = defineStore('hunt', () => {
             } catch (err) {
               console.error('Failed to fetch completed execution details:', err)
             }
-            
+
             // Update execution history to include the completed execution
             const historyIndex = executionHistory.value.findIndex(e => e.id === executionId)
             if (historyIndex !== -1) {
@@ -311,14 +311,14 @@ export const useHuntStore = defineStore('hunt', () => {
             } else {
               executionHistory.value.unshift({ ...updatedExecution })
             }
-            
+
             unsubscribeFromExecution(executionId)
             break
           }
           case 'error': {
             updatedExecution.status = 'failed'
             updatedExecution.completed_at = new Date().toISOString()
-            
+
             // Update execution history
             const errorHistoryIndex = executionHistory.value.findIndex(e => e.id === executionId)
             if (errorHistoryIndex !== -1) {
@@ -326,7 +326,7 @@ export const useHuntStore = defineStore('hunt', () => {
             } else {
               executionHistory.value.unshift({ ...updatedExecution })
             }
-            
+
             unsubscribeFromExecution(executionId)
             break
           }
@@ -374,18 +374,18 @@ export const useHuntStore = defineStore('hunt', () => {
   async function refreshRunningExecutions() {
     const runningExecs = runningExecutions.value
     if (runningExecs.length === 0) return
-    
+
     try {
       const refreshPromises = runningExecs.map(async (execution) => {
         try {
           const updated = await huntService.getExecution(execution.id, true)
-          
+
           // Update in activeExecutions
           activeExecutions.value = {
             ...activeExecutions.value,
             [updated.id]: updated
           }
-          
+
           // If execution is no longer running, update history
           if (updated.status !== 'running' && updated.status !== 'pending') {
             const historyIndex = executionHistory.value.findIndex(e => e.id === updated.id)
@@ -394,18 +394,18 @@ export const useHuntStore = defineStore('hunt', () => {
             } else {
               executionHistory.value.unshift({ ...updated })
             }
-            
+
             // Sort history by creation date
             executionHistory.value.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
           }
-          
+
           return updated
         } catch (err) {
           console.error(`Failed to refresh execution ${execution.id}:`, err)
           return execution
         }
       })
-      
+
       await Promise.all(refreshPromises)
     } catch (err) {
       console.error('Failed to refresh running executions:', err)
