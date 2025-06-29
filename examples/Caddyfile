@@ -1,12 +1,4 @@
 # Example Caddyfile for Owlculus reverse proxy setup
-# 
-# Instructions:
-# 1. Run Owlculus setup with reverse proxy option: ./setup.sh
-# 2. Choose "yes" when asked about reverse proxy
-# 3. Enter your domain name (e.g., owlculus.example.com)
-# 4. Copy this file to your Caddy configuration directory
-# 5. Replace "owlculus.example.com" with your actual domain
-# 6. Start Caddy: caddy run
 
 owlculus.example.com {
     # Frontend - serve Vue.js app
@@ -19,9 +11,8 @@ owlculus.example.com {
         reverse_proxy backend:8000
     }
     
-    # Optional: Add security headers
+    # Add security headers
     header {
-        # Security headers
         Strict-Transport-Security "max-age=31536000; includeSubDomains"
         X-Content-Type-Options "nosniff"
         X-Frame-Options "SAMEORIGIN"
@@ -34,10 +25,5 @@ owlculus.example.com {
     
     # Enable compression
     encode gzip
-    
-    # Logging (optional)
-    log {
-        output file /var/log/caddy/owlculus.log
-        format json
-    }
+
 }

@@ -138,12 +138,12 @@ interactive_config() {
         DEFAULT_FE_PORT="5173"
     fi
     
-    # Reverse Proxy Configuration
+    # Deployment Configuration
     echo "Deployment Configuration:"
     echo "------------------------"
     
     while true; do
-        echo -n "Are you using a reverse proxy (Caddy, nginx, Traefik, etc.)? [y/N]: "
+        echo -n "Use reverse proxy with automatic HTTPS (Caddy)? [y/N]: "
         read reverse_proxy_choice
         case $reverse_proxy_choice in
             [Yy]|[Yy][Ee][Ss]) 
@@ -159,21 +159,8 @@ interactive_config() {
     done
     
     if [ "$USE_REVERSE_PROXY" = "true" ]; then
-        while true; do
-            echo -n "Will your reverse proxy handle HTTPS/SSL? [Y/n]: "
-            read https_choice
-            case $https_choice in
-                [Nn]|[Nn][Oo])
-                    USE_HTTPS="false"
-                    break
-                    ;;
-                [Yy]|[Yy][Ee][Ss]|"")
-                    USE_HTTPS="true"
-                    break
-                    ;;
-                *) echo "Please answer yes or no" ;;
-            esac
-        done
+        USE_HTTPS="true"  # Caddy handles HTTPS automatically
+        print_status "Caddy will automatically handle HTTPS certificates"
     fi
     
     echo ""
@@ -558,13 +545,27 @@ EOF
     
     print_success "Frontend configuration created with API URL: $BACKEND_API_URL"
     
+    # Create Caddyfile if using reverse proxy
+    if [ "$USE_REVERSE_PROXY" = "true" ]; then
+        print_status "Creating Caddyfile from template..."
+        
+        if [ -f "examples/Caddyfile" ]; then
+            # Replace the domain placeholder in the template
+            sed "s/owlculus\.example\.com/$DOMAIN/g" examples/Caddyfile > Caddyfile
+            print_success "Caddyfile created for domain: $DOMAIN"
+        else
+            print_error "Caddyfile template not found in examples/Caddyfile"
+            exit 1
+        fi
+    fi
+    
     # Determine compose files based on mode and reverse proxy
     if [ "$MODE" = "dev" ] || [ "$MODE" = "development" ]; then
         print_status "Starting Owlculus in development mode..."
         BASE_COMPOSE_FILE="docker-compose.dev.yml"
         if [ "$USE_REVERSE_PROXY" = "true" ]; then
-            COMPOSE_FILES="-f $BASE_COMPOSE_FILE -f docker-compose.proxy.dev.yml"
-            print_status "Using reverse proxy configuration (no host port binding)"
+            COMPOSE_FILES="-f $BASE_COMPOSE_FILE -f docker-compose.caddy.yml"
+            print_status "Using Caddy reverse proxy with automatic HTTPS"
         else
             COMPOSE_FILES="-f $BASE_COMPOSE_FILE"
         fi
@@ -572,8 +573,8 @@ EOF
         print_status "Starting Owlculus in production mode..."
         BASE_COMPOSE_FILE="docker-compose.yml"
         if [ "$USE_REVERSE_PROXY" = "true" ]; then
-            COMPOSE_FILES="-f $BASE_COMPOSE_FILE -f docker-compose.proxy.yml"
-            print_status "Using reverse proxy configuration (no host port binding)"
+            COMPOSE_FILES="-f $BASE_COMPOSE_FILE -f docker-compose.caddy.yml"
+            print_status "Using Caddy reverse proxy with automatic HTTPS"
         else
             COMPOSE_FILES="-f $BASE_COMPOSE_FILE"
         fi
@@ -605,11 +606,10 @@ EOF
     
     # Test services based on deployment type
     if [ "$USE_REVERSE_PROXY" = "true" ]; then
-        print_status "Services are running internally - configure your reverse proxy to:"
-        echo "   - Forward requests to frontend container on port 80"
-        echo "   - Forward /api requests to backend container on port 8000"
-        print_success "Frontend URL (via reverse proxy): $FRONTEND_URL"
-        print_success "Backend API URL (via reverse proxy): $BACKEND_API_URL"
+        print_status "Caddy reverse proxy is handling requests"
+        print_success "Frontend URL: $FRONTEND_URL"
+        print_success "Backend API URL: $BACKEND_API_URL"
+        print_status "Note: HTTPS certificates will be automatically obtained on first access"
     else
         # Test backend
         if curl -f -s "$BACKEND_API_URL/" > /dev/null; then
@@ -643,10 +643,13 @@ EOF
     echo ""
     
     if [ "$USE_REVERSE_PROXY" = "true" ]; then
-        echo "Reverse Proxy Configuration:"
-        echo "   Frontend: Forward to http://localhost (container port 80)"
-        echo "   Backend:  Forward /api/* to http://localhost:8000 (container port 8000)"
-        echo "   Note: Services are NOT exposed on host ports"
+        echo "Caddy Reverse Proxy Configuration:"
+        echo "   • Automatic HTTPS certificates via Let's Encrypt"
+        echo "   • Frontend: Served via Caddy on ports 80/443"
+        echo "   • Backend API: Proxied to /api/* endpoints"
+        echo "   • Services run on internal Docker network only"
+        echo ""
+        echo "Important: Make sure DNS for $DOMAIN points to this server!"
         echo ""
     fi
     
