@@ -33,8 +33,10 @@ class Settings(BaseSettings):
 
     BACKEND_CORS_ORIGINS: list[str | AnyHttpUrl] = [
         os.environ.get("FRONTEND_URL", "http://localhost:5173"),
+        os.environ.get("BACKEND_URL", "http://localhost:8000"),
         "http://localhost",
         "http://localhost:80",
+        "http://localhost:8081",
     ]
     ALGORITHM: str = "HS256"
 

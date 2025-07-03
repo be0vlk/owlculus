@@ -23,6 +23,7 @@ app = FastAPI(
     description=settings.DESCRIPTION,
     version=settings.VERSION,
     lifespan=lifespan,
+    proxy_headers=True,
 )
 
 
