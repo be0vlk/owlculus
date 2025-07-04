@@ -2,11 +2,14 @@ import secrets
 from datetime import timedelta, timezone
 
 from app import schemas
-from app.core.dependencies import admin_only
+from app.core.exceptions import (
+    BaseException,
+    DuplicateResourceException,
+    ResourceNotFoundException,
+)
 from app.core.logging import get_security_logger
 from app.core.utils import get_utc_now
 from app.database import crud, models
-from fastapi import HTTPException
 from sqlmodel import Session
 
 
@@ -14,9 +17,8 @@ class InviteService:
     def __init__(self, db: Session):
         self.db = db
 
-    @admin_only()
     async def create_invite(
-        self, invite: schemas.InviteCreate, current_user: models.User
+        self, invite: schemas.InviteCreate, *, current_user: models.User
     ) -> models.Invite:
         invite_logger = get_security_logger(
             admin_user_id=current_user.id,
@@ -50,11 +52,10 @@ class InviteService:
             invite_logger.bind(
                 event_type="invite_creation_error", error_type="system_error"
             ).error(f"Invite creation error: {str(e)}")
-            raise HTTPException(status_code=400, detail=str(e))
+            raise BaseException(str(e))
 
-    @admin_only()
     async def get_invites(
-        self, current_user: models.User, skip: int = 0, limit: int = 100
+        self, skip: int = 0, limit: int = 100, *, current_user: models.User
     ) -> list[schemas.InviteListResponse]:
         invites = await crud.get_all_invites(self.db, skip=skip, limit=limit)
 
@@ -114,7 +115,7 @@ class InviteService:
                     failure_reason="invalid_invite",
                     validation_error=validation.error,
                 ).warning("User registration failed: invalid invite")
-                raise HTTPException(status_code=400, detail=validation.error)
+                raise BaseException(validation.error)
 
             invite = await crud.get_invite_by_token(self.db, token=registration.token)
             if not invite:
@@ -122,7 +123,7 @@ class InviteService:
                     event_type="invite_registration_failed",
                     failure_reason="invite_not_found",
                 ).warning("User registration failed: invite not found")
-                raise HTTPException(status_code=400, detail="Invalid invite token")
+                raise ResourceNotFoundException("Invalid invite token")
 
             existing_user = await crud.get_user_by_username(
                 self.db, username=registration.username
@@ -132,7 +133,7 @@ class InviteService:
                     event_type="invite_registration_failed",
                     failure_reason="username_taken",
                 ).warning("User registration failed: username already taken")
-                raise HTTPException(status_code=400, detail="Username already taken")
+                raise DuplicateResourceException("Username already taken")
 
             existing_user = await crud.get_user_by_email(
                 self.db, email=registration.email
@@ -142,7 +143,7 @@ class InviteService:
                     event_type="invite_registration_failed",
                     failure_reason="email_taken",
                 ).warning("User registration failed: email already registered")
-                raise HTTPException(status_code=400, detail="Email already registered")
+                raise DuplicateResourceException("Email already registered")
 
             user = await crud.create_user_from_invite(
                 db=self.db,
@@ -169,22 +170,21 @@ class InviteService:
                 created_at=user.created_at,
             )
 
-        except HTTPException:
+        except (BaseException, ResourceNotFoundException, DuplicateResourceException):
             raise
         except ValueError as e:
             invite_logger.bind(
                 event_type="invite_registration_failed",
                 failure_reason="validation_error",
             ).warning(f"User registration failed: {str(e)}")
-            raise HTTPException(status_code=400, detail=str(e))
+            raise BaseException(str(e))
         except Exception as e:
             invite_logger.bind(
                 event_type="invite_registration_error", error_type="system_error"
             ).error(f"User registration error: {str(e)}")
-            raise HTTPException(status_code=500, detail="Internal server error")
+            raise BaseException("Internal server error")
 
-    @admin_only()
-    async def delete_invite(self, invite_id: int, current_user: models.User) -> bool:
+    async def delete_invite(self, invite_id: int, *, current_user: models.User) -> bool:
         invite_logger = get_security_logger(
             admin_user_id=current_user.id,
             invite_id=invite_id,
@@ -199,7 +199,7 @@ class InviteService:
                     event_type="invite_deletion_failed",
                     failure_reason="invite_not_found",
                 ).warning("Invite deletion failed: invite not found")
-                raise HTTPException(status_code=404, detail="Invite not found")
+                raise ResourceNotFoundException("Invite not found")
 
             if invite.used_at:
                 invite_logger.bind(
@@ -207,7 +207,7 @@ class InviteService:
                     failure_reason="invite_already_used",
                     used_at=invite.used_at.isoformat(),
                 ).warning("Invite deletion failed: cannot delete used invite")
-                raise HTTPException(status_code=400, detail="Cannot delete used invite")
+                raise BaseException("Cannot delete used invite")
 
             result = await crud.delete_invite(self.db, invite_id=invite_id)
 
@@ -219,19 +219,18 @@ class InviteService:
 
             return result
 
-        except HTTPException:
+        except (BaseException, ResourceNotFoundException, DuplicateResourceException):
             raise
         except ValueError as e:
             invite_logger.bind(
                 event_type="invite_deletion_failed", failure_reason="validation_error"
             ).warning(f"Invite deletion failed: {str(e)}")
-            raise HTTPException(status_code=404, detail=str(e))
+            raise ResourceNotFoundException(str(e))
         except Exception as e:
             invite_logger.bind(
                 event_type="invite_deletion_error", error_type="system_error"
             ).error(f"Invite deletion error: {str(e)}")
-            raise HTTPException(status_code=500, detail="Internal server error")
+            raise BaseException("Internal server error")
 
-    @admin_only()
-    async def cleanup_expired_invites(self, current_user: models.User) -> int:
+    async def cleanup_expired_invites(self, *, current_user: models.User) -> int:
         return await crud.delete_expired_invites(self.db)

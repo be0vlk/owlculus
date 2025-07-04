@@ -6,9 +6,9 @@ from datetime import datetime, timedelta
 
 import pytest
 from app.core.enums import TaskPriority, TaskStatus
+from app.core.exceptions import ResourceNotFoundException, ValidationException
 from app.database import models
 from app.services.task_service import TaskService
-from fastapi import HTTPException
 from sqlmodel import Session
 
 
@@ -207,7 +207,7 @@ class TestTaskTemplateOperations:
             "definition_json": {"fields": []},
         }
 
-        template = await task_service.create_custom_template(template_data, test_admin)
+        template = await task_service.create_custom_template(template_data, current_user=test_admin)
 
         assert template.name == "custom_test"
         assert template.display_name == "Custom Test Template"
@@ -243,7 +243,7 @@ class TestTaskCRUDOperations:
             "custom_fields": {"field1": "test"},
         }
 
-        task = await task_service.create_task(test_case.id, task_data, test_admin)
+        task = await task_service.create_task(test_case.id, task_data, current_user=test_admin)
 
         assert task.title == "New Test Task"
         assert task.case_id == test_case.id
@@ -259,16 +259,17 @@ class TestTaskCRUDOperations:
         test_case: models.Case,
         test_investigator: models.User,
     ):
-        """Test creating task without case access"""
+        """Test creating task without case access - service layer accepts all users"""
         task_data = {
             "title": "Unauthorized Task",
-            "description": "Should fail",
+            "description": "Should succeed at service layer",
             "priority": TaskPriority.LOW.value,
         }
 
-        with pytest.raises(HTTPException) as exc_info:
-            await task_service.create_task(test_case.id, task_data, test_investigator)
-        assert exc_info.value.status_code == 403
+        # Service layer should accept the request (authorization happens at API layer)
+        task = await task_service.create_task(test_case.id, task_data, current_user=test_investigator)
+        assert task.title == "Unauthorized Task"
+        assert task.assigned_by_id == test_investigator.id
 
     @pytest.mark.asyncio
     async def test_get_task(
@@ -278,7 +279,7 @@ class TestTaskCRUDOperations:
         test_admin: models.User,
     ):
         """Test getting a specific task"""
-        task = await task_service.get_task(sample_task.id, test_admin)
+        task = await task_service.get_task(sample_task.id, current_user=test_admin)
         assert task.id == sample_task.id
         assert task.title == sample_task.title
 
@@ -287,9 +288,8 @@ class TestTaskCRUDOperations:
         self, task_service: TaskService, test_admin: models.User
     ):
         """Test getting non-existent task"""
-        with pytest.raises(HTTPException) as exc_info:
-            await task_service.get_task(99999, test_admin)
-        assert exc_info.value.status_code == 404
+        with pytest.raises(ResourceNotFoundException, match="Task not found"):
+            await task_service.get_task(99999, current_user=test_admin)
 
     @pytest.mark.asyncio
     async def test_update_task(
@@ -306,7 +306,7 @@ class TestTaskCRUDOperations:
         }
 
         updated_task = await task_service.update_task(
-            sample_task.id, updates, test_admin
+            sample_task.id, updates, current_user=test_admin
         )
 
         assert updated_task.title == "Updated Task Title"
@@ -323,7 +323,7 @@ class TestTaskCRUDOperations:
         test_admin: models.User,
     ):
         """Test deleting a task"""
-        result = await task_service.delete_task(sample_task.id, test_admin)
+        result = await task_service.delete_task(sample_task.id, current_user=test_admin)
         assert result is True
 
         # Verify task is deleted
@@ -412,9 +412,10 @@ class TestTaskFiltering:
     async def test_get_tasks_non_admin_no_case_access(
         self, task_service: TaskService, multiple_tasks: list, test_analyst: models.User
     ):
-        """Test non-admin user with no case access gets no tasks"""
+        """Test non-admin user with no case access - service layer returns all tasks"""
+        # Service layer doesn't filter by access (done at API layer)
         tasks = await task_service.get_tasks(current_user=test_analyst)
-        assert len(tasks) == 0
+        assert len(tasks) == 4  # All tasks are returned
 
 
 class TestTaskAssignment:
@@ -437,7 +438,7 @@ class TestTaskAssignment:
         task_service.db.commit()
 
         task = await task_service.assign_task(
-            sample_task.id, test_investigator.id, test_admin
+            sample_task.id, test_investigator.id, current_user=test_admin
         )
 
         assert task.assigned_to_id == test_investigator.id
@@ -450,7 +451,7 @@ class TestTaskAssignment:
         test_admin: models.User,
     ):
         """Test unassigning a task"""
-        task = await task_service.assign_task(sample_task.id, None, test_admin)
+        task = await task_service.assign_task(sample_task.id, None, current_user=test_admin)
         assert task.assigned_to_id is None
 
     @pytest.mark.asyncio
@@ -461,10 +462,10 @@ class TestTaskAssignment:
         test_admin: models.User,
         test_analyst: models.User,
     ):
-        """Test assigning task to user without case access"""
-        with pytest.raises(HTTPException) as exc_info:
-            await task_service.assign_task(sample_task.id, test_analyst.id, test_admin)
-        assert exc_info.value.status_code == 403
+        """Test assigning task to user without case access - service layer accepts all users"""
+        # Service layer should accept the request (authorization happens at API layer)
+        task = await task_service.assign_task(sample_task.id, test_analyst.id, current_user=test_admin)
+        assert task.assigned_to_id == test_analyst.id
 
     @pytest.mark.asyncio
     async def test_bulk_assign_tasks(
@@ -484,7 +485,7 @@ class TestTaskAssignment:
 
         task_ids = [task.id for task in multiple_tasks[:3]]
         updated_tasks = await task_service.bulk_assign(
-            task_ids, test_investigator.id, test_admin
+            task_ids, test_investigator.id, current_user=test_admin
         )
 
         assert len(updated_tasks) == 3
@@ -504,7 +505,7 @@ class TestTaskStatusOperations:
     ):
         """Test updating task status to completed"""
         task = await task_service.update_status(
-            sample_task.id, TaskStatus.COMPLETED.value, test_admin
+            sample_task.id, TaskStatus.COMPLETED.value, current_user=test_admin
         )
 
         assert task.status == TaskStatus.COMPLETED.value
@@ -533,7 +534,7 @@ class TestTaskStatusOperations:
 
         # Move to in-progress
         updated_task = await task_service.update_status(
-            task.id, TaskStatus.IN_PROGRESS.value, test_admin
+            task.id, TaskStatus.IN_PROGRESS.value, current_user=test_admin
         )
 
         assert updated_task.status == TaskStatus.IN_PROGRESS.value
@@ -548,11 +549,10 @@ class TestTaskStatusOperations:
         test_admin: models.User,
     ):
         """Test updating task with invalid status"""
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ValidationException, match="Invalid status"):
             await task_service.update_status(
-                sample_task.id, "invalid_status", test_admin
+                sample_task.id, "invalid_status", current_user=test_admin
             )
-        assert exc_info.value.status_code == 400
 
     @pytest.mark.asyncio
     async def test_bulk_update_status(
@@ -567,7 +567,7 @@ class TestTaskStatusOperations:
         ][:2]
 
         updated_tasks = await task_service.bulk_update_status(
-            task_ids, TaskStatus.IN_PROGRESS.value, test_admin
+            task_ids, TaskStatus.IN_PROGRESS.value, current_user=test_admin
         )
 
         assert len(updated_tasks) == 2
@@ -593,7 +593,7 @@ class TestTaskAccessControl:
         task_service.db.add(case_link)
         task_service.db.commit()
 
-        task = await task_service.get_task(sample_task.id, test_analyst)
+        task = await task_service.get_task(sample_task.id, current_user=test_analyst)
         assert task.id == sample_task.id
 
     @pytest.mark.asyncio
@@ -619,14 +619,14 @@ class TestTaskAccessControl:
         }
 
         task = await task_service.create_task(
-            test_case.id, task_data, test_investigator
+            test_case.id, task_data, current_user=test_investigator
         )
         assert task.assigned_by_id == test_investigator.id
 
         # Update task
         updates = {"title": "Updated by Investigator"}
         updated_task = await task_service.update_task(
-            task.id, updates, test_investigator
+            task.id, updates, current_user=test_investigator
         )
         assert updated_task.title == "Updated by Investigator"
 
@@ -660,7 +660,7 @@ class TestTaskWithCustomFields:
             },
         }
 
-        task = await task_service.create_task(test_case.id, task_data, test_admin)
+        task = await task_service.create_task(test_case.id, task_data, current_user=test_admin)
 
         assert task.template_id == task_template.id
         assert task.custom_fields["field1"] == "custom value"
@@ -678,7 +678,7 @@ class TestTaskWithCustomFields:
         updates = {"custom_fields": {"field1": "updated value", "field3": "new field"}}
 
         updated_task = await task_service.update_task(
-            sample_task.id, updates, test_admin
+            sample_task.id, updates, current_user=test_admin
         )
 
         assert updated_task.custom_fields["field1"] == "updated value"
@@ -706,7 +706,7 @@ class TestTaskDueDates:
             "due_date": due_date,
         }
 
-        task = await task_service.create_task(test_case.id, task_data, test_admin)
+        task = await task_service.create_task(test_case.id, task_data, current_user=test_admin)
 
         assert task.due_date is not None
         assert abs((task.due_date - due_date).total_seconds()) < 1
@@ -723,7 +723,7 @@ class TestTaskDueDates:
         updates = {"due_date": new_due_date}
 
         updated_task = await task_service.update_task(
-            sample_task.id, updates, test_admin
+            sample_task.id, updates, current_user=test_admin
         )
 
         assert updated_task.due_date is not None

@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 from app.core.dependencies import get_current_user, get_db
+from app.core.exceptions import ResourceNotFoundException
 from app.database.models import User
 from app.main import app
 from fastapi import status
@@ -175,17 +176,9 @@ class TestPluginsAPI:
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
         try:
-            with patch(
-                "app.services.plugin_service.PluginService.list_plugins"
-            ) as mock_list:
-                from fastapi import HTTPException
-
-                mock_list.side_effect = HTTPException(
-                    status_code=403, detail="Permission denied"
-                )
-
-                response = client.get("/api/plugins/")
-                assert response.status_code == status.HTTP_403_FORBIDDEN
+            response = client.get("/api/plugins/")
+            # The @no_analyst decorator at API level should return 403
+            assert response.status_code == status.HTTP_403_FORBIDDEN
         finally:
             app.dependency_overrides.clear()
 
@@ -295,7 +288,7 @@ class TestPluginsAPI:
             with patch(
                 "app.services.plugin_service.PluginService.execute_plugin"
             ) as mock_execute:
-                mock_execute.side_effect = ValueError(
+                mock_execute.side_effect = ResourceNotFoundException(
                     "Plugin 'NonExistentPlugin' not found"
                 )
 
@@ -362,26 +355,11 @@ class TestPluginsAPI:
         plugin_params = {"test": "value"}
 
         try:
-            with patch(
-                "app.services.plugin_service.PluginService.execute_plugin"
-            ) as mock_execute:
-                mock_execute.side_effect = ValueError("Permission denied")
-
-                response = client.post(
-                    "/api/plugins/TestPlugin/execute", json=plugin_params
-                )
-                assert (
-                    response.status_code == status.HTTP_200_OK
-                )  # Streaming response always returns 200
-
-                # Check error in response content
-                content = response.content.decode()
-                lines = [line for line in content.split("\n") if line.strip()]
-                assert len(lines) >= 1
-
-                error_result = json.loads(lines[0])
-                assert error_result["type"] == "error"
-                assert "Permission denied" in error_result["data"]["message"]
+            response = client.post(
+                "/api/plugins/TestPlugin/execute", json=plugin_params
+            )
+            # The @no_analyst decorator at API level should return 403
+            assert response.status_code == status.HTTP_403_FORBIDDEN
         finally:
             app.dependency_overrides.clear()
 
@@ -511,7 +489,7 @@ class TestPluginsAPI:
             with patch(
                 "app.services.plugin_service.PluginService.execute_plugin"
             ) as mock_execute:
-                mock_execute.side_effect = ValueError(
+                mock_execute.side_effect = ResourceNotFoundException(
                     "Plugin 'TestPlugin123' not found"
                 )
 

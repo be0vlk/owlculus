@@ -2,11 +2,15 @@ from datetime import timedelta
 from unittest.mock import Mock, patch
 
 import pytest
+from app.core.exceptions import (
+    BaseException,
+    DuplicateResourceException,
+    ResourceNotFoundException,
+)
 from app.core.utils import get_utc_now
 from app.database import models
 from app.schemas import invite_schema as schemas
 from app.services.invite_service import InviteService
-from fastapi import HTTPException
 from sqlmodel import Session
 
 
@@ -50,28 +54,33 @@ class TestInviteService:
                 mock_create.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_create_invite_admin_only_permission(
+    async def test_create_invite_non_admin_user(
         self,
         invite_service_instance: InviteService,
         test_user: models.User,
     ):
+        # Test that service layer accepts non-admin users
+        # Authorization is now handled at API layer
         invite_data = schemas.InviteCreate(role="Investigator")
 
-        with patch("app.core.dependencies.admin_only") as mock_decorator:
+        with patch(
+            "app.services.invite_service.crud.create_invite"
+        ) as mock_create:
+            mock_invite = Mock()
+            mock_invite.id = 1
+            mock_invite.role = "Investigator"
+            mock_invite.created_at = get_utc_now()
+            mock_invite.expires_at = get_utc_now() + timedelta(hours=48)
+            mock_invite.created_by_id = test_user.id
+            mock_create.return_value = mock_invite
 
-            def side_effect(*args, **kwargs):
-                if "current_user" in kwargs and kwargs["current_user"].role != "Admin":
-                    raise HTTPException(status_code=403, detail="Admin access required")
-                return kwargs.get("current_user")
+            # This should now succeed at service layer
+            result = await invite_service_instance.create_invite(
+                invite_data, current_user=test_user
+            )
 
-            mock_decorator.return_value = side_effect
-
-            with pytest.raises(HTTPException) as exc_info:
-                await invite_service_instance.create_invite(
-                    invite_data, current_user=test_user
-                )
-
-            assert exc_info.value.status_code == 403
+            assert result.id == 1
+            assert result.role == "Investigator"
 
     @pytest.mark.asyncio
     async def test_get_invites_success(
@@ -80,7 +89,7 @@ class TestInviteService:
         test_admin: models.User,
     ):
         with patch(
-            "app.services.invite_service.crud.get_invites_by_creator"
+            "app.services.invite_service.crud.get_all_invites"
         ) as mock_get_invites:
             mock_invite1 = Mock()
             mock_invite1.id = 1
@@ -99,7 +108,7 @@ class TestInviteService:
             mock_get_invites.return_value = [mock_invite1, mock_invite2]
 
             result = await invite_service_instance.get_invites(
-                current_user=test_admin, skip=0, limit=100
+                skip=0, limit=100, current_user=test_admin
             )
 
             assert len(result) == 2
@@ -269,13 +278,12 @@ class TestInviteService:
             mock_validation.error = "Invalid invite token"
             mock_validate.return_value = mock_validation
 
-            with pytest.raises(HTTPException) as exc_info:
+            with pytest.raises(BaseException) as exc_info:
                 await invite_service_instance.register_user_with_invite(
                     registration_data
                 )
 
-            assert exc_info.value.status_code == 400
-            assert "Invalid invite token" in exc_info.value.detail
+            assert "Invalid invite token" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_register_user_with_invite_username_taken(
@@ -309,13 +317,12 @@ class TestInviteService:
                     existing_user.username = registration_data.username
                     mock_get_username.return_value = existing_user
 
-                    with pytest.raises(HTTPException) as exc_info:
+                    with pytest.raises(DuplicateResourceException) as exc_info:
                         await invite_service_instance.register_user_with_invite(
                             registration_data
                         )
 
-                    assert exc_info.value.status_code == 400
-                    assert "Username already taken" in exc_info.value.detail
+                    assert "Username already taken" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_register_user_with_invite_email_taken(
@@ -354,13 +361,12 @@ class TestInviteService:
                         existing_user.email = registration_data.email
                         mock_get_email.return_value = existing_user
 
-                        with pytest.raises(HTTPException) as exc_info:
+                        with pytest.raises(DuplicateResourceException) as exc_info:
                             await invite_service_instance.register_user_with_invite(
                                 registration_data
                             )
 
-                        assert exc_info.value.status_code == 400
-                        assert "Email already registered" in exc_info.value.detail
+                        assert "Email already registered" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_delete_invite_success(
@@ -401,13 +407,12 @@ class TestInviteService:
         with patch.object(invite_service_instance.db, "get") as mock_get:
             mock_get.return_value = None
 
-            with pytest.raises(HTTPException) as exc_info:
+            with pytest.raises(ResourceNotFoundException) as exc_info:
                 await invite_service_instance.delete_invite(
                     invite_id, current_user=test_admin
                 )
 
-            assert exc_info.value.status_code == 404
-            assert "Invite not found" in exc_info.value.detail
+            assert "Invite not found" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_delete_invite_non_admin_user(
@@ -418,21 +423,30 @@ class TestInviteService:
         """Test that non-admin users cannot delete invites"""
         invite_id = 1
 
-        with pytest.raises(HTTPException) as exc_info:
-            await invite_service_instance.delete_invite(
-                invite_id, current_user=test_user
-            )
-
-        assert exc_info.value.status_code == 403
-        assert "Not authorized" in exc_info.value.detail
+        # Authorization is now handled at API layer, so service should work
+        with patch.object(invite_service_instance.db, "get") as mock_get:
+            mock_invite = Mock()
+            mock_invite.used_at = None
+            mock_get.return_value = mock_invite
+            
+            with patch(
+                "app.services.invite_service.crud.delete_invite"
+            ) as mock_delete:
+                mock_delete.return_value = True
+                
+                result = await invite_service_instance.delete_invite(
+                    invite_id, current_user=test_user
+                )
+                
+                assert result == True
 
     @pytest.mark.asyncio
-    async def test_delete_invite_wrong_owner(
+    async def test_delete_invite_different_creator(
         self,
         invite_service_instance: InviteService,
         test_admin: models.User,
     ):
-        """Test that admin cannot delete invite created by another admin"""
+        """Test that service layer allows deletion by any admin (authorization at API layer)"""
         invite_id = 1
 
         # Create another admin user
@@ -447,14 +461,18 @@ class TestInviteService:
 
         with patch.object(invite_service_instance.db, "get") as mock_get:
             mock_get.return_value = mock_invite
-
-            with pytest.raises(HTTPException) as exc_info:
-                await invite_service_instance.delete_invite(
+            
+            with patch(
+                "app.services.invite_service.crud.delete_invite"
+            ) as mock_delete:
+                mock_delete.return_value = True
+                
+                # Should succeed at service layer
+                result = await invite_service_instance.delete_invite(
                     invite_id, current_user=test_admin
                 )
-
-            assert exc_info.value.status_code == 403
-            assert "Not authorized to delete this invite" in exc_info.value.detail
+                
+                assert result == True
 
     @pytest.mark.asyncio
     async def test_delete_invite_already_used(
@@ -472,13 +490,12 @@ class TestInviteService:
         with patch.object(invite_service_instance.db, "get") as mock_get:
             mock_get.return_value = mock_invite
 
-            with pytest.raises(HTTPException) as exc_info:
+            with pytest.raises(BaseException) as exc_info:
                 await invite_service_instance.delete_invite(
                     invite_id, current_user=test_admin
                 )
 
-            assert exc_info.value.status_code == 400
-            assert "Cannot delete used invite" in exc_info.value.detail
+            assert "Cannot delete used invite" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_cleanup_expired_invites_success(
@@ -499,23 +516,22 @@ class TestInviteService:
             mock_cleanup.assert_called_once_with(invite_service_instance.db)
 
     @pytest.mark.asyncio
-    async def test_cleanup_expired_invites_admin_only(
+    async def test_cleanup_expired_invites_non_admin_user(
         self,
         invite_service_instance: InviteService,
         test_user: models.User,
     ):
-        with patch("app.core.dependencies.admin_only") as mock_decorator:
+        # Test that service layer accepts non-admin users
+        # Authorization is now handled at API layer
+        with patch(
+            "app.services.invite_service.crud.delete_expired_invites"
+        ) as mock_delete:
+            mock_delete.return_value = 3
 
-            def side_effect(*args, **kwargs):
-                if "current_user" in kwargs and kwargs["current_user"].role != "Admin":
-                    raise HTTPException(status_code=403, detail="Admin access required")
-                return kwargs.get("current_user")
+            # This should now succeed at service layer
+            result = await invite_service_instance.cleanup_expired_invites(
+                current_user=test_user
+            )
 
-            mock_decorator.return_value = side_effect
-
-            with pytest.raises(HTTPException) as exc_info:
-                await invite_service_instance.cleanup_expired_invites(
-                    current_user=test_user
-                )
-
-            assert exc_info.value.status_code == 403
+            assert result == 3
+            mock_delete.assert_called_once()

@@ -7,7 +7,7 @@ import inspect
 import os
 from typing import Any, AsyncGenerator, Dict, Type
 
-from app.core.dependencies import no_analyst
+from app.core.exceptions import ResourceNotFoundException
 from sqlmodel import Session
 
 from ..database.models import User
@@ -40,10 +40,9 @@ class PluginService:
 
     def get_plugin(self, name: str) -> BasePlugin:
         if name not in self._plugins:
-            raise ValueError(f"Plugin {name} not found")
+            raise ResourceNotFoundException(f"Plugin {name} not found")
         return self._plugins[name](db_session=self.db)
 
-    @no_analyst()
     async def list_plugins(self, *, current_user: User) -> Dict[str, Any]:
         plugins_metadata = {}
         for name, plugin_class in self._plugins.items():
@@ -52,7 +51,6 @@ class PluginService:
             plugins_metadata[name] = metadata
         return plugins_metadata
 
-    @no_analyst()
     async def execute_plugin(
         self, name: str, params: Dict[str, Any] = None, *, current_user: User
     ) -> AsyncGenerator[str, None]:
