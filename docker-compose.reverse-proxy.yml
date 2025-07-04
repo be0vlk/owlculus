@@ -54,6 +54,7 @@ services:
       SECRET_KEY: ${SECRET_KEY:-development_key_not_secure}
       FRONTEND_URL: ${FRONTEND_URL:-https://localhost}
       BACKEND_URL: ${BACKEND_URL:-https://localhost/api}
+      UVICORN_FORWARDED_ALLOW_IPS: '*'
     volumes:
       - uploads_data:/app/uploads
     expose:

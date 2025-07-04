@@ -71,19 +71,23 @@
             <!-- Active Executions -->
             <div v-if="huntStore.runningExecutions.length > 0">
               <div class="text-h6 mb-4">Running Executions</div>
-              <v-row>
+              <v-row dense>
                 <v-col
                   v-for="execution in huntStore.runningExecutions"
                   :key="`running-${execution.id}`"
                   cols="12"
+                  sm="6"
                   md="6"
                   lg="4"
+                  xl="3"
+                  class="d-flex"
                 >
                   <HuntProgressCard
                     :execution="execution"
                     :cancelling="cancellingExecutions.has(execution.id)"
                     @cancel="handleCancelExecution"
                     @view-details="handleViewExecutionDetails"
+                    class="flex-grow-1"
                   />
                 </v-col>
               </v-row>
@@ -92,17 +96,21 @@
             <!-- Recently Completed -->
             <div v-if="huntStore.completedExecutions.length > 0" class="mt-6">
               <div class="text-h6 mb-4">Recently Completed</div>
-              <v-row>
+              <v-row dense>
                 <v-col
                   v-for="execution in huntStore.completedExecutions.slice(0, 6)"
                   :key="`completed-${execution.id}`"
                   cols="12"
+                  sm="6"
                   md="6"
                   lg="4"
+                  xl="3"
+                  class="d-flex"
                 >
                   <HuntProgressCard
                     :execution="execution"
                     @view-details="handleViewExecutionDetails"
+                    class="flex-grow-1"
                   />
                 </v-col>
               </v-row>

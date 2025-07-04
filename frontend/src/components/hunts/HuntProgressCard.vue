@@ -1,13 +1,13 @@
 <template>
   <v-card class="hunt-progress-card" elevation="2" rounded="lg">
     <!-- Header -->
-    <v-card-title class="d-flex align-center pa-4">
+    <v-card-title class="d-flex align-center pa-4 text-no-wrap">
       <v-avatar :color="statusColor" size="40" class="me-3">
         <v-icon :icon="statusIcon" color="white" />
       </v-avatar>
-      <div class="flex-grow-1">
-        <div class="text-h6 font-weight-bold">{{ huntDisplayTitle }}</div>
-        <div class="text-caption text-medium-emphasis">
+      <div class="flex-grow-1 text-truncate">
+        <div class="text-h6 font-weight-bold text-truncate">{{ huntDisplayTitle }}</div>
+        <div class="text-caption text-medium-emphasis text-truncate">
           Execution #{{ execution.id }}
           <span v-if="execution.hunt">• {{ execution.hunt.category }}</span>
         </div>
@@ -36,18 +36,20 @@
       </div>
 
       <!-- Timing Information -->
-      <div class="d-flex align-center justify-space-between mb-4">
-        <div class="d-flex align-center">
-          <v-icon icon="mdi-clock-start" size="small" class="me-1" />
-          <span class="text-caption">Started: {{ formatDate(execution.started_at) }}</span>
-        </div>
-        <div v-if="execution.completed_at" class="d-flex align-center">
-          <v-icon icon="mdi-clock-end" size="small" class="me-1" />
-          <span class="text-caption">Completed: {{ formatDate(execution.completed_at) }}</span>
-        </div>
-        <div v-else-if="execution.status === 'running'" class="d-flex align-center">
-          <v-icon icon="mdi-clock" size="small" class="me-1" />
-          <span class="text-caption">{{ elapsedTime }}</span>
+      <div class="timing-info mb-4">
+        <div class="d-flex align-center flex-wrap">
+          <div class="d-flex align-center me-4 mb-1">
+            <v-icon icon="mdi-clock-start" size="small" class="me-1" />
+            <span class="text-caption">Started: {{ formatDate(execution.started_at) }}</span>
+          </div>
+          <div v-if="execution.completed_at" class="d-flex align-center mb-1">
+            <v-icon icon="mdi-clock-end" size="small" class="me-1" />
+            <span class="text-caption">Completed: {{ formatDate(execution.completed_at) }}</span>
+          </div>
+          <div v-else-if="execution.status === 'running'" class="d-flex align-center mb-1">
+            <v-icon icon="mdi-clock" size="small" class="me-1" />
+            <span class="text-caption">{{ elapsedTime }}</span>
+          </div>
         </div>
       </div>
 
@@ -66,9 +68,9 @@
             </v-avatar>
 
             <!-- Step Info -->
-            <div class="flex-grow-1">
-              <div class="text-body-2">{{ step.step_id || `Step ${index + 1}` }}</div>
-              <div class="text-caption text-medium-emphasis">{{ step.plugin_name }}</div>
+            <div class="flex-grow-1 text-truncate">
+              <div class="text-body-2 text-truncate">{{ step.step_id || `Step ${index + 1}` }}</div>
+              <div class="text-caption text-medium-emphasis text-truncate">{{ step.plugin_name }}</div>
             </div>
 
             <!-- Step Status -->
@@ -97,12 +99,12 @@
       <!-- Results Summary -->
       <div v-if="execution.status === 'completed' || execution.status === 'partial'" class="mb-4">
         <div class="text-body-2 font-weight-medium mb-2">Results Summary</div>
-        <div class="d-flex align-center justify-space-between">
-          <div class="d-flex align-center">
+        <div class="d-flex align-center flex-wrap">
+          <div class="d-flex align-center me-4 mb-1">
             <v-icon icon="mdi-check-circle" color="success" size="small" class="me-1" />
             <span class="text-caption">{{ completedSteps.length }} steps completed</span>
           </div>
-          <div v-if="failedSteps.length > 0" class="d-flex align-center">
+          <div v-if="failedSteps.length > 0" class="d-flex align-center mb-1">
             <v-icon icon="mdi-alert-circle" color="error" size="small" class="me-1" />
             <span class="text-caption">{{ failedSteps.length }} steps failed</span>
           </div>
@@ -111,7 +113,7 @@
     </v-card-text>
 
     <!-- Actions -->
-    <v-card-actions class="pa-4 pt-0">
+    <v-card-actions class="pa-4 pt-0 flex-wrap">
       <v-btn
         v-if="execution.status === 'running'"
         color="error"
@@ -119,24 +121,27 @@
         size="small"
         @click="$emit('cancel', execution.id)"
         :loading="cancelling"
+        class="mb-2 mb-sm-0"
       >
         <v-icon icon="mdi-stop" start />
         Cancel
       </v-btn>
       
-      <v-spacer />
+      <v-spacer class="d-none d-sm-flex" />
       
       <v-btn
         color="primary"
         :variant="execution.status === 'completed' || execution.status === 'partial' ? 'elevated' : 'text'"
         size="small"
         @click="$emit('view-details', execution.id)"
+        class="mb-2 mb-sm-0"
       >
         <v-icon 
           :icon="execution.status === 'completed' || execution.status === 'partial' ? 'mdi-eye' : 'mdi-information'" 
           start 
         />
-        {{ execution.status === 'completed' || execution.status === 'partial' ? 'View Results' : 'View Details' }}
+        <span class="d-none d-sm-inline">{{ execution.status === 'completed' || execution.status === 'partial' ? 'View Results' : 'View Details' }}</span>
+        <span class="d-inline d-sm-none">{{ execution.status === 'completed' || execution.status === 'partial' ? 'Results' : 'Details' }}</span>
       </v-btn>
     </v-card-actions>
   </v-card>
@@ -313,20 +318,56 @@ watch(() => props.execution.status, (newStatus) => {
 <style scoped>
 .hunt-progress-card {
   min-height: 300px;
+  width: 100%;
+  overflow: hidden;
 }
 
 .step-list {
   max-height: 200px;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .step-item {
   border-radius: 8px;
   padding: 8px;
   transition: background-color 0.2s ease;
+  min-width: 0; /* Enable text truncation in flexbox */
 }
 
 .step-item:hover {
   background-color: rgba(var(--v-theme-surface-variant), 0.1);
+}
+
+/* Ensure proper text truncation */
+.text-truncate {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  .hunt-progress-card {
+    min-height: 280px;
+  }
+  
+  .hunt-progress-card .v-card-title {
+    padding: 12px !important;
+  }
+  
+  .hunt-progress-card .v-card-text {
+    padding: 12px !important;
+  }
+  
+  .hunt-progress-card .v-card-actions {
+    padding: 12px !important;
+    padding-top: 0 !important;
+  }
+}
+
+/* Prevent overflow on timing information */
+.timing-info {
+  overflow: hidden;
 }
 </style>
