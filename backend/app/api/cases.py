@@ -5,7 +5,7 @@ Case management API
 from typing import List, Optional
 
 from app import schemas
-from app.core.dependencies import get_current_active_user
+from app.core.dependencies import get_current_user
 from app.database import models
 from app.database.connection import get_db
 from app.services.case_service import CaseService
@@ -20,7 +20,7 @@ router = APIRouter()
 async def create_case(
     case: schemas.CaseCreate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     case_service = CaseService(db)
     return await case_service.create_case(case=case, current_user=current_user)
@@ -32,7 +32,7 @@ async def read_cases(
     limit: int = 100,
     status: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     case_service = CaseService(db)
     return await case_service.get_cases(
@@ -44,7 +44,7 @@ async def read_cases(
 async def read_case(
     case_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     case_service = CaseService(db)
     return await case_service.get_case(case_id=case_id, current_user=current_user)
@@ -55,7 +55,7 @@ async def update_case(
     case_id: int,
     case: schemas.CaseUpdate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     case_service = CaseService(db)
     return await case_service.update_case(
@@ -68,7 +68,7 @@ async def add_user_to_case(
     case_id: int,
     user_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     case_service = CaseService(db)
     return await case_service.add_user_to_case(
@@ -81,7 +81,7 @@ async def remove_user_from_case(
     case_id: int,
     user_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     case_service = CaseService(db)
     return await case_service.remove_user_from_case(
@@ -99,7 +99,7 @@ async def get_case_entities(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     entity_service = EntityService(db)
     return await entity_service.get_case_entities(
@@ -121,7 +121,7 @@ async def create_entity(
     case_id: int,
     entity: schemas.EntityCreate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     entity_service = EntityService(db)
     return await entity_service.create_entity(
@@ -139,7 +139,7 @@ async def update_entity(
     entity_id: int,
     entity: schemas.EntityUpdate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     entity_service = EntityService(db)
     return await entity_service.update_entity(
@@ -156,7 +156,7 @@ async def delete_entity(
     case_id: int,
     entity_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     entity_service = EntityService(db)
     await entity_service.delete_entity(entity_id=entity_id, current_user=current_user)

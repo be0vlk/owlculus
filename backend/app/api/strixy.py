@@ -1,4 +1,4 @@
-from app.core.dependencies import get_current_active_user, get_db
+from app.core.dependencies import get_current_user, get_db
 from app.database import models
 from app.schemas.strixy_schema import ChatRequest, ChatResponse
 from app.services.strixy_service import StrixyService
@@ -12,7 +12,7 @@ router = APIRouter()
 async def chat_with_strixy(
     request: ChatRequest,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ) -> ChatResponse:
     service = StrixyService(db)
     return await service.send_chat_message(request.messages)

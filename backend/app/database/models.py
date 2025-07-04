@@ -5,6 +5,7 @@ from pydantic import EmailStr
 from sqlalchemy import JSON, Column
 from sqlmodel import Field, Relationship, SQLModel
 
+from ..core.enums import TaskPriority, TaskStatus
 from ..core.utils import get_utc_now
 
 
@@ -116,6 +117,7 @@ class Case(SQLModel, table=True):
     evidence: List["Evidence"] = Relationship(back_populates="case")
     entities: List["Entity"] = Relationship(back_populates="case")
     hunt_executions: List["HuntExecution"] = Relationship(back_populates="case")
+    tasks: List["Task"] = Relationship(back_populates="case")
 
 
 class Hunt(SQLModel, table=True):
@@ -166,3 +168,51 @@ class HuntStep(SQLModel, table=True):
     completed_at: Optional[datetime] = None
 
     execution: HuntExecution = Relationship(back_populates="steps")
+
+
+class TaskTemplate(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(unique=True, index=True)
+    display_name: str
+    description: str
+    category: str
+    version: str = Field(default="1.0.0")
+    is_active: bool = Field(default=True)
+    is_custom: bool = Field(default=False)
+    created_by_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    definition_json: dict = Field(sa_column=Column(JSON))
+    created_at: datetime = Field(default_factory=get_utc_now)
+    updated_at: datetime = Field(default_factory=get_utc_now)
+
+    creator: Optional[User] = Relationship()
+    tasks: List["Task"] = Relationship(back_populates="template")
+
+
+class Task(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    case_id: int = Field(foreign_key="case.id")
+    template_id: Optional[int] = Field(default=None, foreign_key="tasktemplate.id")
+    title: str
+    description: str
+    priority: str = Field(default=TaskPriority.MEDIUM.value)
+    status: str = Field(default=TaskStatus.NOT_STARTED.value)
+    assigned_to_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    assigned_by_id: int = Field(foreign_key="user.id")
+    due_date: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    completed_by_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    custom_fields: Optional[dict] = Field(default=None, sa_column=Column(JSON))
+    created_at: datetime = Field(default_factory=get_utc_now)
+    updated_at: datetime = Field(default_factory=get_utc_now)
+
+    case: Case = Relationship(back_populates="tasks")
+    template: Optional[TaskTemplate] = Relationship(back_populates="tasks")
+    assigned_to: Optional[User] = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "[Task.assigned_to_id]"}
+    )
+    assigned_by: User = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "[Task.assigned_by_id]"}
+    )
+    completed_by: Optional[User] = Relationship(
+        sa_relationship_kwargs={"foreign_keys": "[Task.completed_by_id]"}
+    )

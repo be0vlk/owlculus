@@ -1,6 +1,6 @@
 import pytest
 from app.core.config import settings
-from app.core.dependencies import get_current_active_user, get_db
+from app.core.dependencies import get_current_user, get_db
 from app.database.models import Case, CaseUserLink, Client, Entity, User
 from app.main import app
 from fastapi import HTTPException
@@ -106,7 +106,7 @@ def override_dependencies(session: Session, test_admin: User):
         return test_admin
 
     app.dependency_overrides[get_db] = get_session_override
-    app.dependency_overrides[get_current_active_user] = get_current_user_override
+    app.dependency_overrides[get_current_user] = get_current_user_override
     yield
     app.dependency_overrides = {}
 
@@ -338,7 +338,7 @@ def test_read_cases_as_investigator(
     override_dependencies, test_case: Case, test_user: User, session: Session
 ):
     # Remove the default admin user from the override
-    app.dependency_overrides[get_current_active_user] = (
+    app.dependency_overrides[get_current_user] = (
         lambda: test_user
     )  # Override to return the test user
 
@@ -373,9 +373,7 @@ def test_read_cases_as_investigator(
 def test_update_case_as_investigator(
     override_dependencies, test_case: Case, test_user: User, session: Session
 ):
-    app.dependency_overrides[get_current_active_user] = (
-        lambda: test_user
-    )  # Return test user
+    app.dependency_overrides[get_current_user] = lambda: test_user  # Return test user
 
     # Link user to case
     case_user_link = CaseUserLink(case_id=test_case.id, user_id=test_user.id)
@@ -406,7 +404,7 @@ def test_update_case_as_investigator(
 def test_update_case_as_analyst(
     override_dependencies, test_case: Case, test_analyst: User, session: Session
 ):
-    app.dependency_overrides[get_current_active_user] = (
+    app.dependency_overrides[get_current_user] = (
         lambda: test_analyst
     )  # Return test analyst
 
@@ -559,7 +557,7 @@ def test_field_level_permissions(
     override_dependencies, test_case: Case, test_user: User, session: Session
 ):
     """Test field-level access control"""
-    app.dependency_overrides[get_current_active_user] = lambda: test_user
+    app.dependency_overrides[get_current_user] = lambda: test_user
 
     # Link user to case
     link = CaseUserLink(case_id=test_case.id, user_id=test_user.id)
@@ -612,7 +610,7 @@ def test_error_response_format(override_dependencies):
     def raise_forbidden():
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    app.dependency_overrides[get_current_active_user] = raise_forbidden
+    app.dependency_overrides[get_current_user] = raise_forbidden
     response = client.get(f"{settings.API_V1_STR}/cases/")
     assert response.status_code == 403
     try:

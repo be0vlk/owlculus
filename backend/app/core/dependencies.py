@@ -44,15 +44,20 @@ async def get_current_user(
     user = await crud.get_user_by_username(db, username=username)
     if user is None:
         raise credentials_exception
+
+    # Check if user is active
+    if not user.is_active:
+        raise HTTPException(status_code=400, detail="Inactive user")
+
     return user
 
 
-async def get_current_active_user(
-    current_user: User = Depends(get_current_user),
-) -> User:
-    if not current_user.is_active:
-        raise HTTPException(status_code=400, detail="Inactive user")
-    return current_user
+# async def get_current_active_user(
+#     current_user: User = Depends(get_current_user),
+# ) -> User:
+#     if not current_user.is_active:
+#         raise HTTPException(status_code=400, detail="Inactive user")
+#     return current_user
 
 
 def authorize(func):

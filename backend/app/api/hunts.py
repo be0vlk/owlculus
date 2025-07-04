@@ -4,7 +4,7 @@ API endpoints for hunt operations
 
 from typing import List
 
-from app.core.dependencies import get_current_active_user, get_db, no_analyst
+from app.core.dependencies import get_current_user, get_db, no_analyst
 from app.database import models
 from app.schemas import hunt_schema as schemas
 from app.services.hunt_service import HuntService
@@ -16,7 +16,7 @@ router = APIRouter()
 
 @router.get("/", response_model=List[schemas.HuntResponse])
 async def list_hunts(
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -44,7 +44,7 @@ async def list_hunts(
 @router.get("/{hunt_id}", response_model=schemas.HuntResponse)
 async def get_hunt(
     hunt_id: int,
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Get details of a specific hunt"""
@@ -69,7 +69,7 @@ async def get_hunt(
 async def execute_hunt(
     hunt_id: int,
     request: schemas.HuntExecuteRequest,
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -116,7 +116,7 @@ async def execute_hunt(
 async def get_execution_status(
     execution_id: int,
     include_steps: bool = False,
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -182,7 +182,7 @@ async def get_execution_status(
 )
 async def list_case_executions(
     case_id: int,
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """List all hunt executions for a specific case"""
@@ -206,7 +206,7 @@ async def list_case_executions(
 @no_analyst()
 async def cancel_execution(
     execution_id: int,
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Cancel a running hunt execution"""

@@ -215,7 +215,7 @@ async def test_get_case_non_admin_not_associated(
     with pytest.raises(HTTPException) as excinfo:
         await case_service_instance.get_case(sample_case.id, test_user)
     assert excinfo.value.status_code == 403
-    assert excinfo.value.detail == "Not authorized"
+    assert excinfo.value.detail == "Not authorized to access this case"
 
 
 @pytest.mark.asyncio
@@ -269,7 +269,7 @@ async def test_update_case_non_admin_not_associated(
             sample_case.id, case_update, current_user=test_user
         )
     assert excinfo.value.status_code == 403
-    assert excinfo.value.detail == "You do not have permission to update this case"
+    assert excinfo.value.detail == "Not authorized to update this case"
 
 
 @pytest.mark.asyncio

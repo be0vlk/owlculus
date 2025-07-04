@@ -4,7 +4,7 @@ Evidence management API
 
 from typing import Optional
 
-from app.core.dependencies import get_current_active_user
+from app.core.dependencies import get_current_user
 from app.database import models
 from app.database.connection import get_db
 from app.schemas import evidence_schema as schemas
@@ -28,7 +28,7 @@ async def create_evidence(
     parent_folder_id: Optional[int] = Form(None),
     files: list[UploadFile] = File(...),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     if not files:
         raise HTTPException(
@@ -71,7 +71,7 @@ async def read_case_evidence(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     evidence_service = EvidenceService(db)
     return await evidence_service.get_case_evidence(
@@ -83,7 +83,7 @@ async def read_case_evidence(
 async def read_evidence(
     evidence_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     evidence_service = EvidenceService(db)
     return await evidence_service.get_evidence(
@@ -95,7 +95,7 @@ async def read_evidence(
 async def download_evidence(
     evidence_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     evidence_service = EvidenceService(db)
     return await evidence_service.download_evidence(
@@ -108,7 +108,7 @@ async def download_evidence(
 async def get_evidence_content(
     evidence_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     """Get text content of evidence file for viewing."""
     evidence_service = EvidenceService(db)
@@ -122,7 +122,7 @@ async def get_evidence_content(
 async def get_evidence_image(
     evidence_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     """Get image file for viewing."""
     evidence_service = EvidenceService(db)
@@ -137,7 +137,7 @@ async def update_evidence(
     evidence_id: int,
     evidence: schemas.EvidenceUpdate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     evidence_service = EvidenceService(db)
     return evidence_service.update_evidence(
@@ -151,7 +151,7 @@ async def update_evidence(
 async def delete_evidence(
     evidence_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     evidence_service = EvidenceService(db)
     result = await evidence_service.delete_evidence(
@@ -167,7 +167,7 @@ async def delete_evidence(
 async def create_folder(
     folder_data: schemas.FolderCreate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     evidence_service = EvidenceService(db)
     return await evidence_service.create_folder(
@@ -179,7 +179,7 @@ async def create_folder(
 async def get_folder_tree(
     case_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     evidence_service = EvidenceService(db)
     return await evidence_service.get_folder_tree(
@@ -192,7 +192,7 @@ async def update_folder(
     folder_id: int,
     folder_update: schemas.FolderUpdate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     evidence_service = EvidenceService(db)
     return await evidence_service.update_folder(
@@ -206,7 +206,7 @@ async def update_folder(
 async def delete_folder(
     folder_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     evidence_service = EvidenceService(db)
     result = await evidence_service.delete_folder(
@@ -220,7 +220,7 @@ async def delete_folder(
 async def extract_evidence_metadata(
     evidence_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     """Extract metadata from evidence file using ExifTool"""
     evidence_service = EvidenceService(db)
@@ -281,7 +281,7 @@ async def apply_folder_template(
     case_id: int,
     template_name: str,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     """Apply a folder template to create folder structure for a case."""
     evidence_service = EvidenceService(db)

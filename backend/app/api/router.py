@@ -10,6 +10,7 @@ from . import (
     plugins,
     strixy,
     system_config,
+    tasks,
     users,
 )
 
@@ -25,3 +26,4 @@ api_router.include_router(system_config.router, prefix="/admin", tags=["admin"])
 api_router.include_router(invites.router, prefix="/invites", tags=["invites"])
 api_router.include_router(strixy.router, prefix="/strixy", tags=["strixy"])
 api_router.include_router(hunts.router, prefix="/hunts", tags=["hunts"])
+api_router.include_router(tasks.router, prefix="/tasks", tags=["tasks"])

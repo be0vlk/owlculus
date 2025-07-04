@@ -3,7 +3,7 @@ User management API
 """
 
 from app import schemas
-from app.core.dependencies import get_current_active_user
+from app.core.dependencies import get_current_user
 from app.database import models
 from app.database.connection import get_db
 from app.services.user_service import UserService
@@ -17,14 +17,14 @@ router = APIRouter()
 async def create_user(
     user: schemas.UserCreate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     user_service = UserService(db)
     return await user_service.create_user(user=user, current_user=current_user)
 
 
 @router.get("/me", response_model=schemas.User)
-async def read_self(current_user: models.User = Depends(get_current_active_user)):
+async def read_self(current_user: models.User = Depends(get_current_user)):
     return current_user
 
 
@@ -33,7 +33,7 @@ async def read_users(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     user_service = UserService(db)
     return await user_service.get_users(
@@ -46,7 +46,7 @@ async def update_user(
     user_id: int,
     user: schemas.UserUpdate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     user_service = UserService(db)
     return await user_service.update_user(
@@ -58,7 +58,7 @@ async def update_user(
 async def change_password(
     password_change: schemas.PasswordChange,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     user_service = UserService(db)
     return await user_service.change_password(
@@ -74,7 +74,7 @@ async def admin_reset_password(
     user_id: int,
     password_reset: schemas.AdminPasswordReset,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     user_service = UserService(db)
     return await user_service.admin_reset_password(
@@ -88,7 +88,7 @@ async def admin_reset_password(
 async def delete_user(
     user_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     user_service = UserService(db)
     return await user_service.delete_user(

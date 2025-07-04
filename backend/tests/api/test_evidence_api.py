@@ -5,7 +5,7 @@ Comprehensive tests for evidence API endpoints
 from unittest.mock import patch
 
 import pytest
-from app.core.dependencies import get_current_active_user, get_db
+from app.core.dependencies import get_current_user, get_db
 from app.database.models import Case, CaseUserLink, Client, Evidence, User
 from app.main import app
 from fastapi import status
@@ -151,8 +151,8 @@ class TestEvidenceAPI:
         test_evidence: Evidence,
     ):
         """Test successful case evidence listing"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -174,8 +174,8 @@ class TestEvidenceAPI:
         self, session: Session, test_admin: User, test_case: Case
     ):
         """Test case evidence listing with pagination"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -196,8 +196,8 @@ class TestEvidenceAPI:
         self, session: Session, test_user: User, test_case: Case
     ):
         """Test case evidence listing forbidden for non-assigned user"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_user)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_user
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -222,8 +222,8 @@ class TestEvidenceAPI:
         self, session: Session, test_admin: User, test_evidence: Evidence
     ):
         """Test successful evidence retrieval"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -243,8 +243,8 @@ class TestEvidenceAPI:
 
     def test_get_evidence_not_found(self, session: Session, test_admin: User):
         """Test evidence retrieval with non-existent ID"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -269,8 +269,8 @@ class TestEvidenceAPI:
         self, session: Session, test_admin: User, test_evidence: Evidence
     ):
         """Test successful evidence download"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -293,8 +293,8 @@ class TestEvidenceAPI:
 
     def test_download_evidence_not_found(self, session: Session, test_admin: User):
         """Test evidence download with non-existent ID"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -319,8 +319,8 @@ class TestEvidenceAPI:
         self, session: Session, test_admin: User, test_evidence: Evidence
     ):
         """Test successful evidence update"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -350,8 +350,8 @@ class TestEvidenceAPI:
 
     def test_update_evidence_not_found(self, session: Session, test_admin: User):
         """Test evidence update with non-existent ID"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -376,8 +376,8 @@ class TestEvidenceAPI:
         self, session: Session, test_analyst: User, test_evidence: Evidence
     ):
         """Test evidence update forbidden for analyst"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_analyst)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_analyst
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -406,8 +406,8 @@ class TestEvidenceAPI:
         self, session: Session, test_admin: User, test_evidence: Evidence
     ):
         """Test successful evidence deletion"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -426,8 +426,8 @@ class TestEvidenceAPI:
 
     def test_delete_evidence_not_found(self, session: Session, test_admin: User):
         """Test evidence deletion with non-existent ID"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -450,8 +450,8 @@ class TestEvidenceAPI:
         self, session: Session, test_analyst: User, test_evidence: Evidence
     ):
         """Test evidence deletion forbidden for analyst"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_analyst)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_analyst
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -476,8 +476,8 @@ class TestEvidenceAPI:
         self, session: Session, test_admin: User, test_case: Case
     ):
         """Test successful folder creation"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -515,8 +515,8 @@ class TestEvidenceAPI:
         self, session: Session, test_admin: User, test_case: Case, test_folder: Evidence
     ):
         """Test successful folder tree retrieval"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -538,8 +538,8 @@ class TestEvidenceAPI:
         self, session: Session, test_admin: User, test_folder: Evidence
     ):
         """Test successful folder update"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -567,8 +567,8 @@ class TestEvidenceAPI:
         self, session: Session, test_admin: User, test_folder: Evidence
     ):
         """Test successful folder deletion"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -620,8 +620,8 @@ class TestEvidenceAPI:
         self, session: Session, test_admin: User, test_case: Case
     ):
         """Test pagination with edge case values"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -648,8 +648,8 @@ class TestEvidenceAPI:
 
     def test_evidence_api_invalid_case_id(self, session: Session, test_admin: User):
         """Test evidence endpoints with invalid case ID"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -673,8 +673,8 @@ class TestEvidenceAPI:
         self, session: Session, test_admin: User
     ):
         """Test consistent error response format"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -703,8 +703,8 @@ class TestEvidenceAPI:
         """Test API response time performance"""
         import time
 
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 

@@ -25,6 +25,17 @@ from .invite_schema import (
     UserRegistration,
     UserRegistrationResponse,
 )
+from .task_schema import (
+    BulkTaskAssign,
+    BulkTaskStatusUpdate,
+    TaskCreate,
+    TaskFilter,
+    TaskResponse,
+    TaskTemplateCreate,
+    TaskTemplateResponse,
+    TaskTemplateUpdate,
+    TaskUpdate,
+)
 from .user_schema import (
     AdminPasswordReset,
     PasswordChange,

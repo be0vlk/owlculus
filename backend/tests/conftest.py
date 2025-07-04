@@ -17,7 +17,7 @@ os.environ.setdefault("POSTGRES_DB", "test_db")
 os.environ.setdefault("FRONTEND_URL", "http://localhost:3000")
 
 from app.core.config import settings
-from app.core.dependencies import get_current_active_user, get_current_user
+from app.core.dependencies import get_current_user
 from app.core.security import (
     create_access_token,
     get_password_hash,
@@ -186,7 +186,7 @@ def override_auth_fixture(session):
             raise HTTPException(status_code=401)
 
     app.dependency_overrides[get_current_user] = mock_get_current_user
-    app.dependency_overrides[get_current_active_user] = mock_get_current_user
+    app.dependency_overrides[get_current_user] = mock_get_current_user
     yield
     app.dependency_overrides.clear()
 

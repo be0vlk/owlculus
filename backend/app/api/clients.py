@@ -3,7 +3,7 @@ Client management API
 """
 
 from app import schemas
-from app.core.dependencies import get_current_active_user
+from app.core.dependencies import get_current_user
 from app.database import models
 from app.database.connection import get_db
 from app.services.client_service import ClientService
@@ -18,7 +18,7 @@ async def read_clients(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     client_service = ClientService(db)
     return await client_service.get_clients(
@@ -30,7 +30,7 @@ async def read_clients(
 async def create_client(
     client: schemas.ClientCreate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     client_service = ClientService(db)
     return await client_service.create_client(client=client, current_user=current_user)
@@ -40,7 +40,7 @@ async def create_client(
 async def read_client(
     client_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     client_service = ClientService(db)
     return await client_service.get_client(
@@ -53,7 +53,7 @@ async def update_client(
     client_id: int,
     client: schemas.ClientUpdate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     client_service = ClientService(db)
     return await client_service.update_client(
@@ -65,7 +65,7 @@ async def update_client(
 async def delete_client(
     client_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     client_service = ClientService(db)
     await client_service.delete_client(client_id=client_id, current_user=current_user)

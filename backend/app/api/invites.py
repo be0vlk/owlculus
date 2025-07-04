@@ -1,5 +1,5 @@
 from app import schemas
-from app.core.dependencies import get_current_active_user
+from app.core.dependencies import get_current_user
 from app.database import models
 from app.database.connection import get_db
 from app.services.invite_service import InviteService
@@ -15,7 +15,7 @@ router = APIRouter()
 async def create_invite(
     invite: schemas.InviteCreate,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     invite_service = InviteService(db)
     return await invite_service.create_invite(invite=invite, current_user=current_user)
@@ -26,7 +26,7 @@ async def get_invites(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     invite_service = InviteService(db)
     return await invite_service.get_invites(
@@ -62,7 +62,7 @@ async def register_user(
 async def delete_invite(
     invite_id: int,
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     invite_service = InviteService(db)
     await invite_service.delete_invite(invite_id=invite_id, current_user=current_user)
@@ -72,7 +72,7 @@ async def delete_invite(
 @router.post("/cleanup")
 async def cleanup_expired_invites(
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: models.User = Depends(get_current_user),
 ):
     invite_service = InviteService(db)
     count = await invite_service.cleanup_expired_invites(current_user=current_user)

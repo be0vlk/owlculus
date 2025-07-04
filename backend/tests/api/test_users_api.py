@@ -5,7 +5,7 @@ Comprehensive tests for users API endpoints
 from unittest.mock import patch
 
 import pytest
-from app.core.dependencies import get_current_active_user, get_db
+from app.core.dependencies import get_current_user, get_db
 from app.database.models import User
 from app.main import app
 from fastapi import status
@@ -81,8 +81,8 @@ class TestUsersAPI:
 
     def test_create_user_success_admin(self, session: Session, test_admin: User):
         """Test successful user creation by admin"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -119,8 +119,8 @@ class TestUsersAPI:
 
     def test_create_user_forbidden_non_admin(self, session: Session, test_user: User):
         """Test user creation forbidden for non-admin"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_user)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_user
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -149,8 +149,8 @@ class TestUsersAPI:
 
     def test_create_user_invalid_data(self, session: Session, test_admin: User):
         """Test user creation with invalid data"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -165,8 +165,8 @@ class TestUsersAPI:
 
     def test_create_user_duplicate_username(self, session: Session, test_admin: User):
         """Test user creation with duplicate username"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -197,8 +197,8 @@ class TestUsersAPI:
 
     def test_read_self_success(self, session: Session, test_user: User):
         """Test successful self profile retrieval"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_user)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_user
         )
 
         try:
@@ -222,8 +222,8 @@ class TestUsersAPI:
         self, session: Session, test_admin: User, test_user: User
     ):
         """Test successful users listing by admin"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -242,8 +242,8 @@ class TestUsersAPI:
 
     def test_get_users_with_pagination(self, session: Session, test_admin: User):
         """Test users listing with pagination"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -258,8 +258,8 @@ class TestUsersAPI:
 
     def test_get_users_forbidden_non_admin(self, session: Session, test_user: User):
         """Test users listing forbidden for non-admin"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_user)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_user
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -282,8 +282,8 @@ class TestUsersAPI:
         self, session: Session, test_admin: User, test_user: User
     ):
         """Test successful user update by admin"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -314,8 +314,8 @@ class TestUsersAPI:
 
     def test_update_user_self(self, session: Session, test_user: User):
         """Test user updating their own profile"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_user)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_user
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -339,8 +339,8 @@ class TestUsersAPI:
 
     def test_update_user_not_found(self, session: Session, test_admin: User):
         """Test user update with non-existent ID"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -365,8 +365,8 @@ class TestUsersAPI:
         self, session: Session, test_user: User, test_analyst: User
     ):
         """Test user update forbidden for other users"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_user)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_user
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -391,8 +391,8 @@ class TestUsersAPI:
 
     def test_change_password_success(self, session: Session, test_user: User):
         """Test successful password change"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_user)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_user
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -416,8 +416,8 @@ class TestUsersAPI:
 
     def test_change_password_wrong_current(self, session: Session, test_user: User):
         """Test password change with wrong current password"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_user)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_user
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -443,8 +443,8 @@ class TestUsersAPI:
 
     def test_change_password_weak_password(self, session: Session, test_user: User):
         """Test password change with weak password"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_user)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_user
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -474,8 +474,8 @@ class TestUsersAPI:
         self, session: Session, test_admin: User, test_user: User
     ):
         """Test successful admin password reset"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -500,8 +500,8 @@ class TestUsersAPI:
         self, session: Session, test_user: User, test_analyst: User
     ):
         """Test admin password reset forbidden for non-admin"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_user)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_user
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -528,8 +528,8 @@ class TestUsersAPI:
         self, session: Session, test_admin: User
     ):
         """Test admin password reset with non-existent user"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -592,8 +592,8 @@ class TestUsersAPI:
 
     def test_users_api_pagination_edge_cases(self, session: Session, test_admin: User):
         """Test pagination with edge case values"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -613,8 +613,8 @@ class TestUsersAPI:
 
     def test_users_api_invalid_role(self, session: Session, test_admin: User):
         """Test user creation with invalid role"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -634,8 +634,8 @@ class TestUsersAPI:
 
     def test_users_api_invalid_email_format(self, session: Session, test_admin: User):
         """Test user creation with invalid email format"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -657,8 +657,8 @@ class TestUsersAPI:
         self, session: Session, test_admin: User
     ):
         """Test consistent error response format"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -684,8 +684,8 @@ class TestUsersAPI:
         """Test API response time performance"""
         import time
 
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 

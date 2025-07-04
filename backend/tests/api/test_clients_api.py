@@ -3,7 +3,7 @@ Comprehensive tests for clients API endpoints
 """
 
 import pytest
-from app.core.dependencies import get_current_active_user, get_db
+from app.core.dependencies import get_current_user, get_db
 from app.database.models import Client, User
 from app.main import app
 from fastapi import status
@@ -88,8 +88,8 @@ class TestClientsAPI:
         self, session: Session, test_admin: User, test_client_data: Client
     ):
         """Test successful clients listing by admin"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -106,8 +106,8 @@ class TestClientsAPI:
         self, session: Session, test_user: User, test_client_data: Client
     ):
         """Test successful clients listing by investigator"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_user)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_user
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -121,8 +121,8 @@ class TestClientsAPI:
 
     def test_get_clients_forbidden_analyst(self, session: Session, test_analyst: User):
         """Test clients listing forbidden for analyst"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_analyst)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_analyst
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -140,8 +140,8 @@ class TestClientsAPI:
 
     def test_create_client_success(self, session: Session, test_admin: User):
         """Test successful client creation"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -163,8 +163,8 @@ class TestClientsAPI:
 
     def test_create_client_minimal_data(self, session: Session, test_admin: User):
         """Test client creation with minimal required data"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -180,8 +180,8 @@ class TestClientsAPI:
 
     def test_create_client_forbidden_non_admin(self, session: Session, test_user: User):
         """Test client creation forbidden for non-admin"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_user)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_user
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -220,8 +220,8 @@ class TestClientsAPI:
         self, session: Session, test_admin: User, test_client_data: Client
     ):
         """Test client creation with duplicate email"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -241,8 +241,8 @@ class TestClientsAPI:
         self, session: Session, test_admin: User, test_client_data: Client
     ):
         """Test successful client retrieval"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -257,8 +257,8 @@ class TestClientsAPI:
 
     def test_get_client_not_found(self, session: Session, test_admin: User):
         """Test client retrieval with non-existent ID"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -273,8 +273,8 @@ class TestClientsAPI:
         self, session: Session, test_analyst: User, test_client_data: Client
     ):
         """Test client retrieval forbidden for analyst"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_analyst)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_analyst
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -288,8 +288,8 @@ class TestClientsAPI:
         self, session: Session, test_admin: User, test_client_data: Client
     ):
         """Test successful client update"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -308,8 +308,8 @@ class TestClientsAPI:
 
     def test_update_client_not_found(self, session: Session, test_admin: User):
         """Test client update with non-existent ID"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -325,8 +325,8 @@ class TestClientsAPI:
         self, session: Session, test_user: User, test_client_data: Client
     ):
         """Test client update forbidden for non-admin"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_user)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_user
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -348,8 +348,8 @@ class TestClientsAPI:
         session.commit()
         session.refresh(new_client)
 
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -363,8 +363,8 @@ class TestClientsAPI:
 
     def test_delete_client_not_found(self, session: Session, test_admin: User):
         """Test client deletion with non-existent ID"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -378,8 +378,8 @@ class TestClientsAPI:
         self, session: Session, test_user: User, test_client_data: Client
     ):
         """Test client deletion forbidden for non-admin"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_user)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_user
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -393,8 +393,8 @@ class TestClientsAPI:
         self, session: Session, test_admin: User
     ):
         """Test various validation edge cases"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -419,8 +419,8 @@ class TestClientsAPI:
 
     def test_clients_api_pagination(self, session: Session, test_admin: User):
         """Test pagination parameters"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 

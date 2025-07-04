@@ -17,7 +17,7 @@ import argparse
 import re
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 
 # ANSI color codes for terminal output
@@ -142,7 +142,7 @@ def pascal_to_title(name: str) -> str:
 
 def generate_hunt_definition(config: Dict[str, Any]) -> str:
     """Generate the hunt definition Python file content"""
-    
+
     # Generate example steps based on category
     example_steps = []
     if config["category"] == "domain":
@@ -178,7 +178,7 @@ def generate_hunt_definition(config: Dict[str, Any]) -> str:
         example_steps = [
             {
                 "step_id": "domain_lookup",
-                "plugin_name": "WhoisPlugin", 
+                "plugin_name": "WhoisPlugin",
                 "display_name": "Company domain lookup",
                 "description": "Look up the company's primary domain",
                 "parameter_mapping": {"domain": "initial.company_domain"},
@@ -199,34 +199,38 @@ def generate_hunt_definition(config: Dict[str, Any]) -> str:
     steps_code = []
     for i, step in enumerate(example_steps):
         step_lines = [
-            f"            HuntStepDefinition(",
+            "            HuntStepDefinition(",
             f'                step_id="{step["step_id"]}",',
             f'                plugin_name="{step["plugin_name"]}",',
             f'                display_name="{step["display_name"]}",',
             f'                description="{step["description"]}",',
         ]
-        
+
         # Add parameter mapping
         if step.get("parameter_mapping"):
-            mappings = ", ".join(f'"{k}": "{v}"' for k, v in step["parameter_mapping"].items())
+            mappings = ", ".join(
+                f'"{k}": "{v}"' for k, v in step["parameter_mapping"].items()
+            )
             step_lines.append(f"                parameter_mapping={{{mappings}}},")
-        
+
         # Add optional fields
         if step.get("depends_on"):
             deps = ", ".join(f'"{d}"' for d in step["depends_on"])
             step_lines.append(f"                depends_on=[{deps}],")
-        
+
         if step.get("timeout_seconds"):
-            step_lines.append(f"                timeout_seconds={step['timeout_seconds']},")
-        
+            step_lines.append(
+                f"                timeout_seconds={step['timeout_seconds']},"
+            )
+
         if step.get("optional"):
-            step_lines.append(f"                optional=True,")
-            
+            step_lines.append("                optional=True,")
+
         step_lines.append("            ),")
-        
+
         if i < len(example_steps) - 1:
             step_lines.append("")
-            
+
         steps_code.extend(step_lines)
 
     steps_str = "\n".join(steps_code)
@@ -377,7 +381,7 @@ def display_completion_info(
     print("   • Access initial parameters: 'initial.parameter_name'")
     print("   • Access step results: 'step_id.results[0].data.field_name'")
     print("   • Static values: Use static_parameters instead")
-    
+
     print()
     print_status("info", "Step dependency examples:")
     print("   • Sequential execution: depends_on=['previous_step']")
@@ -392,9 +396,7 @@ def display_completion_info(
         )
 
     print()
-    print_status(
-        "info", "For more details, see HUNT_DEVELOPMENT.md"
-    )
+    print_status("info", "For more details, see HUNT_DEVELOPMENT.md")
 
 
 def create_hunt(args):
@@ -546,7 +548,9 @@ def interactive_mode():
 
     # Get hunt name
     while True:
-        name = input("Enter hunt name (e.g., company_investigation, ip_recon): ").strip()
+        name = input(
+            "Enter hunt name (e.g., company_investigation, ip_recon): "
+        ).strip()
         if not name:
             print(f"{Colors.RED}ERROR:{Colors.END} Hunt name is required")
             continue

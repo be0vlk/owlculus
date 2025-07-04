@@ -6,7 +6,7 @@ import json
 from unittest.mock import patch
 
 import pytest
-from app.core.dependencies import get_current_active_user, get_db
+from app.core.dependencies import get_current_user, get_db
 from app.database.models import User
 from app.main import app
 from fastapi import status
@@ -82,8 +82,8 @@ class TestPluginsAPI:
 
     def test_list_plugins_success_admin(self, session: Session, test_admin: User):
         """Test successful plugins listing by admin"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -137,8 +137,8 @@ class TestPluginsAPI:
 
     def test_list_plugins_success_investigator(self, session: Session, test_user: User):
         """Test successful plugins listing by investigator"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_user)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_user
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -169,8 +169,8 @@ class TestPluginsAPI:
 
     def test_list_plugins_forbidden_analyst(self, session: Session, test_analyst: User):
         """Test plugins listing forbidden for analyst"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_analyst)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_analyst
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -191,8 +191,8 @@ class TestPluginsAPI:
 
     def test_list_plugins_empty_result(self, session: Session, test_admin: User):
         """Test plugins listing with no plugins available"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -218,8 +218,8 @@ class TestPluginsAPI:
 
     def test_execute_plugin_success(self, session: Session, test_user: User):
         """Test successful plugin execution"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_user)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_user
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -259,8 +259,8 @@ class TestPluginsAPI:
 
     def test_execute_plugin_with_no_params(self, session: Session, test_user: User):
         """Test plugin execution without parameters"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_user)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_user
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -284,8 +284,8 @@ class TestPluginsAPI:
 
     def test_execute_plugin_not_found(self, session: Session, test_user: User):
         """Test execution of non-existent plugin"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_user)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_user
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -319,8 +319,8 @@ class TestPluginsAPI:
 
     def test_execute_plugin_execution_error(self, session: Session, test_user: User):
         """Test plugin execution with runtime error"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_user)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_user
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -354,8 +354,8 @@ class TestPluginsAPI:
         self, session: Session, test_analyst: User
     ):
         """Test plugin execution forbidden for analyst"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_analyst)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_analyst
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -394,8 +394,8 @@ class TestPluginsAPI:
 
     def test_execute_plugin_complex_params(self, session: Session, test_user: User):
         """Test plugin execution with complex parameters"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_user)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_user
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -439,8 +439,8 @@ class TestPluginsAPI:
         self, session: Session, test_user: User
     ):
         """Test plugin execution with multiple streaming results"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_user)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_user
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -482,8 +482,8 @@ class TestPluginsAPI:
         self, session: Session, test_user: User
     ):
         """Test plugin execution with invalid JSON parameters"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_user)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_user
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -502,8 +502,8 @@ class TestPluginsAPI:
         self, session: Session, test_user: User
     ):
         """Test plugin execution with special characters in plugin name"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_user)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_user
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -527,8 +527,8 @@ class TestPluginsAPI:
 
     def test_execute_plugin_empty_plugin_name(self, session: Session, test_user: User):
         """Test plugin execution with empty plugin name"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_user)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_user
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -541,8 +541,8 @@ class TestPluginsAPI:
 
     def test_list_plugins_service_error(self, session: Session, test_admin: User):
         """Test plugins listing when service throws unexpected error"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -565,8 +565,8 @@ class TestPluginsAPI:
         self, session: Session, test_admin: User
     ):
         """Test consistent response format across plugins endpoints"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -607,8 +607,8 @@ class TestPluginsAPI:
         """Test API response time performance"""
         import time
 
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_admin)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -632,8 +632,8 @@ class TestPluginsAPI:
 
     def test_execute_plugin_large_parameters(self, session: Session, test_user: User):
         """Test plugin execution with large parameter payload"""
-        app.dependency_overrides[get_current_active_user] = (
-            override_get_current_user_factory(test_user)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_user
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 

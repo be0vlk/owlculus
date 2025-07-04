@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from ..core.dependencies import get_current_active_user, get_db
+from ..core.dependencies import get_current_user, get_db
 from ..database.models import User
 from ..schemas.plugin_schema import PluginMetadata
 from ..services.plugin_service import PluginService
@@ -19,7 +19,7 @@ router = APIRouter(tags=["plugins"])
 
 @router.get("/", response_model=Dict[str, PluginMetadata])
 async def list_plugins(
-    current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     plugin_svc = PluginService(db)
     return await plugin_svc.list_plugins(current_user=current_user)
@@ -50,7 +50,7 @@ async def stream_generator(
 async def execute_plugin(
     plugin_name: str,
     params: Dict[str, Any] = None,
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     return StreamingResponse(
