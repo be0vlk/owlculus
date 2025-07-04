@@ -5,7 +5,7 @@ Case management API
 from typing import List, Optional
 
 from app import schemas
-from app.core.dependencies import get_current_user, admin_only, no_analyst
+from app.core.dependencies import admin_only, get_current_user, no_analyst
 from app.core.exceptions import (
     AuthorizationException,
     BaseException,
@@ -234,7 +234,9 @@ async def delete_entity(
 ):
     entity_service = EntityService(db)
     try:
-        await entity_service.delete_entity(entity_id=entity_id, current_user=current_user)
+        await entity_service.delete_entity(
+            entity_id=entity_id, current_user=current_user
+        )
     except ResourceNotFoundException as e:
         raise HTTPException(status_code=404, detail=str(e))
     except AuthorizationException as e:

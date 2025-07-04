@@ -3,11 +3,11 @@ Client management API
 """
 
 from app import schemas
-from app.core.dependencies import get_current_user, admin_only, no_analyst
+from app.core.dependencies import admin_only, get_current_user, no_analyst
 from app.core.exceptions import (
+    BaseException,
     DuplicateResourceException,
     ResourceNotFoundException,
-    BaseException,
 )
 from app.database import models
 from app.database.connection import get_db

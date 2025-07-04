@@ -4,10 +4,8 @@ Comprehensive test suite for EntityService
 
 import pytest
 from app.core.exceptions import (
-    AuthorizationException,
     DuplicateResourceException,
     ResourceNotFoundException,
-    ValidationException,
 )
 from app.database import models
 from app.schemas.entity_schema import EntityCreate, EntityUpdate
@@ -200,7 +198,9 @@ class TestEntityService:
         assert entity.data["domain"] == "malicious.com"
         assert entity.data["description"] == "Suspected phishing domain"
 
-    async def test_create_entity_ip_address_success(self, test_case_with_users, test_user):
+    async def test_create_entity_ip_address_success(
+        self, test_case_with_users, test_user
+    ):
         """Test creating an IP address entity"""
         entity_data = EntityCreate(
             entity_type="ip_address",
@@ -213,7 +213,9 @@ class TestEntityService:
         assert entity.entity_type == "ip_address"
         assert entity.data["ip_address"] == "192.168.1.1"
 
-    async def test_create_entity_duplicate_person(self, test_case_with_users, test_user):
+    async def test_create_entity_duplicate_person(
+        self, test_case_with_users, test_user
+    ):
         """Test creating duplicate person entity"""
         # Create first person
         entity_data = EntityCreate(
@@ -230,7 +232,9 @@ class TestEntityService:
             )
         assert "already exists" in str(exc_info.value)
 
-    async def test_create_entity_duplicate_company(self, test_case_with_users, test_user):
+    async def test_create_entity_duplicate_company(
+        self, test_case_with_users, test_user
+    ):
         """Test creating duplicate company entity"""
         # Create first company
         entity_data = EntityCreate(
@@ -250,7 +254,9 @@ class TestEntityService:
             )
         assert "already exists" in str(exc_info.value)
 
-    async def test_create_entity_analyst_can_read_but_api_prevents_write(self, test_case_with_users, test_analyst):
+    async def test_create_entity_analyst_can_read_but_api_prevents_write(
+        self, test_case_with_users, test_analyst
+    ):
         """Test that service layer allows analyst to create (API layer will block)"""
         entity_data = EntityCreate(
             entity_type="person", data={"first_name": "Test", "last_name": "User"}
@@ -263,7 +269,9 @@ class TestEntityService:
         assert entity.entity_type == "person"
         assert entity.data["first_name"] == "Test"
 
-    async def test_update_entity_analyst_can_read_but_api_prevents_write(self, test_case_with_users, test_analyst):
+    async def test_update_entity_analyst_can_read_but_api_prevents_write(
+        self, test_case_with_users, test_analyst
+    ):
         """Test that service layer allows analyst to update (API layer will block)"""
         # Create entity
         entity = models.Entity(
@@ -283,9 +291,11 @@ class TestEntityService:
         )
         assert updated.data["first_name"] == "Updated"
 
-    async def test_delete_entity_analyst_can_read_but_api_prevents_write(self, test_case_with_users, test_analyst):
+    async def test_delete_entity_analyst_can_read_but_api_prevents_write(
+        self, test_case_with_users, test_analyst
+    ):
         """Test that service layer allows analyst to delete (API layer will block)"""
-        # Create entity  
+        # Create entity
         entity = models.Entity(
             case_id=test_case_with_users.id,
             entity_type="person",
@@ -303,7 +313,9 @@ class TestEntityService:
         deleted_entity = self.db.get(models.Entity, entity_id)
         assert deleted_entity is None
 
-    async def test_delete_entity_multiple_in_case(self, test_case_with_users, test_user):
+    async def test_delete_entity_multiple_in_case(
+        self, test_case_with_users, test_user
+    ):
         """Test deleting one entity doesn't affect others in same case"""
         # Create multiple entities
         entity1 = models.Entity(
@@ -334,7 +346,9 @@ class TestEntityService:
     # Edge cases and performance tests
     # =========================
 
-    async def test_concurrent_entity_creation(self, test_case_with_users, test_user, test_admin):
+    async def test_concurrent_entity_creation(
+        self, test_case_with_users, test_user, test_admin
+    ):
         """Test handling concurrent entity creation"""
         # This test simulates what happens when two users try to create
         # the same entity at nearly the same time
@@ -368,7 +382,9 @@ class TestEntityService:
         )
         assert len(entity.data["other"]) == 10000
 
-    async def test_entity_with_unicode_and_special_chars(self, test_case_with_users, test_user):
+    async def test_entity_with_unicode_and_special_chars(
+        self, test_case_with_users, test_user
+    ):
         """Test entity creation with unicode and special characters"""
         entity_data = EntityCreate(
             entity_type="person",
@@ -423,7 +439,9 @@ class TestEntityService:
     # Entity lookup tests
     # =========================
 
-    async def test_find_entity_by_ip_address_success(self, test_case_with_users, test_user):
+    async def test_find_entity_by_ip_address_success(
+        self, test_case_with_users, test_user
+    ):
         """Test finding an existing IP address entity"""
         # Create IP entity
         entity_data = EntityCreate(
@@ -443,7 +461,9 @@ class TestEntityService:
         assert found_entity.id == created_entity.id
         assert found_entity.data["ip_address"] == "10.0.0.1"
 
-    async def test_find_entity_by_ip_address_not_found(self, test_case_with_users, test_user):
+    async def test_find_entity_by_ip_address_not_found(
+        self, test_case_with_users, test_user
+    ):
         """Test finding non-existent IP address entity"""
         found_entity = await self.service.find_entity_by_ip_address(
             test_case_with_users.id, "192.168.99.99", test_user
@@ -453,7 +473,9 @@ class TestEntityService:
     async def test_find_entity_by_ip_address_case_not_found(self, test_user):
         """Test finding IP entity in non-existent case"""
         with pytest.raises(ResourceNotFoundException) as exc_info:
-            await self.service.find_entity_by_ip_address(99999, "192.168.1.1", test_user)
+            await self.service.find_entity_by_ip_address(
+                99999, "192.168.1.1", test_user
+            )
         assert "Case not found" in str(exc_info.value)
 
     async def test_find_entity_by_domain_success(self, test_case_with_users, test_user):
@@ -476,7 +498,9 @@ class TestEntityService:
         assert found_entity.id == created_entity.id
         assert found_entity.data["domain"] == "TestDomain.Com"
 
-    async def test_find_entity_by_domain_not_found(self, test_case_with_users, test_user):
+    async def test_find_entity_by_domain_not_found(
+        self, test_case_with_users, test_user
+    ):
         """Test finding non-existent domain entity"""
         found_entity = await self.service.find_entity_by_domain(
             test_case_with_users.id, "nonexistent.com", test_user
@@ -494,7 +518,7 @@ class TestEntityService:
     # =========================
 
     async def test_enrich_entity_description_new_description(
-            self, test_case_with_users, test_user
+        self, test_case_with_users, test_user
     ):
         """Test enriching entity with new description"""
         # Create entity without description
@@ -507,7 +531,9 @@ class TestEntityService:
 
         # Store original state
         original_created_at = created_entity.created_at
-        assert "description" not in created_entity.data  # Verify no description initially
+        assert (
+            "description" not in created_entity.data
+        )  # Verify no description initially
 
         # Enrich with description
         enriched_entity = await self.service.enrich_entity_description(
@@ -529,7 +555,7 @@ class TestEntityService:
         assert enriched_entity.updated_at >= enriched_entity.created_at
 
     async def test_enrich_entity_description_append_to_existing(
-            self, test_case_with_users, test_user
+        self, test_case_with_users, test_user
     ):
         """Test enriching entity that already has a description"""
         # Create entity with existing description
@@ -563,7 +589,7 @@ class TestEntityService:
         assert "Entity not found" in str(exc_info.value)
 
     async def test_enrich_entity_description_analyst_can_read_but_api_prevents_write(
-            self, test_case_with_users, test_analyst
+        self, test_case_with_users, test_analyst
     ):
         """Test that service layer allows analyst to enrich (API layer will block)"""
         # Create entity

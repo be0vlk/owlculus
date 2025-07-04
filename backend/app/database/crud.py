@@ -4,7 +4,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, or_, select
 
-from . import models
 from ..core.exceptions import DuplicateResourceException
 from ..core.roles import UserRole
 from ..core.utils import get_utc_now
@@ -18,6 +17,7 @@ from ..schemas import (
     UserCreate,
     UserUpdate,
 )
+from . import models
 
 
 # --- User ---

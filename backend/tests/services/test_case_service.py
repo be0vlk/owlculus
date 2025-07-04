@@ -4,7 +4,6 @@ import pytest
 from app import schemas
 from app.core.exceptions import (
     AuthorizationException,
-    BaseException,
     DuplicateResourceException,
     ResourceNotFoundException,
     ValidationException,
@@ -85,7 +84,9 @@ async def test_create_case_non_admin(
         client_id=client.id, title="Test Case", status="Open", notes="Test Notes"
     )
     # Service layer no longer checks for admin role - that's handled at API layer
-    created_case = await case_service_instance.create_case(case_data, current_user=test_user)
+    created_case = await case_service_instance.create_case(
+        case_data, current_user=test_user
+    )
     assert created_case.title == "Test Case"
     assert created_case.status == "Open"
 
@@ -103,7 +104,9 @@ async def test_create_case_analyst(
         client_id=client.id, title="Test Case", status="Open", notes="Test Notes"
     )
     # Service layer no longer checks for admin role - that's handled at API layer
-    created_case = await case_service_instance.create_case(case_data, current_user=test_analyst)
+    created_case = await case_service_instance.create_case(
+        case_data, current_user=test_analyst
+    )
     assert created_case.title == "Test Case"
     assert created_case.status == "Open"
 

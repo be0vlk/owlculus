@@ -75,8 +75,13 @@ class HuntExecutor:
 
                     try:
                         await self._execute_step(
-                            step_def, step_record, context, execution, current_user,
-                            completed_steps, len(steps)
+                            step_def,
+                            step_record,
+                            context,
+                            execution,
+                            current_user,
+                            completed_steps,
+                            len(steps),
                         )
                         completed_steps.add(step_def.step_id)
 
@@ -106,8 +111,7 @@ class HuntExecutor:
 
                 # Send WebSocket notification
                 await websocket_manager.send_progress_update(
-                    execution.id,
-                    execution.progress
+                    execution.id, execution.progress
                 )
 
             # Mark skipped steps
@@ -175,8 +179,8 @@ class HuntExecutor:
         context: HuntContext,
         execution: HuntExecution,
         current_user: User,
-            completed_steps: set,
-            total_steps: int,
+        completed_steps: set,
+        total_steps: int,
     ):
         """Execute a single hunt step"""
         # Update step status
@@ -195,9 +199,7 @@ class HuntExecutor:
         # Include step_id so frontend knows which step is running
         progress = len(completed_steps) / total_steps
         await websocket_manager.send_progress_update(
-            execution.id,
-            progress,
-            step_def.step_id
+            execution.id, progress, step_def.step_id
         )
 
         # Execute plugin

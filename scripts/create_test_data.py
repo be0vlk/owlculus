@@ -284,6 +284,7 @@ def main():
     args = parser.parse_args()
 
     import sys
+
     result = asyncio.run(create_test_data(args.username, args.password, args.url))
     if result is False:
         sys.exit(1)

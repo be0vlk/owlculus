@@ -87,7 +87,11 @@ class UserService:
 
             return schemas.User.model_validate(new_user)
 
-        except (DuplicateResourceException, AuthorizationException, ValidationException):
+        except (
+            DuplicateResourceException,
+            AuthorizationException,
+            ValidationException,
+        ):
             raise
         except Exception as e:
             user_logger.bind(
@@ -234,7 +238,12 @@ class UserService:
 
             return schemas.User.model_validate(updated_user)
 
-        except (DuplicateResourceException, AuthorizationException, ResourceNotFoundException, ValidationException):
+        except (
+            DuplicateResourceException,
+            AuthorizationException,
+            ResourceNotFoundException,
+            ValidationException,
+        ):
             raise
         except Exception as e:
             user_logger.bind(
@@ -289,7 +298,12 @@ class UserService:
                 failure_reason="invalid_current_password",
             ).warning(f"Password change failed: {str(e)}")
             raise ValidationException("Invalid current password")
-        except (DuplicateResourceException, AuthorizationException, ResourceNotFoundException, ValidationException):
+        except (
+            DuplicateResourceException,
+            AuthorizationException,
+            ResourceNotFoundException,
+            ValidationException,
+        ):
             raise
         except Exception as e:
             user_logger.bind(
@@ -339,7 +353,12 @@ class UserService:
 
             return schemas.User.model_validate(updated_user)
 
-        except (DuplicateResourceException, AuthorizationException, ResourceNotFoundException, ValidationException):
+        except (
+            DuplicateResourceException,
+            AuthorizationException,
+            ResourceNotFoundException,
+            ValidationException,
+        ):
             raise
         except Exception as e:
             user_logger.bind(
@@ -397,7 +416,12 @@ class UserService:
 
             return {"message": f"User '{username_to_delete}' deleted successfully"}
 
-        except (DuplicateResourceException, AuthorizationException, ResourceNotFoundException, ValidationException):
+        except (
+            DuplicateResourceException,
+            AuthorizationException,
+            ResourceNotFoundException,
+            ValidationException,
+        ):
             raise
         except Exception as e:
             user_logger.bind(

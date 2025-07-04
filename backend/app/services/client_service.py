@@ -4,9 +4,9 @@ Client service layer handling all client-related business logic
 
 from app import schemas
 from app.core.exceptions import (
+    BaseException,
     DuplicateResourceException,
     ResourceNotFoundException,
-    BaseException,
 )
 from app.core.logging import get_security_logger
 from app.database import crud, models

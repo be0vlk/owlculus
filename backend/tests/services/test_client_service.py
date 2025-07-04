@@ -3,7 +3,6 @@ from app import schemas
 from app.core.exceptions import (
     DuplicateResourceException,
     ResourceNotFoundException,
-    BaseException,
 )
 from app.database import crud, models
 from app.services.client_service import ClientService

@@ -7,11 +7,10 @@ from unittest.mock import Mock, patch
 
 import pytest
 from app.core.exceptions import (
-    BaseException,
+    AuthorizationException,
     DuplicateResourceException,
     ResourceNotFoundException,
     ValidationException,
-    AuthorizationException,
 )
 from app.database import models
 from app.schemas import user_schema as schemas
@@ -152,7 +151,6 @@ class TestUserService:
 
                 assert "Email already registered" in str(exc_info.value)
 
-
     @pytest.mark.asyncio
     async def test_get_users_success(
         self,
@@ -189,7 +187,6 @@ class TestUserService:
             mock_get_users.assert_called_once_with(
                 user_service_instance.db, skip=skip, limit=limit
             )
-
 
     @pytest.mark.asyncio
     async def test_update_user_admin_success(
@@ -320,7 +317,9 @@ class TestUserService:
                     user_id, user_update, current_user=test_user
                 )
 
-            assert "Only superadmin can promote users to superadmin" in str(exc_info.value)
+            assert "Only superadmin can promote users to superadmin" in str(
+                exc_info.value
+            )
 
     @pytest.mark.asyncio
     async def test_update_user_self_role_escalation_prevented(
@@ -649,7 +648,6 @@ class TestUserService:
 
             assert "User not found" in str(exc_info.value)
 
-
     @pytest.mark.asyncio
     async def test_delete_user_success_superadmin_deletes_regular_user(
         self,
@@ -851,7 +849,6 @@ class TestUserService:
 
             assert "User not found" in str(exc_info.value)
 
-
     @pytest.mark.asyncio
     async def test_admin_reset_password_cannot_reset_superadmin(
         self,
@@ -879,7 +876,9 @@ class TestUserService:
                     superadmin_target.id, "newpassword", current_user=admin
                 )
 
-            assert "Only superadmin can reset superadmin passwords" in str(exc_info.value)
+            assert "Only superadmin can reset superadmin passwords" in str(
+                exc_info.value
+            )
 
     @pytest.mark.asyncio
     async def test_admin_reset_password_superadmin_can_reset_superadmin(
@@ -1052,7 +1051,9 @@ class TestUserService:
                         user_data, current_user=admin
                     )
 
-                assert "Only superadmin can create superadmin users" in str(exc_info.value)
+                assert "Only superadmin can create superadmin users" in str(
+                    exc_info.value
+                )
 
     @pytest.mark.asyncio
     async def test_create_user_superadmin_can_create_superadmin(
@@ -1138,7 +1139,9 @@ class TestUserService:
                     target_user.id, user_update, current_user=admin
                 )
 
-            assert "Only superadmin can promote users to superadmin" in str(exc_info.value)
+            assert "Only superadmin can promote users to superadmin" in str(
+                exc_info.value
+            )
 
     @pytest.mark.asyncio
     async def test_update_user_superadmin_can_promote_to_superadmin(

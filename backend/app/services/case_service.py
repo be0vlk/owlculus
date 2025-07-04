@@ -136,7 +136,7 @@ class CaseService:
         # Check if user is not an analyst
         if current_user.role == UserRole.ANALYST.value:
             raise AuthorizationException("Not authorized")
-            
+
         case_logger = get_security_logger(
             user_id=current_user.id,
             case_id=case_id,
@@ -197,7 +197,7 @@ class CaseService:
         # Check if user is admin
         if current_user.role != UserRole.ADMIN.value:
             raise AuthorizationException("Not authorized")
-            
+
         case_logger = get_security_logger(
             admin_user_id=current_user.id,
             case_id=case_id,
@@ -241,7 +241,9 @@ class CaseService:
                     event_type="case_user_add_failed",
                     failure_reason="user_already_assigned",
                 ).warning("Add user to case failed: user already assigned to case")
-                raise DuplicateResourceException("User is already assigned to this case")
+                raise DuplicateResourceException(
+                    "User is already assigned to this case"
+                )
 
             case_logger.bind(
                 event_type="case_user_add_error", error_type="system_error"
@@ -254,7 +256,7 @@ class CaseService:
         # Check if user is admin
         if current_user.role != UserRole.ADMIN.value:
             raise AuthorizationException("Not authorized")
-            
+
         case_logger = get_security_logger(
             admin_user_id=current_user.id,
             case_id=case_id,
