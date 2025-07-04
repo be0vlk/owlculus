@@ -5,6 +5,7 @@ Hunt executor for orchestrating hunt workflows
 from typing import List, Set
 
 from app.core.utils import get_utc_now
+from app.core.websocket_manager import websocket_manager
 from app.database.models import HuntExecution, HuntStep, User
 from app.services.plugin_service import PluginService
 from sqlmodel import Session
@@ -74,9 +75,16 @@ class HuntExecutor:
 
                     try:
                         await self._execute_step(
-                            step_def, step_record, context, execution, current_user
+                            step_def, step_record, context, execution, current_user,
+                            completed_steps, len(steps)
                         )
                         completed_steps.add(step_def.step_id)
+
+                        # Send step completion notification
+                        progress = len(completed_steps) / len(steps)
+                        await websocket_manager.send_step_complete(
+                            execution.id, step_def.step_id, progress
+                        )
                     except Exception as e:
                         if not step_def.optional:
                             failed_required_steps.add(step_def.step_id)
@@ -86,9 +94,21 @@ class HuntExecutor:
                         step_record.completed_at = get_utc_now()
                         self.db.commit()
 
+                        # Send step failure notification
+                        progress = len(completed_steps) / len(steps)
+                        await websocket_manager.send_step_failed(
+                            execution.id, step_def.step_id, progress
+                        )
+
                 # Update progress
                 execution.progress = len(completed_steps) / len(steps)
                 self.db.commit()
+
+                # Send WebSocket notification
+                await websocket_manager.send_progress_update(
+                    execution.id,
+                    execution.progress
+                )
 
             # Mark skipped steps
             for step_def in steps:
@@ -107,11 +127,17 @@ class HuntExecutor:
             execution.context_data = context.to_dict()
             self.db.commit()
 
-        except Exception:
+            # Send completion notification
+            await websocket_manager.send_execution_complete(execution.id)
+
+        except Exception as e:
             # Handle catastrophic failure
             execution.status = "failed"
             execution.completed_at = get_utc_now()
             self.db.commit()
+
+            # Send error notification
+            await websocket_manager.send_execution_error(execution.id, str(e))
             raise
 
     def _find_executable_steps(
@@ -149,6 +175,8 @@ class HuntExecutor:
         context: HuntContext,
         execution: HuntExecution,
         current_user: User,
+            completed_steps: set,
+            total_steps: int,
     ):
         """Execute a single hunt step"""
         # Update step status
@@ -162,6 +190,15 @@ class HuntExecutor:
 
         step_record.parameters = parameters
         self.db.commit()
+
+        # Send notification that step is starting
+        # Include step_id so frontend knows which step is running
+        progress = len(completed_steps) / total_steps
+        await websocket_manager.send_progress_update(
+            execution.id,
+            progress,
+            step_def.step_id
+        )
 
         # Execute plugin
         plugin = self.plugin_service.get_plugin(step_def.plugin_name)

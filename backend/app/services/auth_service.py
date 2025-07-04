@@ -6,9 +6,9 @@ from datetime import timedelta
 
 from app.core import security
 from app.core.config import settings
+from app.core.exceptions import AuthenticationException, BaseException
 from app.core.logging import get_security_logger
 from app.database import crud
-from fastapi import HTTPException, status
 from sqlmodel import Session
 
 
@@ -33,11 +33,7 @@ class AuthService:
                     event_type="login_failed",
                     failure_reason="user_not_found",
                 )
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Incorrect username or password",
-                    headers={"Authorization": "Bearer"},
-                )
+                raise AuthenticationException("Incorrect username or password")
 
             if not security.verify_password(password, user.password_hash):
                 auth_logger.bind(
@@ -45,11 +41,7 @@ class AuthService:
                     event_type="login_failed",
                     failure_reason="invalid_password",
                 ).warning("Authentication failed: invalid password")
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Incorrect username or password",
-                    headers={"Authorization": "Bearer"},
-                )
+                raise AuthenticationException("Incorrect username or password")
 
             access_token_expires = timedelta(
                 minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
@@ -64,7 +56,7 @@ class AuthService:
 
             return {"access_token": access_token, "token_type": "bearer"}
 
-        except HTTPException:
+        except AuthenticationException:
             raise
         except Exception as e:
             auth_logger.error(
@@ -72,7 +64,4 @@ class AuthService:
                 event_type="login_error",
                 error_type="system_error",
             )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Authentication service error",
-            )
+            raise BaseException("Authentication service error")

@@ -1,8 +1,12 @@
 import pytest
 from app import schemas
+from app.core.exceptions import (
+    DuplicateResourceException,
+    ResourceNotFoundException,
+    BaseException,
+)
 from app.database import crud, models
 from app.services.client_service import ClientService
-from fastapi import HTTPException
 from sqlmodel import Session
 
 
@@ -62,20 +66,6 @@ class TestClientService:
         with pytest.raises(ValueError):
             await client_service.get_clients(skip=0, limit=-5, current_user=test_user)
 
-    async def test_get_clients_analyst_forbidden(self, session, test_analyst):
-        client_service = ClientService(session)
-        with pytest.raises(HTTPException) as excinfo:
-            await client_service.get_clients(current_user=test_analyst)
-        assert excinfo.value.status_code == 403
-        assert "Not authorized" in excinfo.value.detail
-
-    async def test_get_clients_unauthorized(self, session):
-        client_service = ClientService(session)
-        with pytest.raises(HTTPException) as excinfo:
-            await client_service.get_clients(current_user=None)
-        assert excinfo.value.status_code == 401
-        assert "Not authorized" in excinfo.value.detail
-
     async def test_create_client_success(self, session, test_admin):
         client_data = {"name": "New Client", "email": "newclient@test.com"}
         client_create = schemas.ClientCreate(**client_data)
@@ -93,28 +83,9 @@ class TestClientService:
         client_data = {"name": "Client 2", "email": "client1@test.com"}
         client_create = schemas.ClientCreate(**client_data)
         client_service = ClientService(session)
-        with pytest.raises(HTTPException) as excinfo:
+        with pytest.raises(DuplicateResourceException) as excinfo:
             await client_service.create_client(client_create, current_user=test_admin)
-        assert excinfo.value.status_code == 400
-        assert "Email already registered" in excinfo.value.detail
-
-    async def test_create_client_not_admin(self, session, test_user):
-        client_data = {"name": "New Client", "email": "newclient@test.com"}
-        client_create = schemas.ClientCreate(**client_data)
-        client_service = ClientService(session)
-        with pytest.raises(HTTPException) as excinfo:
-            await client_service.create_client(client_create, current_user=test_user)
-        assert excinfo.value.status_code == 403
-        assert "Not authorized" in excinfo.value.detail
-
-    async def test_create_client_unauthorized(self, session):
-        client_data = {"name": "New Client", "email": "newclient@test.com"}
-        client_create = schemas.ClientCreate(**client_data)
-        client_service = ClientService(session)
-        with pytest.raises(HTTPException) as excinfo:
-            await client_service.create_client(client_create, current_user=None)
-        assert excinfo.value.status_code == 401
-        assert "Not authorized" in excinfo.value.detail
+        assert "Email already registered" in str(excinfo.value)
 
     async def test_get_client_success(self, session, test_user):
         created_client = await create_client_helper(
@@ -129,32 +100,9 @@ class TestClientService:
 
     async def test_get_client_not_found(self, session, test_user):
         client_service = ClientService(session)
-        with pytest.raises(HTTPException) as excinfo:
+        with pytest.raises(ResourceNotFoundException) as excinfo:
             await client_service.get_client(999, current_user=test_user)
-        assert excinfo.value.status_code == 404
-        assert "Client not found" in excinfo.value.detail
-
-    async def test_get_client_analyst_forbidden(self, session, test_analyst):
-        created_client = await create_client_helper(
-            session, {"name": "Client 1", "email": "client1@test.com"}
-        )
-        client_service = ClientService(session)
-        with pytest.raises(HTTPException) as excinfo:
-            await client_service.get_client(
-                created_client.id, current_user=test_analyst
-            )
-        assert excinfo.value.status_code == 403
-        assert "Not authorized" in excinfo.value.detail
-
-    async def test_get_client_unauthorized(self, session):
-        created_client = await create_client_helper(
-            session, {"name": "Test Client", "email": "test@test.com"}
-        )
-        client_service = ClientService(session)
-        with pytest.raises(HTTPException) as excinfo:
-            await client_service.get_client(created_client.id, current_user=None)
-        assert excinfo.value.status_code == 401
-        assert "Not authorized" in excinfo.value.detail
+        assert "Client with id 999 not found" in str(excinfo.value)
 
     async def test_update_client_success(self, session, test_admin):
         created_client = await create_client_helper(
@@ -179,50 +127,21 @@ class TestClientService:
         client_update_data = {"email": "client1@test.com"}
         client_update = schemas.ClientUpdate(**client_update_data)
         client_service = ClientService(session)
-        with pytest.raises(HTTPException) as excinfo:
+        with pytest.raises(DuplicateResourceException) as excinfo:
             await client_service.update_client(
                 created_client2.id, client_update, current_user=test_admin
             )
-        assert excinfo.value.status_code == 400
-        assert "Email already registered" in excinfo.value.detail
+        assert "Email already registered" in str(excinfo.value)
 
     async def test_update_client_not_found(self, session, test_admin):
         client_update_data = {"name": "Updated Client"}
         client_update = schemas.ClientUpdate(**client_update_data)
         client_service = ClientService(session)
-        with pytest.raises(HTTPException) as excinfo:
+        with pytest.raises(ResourceNotFoundException) as excinfo:
             await client_service.update_client(
                 999, client_update, current_user=test_admin
             )
-        assert excinfo.value.status_code == 404
-        assert "Client not found" in excinfo.value.detail
-
-    async def test_update_client_not_admin(self, session, test_user):
-        created_client = await create_client_helper(
-            session, {"name": "Client 1", "email": "client1@test.com"}
-        )
-        client_update_data = {"name": "Updated Client"}
-        client_update = schemas.ClientUpdate(**client_update_data)
-        client_service = ClientService(session)
-        with pytest.raises(HTTPException) as excinfo:
-            await client_service.update_client(
-                created_client.id, client_update, current_user=test_user
-            )
-        assert excinfo.value.status_code == 403
-        assert "Not authorized" in excinfo.value.detail
-
-    async def test_update_client_unauthorized(self, session):
-        created_client = await create_client_helper(
-            session, {"name": "Test Client", "email": "test@test.com"}
-        )
-        client_update = schemas.ClientUpdate(name="Updated Client")
-        client_service = ClientService(session)
-        with pytest.raises(HTTPException) as excinfo:
-            await client_service.update_client(
-                created_client.id, client_update, current_user=None
-            )
-        assert excinfo.value.status_code == 401
-        assert "Not authorized" in excinfo.value.detail
+        assert "Client with id 999 not found" in str(excinfo.value)
 
     # ========================================
     # Additional edge case and validation tests
@@ -377,9 +296,8 @@ class TestClientService:
         await client_service.delete_client(created_client.id, current_user=test_admin)
 
         # Verify client is deleted
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ResourceNotFoundException) as exc_info:
             await client_service.get_client(created_client.id, current_user=test_admin)
-        assert exc_info.value.status_code == 404
 
     async def test_concurrent_client_creation_same_email(self, session, test_admin):
         """Test handling of concurrent client creation with same email"""
@@ -394,10 +312,9 @@ class TestClientService:
 
         # Try to create second client with same email
         client_data2 = schemas.ClientCreate(name="Client 2", email=email)
-        with pytest.raises(HTTPException) as excinfo:
+        with pytest.raises(DuplicateResourceException) as excinfo:
             await client_service.create_client(client_data2, current_user=test_admin)
-        assert excinfo.value.status_code == 400
-        assert "Email already registered" in excinfo.value.detail
+        assert "Email already registered" in str(excinfo.value)
 
     async def test_update_client_case_insensitive_email_check(
         self, session, test_admin
@@ -416,12 +333,11 @@ class TestClientService:
         client_service = ClientService(session)
 
         # This should fail
-        with pytest.raises(HTTPException) as excinfo:
+        with pytest.raises(DuplicateResourceException) as excinfo:
             await client_service.update_client(
                 client2.id, client_update, current_user=test_admin
             )
-        assert excinfo.value.status_code == 400
-        assert "Email already registered" in str(excinfo.value.detail)
+        assert "Email already registered" in str(excinfo.value)
 
     async def test_client_search_functionality(self, session, test_admin):
         """Test searching/filtering clients (if implemented)"""

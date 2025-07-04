@@ -5,11 +5,14 @@ Entity service layer handling all entity-related business logic
 from typing import Optional
 
 from app import schemas
-from app.core.dependencies import check_case_access, no_analyst
+from app.core.dependencies import check_case_access
+from app.core.exceptions import (
+    ResourceNotFoundException,
+    ValidationException,
+)
 from app.core.utils import get_utc_now
 from app.database import crud, models
 from app.database.db_utils import transaction
-from fastapi import HTTPException
 from sqlmodel import Session, select
 
 
@@ -37,7 +40,6 @@ class EntityService:
         result = self.db.exec(query)
         return list(result)
 
-    @no_analyst()
     async def create_entity(
         self,
         case_id: int,
@@ -66,7 +68,6 @@ class EntityService:
         self.db.refresh(db_entity)
         return db_entity
 
-    @no_analyst()
     async def update_entity(
         self,
         entity_id: int,
@@ -75,7 +76,7 @@ class EntityService:
     ) -> models.Entity:
         db_entity = self.db.get(models.Entity, entity_id)
         if not db_entity:
-            raise HTTPException(status_code=404, detail="Entity not found")
+            raise ResourceNotFoundException("Entity not found")
 
         # Check case access
         check_case_access(self.db, db_entity.case_id, current_user)
@@ -88,7 +89,7 @@ class EntityService:
             # Revalidate with entity type
             validated_update = schemas.EntityUpdate(**entity_update_dict)
         except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+            raise ValidationException(str(e))
 
         # Check for duplicates using crud function
         await crud.check_entity_duplicates(
@@ -106,7 +107,6 @@ class EntityService:
 
         return db_entity
 
-    @no_analyst()
     async def delete_entity(
         self,
         entity_id: int,
@@ -114,7 +114,7 @@ class EntityService:
     ) -> None:
         db_entity = self.db.get(models.Entity, entity_id)
         if not db_entity:
-            raise HTTPException(status_code=404, detail="Entity not found")
+            raise ResourceNotFoundException("Entity not found")
 
         # Check case access
         check_case_access(self.db, db_entity.case_id, current_user)
@@ -153,7 +153,6 @@ class EntityService:
         result = self.db.exec(query)
         return result.first()
 
-    @no_analyst()
     async def enrich_entity_description(
         self,
         entity_id: int,
@@ -163,7 +162,7 @@ class EntityService:
         """Enrich an existing entity's description with additional information"""
         db_entity = self.db.get(models.Entity, entity_id)
         if not db_entity:
-            raise HTTPException(status_code=404, detail="Entity not found")
+            raise ResourceNotFoundException("Entity not found")
 
         # Check case access
         check_case_access(self.db, db_entity.case_id, current_user)
@@ -176,15 +175,16 @@ class EntityService:
         else:
             enriched_description = additional_description
 
-        # Update the entity data with enriched description
-        updated_data = db_entity.data.copy()
-        updated_data["description"] = enriched_description
+        # Use transaction for entity update
+        with transaction(self.db):
+            # Update the entity data with enriched description
+            updated_data = db_entity.data.copy()
+            updated_data["description"] = enriched_description
 
-        db_entity.data = updated_data
-        db_entity.updated_at = get_utc_now()
+            db_entity.data = updated_data
+            db_entity.updated_at = get_utc_now()
 
-        self.db.add(db_entity)
-        self.db.commit()
+            self.db.add(db_entity)
+
         self.db.refresh(db_entity)
-
         return db_entity

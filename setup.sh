@@ -58,6 +58,15 @@ else
     fi
 fi
 
+if ! command_exists python3; then
+    print_status "Python 3 not found. Installing..."
+    sudo apt-get update
+    sudo apt-get install -qq -y python3
+    print_success "Python 3 installed successfully"
+else
+    print_success "Python 3 is already installed"
+fi
+
 
 
 # Default configuration values
@@ -416,12 +425,15 @@ create_test_data() {
     sleep 5
     
     # Copy and run the test data script inside the backend container
+    # Pass the admin password from the environment
+    local ADMIN_PASS=$(grep "^ADMIN_PASSWORD=" .env | cut -d'=' -f2)
+    
     if [ "$MODE" = "dev" ] || [ "$MODE" = "development" ]; then
         $DOCKER_COMPOSE_CMD $COMPOSE_FILES cp scripts/create_test_data.py backend:/tmp/create_test_data.py
-        $DOCKER_COMPOSE_CMD $COMPOSE_FILES exec -w /app backend python3 /tmp/create_test_data.py
+        $DOCKER_COMPOSE_CMD $COMPOSE_FILES exec -w /app backend python3 /tmp/create_test_data.py --password "$ADMIN_PASS"
     else
         $DOCKER_COMPOSE_CMD $COMPOSE_FILES cp scripts/create_test_data.py backend:/tmp/create_test_data.py
-        $DOCKER_COMPOSE_CMD $COMPOSE_FILES exec -w /app backend python3 /tmp/create_test_data.py
+        $DOCKER_COMPOSE_CMD $COMPOSE_FILES exec -w /app backend python3 /tmp/create_test_data.py --password "$ADMIN_PASS"
     fi
     
     if [ $? -eq 0 ]; then
@@ -436,7 +448,8 @@ create_test_data() {
         echo "     - investigator / invpassword1 (Investigator role)"
         echo ""
     else
-        print_warning "Test data creation encountered issues. Check the output above."
+        print_error "Test data creation failed. Check the output above."
+        return 1
     fi
 }
 

@@ -162,43 +162,61 @@
                     </v-btn>
                   </div>
 
-                  <!-- Hunt Executions List -->
+                  <!-- Hunt Executions Table -->
                   <div v-if="caseHuntExecutions.length > 0">
-                    <v-row>
-                      <v-col
-                        v-for="execution in caseHuntExecutions"
-                        :key="execution.id"
-                        cols="12"
-                        md="6"
-                        lg="4"
-                      >
-                        <v-card variant="outlined" hover @click="viewHuntExecution(execution.id)">
-                          <v-card-title class="d-flex align-center pa-3">
-                            <v-avatar :color="getHuntStatusColor(execution.status)" size="32" class="me-3">
-                              <v-icon :icon="getHuntStatusIcon(execution.status)" color="white" size="small" />
-                            </v-avatar>
-                            <div class="flex-grow-1">
-                              <div class="text-body-1 font-weight-medium">{{ getFormattedHuntTitle(execution) }}</div>
-                              <div class="text-caption">{{ execution.hunt_category }}</div>
-                            </div>
-                            <v-chip :color="getHuntStatusColor(execution.status)" variant="flat" size="small">
-                              {{ execution.status }}
-                            </v-chip>
-                          </v-card-title>
-                          <v-card-text class="pa-3 pt-0">
-                            <div class="d-flex align-center justify-space-between">
-                              <div class="text-caption">
-                                <v-icon icon="mdi-clock" size="small" class="me-1" />
-                                {{ formatDateTime(execution.created_at) }}
-                              </div>
-                              <div class="text-caption">
-                                Progress: {{ Math.round(execution.progress * 100) }}%
-                              </div>
-                            </div>
-                          </v-card-text>
-                        </v-card>
-                      </v-col>
-                    </v-row>
+                    <v-data-table
+                      :headers="huntTableHeaders"
+                      :items="caseHuntExecutions"
+                      :items-per-page="10"
+                      hover
+                      @click:row="(event, { item }) => viewHuntExecution(item.id)"
+                      class="elevation-1"
+                    >
+                      <template #[`item.title`]="{ item }">
+                        <div>
+                          <div class="font-weight-medium">{{ getFormattedHuntTitle(item) }}</div>
+                          <div class="text-caption text-medium-emphasis">{{ item.hunt_category }}</div>
+                        </div>
+                      </template>
+                      
+                      <template #[`item.status`]="{ item }">
+                        <v-chip 
+                          :color="getHuntStatusColor(item.status)" 
+                          variant="flat" 
+                          size="small"
+                          :prepend-icon="getHuntStatusIcon(item.status)"
+                        >
+                          {{ item.status }}
+                        </v-chip>
+                      </template>
+                      
+                      <template #[`item.progress`]="{ item }">
+                        <div class="d-flex align-center">
+                          <v-progress-linear
+                            :model-value="item.progress * 100"
+                            :color="getHuntStatusColor(item.status)"
+                            height="6"
+                            rounded
+                            class="mr-2"
+                            style="min-width: 60px;"
+                          />
+                          <span class="text-caption">{{ Math.round(item.progress * 100) }}%</span>
+                        </div>
+                      </template>
+                      
+                      <template #[`item.created_at`]="{ item }">
+                        {{ formatDateTime(item.created_at) }}
+                      </template>
+                      
+                      <template #[`item.actions`]="{ item }">
+                        <v-btn
+                          icon="mdi-eye"
+                          size="small"
+                          variant="text"
+                          @click.stop="viewHuntExecution(item.id)"
+                        />
+                      </template>
+                    </v-data-table>
                   </div>
 
                   <!-- Empty State -->
@@ -734,6 +752,15 @@ const loadCaseHuntExecutions = async () => {
     loadingHuntExecutions.value = false;
   }
 };
+
+// Define table headers for hunt executions
+const huntTableHeaders = [
+  { title: 'Hunt', key: 'title', sortable: false },
+  { title: 'Status', key: 'status', align: 'center' },
+  { title: 'Progress', key: 'progress', align: 'center' },
+  { title: 'Created', key: 'created_at' },
+  { title: 'Actions', key: 'actions', align: 'center', sortable: false }
+];
 
 const getHuntStatusColor = (status) => {
   switch (status) {

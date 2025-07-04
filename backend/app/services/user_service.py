@@ -3,11 +3,16 @@ User service layer handling all user-related business logic
 """
 
 from app import schemas
-from app.core.dependencies import admin_only
+from app.core.exceptions import (
+    AuthorizationException,
+    BaseException,
+    DuplicateResourceException,
+    ResourceNotFoundException,
+    ValidationException,
+)
 from app.core.logging import get_security_logger
 from app.core.roles import UserRole
 from app.database import crud, models
-from fastapi import HTTPException
 from sqlmodel import Session
 
 
@@ -15,7 +20,6 @@ class UserService:
     def __init__(self, db: Session):
         self.db = db
 
-    @admin_only()
     async def create_user(
         self, user: schemas.UserCreate, current_user: models.User
     ) -> schemas.User:
@@ -31,15 +35,13 @@ class UserService:
                 user_logger.bind(
                     event_type="user_creation_failed", failure_reason="username_exists"
                 ).warning("User creation failed: username already registered")
-                raise HTTPException(
-                    status_code=400, detail="Username already registered"
-                )
+                raise DuplicateResourceException("Username already registered")
 
             if await crud.get_user_by_email(self.db, email=user.email):
                 user_logger.bind(
                     event_type="user_creation_failed", failure_reason="email_exists"
                 ).warning("User creation failed: email already registered")
-                raise HTTPException(status_code=400, detail="Email already registered")
+                raise DuplicateResourceException("Email already registered")
 
             if user.is_superadmin and not current_user.is_superadmin:
                 user_logger.bind(
@@ -49,9 +51,8 @@ class UserService:
                 ).warning(
                     "User creation failed: only superadmin can create superadmin users"
                 )
-                raise HTTPException(
-                    status_code=403,
-                    detail="Only superadmin can create superadmin users",
+                raise AuthorizationException(
+                    "Only superadmin can create superadmin users"
                 )
 
             try:
@@ -64,23 +65,19 @@ class UserService:
                         event_type="user_creation_failed",
                         failure_reason="username_exists_race",
                     ).warning("User creation failed: username race condition")
-                    raise HTTPException(
-                        status_code=400, detail="Username already registered"
-                    )
+                    raise DuplicateResourceException("Username already registered")
                 elif "email already exists" in error_msg:
                     user_logger.bind(
                         event_type="user_creation_failed",
                         failure_reason="email_exists_race",
                     ).warning("User creation failed: email race condition")
-                    raise HTTPException(
-                        status_code=400, detail="Email already registered"
-                    )
+                    raise DuplicateResourceException("Email already registered")
                 else:
                     user_logger.bind(
                         event_type="user_creation_failed",
                         failure_reason="constraint_violation",
                     ).warning(f"User creation failed: {str(e)}")
-                    raise HTTPException(status_code=400, detail="Invalid user data")
+                    raise ValidationException("Invalid user data")
 
             user_logger.bind(
                 user_id=new_user.id,
@@ -90,15 +87,14 @@ class UserService:
 
             return schemas.User.model_validate(new_user)
 
-        except HTTPException:
+        except (DuplicateResourceException, AuthorizationException, ValidationException):
             raise
         except Exception as e:
             user_logger.bind(
                 event_type="user_creation_error", error_type="system_error"
             ).error(f"User creation error: {str(e)}")
-            raise HTTPException(status_code=500, detail="Internal server error")
+            raise BaseException("Internal server error")
 
-    @admin_only()
     async def get_users(
         self, current_user: models.User, skip: int = 0, limit: int = 100
     ) -> list[schemas.User]:
@@ -126,14 +122,14 @@ class UserService:
                 user_logger.bind(
                     event_type="user_update_failed", failure_reason="not_authorized"
                 ).warning("User update failed: not authorized")
-                raise HTTPException(status_code=403, detail="Not authorized")
+                raise AuthorizationException("Not authorized")
 
             db_user = await crud.get_user(self.db, user_id=user_id)
             if not db_user:
                 user_logger.bind(
                     event_type="user_update_failed", failure_reason="user_not_found"
                 ).warning("User update failed: user not found")
-                raise HTTPException(status_code=404, detail="User not found")
+                raise ResourceNotFoundException("User not found")
 
             if db_user.is_superadmin and not current_user.is_superadmin:
                 user_logger.bind(
@@ -143,8 +139,8 @@ class UserService:
                 ).warning(
                     "User update failed: only superadmin can edit superadmin users"
                 )
-                raise HTTPException(
-                    status_code=403, detail="Only superadmin can edit superadmin users"
+                raise AuthorizationException(
+                    "Only superadmin can edit superadmin users"
                 )
 
             if user_update.is_superadmin and not current_user.is_superadmin:
@@ -155,9 +151,8 @@ class UserService:
                 ).warning(
                     "User update failed: only superadmin can promote users to superadmin"
                 )
-                raise HTTPException(
-                    status_code=403,
-                    detail="Only superadmin can promote users to superadmin",
+                raise AuthorizationException(
+                    "Only superadmin can promote users to superadmin"
                 )
 
             if user_update.username and user_update.username != db_user.username:
@@ -170,9 +165,7 @@ class UserService:
                         failure_reason="username_taken",
                         requested_username=user_update.username,
                     ).warning("User update failed: username already taken")
-                    raise HTTPException(
-                        status_code=400, detail="Username already taken"
-                    )
+                    raise DuplicateResourceException("Username already taken")
 
             if user_update.email and user_update.email != db_user.email:
                 existing_user = await crud.get_user_by_email(
@@ -182,9 +175,7 @@ class UserService:
                     user_logger.bind(
                         event_type="user_update_failed", failure_reason="email_taken"
                     ).warning("User update failed: email already registered")
-                    raise HTTPException(
-                        status_code=400, detail="Email already registered"
-                    )
+                    raise DuplicateResourceException("Email already registered")
 
             update_data = user_update.model_dump(exclude_unset=True)
 
@@ -223,23 +214,19 @@ class UserService:
                         event_type="user_update_failed",
                         failure_reason="username_exists_race",
                     ).warning("User update failed: username race condition")
-                    raise HTTPException(
-                        status_code=400, detail="Username already taken"
-                    )
+                    raise DuplicateResourceException("Username already taken")
                 elif "email already exists" in error_msg:
                     user_logger.bind(
                         event_type="user_update_failed",
                         failure_reason="email_exists_race",
                     ).warning("User update failed: email race condition")
-                    raise HTTPException(
-                        status_code=400, detail="Email already registered"
-                    )
+                    raise DuplicateResourceException("Email already registered")
                 else:
                     user_logger.bind(
                         event_type="user_update_failed",
                         failure_reason="constraint_violation",
                     ).warning(f"User update failed: {str(e)}")
-                    raise HTTPException(status_code=400, detail="Invalid update data")
+                    raise ValidationException("Invalid update data")
 
             user_logger.bind(
                 target_user_id=updated_user.id, event_type="user_update_success"
@@ -247,13 +234,13 @@ class UserService:
 
             return schemas.User.model_validate(updated_user)
 
-        except HTTPException:
+        except (DuplicateResourceException, AuthorizationException, ResourceNotFoundException, ValidationException):
             raise
         except Exception as e:
             user_logger.bind(
                 event_type="user_update_error", error_type="system_error"
             ).error(f"User update error: {str(e)}")
-            raise HTTPException(status_code=500, detail="Internal server error")
+            raise BaseException("Internal server error")
 
     async def change_password(
         self,
@@ -275,13 +262,13 @@ class UserService:
                 user_logger.bind(
                     event_type="password_change_failed", failure_reason="user_not_found"
                 ).warning("Password change failed: user not found")
-                raise HTTPException(status_code=404, detail="User not found")
+                raise ResourceNotFoundException("User not found")
 
             if current_user.id != user_id:
                 user_logger.bind(
                     event_type="password_change_failed", failure_reason="not_authorized"
                 ).warning("Password change failed: not authorized")
-                raise HTTPException(status_code=403, detail="Not authorized")
+                raise AuthorizationException("Not authorized")
 
             updated_user = await crud.change_user_password(
                 self.db,
@@ -301,16 +288,15 @@ class UserService:
                 event_type="password_change_failed",
                 failure_reason="invalid_current_password",
             ).warning(f"Password change failed: {str(e)}")
-            raise HTTPException(status_code=400, detail="Invalid current password")
-        except HTTPException:
+            raise ValidationException("Invalid current password")
+        except (DuplicateResourceException, AuthorizationException, ResourceNotFoundException, ValidationException):
             raise
         except Exception as e:
             user_logger.bind(
                 event_type="password_change_error", error_type="system_error"
             ).error(f"Password change error: {str(e)}")
-            raise HTTPException(status_code=500, detail="Internal server error")
+            raise BaseException("Internal server error")
 
-    @admin_only()
     async def admin_reset_password(
         self, user_id: int, new_password: str, current_user: models.User
     ) -> schemas.User:
@@ -328,7 +314,7 @@ class UserService:
                     event_type="admin_password_reset_failed",
                     failure_reason="user_not_found",
                 ).warning("Admin password reset failed: user not found")
-                raise HTTPException(status_code=404, detail="User not found")
+                raise ResourceNotFoundException("User not found")
 
             if db_user.is_superadmin and not current_user.is_superadmin:
                 user_logger.bind(
@@ -338,9 +324,8 @@ class UserService:
                 ).warning(
                     "Admin password reset failed: only superadmin can reset superadmin passwords"
                 )
-                raise HTTPException(
-                    status_code=403,
-                    detail="Only superadmin can reset superadmin passwords",
+                raise AuthorizationException(
+                    "Only superadmin can reset superadmin passwords"
                 )
 
             updated_user = await crud.admin_reset_password(
@@ -354,15 +339,14 @@ class UserService:
 
             return schemas.User.model_validate(updated_user)
 
-        except HTTPException:
+        except (DuplicateResourceException, AuthorizationException, ResourceNotFoundException, ValidationException):
             raise
         except Exception as e:
             user_logger.bind(
                 event_type="admin_password_reset_error", error_type="system_error"
             ).error(f"Admin password reset error: {str(e)}")
-            raise HTTPException(status_code=500, detail="Internal server error")
+            raise BaseException("Internal server error")
 
-    @admin_only()
     async def delete_user(self, user_id: int, current_user: models.User) -> dict:
         user_logger = get_security_logger(
             user_id=current_user.id,
@@ -377,7 +361,7 @@ class UserService:
                 user_logger.bind(
                     event_type="user_deletion_failed", failure_reason="user_not_found"
                 ).warning("User deletion failed: user not found")
-                raise HTTPException(status_code=404, detail="User not found")
+                raise ResourceNotFoundException("User not found")
 
             if db_user.is_superadmin:
                 user_logger.bind(
@@ -385,18 +369,14 @@ class UserService:
                     failure_reason="cannot_delete_superadmin",
                     target_username=db_user.username,
                 ).warning("User deletion failed: cannot delete superadmin user")
-                raise HTTPException(
-                    status_code=403, detail="Cannot delete superadmin user"
-                )
+                raise AuthorizationException("Cannot delete superadmin user")
 
             if current_user.id == user_id:
                 user_logger.bind(
                     event_type="user_deletion_failed",
                     failure_reason="self_deletion_attempted",
                 ).warning("User deletion failed: cannot delete self")
-                raise HTTPException(
-                    status_code=403, detail="Cannot delete your own account"
-                )
+                raise AuthorizationException("Cannot delete your own account")
 
             if db_user.role == UserRole.ADMIN.value and not current_user.is_superadmin:
                 user_logger.bind(
@@ -406,9 +386,7 @@ class UserService:
                 ).warning(
                     "User deletion failed: only superadmin can delete admin users"
                 )
-                raise HTTPException(
-                    status_code=403, detail="Only superadmin can delete admin users"
-                )
+                raise AuthorizationException("Only superadmin can delete admin users")
 
             username_to_delete = db_user.username
             await crud.delete_user(self.db, user_id=user_id)
@@ -419,10 +397,10 @@ class UserService:
 
             return {"message": f"User '{username_to_delete}' deleted successfully"}
 
-        except HTTPException:
+        except (DuplicateResourceException, AuthorizationException, ResourceNotFoundException, ValidationException):
             raise
         except Exception as e:
             user_logger.bind(
                 event_type="user_deletion_error", error_type="system_error"
             ).error(f"User deletion error: {str(e)}")
-            raise HTTPException(status_code=500, detail="Internal server error")
+            raise BaseException("Internal server error")

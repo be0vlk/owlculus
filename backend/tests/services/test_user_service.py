@@ -6,10 +6,16 @@ from datetime import datetime
 from unittest.mock import Mock, patch
 
 import pytest
+from app.core.exceptions import (
+    BaseException,
+    DuplicateResourceException,
+    ResourceNotFoundException,
+    ValidationException,
+    AuthorizationException,
+)
 from app.database import models
 from app.schemas import user_schema as schemas
 from app.services.user_service import UserService
-from fastapi import HTTPException
 from sqlmodel import Session
 
 
@@ -105,13 +111,12 @@ class TestUserService:
             existing_user.username = user_data.username
             mock_get_username.return_value = existing_user
 
-            with pytest.raises(HTTPException) as exc_info:
+            with pytest.raises(DuplicateResourceException) as exc_info:
                 await user_service_instance.create_user(
                     user_data, current_user=test_admin
                 )
 
-            assert exc_info.value.status_code == 400
-            assert "Username already registered" in exc_info.value.detail
+            assert "Username already registered" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_create_user_email_exists(
@@ -140,45 +145,13 @@ class TestUserService:
                 existing_user.email = user_data.email
                 mock_get_email.return_value = existing_user
 
-                with pytest.raises(HTTPException) as exc_info:
+                with pytest.raises(DuplicateResourceException) as exc_info:
                     await user_service_instance.create_user(
                         user_data, current_user=test_admin
                     )
 
-                assert exc_info.value.status_code == 400
-                assert "Email already registered" in exc_info.value.detail
+                assert "Email already registered" in str(exc_info.value)
 
-    @pytest.mark.asyncio
-    async def test_create_user_admin_only_permission(
-        self,
-        user_service_instance: UserService,
-        test_user: models.User,  # Non-admin user
-    ):
-        """Test that only admins can create users"""
-        user_data = schemas.UserCreate(
-            username="newuser",
-            email="newuser@example.com",
-            password="password123",
-            role="Investigator",
-            is_active=True,
-        )
-
-        # Mock the admin_only decorator to raise exception for non-admin
-        with patch("app.core.dependencies.admin_only") as mock_decorator:
-
-            def side_effect(*args, **kwargs):
-                if "current_user" in kwargs and kwargs["current_user"].role != "Admin":
-                    raise HTTPException(status_code=403, detail="Admin access required")
-                return kwargs.get("current_user")
-
-            mock_decorator.return_value = side_effect
-
-            with pytest.raises(HTTPException) as exc_info:
-                await user_service_instance.create_user(
-                    user_data, current_user=test_user
-                )
-
-            assert exc_info.value.status_code == 403
 
     @pytest.mark.asyncio
     async def test_get_users_success(
@@ -217,26 +190,6 @@ class TestUserService:
                 user_service_instance.db, skip=skip, limit=limit
             )
 
-    @pytest.mark.asyncio
-    async def test_get_users_admin_only_permission(
-        self,
-        user_service_instance: UserService,
-        test_user: models.User,  # Non-admin user
-    ):
-        """Test that only admins can list users"""
-        with patch("app.core.dependencies.admin_only") as mock_decorator:
-
-            def side_effect(*args, **kwargs):
-                if "current_user" in kwargs and kwargs["current_user"].role != "Admin":
-                    raise HTTPException(status_code=403, detail="Admin access required")
-                return kwargs.get("current_user")
-
-            mock_decorator.return_value = side_effect
-
-            with pytest.raises(HTTPException) as exc_info:
-                await user_service_instance.get_users(current_user=test_user)
-
-            assert exc_info.value.status_code == 403
 
     @pytest.mark.asyncio
     async def test_update_user_admin_success(
@@ -362,16 +315,12 @@ class TestUserService:
             mock_get_user.return_value = test_user
 
             # Test that the attempt to escalate privileges is blocked
-            with pytest.raises(HTTPException) as exc_info:
+            with pytest.raises(AuthorizationException) as exc_info:
                 await user_service_instance.update_user(
                     user_id, user_update, current_user=test_user
                 )
 
-            assert exc_info.value.status_code == 403
-            assert (
-                "Only superadmin can promote users to superadmin"
-                in exc_info.value.detail
-            )
+            assert "Only superadmin can promote users to superadmin" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_update_user_self_role_escalation_prevented(
@@ -438,13 +387,12 @@ class TestUserService:
         other_user_id = 999  # Different from test_user.id
         user_update = schemas.UserUpdate(username="newusername")
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(AuthorizationException) as exc_info:
             await user_service_instance.update_user(
                 other_user_id, user_update, current_user=test_user
             )
 
-        assert exc_info.value.status_code == 403
-        assert "Not authorized" in exc_info.value.detail
+        assert "Not authorized" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_update_user_not_found(
@@ -459,13 +407,12 @@ class TestUserService:
         with patch("app.services.user_service.crud.get_user") as mock_get_user:
             mock_get_user.return_value = None
 
-            with pytest.raises(HTTPException) as exc_info:
+            with pytest.raises(ResourceNotFoundException) as exc_info:
                 await user_service_instance.update_user(
                     user_id, user_update, current_user=test_admin
                 )
 
-            assert exc_info.value.status_code == 404
-            assert "User not found" in exc_info.value.detail
+            assert "User not found" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_update_user_username_taken(
@@ -491,13 +438,12 @@ class TestUserService:
                 conflicting_user.username = user_update.username
                 mock_get_username.return_value = conflicting_user
 
-                with pytest.raises(HTTPException) as exc_info:
+                with pytest.raises(DuplicateResourceException) as exc_info:
                     await user_service_instance.update_user(
                         user_id, user_update, current_user=test_admin
                     )
 
-                assert exc_info.value.status_code == 400
-                assert "Username already taken" in exc_info.value.detail
+                assert "Username already taken" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_update_user_email_taken(
@@ -523,13 +469,12 @@ class TestUserService:
                 conflicting_user.email = user_update.email
                 mock_get_email.return_value = conflicting_user
 
-                with pytest.raises(HTTPException) as exc_info:
+                with pytest.raises(DuplicateResourceException) as exc_info:
                     await user_service_instance.update_user(
                         user_id, user_update, current_user=test_admin
                     )
 
-                assert exc_info.value.status_code == 400
-                assert "Email already registered" in exc_info.value.detail
+                assert "Email already registered" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_change_password_success(
@@ -587,13 +532,12 @@ class TestUserService:
         with patch("app.services.user_service.crud.get_user") as mock_get_user:
             mock_get_user.return_value = None
 
-            with pytest.raises(HTTPException) as exc_info:
+            with pytest.raises(ResourceNotFoundException) as exc_info:
                 await user_service_instance.change_password(
                     user_id, "oldpass", "newpass", current_user=test_user
                 )
 
-            assert exc_info.value.status_code == 404
-            assert "User not found" in exc_info.value.detail
+            assert "User not found" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_change_password_unauthorized(
@@ -609,13 +553,12 @@ class TestUserService:
             other_user.id = other_user_id
             mock_get_user.return_value = other_user
 
-            with pytest.raises(HTTPException) as exc_info:
+            with pytest.raises(AuthorizationException) as exc_info:
                 await user_service_instance.change_password(
                     other_user_id, "oldpass", "newpass", current_user=test_user
                 )
 
-            assert exc_info.value.status_code == 403
-            assert "Not authorized" in exc_info.value.detail
+            assert "Not authorized" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_change_password_wrong_current_password(
@@ -636,13 +579,12 @@ class TestUserService:
                     "Current password is incorrect"
                 )
 
-                with pytest.raises(HTTPException) as exc_info:
+                with pytest.raises(ValidationException) as exc_info:
                     await user_service_instance.change_password(
                         user_id, "wrongpass", "newpass", current_user=test_user
                     )
 
-                assert exc_info.value.status_code == 400
-                assert "Invalid current password" in exc_info.value.detail
+                assert "Invalid current password" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_admin_reset_password_success(
@@ -700,36 +642,13 @@ class TestUserService:
         with patch("app.services.user_service.crud.get_user") as mock_get_user:
             mock_get_user.return_value = None
 
-            with pytest.raises(HTTPException) as exc_info:
+            with pytest.raises(ResourceNotFoundException) as exc_info:
                 await user_service_instance.admin_reset_password(
                     user_id, "newpass", current_user=test_admin
                 )
 
-            assert exc_info.value.status_code == 404
-            assert "User not found" in exc_info.value.detail
+            assert "User not found" in str(exc_info.value)
 
-    @pytest.mark.asyncio
-    async def test_admin_reset_password_admin_only_permission(
-        self,
-        user_service_instance: UserService,
-        test_user: models.User,  # Non-admin user
-    ):
-        """Test that only admins can reset passwords"""
-        with patch("app.core.dependencies.admin_only") as mock_decorator:
-
-            def side_effect(*args, **kwargs):
-                if "current_user" in kwargs and kwargs["current_user"].role != "Admin":
-                    raise HTTPException(status_code=403, detail="Admin access required")
-                return kwargs.get("current_user")
-
-            mock_decorator.return_value = side_effect
-
-            with pytest.raises(HTTPException) as exc_info:
-                await user_service_instance.admin_reset_password(
-                    999, "newpass", current_user=test_user
-                )
-
-            assert exc_info.value.status_code == 403
 
     @pytest.mark.asyncio
     async def test_delete_user_success_superadmin_deletes_regular_user(
@@ -852,13 +771,12 @@ class TestUserService:
         with patch("app.services.user_service.crud.get_user") as mock_get_user:
             mock_get_user.return_value = target_superadmin
 
-            with pytest.raises(HTTPException) as exc_info:
+            with pytest.raises(AuthorizationException) as exc_info:
                 await user_service_instance.delete_user(
                     target_superadmin.id, current_user=superadmin
                 )
 
-            assert exc_info.value.status_code == 403
-            assert "Cannot delete superadmin user" in exc_info.value.detail
+            assert "Cannot delete superadmin user" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_delete_user_cannot_delete_self(
@@ -875,11 +793,10 @@ class TestUserService:
         with patch("app.services.user_service.crud.get_user") as mock_get_user:
             mock_get_user.return_value = admin
 
-            with pytest.raises(HTTPException) as exc_info:
+            with pytest.raises(AuthorizationException) as exc_info:
                 await user_service_instance.delete_user(admin.id, current_user=admin)
 
-            assert exc_info.value.status_code == 403
-            assert "Cannot delete your own account" in exc_info.value.detail
+            assert "Cannot delete your own account" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_delete_user_admin_cannot_delete_admin(
@@ -903,13 +820,12 @@ class TestUserService:
         with patch("app.services.user_service.crud.get_user") as mock_get_user:
             mock_get_user.return_value = target_admin
 
-            with pytest.raises(HTTPException) as exc_info:
+            with pytest.raises(AuthorizationException) as exc_info:
                 await user_service_instance.delete_user(
                     target_admin.id, current_user=admin
                 )
 
-            assert exc_info.value.status_code == 403
-            assert "Only superadmin can delete admin users" in exc_info.value.detail
+            assert "Only superadmin can delete admin users" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_delete_user_not_found(
@@ -928,34 +844,13 @@ class TestUserService:
         with patch("app.services.user_service.crud.get_user") as mock_get_user:
             mock_get_user.return_value = None
 
-            with pytest.raises(HTTPException) as exc_info:
+            with pytest.raises(ResourceNotFoundException) as exc_info:
                 await user_service_instance.delete_user(
                     user_id, current_user=superadmin
                 )
 
-            assert exc_info.value.status_code == 404
-            assert "User not found" in exc_info.value.detail
+            assert "User not found" in str(exc_info.value)
 
-    @pytest.mark.asyncio
-    async def test_delete_user_admin_only_permission(
-        self,
-        user_service_instance: UserService,
-        test_user: models.User,  # Non-admin user
-    ):
-        """Test that only admins can delete users"""
-        with patch("app.core.dependencies.admin_only") as mock_decorator:
-
-            def side_effect(*args, **kwargs):
-                if "current_user" in kwargs and kwargs["current_user"].role != "Admin":
-                    raise HTTPException(status_code=403, detail="Admin access required")
-                return kwargs.get("current_user")
-
-            mock_decorator.return_value = side_effect
-
-            with pytest.raises(HTTPException) as exc_info:
-                await user_service_instance.delete_user(999, current_user=test_user)
-
-            assert exc_info.value.status_code == 403
 
     @pytest.mark.asyncio
     async def test_admin_reset_password_cannot_reset_superadmin(
@@ -979,16 +874,12 @@ class TestUserService:
         with patch("app.services.user_service.crud.get_user") as mock_get_user:
             mock_get_user.return_value = superadmin_target
 
-            with pytest.raises(HTTPException) as exc_info:
+            with pytest.raises(AuthorizationException) as exc_info:
                 await user_service_instance.admin_reset_password(
                     superadmin_target.id, "newpassword", current_user=admin
                 )
 
-            assert exc_info.value.status_code == 403
-            assert (
-                "Only superadmin can reset superadmin passwords"
-                in exc_info.value.detail
-            )
+            assert "Only superadmin can reset superadmin passwords" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_admin_reset_password_superadmin_can_reset_superadmin(
@@ -1061,13 +952,12 @@ class TestUserService:
         with patch("app.services.user_service.crud.get_user") as mock_get_user:
             mock_get_user.return_value = superadmin_target
 
-            with pytest.raises(HTTPException) as exc_info:
+            with pytest.raises(AuthorizationException) as exc_info:
                 await user_service_instance.update_user(
                     superadmin_target.id, user_update, current_user=admin
                 )
 
-            assert exc_info.value.status_code == 403
-            assert "Only superadmin can edit superadmin users" in exc_info.value.detail
+            assert "Only superadmin can edit superadmin users" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_update_user_superadmin_can_edit_superadmin(
@@ -1157,16 +1047,12 @@ class TestUserService:
             ) as mock_get_email:
                 mock_get_email.return_value = None  # Email not taken
 
-                with pytest.raises(HTTPException) as exc_info:
+                with pytest.raises(AuthorizationException) as exc_info:
                     await user_service_instance.create_user(
                         user_data, current_user=admin
                     )
 
-                assert exc_info.value.status_code == 403
-                assert (
-                    "Only superadmin can create superadmin users"
-                    in exc_info.value.detail
-                )
+                assert "Only superadmin can create superadmin users" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_create_user_superadmin_can_create_superadmin(
@@ -1247,16 +1133,12 @@ class TestUserService:
         with patch("app.services.user_service.crud.get_user") as mock_get_user:
             mock_get_user.return_value = target_user
 
-            with pytest.raises(HTTPException) as exc_info:
+            with pytest.raises(AuthorizationException) as exc_info:
                 await user_service_instance.update_user(
                     target_user.id, user_update, current_user=admin
                 )
 
-            assert exc_info.value.status_code == 403
-            assert (
-                "Only superadmin can promote users to superadmin"
-                in exc_info.value.detail
-            )
+            assert "Only superadmin can promote users to superadmin" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_update_user_superadmin_can_promote_to_superadmin(

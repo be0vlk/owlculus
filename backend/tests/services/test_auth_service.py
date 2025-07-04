@@ -8,9 +8,12 @@ from unittest.mock import Mock, patch
 import pytest
 from app.core import security
 from app.core.config import settings
+from app.core.exceptions import (
+    AuthenticationException,
+    BaseException,
+)
 from app.database import models
 from app.services.auth_service import AuthService
-from fastapi import HTTPException, status
 from sqlmodel import Session
 
 
@@ -101,12 +104,10 @@ class TestAuthService:
         ) as mock_get_user:
             mock_get_user.return_value = None
 
-            with pytest.raises(HTTPException) as exc_info:
+            with pytest.raises(AuthenticationException) as exc_info:
                 await auth_service_instance.authenticate_user(username, password)
 
-            assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
-            assert "Incorrect username or password" in exc_info.value.detail
-            assert exc_info.value.headers["Authorization"] == "Bearer"
+            assert "Incorrect username or password" in str(exc_info.value)
 
             mock_get_user.assert_called_once_with(
                 auth_service_instance.db, username=username
@@ -137,12 +138,10 @@ class TestAuthService:
             ) as mock_verify:
                 mock_verify.return_value = False
 
-                with pytest.raises(HTTPException) as exc_info:
+                with pytest.raises(AuthenticationException) as exc_info:
                     await auth_service_instance.authenticate_user(username, password)
 
-                assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
-                assert "Incorrect username or password" in exc_info.value.detail
-                assert exc_info.value.headers["Authorization"] == "Bearer"
+                assert "Incorrect username or password" in str(exc_info.value)
 
                 mock_get_user.assert_called_once_with(
                     auth_service_instance.db, username=username
@@ -213,11 +212,10 @@ class TestAuthService:
             mock_get_user.return_value = mock_user
 
             # Don't mock verify_password - let it use the real function
-            with pytest.raises(HTTPException) as exc_info:
+            with pytest.raises(AuthenticationException) as exc_info:
                 await auth_service_instance.authenticate_user(username, wrong_password)
 
-            assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
-            assert "Incorrect username or password" in exc_info.value.detail
+            assert "Incorrect username or password" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_authenticate_user_token_creation_with_custom_expiry(
@@ -284,10 +282,10 @@ class TestAuthService:
         ) as mock_get_user:
             mock_get_user.side_effect = Exception("Database connection error")
 
-            with pytest.raises(Exception) as exc_info:
+            with pytest.raises(BaseException) as exc_info:
                 await auth_service_instance.authenticate_user(username, password)
 
-            assert "Database connection error" in str(exc_info.value)
+            assert "Authentication service error" in str(exc_info.value)
             mock_get_user.assert_called_once_with(
                 auth_service_instance.db, username=username
             )
@@ -304,10 +302,10 @@ class TestAuthService:
         ) as mock_get_user:
             mock_get_user.return_value = None
 
-            with pytest.raises(HTTPException) as exc_info:
+            with pytest.raises(AuthenticationException) as exc_info:
                 await auth_service_instance.authenticate_user("", "password")
 
-            assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
+            assert "Incorrect username or password" in str(exc_info.value)
 
         # Test empty password
         with patch(
@@ -323,10 +321,10 @@ class TestAuthService:
             ) as mock_verify:
                 mock_verify.return_value = False
 
-                with pytest.raises(HTTPException) as exc_info:
+                with pytest.raises(AuthenticationException) as exc_info:
                     await auth_service_instance.authenticate_user("testuser", "")
 
-                assert exc_info.value.status_code == status.HTTP_401_UNAUTHORIZED
+                assert "Incorrect username or password" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_authenticate_user_token_creation_error(
@@ -355,12 +353,12 @@ class TestAuthService:
                 ) as mock_create_token:
                     mock_create_token.side_effect = Exception("Token creation failed")
 
-                    with pytest.raises(Exception) as exc_info:
+                    with pytest.raises(BaseException) as exc_info:
                         await auth_service_instance.authenticate_user(
                             username, password
                         )
 
-                    assert "Token creation failed" in str(exc_info.value)
+                    assert "Authentication service error" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_authenticate_user_integration_with_real_user(

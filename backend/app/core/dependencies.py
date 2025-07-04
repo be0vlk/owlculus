@@ -2,6 +2,7 @@ from functools import wraps
 
 from app.core import security
 from app.core.config import settings
+from app.core.exceptions import AuthorizationException, ResourceNotFoundException
 from app.core.roles import UserRole
 from app.database import crud
 from app.database.connection import get_db
@@ -172,10 +173,8 @@ def check_case_access(db: Session, case_id: int, current_user: User) -> Case:
     """Utility function to check if user has access to a case."""
     case = db.exec(select(Case).where(Case.id == case_id)).first()
     if not case:
-        raise HTTPException(status_code=404, detail="Case not found")
+        raise ResourceNotFoundException("Case not found")
     if current_user.role != UserRole.ADMIN.value and current_user not in case.users:
-        raise HTTPException(
-            status_code=403, detail="Not authorized to access this case"
-        )
+        raise AuthorizationException("Not authorized to access this case")
 
     return case

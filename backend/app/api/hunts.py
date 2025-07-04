@@ -5,6 +5,7 @@ API endpoints for hunt operations
 from typing import List
 
 from app.core.dependencies import get_current_user, get_db, no_analyst
+from app.core.websocket_manager import websocket_manager
 from app.database import models
 from app.schemas import hunt_schema as schemas
 from app.services.hunt_service import HuntService
@@ -239,10 +240,10 @@ async def stream_execution(
     await websocket.accept()
 
     try:
-        # TODO: Implement authentication for WebSocket
-        # TODO: Implement event streaming from hunt executor
+        # Register this websocket connection with the manager
+        await websocket_manager.connect(execution_id, websocket)
 
-        # For now, just send a test message
+        # Send initial connection message
         await websocket.send_json(
             {
                 "execution_id": execution_id,
@@ -258,7 +259,8 @@ async def stream_execution(
                 await websocket.send_text("pong")
 
     except WebSocketDisconnect:
-        pass
+        websocket_manager.disconnect(execution_id, websocket)
     except Exception as e:
         await websocket.send_json({"event_type": "error", "message": str(e)})
+        websocket_manager.disconnect(execution_id, websocket)
         await websocket.close()

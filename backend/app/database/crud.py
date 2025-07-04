@@ -1,10 +1,11 @@
 from typing import Optional
 
-from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, or_, select
 
+from . import models
+from ..core.exceptions import DuplicateResourceException
 from ..core.roles import UserRole
 from ..core.utils import get_utc_now
 from ..schemas import (
@@ -17,7 +18,6 @@ from ..schemas import (
     UserCreate,
     UserUpdate,
 )
-from . import models
 
 
 # --- User ---
@@ -292,9 +292,8 @@ async def check_entity_duplicates(
                 query = query.where(models.Entity.id != entity_id)
 
             if db.exec(query).first():
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"A company with the name '{company_name}' already exists in this case",
+                raise DuplicateResourceException(
+                    f"A company with the name '{company_name}' already exists in this case"
                 )
 
     elif entity_type == "person":
@@ -311,9 +310,8 @@ async def check_entity_duplicates(
                 query = query.where(models.Entity.id != entity_id)
 
             if db.exec(query).first():
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"A person with the name '{first_name} {last_name}' already exists in this case",
+                raise DuplicateResourceException(
+                    f"A person with the name '{first_name} {last_name}' already exists in this case"
                 )
 
     elif entity_type == "ip_address":
@@ -328,9 +326,8 @@ async def check_entity_duplicates(
                 query = query.where(models.Entity.id != entity_id)
 
             if db.exec(query).first():
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"An IP address '{ip_address}' already exists in this case",
+                raise DuplicateResourceException(
+                    f"An IP address '{ip_address}' already exists in this case"
                 )
 
     elif entity_type == "domain":
@@ -345,9 +342,8 @@ async def check_entity_duplicates(
                 query = query.where(models.Entity.id != entity_id)
 
             if db.exec(query).first():
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"A domain '{domain}' already exists in this case",
+                raise DuplicateResourceException(
+                    f"A domain '{domain}' already exists in this case"
                 )
 
     elif entity_type == "network_assets":
@@ -397,9 +393,8 @@ async def check_entity_duplicates(
                 query = query.where(models.Entity.id != entity_id)
 
             if db.exec(query).first():
-                raise HTTPException(
-                    status_code=400,
-                    detail="Network assets with overlapping domains, IP addresses, or subdomains already exist in this case",
+                raise DuplicateResourceException(
+                    "Network assets with overlapping domains, IP addresses, or subdomains already exist in this case"
                 )
 
     elif entity_type == "vehicle":
@@ -416,9 +411,8 @@ async def check_entity_duplicates(
                 query = query.where(models.Entity.id != entity_id)
 
             if db.exec(query).first():
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"A vehicle with VIN '{vin}' already exists in this case",
+                raise DuplicateResourceException(
+                    f"A vehicle with VIN '{vin}' already exists in this case"
                 )
 
         if license_plate:
@@ -431,9 +425,8 @@ async def check_entity_duplicates(
                 query = query.where(models.Entity.id != entity_id)
 
             if db.exec(query).first():
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"A vehicle with license plate '{license_plate}' already exists in this case",
+                raise DuplicateResourceException(
+                    f"A vehicle with license plate '{license_plate}' already exists in this case"
                 )
 
 

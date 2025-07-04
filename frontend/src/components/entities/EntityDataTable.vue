@@ -57,7 +57,7 @@
             class="mr-4"
             style="max-width: 300px"
           />
-          
+
           <v-spacer />
 
           <!-- Bulk Actions -->
@@ -190,7 +190,7 @@
         </v-card-title>
         <v-card-text>
           <span v-if="itemsToDelete.length === 1">
-            Are you sure you want to delete this entity? 
+            Are you sure you want to delete this entity?
           </span>
           <span v-else>
             Are you sure you want to delete {{ itemsToDelete.length }} entities?
@@ -220,8 +220,8 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
-import { formatDate } from '@/composables/dateUtils'
+import {computed, onMounted, ref, watch} from 'vue'
+import {formatDate} from '@/composables/dateUtils'
 
 const props = defineProps({
   caseId: {
@@ -265,11 +265,11 @@ const itemsPerPageOptions = [
 ]
 
 const entityTypes = [
-  { value: 'person', text: 'Person', icon: 'mdi-account', color: 'blue' },
-  { value: 'company', text: 'Company', icon: 'mdi-office-building', color: 'green' },
-  { value: 'domain', text: 'Domain', icon: 'mdi-web', color: 'purple' },
-  { value: 'ip_address', text: 'IP Address', icon: 'mdi-ip', color: 'orange' },
-  { value: 'vehicle', text: 'Vehicle', icon: 'mdi-car', color: 'red' }
+  { value: 'person', text: 'Person', icon: 'mdi-account', color: 'indigo' },
+  { value: 'company', text: 'Company', icon: 'mdi-office-building', color: 'teal-darken-2' },
+  { value: 'domain', text: 'Domain', icon: 'mdi-web', color: 'deep-purple' },
+  { value: 'ip_address', text: 'IP Address', icon: 'mdi-ip', color: 'amber-darken-2' },
+  { value: 'vehicle', text: 'Vehicle', icon: 'mdi-car', color: 'brown' }
 ]
 
 const headers = computed(() => [
@@ -290,7 +290,7 @@ watch([selectedTypes, search], () => {
 // Methods
 const loadItems = async () => {
   loading.value = true
-  
+
   try {
     // For now, use the existing API and implement client-side filtering
     const response = await props.entityService.getCaseEntities(props.caseId)
@@ -298,7 +298,7 @@ const loadItems = async () => {
 
     // Apply type filter
     if (selectedTypes.value.length > 0) {
-      filteredEntities = filteredEntities.filter(entity => 
+      filteredEntities = filteredEntities.filter(entity =>
         selectedTypes.value.includes(entity.entity_type)
       )
     }
@@ -317,10 +317,10 @@ const loadItems = async () => {
     if (sortBy.value.length > 0) {
       const sortKey = sortBy.value[0].key
       const sortOrder = sortBy.value[0].order
-      
+
       filteredEntities.sort((a, b) => {
         let aVal, bVal
-        
+
         if (sortKey === 'entity_type') {
           aVal = a.entity_type
           bVal = b.entity_type
@@ -334,7 +334,7 @@ const loadItems = async () => {
           aVal = getEntityName(a)
           bVal = getEntityName(b)
         }
-        
+
         if (aVal < bVal) return sortOrder === 'asc' ? -1 : 1
         if (aVal > bVal) return sortOrder === 'asc' ? 1 : -1
         return 0
@@ -349,7 +349,7 @@ const loadItems = async () => {
     const startIndex = (page.value - 1) * itemsPerPage.value
     const endIndex = startIndex + itemsPerPage.value
     entities.value = filteredEntities.slice(startIndex, endIndex)
-    
+
   } catch (error) {
     console.error('Error loading entities:', error)
     entities.value = []
@@ -411,7 +411,7 @@ const getTypeColor = (type) => {
 
 const getSortableValue = (entity) => {
   const name = getEntityName(entity)
-  
+
   // For IP addresses, convert to a comparable numeric value for proper sorting
   if (entity.entity_type === 'ip_address') {
     const ipParts = name.split('.').map(part => parseInt(part, 10))
@@ -420,7 +420,7 @@ const getSortableValue = (entity) => {
       return (ipParts[0] << 24) + (ipParts[1] << 16) + (ipParts[2] << 8) + ipParts[3]
     }
   }
-  
+
   // For all other entity types, use lowercase string for alphabetical sorting
   return name.toLowerCase()
 }
@@ -453,12 +453,12 @@ const cancelDelete = () => {
 
 const performDelete = async () => {
   deleting.value = true
-  
+
   try {
     for (const item of itemsToDelete.value) {
       await props.entityService.deleteEntity(props.caseId, item.id)
     }
-    
+
     emit('deleted', itemsToDelete.value)
     deleteDialog.value = false
     itemsToDelete.value = []
@@ -474,7 +474,7 @@ const performDelete = async () => {
 const exportEntities = () => {
   try {
     const filteredEntities = entities.value || []
-    
+
     if (filteredEntities.length === 0) {
       return
     }

@@ -5,25 +5,40 @@ Case management API
 from typing import List, Optional
 
 from app import schemas
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, admin_only, no_analyst
+from app.core.exceptions import (
+    AuthorizationException,
+    BaseException,
+    DuplicateResourceException,
+    ResourceNotFoundException,
+    ValidationException,
+)
 from app.database import models
 from app.database.connection import get_db
 from app.services.case_service import CaseService
 from app.services.entity_service import EntityService
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 
 router = APIRouter()
 
 
 @router.post("/", response_model=schemas.Case, status_code=status.HTTP_201_CREATED)
+@admin_only()
 async def create_case(
     case: schemas.CaseCreate,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
     case_service = CaseService(db)
-    return await case_service.create_case(case=case, current_user=current_user)
+    try:
+        return await case_service.create_case(case=case, current_user=current_user)
+    except AuthorizationException:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    except ValidationException as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BaseException:
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("/", response_model=list[schemas.Case])
@@ -47,10 +62,16 @@ async def read_case(
     current_user: models.User = Depends(get_current_user),
 ):
     case_service = CaseService(db)
-    return await case_service.get_case(case_id=case_id, current_user=current_user)
+    try:
+        return await case_service.get_case(case_id=case_id, current_user=current_user)
+    except ResourceNotFoundException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except AuthorizationException as e:
+        raise HTTPException(status_code=403, detail=str(e))
 
 
 @router.put("/{case_id}", response_model=schemas.Case)
+@no_analyst()
 async def update_case(
     case_id: int,
     case: schemas.CaseUpdate,
@@ -58,12 +79,22 @@ async def update_case(
     current_user: models.User = Depends(get_current_user),
 ):
     case_service = CaseService(db)
-    return await case_service.update_case(
-        case_id=case_id, case_update=case, current_user=current_user
-    )
+    try:
+        return await case_service.update_case(
+            case_id=case_id, case_update=case, current_user=current_user
+        )
+    except AuthorizationException:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    except ResourceNotFoundException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValidationException as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BaseException:
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.post("/{case_id}/users/{user_id}", response_model=schemas.Case)
+@admin_only()
 async def add_user_to_case(
     case_id: int,
     user_id: int,
@@ -71,12 +102,22 @@ async def add_user_to_case(
     current_user: models.User = Depends(get_current_user),
 ):
     case_service = CaseService(db)
-    return await case_service.add_user_to_case(
-        case_id=case_id, user_id=user_id, current_user=current_user
-    )
+    try:
+        return await case_service.add_user_to_case(
+            case_id=case_id, user_id=user_id, current_user=current_user
+        )
+    except AuthorizationException:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    except ResourceNotFoundException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except DuplicateResourceException as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except BaseException:
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete("/{case_id}/users/{user_id}", response_model=schemas.Case)
+@admin_only()
 async def remove_user_from_case(
     case_id: int,
     user_id: int,
@@ -84,9 +125,16 @@ async def remove_user_from_case(
     current_user: models.User = Depends(get_current_user),
 ):
     case_service = CaseService(db)
-    return await case_service.remove_user_from_case(
-        case_id=case_id, user_id=user_id, current_user=current_user
-    )
+    try:
+        return await case_service.remove_user_from_case(
+            case_id=case_id, user_id=user_id, current_user=current_user
+        )
+    except AuthorizationException:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    except ResourceNotFoundException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except BaseException:
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # Entity endpoints
@@ -102,13 +150,18 @@ async def get_case_entities(
     current_user: models.User = Depends(get_current_user),
 ):
     entity_service = EntityService(db)
-    return await entity_service.get_case_entities(
-        case_id=case_id,
-        current_user=current_user,
-        entity_type=entity_type,
-        skip=skip,
-        limit=limit,
-    )
+    try:
+        return await entity_service.get_case_entities(
+            case_id=case_id,
+            current_user=current_user,
+            entity_type=entity_type,
+            skip=skip,
+            limit=limit,
+        )
+    except ResourceNotFoundException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except AuthorizationException as e:
+        raise HTTPException(status_code=403, detail=str(e))
 
 
 @router.post(
@@ -117,6 +170,7 @@ async def get_case_entities(
     tags=["entities"],
     status_code=status.HTTP_201_CREATED,
 )
+@no_analyst()
 async def create_entity(
     case_id: int,
     entity: schemas.EntityCreate,
@@ -124,9 +178,18 @@ async def create_entity(
     current_user: models.User = Depends(get_current_user),
 ):
     entity_service = EntityService(db)
-    return await entity_service.create_entity(
-        case_id=case_id, entity=entity, current_user=current_user
-    )
+    try:
+        return await entity_service.create_entity(
+            case_id=case_id, entity=entity, current_user=current_user
+        )
+    except ResourceNotFoundException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except AuthorizationException as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValidationException as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except BaseException:
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.put(
@@ -134,6 +197,7 @@ async def create_entity(
     response_model=schemas.Entity,
     tags=["entities"],
 )
+@no_analyst()
 async def update_entity(
     case_id: int,
     entity_id: int,
@@ -142,9 +206,18 @@ async def update_entity(
     current_user: models.User = Depends(get_current_user),
 ):
     entity_service = EntityService(db)
-    return await entity_service.update_entity(
-        entity_id=entity_id, entity_update=entity, current_user=current_user
-    )
+    try:
+        return await entity_service.update_entity(
+            entity_id=entity_id, entity_update=entity, current_user=current_user
+        )
+    except ResourceNotFoundException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except AuthorizationException as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValidationException as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except BaseException:
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.delete(
@@ -152,6 +225,7 @@ async def update_entity(
     tags=["entities"],
     status_code=status.HTTP_204_NO_CONTENT,
 )
+@no_analyst()
 async def delete_entity(
     case_id: int,
     entity_id: int,
@@ -159,5 +233,11 @@ async def delete_entity(
     current_user: models.User = Depends(get_current_user),
 ):
     entity_service = EntityService(db)
-    await entity_service.delete_entity(entity_id=entity_id, current_user=current_user)
-    return {"message": "Entity deleted successfully"}
+    try:
+        await entity_service.delete_entity(entity_id=entity_id, current_user=current_user)
+    except ResourceNotFoundException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except AuthorizationException as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except BaseException:
+        raise HTTPException(status_code=500, detail="Internal server error")

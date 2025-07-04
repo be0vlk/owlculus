@@ -154,7 +154,7 @@ class TestClientsAPI:
 
         try:
             response = client.post("/api/clients/", json=client_data)
-            assert response.status_code == status.HTTP_200_OK
+            assert response.status_code == status.HTTP_201_CREATED
             data = response.json()
             assert data["name"] == client_data["name"]
             assert data["email"] == client_data["email"]
@@ -172,7 +172,7 @@ class TestClientsAPI:
 
         try:
             response = client.post("/api/clients/", json=client_data)
-            assert response.status_code == status.HTTP_200_OK
+            assert response.status_code == status.HTTP_201_CREATED
             data = response.json()
             assert data["name"] == client_data["name"]
         finally:
@@ -265,7 +265,7 @@ class TestClientsAPI:
         try:
             response = client.get("/api/clients/999")
             assert response.status_code == status.HTTP_404_NOT_FOUND
-            assert "Client not found" in response.json()["detail"]
+            assert "not found" in response.json()["detail"]
         finally:
             app.dependency_overrides.clear()
 
@@ -355,9 +355,8 @@ class TestClientsAPI:
 
         try:
             response = client.delete(f"/api/clients/{new_client.id}")
-            assert response.status_code == status.HTTP_200_OK
-            data = response.json()
-            assert data["message"] == "Client deleted successfully"
+            assert response.status_code == status.HTTP_204_NO_CONTENT
+            # 204 No Content should not have a response body
         finally:
             app.dependency_overrides.clear()
 
@@ -403,14 +402,14 @@ class TestClientsAPI:
             long_name = "A" * 1000
             client_data = {"name": long_name}
             response = client.post("/api/clients/", json=client_data)
-            assert response.status_code == status.HTTP_200_OK
+            assert response.status_code == status.HTTP_201_CREATED
 
             # Test with Unicode characters - this might fail due to email validation
             unicode_data = {"name": "测试客户"}
             response = client.post("/api/clients/", json=unicode_data)
             # Accept either success or validation error
             assert response.status_code in [
-                status.HTTP_200_OK,
+                status.HTTP_201_CREATED,
                 status.HTTP_400_BAD_REQUEST,
             ]
 

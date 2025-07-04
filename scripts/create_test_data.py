@@ -30,7 +30,7 @@ async def create_test_data(
                 print(
                     f"ERROR: Login failed: {login_response.status_code} - {login_response.text}"
                 )
-                return
+                return False
 
             token_data = login_response.json()
             access_token = token_data["access_token"]
@@ -199,7 +199,7 @@ async def create_test_data(
                 print(
                     f"ERROR: Failed to get entities: {entities_response.status_code} - {entities_response.text}"
                 )
-                return
+                return False
 
             try:
                 entities = entities_response.json()
@@ -260,6 +260,8 @@ async def create_test_data(
             print("   - analyst / anapassword1 (Analyst role)")
             print("   - investigator / invpassword1 (Investigator role)")
 
+            return True
+
         except Exception as e:
             print(f"ERROR: Error creating test data: {e}")
             raise
@@ -281,7 +283,10 @@ def main():
 
     args = parser.parse_args()
 
-    asyncio.run(create_test_data(args.username, args.password, args.url))
+    import sys
+    result = asyncio.run(create_test_data(args.username, args.password, args.url))
+    if result is False:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

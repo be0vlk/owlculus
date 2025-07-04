@@ -109,7 +109,7 @@ class TestUsersAPI:
                 mock_create.return_value = mock_user
 
                 response = client.post("/api/users/", json=user_data)
-                assert response.status_code == status.HTTP_200_OK
+                assert response.status_code == status.HTTP_201_CREATED
                 data = response.json()
                 assert data["username"] == user_data["username"]
                 assert data["email"] == user_data["email"]
