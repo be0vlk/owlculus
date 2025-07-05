@@ -10,14 +10,14 @@
           </div>
         </div>
       </v-card-title>
-      
+
       <v-divider />
-      
+
       <v-card-text class="pa-6">
         <v-alert v-if="error" type="error" variant="tonal" class="mb-4">
           {{ error }}
         </v-alert>
-        
+
         <v-form ref="formRef" @submit.prevent="handlePasswordReset">
           <v-container fluid class="pa-0">
             <v-row>
@@ -37,7 +37,7 @@
                   persistent-hint
                 />
               </v-col>
-              
+
               <v-col cols="12">
                 <v-text-field
                   v-model="confirmPassword"
@@ -54,7 +54,7 @@
                   persistent-hint
                 />
               </v-col>
-              
+
               <!-- Password strength indicator -->
               <v-col cols="12" v-if="newPassword">
                 <v-card variant="outlined" class="pa-3">
@@ -93,7 +93,7 @@
       </v-card-text>
 
       <v-divider />
-      
+
       <modal-actions
         submit-text="Reset Password"
         submit-icon="mdi-key-variant"
@@ -116,13 +116,13 @@ import ModalActions from './ModalActions.vue'
 const props = defineProps({
   show: {
     type: Boolean,
-    required: true
+    required: true,
   },
   userId: {
     type: Number,
     required: false,
-    default: null
-  }
+    default: null,
+  },
 })
 
 const emit = defineEmits(['close', 'saved'])
@@ -133,7 +133,7 @@ const dialogVisible = computed({
     if (!value) {
       emit('close')
     }
-  }
+  },
 })
 
 const newPassword = ref('')
@@ -146,70 +146,72 @@ const formRef = ref(null)
 
 // Validation rules
 const passwordRules = [
-  v => !!v || 'Password is required',
-  v => v.length >= 8 || 'Password must be at least 8 characters',
-  v => /[A-Za-z]/.test(v) || 'Password must contain at least one letter',
-  v => /\d/.test(v) || 'Password must contain at least one number'
+  (v) => !!v || 'Password is required',
+  (v) => v.length >= 8 || 'Password must be at least 8 characters',
+  (v) => /[A-Za-z]/.test(v) || 'Password must contain at least one letter',
+  (v) => /\d/.test(v) || 'Password must contain at least one number',
 ]
 
 const confirmPasswordRules = [
-  v => !!v || 'Please confirm your password',
-  v => v === newPassword.value || 'Passwords do not match'
+  (v) => !!v || 'Please confirm your password',
+  (v) => v === newPassword.value || 'Passwords do not match',
 ]
 
 // Password requirements tracking
 const passwordRequirements = computed(() => [
   {
     text: '8+ characters',
-    met: newPassword.value.length >= 8
+    met: newPassword.value.length >= 8,
   },
   {
     text: 'Contains letter',
-    met: /[A-Za-z]/.test(newPassword.value)
+    met: /[A-Za-z]/.test(newPassword.value),
   },
   {
     text: 'Contains number',
-    met: /\d/.test(newPassword.value)
+    met: /\d/.test(newPassword.value),
   },
   {
     text: 'Passwords match',
-    met: newPassword.value && confirmPassword.value && newPassword.value === confirmPassword.value
-  }
+    met: newPassword.value && confirmPassword.value && newPassword.value === confirmPassword.value,
+  },
 ])
 
 // Password strength calculation
 const passwordStrength = computed(() => {
   const password = newPassword.value
   if (!password) return { score: 0, label: 'Enter a password', color: 'grey' }
-  
+
   let score = 0
   const checks = [
     password.length >= 8,
     /[A-Za-z]/.test(password),
     /\d/.test(password),
-    /[!@#$%^&*(),.?":{}|<>]/.test(password)
+    /[!@#$%^&*(),.?":{}|<>]/.test(password),
   ]
-  
+
   score = checks.filter(Boolean).length
-  
+
   const strengthMap = {
     0: { label: 'Very Weak', color: 'error' },
     1: { label: 'Weak', color: 'error' },
     2: { label: 'Fair', color: 'warning' },
     3: { label: 'Good', color: 'success' },
-    4: { label: 'Strong', color: 'success' }
+    4: { label: 'Strong', color: 'success' },
   }
-  
+
   return { score, ...strengthMap[score] }
 })
 
 const isPasswordValid = computed(() => {
-  return newPassword.value && 
-         confirmPassword.value && 
-         newPassword.value === confirmPassword.value &&
-         newPassword.value.length >= 8 &&
-         /[A-Za-z]/.test(newPassword.value) &&
-         /\d/.test(newPassword.value)
+  return (
+    newPassword.value &&
+    confirmPassword.value &&
+    newPassword.value === confirmPassword.value &&
+    newPassword.value.length >= 8 &&
+    /[A-Za-z]/.test(newPassword.value) &&
+    /\d/.test(newPassword.value)
+  )
 })
 
 const handlePasswordReset = async () => {

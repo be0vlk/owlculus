@@ -1,12 +1,7 @@
 <template>
   <div class="d-flex flex-column ga-4">
     <div v-if="loading" class="d-flex justify-center">
-      <v-progress-circular
-        indeterminate
-        :size="50"
-        :width="8"
-        color="primary"
-      />
+      <v-progress-circular :size="50" :width="8" color="primary" indeterminate />
     </div>
     <v-alert v-else-if="error" type="error">
       {{ error }}
@@ -15,7 +10,10 @@
       <v-card-title class="d-flex align-center justify-space-between flex-shrink-0">
         <span>Evidence</span>
         <div class="d-flex align-center ga-2">
-          <div v-if="treeItems.length > 0 && selectedItems.length > 0" class="d-flex align-center ga-2">
+          <div
+            v-if="treeItems.length > 0 && selectedItems.length > 0"
+            class="d-flex align-center ga-2"
+          >
             <span class="text-caption">{{ selectedItems.length }} selected</span>
             <v-btn
               v-if="userRole !== 'Analyst'"
@@ -40,7 +38,7 @@
           </v-btn>
         </div>
       </v-card-title>
-      
+
       <v-card-text class="pa-4 flex-grow-1 overflow-y-auto evidence-container">
         <template v-if="treeItems.length === 0">
           <div class="text-center py-8">
@@ -51,11 +49,7 @@
             </p>
             <div v-if="userRole !== 'Analyst'" class="d-flex flex-column align-center ga-3">
               <div class="d-flex ga-2">
-                <v-btn
-                  color="primary"
-                  @click="showCreateFolder = true"
-                  :disabled="!caseId"
-                >
+                <v-btn :disabled="!caseId" color="primary" @click="showCreateFolder = true">
                   <v-icon start>mdi-folder-plus</v-icon>
                   Create Folder
                 </v-btn>
@@ -75,7 +69,7 @@
             </div>
           </div>
         </template>
-        
+
         <template v-else>
           <v-treeview
             :key="`treeview-${treeItems.length}`"
@@ -95,13 +89,13 @@
                   density="compact"
                   hide-details
                 />
-                <v-icon 
+                <v-icon
                   v-if="item.is_folder"
                   :icon="getFolderIcon(open)"
                   :color="getFolderColor()"
                   @contextmenu.prevent="showContextMenu($event, item)"
                 />
-                <v-icon 
+                <v-icon
                   v-else
                   :icon="getFileIcon(item)"
                   color="grey-darken-1"
@@ -111,9 +105,9 @@
                 />
               </div>
             </template>
-            
+
             <template v-slot:title="{ item }">
-              <div 
+              <div
                 class="tree-item-title-wrapper"
                 :class="getDragClasses(item)"
                 :draggable="!item.is_folder && userRole !== 'Analyst'"
@@ -124,11 +118,11 @@
                 @dragleave="onDragLeave($event, item)"
                 @drop="onDrop($event, item)"
               >
-                <span 
+                <span
                   class="tree-item-title"
-                  :class="{ 
+                  :class="{
                     'text-file-title': isTextFile(item),
-                    'image-file-title': isImageFile(item)
+                    'image-file-title': isImageFile(item),
                   }"
                   @contextmenu.prevent="showContextMenu($event, item)"
                   @dblclick="handleFileDoubleClick(item)"
@@ -137,18 +131,18 @@
                 </span>
               </div>
             </template>
-            
+
             <template v-slot:append="{ item }">
               <div class="d-flex align-center ga-1">
-                <v-chip 
+                <v-chip
                   v-if="item.is_folder && item.childCount > 0"
-                  size="x-small" 
+                  size="x-small"
                   variant="tonal"
                   color="grey"
                 >
                   {{ item.childCount }}
                 </v-chip>
-                
+
                 <v-btn
                   v-if="!item.is_folder && item.evidence_type === 'file'"
                   size="x-small"
@@ -156,7 +150,7 @@
                   icon="mdi-download"
                   @click.stop="$emit('download', item)"
                 />
-                
+
                 <v-btn
                   v-if="userRole !== 'Analyst'"
                   size="x-small"
@@ -171,7 +165,7 @@
         </template>
       </v-card-text>
     </v-card>
-    
+
     <!-- Context Menu -->
     <FolderContextMenu
       v-model="contextMenu.show"
@@ -184,7 +178,7 @@
       @delete="deleteItem"
       @extract-metadata="extractMetadata"
     />
-    
+
     <!-- Create Folder Dialog -->
     <CreateFolderDialog
       v-model="showCreateFolder"
@@ -192,14 +186,10 @@
       :parent-folder-id="newFolderParent"
       @folder-created="handleFolderCreated"
     />
-    
+
     <!-- Rename Dialog -->
-    <RenameDialog
-      v-model="showRename"
-      :item="renameTargetItem"
-      @renamed="handleItemRenamed"
-    />
-    
+    <RenameDialog v-model="showRename" :item="renameTargetItem" @renamed="handleItemRenamed" />
+
     <!-- Delete Confirmation -->
     <v-dialog v-model="showDeleteConfirm" max-width="500px">
       <v-card>
@@ -207,36 +197,29 @@
           <v-icon icon="mdi-delete" color="error" class="mr-2"></v-icon>
           Confirm Delete
         </v-card-title>
-        
+
         <v-card-text>
           <p>
-            Are you sure you want to delete 
-            <strong>{{ deleteTargetItem?.title }}</strong>?
+            Are you sure you want to delete
+            <strong>{{ deleteTargetItem?.title }}</strong
+            >?
           </p>
           <p v-if="deleteTargetItem?.is_folder" class="text-warning mt-2">
             <v-icon icon="mdi-alert" class="mr-1"></v-icon>
             This will also delete all contents within this folder.
           </p>
         </v-card-text>
-        
+
         <v-card-actions>
           <v-spacer></v-spacer>
-          <v-btn color="grey" variant="text" @click="showDeleteConfirm = false">
-            Cancel
-          </v-btn>
-          <v-btn 
-            color="error" 
-            variant="flat" 
-            @click="confirmDelete"
-            :loading="deleteLoading"
-          >
+          <v-btn color="grey" variant="text" @click="showDeleteConfirm = false"> Cancel </v-btn>
+          <v-btn :loading="deleteLoading" color="error" variant="flat" @click="confirmDelete">
             Delete
           </v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
-    
-    
+
     <!-- Mass Delete Confirmation -->
     <v-dialog v-model="showMassDeleteConfirm" max-width="500px">
       <v-card>
@@ -244,25 +227,24 @@
           <v-icon icon="mdi-delete-multiple" color="error" class="mr-2"></v-icon>
           Confirm Mass Delete
         </v-card-title>
-        
+
         <v-card-text>
           <p>
-            Are you sure you want to delete <strong>{{ selectedItems.length }}</strong> selected items?
+            Are you sure you want to delete <strong>{{ selectedItems.length }}</strong> selected
+            items?
           </p>
           <p class="text-warning mt-2">
             <v-icon icon="mdi-alert" class="mr-1"></v-icon>
             This action cannot be undone. Folders will be deleted along with all their contents.
           </p>
         </v-card-text>
-        
+
         <v-card-actions>
           <v-spacer></v-spacer>
-          <v-btn color="grey" variant="text" @click="showMassDeleteConfirm = false">
-            Cancel
-          </v-btn>
-          <v-btn 
-            color="error" 
-            variant="flat" 
+          <v-btn color="grey" variant="text" @click="showMassDeleteConfirm = false"> Cancel </v-btn>
+          <v-btn
+            color="error"
+            variant="flat"
             @click="confirmMassDelete"
             :loading="massDeleteLoading"
           >
@@ -310,11 +292,20 @@ const props = defineProps({
   },
   userRole: {
     type: String,
-    default: 'Investigator'
-  }
+    default: 'Investigator',
+  },
 })
 
-const emit = defineEmits(['download', 'delete', 'refresh', 'upload-to-folder', 'extract-metadata', 'view-text-content', 'view-image-content', 'evidence-moved'])
+const emit = defineEmits([
+  'download',
+  'delete',
+  'refresh',
+  'upload-to-folder',
+  'extract-metadata',
+  'view-text-content',
+  'view-image-content',
+  'evidence-moved',
+])
 
 // Composables
 const { getFolderColor, getFolderIcon } = useFolderIcons()
@@ -325,7 +316,7 @@ const {
   handleDragLeave,
   handleDrop,
   handleDragEnd,
-  getDragClasses
+  getDragClasses,
 } = useDragAndDrop()
 
 // Reactive data
@@ -357,18 +348,17 @@ const selectedItems = ref([])
 const contextMenu = ref({
   show: false,
   activator: null,
-  item: null
+  item: null,
 })
 
 // Computed
 
-
 const treeItems = computed(() => {
   const items = []
   const itemMap = new Map()
-  
+
   // First pass: create all items
-  props.evidenceList.forEach(evidence => {
+  props.evidenceList.forEach((evidence) => {
     const item = {
       id: evidence.id,
       title: evidence.title,
@@ -379,13 +369,13 @@ const treeItems = computed(() => {
       parent_folder_id: evidence.parent_folder_id,
       folder_path: evidence.folder_path,
       children: evidence.is_folder ? [] : undefined, // Only folders have children
-      childCount: 0
+      childCount: 0,
     }
     itemMap.set(evidence.id, item)
   })
-  
+
   // Second pass: build hierarchy
-  itemMap.forEach(item => {
+  itemMap.forEach((item) => {
     if (item.parent_folder_id && itemMap.has(item.parent_folder_id)) {
       const parent = itemMap.get(item.parent_folder_id)
       parent.children.push(item)
@@ -394,29 +384,30 @@ const treeItems = computed(() => {
       items.push(item)
     }
   })
-  
-  
+
   // Sort items: folders first, then by title
   const sortItems = (items) => {
-    return items.sort((a, b) => {
-      if (a.is_folder && !b.is_folder) return -1
-      if (!a.is_folder && b.is_folder) return 1
-      return a.title.localeCompare(b.title)
-    }).map(item => ({
-      ...item,
-      children: item.children ? sortItems(item.children) : item.children
-    }))
+    return items
+      .sort((a, b) => {
+        if (a.is_folder && !b.is_folder) return -1
+        if (!a.is_folder && b.is_folder) return 1
+        return a.title.localeCompare(b.title)
+      })
+      .map((item) => ({
+        ...item,
+        children: item.children ? sortItems(item.children) : item.children,
+      }))
   }
-  
+
   return sortItems(items)
 })
 
 // Methods
 const getFileIcon = (item) => {
   if (item.is_folder) return 'mdi-folder'
-  
+
   const fileExtension = item.title.split('.').pop()?.toLowerCase()
-  
+
   switch (fileExtension) {
     case 'pdf':
       return 'mdi-file-pdf-box'
@@ -444,19 +435,36 @@ const getFileIcon = (item) => {
 
 const isTextFile = (item) => {
   if (item.is_folder || item.evidence_type !== 'file') return false
-  
+
   const fileExtension = item.title.split('.').pop()?.toLowerCase()
-  const textExtensions = ['txt', 'log', 'csv', 'json', 'md', 'yaml', 'yml', 'xml', 'html', 'css', 'js', 'py', 'sql', 'conf', 'ini', 'cfg']
-  
+  const textExtensions = [
+    'txt',
+    'log',
+    'csv',
+    'json',
+    'md',
+    'yaml',
+    'yml',
+    'xml',
+    'html',
+    'css',
+    'js',
+    'py',
+    'sql',
+    'conf',
+    'ini',
+    'cfg',
+  ]
+
   return textExtensions.includes(fileExtension)
 }
 
 const isImageFile = (item) => {
   if (item.is_folder || item.evidence_type !== 'file') return false
-  
+
   const fileExtension = item.title.split('.').pop()?.toLowerCase()
   const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg']
-  
+
   return imageExtensions.includes(fileExtension)
 }
 
@@ -473,10 +481,9 @@ const showContextMenu = (event, item) => {
   contextMenu.value = {
     show: true,
     activator: event.target,
-    item
+    item,
   }
 }
-
 
 const createSubfolder = (parentItem) => {
   newFolderParent.value = parentItem?.id || null
@@ -497,7 +504,6 @@ const deleteItem = (item) => {
   showDeleteConfirm.value = true
 }
 
-
 const extractMetadata = (item) => {
   emit('extract-metadata', item)
 }
@@ -513,7 +519,6 @@ const toggleSelection = (itemId) => {
   }
 }
 
-
 const handleFolderCreated = () => {
   emit('refresh')
 }
@@ -524,16 +529,16 @@ const handleItemRenamed = () => {
 
 const confirmDelete = async () => {
   if (!deleteTargetItem.value) return
-  
+
   deleteLoading.value = true
-  
+
   try {
     if (deleteTargetItem.value.is_folder) {
       await evidenceService.deleteFolder(deleteTargetItem.value.id)
     } else {
       await evidenceService.deleteEvidence(deleteTargetItem.value.id)
     }
-    
+
     emit('refresh')
     showDeleteConfirm.value = false
   } catch (error) {
@@ -545,15 +550,13 @@ const confirmDelete = async () => {
 
 const confirmMassDelete = async () => {
   if (selectedItems.value.length === 0) return
-  
+
   massDeleteLoading.value = true
-  
+
   try {
     // Get the items to delete from the evidence list
-    const itemsToDelete = props.evidenceList.filter(item => 
-      selectedItems.value.includes(item.id)
-    )
-    
+    const itemsToDelete = props.evidenceList.filter((item) => selectedItems.value.includes(item.id))
+
     // Delete each item
     for (const item of itemsToDelete) {
       if (item.is_folder) {
@@ -562,7 +565,7 @@ const confirmMassDelete = async () => {
         await evidenceService.deleteEvidence(item.id)
       }
     }
-    
+
     // Clear selection and refresh
     selectedItems.value = []
     emit('refresh')
@@ -584,40 +587,44 @@ const handleMoveEvidence = async (draggedItem, targetFolder) => {
   // Store original evidence list and open state for potential rollback
   const originalEvidenceList = [...props.evidenceList]
   const savedOpenState = preserveOpenState()
-  
+
   try {
     // Optimistically update the evidence list
-    const updatedEvidenceList = moveItemOptimistically(draggedItem, targetFolder, props.evidenceList)
-    
+    const updatedEvidenceList = moveItemOptimistically(
+      draggedItem,
+      targetFolder,
+      props.evidenceList,
+    )
+
     emit('evidence-moved', updatedEvidenceList, savedOpenState)
     await evidenceService.moveEvidence(draggedItem.id, targetFolder.id)
-    
+
     return { success: true }
   } catch (error) {
     console.error('Failed to move evidence:', error)
-    
+
     // Revert the optimistic update on failure
     emit('evidence-moved', originalEvidenceList, savedOpenState)
-    
-    return { 
-      success: false, 
-      error: error.response?.data?.detail || error.message || 'Failed to move file'
+
+    return {
+      success: false,
+      error: error.response?.data?.detail || error.message || 'Failed to move file',
     }
   }
 }
 
 // Helper function to optimistically move an item in the evidence list
 const moveItemOptimistically = (draggedItem, targetFolder, evidenceList) => {
-  const updatedList = evidenceList.map(item => {
+  const updatedList = evidenceList.map((item) => {
     if (item.id === draggedItem.id) {
       return {
         ...item,
-        parent_folder_id: targetFolder.id
+        parent_folder_id: targetFolder.id,
       }
     }
     return item
   })
-  
+
   return updatedList
 }
 
@@ -646,7 +653,7 @@ const onDragLeave = (event, item) => {
 const onDrop = async (event, item) => {
   if (item.is_folder) {
     const result = await handleDrop(event, item, props.userRole, handleMoveEvidence)
-    
+
     if (!result.success && result.error) {
       console.error('Drop failed:', result.error)
     }
@@ -658,14 +665,18 @@ const onDragEnd = () => {
 }
 
 // Watch for evidence list changes to maintain open state
-watch(() => props.evidenceList, () => {
-  // Maintain open folders
-}, { deep: true })
+watch(
+  () => props.evidenceList,
+  () => {
+    // Maintain open folders
+  },
+  { deep: true },
+)
 
 // Expose methods to parent component
 defineExpose({
   restoreOpenState,
-  preserveOpenState
+  preserveOpenState,
 })
 </script>
 
@@ -785,7 +796,7 @@ defineExpose({
   border: 1px solid #ccc;
   border-radius: 4px;
   padding: 8px 12px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   font-size: 14px;
   color: #333;
   display: flex;
@@ -810,11 +821,11 @@ defineExpose({
   border-radius: 4px;
 }
 
-.tree-item-title-wrapper[draggable="true"] {
+.tree-item-title-wrapper[draggable='true'] {
   cursor: grab;
 }
 
-.tree-item-title-wrapper[draggable="true"]:active {
+.tree-item-title-wrapper[draggable='true']:active {
   cursor: grabbing;
 }
 </style>

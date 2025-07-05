@@ -1,12 +1,7 @@
 <template>
   <v-card-actions class="pa-4">
     <v-spacer />
-    <v-btn
-      variant="text"
-      prepend-icon="mdi-close"
-      @click="$emit('cancel')"
-      :disabled="loading"
-    >
+    <v-btn :disabled="loading" prepend-icon="mdi-close" variant="text" @click="$emit('cancel')">
       {{ cancelText }}
     </v-btn>
     <v-btn
@@ -27,36 +22,36 @@
 defineProps({
   cancelText: {
     type: String,
-    default: 'Cancel'
+    default: 'Cancel',
   },
   submitText: {
     type: String,
-    required: true
+    required: true,
   },
   submitIcon: {
     type: String,
-    required: true
+    required: true,
   },
   submitColor: {
     type: String,
-    default: 'primary'
+    default: 'primary',
   },
   submitDisabled: {
     type: Boolean,
-    default: false
+    default: false,
   },
   loading: {
     type: Boolean,
-    default: false
+    default: false,
   },
   showSubmit: {
     type: Boolean,
-    default: true
+    default: true,
   },
   loadingText: {
     type: String,
-    default: null
-  }
+    default: null,
+  },
 })
 
 defineEmits(['cancel', 'submit'])

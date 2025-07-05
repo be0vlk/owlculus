@@ -5,7 +5,7 @@
         <v-icon icon="mdi-folder-plus" class="mr-2"></v-icon>
         Create New Folder
       </v-card-title>
-      
+
       <v-card-text>
         <v-form ref="form" v-model="valid" lazy-validation @submit.prevent>
           <v-text-field
@@ -17,7 +17,7 @@
             density="comfortable"
             prepend-inner-icon="mdi-folder"
           ></v-text-field>
-          
+
           <v-textarea
             v-model="description"
             label="Description (Optional)"
@@ -26,18 +26,13 @@
             rows="2"
             prepend-inner-icon="mdi-text"
           ></v-textarea>
-          
-          <v-alert
-            v-if="error"
-            type="error"
-            variant="tonal"
-            class="mb-0"
-          >
+
+          <v-alert v-if="error" class="mb-0" type="error" variant="tonal">
             {{ error }}
           </v-alert>
         </v-form>
       </v-card-text>
-      
+
       <modal-actions
         submit-text="Create Folder"
         submit-icon="mdi-folder-plus"
@@ -58,16 +53,16 @@ import ModalActions from './ModalActions.vue'
 const props = defineProps({
   modelValue: {
     type: Boolean,
-    default: false
+    default: false,
   },
   caseId: {
     type: Number,
-    required: true
+    required: true,
   },
   parentFolderId: {
     type: Number,
-    default: null
-  }
+    default: null,
+  },
 })
 
 const emit = defineEmits(['update:modelValue', 'folderCreated'])
@@ -83,15 +78,17 @@ const description = ref('')
 // Computed
 const dialog = computed({
   get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value)
+  set: (value) => emit('update:modelValue', value),
 })
 
 // Validation rules
 const folderNameRules = [
-  v => !!v || 'Folder name is required',
-  v => (v && v.length >= 1) || 'Folder name must be at least 1 character',
-  v => (v && v.length <= 255) || 'Folder name must be less than 255 characters',
-  v => /^[a-zA-Z0-9._\s-]+$/.test(v) || 'Folder name can only contain letters, numbers, spaces, dots, underscores, and hyphens'
+  (v) => !!v || 'Folder name is required',
+  (v) => (v && v.length >= 1) || 'Folder name must be at least 1 character',
+  (v) => (v && v.length <= 255) || 'Folder name must be less than 255 characters',
+  (v) =>
+    /^[a-zA-Z0-9._\s-]+$/.test(v) ||
+    'Folder name can only contain letters, numbers, spaces, dots, underscores, and hyphens',
 ]
 
 // Methods
@@ -115,7 +112,7 @@ const createFolder = async () => {
       caseId: props.caseId,
       title: folderName.value.trim(),
       description: description.value.trim() || null,
-      parentFolderId: props.parentFolderId || null
+      parentFolderId: props.parentFolderId || null,
     })
 
     emit('folderCreated', newFolder)

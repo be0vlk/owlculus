@@ -5,7 +5,7 @@ Task management API endpoints
 from typing import List
 
 from app import schemas
-from app.core.dependencies import admin_only, check_case_access, get_current_user
+from app.core.dependencies import admin_only, check_case_access, get_current_user, is_case_lead
 from app.core.exceptions import (
     AuthorizationException,
     BaseException,
@@ -93,14 +93,13 @@ async def create_task(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Create a new task for a case"""
-    # Check case access
-    try:
-        check_case_access(db, task.case_id, current_user)
-    except AuthorizationException:
-        raise HTTPException(status_code=http_status.HTTP_403_FORBIDDEN, detail="Not authorized to access this case")
-    except ResourceNotFoundException as e:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    """Create a new task for a case (Admin or Case Lead only)"""
+    # Check if user is admin or case lead (this also verifies case access)
+    if not is_case_lead(db, task.case_id, current_user):
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail="Only admins or case leads can create tasks"
+        )
     
     service = TaskService(db)
     try:
@@ -120,8 +119,11 @@ async def bulk_assign_tasks(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Bulk assign tasks to a user"""
+    """Bulk assign tasks to a user (Admin or Case Lead only)"""
     service = TaskService(db)
+
+    # For bulk operations, we'll check permissions in the service layer for each task
+    # This is because tasks might belong to different cases
     try:
         return await service.bulk_assign(data.task_ids, data.user_id, current_user=current_user)
     except BaseException as e:
@@ -223,13 +225,19 @@ async def assign_task(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Assign or unassign a task to/from a user"""
+    """Assign or unassign a task to/from a user (Admin or Case Lead only)"""
     service = TaskService(db)
-    
-    # First check if the task exists and user has access
+
+    # First check if the task exists
     try:
         task = await service.get_task(task_id, current_user=current_user)
-        check_case_access(db, task.case_id, current_user)
+
+        # Check if user is admin or case lead (this also verifies case access)
+        if not is_case_lead(db, task.case_id, current_user):
+            raise HTTPException(
+                status_code=http_status.HTTP_403_FORBIDDEN,
+                detail="Only admins or case leads can assign tasks"
+            )
         
         # If assigning to someone, verify they have access to the case
         if user_id:

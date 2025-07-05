@@ -1,15 +1,11 @@
 <template>
-  <v-dialog
-    v-model="dialogVisible"
-    max-width="500px"
-    persistent
-  >
+  <v-dialog v-model="dialogVisible" max-width="500px" persistent>
     <v-card>
       <v-card-title class="d-flex align-center">
         <v-icon start>mdi-folder-plus</v-icon>
         New Case
       </v-card-title>
-      
+
       <v-card-text>
         <v-form ref="form" v-model="isFormValid" @submit.prevent="handleSubmit">
           <v-text-field
@@ -17,7 +13,7 @@
             label="Title"
             variant="outlined"
             density="comfortable"
-            :rules="[v => !!v || 'Title is required']"
+            :rules="[(v) => !!v || 'Title is required']"
             required
             class="mb-4"
           />
@@ -30,7 +26,7 @@
             label="Client"
             variant="outlined"
             density="comfortable"
-            :rules="[v => !!v || 'Client is required']"
+            :rules="[(v) => !!v || 'Client is required']"
             required
           />
         </v-form>
@@ -59,8 +55,8 @@ import ModalActions from './ModalActions.vue'
 const props = defineProps({
   isOpen: {
     type: Boolean,
-    required: true
-  }
+    required: true,
+  },
 })
 
 const dialogVisible = computed({
@@ -69,7 +65,7 @@ const dialogVisible = computed({
     if (!value) {
       closeModal()
     }
-  }
+  },
 })
 
 const emit = defineEmits(['close', 'created'])
@@ -82,7 +78,7 @@ const form = ref(null)
 const formData = reactive({
   title: '',
   client_id: '',
-  status: 'Open'
+  status: 'Open',
 })
 
 const clientOptions = computed(() => clients.value)
@@ -90,9 +86,9 @@ const clientOptions = computed(() => clients.value)
 const loadClients = async () => {
   // Only load clients if user is admin
   if (!authStore.requiresAdmin()) {
-    return;
+    return
   }
-  
+
   try {
     clients.value = await clientService.getClients()
   } catch (error) {
@@ -136,11 +132,14 @@ const handleSubmit = async () => {
 }
 
 // Load clients when modal opens
-watch(() => props.isOpen, (newVal) => {
-  if (newVal) {
-    loadClients()
-  }
-})
+watch(
+  () => props.isOpen,
+  (newVal) => {
+    if (newVal) {
+      loadClients()
+    }
+  },
+)
 
 onMounted(loadClients)
 </script>

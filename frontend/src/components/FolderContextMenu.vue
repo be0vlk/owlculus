@@ -1,10 +1,5 @@
 <template>
-  <v-menu
-    v-model="menu"
-    :activator="activator"
-    location="bottom start"
-    offset="2"
-  >
+  <v-menu v-model="menu" :activator="activator" location="bottom start" offset="2">
     <v-list density="compact" min-width="180">
       <v-list-item
         v-if="canCreateSubfolder"
@@ -12,23 +7,18 @@
         title="Create Subfolder"
         @click="createSubfolder"
       />
-      
+
       <v-list-item
         v-if="canUpload"
         prepend-icon="mdi-upload"
         title="Upload Files"
         @click="uploadFiles"
       />
-      
+
       <v-divider v-if="canCreateSubfolder || canUpload" />
-      
-      <v-list-item
-        v-if="canRename"
-        prepend-icon="mdi-pencil"
-        title="Rename"
-        @click="rename"
-      />
-      
+
+      <v-list-item v-if="canRename" prepend-icon="mdi-pencil" title="Rename" @click="rename" />
+
       <v-list-item
         v-if="canDelete"
         prepend-icon="mdi-delete"
@@ -36,16 +26,16 @@
         @click="deleteItem"
         class="text-error"
       />
-      
+
       <v-divider v-if="(canRename || canDelete) && (canCopyHash || canExtractMetadata)" />
-      
+
       <v-list-item
         v-if="canExtractMetadata"
         prepend-icon="mdi-file-image"
         title="Extract Metadata"
         @click="extractMetadata"
       />
-      
+
       <v-list-item
         v-if="canCopyHash"
         prepend-icon="mdi-content-copy"
@@ -62,20 +52,20 @@ import { computed } from 'vue'
 const props = defineProps({
   modelValue: {
     type: Boolean,
-    default: false
+    default: false,
   },
   activator: {
     type: [String, Object],
-    default: null
+    default: null,
   },
   item: {
     type: Object,
-    default: null
+    default: null,
   },
   userRole: {
     type: String,
-    default: 'Investigator'
-  }
+    default: 'Investigator',
+  },
 })
 
 const emit = defineEmits([
@@ -84,13 +74,13 @@ const emit = defineEmits([
   'uploadFiles',
   'rename',
   'delete',
-  'extractMetadata'
+  'extractMetadata',
 ])
 
 // Reactive data
 const menu = computed({
   get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value)
+  set: (value) => emit('update:modelValue', value),
 })
 
 // Computed permissions
@@ -110,25 +100,51 @@ const canDelete = computed(() => {
   return props.userRole !== 'Analyst'
 })
 
-
 const canCopyHash = computed(() => {
   return props.item && !props.item.is_folder && props.item.file_hash
 })
 
 const canExtractMetadata = computed(() => {
   if (!props.item || props.item.is_folder) return false
-  
+
   const filename = props.item.title || ''
   const supportedExtensions = [
     // Images
-    'jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff', 'tif', 'webp', 'heic', 'heif', 
-    'raw', 'cr2', 'nef', 'arw', 'dng',
+    'jpg',
+    'jpeg',
+    'png',
+    'gif',
+    'bmp',
+    'tiff',
+    'tif',
+    'webp',
+    'heic',
+    'heif',
+    'raw',
+    'cr2',
+    'nef',
+    'arw',
+    'dng',
     // Videos
-    'mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv', 'm4v', '3gp',
+    'mp4',
+    'avi',
+    'mov',
+    'wmv',
+    'flv',
+    'webm',
+    'mkv',
+    'm4v',
+    '3gp',
     // Documents
-    'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'
+    'pdf',
+    'doc',
+    'docx',
+    'xls',
+    'xlsx',
+    'ppt',
+    'pptx',
   ]
-  
+
   const fileExtension = filename.split('.').pop()?.toLowerCase()
   return fileExtension && supportedExtensions.includes(fileExtension)
 })
@@ -177,5 +193,4 @@ const extractMetadata = () => {
   menu.value = false
   emit('extractMetadata', props.item)
 }
-
 </script>

@@ -178,3 +178,21 @@ def check_case_access(db: Session, case_id: int, current_user: User) -> Case:
         raise AuthorizationException("Not authorized to access this case")
 
     return case
+
+
+def is_case_lead(db: Session, case_id: int, current_user: User) -> bool:
+    """Check if user is a lead for a specific case."""
+    # Admins are always considered leads
+    if current_user.role == UserRole.ADMIN.value:
+        return True
+
+    # Check the CaseUserLink table for is_lead flag
+    from app.database.models import CaseUserLink
+    link = db.exec(
+        select(CaseUserLink).where(
+            CaseUserLink.case_id == case_id,
+            CaseUserLink.user_id == current_user.id
+        )
+    ).first()
+
+    return link and link.is_lead

@@ -6,19 +6,14 @@
         <v-card-title class="d-flex align-center">
           <v-icon icon="mdi-web" class="mr-2" />
           {{ item.data.domain || 'Whois Results' }}
-          
+
           <!-- Expiration warning badge -->
-          <v-chip
-            v-if="item.data.expiration_warning"
-            color="warning"
-            size="small"
-            class="ml-2"
-          >
+          <v-chip v-if="item.data.expiration_warning" class="ml-2" color="warning" size="small">
             <v-icon start icon="mdi-alert" />
             Expires Soon
           </v-chip>
         </v-card-title>
-        
+
         <v-card-text>
           <!-- Basic Registration Info -->
           <div class="mb-4">
@@ -33,7 +28,7 @@
                   </div>
                 </div>
               </v-col>
-              
+
               <v-col v-if="item.data.org" cols="12" md="6">
                 <div class="d-flex align-center">
                   <v-icon size="small" class="mr-2">mdi-office-building</v-icon>
@@ -43,7 +38,7 @@
                   </div>
                 </div>
               </v-col>
-              
+
               <v-col v-if="item.data.registrant_name" cols="12" md="6">
                 <div class="d-flex align-center">
                   <v-icon size="small" class="mr-2">mdi-account</v-icon>
@@ -53,7 +48,7 @@
                   </div>
                 </div>
               </v-col>
-              
+
               <v-col v-if="item.data.registrant_country" cols="12" md="6">
                 <div class="d-flex align-center">
                   <v-icon size="small" class="mr-2">mdi-flag</v-icon>
@@ -79,7 +74,7 @@
                   </div>
                 </div>
               </v-col>
-              
+
               <v-col v-if="item.data.updated_date" cols="12" md="4">
                 <div class="d-flex align-center">
                   <v-icon size="small" class="mr-2" color="blue">mdi-calendar-edit</v-icon>
@@ -89,12 +84,12 @@
                   </div>
                 </div>
               </v-col>
-              
+
               <v-col v-if="item.data.expiration_date" cols="12" md="4">
                 <div class="d-flex align-center">
-                  <v-icon 
-                    size="small" 
-                    class="mr-2" 
+                  <v-icon
+                    class="mr-2"
+                    size="small"
                     :color="item.data.days_until_expiration < 30 ? 'error' : 'orange'"
                   >
                     mdi-calendar-remove
@@ -105,7 +100,7 @@
                   </div>
                 </div>
               </v-col>
-              
+
               <v-col v-if="item.data.domain_age_years" cols="12" md="6">
                 <div class="d-flex align-center">
                   <v-icon size="small" class="mr-2">mdi-clock-outline</v-icon>
@@ -115,12 +110,12 @@
                   </div>
                 </div>
               </v-col>
-              
+
               <v-col v-if="item.data.days_until_expiration" cols="12" md="6">
                 <div class="d-flex align-center">
-                  <v-icon 
-                    size="small" 
-                    class="mr-2" 
+                  <v-icon
+                    class="mr-2"
+                    size="small"
                     :color="item.data.days_until_expiration < 30 ? 'error' : 'success'"
                   >
                     mdi-timer-outline
@@ -138,8 +133,8 @@
           <div v-if="item.data.name_servers && item.data.name_servers.length" class="mb-4">
             <h4 class="text-subtitle1 mb-2">Name Servers</h4>
             <v-chip-group>
-              <v-chip 
-                v-for="ns in item.data.name_servers" 
+              <v-chip
+                v-for="ns in item.data.name_servers"
                 :key="ns"
                 size="small"
                 variant="outlined"
@@ -155,8 +150,8 @@
           <div v-if="item.data.status && item.data.status.length" class="mb-4">
             <h4 class="text-subtitle1 mb-2">Status</h4>
             <v-chip-group>
-              <v-chip 
-                v-for="status in item.data.status" 
+              <v-chip
+                v-for="status in item.data.status"
                 :key="status"
                 size="small"
                 color="blue"
@@ -171,8 +166,8 @@
           <div v-if="item.data.emails && item.data.emails.length" class="mb-4">
             <h4 class="text-subtitle1 mb-2">Contact Emails</h4>
             <v-chip-group>
-              <v-chip 
-                v-for="email in item.data.emails" 
+              <v-chip
+                v-for="email in item.data.emails"
                 :key="email"
                 size="small"
                 variant="outlined"
@@ -198,21 +193,21 @@
                       <div class="text-body-2">{{ item.data.whois_server }}</div>
                     </div>
                   </v-col>
-                  
+
                   <v-col v-if="item.data.dnssec" cols="12" md="6">
                     <div>
                       <span class="text-caption text-medium-emphasis">DNSSEC</span>
                       <div class="text-body-2">{{ item.data.dnssec }}</div>
                     </div>
                   </v-col>
-                  
+
                   <v-col v-if="item.data.admin_email" cols="12" md="6">
                     <div>
                       <span class="text-caption text-medium-emphasis">Admin Email</span>
                       <div class="text-body-2">{{ item.data.admin_email }}</div>
                     </div>
                   </v-col>
-                  
+
                   <v-col v-if="item.data.tech_email" cols="12" md="6">
                     <div>
                       <span class="text-caption text-medium-emphasis">Tech Email</span>
@@ -226,15 +221,11 @@
 
           <!-- Copy domain button -->
           <div class="d-flex align-center mt-4">
-            <v-btn
-              variant="outlined"
-              size="small"
-              @click="copyToClipboard(item.data.domain)"
-            >
+            <v-btn size="small" variant="outlined" @click="copyToClipboard(item.data.domain)">
               <v-icon start>mdi-content-copy</v-icon>
               Copy Domain
             </v-btn>
-            
+
             <v-btn
               v-if="item.data.emails && item.data.emails.length"
               variant="outlined"
@@ -250,11 +241,7 @@
       </v-card>
 
       <!-- Error Messages -->
-      <v-alert
-        v-else-if="item.type === 'error'"
-        type="error"
-        variant="outlined"
-      >
+      <v-alert v-else-if="item.type === 'error'" type="error" variant="outlined">
         {{ item.data.message }}
       </v-alert>
     </template>
@@ -263,9 +250,7 @@
     <v-card v-if="!parsedResults.length" elevation="2" rounded="lg">
       <v-card-text class="text-center pa-8">
         <v-icon icon="mdi-web" size="48" color="grey-darken-1" class="mb-3" />
-        <p class="text-body-2 text-medium-emphasis">
-          No whois results available.
-        </p>
+        <p class="text-body-2 text-medium-emphasis">No whois results available.</p>
       </v-card-text>
     </v-card>
   </div>
@@ -278,44 +263,44 @@ const props = defineProps({
   result: {
     type: [Object, Array],
     required: true,
-  }
+  },
 })
 
 // Parse streaming results
 const parsedResults = computed(() => {
   if (!props.result) return []
-  
+
   if (Array.isArray(props.result)) {
     return props.result
   }
-  
+
   if (props.result.type) {
     return [props.result]
   }
-  
+
   return []
 })
 
 const formatDate = (dateString) => {
   if (!dateString) return 'Unknown'
-  
+
   try {
     // If it's already formatted, return as is
     if (dateString.includes('UTC')) {
       return dateString
     }
-    
+
     // Try to parse and format
     const date = new Date(dateString)
     if (isNaN(date.getTime())) {
       return dateString
     }
-    
+
     return date.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
-      timeZone: 'UTC'
+      timeZone: 'UTC',
     })
   } catch {
     return dateString

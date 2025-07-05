@@ -4,7 +4,7 @@
       <v-icon start>mdi-map-marker-outline</v-icon>
       Address
     </v-card-subtitle>
-    
+
     <v-row>
       <v-col cols="12">
         <v-text-field
@@ -14,7 +14,7 @@
           density="comfortable"
         />
       </v-col>
-      
+
       <v-col cols="12" sm="6">
         <v-text-field
           v-model="localAddress.city"
@@ -23,7 +23,7 @@
           density="comfortable"
         />
       </v-col>
-      
+
       <v-col cols="12" sm="6">
         <v-text-field
           v-model="localAddress.state"
@@ -32,7 +32,7 @@
           density="comfortable"
         />
       </v-col>
-      
+
       <v-col cols="12" sm="6">
         <v-text-field
           v-model="localAddress.country"
@@ -41,7 +41,7 @@
           density="comfortable"
         />
       </v-col>
-      
+
       <v-col cols="12" sm="6">
         <v-text-field
           v-model="localAddress.postal_code"
@@ -55,24 +55,32 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue';
+import { ref, watch } from 'vue'
 
 const props = defineProps({
   modelValue: {
     type: Object,
     default: () => ({}),
   },
-});
+})
 
-const emit = defineEmits(['update:modelValue']);
+const emit = defineEmits(['update:modelValue'])
 
-const localAddress = ref({ ...props.modelValue });
+const localAddress = ref({ ...props.modelValue })
 
-watch(localAddress, () => {
-  emit('update:modelValue', { ...localAddress.value });
-}, { deep: true });
+watch(
+  localAddress,
+  () => {
+    emit('update:modelValue', { ...localAddress.value })
+  },
+  { deep: true },
+)
 
-watch(() => props.modelValue, (newVal) => {
-  localAddress.value = { ...newVal };
-}, { deep: true });
+watch(
+  () => props.modelValue,
+  (newVal) => {
+    localAddress.value = { ...newVal }
+  },
+  { deep: true },
+)
 </script>

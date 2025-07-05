@@ -14,7 +14,6 @@
       :model-value="evidenceToggleParams"
       @update:model-value="updateEvidenceParams"
     />
-
   </div>
 </template>
 
@@ -28,38 +27,34 @@ import CaseSelector from './CaseSelector.vue'
 const props = defineProps({
   parameters: {
     type: Object,
-    required: true
+    required: true,
   },
   modelValue: {
     type: Object,
-    required: true
-  }
+    required: true,
+  },
 })
 
 const emit = defineEmits(['update:modelValue'])
 
 // Use advanced plugin params composable with case_id configuration
-const {
-  pluginDescription,
-  localParams,
-  updateParams
-} = usePluginParamsAdvanced(props, emit, {
+const { pluginDescription, localParams, updateParams } = usePluginParamsAdvanced(props, emit, {
   parameterDefaults: {
-    case_id: null
-  }
+    case_id: null,
+  },
 })
 
 // Evidence toggle parameters (separate from case to scan)
 const evidenceToggleParams = computed(() => ({
   save_to_case: props.modelValue.save_to_case || false,
-  case_id: props.modelValue.case_id || null
+  case_id: props.modelValue.case_id || null,
 }))
 
 const updateEvidenceParams = (evidenceParams) => {
   emit('update:modelValue', {
     ...props.modelValue,
     save_to_case: evidenceParams.save_to_case,
-    case_id: evidenceParams.case_id || localParams.case_id
+    case_id: evidenceParams.case_id || localParams.case_id,
   })
 }
 </script>

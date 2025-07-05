@@ -11,32 +11,17 @@
           <v-icon icon="mdi-file-image" />
           <span>File Metadata</span>
         </div>
-        <v-btn
-          icon="mdi-close"
-          variant="text"
-          size="small"
-          @click="show = false"
-        />
+        <v-btn icon="mdi-close" size="small" variant="text" @click="show = false" />
       </v-card-title>
 
       <v-card-text class="pa-0">
         <!-- Loading State -->
         <div v-if="loading" class="d-flex justify-center pa-8">
-          <v-progress-circular
-            indeterminate
-            :size="50"
-            :width="6"
-            color="primary"
-          />
+          <v-progress-circular :size="50" :width="6" color="primary" indeterminate />
         </div>
 
         <!-- Error State -->
-        <v-alert
-          v-else-if="error"
-          type="error"
-          variant="outlined"
-          class="ma-4"
-        >
+        <v-alert v-else-if="error" class="ma-4" type="error" variant="outlined">
           {{ error }}
         </v-alert>
 
@@ -52,23 +37,33 @@
               <v-row dense>
                 <v-col cols="12" sm="6">
                   <div class="text-caption text-medium-emphasis">Filename</div>
-                  <div class="text-body-2 font-weight-medium">{{ metadata.file_info.filename }}</div>
+                  <div class="text-body-2 font-weight-medium">
+                    {{ metadata.file_info.filename }}
+                  </div>
                 </v-col>
                 <v-col cols="12" sm="6">
                   <div class="text-caption text-medium-emphasis">File Type</div>
-                  <div class="text-body-2 font-weight-medium">{{ metadata.file_info.file_type }}</div>
+                  <div class="text-body-2 font-weight-medium">
+                    {{ metadata.file_info.file_type }}
+                  </div>
                 </v-col>
                 <v-col cols="12" sm="6">
                   <div class="text-caption text-medium-emphasis">MIME Type</div>
-                  <div class="text-body-2 font-weight-medium">{{ metadata.file_info.mime_type }}</div>
+                  <div class="text-body-2 font-weight-medium">
+                    {{ metadata.file_info.mime_type }}
+                  </div>
                 </v-col>
                 <v-col cols="12" sm="6">
                   <div class="text-caption text-medium-emphasis">File Size</div>
-                  <div class="text-body-2 font-weight-medium">{{ metadata.file_info.file_size }}</div>
+                  <div class="text-body-2 font-weight-medium">
+                    {{ metadata.file_info.file_size }}
+                  </div>
                 </v-col>
                 <v-col v-if="metadata.file_info.dimensions" cols="12" sm="6">
                   <div class="text-caption text-medium-emphasis">Dimensions</div>
-                  <div class="text-body-2 font-weight-medium">{{ metadata.file_info.dimensions }}</div>
+                  <div class="text-body-2 font-weight-medium">
+                    {{ metadata.file_info.dimensions }}
+                  </div>
                 </v-col>
               </v-row>
             </v-card-text>
@@ -90,7 +85,9 @@
                 <v-col v-if="metadata.gps_info.coordinates" cols="12">
                   <div class="text-caption text-medium-emphasis">Coordinates</div>
                   <div class="d-flex align-center ga-2">
-                    <div class="text-body-2 font-weight-medium">{{ metadata.gps_info.coordinates }}</div>
+                    <div class="text-body-2 font-weight-medium">
+                      {{ metadata.gps_info.coordinates }}
+                    </div>
                     <v-btn
                       icon="mdi-content-copy"
                       size="x-small"
@@ -115,7 +112,9 @@
                 </v-col>
                 <v-col v-if="metadata.gps_info.timestamp" cols="12" sm="6">
                   <div class="text-caption text-medium-emphasis">GPS Timestamp</div>
-                  <div class="text-body-2 font-weight-medium">{{ metadata.gps_info.timestamp }}</div>
+                  <div class="text-body-2 font-weight-medium">
+                    {{ metadata.gps_info.timestamp }}
+                  </div>
                 </v-col>
               </v-row>
             </v-card-text>
@@ -151,7 +150,12 @@
               <div v-if="metadata.camera_info.settings" class="mt-3">
                 <div class="text-caption text-medium-emphasis mb-2">Camera Settings</div>
                 <v-row dense>
-                  <v-col v-for="(value, key) in metadata.camera_info.settings" :key="key" cols="6" sm="3">
+                  <v-col
+                    v-for="(value, key) in metadata.camera_info.settings"
+                    :key="key"
+                    cols="6"
+                    sm="3"
+                  >
                     <v-chip size="small" variant="outlined">
                       {{ formatSettingName(key) }}: {{ value }}
                     </v-chip>
@@ -174,7 +178,9 @@
             <v-card-text>
               <v-row dense>
                 <v-col v-for="(value, key) in metadata.timestamp_info" :key="key" cols="12" sm="6">
-                  <div class="text-caption text-medium-emphasis">{{ formatTimestampName(key) }}</div>
+                  <div class="text-caption text-medium-emphasis">
+                    {{ formatTimestampName(key) }}
+                  </div>
                   <div class="text-body-2 font-weight-medium">{{ value }}</div>
                 </v-col>
               </v-row>
@@ -241,9 +247,7 @@
 
       <v-card-actions>
         <v-spacer />
-        <v-btn color="primary" variant="text" @click="show = false">
-          Close
-        </v-btn>
+        <v-btn color="primary" variant="text" @click="show = false"> Close </v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
@@ -255,31 +259,31 @@ import { computed } from 'vue'
 const props = defineProps({
   modelValue: {
     type: Boolean,
-    default: false
+    default: false,
   },
   evidenceItem: {
     type: Object,
-    default: null
+    default: null,
   },
   metadata: {
     type: Object,
-    default: null
+    default: null,
   },
   loading: {
     type: Boolean,
-    default: false
+    default: false,
   },
   error: {
     type: String,
-    default: ''
-  }
+    default: '',
+  },
 })
 
 const emit = defineEmits(['update:modelValue'])
 
 const show = computed({
   get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value)
+  set: (value) => emit('update:modelValue', value),
 })
 
 // Get category icon
@@ -289,7 +293,7 @@ const getCategoryIcon = (categoryName) => {
     gps: 'mdi-map-marker',
     timestamps: 'mdi-clock-outline',
     technical: 'mdi-cog',
-    other: 'mdi-information-outline'
+    other: 'mdi-information-outline',
   }
   return icons[categoryName] || 'mdi-information-outline'
 }
@@ -326,7 +330,7 @@ const formatFieldValue = (fieldName, value) => {
 
 // Format setting names
 const formatSettingName = (settingKey) => {
-  return settingKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+  return settingKey.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
 }
 
 // Format timestamp names
@@ -334,9 +338,11 @@ const formatTimestampName = (timestampKey) => {
   const names = {
     taken: 'Date Taken',
     created: 'Date Created',
-    modified: 'Date Modified'
+    modified: 'Date Modified',
   }
-  return names[timestampKey] || timestampKey.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+  return (
+    names[timestampKey] || timestampKey.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
+  )
 }
 
 // Copy to clipboard

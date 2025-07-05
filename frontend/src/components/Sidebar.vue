@@ -1,14 +1,9 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <template>
-  <v-navigation-drawer
-    v-model="drawer"
-    :width="256"
-    permanent
-    class="owlculus-sidebar border-e"
-  >
+  <v-navigation-drawer v-model="drawer" :width="256" class="owlculus-sidebar border-e" permanent>
     <!-- Logo Section -->
     <v-container class="pa-4">
-      <div class="d-flex justify-center align-center" style="height: 120px;">
+      <div class="d-flex justify-center align-center" style="height: 120px">
         <v-img
           :src="isDark ? '/owl_logo_white.png' : '/owl_logo.png'"
           alt="Owlculus Logo"
@@ -79,22 +74,19 @@ const { isDark, toggleDark } = useDarkMode()
 const navigationItems = computed(() => {
   // Don't show any items until auth is initialized
   if (!authStore.isInitialized) {
-    return [];
+    return []
   }
 
-  const items = [
-    { name: 'Cases', href: '/cases', icon: 'mdi-folder-outline' },
-  ]
+  const items = [{ name: 'Cases', href: '/cases', icon: 'mdi-folder-outline' }]
 
   // Add Clients for admin users
   if (authStore.requiresAdmin()) {
-    items.push(
-      { name: 'Clients', href: '/clients', icon: 'mdi-account-group-outline' }
-    )
+    items.push({ name: 'Clients', href: '/clients', icon: 'mdi-account-group-outline' })
   }
 
   items.push(
-    { name: 'Plugins', href: '/plugins', icon: 'mdi-wrench-outline' }
+    { name: 'Tasks', href: '/tasks', icon: 'mdi-checkbox-marked-circle-outline' },
+    { name: 'Plugins', href: '/plugins', icon: 'mdi-wrench-outline' },
   )
 
   // Add Hunts for non-analyst users
@@ -102,15 +94,11 @@ const navigationItems = computed(() => {
     items.push({ name: 'Hunts', href: '/hunts', icon: 'mdi-target' })
   }
 
-  items.push(
-    { name: 'Strixy (WIP)', href: '/strixy', icon: 'mdi-robot' },
-  )
+  items.push({ name: 'Strixy (WIP)', href: '/strixy', icon: 'mdi-robot' })
 
   // Add Admin settings for admin users
   if (authStore.requiresAdmin()) {
-    items.push(
-      { name: 'Admin', href: '/admin', icon: 'mdi-shield-account-outline' }
-    )
+    items.push({ name: 'Admin', href: '/admin', icon: 'mdi-shield-account-outline' })
   } else {
     // Add regular settings for non-admin users
     items.push({ name: 'Settings', href: '/settings', icon: 'mdi-cog-outline' })

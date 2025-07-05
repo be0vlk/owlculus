@@ -3,7 +3,11 @@
     <v-card variant="outlined" class="pa-3">
       <v-card-subtitle class="pa-0 pb-2">
         <v-icon
-          :icon="section.parentField === 'social_media' ? getSocialMediaIcon(field.id) : getFieldIcon(field.type)"
+          :icon="
+            section.parentField === 'social_media'
+              ? getSocialMediaIcon(field.id)
+              : getFieldIcon(field.type)
+          "
           size="small"
           class="me-2"
         />
@@ -36,23 +40,20 @@
           variant="outlined"
           color="primary"
           size="small"
-          :prepend-icon="section.parentField === 'social_media' ? getSocialMediaIcon(field.id) : 'mdi-open-in-new'"
+          :prepend-icon="
+            section.parentField === 'social_media'
+              ? getSocialMediaIcon(field.id)
+              : 'mdi-open-in-new'
+          "
           class="ma-0"
         >
           {{ getFieldValue(entity.data, section.parentField, field.id) }}
         </v-btn>
-        <v-chip v-else variant="text" color="grey" size="small">
-          Not provided
-        </v-chip>
+        <v-chip v-else color="grey" size="small" variant="text"> Not provided </v-chip>
 
         <!-- Source for URL fields -->
         <div v-if="field.hasSource && sourceValue" class="mt-2">
-          <v-chip
-            color="blue-grey"
-            variant="tonal"
-            size="small"
-            prepend-icon="mdi-source-branch"
-          >
+          <v-chip color="blue-grey" prepend-icon="mdi-source-branch" size="small" variant="tonal">
             Source: {{ sourceValue }}
           </v-chip>
         </div>
@@ -120,9 +121,7 @@
             </template>
           </v-data-table>
         </div>
-        <v-chip v-else variant="text" color="grey" size="small">
-          No subdomains discovered
-        </v-chip>
+        <v-chip v-else color="grey" size="small" variant="text"> No subdomains discovered </v-chip>
       </div>
 
       <!-- Regular Fields -->
@@ -130,18 +129,11 @@
         <span v-if="regularValue">
           {{ regularValue }}
         </span>
-        <v-chip v-else variant="text" color="grey" size="small">
-          Not provided
-        </v-chip>
+        <v-chip v-else color="grey" size="small" variant="text"> Not provided </v-chip>
 
         <!-- Source for regular fields -->
         <div v-if="field.hasSource && sourceValue" class="mt-2">
-          <v-chip
-            color="blue-grey"
-            variant="tonal"
-            size="small"
-            prepend-icon="mdi-source-branch"
-          >
+          <v-chip color="blue-grey" prepend-icon="mdi-source-branch" size="small" variant="tonal">
             Source: {{ sourceValue }}
           </v-chip>
         </div>
@@ -163,7 +155,7 @@ const props = defineProps({
   entity: { type: Object, required: true },
   sourceValue: { type: String, default: '' },
   getAssociateEntities: { type: Function, required: true },
-  existingEntities: { type: Array, required: true }
+  existingEntities: { type: Array, required: true },
 })
 
 defineEmits(['viewEntity'])
@@ -171,30 +163,29 @@ defineEmits(['viewEntity'])
 const { getFieldIcon, getSocialMediaIcon } = useEntityIcons(props.entity)
 const { getEntityDisplayName, getFieldValue } = useEntityDisplay(props.entity)
 
-const regularValue = computed(() => 
-  getFieldValue(props.entity.data, props.section.parentField, props.field.id)
+const regularValue = computed(() =>
+  getFieldValue(props.entity.data, props.section.parentField, props.field.id),
 )
 
 const currentPage = ref(1)
 const itemsPerPage = ref(10)
 const loading = ref(false)
 
-const arrayValue = computed(() => 
-  getFieldValue(props.entity.data, props.section.parentField, props.field.id)
+const arrayValue = computed(() =>
+  getFieldValue(props.entity.data, props.section.parentField, props.field.id),
 )
-
 
 const subdomainHeaders = computed(() => [
   { title: 'Subdomain', value: 'subdomain', sortable: true },
   { title: 'IP Address', value: 'ip', sortable: true },
   { title: 'Resolved', value: 'resolved', sortable: true },
-  { title: 'Source', value: 'source', sortable: true }
+  { title: 'Source', value: 'source', sortable: true },
 ])
 
 const exportSubdomains = () => {
   try {
     const subdomains = arrayValue.value || []
-    
+
     if (subdomains.length === 0) {
       return
     }
@@ -202,19 +193,24 @@ const exportSubdomains = () => {
     const headers = ['Subdomain', 'IP Address', 'Resolved', 'Source']
     const csvData = [
       headers.join(','),
-      ...subdomains.map(item => [
-        `"${(item.subdomain || '').replace(/"/g, '""')}"`,
-        `"${(item.ip || '').replace(/"/g, '""')}"`,
-        item.resolved ? 'Yes' : 'No',
-        `"${(item.source || '').replace(/"/g, '""')}"`
-      ].join(','))
+      ...subdomains.map((item) =>
+        [
+          `"${(item.subdomain || '').replace(/"/g, '""')}"`,
+          `"${(item.ip || '').replace(/"/g, '""')}"`,
+          item.resolved ? 'Yes' : 'No',
+          `"${(item.source || '').replace(/"/g, '""')}"`,
+        ].join(','),
+      ),
     ].join('\n')
 
     const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' })
     const link = document.createElement('a')
     const url = URL.createObjectURL(blob)
     link.setAttribute('href', url)
-    link.setAttribute('download', `subdomains-${props.field.label.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.csv`)
+    link.setAttribute(
+      'download',
+      `subdomains-${props.field.label.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.csv`,
+    )
     link.style.visibility = 'hidden'
     document.body.appendChild(link)
     link.click()

@@ -23,8 +23,8 @@ const { getFolderColor, getFolderIcon } = useFolderIcons()
 defineProps({
   folders: {
     type: Array,
-    default: () => []
-  }
+    default: () => [],
+  },
 })
 </script>
 

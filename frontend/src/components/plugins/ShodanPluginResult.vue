@@ -11,8 +11,8 @@
     <!-- Shodan Results Grid -->
     <div v-if="shodanResults.length" class="shodan-results-grid">
       <v-row>
-        <v-col 
-          v-for="(result, index) in shodanResults" 
+        <v-col
+          v-for="(result, index) in shodanResults"
           :key="`shodan-${index}`"
           cols="12"
           lg="6"
@@ -118,12 +118,7 @@
                     <v-icon icon="mdi-ethernet" size="small" class="mr-2" />
                     <span class="text-subtitle2">Service</span>
                   </div>
-                  <v-chip
-                    size="small"
-                    variant="outlined"
-                    color="success"
-                    class="mr-2"
-                  >
+                  <v-chip class="mr-2" color="success" size="small" variant="outlined">
                     {{ result.port }}/{{ result.transport || 'tcp' }}
                   </v-chip>
                   <span class="text-body-2">{{ result.service || 'Unknown' }}</span>
@@ -148,12 +143,7 @@
                     >
                       {{ vuln }}
                     </v-chip>
-                    <v-chip
-                      v-if="result.vulns.length > 3"
-                      size="small"
-                      variant="text"
-                      color="grey"
-                    >
+                    <v-chip v-if="result.vulns.length > 3" color="grey" size="small" variant="text">
                       +{{ result.vulns.length - 3 }} more
                     </v-chip>
                   </div>
@@ -165,7 +155,7 @@
                     <v-icon icon="mdi-application-cog" size="small" class="mr-2" />
                     <span class="text-subtitle2">Services ({{ result.services.length }})</span>
                   </div>
-                  
+
                   <v-expansion-panels variant="accordion" multiple>
                     <v-expansion-panel
                       v-for="(service, sIndex) in result.services.slice(0, 5)"
@@ -178,7 +168,10 @@
                             {{ service.port }}/{{ service.transport }}
                           </v-chip>
                           <span class="text-body-2">{{ service.service }}</span>
-                          <span v-if="service.version" class="text-caption text-medium-emphasis ml-2">
+                          <span
+                            v-if="service.version"
+                            class="text-caption text-medium-emphasis ml-2"
+                          >
                             v{{ service.version }}
                           </span>
                         </div>
@@ -191,8 +184,11 @@
                       </v-expansion-panel-text>
                     </v-expansion-panel>
                   </v-expansion-panels>
-                  
-                  <div v-if="result.services.length > 5" class="text-caption text-center mt-2 text-medium-emphasis">
+
+                  <div
+                    v-if="result.services.length > 5"
+                    class="text-caption text-center mt-2 text-medium-emphasis"
+                  >
                     Showing 5 of {{ result.services.length }} services
                   </div>
                 </div>
@@ -206,7 +202,9 @@
                   <v-card elevation="1" rounded="lg" color="grey-lighten-5">
                     <v-card-text class="pa-3">
                       <div class="d-flex justify-space-between align-start">
-                        <pre class="text-body-2 font-mono flex-grow-1 service-banner">{{ result.banner }}</pre>
+                        <pre class="text-body-2 font-mono flex-grow-1 service-banner">{{
+                          result.banner
+                        }}</pre>
                         <v-btn
                           icon="mdi-content-copy"
                           size="small"
@@ -257,27 +255,25 @@ const props = defineProps({
   result: {
     type: [Object, Array],
     required: true,
-  }
+  },
 })
 
 const { parsedResults, statusMessages, errorMessages } = usePluginResults(toRef(props, 'result'))
 
 // Extract Shodan data results
 const shodanResults = computed(() => {
-  return parsedResults.value
-    .filter(item => item.type === 'data')
-    .map(item => item.data)
+  return parsedResults.value.filter((item) => item.type === 'data').map((item) => item.data)
 })
 
 const formatDate = (dateString) => {
   if (!dateString || dateString === 'Unknown') return 'Unknown'
-  
+
   try {
     // Handle timestamp format
     if (typeof dateString === 'string' && dateString.includes('T')) {
       return new Date(dateString).toLocaleDateString()
     }
-    
+
     // Handle other formats
     return new Date(dateString).toLocaleDateString()
   } catch {
@@ -296,7 +292,9 @@ const copyToClipboard = async (text) => {
 
 <style scoped>
 .host-card {
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .host-card:hover {
@@ -320,7 +318,11 @@ const copyToClipboard = async (text) => {
 }
 
 .bg-primary-lighten-5 {
-  background: linear-gradient(45deg, rgb(var(--v-theme-primary), 0.08), rgb(var(--v-theme-primary), 0.03));
+  background: linear-gradient(
+    45deg,
+    rgb(var(--v-theme-primary), 0.08),
+    rgb(var(--v-theme-primary), 0.03)
+  );
 }
 
 .cursor-pointer {
@@ -328,17 +330,17 @@ const copyToClipboard = async (text) => {
 }
 
 /* Enhanced chip styles */
-.v-chip[color="success"] {
+.v-chip[color='success'] {
   background: rgb(var(--v-theme-success), 0.12);
   border: 1px solid rgb(var(--v-theme-success), 0.3);
 }
 
-.v-chip[color="error"] {
+.v-chip[color='error'] {
   background: rgb(var(--v-theme-error), 0.12);
   border: 1px solid rgb(var(--v-theme-error), 0.3);
 }
 
-.v-chip[color="info"] {
+.v-chip[color='info'] {
   background: rgb(var(--v-theme-info), 0.12);
   border: 1px solid rgb(var(--v-theme-info), 0.3);
 }

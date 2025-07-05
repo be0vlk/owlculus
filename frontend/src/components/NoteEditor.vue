@@ -1,8 +1,9 @@
 <template>
   <div>
     <!-- Normal View -->
-    <component :is="variant === 'card' ? 'v-card' : 'div'" 
-      v-if="!expanded" 
+    <component
+      :is="variant === 'card' ? 'v-card' : 'div'"
+      v-if="!expanded"
       :variant="variant === 'card' ? 'outlined' : undefined"
       :class="variant === 'card' ? 'note-editor' : 'note-editor-container'"
     >
@@ -15,23 +16,19 @@
         @toggle-expand="expanded = !expanded"
       />
 
-      <component :is="variant === 'card' ? 'v-card-text' : 'div'" 
-        class="pa-4" 
+      <component
+        :is="variant === 'card' ? 'v-card-text' : 'div'"
+        class="pa-4"
         :class="{ 'read-only-notes': isEditing === false }"
-        style="min-height: 200px;"
+        style="min-height: 200px"
       >
         <editor-content :editor="editor" class="tiptap-content" />
       </component>
     </component>
 
     <!-- Full Screen Dialog View -->
-    <v-dialog
-      v-model="expanded"
-      fullscreen
-      transition="dialog-bottom-transition"
-      :scrim="true"
-    >
-      <v-card class="d-flex flex-column" style="height: 100vh;">
+    <v-dialog v-model="expanded" :scrim="true" fullscreen transition="dialog-bottom-transition">
+      <v-card class="d-flex flex-column" style="height: 100vh">
         <v-toolbar color="primary" dark>
           <v-toolbar-title>
             <v-icon start>mdi-note-text</v-icon>
@@ -47,10 +44,7 @@
           >
             {{ isEditing ? 'Editing' : 'View Mode' }}
           </v-chip>
-          <v-btn
-            icon="mdi-close"
-            @click="expanded = false"
-          />
+          <v-btn icon="mdi-close" @click="expanded = false" />
         </v-toolbar>
 
         <div class="flex-grow-1 d-flex flex-column overflow-hidden">
@@ -113,15 +107,13 @@ const emit = defineEmits(['update:modelValue'])
 
 const expanded = ref(false)
 
-const {
-  editor,
-  editorActions,
-  saving,
-  lastSavedTime,
-  formatLastSaved,
-} = useCaseNoteSave(props, emit, {
-  saveMode: props.saveMode,
-})
+const { editor, editorActions, saving, lastSavedTime, formatLastSaved } = useCaseNoteSave(
+  props,
+  emit,
+  {
+    saveMode: props.saveMode,
+  },
+)
 </script>
 
 <style scoped>
@@ -153,11 +145,17 @@ const {
 }
 
 .note-editor .tiptap-content h1,
-.note-editor-container .tiptap-content h1 { font-size: 1.5rem; }
+.note-editor-container .tiptap-content h1 {
+  font-size: 1.5rem;
+}
 .note-editor .tiptap-content h2,
-.note-editor-container .tiptap-content h2 { font-size: 1.3rem; }
+.note-editor-container .tiptap-content h2 {
+  font-size: 1.3rem;
+}
 .note-editor .tiptap-content h3,
-.note-editor-container .tiptap-content h3 { font-size: 1.1rem; }
+.note-editor-container .tiptap-content h3 {
+  font-size: 1.1rem;
+}
 
 .note-editor .tiptap-content ul,
 .note-editor .tiptap-content ol,
@@ -222,13 +220,13 @@ const {
   flex: 1 1 auto;
 }
 
-.note-editor .tiptap-content .task-item input[type="checkbox"],
-.note-editor-container .tiptap-content .task-item input[type="checkbox"] {
+.note-editor .tiptap-content .task-item input[type='checkbox'],
+.note-editor-container .tiptap-content .task-item input[type='checkbox'] {
   margin: 0;
 }
 
-.note-editor .tiptap-content .task-item[data-checked="true"] > div,
-.note-editor-container .tiptap-content .task-item[data-checked="true"] > div {
+.note-editor .tiptap-content .task-item[data-checked='true'] > div,
+.note-editor-container .tiptap-content .task-item[data-checked='true'] > div {
   text-decoration: line-through;
   opacity: 0.6;
 }

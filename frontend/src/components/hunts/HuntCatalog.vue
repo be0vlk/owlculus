@@ -27,12 +27,7 @@
             />
           </v-col>
           <v-col cols="12" md="2">
-            <v-btn-toggle
-              v-model="viewMode"
-              mandatory
-              variant="outlined"
-              density="comfortable"
-            >
+            <v-btn-toggle v-model="viewMode" density="comfortable" mandatory variant="outlined">
               <v-btn value="grid" icon="mdi-view-grid" />
               <v-btn value="list" icon="mdi-view-list" />
             </v-btn-toggle>
@@ -51,9 +46,7 @@
     <v-alert v-else-if="error" type="error" class="mb-4">
       {{ error }}
       <template #append>
-        <v-btn @click="$emit('retry')" variant="text" size="small">
-          Retry
-        </v-btn>
+        <v-btn size="small" variant="text" @click="$emit('retry')"> Retry </v-btn>
       </template>
     </v-alert>
 
@@ -62,7 +55,11 @@
       <v-icon icon="mdi-folder-search" size="64" color="grey" class="mb-4" />
       <div class="text-h6 mb-2">No hunts found</div>
       <div class="text-body-2 text-medium-emphasis">
-        {{ searchQuery || selectedCategory ? 'Try adjusting your search or filter criteria' : 'No hunt templates are available' }}
+        {{
+          searchQuery || selectedCategory
+            ? 'Try adjusting your search or filter criteria'
+            : 'No hunt templates are available'
+        }}
       </div>
       <v-btn
         v-if="searchQuery || selectedCategory"
@@ -79,14 +76,7 @@
     <div v-else>
       <!-- Grid View -->
       <v-row v-if="viewMode === 'grid'">
-        <v-col
-          v-for="hunt in filteredHunts"
-          :key="hunt.id"
-          cols="12"
-          sm="6"
-          md="4"
-          lg="3"
-        >
+        <v-col v-for="hunt in filteredHunts" :key="hunt.id" cols="12" lg="3" md="4" sm="6">
           <HuntCard
             :hunt="hunt"
             @execute="$emit('execute', hunt)"
@@ -118,16 +108,16 @@ import HuntListItem from './HuntListItem.vue'
 const props = defineProps({
   hunts: {
     type: Array,
-    default: () => []
+    default: () => [],
   },
   loading: {
     type: Boolean,
-    default: false
+    default: false,
   },
   error: {
     type: String,
-    default: null
-  }
+    default: null,
+  },
 })
 
 defineEmits(['execute', 'view-details', 'retry'])
@@ -141,9 +131,9 @@ const viewMode = ref('grid')
 const categoryOptions = computed(() => {
   // Use the same categories as plugins for consistency
   const categories = ['Person', 'Network', 'Company', 'Other']
-  return categories.map(category => ({
+  return categories.map((category) => ({
     title: category,
-    value: category
+    value: category,
   }))
 })
 
@@ -153,10 +143,11 @@ const filteredHunts = computed(() => {
   // Filter by search query
   if (searchQuery.value) {
     const query = searchQuery.value.toLowerCase()
-    filtered = filtered.filter(hunt =>
-      hunt.display_name.toLowerCase().includes(query) ||
-      hunt.description.toLowerCase().includes(query) ||
-      hunt.category.toLowerCase().includes(query)
+    filtered = filtered.filter(
+      (hunt) =>
+        hunt.display_name.toLowerCase().includes(query) ||
+        hunt.description.toLowerCase().includes(query) ||
+        hunt.category.toLowerCase().includes(query),
     )
   }
 
@@ -164,14 +155,16 @@ const filteredHunts = computed(() => {
   if (selectedCategory.value) {
     // Map plugin categories to hunt categories
     const categoryMapping = {
-      'Person': ['person'],
-      'Network': ['domain', 'network'],
-      'Company': ['company'],
-      'Other': ['general', 'other']
+      Person: ['person'],
+      Network: ['domain', 'network'],
+      Company: ['company'],
+      Other: ['general', 'other'],
     }
-    
-    const huntCategories = categoryMapping[selectedCategory.value] || [selectedCategory.value.toLowerCase()]
-    filtered = filtered.filter(hunt => huntCategories.includes(hunt.category.toLowerCase()))
+
+    const huntCategories = categoryMapping[selectedCategory.value] || [
+      selectedCategory.value.toLowerCase(),
+    ]
+    filtered = filtered.filter((hunt) => huntCategories.includes(hunt.category.toLowerCase()))
   }
 
   // Sort by category, then by display name
@@ -190,12 +183,18 @@ const clearFilters = () => {
 }
 
 // Watch for prop changes to reset local state if needed
-watch(() => props.hunts, () => {
-  // If selected category no longer exists, clear it
-  if (selectedCategory.value && !categoryOptions.value.some(opt => opt.value === selectedCategory.value)) {
-    selectedCategory.value = null
-  }
-})
+watch(
+  () => props.hunts,
+  () => {
+    // If selected category no longer exists, clear it
+    if (
+      selectedCategory.value &&
+      !categoryOptions.value.some((opt) => opt.value === selectedCategory.value)
+    ) {
+      selectedCategory.value = null
+    }
+  },
+)
 </script>
 
 <style scoped>

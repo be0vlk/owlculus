@@ -78,11 +78,7 @@
 
       <v-card-actions>
         <v-spacer />
-        <v-btn
-          variant="text"
-          @click="$emit('close')"
-          :disabled="entityForm.state.loading"
-        >
+        <v-btn :disabled="entityForm.state.loading" variant="text" @click="$emit('close')">
           Cancel
         </v-btn>
         <v-btn
@@ -122,7 +118,7 @@ const entityTypes = [
   { value: 'company', title: 'Company', icon: 'mdi-domain' },
   { value: 'domain', title: 'Domain', icon: 'mdi-web' },
   { value: 'ip_address', title: 'IP Address', icon: 'mdi-ip' },
-  { value: 'vehicle', title: 'Vehicle', icon: 'mdi-car' }
+  { value: 'vehicle', title: 'Vehicle', icon: 'mdi-car' },
 ]
 
 // Reactive variables
@@ -140,13 +136,11 @@ const dialogVisible = computed({
     if (!value) {
       emit('close')
     }
-  }
+  },
 })
 
 // Computed validation
-const formValid = computed(() => 
-  isFormValid(entityForm.state.entityType, entityForm.state.data)
-)
+const formValid = computed(() => isFormValid(entityForm.state.entityType, entityForm.state.data))
 
 // Handle tab change
 function handleTabChange(newTab) {
@@ -172,15 +166,21 @@ watch(selectedTab, (newTab) => {
 })
 
 // Watch for entity type changes to sync with tabs
-watch(() => entityForm.state.entityType, (newType) => {
-  selectedTab.value = newType
-})
+watch(
+  () => entityForm.state.entityType,
+  (newType) => {
+    selectedTab.value = newType
+  },
+)
 
 // Initialize form when dialog opens
-watch(() => props.show, (show) => {
-  if (show) {
-    entityForm.reset()
-    selectedTab.value = 'person'
-  }
-})
+watch(
+  () => props.show,
+  (show) => {
+    if (show) {
+      entityForm.reset()
+      selectedTab.value = 'person'
+    }
+  },
+)
 </script>

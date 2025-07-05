@@ -7,7 +7,9 @@
             <v-icon icon="mdi-folder-multiple" color="primary" size="large" class="me-3" />
             <div class="flex-grow-1">
               <div class="text-h6 font-weight-bold">Evidence Folder Templates</div>
-              <div class="text-body-2 text-medium-emphasis">Configure folder structures for different types of investigations</div>
+              <div class="text-body-2 text-medium-emphasis">
+                Configure folder structures for different types of investigations
+              </div>
             </div>
             <v-btn
               v-if="expansionPanel === 0"
@@ -23,94 +25,96 @@
             </v-btn>
           </div>
         </v-expansion-panel-title>
-        
+
         <v-expansion-panel-text class="pa-0">
-      <!-- Loading state -->
-      <div v-if="loading" class="pa-6">
-        <v-skeleton-loader type="table-row@3" />
-      </div>
+          <!-- Loading state -->
+          <div v-if="loading" class="pa-6">
+            <v-skeleton-loader type="table-row@3" />
+          </div>
 
-      <!-- Error state -->
-      <v-alert
-        v-else-if="error"
-        type="error"
-        variant="tonal"
-        class="ma-4"
-        :text="error"
-      >
-        <template v-slot:append>
-          <v-btn @click="loadTemplates" size="small" variant="text">Retry</v-btn>
-        </template>
-      </v-alert>
+          <!-- Error state -->
+          <v-alert v-else-if="error" :text="error" class="ma-4" type="error" variant="tonal">
+            <template v-slot:append>
+              <v-btn size="small" variant="text" @click="loadTemplates">Retry</v-btn>
+            </template>
+          </v-alert>
 
-      <!-- Success notification -->
-      <v-alert v-if="saveSuccess" type="success" variant="tonal" class="ma-4" closable>
-        Templates saved successfully!
-      </v-alert>
+          <!-- Success notification -->
+          <v-alert v-if="saveSuccess" class="ma-4" closable type="success" variant="tonal">
+            Templates saved successfully!
+          </v-alert>
 
-      <!-- Main content -->
-      <div v-if="!loading && !error">
-        <!-- Tabs section with proper padding -->
-        <div class="pa-4 pb-0">
-          <v-tabs v-model="activeTab" bg-color="surface" class="mb-4">
-            <v-tab
-              v-for="(template, templateKey) in templates"
-              :key="templateKey"
-              :value="templateKey"
-            >
-              {{ template.name }}
-            </v-tab>
-          </v-tabs>
-        </div>
+          <!-- Main content -->
+          <div v-if="!loading && !error">
+            <!-- Tabs section with proper padding -->
+            <div class="pa-4 pb-0">
+              <v-tabs v-model="activeTab" bg-color="surface" class="mb-4">
+                <v-tab
+                  v-for="(template, templateKey) in templates"
+                  :key="templateKey"
+                  :value="templateKey"
+                >
+                  {{ template.name }}
+                </v-tab>
+              </v-tabs>
+            </div>
 
-        <v-divider />
+            <v-divider />
 
-        <!-- Tab content with consistent padding -->
-        <div class="pa-4">
-          <v-window v-model="activeTab">
-            <v-window-item
-              v-for="(template, templateKey) in templates"
-              :key="templateKey"
-              :value="templateKey"
-            >
-              <div class="template-editor">
-                <div class="d-flex align-center justify-space-between mb-4">
-                  <div class="text-h6 font-weight-bold">Folder Structure</div>
-                  <v-btn
-                    @click="addRootFolder(templateKey)"
-                    size="small"
-                    color="primary"
-                    variant="outlined"
-                    prepend-icon="mdi-folder-plus"
-                  >
-                    Add Folder
-                  </v-btn>
-                </div>
+            <!-- Tab content with consistent padding -->
+            <div class="pa-4">
+              <v-window v-model="activeTab">
+                <v-window-item
+                  v-for="(template, templateKey) in templates"
+                  :key="templateKey"
+                  :value="templateKey"
+                >
+                  <div class="template-editor">
+                    <div class="d-flex align-center justify-space-between mb-4">
+                      <div class="text-h6 font-weight-bold">Folder Structure</div>
+                      <v-btn
+                        color="primary"
+                        prepend-icon="mdi-folder-plus"
+                        size="small"
+                        variant="outlined"
+                        @click="addRootFolder(templateKey)"
+                      >
+                        Add Folder
+                      </v-btn>
+                    </div>
 
-                <div v-if="template.folders && template.folders.length > 0" class="folders-container">
-                  <folder-editor
-                    v-for="(folder, index) in template.folders"
-                    :key="`${templateKey}-${index}`"
-                    :folder="folder"
-                    :level="0"
-                    @update="updateFolder(templateKey, index, $event)"
-                    @delete="deleteFolder(templateKey, index)"
-                    @add-subfolder="addSubfolder(templateKey, index, $event)"
-                  />
-                </div>
+                    <div
+                      v-if="template.folders && template.folders.length > 0"
+                      class="folders-container"
+                    >
+                      <folder-editor
+                        v-for="(folder, index) in template.folders"
+                        :key="`${templateKey}-${index}`"
+                        :folder="folder"
+                        :level="0"
+                        @delete="deleteFolder(templateKey, index)"
+                        @update="updateFolder(templateKey, index, $event)"
+                        @add-subfolder="addSubfolder(templateKey, index, $event)"
+                      />
+                    </div>
 
-                <div v-else class="empty-template text-center py-8">
-                  <v-icon icon="mdi-folder-outline" size="48" color="grey-lighten-1" class="mb-2" />
-                  <div class="text-h6 font-weight-medium mb-2">No Folder Structure</div>
-                  <p class="text-body-2 text-medium-emphasis mb-4">
-                    No folders configured for this template. Click "Add Folder" to get started.
-                  </p>
-                </div>
-              </div>
-            </v-window-item>
-          </v-window>
-        </div>
-      </div>
+                    <div v-else class="empty-template text-center py-8">
+                      <v-icon
+                        class="mb-2"
+                        color="grey-lighten-1"
+                        icon="mdi-folder-outline"
+                        size="48"
+                      />
+                      <div class="text-h6 font-weight-medium mb-2">No Folder Structure</div>
+                      <p class="text-body-2 text-medium-emphasis mb-4">
+                        No folders configured for this template. Click "Add Folder" to get started.
+                      </p>
+                    </div>
+                  </div>
+                </v-window-item>
+              </v-window>
+            </div>
+          </div>
         </v-expansion-panel-text>
       </v-expansion-panel>
     </v-expansion-panels>
@@ -136,7 +140,7 @@ const loadTemplates = async () => {
   try {
     const response = await systemService.getEvidenceFolderTemplates()
     templates.value = response.templates || {}
-    
+
     // Set default active tab if templates exist
     const templateKeys = Object.keys(templates.value)
     if (templateKeys.length > 0) {
@@ -175,7 +179,7 @@ const addRootFolder = (templateKey) => {
   templates.value[templateKey].folders.push({
     name: 'New Folder',
     description: '',
-    subfolders: []
+    subfolders: [],
   })
 }
 
@@ -193,14 +197,14 @@ const addSubfolder = (templateKey, parentIndex, path) => {
   for (let i = 0; i < path.length; i++) {
     current = current.subfolders[path[i]]
   }
-  
+
   if (!current.subfolders) {
     current.subfolders = []
   }
   current.subfolders.push({
     name: 'New Subfolder',
     description: '',
-    subfolders: []
+    subfolders: [],
   })
 }
 

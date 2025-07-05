@@ -1,12 +1,9 @@
 <template>
   <div class="d-flex flex-column ga-3">
     <PluginDescriptionCard :description="pluginDescription" />
-    
+
     <!-- API Key Warning -->
-    <ApiKeyWarning
-      v-if="missingApiKeys.length > 0"
-      :missing-providers="missingApiKeys"
-    />
+    <ApiKeyWarning v-if="missingApiKeys.length > 0" :missing-providers="missingApiKeys" />
 
     <!-- Target Input -->
     <v-text-field
@@ -53,11 +50,10 @@
     />
 
     <!-- Save to Case Option -->
-    <CaseEvidenceToggle 
+    <CaseEvidenceToggle
       :model-value="props.modelValue"
       @update:model-value="emit('update:modelValue', $event)"
     />
-
   </div>
 </template>
 
@@ -72,42 +68,41 @@ import CaseEvidenceToggle from './CaseEvidenceToggle.vue'
 const props = defineProps({
   parameters: {
     type: Object,
-    required: true
+    required: true,
   },
   modelValue: {
     type: Object,
-    required: true
-  }
+    required: true,
+  },
 })
 
 const emit = defineEmits(['update:modelValue'])
 
 // Use advanced plugin params composable
-const {
-  pluginDescription,
-  localParams,
-  updateParams,
-  missingApiKeys
-} = usePluginParamsAdvanced(props, emit, {
-  parameterDefaults: {
-    target: '',
-    analysis_type: 'auto',
-    include_details: true,
-    timeout: 30.0
+const { pluginDescription, localParams, updateParams, missingApiKeys } = usePluginParamsAdvanced(
+  props,
+  emit,
+  {
+    parameterDefaults: {
+      target: '',
+      analysis_type: 'auto',
+      include_details: true,
+      timeout: 30.0,
+    },
+    apiKeyRequirements: props.parameters.api_key_requirements,
+    onApiKeyCheck: async (requirements) => {
+      const { checkPluginApiKeys, getMissingApiKeys } = usePluginApiKeys()
+      const plugin = {
+        name: 'VirusTotalPlugin',
+        api_key_requirements: requirements,
+      }
+      await checkPluginApiKeys(plugin)
+      return {
+        missing: getMissingApiKeys(plugin),
+      }
+    },
   },
-  apiKeyRequirements: props.parameters.api_key_requirements,
-  onApiKeyCheck: async (requirements) => {
-    const { checkPluginApiKeys, getMissingApiKeys } = usePluginApiKeys()
-    const plugin = {
-      name: 'VirusTotalPlugin',
-      api_key_requirements: requirements
-    }
-    await checkPluginApiKeys(plugin)
-    return {
-      missing: getMissingApiKeys(plugin)
-    }
-  }
-})
+)
 
 // Analysis type options
 const analysisTypes = [
@@ -115,7 +110,7 @@ const analysisTypes = [
   { title: 'File Hash', value: 'file' },
   { title: 'URL', value: 'url' },
   { title: 'Domain', value: 'domain' },
-  { title: 'IP Address', value: 'ip' }
+  { title: 'IP Address', value: 'ip' },
 ]
 
 // Dynamic labels and hints based on analysis type

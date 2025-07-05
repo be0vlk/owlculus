@@ -5,7 +5,7 @@
         <v-icon :icon="item?.is_folder ? 'mdi-folder-edit' : 'mdi-file-edit'" class="mr-2"></v-icon>
         Rename {{ item?.is_folder ? 'Folder' : 'File' }}
       </v-card-title>
-      
+
       <v-card-text>
         <v-form ref="form" v-model="valid" lazy-validation>
           <v-text-field
@@ -18,18 +18,13 @@
             :prepend-inner-icon="item?.is_folder ? 'mdi-folder' : 'mdi-file'"
             @keyup.enter="rename"
           ></v-text-field>
-          
-          <v-alert
-            v-if="error"
-            type="error"
-            variant="tonal"
-            class="mb-0"
-          >
+
+          <v-alert v-if="error" class="mb-0" type="error" variant="tonal">
             {{ error }}
           </v-alert>
         </v-form>
       </v-card-text>
-      
+
       <modal-actions
         submit-text="Rename"
         submit-icon="mdi-rename-box"
@@ -50,12 +45,12 @@ import ModalActions from './ModalActions.vue'
 const props = defineProps({
   modelValue: {
     type: Boolean,
-    default: false
+    default: false,
   },
   item: {
     type: Object,
-    default: null
-  }
+    default: null,
+  },
 })
 
 const emit = defineEmits(['update:modelValue', 'renamed'])
@@ -70,15 +65,17 @@ const newName = ref('')
 // Computed
 const dialog = computed({
   get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value)
+  set: (value) => emit('update:modelValue', value),
 })
 
 // Validation rules
 const nameRules = [
-  v => !!v || 'Name is required',
-  v => (v && v.length >= 1) || 'Name must be at least 1 character',
-  v => (v && v.length <= 255) || 'Name must be less than 255 characters',
-  v => /^[a-zA-Z0-9._\s-]+$/.test(v) || 'Name can only contain letters, numbers, spaces, dots, underscores, and hyphens'
+  (v) => !!v || 'Name is required',
+  (v) => (v && v.length >= 1) || 'Name must be at least 1 character',
+  (v) => (v && v.length <= 255) || 'Name must be less than 255 characters',
+  (v) =>
+    /^[a-zA-Z0-9._\s-]+$/.test(v) ||
+    'Name can only contain letters, numbers, spaces, dots, underscores, and hyphens',
 ]
 
 // Methods
@@ -92,14 +89,14 @@ const rename = async () => {
 
   try {
     let updatedItem
-    
+
     if (props.item.is_folder) {
       updatedItem = await evidenceService.updateFolder(props.item.id, {
-        title: newName.value.trim()
+        title: newName.value.trim(),
       })
     } else {
       updatedItem = await evidenceService.updateEvidence(props.item.id, {
-        title: newName.value.trim()
+        title: newName.value.trim(),
       })
     }
 
@@ -116,7 +113,6 @@ const cancel = () => {
   dialog.value = false
 }
 
-
 // Watch for dialog open to set initial name
 watch(dialog, (newVal) => {
   if (newVal && props.item) {
@@ -125,9 +121,12 @@ watch(dialog, (newVal) => {
 })
 
 // Watch for item changes
-watch(() => props.item, (newItem) => {
-  if (newItem) {
-    newName.value = newItem.title
-  }
-})
+watch(
+  () => props.item,
+  (newItem) => {
+    if (newItem) {
+      newName.value = newItem.title
+    }
+  },
+)
 </script>

@@ -23,10 +23,7 @@
               <v-skeleton-loader type="text" width="200" class="ml-2" />
             </v-card-title>
             <v-divider />
-            <v-skeleton-loader
-              type="table"
-              class="pa-4"
-            />
+            <v-skeleton-loader class="pa-4" type="table" />
           </v-card>
         </slot>
 
@@ -58,20 +55,20 @@ import Sidebar from './Sidebar.vue'
 defineProps({
   title: {
     type: String,
-    required: true
+    required: true,
   },
   loading: {
     type: Boolean,
-    default: false
+    default: false,
   },
   error: {
     type: String,
-    default: null
+    default: null,
   },
   showSidebar: {
     type: Boolean,
-    default: true
-  }
+    default: true,
+  },
 })
 </script>
 

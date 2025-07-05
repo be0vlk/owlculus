@@ -16,6 +16,7 @@ class CaseUserLink(SQLModel, table=True):
     user_id: Optional[int] = Field(
         default=None, foreign_key="user.id", primary_key=True
     )
+    is_lead: bool = Field(default=False)
 
 
 class User(SQLModel, table=True):

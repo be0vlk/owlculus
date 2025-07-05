@@ -1,17 +1,8 @@
 <template>
-  <v-dialog
-    v-model="showDialog"
-    max-width="500"
-    persistent
-  >
+  <v-dialog v-model="showDialog" max-width="500" persistent>
     <v-card>
       <v-card-title class="d-flex align-center pa-6">
-        <v-icon
-          :icon="dialogIcon"
-          :color="dialogIconColor"
-          size="large"
-          class="me-3"
-        />
+        <v-icon :color="dialogIconColor" :icon="dialogIcon" class="me-3" size="large" />
         <span class="text-h5 font-weight-medium">{{ dialogTitle }}</span>
       </v-card-title>
 
@@ -19,12 +10,7 @@
 
       <v-card-text class="pa-6">
         <div class="text-body-1 mb-4" v-html="dialogMessage" />
-        <v-alert
-          v-if="warningText"
-          type="warning"
-          variant="tonal"
-          class="mb-0"
-        >
+        <v-alert v-if="warningText" class="mb-0" type="warning" variant="tonal">
           <div class="text-body-2">
             <strong>{{ warningText }}</strong>
           </div>
@@ -35,12 +21,7 @@
 
       <v-card-actions class="pa-6">
         <v-spacer />
-        <v-btn
-          variant="text"
-          color="primary"
-          @click="handleCancel"
-          :disabled="loading"
-        >
+        <v-btn :disabled="loading" color="primary" variant="text" @click="handleCancel">
           {{ cancelButtonText }}
         </v-btn>
         <v-btn
@@ -58,7 +39,7 @@
 </template>
 
 <script setup>
-import { useConfirmationDialog } from '@/composables/useConfirmationDialog'
+import {useConfirmationDialog} from '@/composables/useConfirmationDialog'
 
 const {
   // State
@@ -72,19 +53,19 @@ const {
   cancelButtonText,
   loading,
   warningText,
-  
+
   // Methods
   confirm,
   confirmDelete,
   confirmAction,
   handleConfirm,
-  handleCancel
+  handleCancel,
 } = useConfirmationDialog()
 
 // Expose the confirm method for parent components
 defineExpose({
   confirm,
   confirmDelete,
-  confirmAction
+  confirmAction,
 })
 </script>

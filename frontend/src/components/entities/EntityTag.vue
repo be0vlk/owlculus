@@ -1,15 +1,9 @@
 <template>
-  <v-chip
-    variant="tonal"
-    color="primary"
-    size="small"
-    class="ma-1"
-    @click="$emit('click')"
-  >
+  <v-chip class="ma-1" color="primary" size="small" variant="tonal" @click="$emit('click')">
     <slot></slot>
   </v-chip>
 </template>
 
 <script setup>
-defineEmits(['click']);
+defineEmits(['click'])
 </script>

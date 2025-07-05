@@ -70,7 +70,9 @@
             <!-- Step Info -->
             <div class="flex-grow-1 text-truncate">
               <div class="text-body-2 text-truncate">{{ step.step_id || `Step ${index + 1}` }}</div>
-              <div class="text-caption text-medium-emphasis text-truncate">{{ step.plugin_name }}</div>
+              <div class="text-caption text-medium-emphasis text-truncate">
+                {{ step.plugin_name }}
+              </div>
             </div>
 
             <!-- Step Status -->
@@ -92,7 +94,7 @@
           {{ execution.status === 'failed' ? 'Hunt Failed' : 'Some Steps Failed' }}
         </div>
         <div v-if="failedSteps.length > 0" class="text-caption">
-          Failed steps: {{ failedSteps.map(s => s.step_id).join(', ') }}
+          Failed steps: {{ failedSteps.map((s) => s.step_id).join(', ') }}
         </div>
       </v-alert>
 
@@ -126,22 +128,34 @@
         <v-icon icon="mdi-stop" start />
         Cancel
       </v-btn>
-      
+
       <v-spacer class="d-none d-sm-flex" />
-      
+
       <v-btn
         color="primary"
-        :variant="execution.status === 'completed' || execution.status === 'partial' ? 'elevated' : 'text'"
+        :variant="
+          execution.status === 'completed' || execution.status === 'partial' ? 'elevated' : 'text'
+        "
         size="small"
         @click="$emit('view-details', execution.id)"
         class="mb-2 mb-sm-0"
       >
-        <v-icon 
-          :icon="execution.status === 'completed' || execution.status === 'partial' ? 'mdi-eye' : 'mdi-information'" 
-          start 
+        <v-icon
+          :icon="
+            execution.status === 'completed' || execution.status === 'partial'
+              ? 'mdi-eye'
+              : 'mdi-information'
+          "
+          start
         />
-        <span class="d-none d-sm-inline">{{ execution.status === 'completed' || execution.status === 'partial' ? 'View Results' : 'View Details' }}</span>
-        <span class="d-inline d-sm-none">{{ execution.status === 'completed' || execution.status === 'partial' ? 'Results' : 'Details' }}</span>
+        <span class="d-none d-sm-inline">{{
+          execution.status === 'completed' || execution.status === 'partial'
+            ? 'View Results'
+            : 'View Details'
+        }}</span>
+        <span class="d-inline d-sm-none">{{
+          execution.status === 'completed' || execution.status === 'partial' ? 'Results' : 'Details'
+        }}</span>
       </v-btn>
     </v-card-actions>
   </v-card>
@@ -155,12 +169,12 @@ import { formatDate } from '@/composables/dateUtils'
 const props = defineProps({
   execution: {
     type: Object,
-    required: true
+    required: true,
   },
   cancelling: {
     type: Boolean,
-    default: false
-  }
+    default: false,
+  },
 })
 
 defineEmits(['cancel', 'view-details'])
@@ -172,48 +186,69 @@ let elapsedInterval = null
 // Computed properties
 const statusColor = computed(() => {
   switch (props.execution.status) {
-    case 'pending': return 'grey'
-    case 'running': return 'primary'
-    case 'completed': return 'success'
-    case 'partial': return 'warning'
-    case 'failed': return 'error'
-    case 'cancelled': return 'grey'
-    default: return 'grey'
+    case 'pending':
+      return 'grey'
+    case 'running':
+      return 'primary'
+    case 'completed':
+      return 'success'
+    case 'partial':
+      return 'warning'
+    case 'failed':
+      return 'error'
+    case 'cancelled':
+      return 'grey'
+    default:
+      return 'grey'
   }
 })
 
 const statusIcon = computed(() => {
   switch (props.execution.status) {
-    case 'pending': return 'mdi-clock-outline'
-    case 'running': return 'mdi-play'
-    case 'completed': return 'mdi-check'
-    case 'partial': return 'mdi-alert'
-    case 'failed': return 'mdi-close'
-    case 'cancelled': return 'mdi-stop'
-    default: return 'mdi-help'
+    case 'pending':
+      return 'mdi-clock-outline'
+    case 'running':
+      return 'mdi-play'
+    case 'completed':
+      return 'mdi-check'
+    case 'partial':
+      return 'mdi-alert'
+    case 'failed':
+      return 'mdi-close'
+    case 'cancelled':
+      return 'mdi-stop'
+    default:
+      return 'mdi-help'
   }
 })
 
 const statusText = computed(() => {
   switch (props.execution.status) {
-    case 'pending': return 'Pending'
-    case 'running': return 'Running'
-    case 'completed': return 'Completed'
-    case 'partial': return 'Partial'
-    case 'failed': return 'Failed'
-    case 'cancelled': return 'Cancelled'
-    default: return 'Unknown'
+    case 'pending':
+      return 'Pending'
+    case 'running':
+      return 'Running'
+    case 'completed':
+      return 'Completed'
+    case 'partial':
+      return 'Partial'
+    case 'failed':
+      return 'Failed'
+    case 'cancelled':
+      return 'Cancelled'
+    default:
+      return 'Unknown'
   }
 })
 
 const completedSteps = computed(() => {
   if (!props.execution.steps) return []
-  return props.execution.steps.filter(step => step.status === 'completed')
+  return props.execution.steps.filter((step) => step.status === 'completed')
 })
 
 const failedSteps = computed(() => {
   if (!props.execution.steps) return []
-  return props.execution.steps.filter(step => step.status === 'failed')
+  return props.execution.steps.filter((step) => step.status === 'failed')
 })
 
 const hasFailedSteps = computed(() => {
@@ -224,32 +259,46 @@ const huntDisplayTitle = computed(() => {
   const baseName = props.execution.hunt?.display_name || 'Hunt Execution'
   const initialParams = props.execution.initial_parameters || {}
   const huntCategory = props.execution.hunt?.category || 'general'
-  
+
   return formatHuntExecutionTitle(baseName, initialParams, huntCategory)
 })
 
 // Methods
 const getStepStatusColor = (status) => {
   switch (status) {
-    case 'pending': return 'grey'
-    case 'running': return 'primary'
-    case 'completed': return 'success'
-    case 'failed': return 'error'
-    case 'skipped': return 'warning'
-    case 'cancelled': return 'grey'
-    default: return 'grey'
+    case 'pending':
+      return 'grey'
+    case 'running':
+      return 'primary'
+    case 'completed':
+      return 'success'
+    case 'failed':
+      return 'error'
+    case 'skipped':
+      return 'warning'
+    case 'cancelled':
+      return 'grey'
+    default:
+      return 'grey'
   }
 }
 
 const getStepStatusIcon = (status) => {
   switch (status) {
-    case 'pending': return 'mdi-clock-outline'
-    case 'running': return 'mdi-play'
-    case 'completed': return 'mdi-check'
-    case 'failed': return 'mdi-close'
-    case 'skipped': return 'mdi-skip-next'
-    case 'cancelled': return 'mdi-stop'
-    default: return 'mdi-help'
+    case 'pending':
+      return 'mdi-clock-outline'
+    case 'running':
+      return 'mdi-play'
+    case 'completed':
+      return 'mdi-check'
+    case 'failed':
+      return 'mdi-close'
+    case 'skipped':
+      return 'mdi-skip-next'
+    case 'cancelled':
+      return 'mdi-stop'
+    default:
+      return 'mdi-help'
   }
 }
 
@@ -263,10 +312,14 @@ const updateElapsedTime = () => {
 
   // Ensure the timestamp is parsed as UTC by appending 'Z' if it doesn't have timezone info
   let startTimeStr = props.execution.started_at
-  if (!startTimeStr.includes('Z') && !startTimeStr.includes('+') && !startTimeStr.includes('-', 10)) {
+  if (
+    !startTimeStr.includes('Z') &&
+    !startTimeStr.includes('+') &&
+    !startTimeStr.includes('-', 10)
+  ) {
     startTimeStr += 'Z'
   }
-  
+
   const startTime = new Date(startTimeStr)
   const now = new Date()
   const diff = now - startTime
@@ -279,7 +332,7 @@ const updateElapsedTime = () => {
 
   const minutes = Math.floor(diff / 60000)
   const seconds = Math.floor((diff % 60000) / 1000)
-  
+
   if (minutes > 0) {
     elapsedTime.value = `${minutes}m ${seconds}s`
   } else {
@@ -303,16 +356,19 @@ onUnmounted(() => {
 
 // Watch for status changes
 import { watch } from 'vue'
-watch(() => props.execution.status, (newStatus) => {
-  if (newStatus === 'running' && !elapsedInterval) {
-    updateElapsedTime()
-    elapsedInterval = setInterval(updateElapsedTime, 1000)
-  } else if (newStatus !== 'running' && elapsedInterval) {
-    clearInterval(elapsedInterval)
-    elapsedInterval = null
-    elapsedTime.value = ''
-  }
-})
+watch(
+  () => props.execution.status,
+  (newStatus) => {
+    if (newStatus === 'running' && !elapsedInterval) {
+      updateElapsedTime()
+      elapsedInterval = setInterval(updateElapsedTime, 1000)
+    } else if (newStatus !== 'running' && elapsedInterval) {
+      clearInterval(elapsedInterval)
+      elapsedInterval = null
+      elapsedTime.value = ''
+    }
+  },
+)
 </script>
 
 <style scoped>
@@ -351,15 +407,15 @@ watch(() => props.execution.status, (newStatus) => {
   .hunt-progress-card {
     min-height: 280px;
   }
-  
+
   .hunt-progress-card .v-card-title {
     padding: 12px !important;
   }
-  
+
   .hunt-progress-card .v-card-text {
     padding: 12px !important;
   }
-  
+
   .hunt-progress-card .v-card-actions {
     padding: 12px !important;
     padding-top: 0 !important;

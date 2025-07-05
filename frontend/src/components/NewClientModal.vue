@@ -19,8 +19,8 @@ import BaseClientModal from './BaseClientModal.vue'
 defineProps({
   isOpen: {
     type: Boolean,
-    required: true
-  }
+    required: true,
+  },
 })
 
 const emit = defineEmits(['close', 'created'])
@@ -30,7 +30,7 @@ const form = reactive({
   name: '',
   email: '',
   phone: '',
-  address: ''
+  address: '',
 })
 
 const updateForm = (newForm) => {

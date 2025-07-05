@@ -28,24 +28,13 @@
 
                 <!-- Loading State -->
                 <div v-if="isValidatingToken" class="text-center py-8">
-                  <v-progress-circular
-                    :size="50"
-                    :width="6"
-                    color="primary"
-                    indeterminate
-                  />
-                  <p class="text-body-2 text-medium-emphasis mt-4">
-                    Validating invite...
-                  </p>
+                  <v-progress-circular :size="50" :width="6" color="primary" indeterminate />
+                  <p class="text-body-2 text-medium-emphasis mt-4">Validating invite...</p>
                 </div>
 
                 <!-- Invalid Token State -->
                 <div v-else-if="tokenValidation && !tokenValidation.valid" class="text-center py-4">
-                  <v-alert
-                    type="error"
-                    variant="tonal"
-                    class="mb-4"
-                  >
+                  <v-alert class="mb-4" type="error" variant="tonal">
                     <div class="d-flex align-center">
                       <v-icon start>mdi-alert-circle</v-icon>
                       <div>
@@ -65,22 +54,18 @@
                 </div>
 
                 <!-- Registration Form -->
-                <v-form 
+                <v-form
                   v-else-if="tokenValidation && tokenValidation.valid"
-                  ref="formRef" 
-                  validate-on="submit" 
+                  ref="formRef"
+                  validate-on="submit"
                   @submit.prevent="handleRegister"
                 >
                   <!-- Role Info Card -->
-                  <v-card
-                    variant="tonal"
-                    :color="getRoleColor(tokenValidation.role)"
-                    class="mb-6"
-                  >
+                  <v-card :color="getRoleColor(tokenValidation.role)" class="mb-6" variant="tonal">
                     <v-card-text class="py-3">
                       <div class="d-flex align-center">
-                        <v-icon 
-                          :icon="getRoleIcon(tokenValidation.role)" 
+                        <v-icon
+                          :icon="getRoleIcon(tokenValidation.role)"
                           :color="getRoleColor(tokenValidation.role)"
                           class="me-3"
                         />
@@ -103,7 +88,10 @@
                     prepend-inner-icon="mdi-account"
                     variant="outlined"
                     :disabled="isLoading"
-                    :rules="[rules.required('Username is required'), rules.minLength(3, 'Username must be at least 3 characters')]"
+                    :rules="[
+                      rules.required('Username is required'),
+                      rules.minLength(3, 'Username must be at least 3 characters'),
+                    ]"
                     required
                     class="mb-4"
                     hint="Choose a unique username for your account"
@@ -118,7 +106,10 @@
                     prepend-inner-icon="mdi-email"
                     variant="outlined"
                     :disabled="isLoading"
-                    :rules="[rules.required('Email is required'), rules.email('Please enter a valid email address')]"
+                    :rules="[
+                      rules.required('Email is required'),
+                      rules.email('Please enter a valid email address'),
+                    ]"
                     required
                     class="mb-4"
                     hint="This will be used for account recovery"
@@ -134,7 +125,10 @@
                     :append-inner-icon="showPassword ? 'mdi-eye' : 'mdi-eye-off'"
                     variant="outlined"
                     :disabled="isLoading"
-                    :rules="[rules.required('Password is required'), rules.minLength(8, 'Password must be at least 8 characters')]"
+                    :rules="[
+                      rules.required('Password is required'),
+                      rules.minLength(8, 'Password must be at least 8 characters'),
+                    ]"
                     required
                     class="mb-4"
                     hint="Choose a strong password with at least 8 characters"
@@ -158,24 +152,16 @@
                   />
 
                   <!-- Error Alert -->
-                  <v-alert
-                    v-if="error"
-                    type="error"
-                    variant="tonal"
-                    class="mb-4"
-                  >
+                  <v-alert v-if="error" class="mb-4" type="error" variant="tonal">
                     {{ error }}
                   </v-alert>
 
                   <!-- Success Alert -->
-                  <v-alert
-                    v-if="registrationSuccess"
-                    type="success"
-                    variant="tonal"
-                    class="mb-4"
-                  >
+                  <v-alert v-if="registrationSuccess" class="mb-4" type="success" variant="tonal">
                     <div class="font-weight-bold">Registration Successful!</div>
-                    <div class="text-body-2">Your account has been created. Redirecting to login...</div>
+                    <div class="text-body-2">
+                      Your account has been created. Redirecting to login...
+                    </div>
                   </v-alert>
 
                   <!-- Register Button -->
@@ -238,63 +224,82 @@ const formData = reactive({
   username: '',
   email: '',
   password: '',
-  confirmPassword: ''
+  confirmPassword: '',
 })
 
 const rules = {
-  required: (message = 'This field is required') => v => !!v || message,
-  email: (message = 'Please enter a valid email') => v => /.+@.+\..+/.test(v) || message,
-  minLength: (min, message) => v => (v && v.length >= min) || message
+  required:
+    (message = 'This field is required') =>
+    (v) =>
+      !!v || message,
+  email:
+    (message = 'Please enter a valid email') =>
+    (v) =>
+      /.+@.+\..+/.test(v) || message,
+  minLength: (min, message) => (v) => (v && v.length >= min) || message,
 }
 
-const confirmPasswordRule = v => 
-  v === formData.password || 'Passwords do not match'
+const confirmPasswordRule = (v) => v === formData.password || 'Passwords do not match'
 
 const isFormValid = computed(() => {
-  return formData.username && 
-         formData.email && 
-         formData.password && 
-         formData.confirmPassword &&
-         formData.password === formData.confirmPassword &&
-         formData.username.length >= 3 &&
-         formData.password.length >= 8 &&
-         /.+@.+\..+/.test(formData.email)
+  return (
+    formData.username &&
+    formData.email &&
+    formData.password &&
+    formData.confirmPassword &&
+    formData.password === formData.confirmPassword &&
+    formData.username.length >= 3 &&
+    formData.password.length >= 8 &&
+    /.+@.+\..+/.test(formData.email)
+  )
 })
 
 const getRoleColor = (role) => {
   switch (role) {
-    case 'Admin': return 'error'
-    case 'Investigator': return 'primary'
-    case 'Analyst': return 'info'
-    default: return 'primary'
+    case 'Admin':
+      return 'error'
+    case 'Investigator':
+      return 'primary'
+    case 'Analyst':
+      return 'info'
+    default:
+      return 'primary'
   }
 }
 
 const getRoleIcon = (role) => {
   switch (role) {
-    case 'Admin': return 'mdi-shield-check'
-    case 'Investigator': return 'mdi-account-search'
-    case 'Analyst': return 'mdi-chart-line'
-    default: return 'mdi-account'
+    case 'Admin':
+      return 'mdi-shield-check'
+    case 'Investigator':
+      return 'mdi-account-search'
+    case 'Analyst':
+      return 'mdi-chart-line'
+    default:
+      return 'mdi-account'
   }
 }
 
 const getRoleDescription = (role) => {
   switch (role) {
-    case 'Admin': return 'Full system access and user management'
-    case 'Investigator': return 'Read/write access, can run plugins'
-    case 'Analyst': return 'Read-only access to assigned cases'
-    default: return ''
+    case 'Admin':
+      return 'Full system access and user management'
+    case 'Investigator':
+      return 'Read/write access, can run plugins'
+    case 'Analyst':
+      return 'Read-only access to assigned cases'
+    default:
+      return ''
   }
 }
 
 const validateInviteToken = async () => {
   const token = route.query.token
-  
+
   if (!token) {
-    tokenValidation.value = { 
-      valid: false, 
-      error: 'No invite token provided. Please use a valid invite link.' 
+    tokenValidation.value = {
+      valid: false,
+      error: 'No invite token provided. Please use a valid invite link.',
     }
     isValidatingToken.value = false
     return
@@ -304,9 +309,9 @@ const validateInviteToken = async () => {
     const validation = await inviteService.validateInvite(token)
     tokenValidation.value = validation
   } catch (err) {
-    tokenValidation.value = { 
-      valid: false, 
-      error: err.response?.data?.detail || 'Failed to validate invite token' 
+    tokenValidation.value = {
+      valid: false,
+      error: err.response?.data?.detail || 'Failed to validate invite token',
     }
   } finally {
     isValidatingToken.value = false
@@ -315,7 +320,7 @@ const validateInviteToken = async () => {
 
 const handleRegister = async () => {
   const token = route.query.token
-  
+
   if (!token) {
     error.value = 'No invite token found'
     return
@@ -329,15 +334,14 @@ const handleRegister = async () => {
       username: formData.username,
       email: formData.email,
       password: formData.password,
-      token: token
+      token: token,
     })
 
     registrationSuccess.value = true
-    
+
     setTimeout(() => {
       router.push('/login')
     }, 2000)
-
   } catch (err) {
     error.value = err.response?.data?.detail || 'Failed to create account. Please try again.'
   } finally {

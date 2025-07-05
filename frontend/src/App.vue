@@ -1,7 +1,7 @@
 <template>
   <v-app>
     <router-view />
-    
+
     <!-- Global session expiration notification -->
     <v-snackbar
       v-model="sessionSnackbar.show"
@@ -56,8 +56,17 @@ onUnmounted(() => {
 }
 
 body {
-  font-family: Roboto, -apple-system, BlinkMacSystemFont, 'Segoe UI', Oxygen,
-    Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  font-family:
+    Roboto,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Oxygen,
+    Ubuntu,
+    Cantarell,
+    'Open Sans',
+    'Helvetica Neue',
+    sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

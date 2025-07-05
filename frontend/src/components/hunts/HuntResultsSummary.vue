@@ -36,8 +36,6 @@
       </v-col>
     </v-row>
 
-
-
     <!-- Evidence References -->
     <div v-if="evidenceRefs.length > 0" class="mb-4">
       <div class="text-h6 mb-3">Created Evidence</div>
@@ -92,12 +90,12 @@ import { formatMetadataValue } from '@/utils/huntDisplayUtils'
 const props = defineProps({
   execution: {
     type: Object,
-    required: true
+    required: true,
   },
   contextData: {
     type: Object,
-    default: () => ({})
-  }
+    default: () => ({}),
+  },
 })
 
 const emit = defineEmits(['view-evidence'])
@@ -108,11 +106,11 @@ const stepResults = computed(() => {
 })
 
 const completedSteps = computed(() => {
-  return stepResults.value.filter(step => step.status === 'completed').length
+  return stepResults.value.filter((step) => step.status === 'completed').length
 })
 
 const failedSteps = computed(() => {
-  return stepResults.value.filter(step => step.status === 'failed').length
+  return stepResults.value.filter((step) => step.status === 'failed').length
 })
 
 const totalResults = computed(() => {
@@ -134,7 +132,7 @@ const contextMetadata = computed(() => {
   const metadata = props.contextData?.metadata || {}
   // Filter out internal keys
   const filtered = {}
-  Object.keys(metadata).forEach(key => {
+  Object.keys(metadata).forEach((key) => {
     if (!key.startsWith('_') && key !== 'evidence_refs' && key !== 'step_outputs') {
       filtered[key] = metadata[key]
     }
@@ -144,7 +142,7 @@ const contextMetadata = computed(() => {
 
 // Methods
 const formatMetadataKey = (key) => {
-  return key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+  return key.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
 }
 
 const viewEvidence = (evidenceRef) => {

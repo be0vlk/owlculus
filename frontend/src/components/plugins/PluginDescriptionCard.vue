@@ -1,11 +1,5 @@
 <template>
-  <v-card
-    v-if="description"
-    color="blue-lighten-5"
-    elevation="0"
-    rounded="lg"
-    class="pa-3"
-  >
+  <v-card v-if="description" class="pa-3" color="blue-lighten-5" elevation="0" rounded="lg">
     <div class="d-flex align-center ga-2 mb-2">
       <v-icon color="blue">mdi-information</v-icon>
       <span class="text-subtitle2 font-weight-medium">About</span>
@@ -20,7 +14,7 @@
 defineProps({
   description: {
     type: String,
-    required: true
-  }
+    required: true,
+  },
 })
 </script>

@@ -1,12 +1,9 @@
 <template>
   <div class="d-flex flex-column ga-3">
     <PluginDescriptionCard :description="pluginDescription" />
-    
+
     <!-- API Key Warning -->
-    <ApiKeyWarning
-      v-if="missingApiKeys.length > 0"
-      :missing-providers="missingApiKeys"
-    />
+    <ApiKeyWarning v-if="missingApiKeys.length > 0" :missing-providers="missingApiKeys" />
 
     <!-- Search Type Selection -->
     <v-radio-group
@@ -34,7 +31,7 @@
         persistent-hint
         @update:model-value="updateParams"
       />
-      
+
       <v-text-field
         v-model="localParams.name"
         label="Full Name"
@@ -56,7 +53,7 @@
           class="flex-grow-1"
           @update:model-value="updateParams"
         />
-        
+
         <v-text-field
           v-model="localParams.company"
           label="Company"
@@ -78,7 +75,7 @@
           class="flex-grow-1"
           @update:model-value="updateParams"
         />
-        
+
         <v-text-field
           v-model="localParams.linkedin"
           label="LinkedIn Profile"
@@ -114,7 +111,7 @@
           class="flex-grow-1"
           @update:model-value="updateParams"
         />
-        
+
         <v-text-field
           v-model="localParams.domain"
           label="Domain"
@@ -137,22 +134,18 @@
     </div>
 
     <!-- Search Requirements Info -->
-    <v-alert
-      type="info"
-      variant="text"
-      density="compact"
-    >
+    <v-alert density="compact" type="info" variant="text">
       <div v-if="searchType === 'person'">
-        <strong>Person Search:</strong> At least one field is required (email, name, phone, company, location, or LinkedIn).
-        <br><strong>Best Results:</strong> Use email or LinkedIn profile for most accurate matches.
+        <strong>Person Search:</strong> At least one field is required (email, name, phone, company,
+        location, or LinkedIn). <br /><strong>Best Results:</strong> Use email or LinkedIn profile
+        for most accurate matches.
       </div>
       <div v-else-if="searchType === 'company'">
-        <strong>Company Search:</strong> At least one field is required (name, website, domain, or LinkedIn).
-        <br><strong>Best Results:</strong> Use company website or LinkedIn profile for most accurate matches.
+        <strong>Company Search:</strong> At least one field is required (name, website, domain, or
+        LinkedIn). <br /><strong>Best Results:</strong> Use company website or LinkedIn profile for
+        most accurate matches.
       </div>
-      <div v-else>
-        Please select a search type above to get started.
-      </div>
+      <div v-else>Please select a search type above to get started.</div>
     </v-alert>
 
     <!-- Case Evidence Toggle -->
@@ -160,7 +153,6 @@
       :model-value="props.modelValue"
       @update:model-value="emit('update:modelValue', $event)"
     />
-
   </div>
 </template>
 
@@ -175,47 +167,46 @@ import CaseEvidenceToggle from './CaseEvidenceToggle.vue'
 const props = defineProps({
   parameters: {
     type: Object,
-    required: true
+    required: true,
   },
   modelValue: {
     type: Object,
-    required: true
-  }
+    required: true,
+  },
 })
 
 const emit = defineEmits(['update:modelValue'])
 
 // Use advanced plugin params composable with multi-search configuration
-const {
-  pluginDescription,
-  localParams,
-  updateParams,
-  missingApiKeys
-} = usePluginParamsAdvanced(props, emit, {
-  parameterDefaults: {
-    search_type: 'person',
-    email: '',
-    phone: '',
-    name: '',
-    company: '',
-    website: '',
-    domain: '',
-    location: '',
-    linkedin: ''
+const { pluginDescription, localParams, updateParams, missingApiKeys } = usePluginParamsAdvanced(
+  props,
+  emit,
+  {
+    parameterDefaults: {
+      search_type: 'person',
+      email: '',
+      phone: '',
+      name: '',
+      company: '',
+      website: '',
+      domain: '',
+      location: '',
+      linkedin: '',
+    },
+    apiKeyRequirements: props.parameters.api_key_requirements,
+    onApiKeyCheck: async (requirements) => {
+      const { checkPluginApiKeys, getMissingApiKeys } = usePluginApiKeys()
+      const plugin = {
+        name: 'PeopledatalabsPlugin',
+        api_key_requirements: requirements,
+      }
+      await checkPluginApiKeys(plugin)
+      return {
+        missing: getMissingApiKeys(plugin),
+      }
+    },
   },
-  apiKeyRequirements: props.parameters.api_key_requirements,
-  onApiKeyCheck: async (requirements) => {
-    const { checkPluginApiKeys, getMissingApiKeys } = usePluginApiKeys()
-    const plugin = {
-      name: 'PeopledatalabsPlugin',
-      api_key_requirements: requirements
-    }
-    await checkPluginApiKeys(plugin)
-    return {
-      missing: getMissingApiKeys(plugin)
-    }
-  }
-})
+)
 
 // Search type state (computed from localParams)
 const searchType = computed({
@@ -223,7 +214,7 @@ const searchType = computed({
   set: (value) => {
     localParams.search_type = value
     updateParams()
-  }
+  },
 })
 
 // Update search type

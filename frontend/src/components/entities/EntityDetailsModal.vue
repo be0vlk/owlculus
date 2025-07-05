@@ -5,11 +5,7 @@
         <v-icon start :icon="getEntityIcon" color="primary" />
         <span class="text-h5">{{ getEntityTitle }}</span>
         <v-spacer />
-        <v-chip
-          :color="isEditing ? 'warning' : 'primary'"
-          variant="tonal"
-          size="small"
-        >
+        <v-chip :color="isEditing ? 'warning' : 'primary'" size="small" variant="tonal">
           {{ isEditing ? 'Editing' : 'View Mode' }}
         </v-chip>
       </v-card-title>
@@ -23,12 +19,7 @@
         </v-alert>
 
         <!-- Tabs -->
-        <v-tabs
-          v-model="activeTab"
-          color="primary"
-          align-tabs="start"
-          class="border-b"
-        >
+        <v-tabs v-model="activeTab" align-tabs="start" class="border-b" color="primary">
           <v-tab
             v-for="(section, key) in entitySchema"
             :key="key"
@@ -119,7 +110,7 @@ const dialogVisible = computed({
     if (!value) {
       emit('close')
     }
-  }
+  },
 })
 
 const entity = toRef(props, 'entity')
@@ -135,35 +126,24 @@ const {
   entitySchema,
   startEditing,
   cancelEdit,
-  updateEntity
+  updateEntity,
 } = useEntityDetails(entity, caseId)
 
-const {
-  getAssociateEntities,
-  processAssociates
-} = useEntityAssociates(entity)
+const { getAssociateEntities, processAssociates } = useEntityAssociates(entity)
 
-const {
-  getEntityIcon,
-  getSectionIcon
-} = useEntityIcons(entity)
+const { getEntityIcon, getSectionIcon } = useEntityIcons(entity)
 
-const {
-  getEntityTitle
-} = useEntityDisplay(entity)
+const { getEntityTitle } = useEntityDisplay(entity)
 
 const {
   editor: noteEditor,
   editorActions: noteEditorActions,
   saving: noteSaving,
   lastSavedTime: noteLastSavedTime,
-  formatLastSaved: noteFormatLastSaved
+  formatLastSaved: noteFormatLastSaved,
 } = useEntityNoteEditor(entity, caseId, isEditing, formData, emit)
 
-const {
-  getSourceValue,
-  updateSourceValue
-} = useEntitySources(entity, formData, isEditing)
+const { getSourceValue, updateSourceValue } = useEntitySources(entity, formData, isEditing)
 
 function handleFieldUpdate(fieldPath, value) {
   formData.value.data[fieldPath] = value
@@ -182,6 +162,4 @@ async function handleSubmit() {
     // Error handled in composable
   }
 }
-
 </script>
-

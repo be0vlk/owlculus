@@ -1,12 +1,7 @@
 <template>
   <div class="d-flex flex-column ga-4">
     <!-- Results Overview Card -->
-    <v-card 
-      v-if="summaryData"
-      variant="outlined" 
-      color="primary"
-      class="results-overview"
-    >
+    <v-card v-if="summaryData" class="results-overview" color="primary" variant="outlined">
       <v-card-title class="d-flex align-center">
         <v-icon icon="mdi-chart-box-outline" class="mr-3" />
         <span>Scan Overview</span>
@@ -21,13 +16,17 @@
           </v-col>
           <v-col cols="12" sm="6" md="3">
             <div class="text-center">
-              <div class="text-h4 text-medium-emphasis font-weight-bold">{{ summaryData.notFound }}</div>
+              <div class="text-h4 text-medium-emphasis font-weight-bold">
+                {{ summaryData.notFound }}
+              </div>
               <div class="text-body-2">Not Found</div>
             </div>
           </v-col>
           <v-col cols="12" sm="6" md="3" v-if="summaryData.withRecoveryInfo">
             <div class="text-center">
-              <div class="text-h4 text-warning font-weight-bold">{{ summaryData.withRecoveryInfo }}</div>
+              <div class="text-h4 text-warning font-weight-bold">
+                {{ summaryData.withRecoveryInfo }}
+              </div>
               <div class="text-body-2">With Recovery Info</div>
             </div>
           </v-col>
@@ -38,13 +37,13 @@
             </div>
           </v-col>
         </v-row>
-        
+
         <!-- Found Platforms Quick View -->
         <div v-if="foundPlatforms.length" class="mt-4">
           <h4 class="text-subtitle1 mb-2">Found on platforms:</h4>
           <div class="d-flex flex-wrap ga-2">
-            <v-chip 
-              v-for="platform in foundPlatforms" 
+            <v-chip
+              v-for="platform in foundPlatforms"
               :key="platform"
               size="small"
               color="success"
@@ -68,28 +67,28 @@
     <!-- Results Grid for Platform Data -->
     <div v-if="platformResults.length" class="platform-results-grid">
       <v-row>
-        <v-col 
-          v-for="(platformData, index) in platformResults" 
+        <v-col
+          v-for="(platformData, index) in platformResults"
           :key="`platform-${index}`"
-          cols="12" 
-          md="6" 
+          cols="12"
+          md="6"
           lg="4"
         >
-          <v-card 
-            elevation="2" 
+          <v-card
+            elevation="2"
             rounded="lg"
             :color="platformData.exists ? 'success-lighten-5' : 'grey-lighten-4'"
             class="h-100"
           >
             <v-card-title class="d-flex align-center">
-              <v-icon 
-                :icon="platformData.exists ? 'mdi-check-circle' : 'mdi-close-circle'" 
+              <v-icon
+                :icon="platformData.exists ? 'mdi-check-circle' : 'mdi-close-circle'"
                 :color="platformData.exists ? 'success' : 'grey'"
-                class="mr-2" 
+                class="mr-2"
               />
               {{ platformData.platform }}
               <v-spacer />
-              <v-chip 
+              <v-chip
                 :color="platformData.exists ? 'success' : 'grey'"
                 size="small"
                 variant="tonal"
@@ -137,7 +136,7 @@
                 </div>
 
                 <!-- Rate Limited -->
-                <v-alert 
+                <v-alert
                   v-if="platformData.ratelimited"
                   type="warning"
                   density="compact"
@@ -149,7 +148,7 @@
                 </v-alert>
 
                 <!-- Error -->
-                <v-alert 
+                <v-alert
                   v-if="platformData.error"
                   type="error"
                   density="compact"
@@ -169,12 +168,7 @@
     <!-- Completion and Error Messages -->
     <template v-for="(item, index) in parsedResults" :key="`message-${index}`">
       <!-- Completion Message -->
-      <v-alert 
-        v-if="item.type === 'complete'"
-        type="success"
-        variant="tonal"
-        class="mb-4"
-      >
+      <v-alert v-if="item.type === 'complete'" class="mb-4" type="success" variant="tonal">
         <template #title>
           <div class="d-flex align-center">
             <v-icon icon="mdi-check-circle" class="mr-2" />
@@ -182,7 +176,7 @@
           </div>
         </template>
         <div class="text-body-1 mb-2">{{ item.data.message }}</div>
-        
+
         <div v-if="item.data.summary" class="d-flex flex-wrap ga-2">
           <v-chip size="small" color="primary" variant="text">
             <v-icon icon="mdi-web" size="small" class="mr-1" />
@@ -192,21 +186,16 @@
             <v-icon icon="mdi-check" size="small" class="mr-1" />
             {{ item.data.summary.accounts_found }} found
           </v-chip>
-          <v-chip 
+          <v-chip
             v-if="item.data.summary.rate_limited > 0"
-            size="small" 
-            color="warning" 
+            color="warning"
+            size="small"
             variant="text"
           >
             <v-icon icon="mdi-clock-alert" size="small" class="mr-1" />
             {{ item.data.summary.rate_limited }} rate limited
           </v-chip>
-          <v-chip 
-            v-if="item.data.summary.errors > 0"
-            size="small" 
-            color="error" 
-            variant="text"
-          >
+          <v-chip v-if="item.data.summary.errors > 0" color="error" size="small" variant="text">
             <v-icon icon="mdi-alert" size="small" class="mr-1" />
             {{ item.data.summary.errors }} errors
           </v-chip>
@@ -218,12 +207,7 @@
       </v-alert>
 
       <!-- Error Messages -->
-      <v-alert
-        v-else-if="item.type === 'error'"
-        type="error"
-        variant="tonal"
-        prominent
-      >
+      <v-alert v-else-if="item.type === 'error'" prominent type="error" variant="tonal">
         <template #title>
           <div class="d-flex align-center">
             <v-icon icon="mdi-alert-circle" class="mr-2" />
@@ -250,48 +234,46 @@ const props = defineProps({
   result: {
     type: [Object, Array],
     required: true,
-  }
+  },
 })
 
 const { parsedResults, statusMessages } = usePluginResults(toRef(props, 'result'))
 
 // Extract platform data results
 const platformResults = computed(() => {
-  return parsedResults.value
-    .filter(item => item.type === 'data')
-    .map(item => item.data);
-});
+  return parsedResults.value.filter((item) => item.type === 'data').map((item) => item.data)
+})
 
 // Summary statistics
 const summaryData = computed(() => {
-  if (!platformResults.value.length) return null;
-  
-  const found = platformResults.value.filter(p => p.exists).length;
-  const notFound = platformResults.value.filter(p => !p.exists).length;
-  const withRecoveryInfo = platformResults.value.filter(p => p.partial_info).length;
-  
+  if (!platformResults.value.length) return null
+
+  const found = platformResults.value.filter((p) => p.exists).length
+  const notFound = platformResults.value.filter((p) => !p.exists).length
+  const withRecoveryInfo = platformResults.value.filter((p) => p.partial_info).length
+
   return {
     found,
     notFound,
-    withRecoveryInfo
-  };
-});
+    withRecoveryInfo,
+  }
+})
 
 // List of platforms where accounts were found
 const foundPlatforms = computed(() => {
   return platformResults.value
-    .filter(p => p.exists)
-    .map(p => p.platform)
-    .sort();
-});
+    .filter((p) => p.exists)
+    .map((p) => p.platform)
+    .sort()
+})
 
 const copyToClipboard = async (text) => {
   try {
-    await navigator.clipboard.writeText(text);
+    await navigator.clipboard.writeText(text)
   } catch (err) {
-    console.error('Failed to copy text:', err);
+    console.error('Failed to copy text:', err)
   }
-};
+}
 </script>
 
 <style scoped>
@@ -300,7 +282,11 @@ const copyToClipboard = async (text) => {
 }
 
 .results-overview {
-  background: linear-gradient(45deg, rgb(var(--v-theme-primary), 0.05), rgb(var(--v-theme-primary), 0.02));
+  background: linear-gradient(
+    45deg,
+    rgb(var(--v-theme-primary), 0.05),
+    rgb(var(--v-theme-primary), 0.02)
+  );
 }
 
 .platform-results-grid {
@@ -309,7 +295,9 @@ const copyToClipboard = async (text) => {
 
 /* Enhanced hover effects for platform cards */
 .platform-results-grid .v-card {
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .platform-results-grid .v-card:hover {
@@ -318,11 +306,11 @@ const copyToClipboard = async (text) => {
 }
 
 /* Better visual hierarchy for found vs not found */
-.v-card[style*="success-lighten-5"] {
+.v-card[style*='success-lighten-5'] {
   border-left: 4px solid rgb(var(--v-theme-success));
 }
 
-.v-card[style*="grey-lighten-4"] {
+.v-card[style*='grey-lighten-4'] {
   border-left: 4px solid rgb(var(--v-theme-surface-variant));
 }
 </style>

@@ -2,16 +2,14 @@
 <template>
   <div>
     <Sidebar />
-    
+
     <v-main>
       <v-container class="pa-6">
         <!-- Page Header -->
         <div class="mb-6">
           <v-row align="center" justify="space-between">
             <v-col>
-              <h1 class="text-h4 font-weight-bold">
-                Settings
-              </h1>
+              <h1 class="text-h4 font-weight-bold">Settings</h1>
             </v-col>
           </v-row>
         </div>
@@ -60,12 +58,7 @@
                   />
 
                   <!-- Error Alert -->
-                  <v-alert
-                    v-if="error"
-                    type="error"
-                    class="mb-4"
-                    :text="error"
-                  />
+                  <v-alert v-if="error" :text="error" class="mb-4" type="error" />
 
                   <!-- Success Alert -->
                   <v-alert
@@ -121,7 +114,7 @@ const handlePasswordChange = async () => {
     isLoading.value = true
     await authStore.changePassword({
       current_password: currentPassword.value,
-      new_password: newPassword.value
+      new_password: newPassword.value,
     })
     success.value = true
     currentPassword.value = ''

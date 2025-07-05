@@ -1,10 +1,6 @@
 <template>
   <v-tabs-window :model-value="activeTab" class="pa-4">
-    <v-tabs-window-item
-      v-for="(section, key) in entitySchema"
-      :key="key"
-      :value="key"
-    >
+    <v-tabs-window-item v-for="(section, key) in entitySchema" :key="key" :value="key">
       <!-- Notes Tab -->
       <div v-if="section.isNoteEditor && !notesExpanded" class="note-editor-container">
         <EditorToolbar
@@ -16,11 +12,7 @@
           :expanded="notesExpanded"
           @toggle-expand="$emit('toggleExpand')"
         />
-        <v-card
-          variant="outlined"
-          class="pa-4 mt-3"
-          :class="{ 'read-only-notes': !isEditing }"
-        >
+        <v-card :class="{ 'read-only-notes': !isEditing }" class="pa-4 mt-3" variant="outlined">
           <editor-content v-if="noteEditor" :editor="noteEditor" class="tiptap-content" />
           <div v-else class="text-center pa-4 text-grey">
             <v-icon>mdi-note-text</v-icon>
@@ -88,7 +80,7 @@ const props = defineProps({
   getSourceValue: { type: Function, required: true },
   updateSourceValue: { type: Function, required: true },
   getAssociateEntities: { type: Function, required: true },
-  existingEntities: { type: Array, required: true }
+  existingEntities: { type: Array, required: true },
 })
 
 const emit = defineEmits(['submit', 'toggleExpand', 'viewEntity', 'updateField'])

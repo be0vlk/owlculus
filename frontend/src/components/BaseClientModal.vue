@@ -1,5 +1,10 @@
 <template>
-  <v-dialog :model-value="dialogVisible" max-width="500px" persistent @update:model-value="val => !val && $emit('close')">
+  <v-dialog
+    :model-value="dialogVisible"
+    max-width="500px"
+    persistent
+    @update:model-value="(val) => !val && $emit('close')"
+  >
     <v-card>
       <v-card-title>
         <span class="text-h5">{{ title }}</span>
@@ -49,12 +54,7 @@
 
       <v-card-actions>
         <v-spacer></v-spacer>
-        <v-btn
-          variant="text"
-          @click="$emit('close')"
-        >
-          Cancel
-        </v-btn>
+        <v-btn variant="text" @click="$emit('close')"> Cancel </v-btn>
         <v-btn
           color="primary"
           variant="flat"
@@ -75,24 +75,24 @@ import { computed } from 'vue'
 const props = defineProps({
   isOpen: {
     type: Boolean,
-    required: true
+    required: true,
   },
   title: {
     type: String,
-    required: true
+    required: true,
   },
   modelValue: {
     type: Object,
-    required: true
+    required: true,
   },
   isSubmitting: {
     type: Boolean,
-    default: false
+    default: false,
   },
   submitButtonText: {
     type: String,
-    required: true
-  }
+    required: true,
+  },
 })
 
 const emit = defineEmits(['close', 'submit', 'update:modelValue'])
@@ -102,7 +102,7 @@ const dialogVisible = computed(() => props.isOpen)
 const updateField = (field, value) => {
   emit('update:modelValue', {
     ...props.modelValue,
-    [field]: value
+    [field]: value,
   })
 }
 </script>

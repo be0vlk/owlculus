@@ -14,7 +14,7 @@
               <v-icon start>mdi-information</v-icon>
               Case Information
             </v-card-title>
-            
+
             <v-card-text>
               <v-text-field
                 v-model="formData.title"
@@ -48,7 +48,7 @@
               <v-icon start>mdi-clock</v-icon>
               Case Timeline
             </v-card-title>
-            
+
             <v-card-text>
               <v-row>
                 <v-col cols="12" md="6">
@@ -57,27 +57,19 @@
                       <v-icon size="16" class="me-1">mdi-calendar-plus</v-icon>
                       Created
                     </div>
-                    <v-chip
-                      variant="outlined"
-                      size="small"
-                      class="font-mono"
-                    >
+                    <v-chip class="font-mono" size="small" variant="outlined">
                       {{ formatDate(caseData.created_at) }}
                     </v-chip>
                   </div>
                 </v-col>
-                
+
                 <v-col cols="12" md="6">
                   <div class="mb-4">
                     <div class="text-caption text-medium-emphasis mb-1">
                       <v-icon size="16" class="me-1">mdi-calendar-edit</v-icon>
                       Last Updated
                     </div>
-                    <v-chip
-                      variant="outlined"
-                      size="small"
-                      class="font-mono"
-                    >
+                    <v-chip class="font-mono" size="small" variant="outlined">
                       {{ formatDate(caseData.updated_at) }}
                     </v-chip>
                   </div>
@@ -111,7 +103,7 @@ import ModalActions from './ModalActions.vue'
 const props = defineProps({
   show: {
     type: Boolean,
-    required: true
+    required: true,
   },
   caseData: {
     type: Object,
@@ -120,9 +112,9 @@ const props = defineProps({
       title: '',
       status: '',
       created_at: null,
-      updated_at: null
-    })
-  }
+      updated_at: null,
+    }),
+  },
 })
 
 const emit = defineEmits(['close', 'update'])
@@ -135,22 +127,22 @@ const error = ref(null)
 
 // Status options with icons and colors
 const statusOptions = [
-  { 
-    value: 'Open', 
+  {
+    value: 'Open',
     title: 'Open',
     props: {
       prependIcon: 'mdi-folder-open',
-      color: 'success'
-    }
+      color: 'success',
+    },
   },
-  { 
-    value: 'Closed', 
+  {
+    value: 'Closed',
     title: 'Closed',
     props: {
       prependIcon: 'mdi-folder',
-      color: 'grey'
-    }
-  }
+      color: 'grey',
+    },
+  },
 ]
 
 // Validation rules
@@ -159,7 +151,7 @@ const rules = {
   titleLength: (value) => {
     if (!value) return true // handled by required rule
     return value.length <= 100 || 'Title must be 100 characters or less'
-  }
+  },
 }
 
 const dialogVisible = computed({
@@ -168,47 +160,54 @@ const dialogVisible = computed({
     if (!value) {
       emit('close')
     }
-  }
+  },
 })
 
 const formData = ref({
   title: '',
-  status: ''
+  status: '',
 })
 
 // Watch for caseData changes and update form
-watch(() => props.caseData, (newValue) => {
-  if (newValue) {
-    formData.value = {
-      title: newValue.title || '',
-      status: newValue.status || ''
+watch(
+  () => props.caseData,
+  (newValue) => {
+    if (newValue) {
+      formData.value = {
+        title: newValue.title || '',
+        status: newValue.status || '',
+      }
     }
-  }
-}, { immediate: true })
+  },
+  { immediate: true },
+)
 
 // Reset form validation when dialog opens
-watch(() => props.show, (show) => {
-  if (show && formRef.value) {
-    setTimeout(() => {
-      formRef.value.resetValidation()
-    }, 100)
-  }
-})
+watch(
+  () => props.show,
+  (show) => {
+    if (show && formRef.value) {
+      setTimeout(() => {
+        formRef.value.resetValidation()
+      }, 100)
+    }
+  },
+)
 
 const handleSubmit = async () => {
   // Validate form before submission
   if (!formRef.value) return
-  
+
   const { valid } = await formRef.value.validate()
   if (!valid) return
-  
+
   updating.value = true
   error.value = null
-  
+
   try {
     const response = await api.put(`/api/cases/${props.caseData.id}`, {
       title: formData.value.title.trim(),
-      status: formData.value.status
+      status: formData.value.status,
     })
     emit('update', response.data)
     emit('close')

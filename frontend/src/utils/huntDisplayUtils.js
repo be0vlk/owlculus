@@ -109,7 +109,7 @@ export const getStatusColor = (status) => {
     partial: 'warning',
     failed: 'error',
     cancelled: 'grey',
-    skipped: 'warning'
+    skipped: 'warning',
   }
   return statusColors[status] || 'grey'
 }
@@ -123,7 +123,7 @@ export const getStatusIcon = (status) => {
     partial: 'mdi-alert',
     failed: 'mdi-close',
     cancelled: 'mdi-stop',
-    skipped: 'mdi-skip-next'
+    skipped: 'mdi-skip-next',
   }
   return statusIcons[status] || 'mdi-help'
 }
@@ -137,7 +137,7 @@ export const getStatusText = (status) => {
     partial: 'Partial Success',
     failed: 'Failed',
     cancelled: 'Cancelled',
-    skipped: 'Skipped'
+    skipped: 'Skipped',
   }
   return statusTexts[status] || 'Unknown'
 }
@@ -151,7 +151,7 @@ export const getCategoryIcon = (category) => {
     ip: 'mdi-ip-network',
     phone: 'mdi-phone',
     email: 'mdi-email',
-    general: 'mdi-magnify'
+    general: 'mdi-magnify',
   }
   return iconMap[category] || iconMap.general
 }
@@ -165,7 +165,7 @@ export const getCategoryColor = (category) => {
     ip: 'secondary',
     phone: 'primary-darken-1',
     email: 'error',
-    general: 'secondary'
+    general: 'secondary',
   }
   return colorMap[category] || colorMap.general
 }
@@ -183,15 +183,15 @@ export const formatTime = (timestamp) => {
 // Calculate and format duration
 export const calculateDuration = (startTime, endTime) => {
   if (!startTime) return 'N/A'
-  
+
   const start = new Date(startTime)
   const end = endTime ? new Date(endTime) : new Date()
   const diffMs = end - start
-  
+
   const diffSeconds = Math.floor(diffMs / 1000)
   const diffMinutes = Math.floor(diffSeconds / 60)
   const diffHours = Math.floor(diffMinutes / 60)
-  
+
   if (diffHours > 0) {
     return `${diffHours}h ${diffMinutes % 60}m`
   } else if (diffMinutes > 0) {
@@ -212,7 +212,7 @@ export const formatFileSize = (bytes) => {
 
 // Format parameter names (snake_case to Title Case)
 export const formatParameterName = (paramName) => {
-  return paramName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+  return paramName.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
 }
 
 // Format metadata values
@@ -228,7 +228,7 @@ export const getLogEntryClass = (type) => {
   const classMap = {
     error: 'log-error',
     warning: 'log-warning',
-    info: 'log-info'
+    info: 'log-info',
   }
   return classMap[type] || 'log-default'
 }
@@ -236,19 +236,21 @@ export const getLogEntryClass = (type) => {
 // Get display category name
 export const getDisplayCategory = (category) => {
   if (!category) return 'Other'
-  
+
   // Map hunt categories to display categories (matching HuntCatalog filter logic)
   const categoryMapping = {
-    'person': 'Person',
-    'domain': 'Network',
-    'network': 'Network', 
-    'company': 'Company',
-    'general': 'Other',
-    'other': 'Other'
+    person: 'Person',
+    domain: 'Network',
+    network: 'Network',
+    company: 'Company',
+    general: 'Other',
+    other: 'Other',
   }
-  
-  return categoryMapping[category.toLowerCase()] || 
-         category.charAt(0).toUpperCase() + category.slice(1).toLowerCase()
+
+  return (
+    categoryMapping[category.toLowerCase()] ||
+    category.charAt(0).toUpperCase() + category.slice(1).toLowerCase()
+  )
 }
 
 // Export results to JSON

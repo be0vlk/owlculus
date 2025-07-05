@@ -12,21 +12,15 @@
         :title="action.title"
       />
     </v-btn-group>
-    
+
     <v-spacer />
-    
+
     <div class="text-caption text-medium-emphasis mr-3">
-      <v-progress-circular
-        v-if="saving"
-        size="16"
-        width="2"
-        indeterminate
-        class="mr-2"
-      />
+      <v-progress-circular v-if="saving" class="mr-2" indeterminate size="16" width="2" />
       <span v-if="saving">Saving...</span>
       <span v-else-if="lastSavedTime">Last saved: {{ formatLastSaved }}</span>
     </div>
-    
+
     <v-btn
       :icon="expanded ? 'mdi-arrow-collapse' : 'mdi-arrow-expand'"
       size="small"

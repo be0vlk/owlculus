@@ -3,17 +3,11 @@
     <Sidebar />
     <v-main>
       <v-container fluid class="pa-6">
-
-        <v-alert
-          v-if="apiKeyError"
-          type="warning"
-          variant="tonal"
-          class="mb-6"
-          prominent
-        >
+        <v-alert v-if="apiKeyError" class="mb-6" prominent type="warning" variant="tonal">
           <v-alert-title>OpenAI API Key Required</v-alert-title>
           <div>
-            Strixy requires an OpenAI API key to function. Please contact your administrator to configure the OpenAI API key in the system settings.
+            Strixy requires an OpenAI API key to function. Please contact your administrator to
+            configure the OpenAI API key in the system settings.
           </div>
           <template #append>
             <v-icon size="large">mdi-key-alert</v-icon>
@@ -22,12 +16,18 @@
 
         <v-card variant="outlined" class="chat-container" :class="{ 'chat-disabled': apiKeyError }">
           <v-card-title class="d-flex align-center pa-4 bg-surface">
-            <v-icon icon="mdi-robot" :color="apiKeyError ? 'grey' : 'primary'" size="large" class="me-3" />
+            <v-icon
+              :color="apiKeyError ? 'grey' : 'primary'"
+              class="me-3"
+              icon="mdi-robot"
+              size="large"
+            />
             <div class="flex-grow-1">
-              <div class="text-h6 font-weight-bold" :class="{ 'text-disabled': apiKeyError }">Chat Interface</div>
+              <div :class="{ 'text-disabled': apiKeyError }" class="text-h6 font-weight-bold">
+                Chat Interface
+              </div>
             </div>
-            
-            
+
             <v-tooltip text="Export chat" location="bottom">
               <template #activator="{ props }">
                 <v-btn
@@ -41,7 +41,7 @@
                 />
               </template>
             </v-tooltip>
-            
+
             <v-tooltip text="Start new chat" location="bottom">
               <template #activator="{ props }">
                 <v-btn
@@ -60,20 +60,16 @@
           <v-card-text class="pa-0">
             <div
               class="chat-messages pa-4"
-              style="height: 500px; overflow-y: auto;"
+              style="height: 500px; overflow-y: auto"
               ref="chatContainer"
             >
               <v-list class="pa-0">
-                <v-list-item
-                  v-for="(message, index) in messages"
-                  :key="index"
-                  class="px-0 mb-3"
-                >
+                <v-list-item v-for="(message, index) in messages" :key="index" class="px-0 mb-3">
                   <div
                     class="message-bubble"
                     :class="{
                       'user-message': message.role === 'user',
-                      'assistant-message': message.role === 'assistant'
+                      'assistant-message': message.role === 'assistant',
                     }"
                   >
                     <div class="message-header d-flex align-center mb-1">
@@ -91,21 +87,13 @@
                         {{ formatTime(message.timestamp) }}
                       </span>
                     </div>
-                    <div 
-                      class="message-content"
-                      v-html="renderMarkdown(message.content)"
-                    ></div>
+                    <div class="message-content" v-html="renderMarkdown(message.content)"></div>
                   </div>
                 </v-list-item>
               </v-list>
 
               <div v-if="loading" class="d-flex justify-center my-4">
-                <v-progress-circular
-                  indeterminate
-                  color="primary"
-                  size="24"
-                  class="me-2"
-                />
+                <v-progress-circular class="me-2" color="primary" indeterminate size="24" />
                 <span class="text-caption">Strixy is thinking...</span>
               </div>
             </div>
@@ -159,34 +147,28 @@ const md = new MarkdownIt({
   html: false,
   linkify: true,
   typographer: true,
-  breaks: true
+  breaks: true,
 })
 
-const {
-  messages,
-  loading,
-  currentMessage,
-  apiKeyError,
-  sendMessage,
-  initializeChat,
-  clearChat
-} = useStrixyChat()
+const { messages, loading, currentMessage, apiKeyError, sendMessage, initializeChat, clearChat } =
+  useStrixyChat()
 
 const confirmDialog = ref(null)
 
 const hasUserMessages = computed(() => {
-  return messages.value.some(message => message.role === 'user')
+  return messages.value.some((message) => message.role === 'user')
 })
 
 const handleNewChat = async () => {
   if (hasUserMessages.value) {
     const confirmed = await confirmDialog.value.confirm({
       title: 'Start New Chat',
-      message: 'Are you sure you want to start a new chat? This will clear your current conversation.',
+      message:
+        'Are you sure you want to start a new chat? This will clear your current conversation.',
       icon: 'mdi-chat-plus',
       iconColor: 'primary',
       confirmText: 'Start New Chat',
-      confirmColor: 'primary'
+      confirmColor: 'primary',
     })
     if (confirmed) {
       await clearChat()
@@ -199,7 +181,7 @@ const handleNewChat = async () => {
 const formatTime = (timestamp) => {
   return new Date(timestamp).toLocaleTimeString('en-US', {
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
   })
 }
 
@@ -209,11 +191,11 @@ const exportChat = () => {
   const exportData = {
     title: 'Strixy Chat Export',
     exportTime: new Date().toISOString(),
-    messages: messages.value.map(msg => ({
+    messages: messages.value.map((msg) => ({
       role: msg.role,
       content: msg.content,
-      timestamp: msg.timestamp
-    }))
+      timestamp: msg.timestamp,
+    })),
   }
 
   const dataStr = JSON.stringify(exportData, null, 2)
@@ -311,9 +293,15 @@ onMounted(async () => {
   font-weight: 600;
 }
 
-.message-content :deep(h1) { font-size: 1.5em; }
-.message-content :deep(h2) { font-size: 1.3em; }
-.message-content :deep(h3) { font-size: 1.1em; }
+.message-content :deep(h1) {
+  font-size: 1.5em;
+}
+.message-content :deep(h2) {
+  font-size: 1.3em;
+}
+.message-content :deep(h3) {
+  font-size: 1.1em;
+}
 
 .message-content :deep(p) {
   margin: 0.5em 0;

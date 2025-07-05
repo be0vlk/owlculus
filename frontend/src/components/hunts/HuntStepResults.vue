@@ -12,7 +12,7 @@
           <div class="text-body-2">{{ step.step_id }}</div>
         </v-col>
       </v-row>
-      
+
       <!-- Parameters -->
       <div v-if="step.parameters && Object.keys(step.parameters).length > 0" class="mt-3">
         <div class="text-caption font-weight-medium mb-2">Parameters</div>
@@ -26,7 +26,7 @@
           {{ key }}: {{ value }}
         </v-chip>
       </div>
-      
+
       <!-- Error Details -->
       <div v-if="step.status === 'failed' && step.error_details" class="mt-3">
         <v-alert type="error" variant="tonal" density="compact">
@@ -39,11 +39,7 @@
 
     <!-- Display results based on plugin type -->
     <div v-if="step.status === 'completed' && displayResults.length > 0">
-      <div
-        v-for="(result, index) in displayResults"
-        :key="index"
-        class="result-item mb-3"
-      >
+      <div v-for="(result, index) in displayResults" :key="index" class="result-item mb-3">
         <v-card variant="outlined" density="compact">
           <v-card-text class="pa-3">
             <!-- Generic result display -->
@@ -67,19 +63,19 @@
       <v-icon icon="mdi-information-outline" color="grey" class="mb-2" />
       <div class="text-caption text-medium-emphasis">No results to display</div>
     </div>
-    
+
     <!-- Pending state -->
     <div v-else-if="step.status === 'pending'" class="text-center pa-4">
       <v-icon icon="mdi-clock-outline" color="grey" class="mb-2" />
       <div class="text-caption text-medium-emphasis">Step not yet executed</div>
     </div>
-    
+
     <!-- Running state -->
     <div v-else-if="step.status === 'running'" class="text-center pa-4">
       <v-progress-circular indeterminate size="32" color="primary" />
       <div class="text-caption text-medium-emphasis mt-2">Step is currently running...</div>
     </div>
-    
+
     <!-- Skipped state -->
     <div v-else-if="step.status === 'skipped'" class="text-center pa-4">
       <v-icon icon="mdi-skip-next" color="warning" class="mb-2" />
@@ -94,18 +90,18 @@ import { computed } from 'vue'
 const props = defineProps({
   step: {
     type: Object,
-    required: true
+    required: true,
   },
   stepNumber: {
     type: Number,
-    required: true
-  }
+    required: true,
+  },
 })
 
 // Computed properties
 const displayResults = computed(() => {
   if (!props.step?.output) return []
-  
+
   // Handle different output formats
   if (Array.isArray(props.step.output)) {
     return props.step.output
@@ -121,7 +117,7 @@ const displayResults = computed(() => {
 
 // Methods
 const formatKey = (key) => {
-  return key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+  return key.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
 }
 
 const formatValue = (value) => {

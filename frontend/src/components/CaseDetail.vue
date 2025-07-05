@@ -16,11 +16,7 @@
           <v-list-item-subtitle class="text-subtitle-2 font-weight-medium mb-1">
             Status
           </v-list-item-subtitle>
-          <v-chip 
-            :color="getStatusColor(caseData?.status)"
-            size="small"
-            variant="tonal"
-          >
+          <v-chip :color="getStatusColor(caseData?.status)" size="small" variant="tonal">
             {{ caseData?.status || 'N/A' }}
           </v-chip>
         </div>
@@ -51,8 +47,8 @@
             Assigned Users
           </v-list-item-subtitle>
           <div v-if="caseData?.users?.length" class="d-flex flex-wrap ga-1">
-            <v-chip 
-              v-for="user in caseData.users" 
+            <v-chip
+              v-for="user in caseData.users"
               :key="user.id"
               size="small"
               color="grey-lighten-1"
@@ -71,15 +67,15 @@
 </template>
 
 <script setup>
-import { formatDate } from '../composables/dateUtils';
+import { formatDate } from '../composables/dateUtils'
 
 defineProps({
   caseData: { type: Object, required: true },
   client: { type: Object, default: () => ({}) },
-});
+})
 
 // Function to get status color - consistent with case dashboard table
 const getStatusColor = (status) => {
-  return status === 'Open' ? 'success' : 'default';
-};
+  return status === 'Open' ? 'success' : 'default'
+}
 </script>

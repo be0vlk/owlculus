@@ -38,12 +38,12 @@ import { caseService } from '@/services/case'
 defineProps({
   modelValue: {
     type: [String, Number],
-    default: null
+    default: null,
   },
   label: {
     type: String,
-    default: 'Select Case'
-  }
+    default: 'Select Case',
+  },
 })
 
 defineEmits(['update:modelValue'])
@@ -52,9 +52,9 @@ const cases = ref([])
 const loadingCases = ref(true)
 
 const caseItems = computed(() => {
-  return cases.value.map(case_ => ({
+  return cases.value.map((case_) => ({
     ...case_,
-    display_name: `Case #${case_.case_number}: ${case_.title}`
+    display_name: `Case #${case_.case_number}: ${case_.title}`,
   }))
 })
 

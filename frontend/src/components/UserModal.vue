@@ -14,14 +14,14 @@
           </div>
         </div>
       </v-card-title>
-      
+
       <v-divider />
-      
+
       <v-card-text class="pa-6">
         <v-alert v-if="error" type="error" variant="tonal" class="mb-4">
           {{ error }}
         </v-alert>
-        
+
         <v-form ref="formRef" @submit.prevent="handleSubmit">
           <v-container fluid class="pa-0">
             <v-row>
@@ -36,7 +36,9 @@
                   prepend-inner-icon="mdi-account"
                   :rules="usernameRules"
                   required
-                  :hint="user ? 'Username cannot be changed after creation' : 'Enter a unique username'"
+                  :hint="
+                    user ? 'Username cannot be changed after creation' : 'Enter a unique username'
+                  "
                   :persistent-hint="!!user"
                 />
               </v-col>
@@ -107,7 +109,7 @@
       </v-card-text>
 
       <v-divider />
-      
+
       <modal-actions
         :submit-text="user ? 'Save Changes' : 'Create User'"
         :submit-icon="user ? 'mdi-content-save' : 'mdi-account-plus'"
@@ -129,12 +131,12 @@ import ModalActions from './ModalActions.vue'
 const props = defineProps({
   show: {
     type: Boolean,
-    required: true
+    required: true,
   },
   user: {
     type: Object,
-    default: null
-  }
+    default: null,
+  },
 })
 
 const emit = defineEmits(['close', 'saved'])
@@ -145,7 +147,7 @@ const dialogVisible = computed({
     if (!value) {
       emit('close')
     }
-  }
+  },
 })
 
 const loading = ref(false)
@@ -158,7 +160,7 @@ const formData = ref({
   email: '',
   password: '',
   role: 'Analyst',
-  is_active: true
+  is_active: true,
 })
 
 // Role options with descriptions and icons
@@ -168,42 +170,43 @@ const roleOptions = [
     title: 'Analyst',
     description: 'Read-only access to assigned cases',
     icon: 'mdi-chart-line',
-    color: 'warning'
+    color: 'warning',
   },
   {
     value: 'Investigator',
     title: 'Investigator',
     description: 'Read/write access, can run plugins',
     icon: 'mdi-account-search',
-    color: 'info'
+    color: 'info',
   },
   {
     value: 'Admin',
     title: 'Administrator',
     description: 'Full system access and user management',
     icon: 'mdi-shield-check',
-    color: 'success'
-  }
+    color: 'success',
+  },
 ]
 
 // Validation rules
 const usernameRules = [
-  v => !!v || 'Username is required',
-  v => v.length >= 3 || 'Username must be at least 3 characters',
-  v => v.length <= 50 || 'Username must be less than 50 characters',
-  v => /^[a-zA-Z0-9_-]+$/.test(v) || 'Username can only contain letters, numbers, underscore and dash'
+  (v) => !!v || 'Username is required',
+  (v) => v.length >= 3 || 'Username must be at least 3 characters',
+  (v) => v.length <= 50 || 'Username must be less than 50 characters',
+  (v) =>
+    /^[a-zA-Z0-9_-]+$/.test(v) || 'Username can only contain letters, numbers, underscore and dash',
 ]
 
 const emailRules = [
-  v => !!v || 'Email is required',
-  v => /.+@.+\..+/.test(v) || 'Email must be valid'
+  (v) => !!v || 'Email is required',
+  (v) => /.+@.+\..+/.test(v) || 'Email must be valid',
 ]
 
 const passwordRules = [
-  v => !!v || 'Password is required',
-  v => v.length >= 8 || 'Password must be at least 8 characters',
-  v => /[A-Za-z]/.test(v) || 'Password must contain at least one letter',
-  v => /\d/.test(v) || 'Password must contain at least one number'
+  (v) => !!v || 'Password is required',
+  (v) => v.length >= 8 || 'Password must be at least 8 characters',
+  (v) => /[A-Za-z]/.test(v) || 'Password must contain at least one letter',
+  (v) => /\d/.test(v) || 'Password must contain at least one number',
 ]
 
 // Form validation
@@ -211,30 +214,32 @@ const isFormValid = computed(() => {
   if (!formData.value.username || !formData.value.email || !formData.value.role) {
     return false
   }
-  
+
   if (!props.user && !formData.value.password) {
     return false
   }
-  
+
   // Check email format
   if (!/.+@.+\..+/.test(formData.value.email)) {
     return false
   }
-  
+
   // Check username format
   if (formData.value.username.length < 3 || !/^[a-zA-Z0-9_-]+$/.test(formData.value.username)) {
     return false
   }
-  
+
   // Check password for new users
   if (!props.user) {
-    if (formData.value.password.length < 8 || 
-        !/[A-Za-z]/.test(formData.value.password) || 
-        !/\d/.test(formData.value.password)) {
+    if (
+      formData.value.password.length < 8 ||
+      !/[A-Za-z]/.test(formData.value.password) ||
+      !/\d/.test(formData.value.password)
+    ) {
       return false
     }
   }
-  
+
   return true
 })
 
@@ -244,7 +249,7 @@ const resetForm = () => {
     email: '',
     password: '',
     role: 'Analyst',
-    is_active: true
+    is_active: true,
   }
 }
 
@@ -253,7 +258,7 @@ const updateFormData = () => {
     formData.value = {
       ...formData.value,
       ...props.user,
-      password: '' // Don't include password when editing
+      password: '', // Don't include password when editing
     }
   } else {
     resetForm()
@@ -265,9 +270,13 @@ onMounted(() => {
 })
 
 // Watch for changes to the user prop to update form data
-watch(() => props.user, () => {
-  updateFormData()
-}, { immediate: true })
+watch(
+  () => props.user,
+  () => {
+    updateFormData()
+  },
+  { immediate: true },
+)
 
 const handleSubmit = async () => {
   try {
@@ -280,7 +289,7 @@ const handleSubmit = async () => {
       result = await userService.updateUser(props.user.id, {
         email: formData.value.email,
         role: formData.value.role,
-        is_active: formData.value.is_active
+        is_active: formData.value.is_active,
       })
     } else {
       // Create new user
@@ -289,7 +298,7 @@ const handleSubmit = async () => {
         email: formData.value.email,
         password: formData.value.password,
         role: formData.value.role,
-        is_active: true
+        is_active: true,
       })
     }
 

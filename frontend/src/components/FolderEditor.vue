@@ -3,13 +3,9 @@
     <div class="folder-row">
       <div class="folder-content">
         <div class="folder-icon">
-          <v-icon 
-            :icon="getFolderIcon(expanded)" 
-            :color="getFolderColor(level)"
-            size="small"
-          />
+          <v-icon :color="getFolderColor(level)" :icon="getFolderIcon(expanded)" size="small" />
         </div>
-        
+
         <div class="folder-fields flex-grow-1">
           <v-text-field
             v-model="localFolder.name"
@@ -20,7 +16,7 @@
             class="folder-name-field"
             @blur="updateFolder"
           />
-          
+
           <v-text-field
             v-model="localFolder.description"
             placeholder="Description (optional)"
@@ -43,7 +39,7 @@
           >
             <v-icon :icon="expanded ? 'mdi-chevron-down' : 'mdi-chevron-right'" />
           </v-btn>
-          
+
           <v-btn
             @click="addSubfolder"
             icon="mdi-folder-plus"
@@ -52,7 +48,7 @@
             color="primary"
             class="ml-1"
           />
-          
+
           <v-btn
             @click="deleteFolder"
             icon="mdi-delete"
@@ -89,16 +85,16 @@ const { getFolderColor, getFolderIcon } = useFolderIcons()
 const props = defineProps({
   folder: {
     type: Object,
-    required: true
+    required: true,
   },
   level: {
     type: Number,
-    default: 0
+    default: 0,
   },
   path: {
     type: Array,
-    default: () => []
-  }
+    default: () => [],
+  },
 })
 
 const emit = defineEmits(['update', 'delete', 'add-subfolder'])
@@ -125,7 +121,7 @@ const addSubfolder = () => {
   localFolder.value.subfolders.push({
     name: 'New Subfolder',
     description: '',
-    subfolders: []
+    subfolders: [],
   })
   expanded.value = true
   updateFolder()
@@ -149,9 +145,13 @@ const toggleExpanded = () => {
   expanded.value = !expanded.value
 }
 
-watch(() => props.folder, (newFolder) => {
-  localFolder.value = { ...newFolder }
-}, { deep: true })
+watch(
+  () => props.folder,
+  (newFolder) => {
+    localFolder.value = { ...newFolder }
+  },
+  { deep: true },
+)
 </script>
 
 <style scoped>
@@ -217,7 +217,7 @@ watch(() => props.folder, (newFolder) => {
     flex-direction: column;
     width: 100%;
   }
-  
+
   .folder-name-field,
   .folder-desc-field {
     min-width: 100%;

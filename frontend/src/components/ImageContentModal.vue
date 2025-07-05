@@ -10,32 +10,17 @@
           <v-icon icon="mdi-file-image-box" />
           <span>Image Preview</span>
         </div>
-        <v-btn
-          icon="mdi-close"
-          variant="text"
-          size="small"
-          @click="show = false"
-        />
+        <v-btn icon="mdi-close" size="small" variant="text" @click="show = false" />
       </v-card-title>
 
       <v-card-text class="pa-0">
         <!-- Loading State -->
         <div v-if="loading" class="d-flex justify-center pa-8">
-          <v-progress-circular
-            indeterminate
-            :size="50"
-            :width="6"
-            color="primary"
-          />
+          <v-progress-circular :size="50" :width="6" color="primary" indeterminate />
         </div>
 
         <!-- Error State -->
-        <v-alert
-          v-else-if="error"
-          type="error"
-          variant="outlined"
-          class="ma-4"
-        >
+        <v-alert v-else-if="error" class="ma-4" type="error" variant="outlined">
           {{ error }}
         </v-alert>
 
@@ -47,11 +32,15 @@
               <v-row dense align="center">
                 <v-col cols="12" sm="6" md="3">
                   <div class="text-caption text-medium-emphasis">File</div>
-                  <div class="text-body-2 font-weight-medium">{{ fileInfo.filename || evidenceItem?.title }}</div>
+                  <div class="text-body-2 font-weight-medium">
+                    {{ fileInfo.filename || evidenceItem?.title }}
+                  </div>
                 </v-col>
                 <v-col cols="12" sm="6" md="2">
                   <div class="text-caption text-medium-emphasis">Size</div>
-                  <div class="text-body-2 font-weight-medium">{{ formatFileSize(fileInfo.file_size) }}</div>
+                  <div class="text-body-2 font-weight-medium">
+                    {{ formatFileSize(fileInfo.file_size) }}
+                  </div>
                 </v-col>
                 <v-col cols="12" sm="6" md="2">
                   <div class="text-caption text-medium-emphasis">Dimensions</div>
@@ -92,9 +81,7 @@
               @click="zoomOut"
               :disabled="zoomLevel <= 0.25"
             />
-            <v-chip size="small" variant="outlined">
-              {{ Math.round(zoomLevel * 100) }}%
-            </v-chip>
+            <v-chip size="small" variant="outlined"> {{ Math.round(zoomLevel * 100) }}% </v-chip>
             <v-btn
               size="small"
               icon="mdi-magnify-plus"
@@ -102,20 +89,9 @@
               @click="zoomIn"
               :disabled="zoomLevel >= 3"
             />
-            <v-btn
-              size="small"
-              variant="outlined"
-              @click="resetZoom"
-            >
-              Reset
-            </v-btn>
+            <v-btn size="small" variant="outlined" @click="resetZoom"> Reset </v-btn>
             <v-spacer />
-            <v-btn-toggle
-              v-model="fitMode"
-              mandatory
-              variant="outlined"
-              density="compact"
-            >
+            <v-btn-toggle v-model="fitMode" density="compact" mandatory variant="outlined">
               <v-btn value="contain" size="small">
                 <v-icon>mdi-fit-to-screen-outline</v-icon>
                 <v-tooltip activator="parent" location="top">Fit to screen</v-tooltip>
@@ -128,15 +104,12 @@
           </div>
 
           <!-- Image Container -->
-          <div 
+          <div
             ref="imageContainer"
             class="image-container flex-grow-1"
             @wheel.prevent="handleWheel"
           >
-            <div 
-              class="image-wrapper"
-              :style="imageWrapperStyle"
-            >
+            <div :style="imageWrapperStyle" class="image-wrapper">
               <img
                 ref="imageElement"
                 :src="imageUrl"
@@ -153,9 +126,7 @@
 
       <v-card-actions>
         <v-spacer />
-        <v-btn color="primary" variant="text" @click="show = false">
-          Close
-        </v-btn>
+        <v-btn color="primary" variant="text" @click="show = false"> Close </v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
@@ -169,24 +140,24 @@ import api from '../services/api'
 const props = defineProps({
   modelValue: {
     type: Boolean,
-    default: false
+    default: false,
   },
   evidenceItem: {
     type: Object,
-    default: null
+    default: null,
   },
   fileInfo: {
     type: Object,
-    default: null
+    default: null,
   },
   loading: {
     type: Boolean,
-    default: false
+    default: false,
   },
   error: {
     type: String,
-    default: ''
-  }
+    default: '',
+  },
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -204,7 +175,7 @@ const naturalHeight = ref(0)
 
 const show = computed({
   get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value)
+  set: (value) => emit('update:modelValue', value),
 })
 
 // Computed styles
@@ -215,7 +186,7 @@ const imageWrapperStyle = computed(() => {
       height: '100%',
       display: 'flex',
       alignItems: 'center',
-      justifyContent: 'center'
+      justifyContent: 'center',
     }
   }
   return {
@@ -224,7 +195,7 @@ const imageWrapperStyle = computed(() => {
     overflow: 'auto',
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
   }
 })
 
@@ -236,13 +207,13 @@ const imageStyle = computed(() => {
       width: 'auto',
       height: 'auto',
       transform: `scale(${zoomLevel.value})`,
-      transition: 'transform 0.2s ease'
+      transition: 'transform 0.2s ease',
     }
   }
   return {
     transform: `scale(${zoomLevel.value})`,
     transition: 'transform 0.2s ease',
-    transformOrigin: 'center'
+    transformOrigin: 'center',
   }
 })
 
@@ -252,12 +223,12 @@ const formatFileSize = (bytes) => {
   const units = ['B', 'KB', 'MB', 'GB']
   let size = bytes
   let unitIndex = 0
-  
+
   while (size >= 1024 && unitIndex < units.length - 1) {
     size /= 1024
     unitIndex++
   }
-  
+
   return `${size.toFixed(unitIndex > 0 ? 1 : 0)} ${units[unitIndex]}`
 }
 
@@ -267,7 +238,7 @@ const handleImageLoad = (event) => {
   naturalWidth.value = img.naturalWidth
   naturalHeight.value = img.naturalHeight
   imageDimensions.value = `${img.naturalWidth} × ${img.naturalHeight}`
-  
+
   // Detect format from file extension
   const filename = props.evidenceItem?.title || ''
   const extension = filename.split('.').pop()?.toUpperCase() || 'Unknown'
@@ -306,7 +277,7 @@ const handleWheel = (event) => {
 // Download image
 const downloadImage = async () => {
   if (!props.evidenceItem) return
-  
+
   try {
     const blob = await evidenceService.downloadEvidence(props.evidenceItem.id)
     const url = window.URL.createObjectURL(blob)
@@ -326,9 +297,9 @@ const downloadImage = async () => {
 const toggleFullscreen = () => {
   const elem = imageContainer.value
   if (!elem) return
-  
+
   if (!document.fullscreenElement) {
-    elem.requestFullscreen().catch(err => {
+    elem.requestFullscreen().catch((err) => {
       console.error('Failed to enter fullscreen:', err)
     })
   } else {
@@ -346,9 +317,9 @@ const fetchImage = async (evidenceItem) => {
   try {
     // Fetch the image with authentication
     const response = await api.get(`/api/evidence/${evidenceItem.id}/image`, {
-      responseType: 'blob'
+      responseType: 'blob',
     })
-    
+
     // Create a blob URL from the response
     const blob = new Blob([response.data], { type: response.headers['content-type'] })
     imageUrl.value = URL.createObjectURL(blob)
@@ -359,9 +330,13 @@ const fetchImage = async (evidenceItem) => {
 }
 
 // Set image URL when evidence item changes
-watch(() => props.evidenceItem, (newItem) => {
-  fetchImage(newItem)
-}, { immediate: true })
+watch(
+  () => props.evidenceItem,
+  (newItem) => {
+    fetchImage(newItem)
+  },
+  { immediate: true },
+)
 
 // Reset state when modal closes
 watch(show, (newValue) => {

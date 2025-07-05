@@ -72,6 +72,18 @@ const routes = [
     component: () => import('../views/HuntExecution.vue'),
     meta: { requiresAuth: true, requiresNotAnalyst: true },
   },
+  {
+    path: '/tasks',
+    name: 'Tasks',
+    component: () => import('../views/tasks/TaskDashboard.vue'),
+    meta: { requiresAuth: true },
+  },
+  {
+    path: '/tasks/:id',
+    name: 'TaskDetail',
+    component: () => import('../views/tasks/TaskDetail.vue'),
+    meta: { requiresAuth: true },
+  },
 ]
 
 const router = createRouter({

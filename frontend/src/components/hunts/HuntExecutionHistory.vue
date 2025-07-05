@@ -38,12 +38,7 @@
             />
           </v-col>
           <v-col cols="12" md="2">
-            <v-btn
-              @click="clearFilters"
-              variant="outlined"
-              block
-              :disabled="!hasActiveFilters"
-            >
+            <v-btn :disabled="!hasActiveFilters" block variant="outlined" @click="clearFilters">
               Clear Filters
             </v-btn>
           </v-col>
@@ -62,7 +57,11 @@
       <v-icon icon="mdi-history" size="64" color="grey" class="mb-4" />
       <div class="text-h6 mb-2">No executions found</div>
       <div class="text-body-2 text-medium-emphasis">
-        {{ hasActiveFilters ? 'Try adjusting your search or filter criteria' : 'No hunt executions have been completed yet' }}
+        {{
+          hasActiveFilters
+            ? 'Try adjusting your search or filter criteria'
+            : 'No hunt executions have been completed yet'
+        }}
       </div>
     </v-card>
 
@@ -80,7 +79,12 @@
         <!-- Hunt Name Column -->
         <template #[`item.hunt_display_name`]="{ item }">
           <div class="d-flex align-center">
-            <v-avatar :color="getCategoryColor(item.hunt_category)" size="32" variant="tonal" class="me-3">
+            <v-avatar
+              :color="getCategoryColor(item.hunt_category)"
+              class="me-3"
+              size="32"
+              variant="tonal"
+            >
               <v-icon :icon="getCategoryIcon(item.hunt_category)" size="small" />
             </v-avatar>
             <div class="text-body-2 font-weight-medium">{{ item.hunt_display_name }}</div>
@@ -115,7 +119,7 @@
               height="6"
               rounded
               class="flex-grow-1 me-2"
-              style="max-width: 100px;"
+              style="max-width: 100px"
             />
             <span class="text-caption">{{ Math.round(item.progress * 100) }}%</span>
           </div>
@@ -153,12 +157,12 @@ import { formatDate } from '@/composables/dateUtils'
 const props = defineProps({
   executions: {
     type: Array,
-    default: () => []
+    default: () => [],
   },
   loading: {
     type: Boolean,
-    default: false
-  }
+    default: false,
+  },
 })
 
 defineEmits(['view-details'])
@@ -177,7 +181,7 @@ const headers = [
   { title: 'Progress', key: 'progress', sortable: true },
   { title: 'Started', key: 'created_at', sortable: true },
   { title: 'Duration', key: 'duration', sortable: false },
-  { title: 'Actions', key: 'actions', sortable: false, width: 80 }
+  { title: 'Actions', key: 'actions', sortable: false, width: 80 },
 ]
 
 // Filter options
@@ -187,14 +191,16 @@ const statusOptions = [
   { title: 'Partial', value: 'partial' },
   { title: 'Cancelled', value: 'cancelled' },
   { title: 'Running', value: 'running' },
-  { title: 'Pending', value: 'pending' }
+  { title: 'Pending', value: 'pending' },
 ]
 
 const categoryOptions = computed(() => {
-  const categories = [...new Set(props.executions.map(exec => exec.hunt_category).filter(Boolean))]
-  return categories.map(category => ({
+  const categories = [
+    ...new Set(props.executions.map((exec) => exec.hunt_category).filter(Boolean)),
+  ]
+  return categories.map((category) => ({
     title: category.charAt(0).toUpperCase() + category.slice(1),
-    value: category
+    value: category,
   }))
 })
 
@@ -209,68 +215,93 @@ const filteredExecutions = computed(() => {
   // Filter by search query
   if (searchQuery.value) {
     const query = searchQuery.value.toLowerCase()
-    filtered = filtered.filter(exec => {
-      const target = getHuntTargetSummary(exec.initial_parameters || {}, exec.hunt_category || 'general')
-      return exec.hunt_display_name?.toLowerCase().includes(query) ||
-             exec.hunt_category?.toLowerCase().includes(query) ||
-             exec.status.toLowerCase().includes(query) ||
-             target.toLowerCase().includes(query)
+    filtered = filtered.filter((exec) => {
+      const target = getHuntTargetSummary(
+        exec.initial_parameters || {},
+        exec.hunt_category || 'general',
+      )
+      return (
+        exec.hunt_display_name?.toLowerCase().includes(query) ||
+        exec.hunt_category?.toLowerCase().includes(query) ||
+        exec.status.toLowerCase().includes(query) ||
+        target.toLowerCase().includes(query)
+      )
     })
   }
 
   // Filter by status
   if (statusFilter.value) {
-    filtered = filtered.filter(exec => exec.status === statusFilter.value)
+    filtered = filtered.filter((exec) => exec.status === statusFilter.value)
   }
 
   // Filter by category
   if (categoryFilter.value) {
-    filtered = filtered.filter(exec => exec.hunt_category === categoryFilter.value)
+    filtered = filtered.filter((exec) => exec.hunt_category === categoryFilter.value)
   }
 
   // Add computed properties for sorting
-  return filtered.map(exec => ({
+  return filtered.map((exec) => ({
     ...exec,
-    target: getTargetDisplay(exec) // Add target as a sortable property
+    target: getTargetDisplay(exec), // Add target as a sortable property
   }))
 })
 
 // Methods
 
-
 const getStatusColor = (status) => {
   switch (status) {
-    case 'pending': return 'grey'
-    case 'running': return 'primary'
-    case 'completed': return 'success'
-    case 'partial': return 'warning'
-    case 'failed': return 'error'
-    case 'cancelled': return 'grey'
-    default: return 'grey'
+    case 'pending':
+      return 'grey'
+    case 'running':
+      return 'primary'
+    case 'completed':
+      return 'success'
+    case 'partial':
+      return 'warning'
+    case 'failed':
+      return 'error'
+    case 'cancelled':
+      return 'grey'
+    default:
+      return 'grey'
   }
 }
 
 const getStatusIcon = (status) => {
   switch (status) {
-    case 'pending': return 'mdi-clock-outline'
-    case 'running': return 'mdi-play'
-    case 'completed': return 'mdi-check'
-    case 'partial': return 'mdi-alert'
-    case 'failed': return 'mdi-close'
-    case 'cancelled': return 'mdi-stop'
-    default: return 'mdi-help'
+    case 'pending':
+      return 'mdi-clock-outline'
+    case 'running':
+      return 'mdi-play'
+    case 'completed':
+      return 'mdi-check'
+    case 'partial':
+      return 'mdi-alert'
+    case 'failed':
+      return 'mdi-close'
+    case 'cancelled':
+      return 'mdi-stop'
+    default:
+      return 'mdi-help'
   }
 }
 
 const getStatusText = (status) => {
   switch (status) {
-    case 'pending': return 'Pending'
-    case 'running': return 'Running'
-    case 'completed': return 'Completed'
-    case 'partial': return 'Partial'
-    case 'failed': return 'Failed'
-    case 'cancelled': return 'Cancelled'
-    default: return 'Unknown'
+    case 'pending':
+      return 'Pending'
+    case 'running':
+      return 'Running'
+    case 'completed':
+      return 'Completed'
+    case 'partial':
+      return 'Partial'
+    case 'failed':
+      return 'Failed'
+    case 'cancelled':
+      return 'Cancelled'
+    default:
+      return 'Unknown'
   }
 }
 
@@ -278,17 +309,17 @@ const getStatusText = (status) => {
 
 const calculateDuration = (execution) => {
   if (!execution.started_at) return 'N/A'
-  
+
   const startTime = new Date(execution.started_at)
   const endTime = execution.completed_at ? new Date(execution.completed_at) : new Date()
   const diffMs = endTime - startTime
-  
+
   if (diffMs < 1000) return '< 1s'
-  
+
   const diffSeconds = Math.floor(diffMs / 1000)
   const diffMinutes = Math.floor(diffSeconds / 60)
   const diffHours = Math.floor(diffMinutes / 60)
-  
+
   if (diffHours > 0) {
     return `${diffHours}h ${diffMinutes % 60}m`
   } else if (diffMinutes > 0) {
@@ -307,15 +338,15 @@ const clearFilters = () => {
 const getTargetDisplay = (execution) => {
   const initialParams = execution.initial_parameters || {}
   const huntCategory = execution.hunt_category || 'general'
-  
+
   // First try to get the target from the helper function
   const target = getHuntTargetSummary(initialParams, huntCategory)
-  
+
   // If we got a meaningful result, return it
   if (target && target !== 'N/A') {
     return target
   }
-  
+
   // Otherwise, try to extract any parameter value as fallback
   const paramKeys = Object.keys(initialParams)
   if (paramKeys.length > 0) {
@@ -328,7 +359,7 @@ const getTargetDisplay = (execution) => {
       }
     }
   }
-  
+
   return 'N/A'
 }
 </script>

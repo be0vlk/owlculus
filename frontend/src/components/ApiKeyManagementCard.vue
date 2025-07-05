@@ -4,7 +4,9 @@
       <v-icon icon="mdi-key" color="primary" size="large" class="me-3" />
       <div class="flex-grow-1">
         <div class="text-h6 font-weight-bold">API Key Management</div>
-        <div class="text-body-2 text-medium-emphasis">Manage API keys for external services and plugins</div>
+        <div class="text-body-2 text-medium-emphasis">
+          Manage API keys for external services and plugins
+        </div>
       </div>
       <v-btn
         color="primary"
@@ -26,13 +28,7 @@
       </div>
 
       <!-- Error state -->
-      <v-alert
-        v-else-if="error"
-        type="error"
-        variant="tonal"
-        class="ma-4"
-        :text="error"
-      />
+      <v-alert v-else-if="error" :text="error" class="ma-4" type="error" variant="tonal" />
 
       <!-- Empty state -->
       <div v-else-if="!sortedApiKeys.length" class="pa-8 text-center">
@@ -41,12 +37,7 @@
         <div class="text-body-2 text-medium-emphasis mb-4">
           Add API keys to enable external service integrations and plugins
         </div>
-        <v-btn
-          color="primary"
-          variant="flat"
-          prepend-icon="mdi-plus"
-          @click="openAddDialog"
-        >
+        <v-btn color="primary" prepend-icon="mdi-plus" variant="flat" @click="openAddDialog">
           Add Your First API Key
         </v-btn>
       </div>
@@ -66,12 +57,14 @@
           <tr v-for="apiKey in sortedApiKeys" :key="apiKey.provider">
             <td>
               <div class="d-flex align-center">
-                <v-icon 
-                  :icon="getProviderIcon(apiKey.provider)" 
-                  class="me-3" 
-                  :color="apiKey.is_configured ? 'success' : 'grey'" 
+                <v-icon
+                  :color="apiKey.is_configured ? 'success' : 'grey'"
+                  :icon="getProviderIcon(apiKey.provider)"
+                  class="me-3"
                 />
-                <span class="font-weight-medium">{{ getProviderDisplayName(apiKey.provider) }}</span>
+                <span class="font-weight-medium">{{
+                  getProviderDisplayName(apiKey.provider)
+                }}</span>
               </div>
             </td>
             <td>
@@ -94,7 +87,7 @@
               <span v-else class="text-caption text-medium-emphasis">Unknown</span>
             </td>
             <td>
-              <div class="d-flex align-center" style="gap: 8px;">
+              <div class="d-flex align-center" style="gap: 8px">
                 <v-btn
                   color="primary"
                   size="small"
@@ -135,9 +128,9 @@
           <v-icon icon="mdi-plus" class="me-3" />
           Add API Key
         </v-card-title>
-        
+
         <v-divider />
-        
+
         <v-card-text class="pa-4">
           <v-form @submit.prevent="handleAddApiKey">
             <v-row>
@@ -164,7 +157,7 @@
                   </template>
                 </v-select>
               </v-col>
-              
+
               <v-col cols="12" v-if="newKeyForm.provider === 'custom'">
                 <v-text-field
                   v-model="newKeyForm.provider"
@@ -178,7 +171,7 @@
                   required
                 />
               </v-col>
-              
+
               <v-col cols="12">
                 <v-text-field
                   v-model="newKeyForm.name"
@@ -192,7 +185,7 @@
                   required
                 />
               </v-col>
-              
+
               <v-col cols="12">
                 <v-text-field
                   v-model="newKeyForm.api_key"
@@ -212,18 +205,12 @@
             </v-row>
           </v-form>
         </v-card-text>
-        
+
         <v-divider />
-        
+
         <v-card-actions class="pa-4">
           <v-spacer />
-          <v-btn
-            variant="text"
-            @click="closeAddDialog"
-            :disabled="saving"
-          >
-            Cancel
-          </v-btn>
+          <v-btn :disabled="saving" variant="text" @click="closeAddDialog"> Cancel </v-btn>
           <v-btn
             color="primary"
             variant="flat"
@@ -244,9 +231,9 @@
           <v-icon icon="mdi-pencil" class="me-3" />
           Edit API Key - {{ getProviderDisplayName(editingProvider) }}
         </v-card-title>
-        
+
         <v-divider />
-        
+
         <v-card-text class="pa-4">
           <v-form @submit.prevent="handleUpdateApiKey">
             <v-row>
@@ -261,7 +248,7 @@
                   required
                 />
               </v-col>
-              
+
               <v-col cols="12">
                 <v-text-field
                   v-model="editKeyForm.api_key"
@@ -280,18 +267,12 @@
             </v-row>
           </v-form>
         </v-card-text>
-        
+
         <v-divider />
-        
+
         <v-card-actions class="pa-4">
           <v-spacer />
-          <v-btn
-            variant="text"
-            @click="closeEditDialog"
-            :disabled="saving"
-          >
-            Cancel
-          </v-btn>
+          <v-btn :disabled="saving" variant="text" @click="closeEditDialog"> Cancel </v-btn>
           <v-btn
             color="primary"
             variant="flat"
@@ -308,8 +289,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { useApiKeys } from '@/composables/useApiKeys'
+import {onMounted, ref} from 'vue'
+import {useApiKeys} from '@/composables/useApiKeys'
 
 const emit = defineEmits(['notification', 'confirmDelete'])
 
@@ -329,19 +310,19 @@ const {
   editingProvider,
   newKeyForm,
   editKeyForm,
-  
+
   // Constants
   commonProviders,
-  
+
   // Computed
   sortedApiKeys,
   isFormValid,
-  
+
   // Validation
   validateProvider,
   validateApiKey,
   validateName,
-  
+
   // Methods
   loadApiKeys,
   addApiKey,
@@ -353,7 +334,7 @@ const {
   closeEditDialog,
   handleProviderChange,
   getProviderIcon,
-  getProviderDisplayName
+  getProviderDisplayName,
 } = useApiKeys()
 
 // Event handlers
@@ -382,11 +363,12 @@ const handleDeleteApiKey = async (apiKey) => {
     await emit('confirmDelete', {
       title: 'Delete API Key',
       message: `Are you sure you want to delete the API key for "${getProviderDisplayName(apiKey.provider)}"?`,
-      warning: 'This action cannot be undone. Any plugins or services using this API key will stop working.',
+      warning:
+        'This action cannot be undone. Any plugins or services using this API key will stop working.',
       onConfirm: async () => {
         await deleteApiKey(apiKey.provider)
         emit('notification', { text: 'API key deleted successfully!', color: 'success' })
-      }
+      },
     })
   } catch (error) {
     if (error.message && !error.message.includes('cancelled')) {
@@ -403,7 +385,7 @@ const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
-      day: 'numeric'
+      day: 'numeric',
     })
   } catch {
     return 'Invalid date'

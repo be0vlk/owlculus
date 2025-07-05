@@ -101,23 +101,23 @@ const {
   caseNumberPrefix,
   configLoading,
   exampleCaseNumber,
-  
+
   // Constants
   templateOptions,
-  
+
   // Computed
   isConfigChanged,
   isConfigValid,
-  
+
   // Validation
   validatePrefix,
-  
+
   // Methods
   onTemplateChange,
   onPrefixChange,
   loadConfiguration,
   saveConfiguration,
-  resetConfiguration
+  resetConfiguration,
 } = useSystemConfiguration()
 
 const handleSave = async () => {
@@ -126,7 +126,10 @@ const handleSave = async () => {
     emit('notification', { text: 'Configuration saved successfully!', color: 'success' })
   } catch (error) {
     console.error('Error saving configuration:', error)
-    emit('notification', { text: 'Failed to save configuration. Please try again.', color: 'error' })
+    emit('notification', {
+      text: 'Failed to save configuration. Please try again.',
+      color: 'error',
+    })
   }
 }
 

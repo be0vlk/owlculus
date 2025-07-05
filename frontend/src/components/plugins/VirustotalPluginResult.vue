@@ -11,18 +11,14 @@
     <!-- VirusTotal Results -->
     <div v-if="virusTotalResults.length" class="vt-results-grid">
       <v-row>
-        <v-col 
-          v-for="(result, index) in virusTotalResults" 
-          :key="`vt-${index}`"
-          cols="12"
-        >
+        <v-col v-for="(result, index) in virusTotalResults" :key="`vt-${index}`" cols="12">
           <v-card elevation="2" rounded="lg" class="result-card">
             <!-- Result Header -->
             <v-card-title class="d-flex align-center bg-primary-lighten-5 pa-4">
               <v-icon :icon="getTargetIcon(result.target_type)" size="large" class="mr-3" />
               <div class="flex-grow-1">
                 <div class="text-h6 d-flex align-center ga-2">
-                  <span class="text-truncate" style="max-width: 400px;">{{ result.target }}</span>
+                  <span class="text-truncate" style="max-width: 400px">{{ result.target }}</span>
                   <v-btn
                     icon="mdi-content-copy"
                     size="x-small"
@@ -36,7 +32,7 @@
                   {{ formatTargetType(result.target_type) }}
                 </div>
               </div>
-              
+
               <!-- Verdict Chip -->
               <v-chip
                 :color="getVerdictColor(result.verdict)"
@@ -55,7 +51,10 @@
                 <div class="mb-4">
                   <div class="d-flex align-center justify-space-between mb-2">
                     <span class="text-subtitle1 font-weight-medium">Detection Ratio</span>
-                    <span class="text-h5 font-weight-bold" :class="getDetectionColor(result.detection_ratio)">
+                    <span
+                      :class="getDetectionColor(result.detection_ratio)"
+                      class="text-h5 font-weight-bold"
+                    >
                       {{ result.detection_ratio }}
                     </span>
                   </div>
@@ -109,7 +108,7 @@
                       </v-list-item-title>
                     </v-list-item>
                   </v-list>
-                  
+
                   <!-- File Names -->
                   <div v-if="result.file_info.names && result.file_info.names.length" class="mt-3">
                     <div class="text-body-2 font-weight-medium mb-1">Known Filenames:</div>
@@ -322,16 +321,14 @@ const props = defineProps({
   result: {
     type: [Object, Array],
     required: true,
-  }
+  },
 })
 
 const { parsedResults, statusMessages, errorMessages } = usePluginResults(toRef(props, 'result'))
 
 // Extract VirusTotal data results
 const virusTotalResults = computed(() => {
-  return parsedResults.value
-    .filter(item => item.type === 'data')
-    .map(item => item.data)
+  return parsedResults.value.filter((item) => item.type === 'data').map((item) => item.data)
 })
 
 // Helper functions
@@ -401,7 +398,7 @@ const getVerdictIcon = (verdict) => {
 
 const getDetectionPercentage = (ratio) => {
   if (!ratio) return 0
-  const [detected, total] = ratio.split('/').map(n => parseInt(n))
+  const [detected, total] = ratio.split('/').map((n) => parseInt(n))
   if (total === 0) return 0
   return (detected / total) * 100
 }
@@ -424,13 +421,13 @@ const getDetectionProgressColor = (ratio) => {
 
 const getDetectionCategoryColor = (category) => {
   const categoryColors = {
-    'malware': 'error',
-    'phishing': 'error',
-    'malicious': 'error',
-    'suspicious': 'warning',
-    'undetected': 'success',
-    'harmless': 'success',
-    'type-unsupported': 'grey'
+    malware: 'error',
+    phishing: 'error',
+    malicious: 'error',
+    suspicious: 'warning',
+    undetected: 'success',
+    harmless: 'success',
+    'type-unsupported': 'grey',
   }
   return categoryColors[category?.toLowerCase()] || 'info'
 }
@@ -440,7 +437,7 @@ const formatFileSize = (bytes) => {
   const sizes = ['Bytes', 'KB', 'MB', 'GB']
   if (bytes === 0) return '0 Bytes'
   const i = Math.floor(Math.log(bytes) / Math.log(1024))
-  return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i]
+  return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + ' ' + sizes[i]
 }
 
 const copyToClipboard = async (text) => {
@@ -454,7 +451,9 @@ const copyToClipboard = async (text) => {
 
 <style scoped>
 .result-card {
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .result-card:hover {
@@ -467,7 +466,11 @@ const copyToClipboard = async (text) => {
 }
 
 .bg-primary-lighten-5 {
-  background: linear-gradient(45deg, rgb(var(--v-theme-primary), 0.08), rgb(var(--v-theme-primary), 0.03));
+  background: linear-gradient(
+    45deg,
+    rgb(var(--v-theme-primary), 0.08),
+    rgb(var(--v-theme-primary), 0.03)
+  );
 }
 
 .font-mono {
@@ -482,17 +485,17 @@ const copyToClipboard = async (text) => {
 }
 
 /* Enhanced visual hierarchy */
-.v-chip[color="success"] {
+.v-chip[color='success'] {
   background: rgb(var(--v-theme-success), 0.12);
   border: 1px solid rgb(var(--v-theme-success), 0.3);
 }
 
-.v-chip[color="warning"] {
+.v-chip[color='warning'] {
   background: rgb(var(--v-theme-warning), 0.12);
   border: 1px solid rgb(var(--v-theme-warning), 0.3);
 }
 
-.v-chip[color="error"] {
+.v-chip[color='error'] {
   background: rgb(var(--v-theme-error), 0.12);
   border: 1px solid rgb(var(--v-theme-error), 0.3);
 }

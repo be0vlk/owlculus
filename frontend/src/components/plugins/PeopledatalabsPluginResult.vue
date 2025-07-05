@@ -10,17 +10,17 @@
 
     <template v-for="(item, index) in parsedResults" :key="index">
       <!-- Person Results -->
-      <v-card v-if="item.type === 'data' && item.data.search_type === 'person'" elevation="2" rounded="lg">
+      <v-card
+        v-if="item.type === 'data' && item.data.search_type === 'person'"
+        elevation="2"
+        rounded="lg"
+      >
         <v-card-title class="d-flex align-center justify-space-between">
           <div class="d-flex align-center">
             <v-icon icon="mdi-account" class="mr-2" />
             {{ item.data.person?.full_name || 'Person Profile' }}
           </div>
-          <v-chip 
-            :color="getConfidenceColor(item.data.confidence)" 
-            size="small"
-            variant="outlined"
-          >
+          <v-chip :color="getConfidenceColor(item.data.confidence)" size="small" variant="outlined">
             {{ item.data.confidence || 'Unknown' }} confidence
           </v-chip>
         </v-card-title>
@@ -41,7 +41,7 @@
                 <v-tooltip activator="parent" location="top">Copy location</v-tooltip>
               </v-btn>
             </div>
-            
+
             <div class="d-flex align-center ga-2" v-if="item.data.person?.job_title">
               <v-icon icon="mdi-briefcase" size="small" />
               <span class="text-body-2">{{ item.data.person.job_title }}</span>
@@ -55,7 +55,7 @@
                 <v-tooltip activator="parent" location="top">Copy job title</v-tooltip>
               </v-btn>
             </div>
-            
+
             <div class="d-flex align-center ga-2" v-if="item.data.person?.job_company_name">
               <v-icon icon="mdi-domain" size="small" />
               <span class="text-body-2">{{ item.data.person.job_company_name }}</span>
@@ -72,8 +72,8 @@
 
             <!-- Contact Information -->
             <div v-if="item.data.person?.emails?.length">
-              <div 
-                v-for="email in item.data.person.emails.slice(0, 3)" 
+              <div
+                v-for="email in item.data.person.emails.slice(0, 3)"
                 :key="email"
                 class="d-flex align-center ga-2"
               >
@@ -90,10 +90,10 @@
                 </v-btn>
               </div>
             </div>
-            
+
             <div v-if="item.data.person?.phone_numbers?.length">
-              <div 
-                v-for="phone in item.data.person.phone_numbers.slice(0, 2)" 
+              <div
+                v-for="phone in item.data.person.phone_numbers.slice(0, 2)"
                 :key="phone"
                 class="d-flex align-center ga-2"
               >
@@ -114,7 +114,11 @@
             <!-- Social Profiles -->
             <div v-if="item.data.person?.linkedin_url" class="d-flex align-center ga-2">
               <v-icon icon="mdi-linkedin" size="small" />
-              <a :href="item.data.person.linkedin_url" target="_blank" class="text-decoration-none text-body-2">
+              <a
+                :href="item.data.person.linkedin_url"
+                class="text-decoration-none text-body-2"
+                target="_blank"
+              >
                 LinkedIn Profile
               </a>
               <v-btn
@@ -131,7 +135,9 @@
             <!-- Education Summary -->
             <div v-if="item.data.person?.education?.length" class="d-flex align-center ga-2">
               <v-icon icon="mdi-school" size="small" />
-              <span class="text-body-2">{{ item.data.person.education[0].school?.name || 'Education available' }}</span>
+              <span class="text-body-2">{{
+                item.data.person.education[0].school?.name || 'Education available'
+              }}</span>
               <v-chip size="x-small" variant="outlined">
                 +{{ item.data.person.education.length - 1 }} more
               </v-chip>
@@ -140,11 +146,16 @@
             <!-- Work Experience Summary -->
             <div v-if="item.data.person?.experience?.length" class="d-flex align-center ga-2">
               <v-icon icon="mdi-briefcase-variant" size="small" />
-              <span class="text-body-2">{{ item.data.person.experience.length }} work {{ item.data.person.experience.length === 1 ? 'experience' : 'experiences' }}</span>
+              <span class="text-body-2"
+                >{{ item.data.person.experience.length }} work
+                {{ item.data.person.experience.length === 1 ? 'experience' : 'experiences' }}</span
+              >
             </div>
 
             <!-- API Usage -->
-            <div class="d-flex justify-space-between align-center text-caption text-medium-emphasis mt-2">
+            <div
+              class="d-flex justify-space-between align-center text-caption text-medium-emphasis mt-2"
+            >
               <span>API Credits: {{ item.data.api_credits_used || 1 }}</span>
               <span>People Data Labs</span>
             </div>
@@ -153,17 +164,17 @@
       </v-card>
 
       <!-- Company Results -->
-      <v-card v-else-if="item.type === 'data' && item.data.search_type === 'company'" elevation="2" rounded="lg">
+      <v-card
+        v-else-if="item.type === 'data' && item.data.search_type === 'company'"
+        elevation="2"
+        rounded="lg"
+      >
         <v-card-title class="d-flex align-center justify-space-between">
           <div class="d-flex align-center">
             <v-icon icon="mdi-domain" class="mr-2" />
             {{ item.data.company?.name || 'Company Profile' }}
           </div>
-          <v-chip 
-            :color="getConfidenceColor(item.data.confidence)" 
-            size="small"
-            variant="outlined"
-          >
+          <v-chip :color="getConfidenceColor(item.data.confidence)" size="small" variant="outlined">
             {{ item.data.confidence || 'Unknown' }} confidence
           </v-chip>
         </v-card-title>
@@ -173,7 +184,11 @@
             <!-- Basic Company Information -->
             <div class="d-flex align-center ga-2" v-if="item.data.company?.website">
               <v-icon icon="mdi-web" size="small" />
-              <a :href="`https://${item.data.company.website}`" target="_blank" class="text-decoration-none text-body-2">
+              <a
+                :href="`https://${item.data.company.website}`"
+                class="text-decoration-none text-body-2"
+                target="_blank"
+              >
                 {{ item.data.company.website }}
               </a>
               <v-btn
@@ -186,22 +201,22 @@
                 <v-tooltip activator="parent" location="top">Copy website</v-tooltip>
               </v-btn>
             </div>
-            
+
             <div class="d-flex align-center ga-2" v-if="item.data.company?.industry">
               <v-icon icon="mdi-factory" size="small" />
               <span class="text-body-2">{{ item.data.company.industry }}</span>
             </div>
-            
+
             <div class="d-flex align-center ga-2" v-if="item.data.company?.size">
               <v-icon icon="mdi-account-group" size="small" />
               <span class="text-body-2">{{ item.data.company.size }}</span>
             </div>
-            
+
             <div class="d-flex align-center ga-2" v-if="item.data.company?.founded">
               <v-icon icon="mdi-calendar" size="small" />
               <span class="text-body-2">Founded {{ item.data.company.founded }}</span>
             </div>
-            
+
             <div class="d-flex align-center ga-2" v-if="item.data.company?.employee_count">
               <v-icon icon="mdi-account-multiple" size="small" />
               <span class="text-body-2">{{ item.data.company.employee_count }} employees</span>
@@ -225,7 +240,11 @@
             <!-- Social Profiles -->
             <div v-if="item.data.company?.linkedin_url" class="d-flex align-center ga-2">
               <v-icon icon="mdi-linkedin" size="small" />
-              <a :href="item.data.company.linkedin_url" target="_blank" class="text-decoration-none text-body-2">
+              <a
+                :href="item.data.company.linkedin_url"
+                class="text-decoration-none text-body-2"
+                target="_blank"
+              >
                 LinkedIn Profile
               </a>
               <v-btn
@@ -242,7 +261,9 @@
             <!-- Technologies -->
             <div v-if="item.data.company?.technologies?.length" class="d-flex align-center ga-2">
               <v-icon icon="mdi-code-tags" size="small" />
-              <span class="text-body-2">{{ item.data.company.technologies.length }} technologies</span>
+              <span class="text-body-2"
+                >{{ item.data.company.technologies.length }} technologies</span
+              >
               <div class="d-flex flex-wrap ga-1 ml-2">
                 <v-chip
                   v-for="tech in item.data.company.technologies.slice(0, 3)"
@@ -263,7 +284,9 @@
             </div>
 
             <!-- API Usage -->
-            <div class="d-flex justify-space-between align-center text-caption text-medium-emphasis mt-2">
+            <div
+              class="d-flex justify-space-between align-center text-caption text-medium-emphasis mt-2"
+            >
               <span>API Credits: {{ item.data.api_credits_used || 1 }}</span>
               <span>People Data Labs</span>
             </div>
@@ -272,12 +295,7 @@
       </v-card>
 
       <!-- Error Messages -->
-      <v-alert
-        v-else-if="item.type === 'error'"
-        type="error"
-        variant="tonal"
-        prominent
-      >
+      <v-alert v-else-if="item.type === 'error'" prominent type="error" variant="tonal">
         <template #title>
           <div class="d-flex align-center">
             <v-icon icon="mdi-alert-circle" class="mr-2" />
@@ -303,7 +321,7 @@ const props = defineProps({
   result: {
     type: [Object, Array],
     required: true,
-  }
+  },
 })
 
 const { parsedResults, statusMessages } = usePluginResults(toRef(props, 'result'))
@@ -311,12 +329,12 @@ const { parsedResults, statusMessages } = usePluginResults(toRef(props, 'result'
 // Helper function to get confidence color
 const getConfidenceColor = (confidence) => {
   if (!confidence || confidence === 'unknown') return 'grey'
-  
+
   const conf = confidence.toString().toLowerCase()
   if (conf.includes('high') || conf === '5' || conf === '4') return 'success'
   if (conf.includes('medium') || conf === '3') return 'warning'
   if (conf.includes('low') || conf === '2' || conf === '1') return 'error'
-  
+
   return 'info'
 }
 

@@ -1,6 +1,6 @@
-import {defineStore} from 'pinia'
-import {computed, ref} from 'vue'
-import {huntService} from '../services/hunt'
+import { defineStore } from 'pinia'
+import { computed, ref } from 'vue'
+import { huntService } from '../services/hunt'
 
 export const useHuntStore = defineStore('hunt', () => {
   // State
@@ -84,7 +84,7 @@ export const useHuntStore = defineStore('hunt', () => {
       // Add to active executions with full data - ensure reactivity
       activeExecutions.value = {
         ...activeExecutions.value,
-        [fullExecution.id]: fullExecution
+        [fullExecution.id]: fullExecution,
       }
 
       // Also add to execution history
@@ -153,7 +153,7 @@ export const useHuntStore = defineStore('hunt', () => {
 
           // Add active executions to the store with full details
           const activeExecPromises = executions
-            .filter(execution => execution.status === 'running' || execution.status === 'pending')
+            .filter((execution) => execution.status === 'running' || execution.status === 'pending')
             .map(async (execution) => {
               try {
                 // Fetch full execution details including steps
@@ -256,11 +256,11 @@ export const useHuntStore = defineStore('hunt', () => {
             updatedExecution.progress = data.progress || execution.progress
             // Update step status if provided
             if (data.step_id && updatedExecution.steps) {
-              const stepIndex = updatedExecution.steps.findIndex(s => s.step_id === data.step_id)
+              const stepIndex = updatedExecution.steps.findIndex((s) => s.step_id === data.step_id)
               if (stepIndex !== -1) {
                 updatedExecution.steps[stepIndex] = {
                   ...updatedExecution.steps[stepIndex],
-                  status: 'running'
+                  status: 'running',
                 }
               }
             }
@@ -269,11 +269,11 @@ export const useHuntStore = defineStore('hunt', () => {
             updatedExecution.progress = data.progress || execution.progress
             // Update step status if provided
             if (data.step_id && updatedExecution.steps) {
-              const stepIndex = updatedExecution.steps.findIndex(s => s.step_id === data.step_id)
+              const stepIndex = updatedExecution.steps.findIndex((s) => s.step_id === data.step_id)
               if (stepIndex !== -1) {
                 updatedExecution.steps[stepIndex] = {
                   ...updatedExecution.steps[stepIndex],
-                  status: 'completed'
+                  status: 'completed',
                 }
               }
             }
@@ -282,11 +282,11 @@ export const useHuntStore = defineStore('hunt', () => {
             updatedExecution.progress = data.progress || execution.progress
             // Update step status if provided
             if (data.step_id && updatedExecution.steps) {
-              const stepIndex = updatedExecution.steps.findIndex(s => s.step_id === data.step_id)
+              const stepIndex = updatedExecution.steps.findIndex((s) => s.step_id === data.step_id)
               if (stepIndex !== -1) {
                 updatedExecution.steps[stepIndex] = {
                   ...updatedExecution.steps[stepIndex],
-                  status: 'failed'
+                  status: 'failed',
                 }
               }
             }
@@ -305,7 +305,7 @@ export const useHuntStore = defineStore('hunt', () => {
             }
 
             // Update execution history to include the completed execution
-            const historyIndex = executionHistory.value.findIndex(e => e.id === executionId)
+            const historyIndex = executionHistory.value.findIndex((e) => e.id === executionId)
             if (historyIndex !== -1) {
               executionHistory.value[historyIndex] = { ...updatedExecution }
             } else {
@@ -320,7 +320,7 @@ export const useHuntStore = defineStore('hunt', () => {
             updatedExecution.completed_at = new Date().toISOString()
 
             // Update execution history
-            const errorHistoryIndex = executionHistory.value.findIndex(e => e.id === executionId)
+            const errorHistoryIndex = executionHistory.value.findIndex((e) => e.id === executionId)
             if (errorHistoryIndex !== -1) {
               executionHistory.value[errorHistoryIndex] = { ...updatedExecution }
             } else {
@@ -335,7 +335,7 @@ export const useHuntStore = defineStore('hunt', () => {
         // Force reactivity by replacing the entire object
         activeExecutions.value = {
           ...activeExecutions.value,
-          [executionId]: updatedExecution
+          [executionId]: updatedExecution,
         }
       }
     }
@@ -383,12 +383,12 @@ export const useHuntStore = defineStore('hunt', () => {
           // Update in activeExecutions
           activeExecutions.value = {
             ...activeExecutions.value,
-            [updated.id]: updated
+            [updated.id]: updated,
           }
 
           // If execution is no longer running, update history
           if (updated.status !== 'running' && updated.status !== 'pending') {
-            const historyIndex = executionHistory.value.findIndex(e => e.id === updated.id)
+            const historyIndex = executionHistory.value.findIndex((e) => e.id === updated.id)
             if (historyIndex !== -1) {
               executionHistory.value[historyIndex] = { ...updated }
             } else {

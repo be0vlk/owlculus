@@ -21,19 +21,19 @@ const entityDisplayNames = {
   person: 'Person',
   company: 'Company',
   domain: 'Domain',
-  ip_address: 'IP Address'
-};
+  ip_address: 'IP Address',
+}
 
 const props = defineProps({
   entityTypes: {
     type: Array,
-    required: true
-  }
+    required: true,
+  },
 })
 
-const activeType = ref(props.entityTypes[0] || '');
+const activeType = ref(props.entityTypes[0] || '')
 
 const getDisplayName = (type) => {
-  return entityDisplayNames[type] || type;
+  return entityDisplayNames[type] || type
 }
 </script>

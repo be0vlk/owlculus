@@ -11,32 +11,17 @@
           <v-icon icon="mdi-file-document-outline" />
           <span>Text File Content</span>
         </div>
-        <v-btn
-          icon="mdi-close"
-          variant="text"
-          size="small"
-          @click="show = false"
-        />
+        <v-btn icon="mdi-close" size="small" variant="text" @click="show = false" />
       </v-card-title>
 
       <v-card-text class="pa-0">
         <!-- Loading State -->
         <div v-if="loading" class="d-flex justify-center pa-8">
-          <v-progress-circular
-            indeterminate
-            :size="50"
-            :width="6"
-            color="primary"
-          />
+          <v-progress-circular :size="50" :width="6" color="primary" indeterminate />
         </div>
 
         <!-- Error State -->
-        <v-alert
-          v-else-if="error"
-          type="error"
-          variant="outlined"
-          class="ma-4"
-        >
+        <v-alert v-else-if="error" class="ma-4" type="error" variant="outlined">
           {{ error }}
         </v-alert>
 
@@ -52,15 +37,21 @@
                 </v-col>
                 <v-col cols="12" sm="6" md="2">
                   <div class="text-caption text-medium-emphasis">Size</div>
-                  <div class="text-body-2 font-weight-medium">{{ formatFileSize(fileInfo.file_size) }}</div>
+                  <div class="text-body-2 font-weight-medium">
+                    {{ formatFileSize(fileInfo.file_size) }}
+                  </div>
                 </v-col>
                 <v-col cols="12" sm="6" md="2">
                   <div class="text-caption text-medium-emphasis">Lines</div>
-                  <div class="text-body-2 font-weight-medium">{{ fileInfo.line_count?.toLocaleString() }}</div>
+                  <div class="text-body-2 font-weight-medium">
+                    {{ fileInfo.line_count?.toLocaleString() }}
+                  </div>
                 </v-col>
                 <v-col cols="12" sm="6" md="2">
                   <div class="text-caption text-medium-emphasis">Characters</div>
-                  <div class="text-body-2 font-weight-medium">{{ fileInfo.char_count?.toLocaleString() }}</div>
+                  <div class="text-body-2 font-weight-medium">
+                    {{ fileInfo.char_count?.toLocaleString() }}
+                  </div>
                 </v-col>
                 <v-col cols="12" md="3" class="d-flex justify-end ga-2">
                   <v-btn
@@ -113,9 +104,7 @@
 
       <v-card-actions>
         <v-spacer />
-        <v-btn color="primary" variant="text" @click="show = false">
-          Close
-        </v-btn>
+        <v-btn color="primary" variant="text" @click="show = false"> Close </v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
@@ -127,28 +116,28 @@ import { computed, ref, watch, nextTick } from 'vue'
 const props = defineProps({
   modelValue: {
     type: Boolean,
-    default: false
+    default: false,
   },
   evidenceItem: {
     type: Object,
-    default: null
+    default: null,
   },
   content: {
     type: String,
-    default: ''
+    default: '',
   },
   fileInfo: {
     type: Object,
-    default: null
+    default: null,
   },
   loading: {
     type: Boolean,
-    default: false
+    default: false,
   },
   error: {
     type: String,
-    default: ''
-  }
+    default: '',
+  },
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -161,7 +150,7 @@ const displayContent = ref('')
 
 const show = computed({
   get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value)
+  set: (value) => emit('update:modelValue', value),
 })
 
 // Format file size for display
@@ -170,12 +159,12 @@ const formatFileSize = (bytes) => {
   const units = ['B', 'KB', 'MB', 'GB']
   let size = bytes
   let unitIndex = 0
-  
+
   while (size >= 1024 && unitIndex < units.length - 1) {
     size /= 1024
     unitIndex++
   }
-  
+
   return `${size.toFixed(unitIndex > 0 ? 1 : 0)} ${units[unitIndex]}`
 }
 
@@ -194,14 +183,14 @@ const highlightSearch = () => {
   }
 
   let content = escapeHtml(props.content)
-  
+
   if (searchTerm.value && searchTerm.value.length > 0) {
     const searchRegex = new RegExp(`(${escapeHtml(searchTerm.value)})`, 'gi')
     content = content.replace(searchRegex, '<mark>$1</mark>')
   }
-  
+
   displayContent.value = content
-  
+
   // Scroll to first match if searching
   if (searchTerm.value) {
     nextTick(() => {
@@ -224,9 +213,13 @@ const copyToClipboard = async () => {
 }
 
 // Watch for content changes to update display
-watch(() => props.content, () => {
-  highlightSearch()
-}, { immediate: true })
+watch(
+  () => props.content,
+  () => {
+    highlightSearch()
+  },
+  { immediate: true },
+)
 
 // Watch for search term changes
 watch(searchTerm, () => {
@@ -283,7 +276,7 @@ watch(show, (newValue) => {
     max-height: 50vh;
     margin: 0 8px 8px;
   }
-  
+
   .content-display {
     padding: 12px;
     font-size: 12px;

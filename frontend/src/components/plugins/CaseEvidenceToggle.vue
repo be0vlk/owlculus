@@ -30,16 +30,13 @@ const props = defineProps({
     required: true,
     default: () => ({
       save_to_case: false,
-      case_id: null
-    })
-  }
+      case_id: null,
+    }),
+  },
 })
 
 const emit = defineEmits(['update:modelValue'])
 
 // Use case selection composable
-const {
-  caseParams,
-  updateCaseParams
-} = useCaseSelection(props, emit)
+const { caseParams, updateCaseParams } = useCaseSelection(props, emit)
 </script>

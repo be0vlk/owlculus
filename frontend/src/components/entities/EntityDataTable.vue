@@ -3,12 +3,7 @@
     <!-- Quick Filters -->
     <v-row class="mb-4" no-gutters>
       <v-col cols="12">
-        <v-chip-group
-          v-model="selectedTypes"
-          multiple
-          filter
-          selected-class="text-primary"
-        >
+        <v-chip-group v-model="selectedTypes" filter multiple selected-class="text-primary">
           <v-chip
             v-for="type in entityTypes"
             :key="type.value"
@@ -87,11 +82,7 @@
 
       <!-- Type Column -->
       <template #[`item.entity_type`]="{ item }">
-        <v-chip
-          :color="getTypeColor(item.entity_type)"
-          variant="flat"
-          size="small"
-        >
+        <v-chip :color="getTypeColor(item.entity_type)" size="small" variant="flat">
           <v-icon start size="small">{{ getTypeIcon(item.entity_type) }}</v-icon>
           {{ getTypeLabel(item.entity_type) }}
         </v-chip>
@@ -125,12 +116,7 @@
 
       <!-- Actions Column -->
       <template #[`item.actions`]="{ item }">
-        <v-btn
-          icon="mdi-eye"
-          size="small"
-          variant="text"
-          @click="$emit('view', item)"
-        />
+        <v-btn icon="mdi-eye" size="small" variant="text" @click="$emit('view', item)" />
         <v-btn
           icon="mdi-delete"
           size="small"
@@ -143,25 +129,12 @@
       <!-- No Data -->
       <template v-slot:no-data>
         <v-container class="text-center pa-8">
-          <v-icon
-            size="64"
-            color="grey-lighten-1"
-            class="mb-4"
-          >
-            mdi-account-group-outline
-          </v-icon>
-          <h3 class="text-h6 font-weight-medium mb-2">
-            No Entities Found
-          </h3>
+          <v-icon class="mb-4" color="grey-lighten-1" size="64"> mdi-account-group-outline </v-icon>
+          <h3 class="text-h6 font-weight-medium mb-2">No Entities Found</h3>
           <p class="text-body-2 text-medium-emphasis">
             {{ getNoDataMessage() }}
           </p>
-          <v-btn
-            color="primary"
-            prepend-icon="mdi-plus"
-            @click="$emit('create')"
-            class="mt-4"
-          >
+          <v-btn class="mt-4" color="primary" prepend-icon="mdi-plus" @click="$emit('create')">
             Add First Entity
           </v-btn>
         </v-container>
@@ -169,20 +142,12 @@
 
       <!-- Loading -->
       <template v-slot:loading>
-        <v-skeleton-loader
-          v-for="i in itemsPerPage"
-          :key="i"
-          type="table-row"
-          class="border-b"
-        />
+        <v-skeleton-loader v-for="i in itemsPerPage" :key="i" class="border-b" type="table-row" />
       </template>
     </v-data-table-server>
 
     <!-- Delete Confirmation Dialog -->
-    <v-dialog
-      v-model="deleteDialog"
-      max-width="500"
-    >
+    <v-dialog v-model="deleteDialog" max-width="500">
       <v-card>
         <v-card-title>
           <v-icon start color="error">mdi-alert</v-icon>
@@ -192,25 +157,13 @@
           <span v-if="itemsToDelete.length === 1">
             Are you sure you want to delete this entity?
           </span>
-          <span v-else>
-            Are you sure you want to delete {{ itemsToDelete.length }} entities?
-          </span>
+          <span v-else> Are you sure you want to delete {{ itemsToDelete.length }} entities? </span>
           This action cannot be undone.
         </v-card-text>
         <v-card-actions>
           <v-spacer />
-          <v-btn
-            variant="text"
-            @click="cancelDelete"
-          >
-            Cancel
-          </v-btn>
-          <v-btn
-            color="error"
-            variant="flat"
-            @click="performDelete"
-            :loading="deleting"
-          >
+          <v-btn variant="text" @click="cancelDelete"> Cancel </v-btn>
+          <v-btn :loading="deleting" color="error" variant="flat" @click="performDelete">
             Delete
           </v-btn>
         </v-card-actions>
@@ -220,18 +173,18 @@
 </template>
 
 <script setup>
-import {computed, onMounted, ref, watch} from 'vue'
-import {formatDate} from '@/composables/dateUtils'
+import { computed, onMounted, ref, watch } from 'vue'
+import { formatDate } from '@/composables/dateUtils'
 
 const props = defineProps({
   caseId: {
     type: Number,
-    required: true
+    required: true,
   },
   entityService: {
     type: Object,
-    required: true
-  }
+    required: true,
+  },
 })
 
 const emit = defineEmits(['view', 'create', 'deleted'])
@@ -261,7 +214,7 @@ const itemsPerPageOptions = [
   { value: 10, title: '10' },
   { value: 25, title: '25' },
   { value: 50, title: '50' },
-  { value: 100, title: '100' }
+  { value: 100, title: '100' },
 ]
 
 const entityTypes = [
@@ -269,7 +222,7 @@ const entityTypes = [
   { value: 'company', text: 'Company', icon: 'mdi-office-building', color: 'teal-darken-2' },
   { value: 'domain', text: 'Domain', icon: 'mdi-web', color: 'deep-purple' },
   { value: 'ip_address', text: 'IP Address', icon: 'mdi-ip', color: 'amber-darken-2' },
-  { value: 'vehicle', text: 'Vehicle', icon: 'mdi-car', color: 'brown' }
+  { value: 'vehicle', text: 'Vehicle', icon: 'mdi-car', color: 'brown' },
 ]
 
 const headers = computed(() => [
@@ -277,7 +230,7 @@ const headers = computed(() => [
   { title: 'Name', key: 'name', sortable: true },
   { title: 'Description', key: 'description', sortable: false },
   { title: 'Created', key: 'created_at', sortable: true },
-  { title: 'Actions', key: 'actions', sortable: false, align: 'end' }
+  { title: 'Actions', key: 'actions', sortable: false, align: 'end' },
 ])
 
 // Watch for filter changes
@@ -298,15 +251,15 @@ const loadItems = async () => {
 
     // Apply type filter
     if (selectedTypes.value.length > 0) {
-      filteredEntities = filteredEntities.filter(entity =>
-        selectedTypes.value.includes(entity.entity_type)
+      filteredEntities = filteredEntities.filter((entity) =>
+        selectedTypes.value.includes(entity.entity_type),
       )
     }
 
     // Apply search filter
     if (search.value) {
       const searchTerm = search.value.toLowerCase()
-      filteredEntities = filteredEntities.filter(entity => {
+      filteredEntities = filteredEntities.filter((entity) => {
         const name = getEntityName(entity).toLowerCase()
         const description = entity.data.description?.toLowerCase() || ''
         return name.includes(searchTerm) || description.includes(searchTerm)
@@ -349,7 +302,6 @@ const loadItems = async () => {
     const startIndex = (page.value - 1) * itemsPerPage.value
     const endIndex = startIndex + itemsPerPage.value
     entities.value = filteredEntities.slice(startIndex, endIndex)
-
   } catch (error) {
     console.error('Error loading entities:', error)
     entities.value = []
@@ -398,15 +350,15 @@ const getEntitySubtitle = (entity) => {
 }
 
 const getTypeIcon = (type) => {
-  return entityTypes.find(t => t.value === type)?.icon || 'mdi-help'
+  return entityTypes.find((t) => t.value === type)?.icon || 'mdi-help'
 }
 
 const getTypeLabel = (type) => {
-  return entityTypes.find(t => t.value === type)?.text || type
+  return entityTypes.find((t) => t.value === type)?.text || type
 }
 
 const getTypeColor = (type) => {
-  return entityTypes.find(t => t.value === type)?.color || 'grey'
+  return entityTypes.find((t) => t.value === type)?.color || 'grey'
 }
 
 const getSortableValue = (entity) => {
@@ -414,8 +366,8 @@ const getSortableValue = (entity) => {
 
   // For IP addresses, convert to a comparable numeric value for proper sorting
   if (entity.entity_type === 'ip_address') {
-    const ipParts = name.split('.').map(part => parseInt(part, 10))
-    if (ipParts.length === 4 && ipParts.every(part => !isNaN(part) && part >= 0 && part <= 255)) {
+    const ipParts = name.split('.').map((part) => parseInt(part, 10))
+    if (ipParts.length === 4 && ipParts.every((part) => !isNaN(part) && part >= 0 && part <= 255)) {
       // Convert IP to a single number for comparison (IPv4)
       return (ipParts[0] << 24) + (ipParts[1] << 16) + (ipParts[2] << 8) + ipParts[3]
     }
@@ -424,7 +376,6 @@ const getSortableValue = (entity) => {
   // For all other entity types, use lowercase string for alphabetical sorting
   return name.toLowerCase()
 }
-
 
 const getNoDataMessage = () => {
   if (search.value) {
@@ -482,12 +433,14 @@ const exportEntities = () => {
     const headers = ['Type', 'Name', 'Description', 'Created']
     const csvData = [
       headers.join(','),
-      ...filteredEntities.map(entity => [
-        getTypeLabel(entity.entity_type),
-        `"${getEntityName(entity).replace(/"/g, '""')}"`,
-        `"${(entity.data.description || '').replace(/"/g, '""')}"`,
-        formatDate(entity.created_at)
-      ].join(','))
+      ...filteredEntities.map((entity) =>
+        [
+          getTypeLabel(entity.entity_type),
+          `"${getEntityName(entity).replace(/"/g, '""')}"`,
+          `"${(entity.data.description || '').replace(/"/g, '""')}"`,
+          formatDate(entity.created_at),
+        ].join(','),
+      ),
     ].join('\n')
 
     const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' })
@@ -507,7 +460,7 @@ const exportEntities = () => {
 
 // Expose methods for parent component
 defineExpose({
-  refresh: loadItems
+  refresh: loadItems,
 })
 
 // Initial load

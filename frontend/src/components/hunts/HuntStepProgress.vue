@@ -13,9 +13,7 @@
       <div class="flex-grow-1">
         <div class="d-flex align-center justify-space-between mb-2">
           <div>
-            <div class="text-h6 font-weight-medium">
-              Step {{ stepNumber }}: {{ step.step_id }}
-            </div>
+            <div class="text-h6 font-weight-medium">Step {{ stepNumber }}: {{ step.step_id }}</div>
             <div class="text-body-2 text-medium-emphasis">
               {{ step.plugin_name }}
             </div>
@@ -137,16 +135,16 @@ import { formatTimeOnly } from '@/composables/dateUtils'
 const props = defineProps({
   step: {
     type: Object,
-    required: true
+    required: true,
   },
   stepNumber: {
     type: Number,
-    required: true
+    required: true,
   },
   isLast: {
     type: Boolean,
-    default: false
-  }
+    default: false,
+  },
 })
 
 defineEmits(['view-output', 'view-error'])
@@ -154,37 +152,58 @@ defineEmits(['view-output', 'view-error'])
 // Computed properties
 const statusColor = computed(() => {
   switch (props.step.status) {
-    case 'pending': return 'grey'
-    case 'running': return 'primary'
-    case 'completed': return 'success'
-    case 'failed': return 'error'
-    case 'skipped': return 'warning'
-    case 'cancelled': return 'grey'
-    default: return 'grey'
+    case 'pending':
+      return 'grey'
+    case 'running':
+      return 'primary'
+    case 'completed':
+      return 'success'
+    case 'failed':
+      return 'error'
+    case 'skipped':
+      return 'warning'
+    case 'cancelled':
+      return 'grey'
+    default:
+      return 'grey'
   }
 })
 
 const statusIcon = computed(() => {
   switch (props.step.status) {
-    case 'pending': return 'mdi-clock-outline'
-    case 'running': return 'mdi-play'
-    case 'completed': return 'mdi-check'
-    case 'failed': return 'mdi-close'
-    case 'skipped': return 'mdi-skip-next'
-    case 'cancelled': return 'mdi-stop'
-    default: return 'mdi-help'
+    case 'pending':
+      return 'mdi-clock-outline'
+    case 'running':
+      return 'mdi-play'
+    case 'completed':
+      return 'mdi-check'
+    case 'failed':
+      return 'mdi-close'
+    case 'skipped':
+      return 'mdi-skip-next'
+    case 'cancelled':
+      return 'mdi-stop'
+    default:
+      return 'mdi-help'
   }
 })
 
 const statusText = computed(() => {
   switch (props.step.status) {
-    case 'pending': return 'Pending'
-    case 'running': return 'Running'
-    case 'completed': return 'Completed'
-    case 'failed': return 'Failed'
-    case 'skipped': return 'Skipped'
-    case 'cancelled': return 'Cancelled'
-    default: return 'Unknown'
+    case 'pending':
+      return 'Pending'
+    case 'running':
+      return 'Running'
+    case 'completed':
+      return 'Completed'
+    case 'failed':
+      return 'Failed'
+    case 'skipped':
+      return 'Skipped'
+    case 'cancelled':
+      return 'Cancelled'
+    default:
+      return 'Unknown'
   }
 })
 
@@ -195,16 +214,16 @@ const stepConnectorClass = computed(() => {
 
 const duration = computed(() => {
   if (!props.step.started_at || !props.step.completed_at) return null
-  
+
   const startTime = new Date(props.step.started_at)
   const endTime = new Date(props.step.completed_at)
   const diffMs = endTime - startTime
-  
+
   if (diffMs < 1000) return '< 1s'
-  
+
   const diffSeconds = Math.floor(diffMs / 1000)
   const diffMinutes = Math.floor(diffSeconds / 60)
-  
+
   if (diffMinutes > 0) {
     return `${diffMinutes}m ${diffSeconds % 60}s`
   } else {
@@ -230,20 +249,20 @@ const truncateError = (error) => {
 
 const getOutputSummary = (output) => {
   if (!output) return 'No output data'
-  
+
   if (output.result_count !== undefined) {
     return `Generated ${output.result_count} result(s)`
   }
-  
+
   if (output.results && Array.isArray(output.results)) {
     return `Generated ${output.results.length} result(s)`
   }
-  
+
   if (typeof output === 'object') {
     const keys = Object.keys(output)
     return `Output contains: ${keys.slice(0, 3).join(', ')}${keys.length > 3 ? '...' : ''}`
   }
-  
+
   return 'Step completed successfully'
 }
 </script>

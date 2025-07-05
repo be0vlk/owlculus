@@ -238,6 +238,8 @@ class TaskService:
         self, task_ids: List[int], user_id: Optional[int], *, current_user: models.User
     ) -> List[models.Task]:
         """Bulk assign tasks to a user"""
+        from app.core.dependencies import is_case_lead
+        
         updated_tasks = []
 
         for task_id in task_ids:

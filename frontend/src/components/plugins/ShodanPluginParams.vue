@@ -1,12 +1,9 @@
 <template>
   <div class="d-flex flex-column ga-3">
     <PluginDescriptionCard :description="pluginDescription" />
-    
+
     <!-- API Key Warning -->
-    <ApiKeyWarning
-      v-if="missingApiKeys.length > 0"
-      :missing-providers="missingApiKeys"
-    />
+    <ApiKeyWarning v-if="missingApiKeys.length > 0" :missing-providers="missingApiKeys" />
 
     <!-- Search Type Selection -->
     <v-radio-group
@@ -39,7 +36,9 @@
     <div>
       <div class="d-flex align-center justify-space-between mb-2">
         <span class="text-subtitle2">Result Limit</span>
-        <span class="text-caption text-medium-emphasis">{{ Math.round(localParams.limit) }} results</span>
+        <span class="text-caption text-medium-emphasis"
+          >{{ Math.round(localParams.limit) }} results</span
+        >
       </div>
       <v-slider
         v-model="localParams.limit"
@@ -60,11 +59,10 @@
     </div>
 
     <!-- Save to Case Option -->
-    <CaseEvidenceToggle 
+    <CaseEvidenceToggle
       :model-value="props.modelValue"
       @update:model-value="emit('update:modelValue', $event)"
     />
-
   </div>
 </template>
 
@@ -79,41 +77,40 @@ import CaseEvidenceToggle from './CaseEvidenceToggle.vue'
 const props = defineProps({
   parameters: {
     type: Object,
-    required: true
+    required: true,
   },
   modelValue: {
     type: Object,
-    required: true
-  }
+    required: true,
+  },
 })
 
 const emit = defineEmits(['update:modelValue'])
 
 // Use advanced plugin params composable with search configuration
-const {
-  pluginDescription,
-  localParams,
-  updateParams,
-  missingApiKeys
-} = usePluginParamsAdvanced(props, emit, {
-  parameterDefaults: {
-    ...pluginParamConfigs.searchQuery(),
-    search_type: 'general',
-    limit: 10
+const { pluginDescription, localParams, updateParams, missingApiKeys } = usePluginParamsAdvanced(
+  props,
+  emit,
+  {
+    parameterDefaults: {
+      ...pluginParamConfigs.searchQuery(),
+      search_type: 'general',
+      limit: 10,
+    },
+    apiKeyRequirements: props.parameters.api_key_requirements,
+    onApiKeyCheck: async (requirements) => {
+      const { checkPluginApiKeys, getMissingApiKeys } = usePluginApiKeys()
+      const plugin = {
+        name: 'ShodanPlugin',
+        api_key_requirements: requirements,
+      }
+      await checkPluginApiKeys(plugin)
+      return {
+        missing: getMissingApiKeys(plugin),
+      }
+    },
   },
-  apiKeyRequirements: props.parameters.api_key_requirements,
-  onApiKeyCheck: async (requirements) => {
-    const { checkPluginApiKeys, getMissingApiKeys } = usePluginApiKeys()
-    const plugin = {
-      name: 'ShodanPlugin',
-      api_key_requirements: requirements
-    }
-    await checkPluginApiKeys(plugin)
-    return {
-      missing: getMissingApiKeys(plugin)
-    }
-  }
-})
+)
 
 // Search type state (computed from localParams)
 const searchType = computed({
@@ -121,7 +118,7 @@ const searchType = computed({
   set: (value) => {
     localParams.search_type = value
     updateParams()
-  }
+  },
 })
 
 // Dynamic labels and hints based on search type

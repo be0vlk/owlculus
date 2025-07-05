@@ -46,7 +46,7 @@ const props = defineProps({
   field: { type: Object, required: true },
   fieldValue: { type: [String, Number], default: '' },
   sourceValue: { type: String, default: '' },
-  entity: { type: Object, required: true }
+  entity: { type: Object, required: true },
 })
 
 defineEmits(['update:field', 'update:source'])

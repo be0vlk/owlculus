@@ -1,9 +1,5 @@
 <template>
-  <BaseDashboard
-    title="Hunt Management"
-    :loading="loading"
-    :error="error"
-  >
+  <BaseDashboard :error="error" :loading="loading" title="Hunt Management">
     <!-- Header Actions -->
     <template #header-actions>
       <div class="d-flex align-center ga-2">
@@ -38,13 +34,16 @@
         </v-tab>
         <v-tab value="active" prepend-icon="mdi-play">
           Active Executions
-          <v-chip v-if="huntStore.runningExecutions.length > 0" size="small" color="primary" class="ml-2">
+          <v-chip
+            v-if="huntStore.runningExecutions.length > 0"
+            class="ml-2"
+            color="primary"
+            size="small"
+          >
             {{ huntStore.runningExecutions.length }}
           </v-chip>
         </v-tab>
-        <v-tab value="history" prepend-icon="mdi-history">
-          Execution History
-        </v-tab>
+        <v-tab prepend-icon="mdi-history" value="history"> Execution History </v-tab>
       </v-tabs>
 
       <v-divider />
@@ -117,15 +116,19 @@
             </div>
 
             <!-- Empty State -->
-            <div v-if="huntStore.runningExecutions.length === 0 && huntStore.completedExecutions.length === 0" class="text-center pa-8">
+            <div
+              v-if="
+                huntStore.runningExecutions.length === 0 &&
+                huntStore.completedExecutions.length === 0
+              "
+              class="text-center pa-8"
+            >
               <v-icon icon="mdi-play-circle-outline" size="64" color="grey" class="mb-4" />
               <div class="text-h6 mb-2">No Active Executions</div>
               <div class="text-body-2 text-medium-emphasis mb-4">
                 Start a hunt from the Available Hunts tab to begin investigating
               </div>
-              <v-btn color="primary" @click="activeTab = 'catalog'">
-                Browse Hunts
-              </v-btn>
+              <v-btn color="primary" @click="activeTab = 'catalog'"> Browse Hunts </v-btn>
             </div>
           </div>
         </v-tabs-window-item>
@@ -134,7 +137,11 @@
         <v-tabs-window-item value="history">
           <div class="pa-4">
             <HuntExecutionHistory
-              :executions="huntStore.executionHistory.filter(exec => exec.status !== 'running' && exec.status !== 'pending')"
+              :executions="
+                huntStore.executionHistory.filter(
+                  (exec) => exec.status !== 'running' && exec.status !== 'pending',
+                )
+              "
               :loading="historyLoading"
               @view-details="handleViewExecutionDetails"
             />
@@ -164,18 +171,18 @@
 
 <script setup>
 // Watch for tab changes to manage polling
-import {computed, onMounted, onUnmounted, ref, watch} from 'vue'
-import {useRouter} from 'vue-router'
-import {useAuthStore} from '@/stores/auth'
-import {useHuntStore} from '@/stores/huntStore.js'
-import {useNotifications} from '@/composables/useNotifications'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+import { useHuntStore } from '@/stores/huntStore.js'
+import { useNotifications } from '@/composables/useNotifications'
 import BaseDashboard from '@/components/BaseDashboard.vue'
 import HuntCatalog from '@/components/hunts/HuntCatalog.vue'
 import HuntProgressCard from '@/components/hunts/HuntProgressCard.vue'
 import HuntExecutionModal from '@/components/hunts/HuntExecutionModal.vue'
 import HuntDetailsModal from '@/components/hunts/HuntDetailsModal.vue'
 import HuntExecutionHistory from '@/components/hunts/HuntExecutionHistory.vue'
-import {caseService} from '@/services/case'
+import { caseService } from '@/services/case'
 
 // Store and router
 const router = useRouter()
@@ -215,10 +222,7 @@ const loadData = async () => {
     error.value = null
 
     // Load hunts and cases first
-    await Promise.all([
-      huntStore.fetchHunts(),
-      loadCases()
-    ])
+    await Promise.all([huntStore.fetchHunts(), loadCases()])
 
     // Then load active executions from all accessible cases
     await huntStore.loadAllActiveExecutions(cases.value)
@@ -277,7 +281,7 @@ const handleExecuteHuntSubmit = async (executionData) => {
     const execution = await huntStore.executeHunt(
       executionData.huntId,
       executionData.caseId,
-      executionData.parameters
+      executionData.parameters,
     )
 
     showNotification(`Hunt "${selectedHunt.value.display_name}" started successfully`, 'success')
@@ -331,7 +335,6 @@ const handleViewExecutionDetails = (executionId) => {
   router.push(`/hunts/execution/${executionId}`)
 }
 
-
 watch(activeTab, (newTab) => {
   if (newTab === 'active') {
     startPolling()
@@ -341,13 +344,16 @@ watch(activeTab, (newTab) => {
 })
 
 // Watch for changes in running executions to manage polling
-watch(() => huntStore.runningExecutions.length, (count) => {
-  if (count > 0 && activeTab.value === 'active') {
-    startPolling()
-  } else if (count === 0) {
-    stopPolling()
-  }
-})
+watch(
+  () => huntStore.runningExecutions.length,
+  (count) => {
+    if (count > 0 && activeTab.value === 'active') {
+      startPolling()
+    } else if (count === 0) {
+      stopPolling()
+    }
+  },
+)
 
 // Lifecycle
 onMounted(async () => {

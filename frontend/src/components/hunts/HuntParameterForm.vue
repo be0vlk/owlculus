@@ -122,16 +122,16 @@ import { ref, computed, watch, nextTick } from 'vue'
 const props = defineProps({
   parameters: {
     type: Object,
-    required: true
+    required: true,
   },
   modelValue: {
     type: Object,
-    default: () => ({})
+    default: () => ({}),
   },
   errors: {
     type: Object,
-    default: () => ({})
-  }
+    default: () => ({}),
+  },
 })
 
 const emit = defineEmits(['update:modelValue', 'validate'])
@@ -144,7 +144,7 @@ const validationErrors = ref({})
 // Initialize local values
 const initializeValues = () => {
   const values = {}
-  Object.keys(props.parameters).forEach(paramName => {
+  Object.keys(props.parameters).forEach((paramName) => {
     const paramDef = props.parameters[paramName]
     if (props.modelValue[paramName] !== undefined) {
       values[paramName] = props.modelValue[paramName]
@@ -174,14 +174,15 @@ const isFormValid = computed(() => {
 
 // Methods
 const getParameterLabel = (paramName, paramDef) => {
-  const label = paramDef.label || paramName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+  const label =
+    paramDef.label || paramName.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
   return paramDef.required ? `${label} *` : label
 }
 
 const getParameterIcon = (paramName, paramDef) => {
   // Check for custom icon
   if (paramDef.icon) return paramDef.icon
-  
+
   // Infer icon from parameter name or type
   const name = paramName.toLowerCase()
   if (name.includes('email')) return 'mdi-email'
@@ -194,32 +195,32 @@ const getParameterIcon = (paramName, paramDef) => {
   if (name.includes('date') || name.includes('time')) return 'mdi-calendar'
   if (paramDef.type === 'number') return 'mdi-numeric'
   if (paramDef.type === 'boolean') return 'mdi-toggle-switch'
-  
+
   return 'mdi-form-textbox'
 }
 
 const getValidationRules = (paramName, paramDef) => {
   const rules = []
-  
+
   // Required validation
   if (paramDef.required) {
-    rules.push(value => {
+    rules.push((value) => {
       if (paramDef.type === 'boolean') return true
       return !!value || `${getParameterLabel(paramName, paramDef).replace(' *', '')} is required`
     })
   }
-  
+
   // Type-specific validation
   if (paramDef.type === 'email' || paramName.toLowerCase().includes('email')) {
-    rules.push(value => {
+    rules.push((value) => {
       if (!value && !paramDef.required) return true
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
       return emailRegex.test(value) || 'Please enter a valid email address'
     })
   }
-  
+
   if (paramDef.type === 'url' || paramName.toLowerCase().includes('url')) {
-    rules.push(value => {
+    rules.push((value) => {
       if (!value && !paramDef.required) return true
       try {
         new URL(value)
@@ -229,9 +230,9 @@ const getValidationRules = (paramName, paramDef) => {
       }
     })
   }
-  
+
   if (paramDef.type === 'number') {
-    rules.push(value => {
+    rules.push((value) => {
       if (!value && !paramDef.required) return true
       const num = Number(value)
       if (isNaN(num)) return 'Please enter a valid number'
@@ -244,38 +245,42 @@ const getValidationRules = (paramName, paramDef) => {
       return true
     })
   }
-  
+
   // Length validation
   if (paramDef.minLength) {
-    rules.push(value => {
+    rules.push((value) => {
       if (!value && !paramDef.required) return true
-      return value.length >= paramDef.minLength || `Minimum length is ${paramDef.minLength} characters`
+      return (
+        value.length >= paramDef.minLength || `Minimum length is ${paramDef.minLength} characters`
+      )
     })
   }
-  
+
   if (paramDef.maxLength) {
-    rules.push(value => {
+    rules.push((value) => {
       if (!value) return true
-      return value.length <= paramDef.maxLength || `Maximum length is ${paramDef.maxLength} characters`
+      return (
+        value.length <= paramDef.maxLength || `Maximum length is ${paramDef.maxLength} characters`
+      )
     })
   }
-  
+
   // Pattern validation
   if (paramDef.pattern) {
-    rules.push(value => {
+    rules.push((value) => {
       if (!value && !paramDef.required) return true
       const regex = new RegExp(paramDef.pattern)
-      return regex.test(value) || (paramDef.patternMessage || 'Please enter a valid value')
+      return regex.test(value) || paramDef.patternMessage || 'Please enter a valid value'
     })
   }
-  
+
   return rules
 }
 
 const handleValueChange = (paramName, value) => {
   localValues.value[paramName] = value
   emit('update:modelValue', { ...localValues.value })
-  
+
   // Clear previous validation error for this field
   if (validationErrors.value[paramName]) {
     delete validationErrors.value[paramName]
@@ -285,16 +290,16 @@ const handleValueChange = (paramName, value) => {
 
 const validateField = async (paramName) => {
   if (!form.value) return
-  
+
   // Use Vuetify form validation
   const { valid } = await form.value.validate()
-  
+
   if (!valid) {
     // Extract specific field errors (this is a simplified approach)
     const paramDef = props.parameters[paramName]
     const value = localValues.value[paramName]
     const rules = getValidationRules(paramName, paramDef)
-    
+
     for (const rule of rules) {
       const result = rule(value)
       if (result !== true) {
@@ -305,22 +310,22 @@ const validateField = async (paramName) => {
   } else {
     delete validationErrors.value[paramName]
   }
-  
+
   emitValidationState()
 }
 
 const validateAll = async () => {
   if (!form.value) return false
-  
+
   const { valid } = await form.value.validate()
-  
+
   if (!valid) {
     // Populate validation errors for all fields
-    Object.keys(props.parameters).forEach(paramName => {
+    Object.keys(props.parameters).forEach((paramName) => {
       const paramDef = props.parameters[paramName]
       const value = localValues.value[paramName]
       const rules = getValidationRules(paramName, paramDef)
-      
+
       for (const rule of rules) {
         const result = rule(value)
         if (result !== true) {
@@ -332,7 +337,7 @@ const validateAll = async () => {
   } else {
     validationErrors.value = {}
   }
-  
+
   emitValidationState()
   return valid
 }
@@ -342,15 +347,23 @@ const emitValidationState = () => {
 }
 
 // Watchers
-watch(() => props.parameters, () => {
-  initializeValues()
-}, { immediate: true })
+watch(
+  () => props.parameters,
+  () => {
+    initializeValues()
+  },
+  { immediate: true },
+)
 
-watch(() => props.modelValue, (newValue) => {
-  if (newValue && Object.keys(newValue).length > 0) {
-    localValues.value = { ...newValue }
-  }
-}, { immediate: true })
+watch(
+  () => props.modelValue,
+  (newValue) => {
+    if (newValue && Object.keys(newValue).length > 0) {
+      localValues.value = { ...newValue }
+    }
+  },
+  { immediate: true },
+)
 
 // Initialize
 initializeValues()
@@ -360,7 +373,7 @@ nextTick(() => {
 
 // Expose validation method
 defineExpose({
-  validate: validateAll
+  validate: validateAll,
 })
 </script>
 

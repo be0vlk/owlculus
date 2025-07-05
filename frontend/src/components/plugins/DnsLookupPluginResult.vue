@@ -11,15 +11,13 @@
     <!-- DNS Results Grid -->
     <div v-if="dnsResults.length" class="dns-results-grid">
       <v-row>
-        <v-col 
-          v-for="(dnsData, index) in dnsResults" 
-          :key="`dns-${index}`"
-          cols="12"
-          lg="6"
-        >
+        <v-col v-for="(dnsData, index) in dnsResults" :key="`dns-${index}`" cols="12" lg="6">
           <v-card elevation="2" rounded="lg" class="h-100 target-card">
             <v-card-title class="d-flex align-center bg-primary-lighten-5">
-              <v-icon :icon="dnsData.target_type === 'ip_address' ? 'mdi-ip-network' : 'mdi-web'" class="mr-3" />
+              <v-icon
+                :icon="dnsData.target_type === 'ip_address' ? 'mdi-ip-network' : 'mdi-web'"
+                class="mr-3"
+              />
               <div class="flex-grow-1">
                 <div class="text-h6">{{ dnsData.target }}</div>
                 <div class="text-caption text-medium-emphasis">
@@ -32,30 +30,29 @@
               <!-- Record Results Grid -->
               <div class="pa-4">
                 <div class="d-flex flex-column ga-3">
-                  <div 
-                    v-for="(recordResult, rIndex) in dnsData.results" 
+                  <div
+                    v-for="(recordResult, rIndex) in dnsData.results"
                     :key="rIndex"
                     class="record-result"
                   >
                     <!-- Success Result -->
                     <div v-if="recordResult.records" class="mb-3">
                       <div class="d-flex align-center mb-2">
-                        <v-chip 
-                          size="small" 
-                          color="success"
-                          variant="tonal"
-                          class="mr-2"
-                        >
+                        <v-chip class="mr-2" color="success" size="small" variant="tonal">
                           <v-icon icon="mdi-check-circle" size="x-small" class="mr-1" />
                           {{ recordResult.type }}{{ recordResult.ip_address ? ' (Reverse)' : '' }}
                         </v-chip>
-                        <span class="text-caption text-success">{{ recordResult.records.length }} record(s)</span>
+                        <span class="text-caption text-success"
+                          >{{ recordResult.records.length }} record(s)</span
+                        >
                       </div>
-                      
+
                       <v-card elevation="1" rounded="lg" color="success-lighten-5">
                         <v-card-text class="pa-3">
                           <div class="d-flex justify-space-between align-start">
-                            <pre class="text-body-2 font-mono flex-grow-1 records-display">{{ recordResult.records.join('\n') }}</pre>
+                            <pre class="text-body-2 font-mono flex-grow-1 records-display">{{
+                              recordResult.records.join('\n')
+                            }}</pre>
                             <v-btn
                               icon="mdi-content-copy"
                               size="small"
@@ -71,7 +68,7 @@
                     </div>
 
                     <!-- Error Result -->
-                    <v-alert 
+                    <v-alert
                       v-else-if="recordResult.error"
                       type="error"
                       density="compact"
@@ -135,7 +132,9 @@
         <v-card elevation="1" rounded="lg">
           <v-card-text>
             <div class="d-flex justify-space-between align-start">
-              <code class="text-body-2 font-mono flex-grow-1">{{ legacyResult.ips.join('\n') }}</code>
+              <code class="text-body-2 font-mono flex-grow-1">{{
+                legacyResult.ips.join('\n')
+              }}</code>
               <v-btn
                 icon="mdi-content-copy"
                 size="small"
@@ -166,42 +165,37 @@ const props = defineProps({
   result: {
     type: [Object, Array],
     required: true,
-  }
+  },
 })
 
-const { parsedResults, statusMessages, completionMessages, errorMessages } = usePluginResults(toRef(props, 'result'))
+const { parsedResults, statusMessages, completionMessages, errorMessages } = usePluginResults(
+  toRef(props, 'result'),
+)
 
 const legacyFormat = computed(() => {
-  return props.result && 
-         !props.result.type && 
-         (props.result.domain || props.result.ips)
+  return props.result && !props.result.type && (props.result.domain || props.result.ips)
 })
 
 const legacyResult = computed(() => {
-  return legacyFormat.value ? props.result : null;
-});
+  return legacyFormat.value ? props.result : null
+})
 
 // Extract DNS data results
 const dnsResults = computed(() => {
-  return parsedResults.value
-    .filter(item => item.type === 'data')
-    .map(item => item.data);
-});
+  return parsedResults.value.filter((item) => item.type === 'data').map((item) => item.data)
+})
 
 const hasIpAddresses = (result) => {
-  return result && 
-         !result.error &&
-         Array.isArray(result.ips) && 
-         result.ips.length > 0;
-};
+  return result && !result.error && Array.isArray(result.ips) && result.ips.length > 0
+}
 
 const copyToClipboard = async (text) => {
   try {
-    await navigator.clipboard.writeText(text);
+    await navigator.clipboard.writeText(text)
   } catch (err) {
-    console.error('Failed to copy text:', err);
+    console.error('Failed to copy text:', err)
   }
-};
+}
 </script>
 
 <style scoped>
@@ -220,7 +214,9 @@ pre {
 }
 
 .target-card {
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .target-card:hover {
@@ -238,12 +234,16 @@ pre {
 }
 
 /* Enhanced visual hierarchy for record types */
-.v-chip[color="success"] {
+.v-chip[color='success'] {
   background: rgb(var(--v-theme-success), 0.12);
   border: 1px solid rgb(var(--v-theme-success), 0.3);
 }
 
 .bg-primary-lighten-5 {
-  background: linear-gradient(45deg, rgb(var(--v-theme-primary), 0.08), rgb(var(--v-theme-primary), 0.03));
+  background: linear-gradient(
+    45deg,
+    rgb(var(--v-theme-primary), 0.08),
+    rgb(var(--v-theme-primary), 0.03)
+  );
 }
 </style>

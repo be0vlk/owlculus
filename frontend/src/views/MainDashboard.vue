@@ -1,9 +1,5 @@
 <template>
-  <BaseDashboard 
-    title="Cases" 
-    :loading="loading" 
-    :error="error"
-  >
+  <BaseDashboard :error="error" :loading="loading" title="Cases">
     <template #loading>
       <v-card variant="outlined">
         <v-card-title class="d-flex align-center pa-4 bg-surface">
@@ -24,190 +20,183 @@
 
     <!-- Cases data table -->
     <v-card variant="outlined">
-          <!-- Header -->
-          <v-card-title class="d-flex align-center pa-4 bg-surface">
-            <v-icon icon="mdi-briefcase" color="primary" size="large" class="me-3" />
-            <div class="flex-grow-1">
-              <div class="text-h6 font-weight-bold">Case Management</div>
-              <div class="text-body-2 text-medium-emphasis">
-                Manage investigations and assignments
-              </div>
-            </div>
-            <div class="d-flex align-center ga-2">
-              <v-btn
-                v-if="authStore.requiresAdmin()"
-                color="primary"
-                variant="flat"
-                prepend-icon="mdi-plus"
-                @click="isNewCaseModalOpen = true"
-              >
-                New Case
-              </v-btn>
-              <v-tooltip text="Refresh case list" location="bottom">
-                <template #activator="{ props }">
-                  <v-btn
-                    v-bind="props"
-                    icon="mdi-refresh"
-                    variant="outlined"
-                    @click="loadData"
-                    :loading="loading"
-                  />
-                </template>
-              </v-tooltip>
-            </div>
-          </v-card-title>
-
-          <v-divider />
-
-          <!-- Filters and Search Toolbar -->
-          <v-card-text class="pa-4">
-            <v-row align="center" class="mb-0">
-              <!-- Quick Filter Chips -->
-              <v-col cols="12" md="8">
-                <div class="d-flex align-center ga-2 flex-wrap">
-                  <span class="text-body-2 font-weight-medium me-2">Filter:</span>
-                  <v-chip-group
-                    v-model="activeQuickFilter"
-                    selected-class="text-primary"
-                    color="primary"
-                    variant="outlined"
-                  >
-                    <v-chip filter value="all" size="small"> All Cases </v-chip>
-                    <v-chip filter value="my-cases" size="small"> My Cases </v-chip>
-                    <v-chip filter value="unassigned" size="small"> Unassigned </v-chip>
-                  </v-chip-group>
-                </div>
-              </v-col>
-
-              <!-- Controls -->
-              <v-col cols="12" md="4">
-                <div class="d-flex align-center ga-2 justify-end flex-wrap">
-                  <!-- Show Closed Cases Switch -->
-                  <div class="d-flex align-center flex-shrink-0">
-                    <v-switch
-                      v-model="showClosedCases"
-                      color="primary"
-                      hide-details
-                      density="comfortable"
-                      class="me-2"
-                    />
-                    <span class="text-body-2 text-no-wrap">Show Closed</span>
-                  </div>
-
-                  <!-- Search Field -->
-                  <v-text-field
-                    v-model="searchQuery"
-                    prepend-inner-icon="mdi-magnify"
-                    label="Search cases..."
-                    variant="outlined"
-                    density="comfortable"
-                    hide-details
-                    style="min-width: 200px; max-width: 280px;"
-                    class="flex-grow-1"
-                    clearable
-                  />
-                </div>
-              </v-col>
-            </v-row>
-          </v-card-text>
-
-          <v-divider />
-
-          <v-data-table
-            :headers="vuetifyHeaders"
-            :items="enhancedFilteredCases"
-            :loading="loading"
-            item-key="id"
-            class="elevation-0 case-dashboard-table"
-            hover
-            @click:row="handleRowClick"
+      <!-- Header -->
+      <v-card-title class="d-flex align-center pa-4 bg-surface">
+        <v-icon class="me-3" color="primary" icon="mdi-briefcase" size="large" />
+        <div class="flex-grow-1">
+          <div class="text-h6 font-weight-bold">Case Management</div>
+          <div class="text-body-2 text-medium-emphasis">Manage investigations and assignments</div>
+        </div>
+        <div class="d-flex align-center ga-2">
+          <v-btn
+            v-if="authStore.requiresAdmin()"
+            color="primary"
+            prepend-icon="mdi-plus"
+            variant="flat"
+            @click="isNewCaseModalOpen = true"
           >
-            <!-- Status chip -->
-            <template #[`item.status`]="{ item }">
-              <v-chip
-                :color="item.status === 'Open' ? 'success' : 'default'"
-                size="small"
-                variant="tonal"
+            New Case
+          </v-btn>
+          <v-tooltip location="bottom" text="Refresh case list">
+            <template #activator="{ props }">
+              <v-btn
+                :loading="loading"
+                icon="mdi-refresh"
+                v-bind="props"
+                variant="outlined"
+                @click="loadData"
+              />
+            </template>
+          </v-tooltip>
+        </div>
+      </v-card-title>
+
+      <v-divider />
+
+      <!-- Filters and Search Toolbar -->
+      <v-card-text class="pa-4">
+        <v-row align="center" class="mb-0">
+          <!-- Quick Filter Chips -->
+          <v-col cols="12" md="8">
+            <div class="d-flex align-center ga-2 flex-wrap">
+              <span class="text-body-2 font-weight-medium me-2">Filter:</span>
+              <v-chip-group
+                v-model="activeQuickFilter"
+                color="primary"
+                selected-class="text-primary"
+                variant="outlined"
               >
-                {{ item.status }}
-              </v-chip>
-            </template>
+                <v-chip filter size="small" value="all"> All Cases </v-chip>
+                <v-chip filter size="small" value="my-cases"> My Cases </v-chip>
+                <v-chip filter size="small" value="unassigned"> Unassigned </v-chip>
+              </v-chip-group>
+            </div>
+          </v-col>
 
-            <!-- Users column -->
-            <template #[`item.users`]="{ item }">
-              <div v-if="item.users?.length" class="d-flex flex-wrap ga-1">
-                <v-chip
-                  v-for="user in item.users"
-                  :key="user.id"
-                  :color="getUserRoleColor(user.role)"
-                  size="small"
-                  variant="tonal"
-                >
-                  {{ user.username }}
-                </v-chip>
-              </div>
-              <v-chip v-else size="small" variant="outlined" color="grey"> Unassigned </v-chip>
-            </template>
-
-            <!-- Client name -->
-            <template #[`item.client_id`]="{ item }">
-              {{ getClientName(item.client_id) }}
-            </template>
-
-            <!-- Created date -->
-            <template #[`item.created_at`]="{ item }">
-              <span class="text-body-2">
-                {{ formatDate(item.created_at) }}
-              </span>
-            </template>
-
-            <!-- Empty state -->
-            <template #no-data>
-              <div class="text-center pa-12">
-                <v-icon
-                  icon="mdi-folder-open-outline"
-                  size="64"
-                  color="grey-lighten-1"
-                  class="mb-4"
-                />
-                <h3 class="text-h6 font-weight-medium mb-2">
-                  {{ getEmptyStateTitle() }}
-                </h3>
-                <p class="text-body-2 text-medium-emphasis mb-4">
-                  {{ getEmptyStateMessage() }}
-                </p>
-                <v-btn
-                  v-if="shouldShowCreateButton()"
+          <!-- Controls -->
+          <v-col cols="12" md="4">
+            <div class="d-flex align-center ga-2 justify-end flex-wrap">
+              <!-- Show Closed Cases Switch -->
+              <div class="d-flex align-center flex-shrink-0">
+                <v-switch
+                  v-model="showClosedCases"
+                  class="me-2"
                   color="primary"
-                  prepend-icon="mdi-plus"
-                  @click="isNewCaseModalOpen = true"
-                >
-                  Create First Case
-                </v-btn>
+                  density="comfortable"
+                  hide-details
+                />
+                <span class="text-body-2 text-no-wrap">Show Closed</span>
               </div>
-            </template>
-          </v-data-table>
-        </v-card>
+
+              <!-- Search Field -->
+              <v-text-field
+                v-model="searchQuery"
+                class="flex-grow-1"
+                clearable
+                density="comfortable"
+                hide-details
+                label="Search cases..."
+                prepend-inner-icon="mdi-magnify"
+                style="min-width: 200px; max-width: 280px"
+                variant="outlined"
+              />
+            </div>
+          </v-col>
+        </v-row>
+      </v-card-text>
+
+      <v-divider />
+
+      <v-data-table
+        :headers="vuetifyHeaders"
+        :items="enhancedFilteredCases"
+        :loading="loading"
+        class="elevation-0 case-dashboard-table"
+        hover
+        item-key="id"
+        @click:row="handleRowClick"
+      >
+        <!-- Status chip -->
+        <template #[`item.status`]="{ item }">
+          <v-chip
+            :color="item.status === 'Open' ? 'success' : 'default'"
+            size="small"
+            variant="tonal"
+          >
+            {{ item.status }}
+          </v-chip>
+        </template>
+
+        <!-- Users column -->
+        <template #[`item.users`]="{ item }">
+          <div v-if="item.users?.length" class="d-flex flex-wrap ga-1">
+            <v-chip
+              v-for="user in item.users"
+              :key="user.id"
+              :color="getUserRoleColor(user.role)"
+              size="small"
+              variant="tonal"
+            >
+              {{ user.username }}
+            </v-chip>
+          </div>
+          <v-chip v-else color="grey" size="small" variant="outlined"> Unassigned </v-chip>
+        </template>
+
+        <!-- Client name -->
+        <template #[`item.client_id`]="{ item }">
+          {{ getClientName(item.client_id) }}
+        </template>
+
+        <!-- Created date -->
+        <template #[`item.created_at`]="{ item }">
+          <span class="text-body-2">
+            {{ formatDate(item.created_at) }}
+          </span>
+        </template>
+
+        <!-- Empty state -->
+        <template #no-data>
+          <div class="text-center pa-12">
+            <v-icon class="mb-4" color="grey-lighten-1" icon="mdi-folder-open-outline" size="64" />
+            <h3 class="text-h6 font-weight-medium mb-2">
+              {{ getEmptyStateTitle() }}
+            </h3>
+            <p class="text-body-2 text-medium-emphasis mb-4">
+              {{ getEmptyStateMessage() }}
+            </p>
+            <v-btn
+              v-if="shouldShowCreateButton()"
+              color="primary"
+              prepend-icon="mdi-plus"
+              @click="isNewCaseModalOpen = true"
+            >
+              Create First Case
+            </v-btn>
+          </div>
+        </template>
+      </v-data-table>
+    </v-card>
   </BaseDashboard>
 
-    <NewCaseModal
-      :is-open="isNewCaseModalOpen"
-      @close="isNewCaseModalOpen = false"
-      @created="handleCaseCreated"
-    />
+  <NewCaseModal
+    :is-open="isNewCaseModalOpen"
+    @close="isNewCaseModalOpen = false"
+    @created="handleCaseCreated"
+  />
 
-    <!-- Snackbar for notifications -->
-    <v-snackbar
-      v-model="snackbar.show"
-      :color="snackbar.color"
-      :timeout="snackbar.timeout"
-      location="top right"
-    >
-      {{ snackbar.text }}
-      <template #actions>
-        <v-btn variant="text" @click="snackbar.show = false"> Close </v-btn>
-      </template>
-    </v-snackbar>
+  <!-- Snackbar for notifications -->
+  <v-snackbar
+    v-model="snackbar.show"
+    :color="snackbar.color"
+    :timeout="snackbar.timeout"
+    location="top right"
+  >
+    {{ snackbar.text }}
+    <template #actions>
+      <v-btn variant="text" @click="snackbar.show = false"> Close </v-btn>
+    </template>
+  </v-snackbar>
 </template>
 
 <script setup>
@@ -332,7 +321,6 @@ onMounted(loadData)
 </script>
 
 <style scoped>
-
 .case-dashboard-table :deep(.v-data-table__tr:hover) {
   background-color: rgb(var(--v-theme-primary), 0.04) !important;
   cursor: pointer;

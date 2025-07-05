@@ -1,10 +1,5 @@
 <template>
-  <v-alert
-    type="warning"
-    variant="tonal"
-    class="mb-4"
-    prominent
-  >
+  <v-alert class="mb-4" prominent type="warning" variant="tonal">
     <v-alert-title>API Key Required</v-alert-title>
     <div>
       {{ computedMessage }}
@@ -27,18 +22,18 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
-import { useAuthStore } from '@/stores/auth'
+import {computed} from 'vue'
+import {useAuthStore} from '@/stores/auth'
 
 const props = defineProps({
   missingProviders: {
     type: Array,
-    default: () => []
+    default: () => [],
   },
   showAdminLink: {
     type: Boolean,
-    default: true
-  }
+    default: true,
+  },
 })
 
 const authStore = useAuthStore()
@@ -48,11 +43,11 @@ const computedMessage = computed(() => {
   if (props.missingProviders.length === 0) {
     return 'This plugin requires an API key. Contact your administrator to set it up.'
   }
-  
+
   const providers = props.missingProviders
-    .map(p => p.charAt(0).toUpperCase() + p.slice(1))
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
     .join(', ')
-  
+
   const plural = props.missingProviders.length > 1
   return `This plugin requires ${plural ? 'API keys' : 'an API key'} for: ${providers}. Contact your administrator to set ${plural ? 'them' : 'it'} up.`
 })

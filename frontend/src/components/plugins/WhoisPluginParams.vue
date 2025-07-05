@@ -23,42 +23,41 @@
     />
 
     <!-- Save to Case Option -->
-    <CaseEvidenceToggle 
+    <CaseEvidenceToggle
       :model-value="props.modelValue"
       @update:model-value="emit('update:modelValue', $event)"
     />
-
   </div>
 </template>
 
 <script setup>
-import { usePluginValidation, usePluginParamsAdvanced, pluginParamConfigs } from '@/composables/usePluginParams'
+import {
+  usePluginValidation,
+  usePluginParamsAdvanced,
+  pluginParamConfigs,
+} from '@/composables/usePluginParams'
 import PluginDescriptionCard from './PluginDescriptionCard.vue'
 import CaseEvidenceToggle from './CaseEvidenceToggle.vue'
 
 const props = defineProps({
   parameters: {
     type: Object,
-    required: true
+    required: true,
   },
   modelValue: {
     type: Object,
-    required: true
-  }
+    required: true,
+  },
 })
 
 const emit = defineEmits(['update:modelValue'])
 
 // Use advanced plugin params composable with domain configuration
-const {
-  pluginDescription,
-  localParams,
-  updateParams
-} = usePluginParamsAdvanced(props, emit, {
+const { pluginDescription, localParams, updateParams } = usePluginParamsAdvanced(props, emit, {
   parameterDefaults: {
     ...pluginParamConfigs.domain(),
-    timeout: 30
-  }
+    timeout: 30,
+  },
 })
 
 const { domainRule } = usePluginValidation()

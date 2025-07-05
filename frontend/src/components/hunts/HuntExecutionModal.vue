@@ -1,10 +1,5 @@
 <template>
-  <v-dialog
-    v-model="dialog"
-    max-width="600px"
-    persistent
-    @keydown.esc="handleCancel"
-  >
+  <v-dialog v-model="dialog" max-width="600px" persistent @keydown.esc="handleCancel">
     <v-card>
       <!-- Header -->
       <v-card-title class="d-flex align-center pa-4 bg-primary text-white">
@@ -71,7 +66,7 @@
         <!-- Parameters Form -->
         <div v-if="hunt?.initial_parameters" class="mb-4">
           <div class="text-h6 mb-3">Hunt Parameters</div>
-          
+
           <HuntParameterForm
             :parameters="hunt.initial_parameters"
             v-model="parameterValues"
@@ -89,13 +84,7 @@
       <!-- Actions -->
       <v-card-actions class="pa-4 pt-0">
         <v-spacer />
-        <v-btn
-          variant="text"
-          @click="handleCancel"
-          :disabled="executing"
-        >
-          Cancel
-        </v-btn>
+        <v-btn :disabled="executing" variant="text" @click="handleCancel"> Cancel </v-btn>
         <v-btn
           color="primary"
           variant="elevated"
@@ -118,20 +107,20 @@ import HuntParameterForm from './HuntParameterForm.vue'
 const props = defineProps({
   modelValue: {
     type: Boolean,
-    default: false
+    default: false,
   },
   hunt: {
     type: Object,
-    default: null
+    default: null,
   },
   caseId: {
     type: Number,
-    default: null
+    default: null,
   },
   cases: {
     type: Array,
-    default: () => []
-  }
+    default: () => [],
+  },
 })
 
 const emit = defineEmits(['update:modelValue', 'execute', 'cancel'])
@@ -147,7 +136,7 @@ const isParametersValid = ref(true)
 // Computed properties
 const dialog = computed({
   get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value)
+  set: (value) => emit('update:modelValue', value),
 })
 
 const categoryIcon = computed(() => {
@@ -158,17 +147,17 @@ const categoryIcon = computed(() => {
     ip: 'mdi-ip-network',
     phone: 'mdi-phone',
     email: 'mdi-email',
-    general: 'mdi-magnify'
+    general: 'mdi-magnify',
   }
   return iconMap[props.hunt?.category] || iconMap.general
 })
 
 const caseOptions = computed(() => {
-  return props.cases.map(case_ => ({
+  return props.cases.map((case_) => ({
     id: case_.id,
     title: case_.title || `Case ${case_.case_number}`,
     case_number: case_.case_number,
-    client: case_.client
+    client: case_.client,
   }))
 })
 
@@ -178,7 +167,7 @@ const isFormValid = computed(() => {
 })
 
 const rules = {
-  required: value => !!value || 'This field is required'
+  required: (value) => !!value || 'This field is required',
 }
 
 // Methods
@@ -190,16 +179,15 @@ const handleExecute = async () => {
     error.value = null
 
     const targetCaseId = props.caseId || selectedCaseId.value
-    
+
     await emit('execute', {
       huntId: props.hunt.id,
       caseId: targetCaseId,
-      parameters: parameterValues.value
+      parameters: parameterValues.value,
     })
 
     // Close modal on successful execution
     dialog.value = false
-    
   } catch (err) {
     error.value = err.message || 'Failed to execute hunt'
     console.error('Hunt execution error:', err)
@@ -230,35 +218,45 @@ const resetForm = () => {
 }
 
 // Watchers
-watch(() => props.hunt, (newHunt) => {
-  if (newHunt) {
-    // Initialize parameter values with defaults
-    const initialValues = {}
-    if (newHunt.initial_parameters) {
-      Object.keys(newHunt.initial_parameters).forEach(key => {
-        const param = newHunt.initial_parameters[key]
-        if (param.default !== undefined) {
-          initialValues[key] = param.default
-        } else {
-          initialValues[key] = ''
-        }
+watch(
+  () => props.hunt,
+  (newHunt) => {
+    if (newHunt) {
+      // Initialize parameter values with defaults
+      const initialValues = {}
+      if (newHunt.initial_parameters) {
+        Object.keys(newHunt.initial_parameters).forEach((key) => {
+          const param = newHunt.initial_parameters[key]
+          if (param.default !== undefined) {
+            initialValues[key] = param.default
+          } else {
+            initialValues[key] = ''
+          }
+        })
+      }
+      parameterValues.value = initialValues
+    }
+  },
+  { immediate: true },
+)
+
+watch(
+  () => props.modelValue,
+  (isOpen) => {
+    if (isOpen) {
+      nextTick(() => {
+        resetForm()
       })
     }
-    parameterValues.value = initialValues
-  }
-}, { immediate: true })
+  },
+)
 
-watch(() => props.modelValue, (isOpen) => {
-  if (isOpen) {
-    nextTick(() => {
-      resetForm()
-    })
-  }
-})
-
-watch(() => props.caseId, (newCaseId) => {
-  selectedCaseId.value = newCaseId
-})
+watch(
+  () => props.caseId,
+  (newCaseId) => {
+    selectedCaseId.value = newCaseId
+  },
+)
 </script>
 
 <style scoped>

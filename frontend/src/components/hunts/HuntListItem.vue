@@ -16,11 +16,11 @@
           <div>
             <div class="d-flex align-center">
               <span class="text-body-1 font-weight-bold">{{ hunt.display_name }}</span>
-              <v-icon 
-                v-if="!hunt.is_active" 
-                icon="mdi-alert-circle" 
-                size="x-small" 
-                color="error" 
+              <v-icon
+                v-if="!hunt.is_active"
+                color="error"
+                icon="mdi-alert-circle"
+                size="x-small"
                 class="ml-2"
                 :title="'Inactive'"
               />
@@ -38,10 +38,8 @@
 
         <!-- Stats and Actions -->
         <v-col cols="12" md="4" class="d-flex align-center justify-md-end justify-start">
-          <div class="text-caption text-medium-emphasis me-3">
-            {{ hunt.step_count || 0 }} steps
-          </div>
-          
+          <div class="text-caption text-medium-emphasis me-3">{{ hunt.step_count || 0 }} steps</div>
+
           <!-- Execute Button -->
           <v-btn
             color="primary"
@@ -55,8 +53,6 @@
           </v-btn>
         </v-col>
       </v-row>
-
-
     </v-card-text>
   </v-card>
 </template>
@@ -68,8 +64,8 @@ import { getCategoryColor, getDisplayCategory } from '@/utils/huntDisplayUtils'
 const props = defineProps({
   hunt: {
     type: Object,
-    required: true
-  }
+    required: true,
+  },
 })
 
 defineEmits(['execute', 'view-details'])
@@ -83,7 +79,7 @@ const categoryIcon = computed(() => {
     ip: 'mdi-ip-network',
     phone: 'mdi-phone',
     email: 'mdi-email',
-    general: 'mdi-magnify'
+    general: 'mdi-magnify',
   }
   return iconMap[props.hunt.category] || iconMap.general
 })

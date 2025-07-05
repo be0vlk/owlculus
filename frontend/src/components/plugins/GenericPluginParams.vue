@@ -1,12 +1,9 @@
 <template>
   <div class="d-flex flex-column ga-3">
     <PluginDescriptionCard :description="pluginDescription" />
-    
+
     <!-- API Key Warning -->
-    <ApiKeyWarning
-      v-if="missingApiKeys.length > 0"
-      :missing-providers="missingApiKeys"
-    />
+    <ApiKeyWarning v-if="missingApiKeys.length > 0" :missing-providers="missingApiKeys" />
 
     <!-- Generic parameter fields -->
     <template v-for="(param, paramName) in filteredParameters" :key="paramName">
@@ -51,7 +48,7 @@
     </template>
 
     <!-- Save to Case Option (if available) -->
-    <CaseEvidenceToggle 
+    <CaseEvidenceToggle
       v-if="parameters.save_to_case"
       :model-value="props.modelValue"
       @update:model-value="emit('update:modelValue', $event)"
@@ -69,16 +66,16 @@ import CaseEvidenceToggle from './CaseEvidenceToggle.vue'
 const props = defineProps({
   parameters: {
     type: Object,
-    required: true
+    required: true,
   },
   modelValue: {
     type: Object,
-    required: true
+    required: true,
   },
   pluginName: {
     type: String,
-    default: ''
-  }
+    default: '',
+  },
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -102,22 +99,23 @@ const localParams = reactive({})
 
 // Initialize local params
 const initializeParams = () => {
-  Object.keys(filteredParameters.value).forEach(paramName => {
+  Object.keys(filteredParameters.value).forEach((paramName) => {
     const param = filteredParameters.value[paramName]
     if (param.type === 'boolean') {
-      localParams[paramName] = props.modelValue[paramName] !== undefined 
-        ? props.modelValue[paramName] 
-        : (param.default !== undefined ? param.default : false)
+      localParams[paramName] =
+        props.modelValue[paramName] !== undefined
+          ? props.modelValue[paramName]
+          : param.default !== undefined
+            ? param.default
+            : false
     } else if (param.type === 'number' || param.type === 'float') {
-      localParams[paramName] = props.modelValue[paramName] !== undefined 
-        ? props.modelValue[paramName] 
-        : (param.default || 0)
+      localParams[paramName] =
+        props.modelValue[paramName] !== undefined ? props.modelValue[paramName] : param.default || 0
     } else {
       localParams[paramName] = props.modelValue[paramName] || param.default || ''
     }
   })
 }
-
 
 // Use plugin API keys composable
 const { checkPluginApiKeys, getMissingApiKeys } = usePluginApiKeys()
@@ -126,12 +124,12 @@ const missingApiKeys = ref([])
 // Check API keys on mount
 onMounted(async () => {
   initializeParams()
-  
+
   // Check if plugin has API key requirements
   if (props.parameters.api_key_requirements && props.parameters.api_key_requirements.length > 0) {
     const plugin = {
       name: props.pluginName,
-      api_key_requirements: props.parameters.api_key_requirements
+      api_key_requirements: props.parameters.api_key_requirements,
     }
     await checkPluginApiKeys(plugin)
     missingApiKeys.value = getMissingApiKeys(plugin)
@@ -140,18 +138,22 @@ onMounted(async () => {
 
 // Emit parameter updates for plugin-specific params
 const updateParams = () => {
-  emit('update:modelValue', { 
+  emit('update:modelValue', {
     ...props.modelValue,
-    ...localParams 
+    ...localParams,
   })
 }
 
 // Watch for external changes to modelValue
-watch(() => props.modelValue, (newValue) => {
-  Object.keys(filteredParameters.value).forEach(paramName => {
-    if (newValue[paramName] !== undefined) {
-      localParams[paramName] = newValue[paramName]
-    }
-  })
-}, { deep: true })
+watch(
+  () => props.modelValue,
+  (newValue) => {
+    Object.keys(filteredParameters.value).forEach((paramName) => {
+      if (newValue[paramName] !== undefined) {
+        localParams[paramName] = newValue[paramName]
+      }
+    })
+  },
+  { deep: true },
+)
 </script>

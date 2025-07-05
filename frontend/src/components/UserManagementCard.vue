@@ -5,7 +5,9 @@
       <v-icon icon="mdi-account-cog" color="primary" size="large" class="me-3" />
       <div class="flex-grow-1">
         <div class="text-h6 font-weight-bold">User Management</div>
-        <div class="text-body-2 text-medium-emphasis">Manage system users and their permissions</div>
+        <div class="text-body-2 text-medium-emphasis">
+          Manage system users and their permissions
+        </div>
       </div>
       <div class="d-flex align-center ga-2">
         <v-btn
@@ -50,7 +52,7 @@
               variant="outlined"
               density="comfortable"
               hide-details
-              style="min-width: 280px;"
+              style="min-width: 280px"
               clearable
             />
           </div>
@@ -71,19 +73,10 @@
       <!-- Role column -->
       <template #[`item.role`]="{ item }">
         <div class="d-flex align-center ga-2">
-          <v-chip
-            :color="getRoleColor(item.role)"
-            size="small"
-            variant="tonal"
-          >
+          <v-chip :color="getRoleColor(item.role)" size="small" variant="tonal">
             {{ item.role }}
           </v-chip>
-          <v-chip
-            v-if="item.is_superadmin"
-            color="orange-darken-2"
-            size="small"
-            variant="flat"
-          >
+          <v-chip v-if="item.is_superadmin" color="orange-darken-2" size="small" variant="flat">
             <v-icon start size="x-small">mdi-crown</v-icon>
             Superadmin
           </v-chip>
@@ -109,9 +102,7 @@
             @click="editUser(item)"
           >
             <v-icon>mdi-pencil</v-icon>
-            <v-tooltip activator="parent" location="top">
-              Edit {{ item.username }}
-            </v-tooltip>
+            <v-tooltip activator="parent" location="top"> Edit {{ item.username }} </v-tooltip>
           </v-btn>
           <v-btn
             v-if="canResetPassword(item)"
@@ -135,9 +126,7 @@
             @click="handleDeleteUser(item)"
           >
             <v-icon>mdi-delete</v-icon>
-            <v-tooltip activator="parent" location="top">
-              Delete {{ item.username }}
-            </v-tooltip>
+            <v-tooltip activator="parent" location="top"> Delete {{ item.username }} </v-tooltip>
           </v-btn>
         </div>
       </template>
@@ -145,12 +134,7 @@
       <!-- Empty state -->
       <template #no-data>
         <div class="text-center pa-12">
-          <v-icon
-            icon="mdi-account-group-outline"
-            size="64"
-            color="grey-lighten-1"
-            class="mb-4"
-          />
+          <v-icon class="mb-4" color="grey-lighten-1" icon="mdi-account-group-outline" size="64" />
           <h3 class="text-h6 font-weight-medium mb-2">
             {{ getEmptyStateTitle() }}
           </h3>
@@ -199,59 +183,63 @@ const {
   // State
   loading,
   searchQuery,
-  
+
   // Modal state
   showNewUserModal,
   editingUser,
   showPasswordResetModal,
   selectedUserForPasswordReset,
-  
+
   // Constants
   vuetifyHeaders,
-  
+
   // Computed
   sortedAndFilteredUsers,
-  
+
   // Permission functions
   canDeleteUser,
   canResetPassword,
   canEditUser,
-  
+
   // Helper functions
   getRoleColor,
   getEmptyStateTitle,
   getEmptyStateMessage,
   shouldShowCreateButton,
   formatDate,
-  
+
   // CRUD operations
   loadUsers,
   deleteUser,
-  
+
   // Modal management
   editUser,
   closeUserModal,
   handleUserSaved,
   resetPassword,
   closePasswordResetModal,
-  handlePasswordResetSaved
+  handlePasswordResetSaved,
 } = useUsers()
 
 const handleDeleteUser = (user) => {
   emit('confirmDelete', {
     title: 'Confirm Deletion',
     message: `Are you sure you want to delete the user <strong>${user.username}</strong>?`,
-    warning: 'This action cannot be undone. All user data and associated records will be permanently removed.',
+    warning:
+      'This action cannot be undone. All user data and associated records will be permanently removed.',
     onConfirm: async () => {
       try {
         await deleteUser(user.id)
-        emit('notification', { text: `User '${user.username}' deleted successfully`, color: 'success' })
+        emit('notification', {
+          text: `User '${user.username}' deleted successfully`,
+          color: 'success',
+        })
       } catch (err) {
         console.error('Error deleting user:', err)
         emit('notification', { text: 'Failed to delete user. Please try again.', color: 'error' })
         throw err
       }
-    }
+    },
   })
 }
 

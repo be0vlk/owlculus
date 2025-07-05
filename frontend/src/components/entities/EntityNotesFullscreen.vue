@@ -6,17 +6,14 @@
     transition="dialog-bottom-transition"
     :scrim="true"
   >
-    <v-card class="d-flex flex-column" style="height: 100vh;">
+    <v-card class="d-flex flex-column" style="height: 100vh">
       <v-toolbar color="primary" dark>
         <v-toolbar-title>
           <v-icon start>mdi-note-text</v-icon>
           {{ title }} - Notes
         </v-toolbar-title>
         <v-spacer />
-        <v-btn
-          icon="mdi-close"
-          @click="$emit('close')"
-        />
+        <v-btn icon="mdi-close" @click="$emit('close')" />
       </v-toolbar>
 
       <div class="flex-grow-1 d-flex flex-column overflow-hidden">
@@ -34,7 +31,11 @@
           <v-row justify="center">
             <v-col cols="12" lg="10" xl="8">
               <div :class="{ 'read-only-notes': isEditing === false }">
-                <editor-content v-if="editor" :editor="editor" class="tiptap-content fullscreen-editor" />
+                <editor-content
+                  v-if="editor"
+                  :editor="editor"
+                  class="tiptap-content fullscreen-editor"
+                />
                 <div v-else class="text-center pa-4 text-grey">
                   <v-icon size="64">mdi-note-text</v-icon>
                   <p>Loading notes editor...</p>
@@ -60,7 +61,7 @@ defineProps({
   saving: { type: Boolean, default: false },
   lastSavedTime: { type: [Date, null], default: null },
   formatLastSaved: { type: String, default: '' },
-  isEditing: { type: Boolean, default: undefined }
+  isEditing: { type: Boolean, default: undefined },
 })
 
 defineEmits(['update:show', 'close'])

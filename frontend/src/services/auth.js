@@ -2,9 +2,10 @@ import axios from 'axios'
 
 // Use relative URLs when VITE_API_BASE_URL is empty (for reverse proxy setups)
 // Only fall back to localhost:8000 if the env var is not defined at all
-const baseURL = import.meta.env.VITE_API_BASE_URL !== undefined 
-  ? import.meta.env.VITE_API_BASE_URL 
-  : 'http://localhost:8000'
+const baseURL =
+  import.meta.env.VITE_API_BASE_URL !== undefined
+    ? import.meta.env.VITE_API_BASE_URL
+    : 'http://localhost:8000'
 
 // Create a separate axios instance for auth that doesn't have interceptors
 // to avoid circular dependencies with the main api instance

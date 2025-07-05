@@ -1,5 +1,5 @@
 <template>
-  <v-alert 
+  <v-alert
     v-if="message"
     :type="alertType"
     :variant="variant"
@@ -29,16 +29,16 @@ const props = defineProps({
   type: {
     type: String,
     required: true,
-    validator: (value) => ['status', 'complete', 'error'].includes(value)
+    validator: (value) => ['status', 'complete', 'error'].includes(value),
   },
   message: {
     type: String,
-    required: true
+    required: true,
   },
   pluginName: {
     type: String,
-    default: ''
-  }
+    default: '',
+  },
 })
 
 const alertType = computed(() => {
@@ -54,10 +54,10 @@ const alertType = computed(() => {
   }
 })
 
-const variant = computed(() => props.type === 'status' ? 'tonal' : 'tonal')
-const density = computed(() => props.type === 'status' ? 'compact' : 'default')
+const variant = computed(() => (props.type === 'status' ? 'tonal' : 'tonal'))
+const density = computed(() => (props.type === 'status' ? 'compact' : 'default'))
 const prominent = computed(() => props.type === 'error')
-const alertClass = computed(() => props.type === 'complete' ? 'mb-4' : '')
+const alertClass = computed(() => (props.type === 'complete' ? 'mb-4' : ''))
 
 const showTitle = computed(() => props.type !== 'status')
 

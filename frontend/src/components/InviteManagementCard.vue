@@ -61,7 +61,7 @@
               variant="outlined"
               density="comfortable"
               hide-details
-              style="min-width: 280px;"
+              style="min-width: 280px"
               clearable
             />
           </div>
@@ -81,22 +81,14 @@
     >
       <!-- Role column -->
       <template #[`item.role`]="{ item }">
-        <v-chip
-          :color="getRoleColor(item.role)"
-          size="small"
-          variant="tonal"
-        >
+        <v-chip :color="getRoleColor(item.role)" size="small" variant="tonal">
           {{ item.role }}
         </v-chip>
       </template>
 
       <!-- Status column -->
       <template #[`item.status`]="{ item }">
-        <v-chip
-          :color="getInviteStatusColor(item)"
-          size="small"
-          variant="tonal"
-        >
+        <v-chip :color="getInviteStatusColor(item)" size="small" variant="tonal">
           {{ getInviteStatus(item) }}
         </v-chip>
       </template>
@@ -127,9 +119,7 @@
             @click="handleCopyInviteLink(item)"
           >
             <v-icon>mdi-content-copy</v-icon>
-            <v-tooltip activator="parent" location="top">
-              Copy invite link
-            </v-tooltip>
+            <v-tooltip activator="parent" location="top"> Copy invite link </v-tooltip>
           </v-btn>
           <v-btn
             v-if="!item.is_used"
@@ -140,9 +130,7 @@
             @click="handleDeleteInvite(item)"
           >
             <v-icon>mdi-delete</v-icon>
-            <v-tooltip activator="parent" location="top">
-              Delete invite
-            </v-tooltip>
+            <v-tooltip activator="parent" location="top"> Delete invite </v-tooltip>
           </v-btn>
         </div>
       </template>
@@ -150,12 +138,7 @@
       <!-- Empty state -->
       <template #no-data>
         <div class="text-center pa-12">
-          <v-icon
-            icon="mdi-email-outline"
-            size="64"
-            color="grey-lighten-1"
-            class="mb-4"
-          />
+          <v-icon class="mb-4" color="grey-lighten-1" icon="mdi-email-outline" size="64" />
           <h3 class="text-h6 font-weight-medium mb-2">
             {{ getInviteEmptyStateTitle() }}
           </h3>
@@ -195,16 +178,16 @@ const {
   loading,
   inviteSearchQuery,
   cleanupLoading,
-  
+
   // Modal state
   showNewInviteModal,
-  
+
   // Constants
   inviteHeaders,
-  
+
   // Computed
   sortedAndFilteredInvites,
-  
+
   // Helper functions
   getRoleColor,
   getInviteStatus,
@@ -213,16 +196,16 @@ const {
   getInviteEmptyStateMessage,
   shouldShowCreateInviteButton,
   formatDate,
-  
+
   // CRUD operations
   loadInvites,
   deleteInvite,
   cleanupExpiredInvites,
   copyInviteLink,
-  
+
   // Modal management
   closeInviteModal,
-  handleInviteCreated
+  handleInviteCreated,
 } = useInvites()
 
 const handleCopyInviteLink = async (invite) => {
@@ -246,14 +229,17 @@ const handleDeleteInvite = (invite) => {
         emit('notification', { text: 'Failed to delete invite. Please try again.', color: 'error' })
         throw err
       }
-    }
+    },
   })
 }
 
 const handleCleanupExpiredInvites = async () => {
   try {
     const result = await cleanupExpiredInvites()
-    emit('notification', { text: `Cleaned up ${result.deleted_count || 0} expired invites`, color: 'success' })
+    emit('notification', {
+      text: `Cleaned up ${result.deleted_count || 0} expired invites`,
+      color: 'success',
+    })
   } catch (err) {
     emit('notification', { text: 'Failed to cleanup expired invites', color: 'error' })
     console.error('Error cleaning up expired invites:', err)

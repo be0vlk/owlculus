@@ -4,13 +4,7 @@
       <v-card-text>
         <v-form ref="formRef" @submit.prevent="handleSubmit">
           <!-- Target Folder Alert -->
-          <v-alert
-            v-if="targetFolder"
-            type="info"
-            variant="tonal"
-            class="mb-4"
-            icon="mdi-folder"
-          >
+          <v-alert v-if="targetFolder" class="mb-4" icon="mdi-folder" type="info" variant="tonal">
             Uploading to: <strong>{{ targetFolder.title }}</strong>
           </v-alert>
 
@@ -29,10 +23,7 @@
             class="mb-4"
           >
             <template v-slot:prepend-item>
-              <v-list-item
-                title="📁 Root (No folder)"
-                @click="selectedFolder = null"
-              />
+              <v-list-item title="📁 Root (No folder)" @click="selectedFolder = null" />
               <v-divider />
             </template>
           </v-select>
@@ -69,16 +60,10 @@
             @drop.prevent="handleFileDrop"
           >
             <v-card-text class="text-center pa-8">
-              <v-icon 
-                size="64" 
-                color="primary" 
-                class="mb-4"
-              >
-                mdi-cloud-upload-outline
-              </v-icon>
-              
+              <v-icon class="mb-4" color="primary" size="64"> mdi-cloud-upload-outline </v-icon>
+
               <div class="text-h6 mb-2">Drop files here or browse</div>
-              
+
               <v-btn
                 color="primary"
                 variant="outlined"
@@ -88,7 +73,7 @@
                 <v-icon start>mdi-file-plus</v-icon>
                 Choose Files
               </v-btn>
-              
+
               <input
                 ref="fileInput"
                 type="file"
@@ -96,8 +81,8 @@
                 @change="handleFileSelect"
                 accept="image/*,application/pdf,.doc,.docx,.txt"
                 multiple
-              >
-              
+              />
+
               <div class="text-body-2 text-medium-emphasis">
                 Images, PDF, DOC, DOCX or TXT up to 50MB
               </div>
@@ -109,19 +94,14 @@
             <v-card-title class="text-subtitle-1">
               Selected Files ({{ selectedFiles.length }})
               <v-spacer />
-              <v-btn
-                size="small"
-                variant="text"
-                color="error"
-                @click="clearFiles"
-              >
+              <v-btn color="error" size="small" variant="text" @click="clearFiles">
                 <v-icon start>mdi-delete</v-icon>
                 Clear All
               </v-btn>
             </v-card-title>
-            
+
             <v-divider />
-            
+
             <v-list density="compact">
               <v-list-item
                 v-for="file in selectedFiles"
@@ -132,7 +112,7 @@
                 <template v-slot:prepend>
                   <v-icon>{{ getFileIcon(file.name) }}</v-icon>
                 </template>
-                
+
                 <template v-slot:append>
                   <v-btn
                     size="small"
@@ -147,12 +127,7 @@
           </v-card>
 
           <!-- Error Display -->
-          <v-alert
-            v-if="fileError"
-            type="error"
-            variant="tonal"
-            class="mb-4"
-          >
+          <v-alert v-if="fileError" class="mb-4" type="error" variant="tonal">
             {{ fileError }}
           </v-alert>
         </v-form>
@@ -162,13 +137,7 @@
 
       <v-card-actions>
         <v-spacer />
-        <v-btn
-          variant="text"
-          @click="$emit('close')"
-          :disabled="uploading"
-        >
-          Cancel
-        </v-btn>
+        <v-btn :disabled="uploading" variant="text" @click="$emit('close')"> Cancel </v-btn>
         <v-btn
           color="primary"
           variant="flat"
@@ -184,8 +153,8 @@
 </template>
 
 <script setup>
-import { ref, defineProps, defineEmits, computed, watch, onMounted } from 'vue';
-import { evidenceService } from '../services/evidence';
+import { ref, defineProps, defineEmits, computed, watch, onMounted } from 'vue'
+import { evidenceService } from '../services/evidence'
 // Vuetify components are auto-imported
 
 const CATEGORIES = [
@@ -194,8 +163,8 @@ const CATEGORIES = [
   'Network Assets',
   'Communications',
   'Documents',
-  'Other'
-];
+  'Other',
+]
 
 const props = defineProps({
   show: {
@@ -210,9 +179,9 @@ const props = defineProps({
     type: Object,
     default: null,
   },
-});
+})
 
-const emit = defineEmits(['close', 'uploaded']);
+const emit = defineEmits(['close', 'uploaded'])
 
 const dialogVisible = computed({
   get: () => props.show,
@@ -220,52 +189,52 @@ const dialogVisible = computed({
     if (!value) {
       emit('close')
     }
-  }
-});
+  },
+})
 
 const form = ref({
   description: '',
   category: '',
-});
+})
 
-const selectedFiles = ref([]);
-const uploading = ref(false);
-const fileError = ref(null);
-const selectedFolder = ref(null);
-const availableFolders = ref([]);
-const loadingFolders = ref(false);
-const isDragOver = ref(false);
-const formRef = ref(null);
+const selectedFiles = ref([])
+const uploading = ref(false)
+const fileError = ref(null)
+const selectedFolder = ref(null)
+const availableFolders = ref([])
+const loadingFolders = ref(false)
+const isDragOver = ref(false)
+const formRef = ref(null)
 
 // Computed properties
 const folderOptions = computed(() => {
   const buildFolderTree = (folders, parentId = null, prefix = '') => {
     const options = []
-    const children = folders.filter(f => f.parent_folder_id === parentId && f.is_folder)
-    
-    children.forEach(folder => {
+    const children = folders.filter((f) => f.parent_folder_id === parentId && f.is_folder)
+
+    children.forEach((folder) => {
       const label = prefix + '📁 ' + folder.title
       options.push({
         label,
         value: folder,
-        folder
+        folder,
       })
-      
+
       // Add nested folders with indentation
       const nestedOptions = buildFolderTree(folders, folder.id, prefix + '  ')
       options.push(...nestedOptions)
     })
-    
+
     return options
   }
-  
+
   return buildFolderTree(availableFolders.value)
 })
 
 // Methods
 const loadFolders = async () => {
   if (!props.caseId) return
-  
+
   try {
     loadingFolders.value = true
     const folders = await evidenceService.getFolderTree(props.caseId)
@@ -278,76 +247,79 @@ const loadFolders = async () => {
 }
 
 function handleFileSelect(event) {
-  const files = Array.from(event.target.files);
-  const invalidFiles = files.filter(file => file.size > 50000000);
-  
+  const files = Array.from(event.target.files)
+  const invalidFiles = files.filter((file) => file.size > 50000000)
+
   if (invalidFiles.length > 0) {
-    fileError.value = `${invalidFiles.length} file(s) exceed 50MB size limit`;
-    return;
+    fileError.value = `${invalidFiles.length} file(s) exceed 50MB size limit`
+    return
   }
 
-  selectedFiles.value = [...selectedFiles.value, ...files];
-  fileError.value = null;
+  selectedFiles.value = [...selectedFiles.value, ...files]
+  fileError.value = null
 }
 
 function handleFileDrop(event) {
-  isDragOver.value = false;
-  const files = Array.from(event.dataTransfer.files);
-  const invalidFiles = files.filter(file => file.size > 50000000);
-  
+  isDragOver.value = false
+  const files = Array.from(event.dataTransfer.files)
+  const invalidFiles = files.filter((file) => file.size > 50000000)
+
   if (invalidFiles.length > 0) {
-    fileError.value = `${invalidFiles.length} file(s) exceed 50MB size limit`;
-    return;
+    fileError.value = `${invalidFiles.length} file(s) exceed 50MB size limit`
+    return
   }
 
-  selectedFiles.value = [...selectedFiles.value, ...files];
-  fileError.value = null;
+  selectedFiles.value = [...selectedFiles.value, ...files]
+  fileError.value = null
 }
 
 function removeFile(file) {
-  selectedFiles.value = selectedFiles.value.filter(f => f !== file);
+  selectedFiles.value = selectedFiles.value.filter((f) => f !== file)
 }
 
 function clearFiles() {
-  selectedFiles.value = [];
-  fileError.value = null;
+  selectedFiles.value = []
+  fileError.value = null
 }
 
 async function handleSubmit() {
   if (selectedFiles.value.length === 0) {
-    fileError.value = 'Please select at least one file';
-    return;
+    fileError.value = 'Please select at least one file'
+    return
   }
 
   try {
-    uploading.value = true;
-    
+    uploading.value = true
+
     // Determine target folder - either from prop (context menu) or user selection
-    const targetFolderData = props.targetFolder || selectedFolder.value;
-    
+    const targetFolderData = props.targetFolder || selectedFolder.value
+
     const evidence = await evidenceService.createEvidence({
       description: form.value.description,
       category: form.value.category || 'Other',
       caseId: props.caseId,
       files: selectedFiles.value,
       folderPath: targetFolderData?.folder_path,
-      parentFolderId: targetFolderData?.id
-    });
-    emit('uploaded', evidence);
-    emit('close');
+      parentFolderId: targetFolderData?.id,
+    })
+    emit('uploaded', evidence)
+    emit('close')
   } catch {
-    fileError.value = 'Failed to upload files. Please try again.';
+    fileError.value = 'Failed to upload files. Please try again.'
   } finally {
-    uploading.value = false;
+    uploading.value = false
   }
 }
 
 // Watch for dialog opening to load folders
-watch(() => props.show, (newShow) => {
-  if (newShow && props.caseId) {
-    loadFolders()
-  }
-})
+watch(
+  () => props.show,
+  (newShow) => {
+    if (newShow && props.caseId) {
+      loadFolders()
+    }
+  },
+)
 
 // Load folders on mount if dialog is already open
 onMounted(() => {
@@ -358,8 +330,8 @@ onMounted(() => {
 
 // Helper function to get appropriate file icon
 function getFileIcon(fileName) {
-  const extension = fileName.split('.').pop().toLowerCase();
-  
+  const extension = fileName.split('.').pop().toLowerCase()
+
   const iconMap = {
     pdf: 'mdi-file-pdf-box',
     doc: 'mdi-file-word-box',
@@ -370,10 +342,10 @@ function getFileIcon(fileName) {
     png: 'mdi-file-image',
     gif: 'mdi-file-image',
     webp: 'mdi-file-image',
-    svg: 'mdi-file-image'
-  };
-  
-  return iconMap[extension] || 'mdi-file-outline';
+    svg: 'mdi-file-image',
+  }
+
+  return iconMap[extension] || 'mdi-file-outline'
 }
 </script>
 

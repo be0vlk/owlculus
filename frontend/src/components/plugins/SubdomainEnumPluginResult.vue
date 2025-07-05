@@ -18,28 +18,35 @@
         <v-row>
           <v-col cols="12" md="4">
             <div class="text-center">
-              <div class="text-h2 font-weight-bold text-primary">{{ summaryData.total_discovered }}</div>
+              <div class="text-h2 font-weight-bold text-primary">
+                {{ summaryData.total_discovered }}
+              </div>
               <div class="text-subtitle-2 text-medium-emphasis">Subdomains Discovered</div>
             </div>
           </v-col>
           <v-col cols="12" md="4">
             <div class="text-center">
-              <div class="text-h2 font-weight-bold text-success">{{ summaryData.total_resolved }}</div>
+              <div class="text-h2 font-weight-bold text-success">
+                {{ summaryData.total_resolved }}
+              </div>
               <div class="text-subtitle-2 text-medium-emphasis">Successfully Resolved</div>
             </div>
           </v-col>
           <v-col cols="12" md="4">
             <div class="text-center">
               <div class="text-h2 font-weight-bold text-warning">
-                {{ Math.round((summaryData.total_resolved / summaryData.total_discovered) * 100) || 0 }}%
+                {{
+                  Math.round((summaryData.total_resolved / summaryData.total_discovered) * 100) ||
+                  0
+                }}%
               </div>
               <div class="text-subtitle-2 text-medium-emphasis">Resolution Rate</div>
             </div>
           </v-col>
         </v-row>
-        
+
         <v-divider class="my-4" />
-        
+
         <div class="d-flex align-center justify-center flex-wrap ga-2">
           <div class="text-subtitle-2 text-medium-emphasis mr-2">Sources Used:</div>
           <v-chip
@@ -59,8 +66,8 @@
     <!-- Subdomain Results Grid -->
     <div v-if="subdomainResults.length" class="subdomain-results-grid">
       <v-row>
-        <v-col 
-          v-for="(subdomain, index) in sortedSubdomains" 
+        <v-col
+          v-for="(subdomain, index) in sortedSubdomains"
           :key="`subdomain-${index}`"
           cols="12"
           md="6"
@@ -68,14 +75,16 @@
         >
           <v-card elevation="2" rounded="lg" class="h-100 subdomain-card">
             <v-card-title class="d-flex align-center pa-3 bg-primary-lighten-5">
-              <v-icon 
-                :icon="subdomain.resolved ? 'mdi-check-circle' : 'mdi-subdirectory-arrow-right'" 
+              <v-icon
+                :icon="subdomain.resolved ? 'mdi-check-circle' : 'mdi-subdirectory-arrow-right'"
                 :color="subdomain.resolved ? 'success' : 'grey'"
-                class="mr-2" 
+                class="mr-2"
                 size="small"
               />
               <div class="flex-grow-1 text-truncate">
-                <div class="text-body-1 font-weight-medium text-truncate">{{ subdomain.subdomain }}</div>
+                <div class="text-body-1 font-weight-medium text-truncate">
+                  {{ subdomain.subdomain }}
+                </div>
               </div>
               <v-btn
                 icon="mdi-content-copy"
@@ -101,7 +110,7 @@
                   <v-tooltip activator="parent" location="top">Copy IP</v-tooltip>
                 </v-btn>
               </div>
-              
+
               <!-- Sources -->
               <div class="d-flex align-center flex-wrap ga-1">
                 <v-icon icon="mdi-source-merge" size="small" class="mr-1" />
@@ -123,26 +132,17 @@
 
       <!-- Export Actions -->
       <div class="d-flex justify-center mt-4 ga-2">
-        <v-btn
-          variant="outlined"
-          @click="copyAllSubdomains"
-        >
+        <v-btn variant="outlined" @click="copyAllSubdomains">
           <v-icon start>mdi-content-copy</v-icon>
           Copy All Subdomains
         </v-btn>
-        
-        <v-btn
-          variant="outlined"
-          @click="copyResolvedOnly"
-        >
+
+        <v-btn variant="outlined" @click="copyResolvedOnly">
           <v-icon start>mdi-check-all</v-icon>
           Copy Resolved Only
         </v-btn>
-        
-        <v-btn
-          variant="outlined"
-          @click="copyAsHostsFile"
-        >
+
+        <v-btn variant="outlined" @click="copyAsHostsFile">
           <v-icon start>mdi-file-document</v-icon>
           Copy as Hosts File
         </v-btn>
@@ -182,28 +182,30 @@ const props = defineProps({
   result: {
     type: [Object, Array],
     required: true,
-  }
+  },
 })
 
-const { statusMessages, completionMessages, errorMessages, dataResults } = usePluginResults(toRef(props, 'result'))
+const { statusMessages, completionMessages, errorMessages, dataResults } = usePluginResults(
+  toRef(props, 'result'),
+)
 
 // Extract subdomain results
 const subdomainResults = computed(() => {
-  return dataResults.value.filter(item => 
-    item.data.subdomain && item.data.subdomain !== undefined
+  return dataResults.value.filter(
+    (item) => item.data.subdomain && item.data.subdomain !== undefined,
   )
 })
 
 // Extract summary data
 const summaryData = computed(() => {
-  const summary = dataResults.value.find(item => item.data.phase === 'summary')
+  const summary = dataResults.value.find((item) => item.data.phase === 'summary')
   return summary ? summary.data : null
 })
 
 // Sort subdomains: resolved first, then alphabetically
 const sortedSubdomains = computed(() => {
   return [...subdomainResults.value]
-    .map(item => item.data)
+    .map((item) => item.data)
     .sort((a, b) => {
       if (a.resolved && !b.resolved) return -1
       if (!a.resolved && b.resolved) return 1
@@ -219,8 +221,8 @@ const hasResults = computed(() => {
 const getSourceColor = (source) => {
   const colors = {
     'crt.sh': 'primary',
-    'HackerTarget': 'success',
-    'SecurityTrails': 'warning'
+    HackerTarget: 'success',
+    SecurityTrails: 'warning',
   }
   return colors[source] || 'grey'
 }
@@ -228,8 +230,8 @@ const getSourceColor = (source) => {
 const getSourceIcon = (source) => {
   const icons = {
     'crt.sh': 'mdi-certificate',
-    'HackerTarget': 'mdi-target',
-    'SecurityTrails': 'mdi-security'
+    HackerTarget: 'mdi-target',
+    SecurityTrails: 'mdi-security',
   }
   return icons[source] || 'mdi-source-merge'
 }
@@ -243,22 +245,22 @@ const copyToClipboard = async (text) => {
 }
 
 const copyAllSubdomains = () => {
-  const subdomains = sortedSubdomains.value.map(s => s.subdomain).join('\n')
+  const subdomains = sortedSubdomains.value.map((s) => s.subdomain).join('\n')
   copyToClipboard(subdomains)
 }
 
 const copyResolvedOnly = () => {
   const resolved = sortedSubdomains.value
-    .filter(s => s.resolved && s.ip)
-    .map(s => s.subdomain)
+    .filter((s) => s.resolved && s.ip)
+    .map((s) => s.subdomain)
     .join('\n')
   copyToClipboard(resolved)
 }
 
 const copyAsHostsFile = () => {
   const hosts = sortedSubdomains.value
-    .filter(s => s.resolved && s.ip)
-    .map(s => `${s.ip}\t${s.subdomain}`)
+    .filter((s) => s.resolved && s.ip)
+    .map((s) => `${s.ip}\t${s.subdomain}`)
     .join('\n')
   copyToClipboard(hosts)
 }
@@ -270,7 +272,9 @@ const copyAsHostsFile = () => {
 }
 
 .subdomain-card {
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .subdomain-card:hover {
@@ -279,15 +283,27 @@ const copyAsHostsFile = () => {
 }
 
 .summary-card {
-  background: linear-gradient(135deg, rgb(var(--v-theme-surface)) 0%, rgb(var(--v-theme-surface-variant), 0.05) 100%);
+  background: linear-gradient(
+    135deg,
+    rgb(var(--v-theme-surface)) 0%,
+    rgb(var(--v-theme-surface-variant), 0.05) 100%
+  );
 }
 
 .bg-gradient-primary {
-  background: linear-gradient(45deg, rgb(var(--v-theme-primary), 0.12), rgb(var(--v-theme-primary), 0.05));
+  background: linear-gradient(
+    45deg,
+    rgb(var(--v-theme-primary), 0.12),
+    rgb(var(--v-theme-primary), 0.05)
+  );
 }
 
 .bg-primary-lighten-5 {
-  background: linear-gradient(45deg, rgb(var(--v-theme-primary), 0.08), rgb(var(--v-theme-primary), 0.03));
+  background: linear-gradient(
+    45deg,
+    rgb(var(--v-theme-primary), 0.08),
+    rgb(var(--v-theme-primary), 0.03)
+  );
 }
 
 pre {

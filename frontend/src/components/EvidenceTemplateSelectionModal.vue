@@ -16,38 +16,21 @@
 
       <v-card-text class="pa-6">
         <div v-if="loading" class="text-center py-8">
-          <v-progress-circular 
-            size="64" 
-            width="4" 
-            color="primary" 
-            indeterminate 
-          />
+          <v-progress-circular color="primary" indeterminate size="64" width="4" />
           <div class="text-h6 mt-4">Loading templates...</div>
         </div>
 
         <div v-else-if="error" class="text-center py-8">
-          <v-alert 
-            type="error" 
-            variant="tonal" 
-            prominent 
-            icon="mdi-alert-circle"
-            class="mb-6"
-          >
+          <v-alert class="mb-6" icon="mdi-alert-circle" prominent type="error" variant="tonal">
             <v-alert-title>Error Loading Templates</v-alert-title>
             {{ error }}
           </v-alert>
-          <v-btn 
-            @click="loadTemplates" 
-            color="primary" 
-            prepend-icon="mdi-refresh"
-            variant="flat"
-          >
+          <v-btn color="primary" prepend-icon="mdi-refresh" variant="flat" @click="loadTemplates">
             Retry
           </v-btn>
         </div>
 
         <div v-else>
-
           <v-select
             v-model="selectedTemplate"
             :items="templateOptions"
@@ -61,11 +44,7 @@
             placeholder="Choose a folder template..."
           >
             <template v-slot:item="{ props, item }">
-              <v-list-item 
-                :key="item.value"
-                :value="item.value"
-                @click="props.onClick"
-              >
+              <v-list-item :key="item.value" :value="item.value" @click="props.onClick">
                 <template v-slot:prepend>
                   <v-icon icon="mdi-folder-multiple" :color="getFolderColor()" class="me-3" />
                 </template>
@@ -85,7 +64,10 @@
               </v-card-title>
               <v-divider />
               <v-card-text class="pa-4">
-                <div v-if="selectedTemplateData.description" class="text-body-2 text-medium-emphasis mb-4">
+                <div
+                  v-if="selectedTemplateData.description"
+                  class="text-body-2 text-medium-emphasis mb-4"
+                >
                   {{ selectedTemplateData.description }}
                 </div>
                 <div v-if="selectedTemplateData.folders && selectedTemplateData.folders.length > 0">
@@ -98,12 +80,7 @@
                   </div>
                 </div>
                 <div v-else>
-                  <v-alert 
-                    type="info" 
-                    variant="tonal" 
-                    density="compact"
-                    icon="mdi-information"
-                  >
+                  <v-alert density="compact" icon="mdi-information" type="info" variant="tonal">
                     This template is empty. You can configure it in Admin settings.
                   </v-alert>
                 </div>
@@ -114,7 +91,7 @@
       </v-card-text>
 
       <v-divider />
-      
+
       <ModalActions
         submit-text="Apply Template"
         submit-icon="mdi-check"
@@ -140,12 +117,12 @@ const { getFolderColor } = useFolderIcons()
 const props = defineProps({
   modelValue: {
     type: Boolean,
-    default: false
+    default: false,
   },
   caseId: {
     type: Number,
-    required: true
-  }
+    required: true,
+  },
 })
 
 const emit = defineEmits(['update:modelValue', 'template-applied'])
@@ -158,14 +135,14 @@ const selectedTemplate = ref('')
 
 const dialogOpen = computed({
   get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value)
+  set: (value) => emit('update:modelValue', value),
 })
 
 const templateOptions = computed(() => {
-  return Object.keys(templates.value).map(key => ({
+  return Object.keys(templates.value).map((key) => ({
     value: key,
     name: templates.value[key].name,
-    description: templates.value[key].description
+    description: templates.value[key].description,
   }))
 })
 

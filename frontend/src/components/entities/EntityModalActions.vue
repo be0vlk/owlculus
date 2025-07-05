@@ -4,12 +4,7 @@
 
     <!-- Edit Mode Actions -->
     <template v-if="isEditing">
-      <v-btn
-        variant="text"
-        prepend-icon="mdi-close"
-        @click="$emit('cancel')"
-        :disabled="updating"
-      >
+      <v-btn :disabled="updating" prepend-icon="mdi-close" variant="text" @click="$emit('cancel')">
         Cancel
       </v-btn>
       <v-btn
@@ -26,19 +21,8 @@
 
     <!-- View Mode Actions -->
     <template v-else>
-      <v-btn
-        variant="text"
-        prepend-icon="mdi-close"
-        @click="$emit('close')"
-      >
-        Close
-      </v-btn>
-      <v-btn
-        color="primary"
-        variant="flat"
-        prepend-icon="mdi-pencil"
-        @click="$emit('edit')"
-      >
+      <v-btn prepend-icon="mdi-close" variant="text" @click="$emit('close')"> Close </v-btn>
+      <v-btn color="primary" prepend-icon="mdi-pencil" variant="flat" @click="$emit('edit')">
         Edit Entity
       </v-btn>
     </template>
@@ -48,7 +32,7 @@
 <script setup>
 defineProps({
   isEditing: { type: Boolean, required: true },
-  updating: { type: Boolean, required: true }
+  updating: { type: Boolean, required: true },
 })
 
 defineEmits(['close', 'edit', 'cancel', 'save'])

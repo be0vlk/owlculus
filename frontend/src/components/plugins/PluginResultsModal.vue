@@ -11,9 +11,7 @@
       <v-card-title class="d-flex align-center ga-3 px-6 py-4">
         <v-icon :icon="getPluginIcon(pluginName)" size="24" />
         <div class="flex-grow-1">
-          <h2 class="text-h5 font-weight-medium">
-            {{ getPluginDisplayName(pluginName) }} Results
-          </h2>
+          <h2 class="text-h5 font-weight-medium">{{ getPluginDisplayName(pluginName) }} Results</h2>
           <div class="text-body-2 text-medium-emphasis">
             Executed {{ formatExecutionTime(executionTime) }}
           </div>
@@ -30,11 +28,7 @@
           >
             Export
           </v-btn>
-          <v-btn
-            variant="text"
-            icon="mdi-close"
-            @click="closeModal"
-          />
+          <v-btn icon="mdi-close" variant="text" @click="closeModal" />
         </div>
       </v-card-title>
 
@@ -42,7 +36,7 @@
 
       <!-- Content -->
       <v-card-text class="flex-grow-1 pa-0">
-        <v-container class="py-6 px-6" style="max-width: none;">
+        <v-container class="py-6 px-6" style="max-width: none">
           <!-- Plugin Parameters Display -->
           <v-card
             v-if="parameters && Object.keys(parameters).length"
@@ -72,21 +66,11 @@
 
           <!-- Results Display -->
           <div v-if="results" class="results-container">
-            <PluginResult
-              :result="results"
-              :plugin-name="pluginName"
-              class="modal-plugin-result"
-            />
+            <PluginResult :plugin-name="pluginName" :result="results" class="modal-plugin-result" />
           </div>
 
           <!-- Error Display -->
-          <v-alert
-            v-else-if="error"
-            type="error"
-            variant="tonal"
-            prominent
-            class="ma-0"
-          >
+          <v-alert v-else-if="error" class="ma-0" prominent type="error" variant="tonal">
             <template #title>
               <div class="d-flex align-center">
                 <v-icon icon="mdi-alert-circle" class="mr-2" />
@@ -98,12 +82,7 @@
 
           <!-- No Results State -->
           <v-card v-else variant="outlined" class="text-center pa-8">
-            <v-icon
-              icon="mdi-file-search-outline"
-              size="64"
-              color="grey-darken-1"
-              class="mb-4"
-            />
+            <v-icon class="mb-4" color="grey-darken-1" icon="mdi-file-search-outline" size="64" />
             <h3 class="text-h6 mb-2">No Results Available</h3>
             <p class="text-body-2 text-medium-emphasis">
               Plugin execution did not produce any results.
@@ -124,28 +103,28 @@ import { formatDate } from '@/composables/dateUtils.js'
 const props = defineProps({
   modelValue: {
     type: Boolean,
-    default: false
+    default: false,
   },
   pluginName: {
     type: String,
-    required: true
+    required: true,
   },
   results: {
     type: [Object, Array, String, Number, Boolean],
-    default: null
+    default: null,
   },
   error: {
     type: String,
-    default: null
+    default: null,
   },
   parameters: {
     type: Object,
-    default: () => ({})
+    default: () => ({}),
   },
   executionTime: {
     type: Date,
-    default: () => new Date()
-  }
+    default: () => new Date(),
+  },
 })
 
 const emit = defineEmits(['update:modelValue', 'export'])
@@ -154,7 +133,7 @@ const { mdAndDown } = useDisplay()
 
 const isOpen = computed({
   get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value)
+  set: (value) => emit('update:modelValue', value),
 })
 
 const closeModal = () => {
@@ -169,15 +148,15 @@ const getPluginDisplayName = (name) => {
     .replace(/Plugin$/, '')
     .replace(/([A-Z])/g, ' $1')
     .trim()
-    .replace(/^./, str => str.toUpperCase())
+    .replace(/^./, (str) => str.toUpperCase())
 }
 
 const getPluginIcon = (name) => {
   const iconMap = {
-    'holehe': 'mdi-account-search',
-    'dnslookup': 'mdi-dns',
-    'correlation': 'mdi-chart-scatter-plot',
-    'default': 'mdi-puzzle'
+    holehe: 'mdi-account-search',
+    dnslookup: 'mdi-dns',
+    correlation: 'mdi-chart-scatter-plot',
+    default: 'mdi-puzzle',
   }
 
   const pluginKey = name?.toLowerCase().replace('plugin', '') || 'default'
@@ -192,7 +171,7 @@ const formatExecutionTime = (time) => {
 const formatParameterName = (key) => {
   return key
     .split('_')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ')
 }
 
@@ -209,7 +188,7 @@ const exportResults = () => {
     pluginName: props.pluginName,
     results: props.results,
     parameters: props.parameters,
-    executionTime: props.executionTime
+    executionTime: props.executionTime,
   })
 }
 </script>

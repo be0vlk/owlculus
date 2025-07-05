@@ -19,12 +19,12 @@ import BaseClientModal from './BaseClientModal.vue'
 const props = defineProps({
   isOpen: {
     type: Boolean,
-    required: true
+    required: true,
   },
   client: {
     type: Object,
-    default: null
-  }
+    default: null,
+  },
 })
 
 const emit = defineEmits(['close', 'updated'])
@@ -34,18 +34,22 @@ const form = reactive({
   name: '',
   email: '',
   phone: '',
-  address: ''
+  address: '',
 })
 
 // Watch for client prop changes to populate form
-watch(() => props.client, (newClient) => {
-  if (newClient) {
-    form.name = newClient.name || ''
-    form.email = newClient.email || ''
-    form.phone = newClient.phone || ''
-    form.address = newClient.address || ''
-  }
-}, { immediate: true })
+watch(
+  () => props.client,
+  (newClient) => {
+    if (newClient) {
+      form.name = newClient.name || ''
+      form.email = newClient.email || ''
+      form.phone = newClient.phone || ''
+      form.address = newClient.address || ''
+    }
+  },
+  { immediate: true },
+)
 
 const updateForm = (newForm) => {
   Object.assign(form, newForm)

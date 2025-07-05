@@ -1,21 +1,11 @@
 <template>
-  <v-card
-    class="hunt-card"
-    elevation="1"
-    rounded="lg"
-    hover
-    @click="$emit('view-details', hunt)"
-  >
+  <v-card class="hunt-card" elevation="1" hover rounded="lg" @click="$emit('view-details', hunt)">
     <!-- Hunt Category Header -->
     <v-card-title class="d-flex align-center pa-3 header-gradient text-white">
       <v-icon :icon="categoryIcon" color="white" size="small" class="me-2" />
       <span class="text-caption text-uppercase font-weight-bold">{{ displayCategory }}</span>
       <v-spacer />
-      <v-chip
-        :color="hunt.is_active ? 'success' : 'error'"
-        size="x-small"
-        variant="flat"
-      >
+      <v-chip :color="hunt.is_active ? 'success' : 'error'" size="x-small" variant="flat">
         {{ hunt.is_active ? 'Active' : 'Inactive' }}
       </v-chip>
     </v-card-title>
@@ -40,7 +30,6 @@
           <span class="text-caption">v{{ hunt.version }}</span>
         </div>
       </div>
-
     </v-card-text>
 
     <!-- Actions -->
@@ -67,8 +56,8 @@ import { getDisplayCategory } from '@/utils/huntDisplayUtils'
 const props = defineProps({
   hunt: {
     type: Object,
-    required: true
-  }
+    required: true,
+  },
 })
 
 defineEmits(['execute', 'view-details'])
@@ -82,16 +71,14 @@ const categoryIcon = computed(() => {
     ip: 'mdi-ip-network',
     phone: 'mdi-phone',
     email: 'mdi-email',
-    general: 'mdi-magnify'
+    general: 'mdi-magnify',
   }
   return iconMap[props.hunt.category] || iconMap.general
 })
 
-
 const displayCategory = computed(() => {
   return getDisplayCategory(props.hunt.category)
 })
-
 </script>
 
 <style scoped>
