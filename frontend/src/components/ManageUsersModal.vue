@@ -51,15 +51,14 @@
 
                   <v-list-item-title>
                     {{ user.email }}
-                    <v-chip
+                    <v-icon
                       v-if="user.is_lead"
-                      class="ml-2"
+                      class="ml-1"
                       color="primary"
                       size="x-small"
-                      variant="tonal"
                     >
-                      Lead
-                    </v-chip>
+                      mdi-star
+                    </v-icon>
                     <v-chip
                       v-if="user.role === 'Analyst'"
                       class="ml-2"

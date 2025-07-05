@@ -217,7 +217,7 @@ async def create_case(
         created_at=current_time,
         updated_at=current_time,
     )
-    db_case.users.append(current_user)
+
     db.add(db_case)
     db.flush()
     db.refresh(db_case)
