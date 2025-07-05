@@ -4,6 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, or_, select
 
+from . import models
 from ..core.exceptions import DuplicateResourceException
 from ..core.roles import UserRole
 from ..core.utils import get_utc_now
@@ -17,7 +18,6 @@ from ..schemas import (
     UserCreate,
     UserUpdate,
 )
-from . import models
 
 
 # --- User ---
@@ -244,9 +244,29 @@ async def update_case(
 
 
 async def add_user_to_case(
-    db: Session, case: models.Case, user: models.User
+    db: Session, case: models.Case, user: models.User, is_lead: bool = False
 ) -> models.Case:
-    case.users.append(user)
+    # Check if link already exists
+    existing_link = db.exec(
+        select(models.CaseUserLink).where(
+            models.CaseUserLink.case_id == case.id,
+            models.CaseUserLink.user_id == user.id
+        )
+    ).first()
+    
+    if existing_link:
+        # If already exists, just update is_lead if needed
+        existing_link.is_lead = is_lead
+        db.add(existing_link)
+    else:
+        # Create new link with is_lead flag
+        link = models.CaseUserLink(
+            case_id=case.id,
+            user_id=user.id,
+            is_lead=is_lead
+        )
+        db.add(link)
+    
     case.updated_at = get_utc_now()
     db.add(case)
     db.commit()
@@ -260,6 +280,36 @@ async def remove_user_from_case(
     case.users.remove(user)
     case.updated_at = get_utc_now()
     db.add(case)
+    db.commit()
+    db.refresh(case)
+    return case
+
+
+async def update_case_user_lead_status(
+    db: Session, case_id: int, user_id: int, is_lead: bool
+) -> models.Case:
+    """Update the is_lead status for a user in a case"""
+    # Get the CaseUserLink
+    link = db.exec(
+        select(models.CaseUserLink).where(
+            models.CaseUserLink.case_id == case_id,
+            models.CaseUserLink.user_id == user_id
+        )
+    ).first()
+    
+    if not link:
+        raise ValueError(f"User {user_id} not found in case {case_id}")
+    
+    # Update the is_lead status
+    link.is_lead = is_lead
+    db.add(link)
+    
+    # Update case timestamp
+    case = db.get(models.Case, case_id)
+    if case:
+        case.updated_at = get_utc_now()
+        db.add(case)
+    
     db.commit()
     db.refresh(case)
     return case

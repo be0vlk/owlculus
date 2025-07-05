@@ -51,9 +51,10 @@
               v-for="user in caseData.users"
               :key="user.id"
               size="small"
-              color="grey-lighten-1"
+              :color="user.is_lead ? 'primary' : 'grey-lighten-1'"
               variant="tonal"
             >
+              <v-icon v-if="user.is_lead" size="x-small" start>mdi-star</v-icon>
               {{ user.username }}
             </v-chip>
           </div>
@@ -67,7 +68,7 @@
 </template>
 
 <script setup>
-import { formatDate } from '../composables/dateUtils'
+import {formatDate} from '../composables/dateUtils'
 
 defineProps({
   caseData: { type: Object, required: true },

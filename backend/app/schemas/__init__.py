@@ -2,7 +2,7 @@
 Pydantic models for request/response validation
 """
 
-from .case_schema import Case, CaseCreate, CaseUpdate
+from .case_schema import Case, CaseCreate, CaseUpdate, CaseUserAdd, CaseUserUpdate
 from .client_schema import Client, ClientCreate, ClientUpdate
 from .entity_schema import (
     ENTITY_TYPE_SCHEMAS,

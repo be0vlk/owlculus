@@ -50,6 +50,14 @@
                 class="mb-4"
               />
 
+              <v-checkbox
+                v-model="isLead"
+                color="primary"
+                hint="Lead investigators have primary responsibility for the case"
+                label="Set as Lead Investigator"
+                persistent-hint
+              />
+
               <v-alert
                 v-if="availableUsers.length === 0"
                 type="info"
@@ -79,9 +87,9 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
-import { userService } from '@/services/user'
-import { caseService } from '@/services/case'
+import {computed, ref, watch} from 'vue'
+import {userService} from '@/services/user'
+import {caseService} from '@/services/case'
 import ModalActions from './ModalActions.vue'
 
 const props = defineProps({
@@ -104,6 +112,7 @@ const loading = ref(false)
 const error = ref(null)
 const selectedUserId = ref('')
 const availableUsers = ref([])
+const isLead = ref(false)
 
 // Validation rules
 const rules = {
@@ -149,7 +158,7 @@ const handleAddUser = async () => {
   try {
     loading.value = true
     error.value = null
-    await caseService.addUserToCase(props.caseId, selectedUserId.value)
+    await caseService.addUserToCase(props.caseId, selectedUserId.value, isLead.value)
     emit('userAdded')
     emit('close')
   } catch (err) {
@@ -175,6 +184,7 @@ watch(
       // Clear selection and errors when modal is closed
       selectedUserId.value = ''
       error.value = null
+      isLead.value = false
     }
   },
 )

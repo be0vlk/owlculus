@@ -1,7 +1,13 @@
 <template>
   <v-card-actions class="pa-4">
     <v-spacer />
-    <v-btn :disabled="loading" prepend-icon="mdi-close" variant="text" @click="$emit('cancel')">
+    <v-btn 
+      v-if="showCancel"
+      :disabled="loading" 
+      prepend-icon="mdi-close" 
+      variant="text" 
+      @click="$emit('cancel')"
+    >
       {{ cancelText }}
     </v-btn>
     <v-btn
@@ -45,6 +51,10 @@ defineProps({
     default: false,
   },
   showSubmit: {
+    type: Boolean,
+    default: true,
+  },
+  showCancel: {
     type: Boolean,
     default: true,
   },

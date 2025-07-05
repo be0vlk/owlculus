@@ -724,13 +724,22 @@ async def test_add_duplicate_user_to_case(
     sample_case_link: models.CaseUserLink,
 ):
     """Test adding a user who is already assigned to the case"""
-    # User is already assigned via sample_case_link
-    # Try to add them again - this should fail with DuplicateResourceException
-    with pytest.raises(DuplicateResourceException) as excinfo:
-        await case_service_instance.add_user_to_case(
-            sample_case.id, test_user.id, current_user=test_admin
-        )
-    assert "already assigned" in str(excinfo.value)
+    # User is already assigned via sample_case_link (not a lead)
+    # Verify initial state
+    case = await case_service_instance.get_case(sample_case.id, test_admin)
+    user_dict = {u.id: u for u in case.users}
+    assert user_dict[test_user.id].is_lead is False
+    
+    # Try to add them again with is_lead=True - should update is_lead instead of failing
+    updated_case = await case_service_instance.add_user_to_case(
+        sample_case.id, test_user.id, current_user=test_admin, is_lead=True
+    )
+    
+    # Verify user is still there but now as lead
+    case = await case_service_instance.get_case(sample_case.id, test_admin)
+    user_dict = {u.id: u for u in case.users}
+    assert test_user.id in user_dict
+    assert user_dict[test_user.id].is_lead is True
 
 
 @pytest.mark.asyncio
@@ -774,3 +783,95 @@ async def test_get_case_with_is_lead_info(
 
     assert test_admin.id in user_dict
     assert user_dict[test_admin.id].is_lead is False
+
+
+@pytest.mark.asyncio
+async def test_add_user_to_case_with_is_lead(
+    case_service_instance: case_service.CaseService,
+    sample_case: models.Case,
+    test_user: models.User,
+    test_admin: models.User,
+):
+    """Test adding a user to a case with is_lead=True"""
+    # Add user as lead
+    updated_case = await case_service_instance.add_user_to_case(
+        sample_case.id, test_user.id, current_user=test_admin, is_lead=True
+    )
+    
+    # Verify user was added
+    user_ids = [u.id for u in updated_case.users]
+    assert test_user.id in user_ids
+    
+    # Get the case with is_lead info
+    case_with_users = await case_service_instance.get_case(sample_case.id, test_admin)
+    
+    # Find the user and verify is_lead is True
+    user_dict = {u.id: u for u in case_with_users.users}
+    assert test_user.id in user_dict
+    assert user_dict[test_user.id].is_lead is True
+
+
+@pytest.mark.asyncio
+async def test_update_case_user_lead_status(
+    case_service_instance: case_service.CaseService,
+    sample_case: models.Case,
+    test_user: models.User,
+    test_admin: models.User,
+    sample_case_link: models.CaseUserLink,
+):
+    """Test updating a user's is_lead status"""
+    # Verify initial state (not lead)
+    case_with_users = await case_service_instance.get_case(sample_case.id, test_admin)
+    user_dict = {u.id: u for u in case_with_users.users}
+    assert user_dict[test_user.id].is_lead is False
+    
+    # Update to lead
+    await case_service_instance.update_case_user_lead_status(
+        sample_case.id, test_user.id, is_lead=True, current_user=test_admin
+    )
+    
+    # Verify update
+    case_with_users = await case_service_instance.get_case(sample_case.id, test_admin)
+    user_dict = {u.id: u for u in case_with_users.users}
+    assert user_dict[test_user.id].is_lead is True
+    
+    # Update back to non-lead
+    await case_service_instance.update_case_user_lead_status(
+        sample_case.id, test_user.id, is_lead=False, current_user=test_admin
+    )
+    
+    # Verify update
+    case_with_users = await case_service_instance.get_case(sample_case.id, test_admin)
+    user_dict = {u.id: u for u in case_with_users.users}
+    assert user_dict[test_user.id].is_lead is False
+
+
+@pytest.mark.asyncio
+async def test_update_case_user_lead_status_non_admin(
+    case_service_instance: case_service.CaseService,
+    sample_case: models.Case,
+    test_user: models.User,
+    test_analyst: models.User,
+    sample_case_link: models.CaseUserLink,
+):
+    """Test that non-admins cannot update lead status"""
+    with pytest.raises(AuthorizationException) as excinfo:
+        await case_service_instance.update_case_user_lead_status(
+            sample_case.id, test_user.id, is_lead=True, current_user=test_analyst
+        )
+    assert "Not authorized" in str(excinfo.value)
+
+
+@pytest.mark.asyncio
+async def test_update_case_user_lead_status_user_not_in_case(
+    case_service_instance: case_service.CaseService,
+    sample_case: models.Case,
+    test_user: models.User,
+    test_admin: models.User,
+):
+    """Test updating lead status for user not in case"""
+    with pytest.raises(ValidationException) as excinfo:
+        await case_service_instance.update_case_user_lead_status(
+            sample_case.id, test_user.id, is_lead=True, current_user=test_admin
+        )
+    assert "User is not assigned to this case" in str(excinfo.value)

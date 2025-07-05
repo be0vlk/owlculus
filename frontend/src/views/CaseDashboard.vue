@@ -10,8 +10,8 @@
           <v-btn color="white" prepend-icon="mdi-pencil" @click="showEditModal = true">
             Edit Case
           </v-btn>
-          <v-btn color="white" prepend-icon="mdi-account-plus" @click="showAddUserModal = true">
-            Add User
+          <v-btn color="white" prepend-icon="mdi-account-group" @click="showManageUsersModal = true">
+            Manage Users
           </v-btn>
         </v-btn-group>
       </div>
@@ -289,12 +289,13 @@
     @case-updated="handleCaseUpdate"
   />
 
-  <AddUserToCaseModal
+  <ManageUsersModal
     v-if="caseData"
     :case-id="Number(route.params.id)"
-    :show="showAddUserModal"
-    @close="showAddUserModal = false"
-    @user-added="loadCaseData"
+    :case-data="caseData"
+    :show="showManageUsersModal"
+    @close="showManageUsersModal = false"
+    @updated="loadCaseData"
   />
 
   <NewEntityModal
@@ -388,7 +389,7 @@ import CaseDetail from '../components/CaseDetail.vue'
 import EntityDataTable from '../components/entities/EntityDataTable.vue'
 import CaseTabs from '../components/CaseTabs.vue'
 import EditCaseModal from '../components/EditCaseModal.vue'
-import AddUserToCaseModal from '../components/AddUserToCaseModal.vue'
+import ManageUsersModal from '../components/ManageUsersModal.vue'
 import NewEntityModal from '../components/NewEntityModal.vue'
 import EntityDetailsModal from '../components/entities/EntityDetailsModal.vue'
 import NoteEditor from '../components/NoteEditor.vue'
@@ -417,7 +418,7 @@ const entities = ref([])
 const entityTableRef = ref(null)
 const evidenceListRef = ref(null)
 const showEditModal = ref(false)
-const showAddUserModal = ref(false)
+const showManageUsersModal = ref(false)
 const showNewEntityModal = ref(false)
 const showEntityDetailsModal = ref(false)
 const selectedEntity = ref(null)

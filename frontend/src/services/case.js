@@ -21,13 +21,18 @@ export const caseService = {
     return response.data
   },
 
-  async addUserToCase(caseId, userId) {
-    const response = await api.post(`/api/cases/${caseId}/users/${userId}`)
+  async addUserToCase(caseId, userId, isLead = false) {
+    const response = await api.post(`/api/cases/${caseId}/users/${userId}`, { is_lead: isLead })
     return response.data
   },
 
   async removeUserFromCase(caseId, userId) {
     const response = await api.delete(`/api/cases/${caseId}/users/${userId}`)
+    return response.data
+  },
+
+  async updateCaseUserLeadStatus(caseId, userId, isLead) {
+    const response = await api.patch(`/api/cases/${caseId}/users/${userId}`, { is_lead: isLead })
     return response.data
   },
 }

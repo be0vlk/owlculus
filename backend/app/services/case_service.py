@@ -209,7 +209,7 @@ class CaseService:
             raise BaseException("Internal server error")
 
     async def add_user_to_case(
-        self, case_id: int, user_id: int, current_user: models.User
+        self, case_id: int, user_id: int, current_user: models.User, is_lead: bool = False
     ) -> models.Case:
         # Check if user is admin
         if current_user.role != UserRole.ADMIN.value:
@@ -239,7 +239,7 @@ class CaseService:
                 raise ResourceNotFoundException("User not found")
 
             updated_case = await crud.add_user_to_case(
-                self.db, case=db_case, user=db_user
+                self.db, case=db_case, user=db_user, is_lead=is_lead
             )
 
             case_logger.bind(
@@ -317,4 +317,68 @@ class CaseService:
             case_logger.bind(
                 event_type="case_user_remove_error", error_type="system_error"
             ).error(f"Remove user from case error: {str(e)}")
+            raise BaseException("Internal server error")
+
+    async def update_case_user_lead_status(
+        self, case_id: int, user_id: int, is_lead: bool, current_user: models.User
+    ) -> models.Case:
+        # Check if user is admin
+        if current_user.role != UserRole.ADMIN.value:
+            raise AuthorizationException("Not authorized")
+
+        case_logger = get_security_logger(
+            admin_user_id=current_user.id,
+            case_id=case_id,
+            target_user_id=user_id,
+            action="update_case_user_lead_status",
+            event_type="case_user_lead_update_attempt",
+        )
+
+        try:
+            # Check if case exists
+            db_case = await crud.get_case(self.db, case_id=case_id)
+            if not db_case:
+                case_logger.bind(
+                    event_type="case_user_lead_update_failed",
+                    failure_reason="case_not_found",
+                ).warning("Update case user lead status failed: case not found")
+                raise ResourceNotFoundException("Case not found")
+
+            # Check if user exists
+            db_user = await crud.get_user(self.db, user_id=user_id)
+            if not db_user:
+                case_logger.bind(
+                    event_type="case_user_lead_update_failed",
+                    failure_reason="user_not_found",
+                ).warning("Update case user lead status failed: user not found")
+                raise ResourceNotFoundException("User not found")
+
+            # Check if user is assigned to case
+            if db_user not in db_case.users:
+                case_logger.bind(
+                    event_type="case_user_lead_update_failed",
+                    failure_reason="user_not_in_case",
+                ).warning("Update case user lead status failed: user not assigned to case")
+                raise ValidationException("User is not assigned to this case")
+
+            # Update the lead status
+            updated_case = await crud.update_case_user_lead_status(
+                self.db, case_id=case_id, user_id=user_id, is_lead=is_lead
+            )
+
+            case_logger.bind(
+                case_number=db_case.case_number,
+                username=db_user.username,
+                is_lead=is_lead,
+                event_type="case_user_lead_update_success",
+            ).info("Case user lead status updated successfully")
+
+            return updated_case
+
+        except (AuthorizationException, ResourceNotFoundException, ValidationException):
+            raise
+        except Exception as e:
+            case_logger.bind(
+                event_type="case_user_lead_update_error", error_type="system_error"
+            ).error(f"Update case user lead status error: {str(e)}")
             raise BaseException("Internal server error")

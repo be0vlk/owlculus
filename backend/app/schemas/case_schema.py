@@ -43,3 +43,14 @@ class Case(CaseBase):
     created_at: datetime = Field(default_factory=get_utc_now)
     updated_at: datetime = Field(default_factory=get_utc_now)
     users: list[CaseUser] = []
+
+
+class CaseUserAdd(BaseModel):
+    """Schema for adding a user to a case"""
+    user_id: int
+    is_lead: bool = False
+
+
+class CaseUserUpdate(BaseModel):
+    """Schema for updating a user's case role"""
+    is_lead: bool
