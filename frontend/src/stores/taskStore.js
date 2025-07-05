@@ -1,8 +1,8 @@
-import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import {defineStore} from 'pinia'
+import {computed, ref} from 'vue'
 import taskService from '@/services/task'
-import { TASK_STATUS } from '@/constants/tasks'
-import { useAuthStore } from './auth'
+import {TASK_STATUS} from '@/constants/tasks'
+import {useAuthStore} from './auth'
 
 export const useTaskStore = defineStore('task', () => {
   // State
@@ -83,14 +83,12 @@ export const useTaskStore = defineStore('task', () => {
   // Actions
   async function loadTemplates() {
     try {
-      loading.value = true
-      error.value = null
+      // Don't set the global loading state for template loading
+      // This was causing infinite re-renders in TaskDashboard
       templates.value = await taskService.getTemplates()
     } catch (err) {
       error.value = err.response?.data?.detail || 'Failed to load templates'
       throw err
-    } finally {
-      loading.value = false
     }
   }
 

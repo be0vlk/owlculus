@@ -320,10 +320,7 @@
     :case-id="Number(route.params.id)"
     :show="showUploadEvidenceModal"
     :target-folder="uploadTargetFolder"
-    @close="
-      showUploadEvidenceModal = false
-      uploadTargetFolder = null
-    "
+    @close="handleCloseUploadModal"
     @uploaded="handleEvidenceUpload"
   />
 
@@ -383,9 +380,9 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { useAuthStore } from '../stores/auth'
+import {computed, onMounted, ref} from 'vue'
+import {useRoute, useRouter} from 'vue-router'
+import {useAuthStore} from '../stores/auth'
 import BaseDashboard from '../components/BaseDashboard.vue'
 import CaseDetail from '../components/CaseDetail.vue'
 import EntityDataTable from '../components/entities/EntityDataTable.vue'
@@ -401,12 +398,12 @@ import MetadataModal from '../components/MetadataModal.vue'
 import TextContentModal from '../components/TextContentModal.vue'
 import ImageContentModal from '../components/ImageContentModal.vue'
 import CaseTasks from './cases/CaseTasks.vue'
-import { caseService } from '../services/case'
-import { clientService } from '../services/client'
-import { entityService } from '../services/entity'
-import { evidenceService } from '../services/evidence'
-import { useHuntStore } from '../stores/huntStore.js'
-import { formatHuntExecutionTitle } from '../utils/huntDisplayUtils'
+import {caseService} from '../services/case'
+import {clientService} from '../services/client'
+import {entityService} from '../services/entity'
+import {evidenceService} from '../services/evidence'
+import {useHuntStore} from '../stores/huntStore.js'
+import {formatHuntExecutionTitle} from '../utils/huntDisplayUtils'
 
 const route = useRoute()
 const router = useRouter()
@@ -653,6 +650,11 @@ const handleEvidenceMoved = (updatedEvidenceList, openState) => {
 const handleUploadToFolder = (folder) => {
   uploadTargetFolder.value = folder
   showUploadEvidenceModal.value = true
+}
+
+const handleCloseUploadModal = () => {
+  showUploadEvidenceModal.value = false
+  uploadTargetFolder.value = null
 }
 
 const handleExtractMetadata = async (evidenceItem) => {

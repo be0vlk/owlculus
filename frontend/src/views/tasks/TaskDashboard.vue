@@ -114,97 +114,27 @@
       </v-card-text>
 
       <v-divider />
-      <v-data-table
+      <TaskTable
         v-model="selected"
-        :headers="headers"
-        :items="filteredAndSearchedTasks"
+        :show-case="true"
         :loading="loading"
-        class="tasks-dashboard-table"
-        hover
-        item-value="id"
-        show-select
-        @click:row="handleRowClick"
+        :show-select="true"
+        :tasks="filteredAndSearchedTasks"
       >
-        <!-- Title Column -->
-        <template #[`item.title`]="{ item }">
-          {{ item.title }}
+        <template #empty-title>{{ getEmptyStateTitle() }}</template>
+        <template #empty-message>{{ getEmptyStateMessage() }}</template>
+        <template #empty-action>
+          <v-btn
+            v-if="shouldShowCreateButton()"
+            :disabled="!canCreateTasks"
+            color="primary"
+            prepend-icon="mdi-plus"
+            @click="showCreateDialog = true"
+          >
+            Create First Task
+          </v-btn>
         </template>
-
-        <!-- Case Column -->
-        <template #[`item.case`]="{ item }"> Case #{{ item.case_id }} </template>
-
-        <!-- Priority Column -->
-        <template #[`item.priority`]="{ item }">
-          <v-chip :color="TASK_PRIORITY_COLORS[item.priority]" size="small">
-            <v-icon size="small" start>{{ TASK_PRIORITY_ICONS[item.priority] }}</v-icon>
-            {{ TASK_PRIORITY_LABELS[item.priority] }}
-          </v-chip>
-        </template>
-
-        <!-- Status Column -->
-        <template #[`item.status`]="{ item }">
-          <v-chip :color="TASK_STATUS_COLORS[item.status]" size="small">
-            {{ TASK_STATUS_LABELS[item.status] }}
-          </v-chip>
-        </template>
-
-        <!-- Assignee Column -->
-        <template #[`item.assignee`]="{ item }">
-          <span v-if="item.assigned_to">
-            {{ item.assigned_to.username }}
-          </span>
-          <span v-else class="text-grey"> Unassigned </span>
-        </template>
-
-        <!-- Due Date Column -->
-        <template #[`item.due_date`]="{ item }">
-          <span v-if="item.due_date" :class="{ 'text-error': isOverdue(item) }">
-            {{ formatDate(item.due_date) }}
-          </span>
-        </template>
-
-        <!-- Actions Column -->
-        <template #[`item.actions`]="{ item }">
-          <div class="d-flex ga-1">
-            <v-btn
-              :disabled="!canAssignTasks"
-              icon
-              size="small"
-              variant="text"
-              @click="openAssignDialog(item)"
-            >
-              <v-icon>mdi-account-plus</v-icon>
-              <v-tooltip activator="parent" location="top">Assign Task</v-tooltip>
-            </v-btn>
-            <v-btn icon size="small" variant="text" @click="openStatusDialog(item)">
-              <v-icon>mdi-progress-check</v-icon>
-              <v-tooltip activator="parent" location="top">Update Status</v-tooltip>
-            </v-btn>
-          </div>
-        </template>
-
-        <!-- Empty state -->
-        <template #no-data>
-          <div class="text-center pa-12">
-            <v-icon class="mb-4" color="grey-lighten-1" icon="mdi-format-list-checks" size="64" />
-            <h3 class="text-h6 font-weight-medium mb-2">
-              {{ getEmptyStateTitle() }}
-            </h3>
-            <p class="text-body-2 text-medium-emphasis mb-4">
-              {{ getEmptyStateMessage() }}
-            </p>
-            <v-btn
-              v-if="shouldShowCreateButton()"
-              :disabled="!canCreateTasks"
-              color="primary"
-              prepend-icon="mdi-plus"
-              @click="showCreateDialog = true"
-            >
-              Create First Task
-            </v-btn>
-          </div>
-        </template>
-      </v-data-table>
+      </TaskTable>
     </v-card>
 
     <!-- Bulk Actions -->
@@ -219,61 +149,24 @@
     <v-dialog v-model="showCreateDialog" max-width="600">
       <TaskForm @cancel="showCreateDialog = false" @save="handleCreateTask" />
     </v-dialog>
-
-    <!-- Assign Dialog -->
-    <v-dialog v-model="showAssignDialog" max-width="400">
-      <TaskAssignDialog
-        v-if="selectedTask"
-        :task="selectedTask"
-        @assign="handleAssign"
-        @cancel="showAssignDialog = false"
-      />
-    </v-dialog>
-
-    <!-- Status Dialog -->
-    <v-dialog v-model="showStatusDialog" max-width="400">
-      <v-card v-if="selectedTask">
-        <v-card-title>Update Status</v-card-title>
-        <v-card-text>
-          <v-select v-model="newStatus" :items="statusOptions" label="New Status" />
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn @click="showStatusDialog = false">Cancel</v-btn>
-          <v-btn color="primary" @click="handleStatusUpdate">Update</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
   </BaseDashboard>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { useTaskStore } from '@/stores/taskStore'
-import { useAuthStore } from '@/stores/auth'
-import {
-  TASK_STATUS,
-  TASK_STATUS_LABELS,
-  TASK_STATUS_COLORS,
-  TASK_PRIORITY_LABELS,
-  TASK_PRIORITY_COLORS,
-  TASK_PRIORITY_ICONS,
-} from '@/constants/tasks'
+import {computed, onMounted, ref} from 'vue'
+import {useTaskStore} from '@/stores/taskStore'
+import {useAuthStore} from '@/stores/auth'
+import {useTaskTable} from '@/composables/useTaskTable'
 import TaskForm from '@/components/tasks/TaskForm.vue'
-import TaskAssignDialog from '@/components/tasks/TaskAssignDialog.vue'
+import TaskTable from '@/components/tasks/TaskTable.vue'
 import BaseDashboard from '@/components/BaseDashboard.vue'
 
 const taskStore = useTaskStore()
 const authStore = useAuthStore()
-const router = useRouter()
+const { canCreateTasks, canAssignTasks } = useTaskTable()
 
 // Data
 const showCreateDialog = ref(false)
-const showAssignDialog = ref(false)
-const showStatusDialog = ref(false)
-const selectedTask = ref(null)
-const newStatus = ref('')
 const selected = ref([])
 const searchQuery = ref('')
 const activeQuickFilter = ref('me')
@@ -282,16 +175,6 @@ const activeQuickFilter = ref('me')
 const loading = computed(() => taskStore.loading)
 const error = computed(() => taskStore.error)
 const stats = computed(() => taskStore.stats)
-
-const canCreateTasks = computed(() => {
-  // Show for non-analyst users; backend will enforce actual permissions
-  return authStore.user?.role !== 'Analyst'
-})
-
-const canAssignTasks = computed(() => {
-  // Show for non-analyst users; backend will enforce actual permissions
-  return authStore.user?.role !== 'Analyst'
-})
 
 const filteredAndSearchedTasks = computed(() => {
   let result = taskStore.tasks || []
@@ -313,64 +196,20 @@ const filteredAndSearchedTasks = computed(() => {
   return result
 })
 
-// Status options for the status update dialog
-const statusOptions = computed(() =>
-  Object.entries(TASK_STATUS_LABELS).map(([value, title]) => ({ title, value })),
-)
-
-// Table configuration
-const headers = [
-  { title: 'Title', key: 'title', sortable: true },
-  { title: 'Case', key: 'case', sortable: true },
-  { title: 'Priority', key: 'priority', sortable: true },
-  { title: 'Status', key: 'status', sortable: true },
-  { title: 'Assignee', key: 'assignee', sortable: true },
-  { title: 'Due Date', key: 'due_date', sortable: true },
-  { title: 'Actions', key: 'actions', sortable: false },
-]
-
 // Methods
-function formatDate(date) {
-  if (!date) return ''
-  return new Date(date).toLocaleDateString()
-}
-
-function isOverdue(task) {
-  if (!task.due_date || task.status === TASK_STATUS.COMPLETED) return false
-  return new Date(task.due_date) < new Date()
-}
-
 async function loadTasks() {
   await taskStore.loadTasks()
 }
 
 async function handleCreateTask(taskData) {
-  await taskStore.createTask(taskData)
-  showCreateDialog.value = false
-  await loadTasks()
-}
-
-function openAssignDialog(task) {
-  selectedTask.value = task
-  showAssignDialog.value = true
-}
-
-function openStatusDialog(task) {
-  selectedTask.value = task
-  newStatus.value = task.status
-  showStatusDialog.value = true
-}
-
-async function handleAssign(userId) {
-  await taskStore.assignTask(selectedTask.value.id, userId)
-  showAssignDialog.value = false
-  selectedTask.value = null
-}
-
-async function handleStatusUpdate() {
-  await taskStore.updateTaskStatus(selectedTask.value.id, newStatus.value)
-  showStatusDialog.value = false
-  selectedTask.value = null
+  try {
+    await taskStore.createTask(taskData)
+    showCreateDialog.value = false
+    await loadTasks()
+  } catch (error) {
+    console.error('Failed to create task:', error)
+    // Dialog remains open on error
+  }
 }
 
 async function bulkAssign() {
@@ -408,41 +247,12 @@ const shouldShowCreateButton = () => {
   return !searchQuery.value && activeQuickFilter.value === 'all' && canCreateTasks.value
 }
 
-function handleRowClick(event, { item }) {
-  router.push(`/tasks/${item.id}`)
-}
-
 // Lifecycle
 onMounted(async () => {
-  // Load tasks without any filters
   try {
     await loadTasks()
-    // We no longer need to load users since we're not using assignee dropdown
   } catch (error) {
     console.error('Failed to load data:', error)
   }
 })
 </script>
-
-<style scoped>
-.tasks-dashboard-table :deep(.v-data-table__tr:hover) {
-  background-color: rgb(var(--v-theme-primary), 0.04) !important;
-  cursor: pointer;
-}
-
-.tasks-dashboard-table :deep(.v-data-table__td) {
-  padding: 12px 16px !important;
-  border-bottom: 1px solid rgb(var(--v-theme-on-surface), 0.08) !important;
-}
-
-.tasks-dashboard-table :deep(.v-data-table__th) {
-  padding: 16px !important;
-  font-weight: 600 !important;
-  color: rgb(var(--v-theme-on-surface), 0.87) !important;
-  border-bottom: 2px solid rgb(var(--v-theme-on-surface), 0.12) !important;
-}
-
-.tasks-dashboard-table :deep(.v-data-table-rows-no-data) {
-  padding: 48px 16px !important;
-}
-</style>

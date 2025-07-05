@@ -40,7 +40,7 @@
 
         <v-select
           v-model="formData.assigned_to_id"
-          :items="users"
+          :items="filteredUsers"
           clearable
           item-title="username"
           item-value="id"
@@ -61,11 +61,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { useTaskStore } from '@/stores/taskStore'
-import { caseService } from '@/services/case'
-import { userService } from '@/services/user'
-import { TASK_PRIORITY, TASK_PRIORITY_LABELS } from '@/constants/tasks'
+import {computed, onMounted, ref} from 'vue'
+import {useTaskStore} from '@/stores/taskStore'
+import {caseService} from '@/services/case'
+import {TASK_PRIORITY, TASK_PRIORITY_LABELS} from '@/constants/tasks'
 
 const props = defineProps({
   task: {
@@ -86,7 +85,6 @@ const form = ref(null)
 const valid = ref(false)
 const loading = ref(false)
 const cases = ref([])
-const users = ref([])
 
 const isEdit = computed(() => !!props.task)
 
@@ -106,8 +104,16 @@ const priorityOptions = computed(() =>
   Object.entries(TASK_PRIORITY_LABELS).map(([value, title]) => ({ title, value })),
 )
 
+const filteredUsers = computed(() => {
+  if (!formData.value.case_id) return []
+
+  const selectedCase = cases.value.find(c => c.id === formData.value.case_id)
+  return selectedCase?.users || []
+})
+
 async function save() {
-  if (!form.value.validate()) return
+  // Check if form is valid using v-model binding
+  if (!valid.value) return
 
   loading.value = true
   try {
@@ -126,13 +132,12 @@ async function save() {
 onMounted(async () => {
   // Load required data
   try {
-    const [casesData, usersData] = await Promise.all([
+    const [casesData] = await Promise.all([
       caseService.getCases(),
-      userService.getUsers(),
       taskStore.loadTemplates(),
     ])
     cases.value = casesData
-    users.value = usersData
+    // Templates are already stored in the taskStore
   } catch (error) {
     console.error('Failed to load data:', error)
   }
