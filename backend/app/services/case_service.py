@@ -107,28 +107,45 @@ class CaseService:
         limit: int = 100,
         status: str | None = None,
     ) -> list[models.Case]:
+        from app.core.dependencies import load_case_with_users
+        
         if current_user.role == UserRole.ADMIN.value:
             stmt = select(models.Case)
             if status:
                 stmt = stmt.where(models.Case.status == status)
             stmt = stmt.offset(skip).limit(limit)
             result = self.db.exec(stmt)
-            return result.all()
+            cases = result.all()
+        else:
+            # For non-admin users, only return cases they are associated with
+            stmt = (
+                select(models.Case)
+                .join(models.CaseUserLink)
+                .where(models.CaseUserLink.user_id == current_user.id)
+            )
+            if status:
+                stmt = stmt.where(models.Case.status == status)
+            stmt = stmt.offset(skip).limit(limit)
+            result = self.db.exec(stmt)
+            cases = result.all()
 
-        # For non-admin users, only return cases they are associated with
-        stmt = (
-            select(models.Case)
-            .join(models.CaseUserLink)
-            .where(models.CaseUserLink.user_id == current_user.id)
-        )
-        if status:
-            stmt = stmt.where(models.Case.status == status)
-        stmt = stmt.offset(skip).limit(limit)
-        result = self.db.exec(stmt)
-        return result.all()
+        # Load each case with users including is_lead information
+        cases_with_users = []
+        for case in cases:
+            case_with_users = load_case_with_users(self.db, case.id)
+            if case_with_users:
+                cases_with_users.append(case_with_users)
+
+        return cases_with_users
 
     async def get_case(self, case_id: int, current_user: models.User) -> models.Case:
-        return check_case_access(self.db, case_id, current_user)
+        from app.core.dependencies import load_case_with_users
+
+        # First check access
+        check_case_access(self.db, case_id, current_user)
+
+        # Then load case with users including is_lead information
+        return load_case_with_users(self.db, case_id)
 
     async def update_case(
         self, case_id: int, case_update: schemas.CaseUpdate, current_user: models.User

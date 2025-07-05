@@ -3,8 +3,13 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..core.utils import get_utc_now
 from .user_schema import User
+from ..core.utils import get_utc_now
+
+
+class CaseUser(User):
+    """User with case-specific information"""
+    is_lead: bool = False
 
 
 class CaseBase(BaseModel):
@@ -37,4 +42,4 @@ class Case(CaseBase):
     id: int
     created_at: datetime = Field(default_factory=get_utc_now)
     updated_at: datetime = Field(default_factory=get_utc_now)
-    users: list[User] = []
+    users: list[CaseUser] = []

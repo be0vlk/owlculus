@@ -731,3 +731,46 @@ async def test_add_duplicate_user_to_case(
             sample_case.id, test_user.id, current_user=test_admin
         )
     assert "already assigned" in str(excinfo.value)
+
+
+@pytest.mark.asyncio
+async def test_get_case_with_is_lead_info(
+        case_service_instance: case_service.CaseService,
+        sample_case: models.Case,
+        test_user: models.User,
+        test_admin: models.User,
+        session: Session,
+):
+    """Test that is_lead information is properly included in case response"""
+    # Add test_user as case lead
+    case_link = models.CaseUserLink(
+        case_id=sample_case.id,
+        user_id=test_user.id,
+        is_lead=True
+    )
+    session.add(case_link)
+    session.commit()
+
+    # Add admin as non-lead
+    admin_link = models.CaseUserLink(
+        case_id=sample_case.id,
+        user_id=test_admin.id,
+        is_lead=False
+    )
+    session.add(admin_link)
+    session.commit()
+
+    # Get case with user info
+    case = await case_service_instance.get_case(sample_case.id, test_admin)
+
+    # Verify the case has users with is_lead info
+    assert len(case.users) == 2
+
+    # Find each user and check their is_lead status
+    user_dict = {u.id: u for u in case.users}
+
+    assert test_user.id in user_dict
+    assert user_dict[test_user.id].is_lead is True
+
+    assert test_admin.id in user_dict
+    assert user_dict[test_admin.id].is_lead is False

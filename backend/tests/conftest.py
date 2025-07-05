@@ -103,7 +103,7 @@ def test_user_fixture(session):
         email="user@test.com",
         username="user",
         password_hash=get_password_hash("userpass"),
-        role="User",
+        role="Investigator",
         is_active=True,
     )
     session.add(user)

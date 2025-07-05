@@ -196,3 +196,35 @@ def is_case_lead(db: Session, case_id: int, current_user: User) -> bool:
     ).first()
 
     return link and link.is_lead
+
+
+def load_case_with_users(db: Session, case_id: int):
+    """Load a case with users including is_lead information."""
+    from app.database.models import CaseUserLink
+    from app.schemas.case_schema import Case as CaseSchema, CaseUser
+
+    # Load the case
+    case = db.exec(select(Case).where(Case.id == case_id)).first()
+    if not case:
+        return None
+
+    # Load case users with is_lead information
+    case_users = []
+    for user in case.users:
+        # Get the is_lead flag from CaseUserLink
+        link = db.exec(
+            select(CaseUserLink).where(
+                CaseUserLink.case_id == case_id,
+                CaseUserLink.user_id == user.id
+            )
+        ).first()
+
+        # Create CaseUser with is_lead information
+        case_user_data = user.model_dump()
+        case_user_data['is_lead'] = link.is_lead if link else False
+        case_users.append(CaseUser(**case_user_data))
+
+    # Create a CaseSchema object with the enriched users
+    case_data = case.model_dump()
+    case_data['users'] = case_users
+    return CaseSchema(**case_data)
