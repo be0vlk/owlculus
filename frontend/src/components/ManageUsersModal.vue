@@ -60,13 +60,22 @@
                     >
                       Lead
                     </v-chip>
+                    <v-chip
+                      v-if="user.role === 'Analyst'"
+                      class="ml-2"
+                      color="grey"
+                      size="x-small"
+                      variant="tonal"
+                    >
+                      {{ user.role }}
+                    </v-chip>
                   </v-list-item-title>
                   <v-list-item-subtitle>{{ user.username }}</v-list-item-subtitle>
 
                   <template #append>
                     <div class="d-flex align-center ga-1">
                       <v-tooltip
-                        :text="user.is_lead ? 'Remove as Lead' : 'Set as Lead'"
+                        :text="getLeadButtonTooltip(user)"
                         location="top"
                       >
                         <template #activator="{ props }">
@@ -74,6 +83,7 @@
                             :color="user.is_lead ? 'primary' : 'default'"
                             :icon="user.is_lead ? 'mdi-star' : 'mdi-star-outline'"
                             :loading="updatingLeadStatus === user.id"
+                            :disabled="user.role === 'Analyst' && !user.is_lead"
                             size="small"
                             v-bind="props"
                             variant="text"
@@ -141,6 +151,7 @@
                       density="comfortable"
                       hide-details
                       label="Set as Lead"
+                      :disabled="isSelectedUserAnalyst"
                     />
                   </v-col>
                   <v-col cols="12" md="3">
@@ -246,8 +257,15 @@ const availableUsers = computed(() => {
     .filter(user => !caseUserIds.includes(user.id))
     .map(user => ({
       ...user,
-      displayText: `${user.email} - ${user.username}`,
+      displayText: `${user.email} - ${user.username} (${user.role})`,
     }))
+})
+
+// Check if selected user is an analyst
+const isSelectedUserAnalyst = computed(() => {
+  if (!selectedUserId.value) return false
+  const selectedUser = allUsers.value.find(u => u.id === selectedUserId.value)
+  return selectedUser?.role === 'Analyst'
 })
 
 const loadUsers = async () => {
@@ -302,6 +320,11 @@ const removeUser = async (user) => {
 }
 
 const toggleLeadStatus = async (user) => {
+  // Don't allow toggle if user is an analyst and not currently a lead
+  if (user.role === 'Analyst' && !user.is_lead) {
+    return
+  }
+  
   try {
     updatingLeadStatus.value = user.id
     error.value = null
@@ -312,6 +335,13 @@ const toggleLeadStatus = async (user) => {
   } finally {
     updatingLeadStatus.value = null
   }
+}
+
+const getLeadButtonTooltip = (user) => {
+  if (user.role === 'Analyst' && !user.is_lead) {
+    return 'Analysts cannot be set as leads'
+  }
+  return user.is_lead ? 'Remove as Lead' : 'Set as Lead'
 }
 
 // Watch for dialog opening/closing
@@ -332,4 +362,11 @@ watch(
     }
   },
 )
+
+// Watch for user selection to reset isLead for analysts
+watch(selectedUserId, (newUserId) => {
+  if (newUserId && isSelectedUserAnalyst.value) {
+    isLead.value = false
+  }
+})
 </script>

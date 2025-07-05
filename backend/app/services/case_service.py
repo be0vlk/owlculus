@@ -238,6 +238,14 @@ class CaseService:
                 ).warning("Add user to case failed: user not found")
                 raise ResourceNotFoundException("User not found")
 
+            # Check if user is analyst and being set as lead
+            if is_lead and db_user.role == UserRole.ANALYST.value:
+                case_logger.bind(
+                    event_type="case_user_add_failed",
+                    failure_reason="analyst_cannot_be_lead",
+                ).warning("Add user to case failed: analyst cannot be set as lead")
+                raise ValidationException("Analysts cannot be set as case leads")
+
             updated_case = await crud.add_user_to_case(
                 self.db, case=db_case, user=db_user, is_lead=is_lead
             )
@@ -250,7 +258,7 @@ class CaseService:
 
             return updated_case
 
-        except (AuthorizationException, ResourceNotFoundException):
+        except (AuthorizationException, ResourceNotFoundException, ValidationException):
             raise
         except Exception as e:
             if "UNIQUE constraint failed" in str(e) and "caseuserlink" in str(e):
@@ -360,6 +368,14 @@ class CaseService:
                     failure_reason="user_not_in_case",
                 ).warning("Update case user lead status failed: user not assigned to case")
                 raise ValidationException("User is not assigned to this case")
+
+            # Check if user is analyst and being set as lead
+            if is_lead and db_user.role == UserRole.ANALYST.value:
+                case_logger.bind(
+                    event_type="case_user_lead_update_failed",
+                    failure_reason="analyst_cannot_be_lead",
+                ).warning("Update case user lead status failed: analyst cannot be set as lead")
+                raise ValidationException("Analysts cannot be set as case leads")
 
             # Update the lead status
             updated_case = await crud.update_case_user_lead_status(

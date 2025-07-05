@@ -133,10 +133,11 @@
             <v-chip
               v-for="user in item.users"
               :key="user.id"
-              :color="getUserRoleColor(user.role)"
+              :color="user.is_lead ? 'primary' : 'grey-lighten-1'"
               size="small"
               variant="tonal"
             >
+              <v-icon v-if="user.is_lead" size="x-small" start>mdi-star</v-icon>
               {{ user.username }}
             </v-chip>
           </div>
@@ -267,10 +268,6 @@ const handleRowClick = (event, { item }) => {
   router.push(`/case/${item.id}`)
 }
 
-// Function to get color for user role chips
-const getUserRoleColor = () => {
-  return 'grey-darken-1'
-}
 
 // Snackbar helper function
 const showNotification = (text, color = 'success') => {
