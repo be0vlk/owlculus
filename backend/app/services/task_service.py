@@ -244,6 +244,14 @@ class TaskService:
 
         for task_id in task_ids:
             try:
+                # Get the task to check its case
+                task = await self.get_task(task_id, current_user=current_user)
+
+                # Check if user is admin or case lead for this task's case
+                if not is_case_lead(self.db, task.case_id, current_user):
+                    # Skip tasks where user is not lead
+                    continue
+                
                 task = await self.assign_task(task_id, user_id, current_user=current_user)
                 updated_tasks.append(task)
             except (ResourceNotFoundException, BaseException):
