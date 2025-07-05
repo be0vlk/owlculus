@@ -39,7 +39,7 @@
 </template>
 
 <script setup>
-import {useConfirmationDialog} from '@/composables/useConfirmationDialog'
+import { useConfirmationDialog } from '@/composables/useConfirmationDialog'
 
 const {
   // State

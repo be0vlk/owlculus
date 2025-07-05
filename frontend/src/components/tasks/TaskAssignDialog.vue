@@ -48,9 +48,7 @@ const assignableUsers = computed(() => {
   if (!caseData.value) return []
 
   // Filter users who are assigned to this case
-  return users.value.filter((user) =>
-    caseData.value.users?.some((cu) => cu.id === user.id)
-  )
+  return users.value.filter((user) => caseData.value.users?.some((cu) => cu.id === user.id))
 })
 
 async function assign() {
@@ -67,7 +65,7 @@ onMounted(async () => {
     // Load case and user data
     const [caseResult, usersResult] = await Promise.all([
       caseService.getCase(props.task.case_id),
-      userService.getUsers()
+      userService.getUsers(),
     ])
     caseData.value = caseResult
     users.value = usersResult

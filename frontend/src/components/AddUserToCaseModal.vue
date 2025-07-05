@@ -79,9 +79,9 @@
 </template>
 
 <script setup>
-import {computed, ref, watch} from 'vue'
-import {userService} from '@/services/user'
-import {caseService} from '@/services/case'
+import { computed, ref, watch } from 'vue'
+import { userService } from '@/services/user'
+import { caseService } from '@/services/case'
 import ModalActions from './ModalActions.vue'
 
 const props = defineProps({

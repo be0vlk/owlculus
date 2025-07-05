@@ -22,8 +22,8 @@
 </template>
 
 <script setup>
-import {computed} from 'vue'
-import {useAuthStore} from '@/stores/auth'
+import { computed } from 'vue'
+import { useAuthStore } from '@/stores/auth'
 
 const props = defineProps({
   missingProviders: {

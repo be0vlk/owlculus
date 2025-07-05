@@ -1,77 +1,77 @@
 @import url('./base.css');
 
 #app {
-    min-height: 100vh;
-    font-weight: normal;
+  min-height: 100vh;
+  font-weight: normal;
 }
 
 /* Custom styles for Owlculus */
 .owlculus-link {
-    text-decoration: none;
-    color: rgb(var(--v-theme-primary));
-    transition: 0.4s;
-    padding: 3px;
+  text-decoration: none;
+  color: rgb(var(--v-theme-primary));
+  transition: 0.4s;
+  padding: 3px;
 }
 
 @media (hover: hover) {
-    .owlculus-link:hover {
-        background-color: rgb(var(--v-theme-primary), 0.1);
-    }
+  .owlculus-link:hover {
+    background-color: rgb(var(--v-theme-primary), 0.1);
+  }
 }
 
 /* Rich text editor styles */
 .ProseMirror {
-    outline: none;
-    padding: 12px;
-    min-height: 100px;
+  outline: none;
+  padding: 12px;
+  min-height: 100px;
 }
 
 .ProseMirror h1,
 .ProseMirror h2,
 .ProseMirror h3 {
-    margin: 16px 0 8px;
-    line-height: 1.2;
+  margin: 16px 0 8px;
+  line-height: 1.2;
 }
 
 .ProseMirror h1 {
-    font-size: 1.5rem;
+  font-size: 1.5rem;
 }
 
 .ProseMirror h2 {
-    font-size: 1.3rem;
+  font-size: 1.3rem;
 }
 
 .ProseMirror h3 {
-    font-size: 1.1rem;
+  font-size: 1.1rem;
 }
 
 .ProseMirror ul,
 .ProseMirror ol {
-    padding-left: 24px;
-    margin: 8px 0;
+  padding-left: 24px;
+  margin: 8px 0;
 }
 
 .ProseMirror blockquote {
-    border-left: 4px solid rgb(var(--v-theme-primary));
-    margin: 16px 0;
-    padding-left: 16px;
-    font-style: italic;
+  border-left: 4px solid rgb(var(--v-theme-primary));
+  margin: 16px 0;
+  padding-left: 16px;
+  font-style: italic;
 }
 
 .ProseMirror a {
-    color: rgb(var(--v-theme-primary));
-    text-decoration: underline;
+  color: rgb(var(--v-theme-primary));
+  text-decoration: underline;
 }
 
 .ProseMirror p {
-    margin: 8px 0;
+  margin: 8px 0;
 }
 
 /* Shared header gradient for consistent styling across components */
 .header-gradient {
-    background: linear-gradient(
-            135deg,
-            rgb(var(--v-theme-primary)) 0%,
-            rgb(var(--v-theme-primary), 0.8) 100%
-    ) !important;
+  background: linear-gradient(
+    135deg,
+    rgb(var(--v-theme-primary)) 0%,
+    rgb(var(--v-theme-primary), 0.8) 100%
+  ) !important;
 }

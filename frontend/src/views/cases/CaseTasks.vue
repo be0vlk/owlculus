@@ -101,9 +101,9 @@
 </template>
 
 <script setup>
-import {computed, onMounted, ref, watch} from 'vue'
-import {useTaskStore} from '@/stores/taskStore'
-import {useAuthStore} from '@/stores/auth'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useTaskStore } from '@/stores/taskStore'
+import { useAuthStore } from '@/stores/auth'
 import {
   TASK_PRIORITY_COLORS,
   TASK_PRIORITY_ICONS,

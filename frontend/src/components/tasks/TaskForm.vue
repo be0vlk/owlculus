@@ -5,7 +5,7 @@
       <v-form ref="form" v-model="valid">
         <v-select
           v-model="formData.case_id"
-          :disabled="isEdit || caseId"
+          :disabled="isEdit || !!caseId"
           :items="cases"
           :rules="[(v) => !!v || 'Case is required']"
           item-title="title"
@@ -129,7 +129,7 @@ onMounted(async () => {
     const [casesData, usersData] = await Promise.all([
       caseService.getCases(),
       userService.getUsers(),
-      taskStore.loadTemplates()
+      taskStore.loadTemplates(),
     ])
     cases.value = casesData
     users.value = usersData

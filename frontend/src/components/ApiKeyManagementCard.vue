@@ -289,8 +289,8 @@
 </template>
 
 <script setup>
-import {onMounted, ref} from 'vue'
-import {useApiKeys} from '@/composables/useApiKeys'
+import { onMounted, ref } from 'vue'
+import { useApiKeys } from '@/composables/useApiKeys'
 
 const emit = defineEmits(['notification', 'confirmDelete'])
 

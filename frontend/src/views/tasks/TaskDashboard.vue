@@ -76,55 +76,39 @@
 
       <v-divider />
 
-      <!-- Filters -->
+      <!-- Filters and Search Toolbar -->
       <v-card-text class="pa-4">
         <v-row align="center" class="mb-0">
-          <v-col cols="12" md="3" sm="6">
-            <v-select
-              v-model="filters.status"
-              :items="statusOptions"
-              clearable
-              density="comfortable"
-              hide-details
-              label="Status"
-              variant="outlined"
-              @update:model-value="loadTasks"
-            />
+          <!-- Quick Filter Chips -->
+          <v-col cols="12" md="8">
+            <div class="d-flex align-center ga-2 flex-wrap">
+              <span class="text-body-2 font-weight-medium me-2">Filter:</span>
+              <v-chip-group
+                v-model="activeQuickFilter"
+                color="primary"
+                selected-class="text-primary"
+                variant="outlined"
+              >
+                <v-chip filter size="small" value="all"> All Tasks </v-chip>
+                <v-chip filter size="small" value="me"> My Tasks </v-chip>
+              </v-chip-group>
+            </div>
           </v-col>
-          <v-col cols="12" md="3" sm="6">
-            <v-select
-              v-model="filters.priority"
-              :items="priorityOptions"
-              clearable
-              density="comfortable"
-              hide-details
-              label="Priority"
-              variant="outlined"
-              @update:model-value="loadTasks"
-            />
-          </v-col>
-          <v-col cols="12" md="3" sm="6">
-            <v-select
-              v-model="filters.assignee"
-              :items="assigneeOptions"
-              clearable
-              density="comfortable"
-              hide-details
-              label="Assignee"
-              variant="outlined"
-              @update:model-value="loadTasks"
-            />
-          </v-col>
-          <v-col cols="12" md="3" sm="6">
-            <v-text-field
-              v-model="searchQuery"
-              clearable
-              density="comfortable"
-              hide-details
-              label="Search tasks..."
-              prepend-inner-icon="mdi-magnify"
-              variant="outlined"
-            />
+
+          <!-- Search Field -->
+          <v-col cols="12" md="4">
+            <div class="d-flex align-center ga-2 justify-end">
+              <v-text-field
+                v-model="searchQuery"
+                clearable
+                density="comfortable"
+                hide-details
+                label="Search tasks..."
+                prepend-inner-icon="mdi-magnify"
+                style="min-width: 200px; max-width: 280px"
+                variant="outlined"
+              />
+            </div>
           </v-col>
         </v-row>
       </v-card-text>
@@ -139,20 +123,15 @@
         hover
         item-value="id"
         show-select
+        @click:row="handleRowClick"
       >
         <!-- Title Column -->
         <template #[`item.title`]="{ item }">
-          <router-link :to="`/tasks/${item.id}`" class="text-decoration-none">
-            {{ item.title }}
-          </router-link>
+          {{ item.title }}
         </template>
 
         <!-- Case Column -->
-        <template #[`item.case`]="{ item }">
-          <router-link :to="`/cases/${item.case_id}`" class="text-decoration-none">
-            Case #{{ item.case_id }}
-          </router-link>
-        </template>
+        <template #[`item.case`]="{ item }"> Case #{{ item.case_id }} </template>
 
         <!-- Priority Column -->
         <template #[`item.priority`]="{ item }">
@@ -207,12 +186,7 @@
         <!-- Empty state -->
         <template #no-data>
           <div class="text-center pa-12">
-            <v-icon
-              class="mb-4"
-              color="grey-lighten-1"
-              icon="mdi-format-list-checks"
-              size="64"
-            />
+            <v-icon class="mb-4" color="grey-lighten-1" icon="mdi-format-list-checks" size="64" />
             <h3 class="text-h6 font-weight-medium mb-2">
               {{ getEmptyStateTitle() }}
             </h3>
@@ -275,9 +249,9 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useTaskStore } from '@/stores/taskStore'
 import { useAuthStore } from '@/stores/auth'
-import { userService } from '@/services/user'
 import {
   TASK_STATUS,
   TASK_STATUS_LABELS,
@@ -292,6 +266,7 @@ import BaseDashboard from '@/components/BaseDashboard.vue'
 
 const taskStore = useTaskStore()
 const authStore = useAuthStore()
+const router = useRouter()
 
 // Data
 const showCreateDialog = ref(false)
@@ -301,11 +276,11 @@ const selectedTask = ref(null)
 const newStatus = ref('')
 const selected = ref([])
 const searchQuery = ref('')
-const users = ref([])
+const activeQuickFilter = ref('me')
 
 // Computed
 const loading = computed(() => taskStore.loading)
-const filters = computed(() => taskStore.filters)
+const error = computed(() => taskStore.error)
 const stats = computed(() => taskStore.stats)
 
 const canCreateTasks = computed(() => {
@@ -319,8 +294,14 @@ const canAssignTasks = computed(() => {
 })
 
 const filteredAndSearchedTasks = computed(() => {
-  let result = taskStore.filteredTasks
+  let result = taskStore.tasks || []
 
+  // Apply quick filter
+  if (activeQuickFilter.value === 'me' && authStore.user) {
+    result = result.filter((task) => task.assigned_to?.id === authStore.user.id)
+  }
+
+  // Apply search
   if (searchQuery.value) {
     const query = searchQuery.value.toLowerCase()
     result = result.filter(
@@ -332,25 +313,10 @@ const filteredAndSearchedTasks = computed(() => {
   return result
 })
 
-const statusOptions = computed(() => [
-  { title: 'All', value: 'all' },
-  ...Object.entries(TASK_STATUS_LABELS).map(([value, title]) => ({ title, value })),
-])
-
-const priorityOptions = computed(() => [
-  { title: 'All', value: 'all' },
-  ...Object.entries(TASK_PRIORITY_LABELS).map(([value, title]) => ({ title, value })),
-])
-
-const assigneeOptions = computed(() => [
-  { title: 'All', value: 'all' },
-  { title: 'Unassigned', value: 'unassigned' },
-  { title: 'Me', value: 'me' },
-  ...users.value.map((user) => ({
-    title: user.username,
-    value: user.id.toString(),
-  })),
-])
+// Status options for the status update dialog
+const statusOptions = computed(() =>
+  Object.entries(TASK_STATUS_LABELS).map(([value, title]) => ({ title, value })),
+)
 
 // Table configuration
 const headers = [
@@ -421,8 +387,8 @@ async function bulkUpdateStatus() {
 const getEmptyStateTitle = () => {
   if (searchQuery.value) {
     return 'No tasks found'
-  } else if (filters.value.status || filters.value.priority || filters.value.assignee) {
-    return 'No tasks match your filters'
+  } else if (activeQuickFilter.value === 'me') {
+    return 'No tasks assigned to you'
   } else {
     return 'No tasks yet'
   }
@@ -430,30 +396,28 @@ const getEmptyStateTitle = () => {
 
 const getEmptyStateMessage = () => {
   if (searchQuery.value) {
-    return 'Try adjusting your search terms to find the task you\'re looking for.'
-  } else if (filters.value.status || filters.value.priority || filters.value.assignee) {
-    return 'Try adjusting your filters to see more tasks.'
+    return "Try adjusting your search terms to find the task you're looking for."
+  } else if (activeQuickFilter.value === 'me') {
+    return "You don't have any tasks assigned. Check 'All Tasks' to see unassigned tasks."
   } else {
     return 'Get started by creating your first task to track work across cases.'
   }
 }
 
 const shouldShowCreateButton = () => {
-  return !searchQuery.value && !filters.value.status && !filters.value.priority && !filters.value.assignee && canCreateTasks.value
+  return !searchQuery.value && activeQuickFilter.value === 'all' && canCreateTasks.value
+}
+
+function handleRowClick(event, { item }) {
+  router.push(`/tasks/${item.id}`)
 }
 
 // Lifecycle
 onMounted(async () => {
-  // Set default filter to show user's open tasks
-  taskStore.setFilters({ assignee: 'me', status: TASK_STATUS.NOT_STARTED })
-
-  // Load required data
+  // Load tasks without any filters
   try {
-    const [, usersData] = await Promise.all([
-      loadTasks(),
-      userService.getUsers()
-    ])
-    users.value = usersData
+    await loadTasks()
+    // We no longer need to load users since we're not using assignee dropdown
   } catch (error) {
     console.error('Failed to load data:', error)
   }
