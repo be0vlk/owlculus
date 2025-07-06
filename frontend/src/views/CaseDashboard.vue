@@ -385,7 +385,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import BaseDashboard from '../components/BaseDashboard.vue'
@@ -811,9 +811,40 @@ const getFormattedHuntTitle = (execution) => {
   return formatHuntExecutionTitle(baseName, initialParams, huntCategory)
 }
 
-onMounted(() => {
-  loadCaseData()
+// Watch for entity query parameter changes
+watch(
+  () => route.query.entity,
+  async (newEntityId) => {
+    if (newEntityId && caseData.value) {
+      try {
+        const entityId = Number(newEntityId)
+        const entity = await entityService.getEntity(route.params.id, entityId)
+        showEntityDetails(entity)
+      } catch (error) {
+        console.error('Failed to load entity:', error)
+      }
+    }
+  },
+)
+
+onMounted(async () => {
+  await loadCaseData()
   loadEvidence()
   loadCaseHuntExecutions()
+
+  // Check if entity ID is provided in query params
+  if (route.query.entity) {
+    // Wait a bit to ensure entity table is loaded
+    setTimeout(async () => {
+      try {
+        // Load the specific entity
+        const entityId = Number(route.query.entity)
+        const entity = await entityService.getEntity(route.params.id, entityId)
+        showEntityDetails(entity)
+      } catch (error) {
+        console.error('Failed to load entity:', error)
+      }
+    }, 1000)
+  }
 })
 </script>

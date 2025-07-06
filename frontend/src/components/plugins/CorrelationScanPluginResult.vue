@@ -16,10 +16,10 @@
             <v-chip
               class="ml-2"
               size="small"
-              :color="resultItem.data.match_type === 'employer' ? 'secondary' : 'success'"
+              :color="getMatchTypeColor(resultItem.data.match_type)"
               variant="tonal"
             >
-              {{ resultItem.data.match_type === 'employer' ? 'Employer Match' : 'Name Match' }}
+              {{ getMatchTypeLabel(resultItem.data.match_type) }}
             </v-chip>
           </div>
 
@@ -29,6 +29,23 @@
               Found multiple people who work at
               <span class="font-weight-medium">{{ resultItem.data.employer_name }}</span
               >. This employer connection may indicate a relationship between these cases.
+            </template>
+            <template v-else-if="resultItem.data.match_type === 'domain'">
+              Found multiple entities associated with the domain
+              <span class="font-weight-medium">{{ resultItem.data.domain }}</span
+              >. This domain connection may indicate a relationship between these cases or entities.
+            </template>
+            <template v-else-if="resultItem.data.match_type === 'vin'">
+              Found multiple vehicles with the same VIN
+              <span class="font-weight-medium">{{ resultItem.data.matched_value }}</span
+              >. This indicates the same vehicle appears in multiple cases, which strongly suggests
+              a connection between these investigations.
+            </template>
+            <template v-else-if="resultItem.data.match_type === 'license_plate'">
+              Found multiple vehicles with the same license plate
+              <span class="font-weight-medium">{{ resultItem.data.matched_value }}</span
+              >. This indicates the same vehicle appears in multiple cases, suggesting a connection
+              between these investigations.
             </template>
             <template v-else>
               Found an entity named
@@ -60,13 +77,13 @@
                     </template>
                   </div>
                   <v-btn
-                    :href="'/case/' + match.case_id"
                     color="primary"
                     variant="text"
                     size="small"
                     append-icon="mdi-chevron-right"
+                    @click="viewEntity(match)"
                   >
-                    View Case
+                    View Entity
                   </v-btn>
                 </div>
               </v-card-text>
@@ -103,6 +120,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 
 const props = defineProps({
   result: {
@@ -111,8 +129,40 @@ const props = defineProps({
   },
 })
 
+const router = useRouter()
+
 const normalizedResult = computed(() => {
   if (!props.result) return []
   return Array.isArray(props.result) ? props.result : [props.result]
 })
+
+const getMatchTypeLabel = (matchType) => {
+  const labels = {
+    name: 'Name Match',
+    employer: 'Employer Match',
+    domain: 'Domain Match',
+    vin: 'VIN Match',
+    license_plate: 'License Plate Match',
+  }
+  return labels[matchType] || 'Match'
+}
+
+const getMatchTypeColor = (matchType) => {
+  const colors = {
+    name: 'success',
+    employer: 'secondary',
+    domain: 'info',
+    vin: 'warning',
+    license_plate: 'warning',
+  }
+  return colors[matchType] || 'grey'
+}
+
+const viewEntity = (match) => {
+  // Navigate to the case with entity query parameter
+  router.push({
+    path: `/case/${match.case_id}`,
+    query: { entity: match.entity_id },
+  })
+}
 </script>

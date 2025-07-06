@@ -254,6 +254,28 @@ async def update_entity(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.get(
+    "/{case_id}/entities/{entity_id}",
+    response_model=schemas.Entity,
+    tags=["entities"],
+)
+async def get_entity(
+    case_id: int,
+    entity_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    entity_service = EntityService(db)
+    try:
+        return await entity_service.get_entity(
+            entity_id=entity_id, current_user=current_user
+        )
+    except ResourceNotFoundException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except AuthorizationException as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
+
 @router.delete(
     "/{case_id}/entities/{entity_id}",
     tags=["entities"],

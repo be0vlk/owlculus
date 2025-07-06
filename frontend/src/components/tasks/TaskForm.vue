@@ -52,9 +52,9 @@
           class="mb-4"
         />
 
-        <v-select 
-          v-model="formData.priority" 
-          :items="priorityOptions" 
+        <v-select
+          v-model="formData.priority"
+          :items="priorityOptions"
           label="Priority"
           variant="outlined"
           density="comfortable"
@@ -73,10 +73,10 @@
           class="mb-4"
         />
 
-        <v-text-field 
-          v-model="formData.due_date" 
-          clearable 
-          label="Due Date" 
+        <v-text-field
+          v-model="formData.due_date"
+          clearable
+          label="Due Date"
           type="date"
           variant="outlined"
           density="comfortable"
@@ -101,13 +101,7 @@
     <v-card-actions class="pa-4">
       <v-spacer />
       <v-btn variant="text" @click="$emit('cancel')">Cancel</v-btn>
-      <v-btn 
-        :disabled="!valid" 
-        :loading="loading" 
-        color="primary" 
-        variant="flat"
-        @click="save"
-      >
+      <v-btn :disabled="!valid" :loading="loading" color="primary" variant="flat" @click="save">
         {{ isEdit ? 'Update' : 'Create' }}
       </v-btn>
     </v-card-actions>

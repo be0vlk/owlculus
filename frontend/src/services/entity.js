@@ -53,4 +53,9 @@ export const entityService = {
   async deleteEntity(caseId, entityId) {
     await api.delete(`/api/cases/${caseId}/entities/${entityId}`)
   },
+
+  async getEntity(caseId, entityId) {
+    const response = await api.get(`/api/cases/${caseId}/entities/${entityId}`)
+    return response.data
+  },
 }

@@ -40,6 +40,20 @@ class EntityService:
         result = self.db.exec(query)
         return list(result)
 
+    async def get_entity(
+        self,
+        entity_id: int,
+        current_user: models.User,
+    ) -> models.Entity:
+        db_entity = self.db.get(models.Entity, entity_id)
+        if not db_entity:
+            raise ResourceNotFoundException("Entity not found")
+
+        # Check case access
+        check_case_access(self.db, db_entity.case_id, current_user)
+
+        return db_entity
+
     async def create_entity(
         self,
         case_id: int,

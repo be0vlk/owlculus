@@ -357,7 +357,9 @@ const canEditTask = computed(() => {
   if (!task.value) return false
   // Admin, case lead, or assigned user can edit
   return (
-    authStore.user?.role === 'Admin' || isUserCaseLead.value || task.value.assigned_to_id === authStore.user?.id
+    authStore.user?.role === 'Admin' ||
+    isUserCaseLead.value ||
+    task.value.assigned_to_id === authStore.user?.id
   )
 })
 
@@ -454,7 +456,7 @@ onMounted(async () => {
   if (task.value?.case_id && authStore.user) {
     try {
       const caseData = await caseService.getCase(task.value.case_id)
-      const currentUserInCase = caseData.users?.find(u => u.id === authStore.user.id)
+      const currentUserInCase = caseData.users?.find((u) => u.id === authStore.user.id)
       isUserCaseLead.value = currentUserInCase?.is_lead || false
     } catch (error) {
       console.error('Failed to fetch case data:', error)
