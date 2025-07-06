@@ -35,4 +35,9 @@ export const caseService = {
     const response = await api.patch(`/api/cases/${caseId}/users/${userId}`, { is_lead: isLead })
     return response.data
   },
+
+  async getCaseUsers(caseId) {
+    const response = await api.get(`/api/cases/${caseId}/users`)
+    return response.data
+  },
 }

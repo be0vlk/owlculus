@@ -5,7 +5,7 @@ Case management API
 from typing import List, Optional
 
 from app import schemas
-from app.core.dependencies import admin_only, get_current_user, no_analyst
+from app.core.dependencies import admin_only, get_current_user, no_analyst, check_case_access
 from app.core.exceptions import (
     AuthorizationException,
     BaseException,
@@ -165,6 +165,31 @@ async def remove_user_from_case(
         )
     except AuthorizationException:
         raise HTTPException(status_code=403, detail="Not authorized")
+    except ResourceNotFoundException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except BaseException:
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@router.get("/{case_id}/users", response_model=list[schemas.User])
+async def get_case_users(
+    case_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    """Get all users assigned to a case - accessible by all case members"""
+    # Check if user has access to this case
+    try:
+        check_case_access(db, case_id, current_user)
+    except AuthorizationException:
+        raise HTTPException(status_code=403, detail="Not authorized to access this case")
+    except ResourceNotFoundException:
+        raise HTTPException(status_code=404, detail="Case not found")
+    
+    # Get the case with users
+    case_service = CaseService(db)
+    try:
+        case = await case_service.get_case(case_id=case_id, current_user=current_user)
+        return case.users
     except ResourceNotFoundException as e:
         raise HTTPException(status_code=404, detail=str(e))
     except BaseException:

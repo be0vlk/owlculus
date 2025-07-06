@@ -26,7 +26,6 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { userService } from '@/services/user'
 import { caseService } from '@/services/case'
 
 const props = defineProps({
@@ -45,10 +44,7 @@ const users = ref([])
 
 // Only show users who have access to the case
 const assignableUsers = computed(() => {
-  if (!caseData.value) return []
-
-  // Filter users who are assigned to this case
-  return users.value.filter((user) => caseData.value.users?.some((cu) => cu.id === user.id))
+  return users.value
 })
 
 async function assign() {
@@ -65,7 +61,7 @@ onMounted(async () => {
     // Load case and user data
     const [caseResult, usersResult] = await Promise.all([
       caseService.getCase(props.task.case_id),
-      userService.getUsers(),
+      caseService.getCaseUsers(props.task.case_id),
     ])
     caseData.value = caseResult
     users.value = usersResult

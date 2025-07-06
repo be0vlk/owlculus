@@ -2,6 +2,7 @@ import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useTaskStore } from '@/stores/taskStore'
 import { useAuthStore } from '@/stores/auth'
+import { useNotifications } from '@/composables/useNotifications'
 import {
   TASK_PRIORITY_COLORS,
   TASK_PRIORITY_ICONS,
@@ -16,6 +17,7 @@ export function useTaskTable() {
   const router = useRouter()
   const taskStore = useTaskStore()
   const authStore = useAuthStore()
+  const { showError, showSuccess } = useNotifications()
 
   // Dialog states
   const showAssignDialog = ref(false)
@@ -28,21 +30,18 @@ export function useTaskTable() {
     return authStore.user?.role !== 'Analyst'
   })
 
-  const canAssignTasks = computed(() => {
-    return authStore.user?.role !== 'Analyst'
-  })
+  // Check if user can assign tasks (Admin or Lead only)
+  // When passed a task, checks if user is admin or lead for that specific case
+  const canAssignTasks = (task = null) => {
+    if (authStore.user?.role === 'Admin') return true
+    if (task && task.is_lead === true) return true
+    return false
+  }
 
   // Check if user can delete a specific task
   const canDeleteTask = () => {
-    // Admin can always delete
-    if (authStore.user?.role === 'Admin') {
-      return true
-    }
-
-    // For now, we can't check is_lead status from frontend
-    // This will need to be added to the task or case data from backend
-    // TODO: Add is_lead information to task/case response
-    return false
+    // Only admins can delete tasks
+    return authStore.user?.role === 'Admin'
   }
 
   // Status options for the status update dialog
@@ -97,15 +96,35 @@ export function useTaskTable() {
   }
 
   async function handleAssign(userId) {
-    await taskStore.assignTask(selectedTask.value.id, userId)
-    showAssignDialog.value = false
-    selectedTask.value = null
+    try {
+      await taskStore.assignTask(selectedTask.value.id, userId)
+      showAssignDialog.value = false
+      selectedTask.value = null
+      showSuccess('Task assigned successfully')
+    } catch (error) {
+      console.error('Failed to assign task:', error)
+      if (error.response?.status === 403) {
+        showError('You do not have permission to assign this task. Only admins and case leads can assign tasks.')
+      } else {
+        showError(error.response?.data?.detail || 'Failed to assign task')
+      }
+    }
   }
 
   async function handleStatusUpdate() {
-    await taskStore.updateTaskStatus(selectedTask.value.id, newStatus.value)
-    showStatusDialog.value = false
-    selectedTask.value = null
+    try {
+      await taskStore.updateTaskStatus(selectedTask.value.id, newStatus.value)
+      showStatusDialog.value = false
+      selectedTask.value = null
+      showSuccess('Task status updated successfully')
+    } catch (error) {
+      console.error('Failed to update task status:', error)
+      if (error.response?.status === 403) {
+        showError('You do not have permission to update this task')
+      } else {
+        showError(error.response?.data?.detail || 'Failed to update task status')
+      }
+    }
   }
 
   // Note: Delete confirmation is handled by the component using ConfirmationDialog

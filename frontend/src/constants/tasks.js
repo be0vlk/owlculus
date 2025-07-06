@@ -26,7 +26,7 @@ export const TASK_PRIORITY_LABELS = {
 
 export const TASK_STATUS_COLORS = {
   [TASK_STATUS.NOT_STARTED]: 'grey',
-  [TASK_STATUS.IN_PROGRESS]: 'info',
+  [TASK_STATUS.IN_PROGRESS]: 'deep-purple-lighten-3',
   [TASK_STATUS.BLOCKED]: 'warning',
   [TASK_STATUS.COMPLETED]: 'success',
 }

@@ -12,6 +12,7 @@ from app.core.exceptions import (
     ValidationException,
 )
 from app.core.logging import get_security_logger
+from app.core.roles import UserRole
 from app.database import models
 from sqlmodel import Session, select
 
@@ -93,6 +94,21 @@ class TaskService:
         # Filter by case if specified
         if case_id:
             query = query.where(models.Task.case_id == case_id)
+        else:
+            # If no specific case is requested and user is not admin,
+            # filter to only show tasks from cases the user has access to
+            if current_user.role != UserRole.ADMIN.value:
+                # Get all case IDs the user has access to
+                user_case_ids = self.db.exec(
+                    select(models.CaseUserLink.case_id)
+                    .where(models.CaseUserLink.user_id == current_user.id)
+                ).all()
+                
+                if user_case_ids:
+                    query = query.where(models.Task.case_id.in_(user_case_ids))
+                else:
+                    # User has no case assignments, return empty list
+                    return []
 
         # Apply other filters
         if assigned_to_id:

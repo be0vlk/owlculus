@@ -5,6 +5,7 @@ Task management API endpoints
 from typing import List
 
 from app import schemas
+from app.core.roles import UserRole
 from app.core.dependencies import (
     admin_only,
     check_case_access,
@@ -273,7 +274,7 @@ async def update_task(
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
 
     # Check if user can edit this task
-    is_admin_or_lead = current_user.role == "Admin" or is_case_lead(
+    is_admin_or_lead = current_user.role == UserRole.ADMIN.value or is_case_lead(
         db, task.case_id, current_user
     )
     is_assignee = task.assigned_to_id == current_user.id
