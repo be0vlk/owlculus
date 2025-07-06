@@ -41,11 +41,7 @@
             <v-card-text>
               <!-- Selected Users -->
               <v-list v-if="selectedUsers.length > 0" density="compact" class="mb-4">
-                <v-list-item
-                  v-for="user in selectedUsers"
-                  :key="user.id"
-                  class="px-0"
-                >
+                <v-list-item v-for="user in selectedUsers" :key="user.id" class="px-0">
                   <template #prepend>
                     <v-avatar color="grey-lighten-1" size="32">
                       <v-icon>mdi-account</v-icon>
@@ -54,12 +50,7 @@
 
                   <v-list-item-title>
                     {{ user.email }}
-                    <v-icon
-                      v-if="user.is_lead"
-                      class="ml-1"
-                      color="primary"
-                      size="x-small"
-                    >
+                    <v-icon v-if="user.is_lead" class="ml-1" color="primary" size="x-small">
                       mdi-star
                     </v-icon>
                     <v-chip
@@ -76,10 +67,7 @@
 
                   <template #append>
                     <div class="d-flex align-center ga-1">
-                      <v-tooltip
-                        :text="getLeadButtonTooltip(user)"
-                        location="top"
-                      >
+                      <v-tooltip :text="getLeadButtonTooltip(user)" location="top">
                         <template #activator="{ props }">
                           <v-btn
                             :color="user.is_lead ? 'primary' : 'default'"
@@ -220,10 +208,10 @@ const formData = reactive({
 const clientOptions = computed(() => clients.value)
 
 const availableUsers = computed(() => {
-  const selectedUserIds = selectedUsers.value.map(u => u.id)
+  const selectedUserIds = selectedUsers.value.map((u) => u.id)
   return allUsers.value
-    .filter(user => !selectedUserIds.includes(user.id))
-    .map(user => ({
+    .filter((user) => !selectedUserIds.includes(user.id))
+    .map((user) => ({
       ...user,
       displayText: `${user.email} - ${user.username} (${user.role})`,
     }))
@@ -231,7 +219,7 @@ const availableUsers = computed(() => {
 
 const isUserToAddAnalyst = computed(() => {
   if (!userToAdd.value) return false
-  const user = allUsers.value.find(u => u.id === userToAdd.value)
+  const user = allUsers.value.find((u) => u.id === userToAdd.value)
   return user?.role === 'Analyst'
 })
 
@@ -272,14 +260,14 @@ watch(userToAdd, (newUserId) => {
 
 const addUser = () => {
   if (!userToAdd.value) return
-  
-  const user = allUsers.value.find(u => u.id === userToAdd.value)
+
+  const user = allUsers.value.find((u) => u.id === userToAdd.value)
   if (user) {
     selectedUsers.value.push({
       ...user,
-      is_lead: isLeadToAdd.value && user.role !== 'Analyst'
+      is_lead: isLeadToAdd.value && user.role !== 'Analyst',
     })
-    
+
     // Reset form
     userToAdd.value = null
     isLeadToAdd.value = false
@@ -287,7 +275,7 @@ const addUser = () => {
 }
 
 const removeUser = (user) => {
-  selectedUsers.value = selectedUsers.value.filter(u => u.id !== user.id)
+  selectedUsers.value = selectedUsers.value.filter((u) => u.id !== user.id)
 }
 
 const toggleLeadStatus = (user) => {
@@ -295,8 +283,8 @@ const toggleLeadStatus = (user) => {
   if (user.role === 'Analyst' && !user.is_lead) {
     return
   }
-  
-  const index = selectedUsers.value.findIndex(u => u.id === user.id)
+
+  const index = selectedUsers.value.findIndex((u) => u.id === user.id)
   if (index !== -1) {
     selectedUsers.value[index].is_lead = !selectedUsers.value[index].is_lead
   }
@@ -330,12 +318,12 @@ const handleSubmit = async () => {
   try {
     isSubmitting.value = true
     const newCase = await caseService.createCase(formData)
-    
+
     // Add users to the case
     for (const user of selectedUsers.value) {
       await caseService.addUserToCase(newCase.id, user.id, user.is_lead)
     }
-    
+
     emit('created', newCase)
     closeModal()
   } catch (error) {

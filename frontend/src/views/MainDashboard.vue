@@ -268,7 +268,6 @@ const handleRowClick = (event, { item }) => {
   router.push(`/case/${item.id}`)
 }
 
-
 // Snackbar helper function
 const showNotification = (text, color = 'success') => {
   snackbar.value.text = text

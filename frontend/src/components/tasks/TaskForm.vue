@@ -61,10 +61,10 @@
 </template>
 
 <script setup>
-import {computed, onMounted, ref} from 'vue'
-import {useTaskStore} from '@/stores/taskStore'
-import {caseService} from '@/services/case'
-import {TASK_PRIORITY, TASK_PRIORITY_LABELS} from '@/constants/tasks'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useTaskStore } from '@/stores/taskStore'
+import { caseService } from '@/services/case'
+import { TASK_PRIORITY, TASK_PRIORITY_LABELS } from '@/constants/tasks'
 
 const props = defineProps({
   task: {
@@ -107,9 +107,25 @@ const priorityOptions = computed(() =>
 const filteredUsers = computed(() => {
   if (!formData.value.case_id) return []
 
-  const selectedCase = cases.value.find(c => c.id === formData.value.case_id)
+  const selectedCase = cases.value.find((c) => c.id === formData.value.case_id)
   return selectedCase?.users || []
 })
+
+// Watch for template selection changes
+watch(
+  () => formData.value.template_id,
+  (newTemplateId) => {
+    if (newTemplateId && !isEdit.value) {
+      // Find the selected template
+      const selectedTemplate = templates.value.find((t) => t.id === newTemplateId)
+      if (selectedTemplate) {
+        // Auto-fill title and description from template
+        formData.value.title = selectedTemplate.display_name
+        formData.value.description = selectedTemplate.description
+      }
+    }
+  },
+)
 
 async function save() {
   // Check if form is valid using v-model binding
@@ -132,10 +148,7 @@ async function save() {
 onMounted(async () => {
   // Load required data
   try {
-    const [casesData] = await Promise.all([
-      caseService.getCases(),
-      taskStore.loadTemplates(),
-    ])
+    const [casesData] = await Promise.all([caseService.getCases(), taskStore.loadTemplates()])
     cases.value = casesData
     // Templates are already stored in the taskStore
   } catch (error) {

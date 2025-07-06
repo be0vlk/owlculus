@@ -23,9 +23,9 @@
 </template>
 
 <script setup>
-import {computed, onMounted, ref, watch} from 'vue'
-import {useTaskStore} from '@/stores/taskStore'
-import {useTaskTable} from '@/composables/useTaskTable'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useTaskStore } from '@/stores/taskStore'
+import { useTaskTable } from '@/composables/useTaskTable'
 import TaskForm from '@/components/tasks/TaskForm.vue'
 import TaskTable from '@/components/tasks/TaskTable.vue'
 

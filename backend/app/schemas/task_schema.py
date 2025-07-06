@@ -17,7 +17,6 @@ class TaskTemplateBase(BaseModel):
     display_name: str
     description: str
     category: str
-    version: str = "1.0.0"
     is_active: bool = True
     definition_json: Dict[str, Any]
 
@@ -31,7 +30,6 @@ class TaskTemplateUpdate(BaseModel):
     display_name: Optional[str] = None
     description: Optional[str] = None
     category: Optional[str] = None
-    version: Optional[str] = None
     is_active: Optional[bool] = None
     definition_json: Optional[Dict[str, Any]] = None
 
@@ -40,7 +38,6 @@ class TaskTemplateResponse(TaskTemplateBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    is_custom: bool
     created_by_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime

@@ -1,7 +1,7 @@
-import {computed, ref} from 'vue'
-import {useRouter} from 'vue-router'
-import {useTaskStore} from '@/stores/taskStore'
-import {useAuthStore} from '@/stores/auth'
+import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { useTaskStore } from '@/stores/taskStore'
+import { useAuthStore } from '@/stores/auth'
 import {
   TASK_PRIORITY_COLORS,
   TASK_PRIORITY_ICONS,

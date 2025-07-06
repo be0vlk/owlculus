@@ -37,7 +37,7 @@ class TaskService:
     ) -> models.TaskTemplate:
         """Create a custom task template (Admin only)"""
         template = models.TaskTemplate(
-            **template_data, is_custom=True, created_by_id=current_user.id
+            **template_data, created_by_id=current_user.id
         )
         self.db.add(template)
         self.db.commit()
@@ -275,3 +275,71 @@ class TaskService:
                 continue
 
         return updated_tasks
+
+    async def update_template(
+        self, template_id: int, updates: dict, *, current_user: models.User
+    ) -> models.TaskTemplate:
+        """Update a task template"""
+        template = self.db.query(models.TaskTemplate).filter(
+            models.TaskTemplate.id == template_id
+        ).first()
+        
+        if not template:
+            raise ResourceNotFoundException(f"Task template {template_id} not found")
+        
+        # Update allowed fields
+        for field, value in updates.items():
+            if field in ["display_name", "description", "category", "is_active", "definition_json"]:
+                setattr(template, field, value)
+        
+        template.updated_at = datetime.utcnow()
+        
+        self.db.add(template)
+        self.db.commit()
+        self.db.refresh(template)
+        
+        # Log the action
+        logger = get_security_logger(
+            user_id=current_user.id,
+            action="update_task_template",
+            template_id=template_id,
+            event_type="task_template_updated",
+        )
+        logger.info(f"Task template {template_id} updated")
+        
+        return template
+
+    async def delete_template(
+        self, template_id: int, *, current_user: models.User
+    ) -> bool:
+        """Delete a task template"""
+        template = self.db.query(models.TaskTemplate).filter(
+            models.TaskTemplate.id == template_id
+        ).first()
+        
+        if not template:
+            raise ResourceNotFoundException(f"Task template {template_id} not found")
+        
+        # Check if template is in use
+        tasks_using_template = self.db.query(models.Task).filter(
+            models.Task.template_id == template_id
+        ).count()
+        
+        if tasks_using_template > 0:
+            raise ValidationException(
+                f"Cannot delete template. It is used by {tasks_using_template} task(s)"
+            )
+        
+        self.db.delete(template)
+        self.db.commit()
+        
+        # Log the action
+        logger = get_security_logger(
+            user_id=current_user.id,
+            action="delete_task_template",
+            template_id=template_id,
+            event_type="task_template_deleted",
+        )
+        logger.info(f"Task template {template_id} deleted")
+        
+        return True

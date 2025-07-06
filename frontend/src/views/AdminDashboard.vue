@@ -52,6 +52,12 @@
 
     <!-- Evidence Template Management -->
     <EvidenceTemplateManagementCard @notification="handleNotification" />
+
+    <!-- Task Template Management -->
+    <TaskTemplateManagementCard
+      @notification="handleNotification"
+      @confirmDelete="handleConfirmDelete"
+    />
   </BaseDashboard>
 
   <!-- Confirmation Dialog -->
@@ -80,6 +86,7 @@ import BaseDashboard from '@/components/BaseDashboard.vue'
 import SystemConfigurationCard from '@/components/SystemConfigurationCard.vue'
 import ApiKeyManagementCard from '@/components/ApiKeyManagementCard.vue'
 import EvidenceTemplateManagementCard from '@/components/EvidenceTemplateManagementCard.vue'
+import TaskTemplateManagementCard from '@/components/TaskTemplateManagementCard.vue'
 import UserManagementCard from '@/components/UserManagementCard.vue'
 import InviteManagementCard from '@/components/InviteManagementCard.vue'
 import ConfirmationDialog from '@/components/ConfirmationDialog.vue'

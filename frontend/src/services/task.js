@@ -27,6 +27,27 @@ export const taskService = {
   },
 
   /**
+   * Update a task template (Admin only)
+   * @param {number} templateId - Template ID
+   * @param {Object} updates - Update data
+   * @returns {Promise<Object>} Updated template
+   */
+  async updateTemplate(templateId, updates) {
+    const response = await api.put(`/api/tasks/templates/${templateId}`, updates)
+    return response.data
+  },
+
+  /**
+   * Delete a task template (Admin only)
+   * @param {number} templateId - Template ID
+   * @returns {Promise<Object>} Success message
+   */
+  async deleteTemplate(templateId) {
+    const response = await api.delete(`/api/tasks/templates/${templateId}`)
+    return response.data
+  },
+
+  /**
    * Get tasks with optional filters
    * @param {Object} filters - Filter options
    * @returns {Promise<Array>} List of tasks

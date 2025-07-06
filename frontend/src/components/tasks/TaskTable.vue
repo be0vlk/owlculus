@@ -18,9 +18,7 @@
       </template>
 
       <!-- Case Column (only if showCase is true) -->
-      <template v-if="showCase" #[`item.case`]="{ item }">
-        Case #{{ item.case_id }}
-      </template>
+      <template v-if="showCase" #[`item.case`]="{ item }"> Case #{{ item.case_id }} </template>
 
       <!-- Priority Column -->
       <template #[`item.priority`]="{ item }">
@@ -129,8 +127,8 @@
 </template>
 
 <script setup>
-import {computed, ref} from 'vue'
-import {useTaskTable} from '@/composables/useTaskTable'
+import { computed, ref } from 'vue'
+import { useTaskTable } from '@/composables/useTaskTable'
 import TaskAssignDialog from './TaskAssignDialog.vue'
 import ConfirmationDialog from '@/components/ConfirmationDialog.vue'
 

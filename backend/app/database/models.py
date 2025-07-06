@@ -177,9 +177,7 @@ class TaskTemplate(SQLModel, table=True):
     display_name: str
     description: str
     category: str
-    version: str = Field(default="1.0.0")
     is_active: bool = Field(default=True)
-    is_custom: bool = Field(default=False)
     created_by_id: Optional[int] = Field(default=None, foreign_key="user.id")
     definition_json: dict = Field(sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=get_utc_now)

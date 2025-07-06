@@ -68,7 +68,7 @@
 </template>
 
 <script setup>
-import {formatDate} from '../composables/dateUtils'
+import { formatDate } from '../composables/dateUtils'
 
 defineProps({
   caseData: { type: Object, required: true },

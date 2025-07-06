@@ -1,8 +1,8 @@
-import {defineStore} from 'pinia'
-import {computed, ref} from 'vue'
+import { defineStore } from 'pinia'
+import { computed, ref } from 'vue'
 import taskService from '@/services/task'
-import {TASK_STATUS} from '@/constants/tasks'
-import {useAuthStore} from './auth'
+import { TASK_STATUS } from '@/constants/tasks'
+import { useAuthStore } from './auth'
 
 export const useTaskStore = defineStore('task', () => {
   // State

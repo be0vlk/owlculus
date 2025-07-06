@@ -1,11 +1,11 @@
 <template>
   <v-card-actions class="pa-4">
     <v-spacer />
-    <v-btn 
+    <v-btn
       v-if="showCancel"
-      :disabled="loading" 
-      prepend-icon="mdi-close" 
-      variant="text" 
+      :disabled="loading"
+      prepend-icon="mdi-close"
+      variant="text"
       @click="$emit('cancel')"
     >
       {{ cancelText }}

@@ -38,11 +38,7 @@
 
             <v-card-text>
               <v-list v-if="caseUsers.length > 0" density="compact">
-                <v-list-item
-                  v-for="user in caseUsers"
-                  :key="user.id"
-                  class="px-0"
-                >
+                <v-list-item v-for="user in caseUsers" :key="user.id" class="px-0">
                   <template #prepend>
                     <v-avatar color="grey-lighten-1" size="32">
                       <v-icon>mdi-account</v-icon>
@@ -51,12 +47,7 @@
 
                   <v-list-item-title>
                     {{ user.email }}
-                    <v-icon
-                      v-if="user.is_lead"
-                      class="ml-1"
-                      color="primary"
-                      size="x-small"
-                    >
+                    <v-icon v-if="user.is_lead" class="ml-1" color="primary" size="x-small">
                       mdi-star
                     </v-icon>
                     <v-chip
@@ -73,10 +64,7 @@
 
                   <template #append>
                     <div class="d-flex align-center ga-1">
-                      <v-tooltip
-                        :text="getLeadButtonTooltip(user)"
-                        location="top"
-                      >
+                      <v-tooltip :text="getLeadButtonTooltip(user)" location="top">
                         <template #activator="{ props }">
                           <v-btn
                             :color="user.is_lead ? 'primary' : 'default'"
@@ -109,12 +97,7 @@
                 </v-list-item>
               </v-list>
 
-              <v-alert
-                v-else
-                icon="mdi-information"
-                type="info"
-                variant="tonal"
-              >
+              <v-alert v-else icon="mdi-information" type="info" variant="tonal">
                 No users are currently assigned to this case
               </v-alert>
             </v-card-text>
@@ -198,9 +181,9 @@
 </template>
 
 <script setup>
-import {computed, ref, watch} from 'vue'
-import {userService} from '@/services/user'
-import {caseService} from '@/services/case'
+import { computed, ref, watch } from 'vue'
+import { userService } from '@/services/user'
+import { caseService } from '@/services/case'
 import ModalActions from './ModalActions.vue'
 
 const props = defineProps({
@@ -251,10 +234,10 @@ const caseUsers = computed(() => props.caseData?.users || [])
 
 // Available users (not already in case)
 const availableUsers = computed(() => {
-  const caseUserIds = caseUsers.value.map(u => u.id)
+  const caseUserIds = caseUsers.value.map((u) => u.id)
   return allUsers.value
-    .filter(user => !caseUserIds.includes(user.id))
-    .map(user => ({
+    .filter((user) => !caseUserIds.includes(user.id))
+    .map((user) => ({
       ...user,
       displayText: `${user.email} - ${user.username} (${user.role})`,
     }))
@@ -263,7 +246,7 @@ const availableUsers = computed(() => {
 // Check if selected user is an analyst
 const isSelectedUserAnalyst = computed(() => {
   if (!selectedUserId.value) return false
-  const selectedUser = allUsers.value.find(u => u.id === selectedUserId.value)
+  const selectedUser = allUsers.value.find((u) => u.id === selectedUserId.value)
   return selectedUser?.role === 'Analyst'
 })
 
@@ -323,7 +306,7 @@ const toggleLeadStatus = async (user) => {
   if (user.role === 'Analyst' && !user.is_lead) {
     return
   }
-  
+
   try {
     updatingLeadStatus.value = user.id
     error.value = null
