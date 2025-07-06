@@ -86,8 +86,14 @@ const props = defineProps({
 const emit = defineEmits(['submit', 'toggleExpand', 'viewEntity', 'updateField'])
 
 function getFieldValue(section, field) {
-  const fieldPath = section.parentField ? `${section.parentField}.${field.id}` : field.id
-  return props.formData.data[fieldPath] || ''
+  if (section.parentField) {
+    // Handle nested fields (e.g., address.street, social_media.twitter)
+    const parentData = props.formData.data[section.parentField]
+    return parentData ? parentData[field.id] || '' : ''
+  } else {
+    // Handle flat fields (e.g., name, email)
+    return props.formData.data[field.id] || ''
+  }
 }
 
 function updateFieldValue(section, field, value) {

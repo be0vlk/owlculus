@@ -490,20 +490,14 @@ function showEntityDetails(entity) {
 }
 
 async function handleEditEntity(updatedEntity, createdAssociates = []) {
-  const index = entities.value.findIndex((e) => e.id === updatedEntity.id)
-  if (index !== -1) {
-    entities.value[index] = { ...updatedEntity }
-    if (selectedEntity.value?.id === updatedEntity.id) {
-      selectedEntity.value = { ...updatedEntity }
-    }
+  // Update selectedEntity if it's the one being edited
+  if (selectedEntity.value?.id === updatedEntity.id) {
+    selectedEntity.value = { ...updatedEntity }
+  }
 
-    if (createdAssociates.length > 0) {
-      entities.value = [...entities.value, ...createdAssociates]
-    }
-
-    if (entityTableRef.value) {
-      entityTableRef.value.refresh()
-    }
+  // Always refresh the EntityDataTable to show updated data
+  if (entityTableRef.value) {
+    entityTableRef.value.refresh()
   }
 }
 

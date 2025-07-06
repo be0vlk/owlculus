@@ -41,6 +41,7 @@ export function useEntityDetails(entity, caseId) {
   const restructureNestedFields = (data, schema) => {
     const result = { ...data }
 
+    // First handle section-level parent fields
     Object.entries(schema).forEach(([, section]) => {
       if (section.parentField) {
         result[section.parentField] = result[section.parentField] || {}
@@ -156,6 +157,7 @@ export function useEntityDetails(entity, caseId) {
         }
       }
     },
+    { deep: true },
   )
 
   return {

@@ -146,7 +146,21 @@ const {
 const { getSourceValue, updateSourceValue } = useEntitySources(entity, formData, isEditing)
 
 function handleFieldUpdate(fieldPath, value) {
-  formData.value.data[fieldPath] = value
+  // Handle nested field paths (e.g., 'address.street' becomes data.address.street)
+  if (fieldPath.includes('.')) {
+    const parts = fieldPath.split('.')
+    const parentField = parts[0]
+    const childField = parts[1]
+    
+    // Ensure parent object exists
+    if (!formData.value.data[parentField]) {
+      formData.value.data[parentField] = {}
+    }
+    
+    formData.value.data[parentField][childField] = value
+  } else {
+    formData.value.data[fieldPath] = value
+  }
 }
 
 async function handleSubmit() {

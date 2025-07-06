@@ -90,10 +90,12 @@ See [extension/README.md](extension/README.md) for details.
 
 ## Quick Start
 
+> ![Main Dashboard](https://i.ibb.co/wFMwb7WY/case-dashboard.png)
+
 1. **Login** with admin credentials from setup
 2. **Create a case** using "New Case" button, then click on it in the table to access
 3. **Add entities** (person, company, domain, IP address, vehicle) which all come with templated notes
-4. **Upload evidence** in the "Evidence" tab using folder templates or custom structure
+4. **Upload evidence** in the "Evidence" tab using folder templates or custom structure (right-click on an evidence item to see some options!)
 5. **Run OSINT plugins** from the "Plugins" page with optional evidence saving
 6. **Execute hunts** for automated multi-step investigations (WIP)
 

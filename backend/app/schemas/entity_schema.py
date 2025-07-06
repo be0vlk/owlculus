@@ -167,7 +167,7 @@ class Entity(BaseModel):
         schema = ENTITY_TYPE_SCHEMAS.get(self.entity_type)
         if schema:
             try:
-                self.data = schema(**self.data).model_dump()
+                self.data = schema(**self.data).model_dump(mode="json")
             except Exception as e:
                 raise ValueError(
                     f"Invalid data for entity type '{self.entity_type}': {str(e)}"
@@ -209,7 +209,7 @@ class EntityUpdate(BaseModel):
             schema = ENTITY_TYPE_SCHEMAS.get(entity_type)
             if schema:
                 try:
-                    values["data"] = schema(**values["data"]).model_dump()
+                    values["data"] = schema(**values["data"]).model_dump(mode="json")
                 except Exception as e:
                     raise ValueError(
                         f"Invalid data for entity type '{entity_type}': {str(e)}"
