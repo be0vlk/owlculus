@@ -10,6 +10,7 @@ import {
   TASK_STATUS_COLORS,
   TASK_STATUS_LABELS,
 } from '@/constants/tasks'
+import { formatDateOnly } from '@/composables/dateUtils'
 
 export function useTaskTable() {
   const router = useRouter()
@@ -72,8 +73,7 @@ export function useTaskTable() {
 
   // Methods
   function formatDate(date) {
-    if (!date) return ''
-    return new Date(date).toLocaleDateString()
+    return formatDateOnly(date)
   }
 
   function isOverdue(task) {

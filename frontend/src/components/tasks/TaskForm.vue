@@ -1,7 +1,11 @@
 <template>
   <v-card>
-    <v-card-title>{{ isEdit ? 'Edit Task' : 'Create Task' }}</v-card-title>
-    <v-card-text>
+    <v-card-title class="d-flex align-center">
+      <v-icon start :icon="isEdit ? 'mdi-pencil' : 'mdi-plus'" />
+      {{ isEdit ? 'Edit Task' : 'Create Task' }}
+    </v-card-title>
+    <v-divider />
+    <v-card-text class="pa-4">
       <v-form ref="form" v-model="valid">
         <v-select
           v-model="formData.case_id"
@@ -11,12 +15,18 @@
           item-title="title"
           item-value="id"
           label="Case"
+          variant="outlined"
+          density="comfortable"
+          class="mb-4"
         />
 
         <v-text-field
           v-model="formData.title"
           :rules="[(v) => !!v || 'Title is required']"
           label="Title"
+          variant="outlined"
+          density="comfortable"
+          class="mb-4"
         />
 
         <v-textarea
@@ -24,6 +34,9 @@
           :rules="[(v) => !!v || 'Description is required']"
           label="Description"
           rows="3"
+          variant="outlined"
+          density="comfortable"
+          class="mb-4"
         />
 
         <v-select
@@ -34,9 +47,19 @@
           item-title="display_name"
           item-value="id"
           label="Template (Optional)"
+          variant="outlined"
+          density="comfortable"
+          class="mb-4"
         />
 
-        <v-select v-model="formData.priority" :items="priorityOptions" label="Priority" />
+        <v-select 
+          v-model="formData.priority" 
+          :items="priorityOptions" 
+          label="Priority"
+          variant="outlined"
+          density="comfortable"
+          class="mb-4"
+        />
 
         <v-select
           v-model="formData.assigned_to_id"
@@ -45,15 +68,46 @@
           item-title="username"
           item-value="id"
           label="Assign To"
+          variant="outlined"
+          density="comfortable"
+          class="mb-4"
         />
 
-        <v-text-field v-model="formData.due_date" clearable label="Due Date" type="date" />
+        <v-text-field 
+          v-model="formData.due_date" 
+          clearable 
+          label="Due Date" 
+          type="date"
+          variant="outlined"
+          density="comfortable"
+          class="mb-4"
+        />
+
+        <!-- Custom Fields -->
+        <div v-if="customFields.length > 0" class="mt-4">
+          <v-divider class="mb-4" />
+          <div class="text-subtitle-2 text-medium-emphasis mb-3">Additional Fields</div>
+          <CustomFieldInput
+            v-for="field in customFields"
+            :key="field.name"
+            v-model="formData.custom_fields[field.name]"
+            :field="field"
+            class="mb-2"
+          />
+        </div>
       </v-form>
     </v-card-text>
-    <v-card-actions>
+    <v-divider />
+    <v-card-actions class="pa-4">
       <v-spacer />
-      <v-btn @click="$emit('cancel')">Cancel</v-btn>
-      <v-btn :disabled="!valid" :loading="loading" color="primary" @click="save">
+      <v-btn variant="text" @click="$emit('cancel')">Cancel</v-btn>
+      <v-btn 
+        :disabled="!valid" 
+        :loading="loading" 
+        color="primary" 
+        variant="flat"
+        @click="save"
+      >
         {{ isEdit ? 'Update' : 'Create' }}
       </v-btn>
     </v-card-actions>
@@ -65,6 +119,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useTaskStore } from '@/stores/taskStore'
 import { caseService } from '@/services/case'
 import { TASK_PRIORITY, TASK_PRIORITY_LABELS } from '@/constants/tasks'
+import CustomFieldInput from './CustomFieldInput.vue'
 
 const props = defineProps({
   task: {
@@ -96,9 +151,11 @@ const formData = ref({
   priority: props.task?.priority || TASK_PRIORITY.MEDIUM,
   assigned_to_id: props.task?.assigned_to_id || null,
   due_date: props.task?.due_date ? props.task.due_date.split('T')[0] : null,
+  custom_fields: props.task?.custom_fields || {},
 })
 
 const templates = computed(() => taskStore.templates)
+const customFields = ref([])
 
 const priorityOptions = computed(() =>
   Object.entries(TASK_PRIORITY_LABELS).map(([value, title]) => ({ title, value })),
@@ -122,7 +179,25 @@ watch(
         // Auto-fill title and description from template
         formData.value.title = selectedTemplate.display_name
         formData.value.description = selectedTemplate.description
+
+        // Set custom fields from template
+        if (selectedTemplate.definition_json?.fields) {
+          customFields.value = selectedTemplate.definition_json.fields
+          // Initialize custom field values
+          const customFieldValues = {}
+          selectedTemplate.definition_json.fields.forEach((field) => {
+            customFieldValues[field.name] =
+              formData.value.custom_fields[field.name] || (field.type === 'boolean' ? false : '')
+          })
+          formData.value.custom_fields = customFieldValues
+        } else {
+          customFields.value = []
+        }
       }
+    } else if (!newTemplateId) {
+      // Clear custom fields when no template is selected
+      customFields.value = []
+      formData.value.custom_fields = {}
     }
   },
 )
@@ -151,6 +226,14 @@ onMounted(async () => {
     const [casesData] = await Promise.all([caseService.getCases(), taskStore.loadTemplates()])
     cases.value = casesData
     // Templates are already stored in the taskStore
+
+    // If editing a task with a template, load custom fields
+    if (isEdit.value && props.task?.template_id) {
+      const template = templates.value.find((t) => t.id === props.task.template_id)
+      if (template?.definition_json?.fields) {
+        customFields.value = template.definition_json.fields
+      }
+    }
   } catch (error) {
     console.error('Failed to load data:', error)
   }

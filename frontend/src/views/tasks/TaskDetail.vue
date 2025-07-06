@@ -11,13 +11,22 @@
           Back
         </v-btn>
         <v-btn
-          v-if="canEditTask"
+          v-if="canEditFull"
           color="white"
           prepend-icon="mdi-pencil"
           variant="text"
           @click="editMode = true"
         >
           Edit Task
+        </v-btn>
+        <v-btn
+          v-else-if="canEditLimited"
+          color="white"
+          prepend-icon="mdi-pencil-box-outline"
+          variant="text"
+          @click="showQuickEditDialog = true"
+        >
+          Quick Edit
         </v-btn>
       </div>
     </template>
@@ -77,7 +86,7 @@
                       <v-icon icon="mdi-calendar" size="small" class="me-2 text-medium-emphasis" />
                       <span class="text-body-2 text-medium-emphasis me-2">Created:</span>
                       <span class="text-body-2">
-                        {{ formatDateTime(task.created_at) }}
+                        {{ formatDate(task.created_at) }}
                       </span>
                     </div>
                     <div class="d-flex align-center mb-3">
@@ -91,13 +100,81 @@
                       <v-icon icon="mdi-check-circle" size="small" class="me-2 text-success" />
                       <span class="text-body-2 text-medium-emphasis me-2">Completed:</span>
                       <span class="text-body-2">
-                        {{ formatDateTime(task.completed_at) }}
+                        {{ formatDate(task.completed_at) }}
                       </span>
                     </div>
                     <div v-if="task.completed_by" class="d-flex align-center mb-3">
                       <v-icon icon="mdi-account-check" size="small" class="me-2 text-success" />
                       <span class="text-body-2 text-medium-emphasis me-2">Completed by:</span>
                       <span class="text-body-2">{{ task.completed_by.username }}</span>
+                    </div>
+                  </v-col>
+                </v-row>
+              </div>
+
+              <!-- Custom Fields -->
+              <div v-if="customFields.length > 0" class="mt-6">
+                <v-divider class="mb-4" />
+                <div class="text-subtitle-1 font-weight-medium mb-3">Additional Information</div>
+                <v-row>
+                  <v-col v-for="field in customFields" :key="field.name" cols="12" sm="6" md="4">
+                    <div class="mb-3">
+                      <div class="d-flex align-center mb-1">
+                        <span class="text-body-2 text-medium-emphasis">{{ field.label }}</span>
+                        <v-btn
+                          v-if="canEditTask && editingCustomField !== field.name"
+                          icon="mdi-pencil"
+                          size="x-small"
+                          variant="text"
+                          class="ml-1"
+                          @click="startEditingField(field)"
+                        >
+                          <v-tooltip activator="parent" location="top"
+                            >Edit {{ field.label }}</v-tooltip
+                          >
+                        </v-btn>
+                      </div>
+                      <div v-if="editingCustomField === field.name" class="mb-2">
+                        <CustomFieldInput v-model="customFieldValues[field.name]" :field="field" />
+                        <div class="d-flex mt-2">
+                          <v-btn size="small" variant="tonal" @click="cancelFieldEdit"
+                            >Cancel</v-btn
+                          >
+                          <v-btn
+                            size="small"
+                            color="primary"
+                            variant="flat"
+                            class="ml-2"
+                            @click="saveFieldEdit(field)"
+                          >
+                            Save
+                          </v-btn>
+                        </div>
+                      </div>
+                      <div v-else class="text-body-2">
+                        <span v-if="field.type === 'boolean'">
+                          <v-icon
+                            :icon="
+                              task.custom_fields[field.name]
+                                ? 'mdi-check-circle'
+                                : 'mdi-close-circle'
+                            "
+                            :color="task.custom_fields[field.name] ? 'success' : 'error'"
+                            size="small"
+                            class="me-1"
+                          />
+                          {{ task.custom_fields[field.name] ? 'Yes' : 'No' }}
+                        </span>
+                        <span v-else-if="field.type === 'date' && task.custom_fields[field.name]">
+                          {{ formatDateOnly(task.custom_fields[field.name]) }}
+                        </span>
+                        <span v-else>
+                          {{ task.custom_fields[field.name] || 'Not provided' }}
+                        </span>
+                      </div>
+                      <div v-if="field.description" class="text-caption text-medium-emphasis mt-1">
+                        {{ field.description }}
+                      </div>
                     </div>
                   </v-col>
                 </v-row>
@@ -174,7 +251,7 @@
                         color="error"
                         class="me-1"
                       />
-                      {{ formatDate(task.due_date) }}
+                      {{ formatDateOnly(task.due_date) }}
                     </div>
                   </div>
                 </v-card-text>
@@ -221,6 +298,17 @@
       </v-card-actions>
     </v-card>
   </v-dialog>
+
+  <!-- Quick Edit Dialog -->
+  <v-dialog v-model="showQuickEditDialog" max-width="600" persistent>
+    <TaskQuickEditDialog
+      :task="task"
+      :custom-fields="customFields"
+      :is-user-case-lead="isUserCaseLead"
+      @cancel="showQuickEditDialog = false"
+      @save="handleQuickUpdate"
+    />
+  </v-dialog>
 </template>
 
 <script setup>
@@ -237,7 +325,11 @@ import {
 } from '@/constants/tasks'
 import TaskForm from '@/components/tasks/TaskForm.vue'
 import TaskAssignDialog from '@/components/tasks/TaskAssignDialog.vue'
+import TaskQuickEditDialog from '@/components/tasks/TaskQuickEditDialog.vue'
+import CustomFieldInput from '@/components/tasks/CustomFieldInput.vue'
 import BaseDashboard from '@/components/BaseDashboard.vue'
+import { formatDate, formatDateOnly } from '@/composables/dateUtils'
+import { caseService } from '@/services/case'
 
 const route = useRoute()
 const taskStore = useTaskStore()
@@ -247,8 +339,13 @@ const authStore = useAuthStore()
 const editMode = ref(false)
 const showAssignDialog = ref(false)
 const showStatusDialog = ref(false)
+const showQuickEditDialog = ref(false)
+const editingCustomField = ref(null)
 const newStatus = ref('')
 const isEditing = ref(false)
+const customFields = ref([])
+const customFieldValues = ref({})
+const isUserCaseLead = ref(false)
 
 // Computed
 const taskId = computed(() => parseInt(route.params.id))
@@ -258,8 +355,26 @@ const error = computed(() => taskStore.error)
 
 const canEditTask = computed(() => {
   if (!task.value) return false
-  // Admin or case lead can edit
-  return authStore.isAdmin || authStore.user?.is_lead
+  // Admin, case lead, or assigned user can edit
+  return (
+    authStore.user?.role === 'Admin' || isUserCaseLead.value || task.value.assigned_to_id === authStore.user?.id
+  )
+})
+
+const canEditFull = computed(() => {
+  if (!task.value) return false
+  // Only admin or case lead can do full edits
+  return authStore.user?.role === 'Admin' || isUserCaseLead.value
+})
+
+const canEditLimited = computed(() => {
+  if (!task.value) return false
+  // Assigned users have limited edit capabilities
+  return (
+    task.value.assigned_to_id === authStore.user?.id &&
+    authStore.user?.role !== 'Admin' &&
+    !isUserCaseLead.value
+  )
 })
 
 const canAssignTask = computed(() => {
@@ -276,13 +391,7 @@ const statusOptions = computed(() =>
 )
 
 // Methods
-function formatDate(date) {
-  return new Date(date).toLocaleDateString()
-}
-
-function formatDateTime(date) {
-  return new Date(date).toLocaleString()
-}
+// Remove local formatDate and formatDateTime - using imported ones from dateUtils
 
 function openAssignDialog() {
   showAssignDialog.value = true
@@ -308,9 +417,59 @@ async function handleStatusUpdate() {
   showStatusDialog.value = false
 }
 
+async function handleQuickUpdate(updates) {
+  await taskStore.updateTask(taskId.value, updates)
+  showQuickEditDialog.value = false
+}
+
+function startEditingField(field) {
+  editingCustomField.value = field.name
+  customFieldValues.value[field.name] =
+    task.value.custom_fields[field.name] || (field.type === 'boolean' ? false : '')
+}
+
+function cancelFieldEdit() {
+  editingCustomField.value = null
+  customFieldValues.value = {}
+}
+
+async function saveFieldEdit(field) {
+  const updates = {
+    custom_fields: {
+      ...task.value.custom_fields,
+      [field.name]: customFieldValues.value[field.name],
+    },
+  }
+  await taskStore.updateTask(taskId.value, updates)
+  editingCustomField.value = null
+  customFieldValues.value = {}
+}
+
 // Lifecycle
 onMounted(async () => {
   await taskStore.loadTask(taskId.value)
+  await taskStore.loadTemplates()
+
+  // Check if user is a case lead
+  if (task.value?.case_id && authStore.user) {
+    try {
+      const caseData = await caseService.getCase(task.value.case_id)
+      const currentUserInCase = caseData.users?.find(u => u.id === authStore.user.id)
+      isUserCaseLead.value = currentUserInCase?.is_lead || false
+    } catch (error) {
+      console.error('Failed to fetch case data:', error)
+      isUserCaseLead.value = false
+    }
+  }
+
+  // Load custom fields from template if task has one
+  if (task.value?.template_id) {
+    const templates = taskStore.templates
+    const template = templates.find((t) => t.id === task.value.template_id)
+    if (template?.definition_json?.fields) {
+      customFields.value = template.definition_json.fields
+    }
+  }
 })
 </script>
 

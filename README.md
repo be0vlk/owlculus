@@ -32,7 +32,7 @@ Planned features and improvements:
 
 - **Enhanced Plugin Library**: More OSINT tools and custom integrations
 - **LLM Integration**: AI-powered analysis and insights
-- **Advanced Analytics**: Cross-case patterns and timeline analysis
+- **Advanced Analytics**: Cross-case patterns and timeline analysis, charts, etc.
 - **API Enhancements**: Webhook support and third-party integrations
 - **Cloud Deployment**: Native support for AWS, GCP, and Azure
 - **Python SDK**: Making it even easier to integrate Owlculus into your flow
@@ -53,14 +53,14 @@ chmod +x setup.sh
 
 **Access URLs:**
 
-- Frontend: http://localhost
+- Frontend: http://localhost:8081
 - Backend API: http://localhost:8000
 
 **Setup Options:**
 
 *Tested on Linux only. Windows users should use WSL.*
 
-- `./setup.sh dev` - Development mode with hot-reload
+- `./setup.sh` - Standard interactive setup. If just for your personal use, you should select Local Production mode when prompted.
 - `./setup.sh --clean` - Clean installation
 - `./setup.sh --non-interactive` - Use defaults
 

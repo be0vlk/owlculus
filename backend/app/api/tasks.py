@@ -5,7 +5,12 @@ Task management API endpoints
 from typing import List
 
 from app import schemas
-from app.core.dependencies import admin_only, check_case_access, get_current_user, is_case_lead
+from app.core.dependencies import (
+    admin_only,
+    check_case_access,
+    get_current_user,
+    is_case_lead,
+)
 from app.core.exceptions import (
     AuthorizationException,
     BaseException,
@@ -32,10 +37,14 @@ async def list_templates(
     """List all available task templates"""
     service = TaskService(db)
     try:
-        templates = await service.get_templates(include_inactive, current_user=current_user)
+        templates = await service.get_templates(
+            include_inactive, current_user=current_user
+        )
         return templates
     except BaseException as e:
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        )
 
 
 @router.post("/templates", response_model=schemas.TaskTemplateResponse)
@@ -48,9 +57,13 @@ async def create_template(
     """Create a custom task template (Admin only)"""
     service = TaskService(db)
     try:
-        return await service.create_custom_template(template.model_dump(), current_user=current_user)
+        return await service.create_custom_template(
+            template.model_dump(), current_user=current_user
+        )
     except BaseException as e:
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        )
 
 
 @router.put("/templates/{template_id}", response_model=schemas.TaskTemplateResponse)
@@ -66,11 +79,15 @@ async def update_template(
     try:
         # Filter out None values to only update provided fields
         update_data = {k: v for k, v in updates.model_dump().items() if v is not None}
-        return await service.update_template(template_id, update_data, current_user=current_user)
+        return await service.update_template(
+            template_id, update_data, current_user=current_user
+        )
     except ResourceNotFoundException as e:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
     except BaseException as e:
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        )
 
 
 @router.delete("/templates/{template_id}")
@@ -89,7 +106,9 @@ async def delete_template(
     except ResourceNotFoundException as e:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
     except BaseException as e:
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        )
 
 
 # Task CRUD endpoints
@@ -101,16 +120,21 @@ async def list_tasks(
 ):
     """List tasks with optional filters"""
     service = TaskService(db)
-    
+
     # Check case access if filtering by case
     if filters.case_id:
         try:
             check_case_access(db, filters.case_id, current_user)
         except AuthorizationException:
-            raise HTTPException(status_code=http_status.HTTP_403_FORBIDDEN, detail="Not authorized to access this case")
+            raise HTTPException(
+                status_code=http_status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to access this case",
+            )
         except ResourceNotFoundException as e:
-            raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
-    
+            raise HTTPException(
+                status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e)
+            )
+
     try:
         tasks = await service.get_tasks(
             current_user=current_user,
@@ -123,7 +147,9 @@ async def list_tasks(
         )
         return tasks
     except BaseException as e:
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        )
 
 
 @router.post("/", response_model=schemas.TaskResponse)
@@ -137,9 +163,9 @@ async def create_task(
     if not is_case_lead(db, task.case_id, current_user):
         raise HTTPException(
             status_code=http_status.HTTP_403_FORBIDDEN,
-            detail="Only admins or case leads can create tasks"
+            detail="Only admins or case leads can create tasks",
         )
-    
+
     service = TaskService(db)
     try:
         return await service.create_task(
@@ -148,7 +174,9 @@ async def create_task(
             current_user=current_user,
         )
     except BaseException as e:
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        )
 
 
 # Bulk operation endpoints (must come before /{task_id} routes)
@@ -164,9 +192,13 @@ async def bulk_assign_tasks(
     # For bulk operations, we'll check permissions in the service layer for each task
     # This is because tasks might belong to different cases
     try:
-        return await service.bulk_assign(data.task_ids, data.user_id, current_user=current_user)
+        return await service.bulk_assign(
+            data.task_ids, data.user_id, current_user=current_user
+        )
     except BaseException as e:
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        )
 
 
 @router.post("/bulk/status", response_model=List[schemas.TaskResponse])
@@ -178,9 +210,13 @@ async def bulk_update_status(
     """Bulk update task status"""
     service = TaskService(db)
     try:
-        return await service.bulk_update_status(data.task_ids, data.status, current_user=current_user)
+        return await service.bulk_update_status(
+            data.task_ids, data.status, current_user=current_user
+        )
     except BaseException as e:
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        )
 
 
 @router.get("/{task_id}", response_model=schemas.TaskResponse)
@@ -197,14 +233,21 @@ async def get_task(
         try:
             check_case_access(db, task.case_id, current_user)
         except AuthorizationException:
-            raise HTTPException(status_code=http_status.HTTP_403_FORBIDDEN, detail="Not authorized to access this case")
+            raise HTTPException(
+                status_code=http_status.HTTP_403_FORBIDDEN,
+                detail="Not authorized to access this case",
+            )
         except ResourceNotFoundException as e:
-            raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+            raise HTTPException(
+                status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e)
+            )
         return task
     except ResourceNotFoundException as e:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
     except BaseException as e:
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        )
 
 
 @router.put("/{task_id}", response_model=schemas.TaskResponse)
@@ -214,27 +257,61 @@ async def update_task(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Update a task"""
+    """Update a task - Full edit for admins/leads, limited edit for assignees"""
     service = TaskService(db)
-    
+
     # First check if the task exists and user has access
     try:
         task = await service.get_task(task_id, current_user=current_user)
         check_case_access(db, task.case_id, current_user)
     except AuthorizationException:
-        raise HTTPException(status_code=http_status.HTTP_403_FORBIDDEN, detail="Not authorized to access this case")
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to access this case",
+        )
     except ResourceNotFoundException as e:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
-    
+
+    # Check if user can edit this task
+    is_admin_or_lead = current_user.role == "Admin" or is_case_lead(
+        db, task.case_id, current_user
+    )
+    is_assignee = task.assigned_to_id == current_user.id
+
+    if not is_admin_or_lead and not is_assignee:
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail="Only admins, case leads, or the assigned user can update this task",
+        )
+
     # Filter out None values to only update provided fields
     update_data = {k: v for k, v in updates.model_dump().items() if v is not None}
-    
+
+    # If user is assignee (not admin/lead), restrict what they can update
+    if is_assignee and not is_admin_or_lead:
+        allowed_fields = {"status", "custom_fields"}
+        restricted_updates = {
+            k: v for k, v in update_data.items() if k in allowed_fields
+        }
+
+        if len(restricted_updates) != len(update_data):
+            raise HTTPException(
+                status_code=http_status.HTTP_403_FORBIDDEN,
+                detail="Assigned users can only update status and custom fields",
+            )
+
+        update_data = restricted_updates
+
     try:
-        return await service.update_task(task_id, update_data, current_user=current_user)
+        return await service.update_task(
+            task_id, update_data, current_user=current_user
+        )
     except ResourceNotFoundException as e:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
     except BaseException as e:
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        )
 
 
 @router.delete("/{task_id}")
@@ -253,7 +330,9 @@ async def delete_task(
     except ResourceNotFoundException as e:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
     except BaseException as e:
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        )
 
 
 # Task operation endpoints
@@ -275,25 +354,30 @@ async def assign_task(
         if not is_case_lead(db, task.case_id, current_user):
             raise HTTPException(
                 status_code=http_status.HTTP_403_FORBIDDEN,
-                detail="Only admins or case leads can assign tasks"
+                detail="Only admins or case leads can assign tasks",
             )
-        
+
         # If assigning to someone, verify they have access to the case
         if user_id:
             user = db.get(User, user_id)
             if user:
                 check_case_access(db, task.case_id, user)
     except AuthorizationException:
-        raise HTTPException(status_code=http_status.HTTP_403_FORBIDDEN, detail="Not authorized to access this case")
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to access this case",
+        )
     except ResourceNotFoundException as e:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
-    
+
     try:
         return await service.assign_task(task_id, user_id, current_user=current_user)
     except ResourceNotFoundException as e:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
     except BaseException as e:
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        )
 
 
 @router.put("/{task_id}/status", response_model=schemas.TaskResponse)
@@ -305,16 +389,19 @@ async def update_task_status(
 ):
     """Update task status"""
     service = TaskService(db)
-    
+
     # First check if the task exists and user has access
     try:
         task = await service.get_task(task_id, current_user=current_user)
         check_case_access(db, task.case_id, current_user)
     except AuthorizationException:
-        raise HTTPException(status_code=http_status.HTTP_403_FORBIDDEN, detail="Not authorized to access this case")
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to access this case",
+        )
     except ResourceNotFoundException as e:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
-    
+
     try:
         return await service.update_status(task_id, status, current_user=current_user)
     except ValidationException as e:
@@ -322,4 +409,6 @@ async def update_task_status(
     except ResourceNotFoundException as e:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
     except BaseException as e:
-        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+        )

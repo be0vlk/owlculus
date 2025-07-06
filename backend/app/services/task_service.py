@@ -27,7 +27,7 @@ class TaskService:
         """Get all task templates"""
         query = select(models.TaskTemplate)
         if not include_inactive:
-            query = query.where(models.TaskTemplate.is_active == True)
+            query = query.where(models.TaskTemplate.is_active)
 
         templates = self.db.exec(query).all()
         return templates
@@ -36,9 +36,7 @@ class TaskService:
         self, template_data: dict, *, current_user: models.User
     ) -> models.TaskTemplate:
         """Create a custom task template (Admin only)"""
-        template = models.TaskTemplate(
-            **template_data, created_by_id=current_user.id
-        )
+        template = models.TaskTemplate(**template_data, created_by_id=current_user.id)
         self.db.add(template)
         self.db.commit()
         self.db.refresh(template)
@@ -124,10 +122,30 @@ class TaskService:
         """Update a task"""
         task = await self.get_task(task_id, current_user=current_user)
 
+        # Track what fields are being updated for logging
+        updated_fields = []
+
         # Update fields
         for key, value in updates.items():
             if hasattr(task, key):
-                setattr(task, key, value)
+                # Special handling for custom_fields to merge rather than replace
+                if key == "custom_fields" and task.custom_fields:
+                    # Merge new custom field values with existing ones
+                    existing_custom_fields = task.custom_fields or {}
+                    merged_custom_fields = {**existing_custom_fields, **value}
+                    setattr(task, key, merged_custom_fields)
+                else:
+                    setattr(task, key, value)
+                updated_fields.append(key)
+
+        # Handle status completion tracking
+        if "status" in updates and updates["status"] == TaskStatus.COMPLETED.value:
+            task.completed_at = datetime.utcnow()
+            task.completed_by_id = current_user.id
+        elif "status" in updates and updates["status"] != TaskStatus.COMPLETED.value:
+            # Clear completion data if status is changed from completed
+            task.completed_at = None
+            task.completed_by_id = None
 
         task.updated_at = datetime.utcnow()
 
@@ -135,14 +153,16 @@ class TaskService:
         self.db.commit()
         self.db.refresh(task)
 
-        # Log the action
+        # Log the action with details about what was updated
         logger = get_security_logger(
             user_id=current_user.id,
             action="update_task",
             task_id=task_id,
             event_type="task_updated",
+            fields_updated=updated_fields,
+            is_assignee_update=task.assigned_to_id == current_user.id,
         )
-        logger.info(f"Task {task_id} updated")
+        logger.info(f"Task {task_id} updated - fields: {', '.join(updated_fields)}")
 
         return task
 
@@ -239,7 +259,7 @@ class TaskService:
     ) -> List[models.Task]:
         """Bulk assign tasks to a user"""
         from app.core.dependencies import is_case_lead
-        
+
         updated_tasks = []
 
         for task_id in task_ids:
@@ -251,8 +271,10 @@ class TaskService:
                 if not is_case_lead(self.db, task.case_id, current_user):
                     # Skip tasks where user is not lead
                     continue
-                
-                task = await self.assign_task(task_id, user_id, current_user=current_user)
+
+                task = await self.assign_task(
+                    task_id, user_id, current_user=current_user
+                )
                 updated_tasks.append(task)
             except (ResourceNotFoundException, BaseException):
                 # Skip tasks that can't be assigned
@@ -268,7 +290,9 @@ class TaskService:
 
         for task_id in task_ids:
             try:
-                task = await self.update_status(task_id, status, current_user=current_user)
+                task = await self.update_status(
+                    task_id, status, current_user=current_user
+                )
                 updated_tasks.append(task)
             except (ResourceNotFoundException, ValidationException, BaseException):
                 # Skip tasks that can't be updated
@@ -280,24 +304,32 @@ class TaskService:
         self, template_id: int, updates: dict, *, current_user: models.User
     ) -> models.TaskTemplate:
         """Update a task template"""
-        template = self.db.query(models.TaskTemplate).filter(
-            models.TaskTemplate.id == template_id
-        ).first()
-        
+        template = (
+            self.db.query(models.TaskTemplate)
+            .filter(models.TaskTemplate.id == template_id)
+            .first()
+        )
+
         if not template:
             raise ResourceNotFoundException(f"Task template {template_id} not found")
-        
+
         # Update allowed fields
         for field, value in updates.items():
-            if field in ["display_name", "description", "category", "is_active", "definition_json"]:
+            if field in [
+                "display_name",
+                "description",
+                "category",
+                "is_active",
+                "definition_json",
+            ]:
                 setattr(template, field, value)
-        
+
         template.updated_at = datetime.utcnow()
-        
+
         self.db.add(template)
         self.db.commit()
         self.db.refresh(template)
-        
+
         # Log the action
         logger = get_security_logger(
             user_id=current_user.id,
@@ -306,33 +338,37 @@ class TaskService:
             event_type="task_template_updated",
         )
         logger.info(f"Task template {template_id} updated")
-        
+
         return template
 
     async def delete_template(
         self, template_id: int, *, current_user: models.User
     ) -> bool:
         """Delete a task template"""
-        template = self.db.query(models.TaskTemplate).filter(
-            models.TaskTemplate.id == template_id
-        ).first()
-        
+        template = (
+            self.db.query(models.TaskTemplate)
+            .filter(models.TaskTemplate.id == template_id)
+            .first()
+        )
+
         if not template:
             raise ResourceNotFoundException(f"Task template {template_id} not found")
-        
+
         # Check if template is in use
-        tasks_using_template = self.db.query(models.Task).filter(
-            models.Task.template_id == template_id
-        ).count()
-        
+        tasks_using_template = (
+            self.db.query(models.Task)
+            .filter(models.Task.template_id == template_id)
+            .count()
+        )
+
         if tasks_using_template > 0:
             raise ValidationException(
                 f"Cannot delete template. It is used by {tasks_using_template} task(s)"
             )
-        
+
         self.db.delete(template)
         self.db.commit()
-        
+
         # Log the action
         logger = get_security_logger(
             user_id=current_user.id,
@@ -341,5 +377,5 @@ class TaskService:
             event_type="task_template_deleted",
         )
         logger.info(f"Task template {template_id} deleted")
-        
+
         return True
