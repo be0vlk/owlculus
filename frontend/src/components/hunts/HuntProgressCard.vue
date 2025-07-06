@@ -21,20 +21,6 @@
 
     <!-- Progress Section -->
     <v-card-text class="pa-4">
-      <!-- Overall Progress -->
-      <div class="mb-4">
-        <div class="d-flex align-center justify-space-between mb-2">
-          <span class="text-body-2 font-weight-medium">Overall Progress</span>
-          <span class="text-body-2">{{ Math.round(execution.progress * 100) }}%</span>
-        </div>
-        <v-progress-linear
-          :model-value="execution.progress * 100"
-          :color="statusColor"
-          height="8"
-          rounded
-        />
-      </div>
-
       <!-- Timing Information -->
       <div class="timing-info mb-4">
         <div class="d-flex align-center flex-wrap">

@@ -150,25 +150,6 @@
                 </v-list-item-title>
               </div>
             </v-col>
-            <v-col cols="12">
-              <div class="mb-4">
-                <v-list-item-subtitle class="text-subtitle-2 font-weight-medium mb-1">
-                  Progress
-                </v-list-item-subtitle>
-                <div class="d-flex align-center mt-2">
-                  <v-progress-linear
-                    :model-value="execution.progress * 100"
-                    :color="statusColor"
-                    height="8"
-                    rounded
-                    class="flex-grow-1 me-3"
-                  />
-                  <span class="text-body-2 font-weight-medium"
-                    >{{ Math.round(execution.progress * 100) }}%</span
-                  >
-                </div>
-              </div>
-            </v-col>
           </v-row>
 
           <!-- Initial Parameters -->
