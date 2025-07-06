@@ -1,184 +1,132 @@
 <template>
-  <div class="min-h-screen bg-gray-100 dark:bg-gray-900">
-    <div class="flex">
-      <!-- Sidebar -->
-      <Sidebar class="fixed inset-y-0 left-0" />
+  <BaseDashboard :error="error" :loading="loading" title="Admin">
+    <!-- Main Content -->
+    <!-- User and Invite Management -->
+    <v-card class="mb-6" variant="outlined">
+      <!-- Header -->
+      <v-card-title class="d-flex align-center pa-4 bg-surface">
+        <v-icon class="me-3" color="primary" icon="mdi-account-group" size="large" />
+        <div class="flex-grow-1">
+          <div class="text-h6 font-weight-bold">User Management</div>
+          <div class="text-body-2 text-medium-emphasis">
+            Manage system users and their permissions
+          </div>
+        </div>
+      </v-card-title>
 
-      <!-- Main content -->
-      <div class="flex-1 ml-64">
-        <header class="bg-white shadow dark:bg-gray-800">
-          <div class="max-w-7xl mx-auto px-8 py-6">
-            <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100">Admin</h1>
-          </div>
-        </header>
-        <main class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-          <!-- Loading state -->
-          <div v-if="loading" class="flex justify-center items-center h-64">
-            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-500 dark:border-cyan-400"></div>
-          </div>
+      <v-divider />
 
-          <!-- Error state -->
-          <div v-else-if="error" class="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-400 dark:border-red-500 p-4 mb-4">
-            <div class="flex">
-              <div class="flex-shrink-0">
-                <svg class="h-5 w-5 text-red-400 dark:text-red-500" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
-                </svg>
-              </div>
-              <div class="ml-3">
-                <p class="text-sm text-red-700 dark:text-red-400">{{ error }}</p>
-              </div>
-            </div>
-          </div>
+      <!-- Tabs -->
+      <v-tabs v-model="activeTab" bg-color="surface" class="px-4">
+        <v-tab prepend-icon="mdi-account" value="users">Users</v-tab>
+        <v-tab prepend-icon="mdi-email" value="invites">Invites</v-tab>
+      </v-tabs>
 
-          <!-- Admin Panel -->
-          <div v-else class="space-y-6">
-            <!-- User Management -->
-            <div class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
-              <div class="px-6 py-5 border-b border-gray-200 dark:border-gray-700">
-                <div class="flex items-center justify-between">
-                  <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100">User Management</h2>
-                  <button
-                    @click="showNewUserModal = true"
-                    class="px-4 py-2 text-sm font-medium text-white bg-cyan-600 hover:bg-cyan-700 dark:bg-cyan-700 dark:hover:bg-cyan-800 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 dark:focus:ring-offset-gray-900"
-                  >
-                    Add New User
-                  </button>
-                </div>
-              </div>
-              <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                  <thead class="bg-gray-50 dark:bg-gray-700">
-                    <tr>
-                      <th 
-                        v-for="column in columns" 
-                        :key="column.key"
-                        scope="col" 
-                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 whitespace-nowrap"
-                        @click="sortBy(column.key)"
-                      >
-                        <div class="flex items-center space-x-1">
-                          <span>{{ column.label }}</span>
-                          <span v-if="sortKey === column.key" class="ml-2">
-                            {{ sortOrder === 'asc' ? '↑' : '↓' }}
-                          </span>
-                        </div>
-                      </th>
-                      <th scope="col" class="relative px-6 py-3">
-                        <span class="sr-only">Actions</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                    <tr v-for="user in sortedAndFilteredUsers" :key="user.id" class="hover:bg-gray-50 dark:hover:bg-gray-700">
-                      <td class="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap">
-                        {{ user.username }}
-                      </td>
-                      <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-300">
-                        {{ user.email }}
-                      </td>
-                      <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-300 whitespace-nowrap">
-                        {{ user.role }}
-                      </td>
-                      <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-300 whitespace-nowrap">
-                        {{ formatDate(user.created_at) }}
-                      </td>
-                      <td class="px-6 py-4 text-right text-sm font-medium whitespace-nowrap">
-                        <button
-                          @click="editUser(user)"
-                          class="text-cyan-600 hover:text-cyan-700 dark:text-cyan-400 dark:hover:text-cyan-300 mr-4"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          @click="resetPassword(user)"
-                          class="text-cyan-600 hover:text-cyan-700 dark:text-cyan-400 dark:hover:text-cyan-300 mr-4"
-                        >
-                          Reset Password
-                        </button>
-                        <button
-                          @click="deleteUser(user)"
-                          class="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </main>
-      </div>
-    </div>
-    
-    <!-- User Modal -->
-    <UserModal
-      :show="showNewUserModal"
-      :user="editingUser"
-      @close="closeUserModal"
-      @saved="handleUserSaved"
+      <v-divider />
+
+      <!-- Tab Content -->
+      <v-tabs-window v-model="activeTab">
+        <!-- Users Tab -->
+        <v-tabs-window-item value="users">
+          <UserManagementCard
+            @confirmDelete="handleConfirmDelete"
+            @notification="handleNotification"
+          />
+        </v-tabs-window-item>
+
+        <!-- Invites Tab -->
+        <v-tabs-window-item value="invites">
+          <InviteManagementCard
+            @confirmDelete="handleConfirmDelete"
+            @notification="handleNotification"
+          />
+        </v-tabs-window-item>
+      </v-tabs-window>
+    </v-card>
+
+    <!-- API Key Management -->
+    <ApiKeyManagementCard @confirmDelete="handleConfirmDelete" @notification="handleNotification" />
+
+    <!-- System Configuration -->
+    <SystemConfigurationCard @notification="handleNotification" />
+
+    <!-- Evidence Template Management -->
+    <EvidenceTemplateManagementCard @notification="handleNotification" />
+
+    <!-- Task Template Management -->
+    <TaskTemplateManagementCard
+      @notification="handleNotification"
+      @confirmDelete="handleConfirmDelete"
     />
+  </BaseDashboard>
 
-    <!-- Password Reset Modal -->
-    <PasswordResetModal
-      :show="showPasswordResetModal"
-      :userId="selectedUserForPasswordReset ? selectedUserForPasswordReset.id : null"
-      @close="closePasswordResetModal"
-      @saved="handlePasswordResetSaved"
-    />
-  </div>
+  <!-- Confirmation Dialog -->
+  <ConfirmationDialog ref="confirmDialog" />
+
+  <!-- Snackbar for notifications -->
+  <v-snackbar
+    v-model="snackbar.show"
+    :color="snackbar.color"
+    :timeout="snackbar.timeout"
+    location="top right"
+  >
+    {{ snackbar.text }}
+    <template #actions>
+      <v-btn variant="text" @click="closeNotification"> Close </v-btn>
+    </template>
+  </v-snackbar>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { userService } from '@/services/user'
-import Sidebar from '../components/Sidebar.vue'
-import UserModal from '../components/UserModal.vue'
-import PasswordResetModal from '../components/PasswordResetModal.vue'
-import { formatDate } from '@/composables/dateUtils'
+import { useNotifications } from '@/composables/useNotifications'
+import BaseDashboard from '@/components/BaseDashboard.vue'
+import SystemConfigurationCard from '@/components/SystemConfigurationCard.vue'
+import ApiKeyManagementCard from '@/components/ApiKeyManagementCard.vue'
+import EvidenceTemplateManagementCard from '@/components/EvidenceTemplateManagementCard.vue'
+import TaskTemplateManagementCard from '@/components/TaskTemplateManagementCard.vue'
+import UserManagementCard from '@/components/UserManagementCard.vue'
+import InviteManagementCard from '@/components/InviteManagementCard.vue'
+import ConfirmationDialog from '@/components/ConfirmationDialog.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
 
-const users = ref([])
+// State
 const loading = ref(true)
 const error = ref(null)
-const sortKey = ref('username')
-const sortOrder = ref('asc')
-const showNewUserModal = ref(false)
-const editingUser = ref(null)
-const settings = ref({
-  sessionTimeout: 30
-})
+const activeTab = ref('users')
 
-const columns = [
-  { key: 'username', label: 'Username' },
-  { key: 'email', label: 'Email' },
-  { key: 'role', label: 'Role' },
-  { key: 'created_at', label: 'Created' }
-]
+// Notifications
+const { snackbar, showNotification, closeNotification } = useNotifications()
 
-// Password reset state
-const showPasswordResetModal = ref(false)
-const selectedUserForPasswordReset = ref(null)
+// Confirmation dialog reference
+const confirmDialog = ref(null)
 
-const resetPassword = (user) => {
-  selectedUserForPasswordReset.value = user
-  showPasswordResetModal.value = true
+// Event handlers
+const handleNotification = ({ text, color }) => {
+  showNotification(text, color)
 }
 
-const closePasswordResetModal = () => {
-  showPasswordResetModal.value = false
-  selectedUserForPasswordReset.value = null
-}
+const handleConfirmDelete = async ({ title, message, warning, onConfirm }) => {
+  try {
+    await confirmDialog.value.confirm({
+      title,
+      message,
+      warning,
+      confirmText: 'Delete',
+      confirmColor: 'error',
+      icon: 'mdi-delete-alert',
+      iconColor: 'error',
+    })
 
-const handlePasswordResetSaved = () => {
-  closePasswordResetModal()
-  alert('Password has been reset successfully')
+    // Execute the confirmation action
+    await onConfirm()
+  } catch {
+    // User cancelled or action failed
+  }
 }
 
 onMounted(async () => {
@@ -187,77 +135,11 @@ onMounted(async () => {
     return
   }
 
-  try {
-    const userData = await userService.getUsers()
-    users.value = userData
-    loading.value = false
-  } catch (err) {
-    error.value = 'Failed to load users. Please try again later.'
-    console.error('Error loading users:', err)
-  }
+  // Let child components handle their own loading
+  loading.value = false
 })
-
-const sortBy = (key) => {
-  if (sortKey.value === key) {
-    sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
-  } else {
-    sortKey.value = key
-    sortOrder.value = 'asc'
-  }
-}
-
-const sortedAndFilteredUsers = computed(() => {
-  return [...users.value].sort((a, b) => {
-    const aVal = a[sortKey.value]
-    const bVal = b[sortKey.value]
-
-    if (aVal === bVal) return 0
-    
-    const comparison = aVal > bVal ? 1 : -1
-    return sortOrder.value === 'asc' ? comparison : -comparison
-  })
-})
-
-const editUser = async (user) => {
-  editingUser.value = user
-  showNewUserModal.value = true
-}
-
-const closeUserModal = () => {
-  showNewUserModal.value = false
-  editingUser.value = null
-}
-
-const handleUserSaved = (user) => {
-  if (editingUser.value) {
-    const index = users.value.findIndex(u => u.id === user.id)
-    if (index !== -1) {
-      users.value[index] = user
-    }
-  } else {
-    users.value.push(user)
-  }
-}
-
-const deleteUser = async (user) => {
-  if (!confirm(`Are you sure you want to delete user ${user.username}?`)) {
-    return
-  }
-
-  try {
-    await userService.deleteUser(user.id)
-    users.value = users.value.filter(u => u.id !== user.id)
-  } catch (err) {
-    error.value = 'Failed to delete user. Please try again.'
-    console.error('Error deleting user:', err)
-  }
-}
-
-const saveSettings = async () => {
-  try {
-    // TODO: Implement settings API
-  } catch (err) {
-    error.value = 'Failed to save settings. Please try again.'
-  }
-}
 </script>
+
+<style scoped>
+@import '@/styles/admin-dashboard-table.css';
+</style>

@@ -1,22 +1,53 @@
 <template>
-    <div v-if="address" class="mt-6">
-      <h4 class="text-md font-medium text-gray-900 dark:text-white">Address</h4>
-      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div class="sm:col-span-2">
-          <BaseDisplayField label="Street" :value="address.street" />
-        </div>
-        <BaseDisplayField label="City" :value="address.city" />
-        <BaseDisplayField label="State" :value="address.state" />
-        <BaseDisplayField label="Country" :value="address.country" />
-        <BaseDisplayField label="Postal Code" :value="address.postal_code" />
-      </div>
-    </div>
-  </template>
-  
-  <script setup>
-  import BaseDisplayField from './BaseDisplayField.vue';
-  
-  defineProps({
-    address: { type: Object, default: null },
-  });
-  </script>
+  <v-card v-if="address" class="mt-4" variant="outlined">
+    <v-card-title>
+      <v-icon start>mdi-map-marker-outline</v-icon>
+      Address
+    </v-card-title>
+
+    <v-card-text>
+      <v-row>
+        <v-col cols="12">
+          <div class="mb-3">
+            <v-label class="text-subtitle-2 font-weight-medium mb-1">Street</v-label>
+            <div class="text-body-2 text-medium-emphasis">{{ address.street || 'N/A' }}</div>
+          </div>
+        </v-col>
+
+        <v-col cols="12" sm="6">
+          <div class="mb-3">
+            <v-label class="text-subtitle-2 font-weight-medium mb-1">City</v-label>
+            <div class="text-body-2 text-medium-emphasis">{{ address.city || 'N/A' }}</div>
+          </div>
+        </v-col>
+
+        <v-col cols="12" sm="6">
+          <div class="mb-3">
+            <v-label class="text-subtitle-2 font-weight-medium mb-1">State</v-label>
+            <div class="text-body-2 text-medium-emphasis">{{ address.state || 'N/A' }}</div>
+          </div>
+        </v-col>
+
+        <v-col cols="12" sm="6">
+          <div class="mb-3">
+            <v-label class="text-subtitle-2 font-weight-medium mb-1">Country</v-label>
+            <div class="text-body-2 text-medium-emphasis">{{ address.country || 'N/A' }}</div>
+          </div>
+        </v-col>
+
+        <v-col cols="12" sm="6">
+          <div class="mb-3">
+            <v-label class="text-subtitle-2 font-weight-medium mb-1">Postal Code</v-label>
+            <div class="text-body-2 text-medium-emphasis">{{ address.postal_code || 'N/A' }}</div>
+          </div>
+        </v-col>
+      </v-row>
+    </v-card-text>
+  </v-card>
+</template>
+
+<script setup>
+defineProps({
+  address: { type: Object, default: null },
+})
+</script>

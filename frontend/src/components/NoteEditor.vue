@@ -1,38 +1,82 @@
 <template>
-  <div class="note-editor">
-    <div class="editor-toolbar border-b border-gray-200 dark:border-gray-700 p-2 flex gap-2">
-      <button
-        v-for="(action, index) in editorActions"
-        :key="index"
-        @click="action.action"
-        :class="[
-          'p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300',
-          { 'bg-gray-100 dark:bg-gray-700': action.isActive?.() }
-        ]"
-        :title="action.title"
+  <div>
+    <!-- Normal View -->
+    <component
+      :is="variant === 'card' ? 'v-card' : 'div'"
+      v-if="!expanded"
+      :variant="variant === 'card' ? 'outlined' : undefined"
+      :class="variant === 'card' ? 'note-editor' : 'note-editor-container'"
+    >
+      <EditorToolbar
+        :actions="editorActions"
+        :saving="saving"
+        :last-saved-time="lastSavedTime"
+        :format-last-saved="formatLastSaved"
+        :expanded="expanded"
+        @toggle-expand="expanded = !expanded"
+      />
+
+      <component
+        :is="variant === 'card' ? 'v-card-text' : 'div'"
+        class="pa-4"
+        :class="{ 'read-only-notes': isEditing === false }"
+        style="min-height: 200px"
       >
-        <font-awesome-icon :icon="action.icon" />
-      </button>
-    </div>
-    <div class="p-4 min-h-[200px] bg-white dark:bg-gray-800">
-      <editor-content :editor="editor" class="prose dark:prose-invert max-w-none text-gray-900 dark:text-gray-100" />
-    </div>
-    <div class="flex justify-end p-2 text-sm text-gray-500 dark:text-gray-400">
-      <span v-if="saving">Saving...</span>
-      <span v-else-if="lastSavedTime">Last saved: {{ formatLastSaved }}</span>
-    </div>
+        <editor-content :editor="editor" class="tiptap-content" />
+      </component>
+    </component>
+
+    <!-- Full Screen Dialog View -->
+    <v-dialog v-model="expanded" :scrim="true" fullscreen transition="dialog-bottom-transition">
+      <v-card class="d-flex flex-column" style="height: 100vh">
+        <v-toolbar color="primary" dark>
+          <v-toolbar-title>
+            <v-icon start>mdi-note-text</v-icon>
+            Case Notes Editor
+          </v-toolbar-title>
+          <v-spacer />
+          <v-chip
+            v-if="isEditing !== undefined"
+            :color="isEditing ? 'warning' : 'primary'"
+            variant="tonal"
+            size="small"
+            class="me-3"
+          >
+            {{ isEditing ? 'Editing' : 'View Mode' }}
+          </v-chip>
+          <v-btn icon="mdi-close" @click="expanded = false" />
+        </v-toolbar>
+
+        <div class="flex-grow-1 d-flex flex-column overflow-hidden">
+          <EditorToolbar
+            :actions="editorActions"
+            :saving="saving"
+            :last-saved-time="lastSavedTime"
+            :format-last-saved="formatLastSaved"
+            :expanded="expanded"
+            @toggle-expand="expanded = !expanded"
+          />
+
+          <v-container fluid class="flex-grow-1 overflow-auto pa-6">
+            <v-row justify="center">
+              <v-col cols="12" lg="10" xl="8">
+                <div :class="{ 'read-only-notes': isEditing === false }">
+                  <editor-content :editor="editor" class="tiptap-content fullscreen-editor" />
+                </div>
+              </v-col>
+            </v-row>
+          </v-container>
+        </div>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 
 <script setup>
-import { useEditor, EditorContent } from '@tiptap/vue-3';
-import StarterKit from '@tiptap/starter-kit';
-import Underline from '@tiptap/extension-underline';
-import Link from '@tiptap/extension-link';
-import { onBeforeUnmount, ref, watch, defineEmits, defineProps, computed } from 'vue';
-import { caseService } from '../services/case';
-import Placeholder from '@tiptap/extension-placeholder';
-import { formatDistanceToNow } from 'date-fns';
+import { EditorContent } from '@tiptap/vue-3'
+import { defineEmits, defineProps, ref } from 'vue'
+import { useCaseNoteSave } from '../composables/useCaseNoteSave'
+import EditorToolbar from './editor/EditorToolbar.vue'
 
 const props = defineProps({
   modelValue: {
@@ -43,163 +87,182 @@ const props = defineProps({
     type: Number,
     required: true,
   },
-});
+  isEditing: {
+    type: Boolean,
+    default: undefined,
+  },
+  saveMode: {
+    type: String,
+    default: 'auto',
+    validator: (value) => ['auto', 'manual'].includes(value),
+  },
+  variant: {
+    type: String,
+    default: 'card',
+    validator: (value) => ['card', 'plain'].includes(value),
+  },
+})
 
-const emit = defineEmits(['update:modelValue']);
+const emit = defineEmits(['update:modelValue'])
 
-const lastSaved = ref(null);
-const lastSavedTime = ref(null);
-const saving = ref(false);
+const expanded = ref(false)
 
-const formatLastSaved = computed(() => {
-  if (!lastSavedTime.value) return '';
-  return formatDistanceToNow(lastSavedTime.value, { addSuffix: true });
-});
-
-const editorActions = computed(() => [
+const { editor, editorActions, saving, lastSavedTime, formatLastSaved } = useCaseNoteSave(
+  props,
+  emit,
   {
-    icon: ['fas', 'bold'],
-    title: 'Bold',
-    action: () => editor.value?.chain().focus().toggleBold().run(),
-    isActive: () => editor.value?.isActive('bold'),
+    saveMode: props.saveMode,
   },
-  {
-    icon: ['fas', 'italic'],
-    title: 'Italic',
-    action: () => editor.value?.chain().focus().toggleItalic().run(),
-    isActive: () => editor.value?.isActive('italic'),
-  },
-  {
-    icon: ['fas', 'underline'],
-    title: 'Underline',
-    action: () => editor.value?.chain().focus().toggleUnderline().run(),
-    isActive: () => editor.value?.isActive('underline'),
-  },
-  {
-    icon: ['fas', 'strikethrough'],
-    title: 'Strike',
-    action: () => editor.value?.chain().focus().toggleStrike().run(),
-    isActive: () => editor.value?.isActive('strike'),
-  },
-  {
-    icon: ['fas', 'list-ul'],
-    title: 'Bullet List',
-    action: () => editor.value?.chain().focus().toggleBulletList().run(),
-    isActive: () => editor.value?.isActive('bulletList'),
-  },
-  {
-    icon: ['fas', 'list-ol'],
-    title: 'Ordered List',
-    action: () => editor.value?.chain().focus().toggleOrderedList().run(),
-    isActive: () => editor.value?.isActive('orderedList'),
-  },
-  {
-    icon: ['fas', 'quote-right'],
-    title: 'Blockquote',
-    action: () => editor.value?.chain().focus().toggleBlockquote().run(),
-    isActive: () => editor.value?.isActive('blockquote'),
-  },
-]);
-
-const editor = useEditor({
-  content: props.modelValue || '',
-  extensions: [
-    StarterKit,
-    Underline,
-    Link,
-    Placeholder.configure({
-      placeholder: 'Write your notes here...',
-    }),
-  ],
-  onUpdate: ({ editor }) => {
-    const content = editor.getHTML();
-    emit('update:modelValue', content);
-    triggerSave();
-  },
-  editorProps: {
-    attributes: {
-      class: 'prose dark:prose-invert focus:outline-none min-h-[150px] text-gray-900 dark:text-gray-100',
-    },
-  },
-});
-
-watch(
-  () => props.modelValue,
-  (newVal) => {
-    const currentContent = editor.value?.getHTML();
-    if (newVal !== currentContent && editor.value) {
-      editor.value.commands.setContent(newVal || '', false);
-    }
-  }
-);
-
-const saveNotes = async () => {
-  if (!editor.value) return;
-  
-  const content = editor.value.getHTML();
-  if (content === lastSaved.value) return;
-  
-  try {
-    saving.value = true;
-    await caseService.updateCase(props.caseId, { notes: content });
-    lastSaved.value = content;
-    lastSavedTime.value = new Date();
-  } catch (error) {
-    console.error('Failed to save notes:', error);
-  } finally {
-    saving.value = false;
-  }
-};
-
-let saveTimeout;
-const triggerSave = () => {
-  clearTimeout(saveTimeout);
-  saveTimeout = setTimeout(saveNotes, 1000);
-};
-
-onBeforeUnmount(() => {
-  clearTimeout(saveTimeout);
-  if (editor.value) {
-    const content = editor.value.getHTML();
-    if (content !== lastSaved.value) {
-      saveNotes();
-    }
-    editor.value.destroy();
-  }
-});
+)
 </script>
 
-<style>
-.note-editor {
-  @apply border rounded-lg dark:border-gray-700;
+<style scoped>
+.note-editor .tiptap-content .ProseMirror,
+.note-editor-container .tiptap-content .ProseMirror {
+  outline: none;
+  min-height: 150px;
 }
 
-.note-editor .ProseMirror {
-  @apply min-h-[200px] outline-none;
-}
-
-.note-editor .ProseMirror p.is-editor-empty:first-child::before {
-  @apply text-gray-400 dark:text-gray-500;
+.note-editor .tiptap-content .ProseMirror p.is-editor-empty:first-child::before,
+.note-editor-container .tiptap-content .ProseMirror p.is-editor-empty:first-child::before {
+  color: rgb(var(--v-theme-on-surface-variant));
   content: attr(data-placeholder);
   float: left;
   height: 0;
   pointer-events: none;
 }
 
-/* Additional styling for the editor content */
-.note-editor .prose {
-  @apply max-w-none;
+/* TipTap editor content styling */
+.note-editor .tiptap-content h1,
+.note-editor .tiptap-content h2,
+.note-editor .tiptap-content h3,
+.note-editor-container .tiptap-content h1,
+.note-editor-container .tiptap-content h2,
+.note-editor-container .tiptap-content h3 {
+  margin: 16px 0 8px;
+  line-height: 1.2;
+  font-weight: 600;
 }
 
-.note-editor .prose :where(blockquote):not(:where([class~="not-prose"] *)) {
-  @apply border-l-4 border-gray-300 dark:border-gray-600;
+.note-editor .tiptap-content h1,
+.note-editor-container .tiptap-content h1 {
+  font-size: 1.5rem;
+}
+.note-editor .tiptap-content h2,
+.note-editor-container .tiptap-content h2 {
+  font-size: 1.3rem;
+}
+.note-editor .tiptap-content h3,
+.note-editor-container .tiptap-content h3 {
+  font-size: 1.1rem;
 }
 
-.note-editor .prose :where(ul > li):not(:where([class~="not-prose"] *))::marker {
-  @apply text-gray-500 dark:text-gray-400;
+.note-editor .tiptap-content ul,
+.note-editor .tiptap-content ol,
+.note-editor-container .tiptap-content ul,
+.note-editor-container .tiptap-content ol {
+  padding-left: 24px;
+  margin: 8px 0;
 }
 
-.note-editor .prose :where(ol > li):not(:where([class~="not-prose"] *))::marker {
-  @apply text-gray-500 dark:text-gray-400;
+.note-editor .tiptap-content blockquote,
+.note-editor-container .tiptap-content blockquote {
+  border-left: 4px solid rgb(var(--v-theme-primary));
+  margin: 16px 0;
+  padding-left: 16px;
+  font-style: italic;
+  color: rgb(var(--v-theme-on-surface-variant));
+}
+
+.note-editor .tiptap-content a,
+.note-editor-container .tiptap-content a {
+  color: rgb(var(--v-theme-primary));
+  text-decoration: underline;
+}
+
+.note-editor .tiptap-content p,
+.note-editor-container .tiptap-content p {
+  margin: 8px 0;
+}
+
+/* Highlight styling */
+.note-editor .tiptap-content mark,
+.note-editor-container .tiptap-content mark {
+  background-color: rgb(var(--v-theme-warning));
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
+/* Task list styling */
+.note-editor .tiptap-content .task-list,
+.note-editor-container .tiptap-content .task-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+.note-editor .tiptap-content .task-item,
+.note-editor-container .tiptap-content .task-item {
+  display: flex;
+  align-items: flex-start;
+  margin: 4px 0;
+}
+
+.note-editor .tiptap-content .task-item > label,
+.note-editor-container .tiptap-content .task-item > label {
+  flex: 0 0 auto;
+  margin-right: 8px;
+  margin-top: 2px;
+  user-select: none;
+}
+
+.note-editor .tiptap-content .task-item > div,
+.note-editor-container .tiptap-content .task-item > div {
+  flex: 1 1 auto;
+}
+
+.note-editor .tiptap-content .task-item input[type='checkbox'],
+.note-editor-container .tiptap-content .task-item input[type='checkbox'] {
+  margin: 0;
+}
+
+.note-editor .tiptap-content .task-item[data-checked='true'] > div,
+.note-editor-container .tiptap-content .task-item[data-checked='true'] > div {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+/* Read-only styling */
+.read-only-notes {
+  background-color: rgb(var(--v-theme-surface-variant), 0.05) !important;
+}
+
+.read-only-notes .tiptap-content .ProseMirror {
+  cursor: default;
+  background-color: rgb(var(--v-theme-surface-variant), 0.03) !important;
+}
+
+.read-only-notes .tiptap-content .ProseMirror * {
+  pointer-events: none;
+}
+
+/* Full screen editor styles */
+.fullscreen-editor .ProseMirror {
+  outline: none;
+  min-height: 400px;
+  background: rgb(var(--v-theme-surface));
+  border-radius: 4px;
+  padding: 24px;
+}
+
+.fullscreen-editor .ProseMirror:focus {
+  box-shadow: 0 0 0 2px rgba(var(--v-theme-primary), 0.2);
+}
+
+.fullscreen-editor .ProseMirror p.is-editor-empty:first-child::before {
+  color: rgb(var(--v-theme-on-surface-variant));
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
 }
 </style>

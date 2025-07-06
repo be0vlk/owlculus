@@ -1,124 +1,191 @@
 <template>
-  <div v-if="show" class="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-    <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-      <!-- Background overlay -->
-      <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" @click="$emit('close')"></div>
-
-      <!-- Modal panel -->
-      <div class="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
-        <div class="sm:flex sm:items-start">
-          <div class="mt-3 text-center sm:mt-0 sm:text-left w-full">
-            <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white" id="modal-title">
-              Add User to Case
-            </h3>
-
-            <div v-if="loading" class="flex justify-center mt-4">
-              <LoadingSpinner size="medium" />
-            </div>
-            <div v-else-if="error" class="mt-2 p-2 bg-red-100 text-red-700 rounded-md text-sm">
-              {{ error }}
-            </div>
-            <div v-else class="mt-4 space-y-4">
-              <div class="flex flex-col">
-                <BaseSelect
-                  label="Select User"
-                  id="user"
-                  v-model="selectedUserId"
-                  :options="[
-                    { value: '', label: 'Select a user' },
-                    ...availableUsers.map(user => ({
-                      value: user.id,
-                      label: user.email
-                    }))
-                  ]"
-                />
+  <v-dialog v-model="dialogVisible" max-width="600px" persistent>
+    <v-card prepend-icon="mdi-account-plus" title="Add User to Case">
+      <v-card-text>
+        <!-- Loading State -->
+        <v-row v-if="loading" justify="center">
+          <v-col cols="12" class="text-center">
+            <v-card variant="outlined" class="pa-8">
+              <v-progress-circular class="mb-4" color="primary" indeterminate size="64" width="4" />
+              <div class="text-h6">Loading Users...</div>
+              <div class="text-body-2 text-medium-emphasis">
+                Please wait while we fetch available users
               </div>
-            </div>
+            </v-card>
+          </v-col>
+        </v-row>
 
-            <!-- Modal footer -->
-            <div class="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
-              <button
-                type="button"
-                :disabled="!selectedUserId || loading"
-                class="ml-3 inline-flex justify-center px-4 py-2 text-sm font-medium text-white bg-cyan-600 border border-transparent rounded-md hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                @click="handleAddUser"
+        <!-- Error State -->
+        <v-alert
+          v-else-if="error"
+          type="error"
+          variant="tonal"
+          border="start"
+          icon="mdi-alert-circle"
+          class="mb-6"
+        >
+          <v-alert-title>Error Loading Users</v-alert-title>
+          {{ error }}
+        </v-alert>
+
+        <!-- User Selection Form -->
+        <v-form v-else ref="formRef" v-model="isFormValid">
+          <v-card variant="outlined" class="mb-6">
+            <v-card-title class="text-subtitle-1 pb-2">
+              <v-icon start>mdi-account-group</v-icon>
+              User Selection
+            </v-card-title>
+
+            <v-card-text>
+              <v-select
+                v-model="selectedUserId"
+                :items="enhancedUsers"
+                item-title="displayText"
+                item-value="id"
+                label="Select User"
+                variant="outlined"
+                density="comfortable"
+                placeholder="Choose a user to add to this case"
+                :rules="[rules.required]"
+                class="mb-4"
+              />
+
+              <v-checkbox
+                v-model="isLead"
+                color="primary"
+                hint="Lead investigators have primary responsibility for the case"
+                label="Set as Lead Investigator"
+                persistent-hint
+              />
+
+              <v-alert
+                v-if="availableUsers.length === 0"
+                type="info"
+                variant="tonal"
+                icon="mdi-information"
               >
-                Add User
-              </button>
-              <button
-                type="button"
-                class="mt-3 sm:mt-0 inline-flex justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-600"
-                @click="$emit('close')"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+                <v-alert-title>No Users Available</v-alert-title>
+                All users are already assigned to this case or no users exist in the system.
+              </v-alert>
+            </v-card-text>
+          </v-card>
+        </v-form>
+      </v-card-text>
+
+      <v-divider />
+
+      <ModalActions
+        submit-text="Add User"
+        submit-icon="mdi-account-plus"
+        :submit-disabled="!isFormValid || loading"
+        :loading="loading"
+        @cancel="$emit('close')"
+        @submit="handleAddUser"
+      />
+    </v-card>
+  </v-dialog>
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue';
-import { userService } from '@/services/user';
-import { caseService } from '@/services/case';
-import LoadingSpinner from './LoadingSpinner.vue';
-import BaseSelect from './BaseSelect.vue';
+import { computed, ref, watch } from 'vue'
+import { userService } from '@/services/user'
+import { caseService } from '@/services/case'
+import ModalActions from './ModalActions.vue'
 
 const props = defineProps({
   show: {
     type: Boolean,
-    required: true
+    required: true,
   },
   caseId: {
     type: Number,
-    required: true
-  }
-});
+    required: true,
+  },
+})
 
-const emit = defineEmits(['close', 'userAdded']);
+const emit = defineEmits(['close', 'userAdded'])
 
-const loading = ref(false);
-const error = ref(null);
-const selectedUserId = ref('');
-const availableUsers = ref([]);
+// Reactive variables
+const formRef = ref(null)
+const isFormValid = ref(false)
+const loading = ref(false)
+const error = ref(null)
+const selectedUserId = ref('')
+const availableUsers = ref([])
+const isLead = ref(false)
+
+// Validation rules
+const rules = {
+  required: (value) => !!value || 'Please select a user',
+}
+
+const dialogVisible = computed({
+  get: () => props.show,
+  set: (value) => {
+    if (!value) {
+      emit('close')
+    }
+  },
+})
+
+// Enhanced computed property for user display
+const enhancedUsers = computed(() => {
+  return availableUsers.value.map((user) => ({
+    ...user,
+    displayText: `${user.email} - ${user.username}`,
+  }))
+})
 
 const loadUsers = async () => {
   try {
-    loading.value = true;
-    error.value = null;
-    availableUsers.value = await userService.getUsers();
+    loading.value = true
+    error.value = null
+    availableUsers.value = await userService.getUsers()
   } catch (err) {
-    error.value = err.message || 'Failed to load users';
+    error.value = err.response?.data?.message || err.message || 'Failed to load users'
   } finally {
-    loading.value = false;
+    loading.value = false
   }
-};
+}
 
 const handleAddUser = async () => {
-  if (!selectedUserId.value) return;
-  
-  try {
-    loading.value = true;
-    error.value = null;
-    await caseService.addUserToCase(props.caseId, selectedUserId.value);
-    emit('userAdded');
-    emit('close');
-  } catch (err) {
-    error.value = err.message || 'Failed to add user to case';
-  } finally {
-    loading.value = false;
-  }
-};
+  // Validate form before submission
+  if (!formRef.value) return
 
-watch(() => props.show, (newValue) => {
-  if (newValue) {
-    loadUsers();
-  } else {
-    // Clear selection when modal is closed
-    selectedUserId.value = '';
+  const { valid } = await formRef.value.validate()
+  if (!valid) return
+
+  try {
+    loading.value = true
+    error.value = null
+    await caseService.addUserToCase(props.caseId, selectedUserId.value, isLead.value)
+    emit('userAdded')
+    emit('close')
+  } catch (err) {
+    error.value = err.response?.data?.message || err.message || 'Failed to add user to case'
+  } finally {
+    loading.value = false
   }
-});
+}
+
+// Watch for dialog opening/closing
+watch(
+  () => props.show,
+  (newValue) => {
+    if (newValue) {
+      loadUsers()
+      // Reset form validation when dialog opens
+      setTimeout(() => {
+        if (formRef.value) {
+          formRef.value.resetValidation()
+        }
+      }, 100)
+    } else {
+      // Clear selection and errors when modal is closed
+      selectedUserId.value = ''
+      error.value = null
+      isLead.value = false
+    }
+  },
+)
 </script>

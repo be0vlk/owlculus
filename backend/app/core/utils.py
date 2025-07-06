@@ -2,9 +2,9 @@
 Utility functions used throughout the application.
 """
 
+import base64
 from datetime import datetime, timezone
 from pathlib import Path
-import base64
 
 
 def get_project_root() -> Path:

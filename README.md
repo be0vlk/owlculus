@@ -4,98 +4,112 @@
   <img src="https://i.imgur.com/Cuf4hMK.png" />
 </p>
 
-Owlculus is purpose built for managing OSINT investigation cases and running useful tools right in the browser.
+Owlculus is a comprehensive OSINT case management platform built for solo work or investigative teams. Manage cases,
+collaborate, and run OSINT tools directly in your browser.
 
-**NOTE:** This project is now and will always be 100% free and open-source, no matter how much it improves. If you're feeling generous, donate to your favorite charity instead :)
+**100% free and open-source forever, no matter what.**
+
+> **Active Development**: Note that Owlculus is under active development. Run `git pull` in the repo root regularly for
+> updates. Never deploy the "
+> dev" branch to production!
 
 ## Features
-- Create and track cases with preset report number formats.
-- Web-based multi-user collaboration with predefined roles for different permissions.
-- The backend RESTful API architecture enables various types of automation and integration.
-- Run useful OSINT tools right in the app and associate results with cases.
-- Automatically scan for correlations between cases. Investigated John Doe two months ago in a different case? The scan will find it.
+
+- **Case Management**: Create and track cases with customizable report numbering
+- **Multi-User Collaboration**: Role-based access controls (Admin, Investigator, Analyst)
+- **Entity System**: Track individual people, companies, domains, IP addresses, and vehicles each with dedicated
+  notetaking
+- **Evidence Management**: Organized file storage with folder templates and integration with the browser extension
+- **OSINT Plugin Ecosystem**: Run popular open-source and custom OSINT tools right in your browser
+- **Cross-Case Correlation**: Discover connections between investigations with the Correlation Scan plugin
+- **Automated Hunts**: Multi-step OSINT workflows for comprehensive research (WIP)
+- **Browser Extension**: Capture web pages as HTML or screenshots as you investigate and save directly to case evidence
+- **RESTful API**: Complete API backend for easy automation and integrations
 
 ## Roadmap
-I will be very actively maintaining and improving this application and am always open to suggestions. If you have any of those, or come across any bugs, please feel free to open an issue right here on GitHub. Some things definitely planned are:
 
-- More custom built and open-source tool compatibility on the plugins dashboard
-- Different ways to add evidence to case files (browser extension?)
-- Powerful LLM integration
-- More robust analytics and other helpful insights
+Planned features and improvements:
+
+- **Enhanced Plugin Library**: More OSINT tools and custom integrations
+- **LLM Integration**: AI-powered analysis and insights
+- **Advanced Analytics**: Cross-case patterns and timeline analysis, charts, etc.
+- **API Enhancements**: Webhook support and third-party integrations
+- **Cloud Deployment**: Native support for AWS, GCP, and Azure
+- **Python SDK**: Making it even easier to integrate Owlculus into your flow
+
+Open to suggestions via GitHub issues!
 
 ## Installation
-I highly recommend installing this on Linux (specifically tested on Debian 11 and Ubuntu 22.04), although not strictly required. I've included an automation script to make setup a bit easier. You MUST follow each of these steps for the app to install and work properly.
 
-Run all of the following commands from the project root folder:
+**Prerequisites:** [Docker](https://docs.docker.com/get-docker/)
+and [Docker Compose](https://docs.docker.com/compose/install/)
 
 ```bash
+git clone https://github.com/be0vlk/owlculus.git
+cd owlculus
 chmod +x setup.sh
 ./setup.sh
-python3 backend/app/database/init_db.py
 ```
 
-See, wasn't that easy?
+**Access URLs:**
 
-## Usage
-### Startup
-After installation, navigate to the backend folder and run the following commands:
+- Frontend: http://localhost:8081
+- Backend API: http://localhost:8000
+
+**Setup Options:**
+
+*Tested on Linux only. Windows users should use WSL.*
+
+- `./setup.sh` - Standard interactive setup. If just for your personal use, you should select Local Production mode when prompted.
+- `./setup.sh --clean` - Clean installation
+- `./setup.sh --non-interactive` - Use defaults
+
+If you're doing any development, you can add the `--testdata` flag to any setup mode to prepoulate some basic data for
+testing with.
+
+### Management Commands
 
 ```bash
-source ../venv/bin/activate
-uvicorn app.main:app --reload
+make start-dev     # Start development services
+make stop          # Stop all services
+make logs          # View service logs
+make test          # Run backend tests
+make clean         # Remove all containers and volumes (⚠️ destroys data)
 ```
 
-Then to start the frontend, navigate to the frontend folder and run:
+See `make help` for all commands.
 
-```bash
-npm run dev
-```
+## Browser Extension
 
-You should now be able to open the app in your browser on http://localhost:5173 or whatever you have set as the frontend url in your .env file and log in with the admin user you created during setup.
+Capture web pages directly to case evidence.
 
-### Case Dashboard
-![Imgur](https://i.imgur.com/LqT2jQf.png)
+**Installation:** Load unpacked extension from `extension/` directory in Chrome developer mode.
+**Usage:** Click extension icon, select case, capture page HTML.
 
-After logging in as the admin user, you'll be redirected to the main case dashboard where you can create your first case by clicking the aptly named "New Case" button. A modal will pop up asking for basic case details. Optionally, before you create the case, click "Clients" in the sidebar to add a client which you will then be able to add the case to. The database initialization script will have already created a client called "Personal" for any cases you are not working for a real client.
+See [extension/README.md](extension/README.md) for details.
 
-**NOTE**: Non-admin users cannot interact with any cases they are not explicitly assigned to, and only admins can assign them. Cases that a user is not assigned to will not show up in the dashboard and will not be accessible via the API.
+## Quick Start
 
-Now, double-click directly on the case in the table and you'll be redirected to that case's detail page.
+1. **Login** with admin credentials from setup
+2. **Create a case** using "New Case" button, then click on it in the table to access
+3. **Add entities** (person, company, domain, IP address, vehicle) which all come with templated notes
+4. **Upload evidence** in the "Evidence" tab using folder templates or custom structure
+5. **Run OSINT plugins** from the "Plugins" page with optional evidence saving
+6. **Execute hunts** for automated multi-step investigations (WIP)
 
-### Case Detail
-![Imgur](https://i.imgur.com/o5XjCc5.png)
+## User Roles
 
-This page displays the basic case information and allows you to create and view notes, upload/download evidence to the case folder, add users to the case, create entities (more on that below) and update the case status. When you first create a case, you will not see the entity tabs so don't worry if your screen looks a little different at first.
+| Role             | Access         | Permissions                                 |
+|------------------|----------------|---------------------------------------------|
+| **Admin**        | All cases      | Full access, user management, system config |
+| **Investigator** | Assigned cases | Read/write, run plugins, no user management |
+| **Analyst**      | Assigned cases | Read-only access                            |
 
-#### Entities
-This is a key part of Owlculus functionality. Rather than define the case type when you create it, like we did in the previous version, you now add individual entities to the case. For now, the only entity types are `person`, `company`, `domain` and `ip_address`. Each entity is its own standalone component and each type comes with predefined templates for note-taking.
+## Contributing
 
-When you first create an entity, only some of the template will show up. After you create it, you can click the "View Details" button to expand it. This will show you the full template and allow you to add several additional notes, all conveniently organized by category.
+If you find the app useful and feel so inclined, please consider fueling my future coding sessions with a donation
+below. Anything and everything helps and is greatly appreciated :)
 
-The app is smart enough to recognize certain relationships between entities and automatically create/link them. For example, if you create a person entity for John Doe and add "Jane Doe" as his sister within his notes, a new entity will be created for Jane Doe and automatically linked to John. This will be much more robust in the future but try it out!
+GitHub Issues and Pull Requests always welcome too!
 
-#### Evidence
-
-![Imgur](https://i.imgur.com/OVFMt6o.png)
-This page allows you to upload and download evidence to the case folder. A default, organized virtual folder structure is created along with the case.
-
-### Plugins
-This page allows you to conveniently run certain OSINT tools right from the app. I have completely re-written this functionality compared to the old version of this app which means that, for now, it is limited in scope. However, it is designed to be extensible and I will be adding many more plugins soon!
-
-#### Correlation Plugin
-This plugin will scan for correlations between entities in cases. It will also automatically create output in the given case's evidence folder where you can download the results.
-
-![Imgur](https://i.imgur.com/cKtoJya.png)
-
-In this example, the match came up because John Doe and Billy Bob both have "Acme Co" listed as their employer in their respective cases. Output from this plugin is also automatically added to the case's evidence folder.
-
-**NOTE:** This will only reveal correlations between cases that are assigned to the current user. Hypothetically, there could still be cases that are not assigned to the user but have a correlation. Admins have access to everything.
-
-### Admin
-Basic admin portal that allows you to create, manage and delete users.
-
-`Admin` Full access to do anything in the app, including run all plugins, view and edit any case/client, etc.
-
-`Investigator` Standard read/write access to any cases they have been assigned to. This includes editing notes and running the various plugins offered in app. They cannot create cases.
-
-`Analyst` Essentially, read-only access. They can review notes and download evidence from any case they are assigned to, but have no access to any write operations or plugin runs.
+<a href="https://www.buymeacoffee.com/be0vlk" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>

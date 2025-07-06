@@ -1,196 +1,210 @@
 <template>
-  <div class="min-h-screen bg-gray-100 dark:bg-gray-900">
-    <div class="flex">
-      <!-- Sidebar -->
-      <Sidebar class="fixed inset-y-0 left-0" />
+  <BaseDashboard :error="error" :loading="loading" title="Cases">
+    <template #loading>
+      <v-card variant="outlined">
+        <v-card-title class="d-flex align-center pa-4 bg-surface">
+          <v-skeleton-loader type="text" width="200" />
+          <v-spacer />
+          <div class="d-flex ga-2">
+            <v-skeleton-loader type="button" width="80" />
+            <v-skeleton-loader type="button" width="90" />
+            <v-skeleton-loader type="button" width="100" />
+          </div>
+          <v-skeleton-loader type="button" width="120" class="ml-4" />
+          <v-skeleton-loader type="text" width="200" class="ml-2" />
+        </v-card-title>
+        <v-divider />
+        <v-skeleton-loader type="table" class="pa-4" />
+      </v-card>
+    </template>
 
-      <!-- Main content -->
-      <div class="flex-1 ml-64">
-        <header class="bg-white shadow dark:bg-gray-800">
-          <div class="max-w-7xl mx-auto px-8 py-6">
-            <div class="flex justify-between items-center">
-              <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100">Case Dashboard</h1>
-              <button
-                v-if="authStore.requiresAdmin()"
-                @click="isNewCaseModalOpen = true"
-                class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-cyan-600 hover:bg-cyan-700 dark:bg-cyan-700 dark:hover:bg-cyan-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 dark:focus:ring-offset-gray-900"
+    <!-- Cases data table -->
+    <v-card variant="outlined">
+      <!-- Header -->
+      <v-card-title class="d-flex align-center pa-4 bg-surface">
+        <v-icon class="me-3" color="primary" icon="mdi-briefcase" size="large" />
+        <div class="flex-grow-1">
+          <div class="text-h6 font-weight-bold">Case Management</div>
+          <div class="text-body-2 text-medium-emphasis">Manage investigations and assignments</div>
+        </div>
+        <div class="d-flex align-center ga-2">
+          <v-btn
+            v-if="authStore.requiresAdmin()"
+            color="primary"
+            prepend-icon="mdi-plus"
+            variant="flat"
+            @click="isNewCaseModalOpen = true"
+          >
+            New Case
+          </v-btn>
+          <v-tooltip location="bottom" text="Refresh case list">
+            <template #activator="{ props }">
+              <v-btn
+                :loading="loading"
+                icon="mdi-refresh"
+                v-bind="props"
+                variant="outlined"
+                @click="loadData"
+              />
+            </template>
+          </v-tooltip>
+        </div>
+      </v-card-title>
+
+      <v-divider />
+
+      <!-- Filters and Search Toolbar -->
+      <v-card-text class="pa-4">
+        <v-row align="center" class="mb-0">
+          <!-- Quick Filter Chips -->
+          <v-col cols="12" md="8">
+            <div class="d-flex align-center ga-2 flex-wrap">
+              <span class="text-body-2 font-weight-medium me-2">Filter:</span>
+              <v-chip-group
+                v-model="activeQuickFilter"
+                color="primary"
+                selected-class="text-primary"
+                variant="outlined"
               >
-                <svg class="-ml-1 mr-2 h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd" />
-                </svg>
-                New Case
-              </button>
+                <v-chip filter size="small" value="all"> All Cases </v-chip>
+                <v-chip filter size="small" value="my-cases"> My Cases </v-chip>
+                <v-chip filter size="small" value="unassigned"> Unassigned </v-chip>
+              </v-chip-group>
             </div>
-          </div>
-        </header>
-        <main class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-          <!-- Loading state -->
-          <div v-if="loading" class="flex justify-center items-center h-64">
-            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-500 dark:border-cyan-400"></div>
-          </div>
+          </v-col>
 
-          <!-- Error state -->
-          <div v-else-if="error" class="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-400 dark:border-red-500 p-4 mb-4">
-            <div class="flex">
-              <div class="flex-shrink-0">
-                <svg class="h-5 w-5 text-red-400 dark:text-red-500" viewBox="0 0 20 20" fill="currentColor">
-                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
-                </svg>
+          <!-- Controls -->
+          <v-col cols="12" md="4">
+            <div class="d-flex align-center ga-2 justify-end flex-wrap">
+              <!-- Show Closed Cases Switch -->
+              <div class="d-flex align-center flex-shrink-0">
+                <v-switch
+                  v-model="showClosedCases"
+                  class="me-2"
+                  color="primary"
+                  density="comfortable"
+                  hide-details
+                />
+                <span class="text-body-2 text-no-wrap">Show Closed</span>
               </div>
-              <div class="ml-3">
-                <p class="text-sm text-red-700 dark:text-red-400">{{ error }}</p>
-              </div>
-            </div>
-          </div>
 
-          <!-- Cases table -->
-          <div v-else class="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
-            <div class="px-6 py-5 border-b border-gray-200 dark:border-gray-700">
-              <div class="flex items-center justify-between">
-                <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-100">Cases</h2>
-                <div class="flex items-center space-x-4">
-                  <!-- Show Closed Cases Toggle -->
-                  <div class="flex items-center">
-                    <label for="showClosedCases" class="mr-3 text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Show Closed Cases
-                    </label>
-                    <button
-                      type="button"
-                      :class="[
-                        showClosedCases ? 'bg-cyan-600' : 'bg-gray-200',
-                        'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500'
-                      ]"
-                      role="switch"
-                      :aria-checked="showClosedCases"
-                      @click="toggleClosedCases"
-                    >
-                      <span
-                        :class="[
-                          showClosedCases ? 'translate-x-5' : 'translate-x-0',
-                          'pointer-events-none relative inline-block h-5 w-5 transform rounded-full bg-white dark:bg-gray-200 shadow ring-0 transition duration-200 ease-in-out'
-                        ]"
-                      >
-                        <span
-                          :class="[
-                            showClosedCases ? 'opacity-0 duration-100 ease-out' : 'opacity-100 duration-200 ease-in',
-                            'absolute inset-0 flex h-full w-full items-center justify-center transition-opacity'
-                          ]"
-                          aria-hidden="true"
-                        >
-                          <svg class="h-3 w-3 text-gray-400" fill="none" viewBox="0 0 12 12">
-                            <path
-                              d="M4 8l2-2m0 0l2-2M6 6L4 4m2 2l2 2"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                            />
-                          </svg>
-                        </span>
-                        <span
-                          :class="[
-                            showClosedCases ? 'opacity-100 duration-200 ease-in' : 'opacity-0 duration-100 ease-out',
-                            'absolute inset-0 flex h-full w-full items-center justify-center transition-opacity'
-                          ]"
-                          aria-hidden="true"
-                        >
-                          <svg class="h-3 w-3 text-cyan-600" fill="currentColor" viewBox="0 0 12 12">
-                            <path d="M3.707 5.293a1 1 0 00-1.414 1.414l1.414-1.414zM5 8l-.707.707a1 1 0 001.414 0L5 8zm4.707-3.293a1 1 0 00-1.414-1.414l1.414 1.414zm-7.414 2l2 2 1.414-1.414-2-2-1.414 1.414zm3.414 2l4-4-1.414-1.414-4 4 1.414 1.414z" />
-                          </svg>
-                        </span>
-                      </span>
-                    </button>
-                  </div>
-                  <!-- Search Box -->
-                  <div class="relative w-96">
-                    <input
-                      type="text"
-                      v-model="searchQuery"
-                      placeholder="Search cases..."
-                      class="w-full rounded-md border-0 py-2 pl-10 pr-3 text-gray-900 dark:text-gray-100 dark:bg-gray-700 ring-1 ring-inset ring-gray-300 dark:ring-gray-600 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:ring-2 focus:ring-cyan-600 text-sm"
-                    />
-                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <svg class="h-5 w-5 text-gray-400 dark:text-gray-500" viewBox="0 0 20 20" fill="currentColor">
-                        <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <!-- Search Field -->
+              <v-text-field
+                v-model="searchQuery"
+                class="flex-grow-1"
+                clearable
+                density="comfortable"
+                hide-details
+                label="Search cases..."
+                prepend-inner-icon="mdi-magnify"
+                style="min-width: 200px; max-width: 280px"
+                variant="outlined"
+              />
             </div>
-            <div class="overflow-x-auto">
-              <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead class="bg-gray-50 dark:bg-gray-700">
-                  <tr>
-                    <th 
-                      v-for="column in columns" 
-                      :key="column.key"
-                      scope="col" 
-                      class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 whitespace-nowrap"
-                      @click="sortBy(column.key)"
-                    >
-                      <div class="flex items-center space-x-1">
-                        <span>{{ column.label }}</span>
-                        <span v-if="sortKey === column.key" class="ml-2">
-                          {{ sortOrder === 'asc' ? '↑' : '↓' }}
-                        </span>
-                      </div>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                  <tr 
-                    v-for="case_ in sortedAndFilteredCases" 
-                    :key="case_.id" 
-                    class="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
-                    @dblclick="router.push(`/case/${case_.id}`)"
-                  >
-                    <td class="px-6 py-4 text-sm font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap">
-                      {{ case_.case_number }}
-                    </td>
-                    <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-300">
-                      {{ case_.title }}
-                    </td>
-                    <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-300 whitespace-nowrap">
-                      {{ getClientName(case_.client_id) }}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                      <span :class="[
-                        'px-3 py-1 text-sm font-medium rounded-full',
-                        case_.status === 'Open' 
-                          ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' 
-                          : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                      ]">
-                        {{ case_.status }}
-                      </span>
-                    </td>
-                    <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-300 whitespace-nowrap">
-                      {{ formatDate(case_.created_at) }}
-                    </td>
-                    <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-300">
-                      {{ case_.users?.map(user => user.username).join(', ') || 'Unassigned' }}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+          </v-col>
+        </v-row>
+      </v-card-text>
+
+      <v-divider />
+
+      <v-data-table
+        :headers="vuetifyHeaders"
+        :items="enhancedFilteredCases"
+        :loading="loading"
+        class="elevation-0 case-dashboard-table"
+        hover
+        item-key="id"
+        @click:row="handleRowClick"
+      >
+        <!-- Status chip -->
+        <template #[`item.status`]="{ item }">
+          <v-chip
+            :color="item.status === 'Open' ? 'success' : 'default'"
+            size="small"
+            variant="tonal"
+          >
+            {{ item.status }}
+          </v-chip>
+        </template>
+
+        <!-- Users column -->
+        <template #[`item.users`]="{ item }">
+          <div v-if="item.users?.length" class="d-flex flex-wrap ga-1">
+            <v-chip
+              v-for="user in item.users"
+              :key="user.id"
+              :color="user.is_lead ? 'primary' : 'grey-lighten-1'"
+              size="small"
+              variant="tonal"
+            >
+              <v-icon v-if="user.is_lead" size="x-small" start>mdi-star</v-icon>
+              {{ user.username }}
+            </v-chip>
           </div>
-        </main>
-      </div>
-    </div>
-    <NewCaseModal 
-      :is-open="isNewCaseModalOpen" 
-      @close="isNewCaseModalOpen = false" 
-      @created="handleCaseCreated" 
-    />
-  </div>
+          <v-chip v-else color="grey" size="small" variant="outlined"> Unassigned </v-chip>
+        </template>
+
+        <!-- Client name -->
+        <template #[`item.client_id`]="{ item }">
+          {{ getClientName(item.client_id) }}
+        </template>
+
+        <!-- Created date -->
+        <template #[`item.created_at`]="{ item }">
+          <span class="text-body-2">
+            {{ formatDate(item.created_at) }}
+          </span>
+        </template>
+
+        <!-- Empty state -->
+        <template #no-data>
+          <div class="text-center pa-12">
+            <v-icon class="mb-4" color="grey-lighten-1" icon="mdi-folder-open-outline" size="64" />
+            <h3 class="text-h6 font-weight-medium mb-2">
+              {{ getEmptyStateTitle() }}
+            </h3>
+            <p class="text-body-2 text-medium-emphasis mb-4">
+              {{ getEmptyStateMessage() }}
+            </p>
+            <v-btn
+              v-if="shouldShowCreateButton()"
+              color="primary"
+              prepend-icon="mdi-plus"
+              @click="isNewCaseModalOpen = true"
+            >
+              Create First Case
+            </v-btn>
+          </div>
+        </template>
+      </v-data-table>
+    </v-card>
+  </BaseDashboard>
+
+  <NewCaseModal
+    :is-open="isNewCaseModalOpen"
+    @close="isNewCaseModalOpen = false"
+    @created="handleCaseCreated"
+  />
+
+  <!-- Snackbar for notifications -->
+  <v-snackbar
+    v-model="snackbar.show"
+    :color="snackbar.color"
+    :timeout="snackbar.timeout"
+    location="top right"
+  >
+    {{ snackbar.text }}
+    <template #actions>
+      <v-btn variant="text" @click="snackbar.show = false"> Close </v-btn>
+    </template>
+  </v-snackbar>
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
-import Sidebar from '../components/Sidebar.vue'
+import { onMounted, ref, computed } from 'vue'
+import BaseDashboard from '../components/BaseDashboard.vue'
 import NewCaseModal from '../components/NewCaseModal.vue'
-import { useDashboard, columns } from '../composables/useDashboard'
+import { useDashboard } from '../composables/useDashboard'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
@@ -201,25 +215,126 @@ const {
   loading,
   error,
   searchQuery,
-  sortKey,
-  sortOrder,
   showClosedCases,
   loadData,
-  sortBy,
   getClientName,
   formatDate,
-  getAssignedUsers,
-  toggleClosedCases,
-  sortedAndFilteredCases
+  sortedAndFilteredCases,
+  cases,
 } = useDashboard()
 
 const isNewCaseModalOpen = ref(false)
+const activeQuickFilter = ref('all')
+
+const snackbar = ref({
+  show: false,
+  text: '',
+  color: 'success',
+  timeout: 4000,
+})
+
+const vuetifyHeaders = computed(() => [
+  { title: 'Case Number', value: 'case_number', sortable: true },
+  { title: 'Title', value: 'title', sortable: true },
+  { title: 'Client', value: 'client_id', sortable: true },
+  { title: 'Status', value: 'status', sortable: true },
+  { title: 'Created', value: 'created_at', sortable: true },
+  { title: 'Assigned Users', value: 'users', sortable: false },
+])
+
+const enhancedFilteredCases = computed(() => {
+  let filteredCases = sortedAndFilteredCases.value
+
+  // Apply quick filter
+  if (activeQuickFilter.value === 'my-cases' && authStore.user) {
+    filteredCases = filteredCases.filter((case_) =>
+      case_.users?.some((user) => user.id === authStore.user.id),
+    )
+  } else if (activeQuickFilter.value === 'unassigned') {
+    filteredCases = filteredCases.filter((case_) => !case_.users || case_.users.length === 0)
+  }
+
+  return filteredCases
+})
 
 const handleCaseCreated = (newCase) => {
   // Refresh the cases list
   loadData()
   isNewCaseModalOpen.value = false
+  showNotification(`Case "${newCase?.case_number || 'New case'}" created successfully`, 'success')
+}
+
+const handleRowClick = (event, { item }) => {
+  router.push(`/case/${item.id}`)
+}
+
+// Snackbar helper function
+const showNotification = (text, color = 'success') => {
+  snackbar.value.text = text
+  snackbar.value.color = color
+  snackbar.value.show = true
+}
+
+// Empty state functions
+const getEmptyStateTitle = () => {
+  if (searchQuery.value) {
+    return 'No results found'
+  } else if (activeQuickFilter.value === 'my-cases') {
+    return 'No cases assigned to you'
+  } else if (activeQuickFilter.value === 'unassigned') {
+    return 'No unassigned cases'
+  } else if ((cases.value || []).length === 0) {
+    return 'No cases yet'
+  } else {
+    return 'No cases match your filters'
+  }
+}
+
+const getEmptyStateMessage = () => {
+  if (searchQuery.value) {
+    return 'Try adjusting your search terms or removing filters to see more results.'
+  } else if (activeQuickFilter.value === 'my-cases') {
+    return "You haven't been assigned to any cases yet. Check with your administrator."
+  } else if (activeQuickFilter.value === 'unassigned') {
+    return 'All cases have been assigned to team members.'
+  } else if ((cases.value || []).length === 0) {
+    return 'Get started by creating your first investigation case.'
+  } else {
+    return 'Try adjusting your filters to see more cases.'
+  }
+}
+
+const shouldShowCreateButton = () => {
+  return (
+    (cases.value || []).length === 0 &&
+    !searchQuery.value &&
+    activeQuickFilter.value === 'all' &&
+    authStore.requiresAdmin()
+  )
 }
 
 onMounted(loadData)
 </script>
+
+<style scoped>
+.case-dashboard-table :deep(.v-data-table__tr:hover) {
+  background-color: rgb(var(--v-theme-primary), 0.04) !important;
+  cursor: pointer;
+}
+
+.case-dashboard-table :deep(.v-data-table__td) {
+  padding: 12px 16px !important;
+  border-bottom: 1px solid rgb(var(--v-theme-on-surface), 0.08) !important;
+}
+
+.case-dashboard-table :deep(.v-data-table__th) {
+  padding: 16px !important;
+  font-weight: 600 !important;
+  color: rgb(var(--v-theme-on-surface), 0.87) !important;
+  border-bottom: 2px solid rgb(var(--v-theme-on-surface), 0.12) !important;
+}
+
+.case-dashboard-table :deep(.v-data-table-rows-no-data) {
+  padding: 48px 16px !important;
+}
+</style>

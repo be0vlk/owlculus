@@ -1,138 +1,246 @@
 <template>
-  <div v-if="show" class="fixed inset-0 z-10 overflow-y-auto">
-    <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-      <!-- Background overlay -->
-      <div class="fixed inset-0 transition-opacity" aria-hidden="true">
-        <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
-      </div>
+  <v-dialog v-model="dialogVisible" max-width="600px" persistent scrollable>
+    <v-card>
+      <v-card-title class="d-flex align-center pa-4 bg-primary">
+        <v-icon start color="white" size="large">
+          {{ user ? 'mdi-account-edit' : 'mdi-account-plus' }}
+        </v-icon>
+        <div class="text-white">
+          <div class="text-h5 font-weight-bold">
+            {{ user ? 'Edit User' : 'Add New User' }}
+          </div>
+          <div class="text-subtitle-2 text-blue-lighten-2">
+            {{ user ? 'Update user information and permissions' : 'Create a new user account' }}
+          </div>
+        </div>
+      </v-card-title>
 
-      <!-- Modal panel -->
-      <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-        <form @submit.prevent="handleSubmit">
-          <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-            <div class="mb-4">
-              <h3 class="text-lg font-medium leading-6 text-gray-900">
-                {{ user ? 'Edit User' : 'Add New User' }}
-              </h3>
-            </div>
+      <v-divider />
 
-            <!-- Error message -->
-            <div v-if="error" class="mb-4 bg-red-50 border-l-4 border-red-400 p-4">
-              <div class="flex">
-                <div class="flex-shrink-0">
-                  <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
-                  </svg>
-                </div>
-                <div class="ml-3">
-                  <p class="text-sm text-red-700">{{ error }}</p>
-                </div>
-              </div>
-            </div>
+      <v-card-text class="pa-6">
+        <v-alert v-if="error" type="error" variant="tonal" class="mb-4">
+          {{ error }}
+        </v-alert>
 
-            <div class="space-y-4">
+        <v-form ref="formRef" @submit.prevent="handleSubmit">
+          <v-container fluid class="pa-0">
+            <v-row>
               <!-- Username -->
-              <div>
-                <label for="username" class="block text-sm font-medium text-gray-700">Username</label>
-                <input
-                  type="text"
-                  id="username"
+              <v-col cols="12">
+                <v-text-field
                   v-model="formData.username"
+                  label="Username"
                   :disabled="!!user"
-                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-cyan-300 focus:ring focus:ring-cyan-200 focus:ring-opacity-50 disabled:bg-gray-100 text-gray-900"
+                  variant="outlined"
+                  density="comfortable"
+                  prepend-inner-icon="mdi-account"
+                  :rules="usernameRules"
                   required
+                  :hint="
+                    user ? 'Username cannot be changed after creation' : 'Enter a unique username'
+                  "
+                  :persistent-hint="!!user"
                 />
-              </div>
+              </v-col>
 
               <!-- Email -->
-              <div>
-                <label for="email" class="block text-sm font-medium text-gray-700">Email</label>
-                <input
-                  type="email"
-                  id="email"
+              <v-col cols="12">
+                <v-text-field
                   v-model="formData.email"
-                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-cyan-300 focus:ring focus:ring-cyan-200 focus:ring-opacity-50 text-gray-900"
+                  label="Email Address"
+                  type="email"
+                  variant="outlined"
+                  density="comfortable"
+                  prepend-inner-icon="mdi-email"
+                  :rules="emailRules"
                   required
+                  hint="User will receive notifications at this email"
+                  persistent-hint
                 />
-              </div>
+              </v-col>
 
               <!-- Password (only for new users) -->
-              <div v-if="!user">
-                <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
-                <input
-                  type="password"
-                  id="password"
+              <v-col cols="12" v-if="!user">
+                <v-text-field
                   v-model="formData.password"
-                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-cyan-300 focus:ring focus:ring-cyan-200 focus:ring-opacity-50 text-gray-900"
+                  label="Password"
+                  :type="showPassword ? 'text' : 'password'"
+                  variant="outlined"
+                  density="comfortable"
+                  prepend-inner-icon="mdi-lock"
+                  :append-inner-icon="showPassword ? 'mdi-eye' : 'mdi-eye-off'"
+                  @click:append-inner="showPassword = !showPassword"
+                  :rules="passwordRules"
                   required
+                  hint="Minimum 8 characters with letters and numbers"
+                  persistent-hint
                 />
-              </div>
+              </v-col>
 
               <!-- Role -->
-              <div>
-                <label for="role" class="block text-sm font-medium text-gray-700">Role</label>
-                <select
-                  id="role"
+              <v-col cols="12">
+                <v-select
                   v-model="formData.role"
-                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-cyan-300 focus:ring focus:ring-cyan-200 focus:ring-opacity-50 text-gray-900"
+                  :items="roleOptions"
+                  item-title="title"
+                  item-value="value"
+                  label="User Role"
+                  variant="outlined"
+                  density="comfortable"
+                  prepend-inner-icon="mdi-shield-account"
                   required
+                  hint="Determines user permissions and access level"
+                  persistent-hint
                 >
-                  <option value="Analyst">Analyst</option>
-                  <option value="Investigator">Investigator</option>
-                  <option value="Admin">Admin</option>
-                </select>
-              </div>
-            </div>
-          </div>
+                  <template #item="{ props, item }">
+                    <v-list-item v-bind="props">
+                      <template #prepend>
+                        <v-icon :icon="item.raw.icon" :color="item.raw.color" />
+                      </template>
+                      <v-list-item-title>{{ item.raw.title }}</v-list-item-title>
+                      <v-list-item-subtitle>{{ item.raw.description }}</v-list-item-subtitle>
+                    </v-list-item>
+                  </template>
+                </v-select>
+              </v-col>
+            </v-row>
+          </v-container>
+        </v-form>
+      </v-card-text>
 
-          <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-            <button
-              type="submit"
-              :disabled="loading"
-              class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-cyan-600 text-base font-medium text-white hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
-            >
-              {{ loading ? 'Saving...' : (user ? 'Save Changes' : 'Create User') }}
-            </button>
-            <button
-              type="button"
-              @click="$emit('close')"
-              :disabled="loading"
-              class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-cyan-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm disabled:opacity-50"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
+      <v-divider />
+
+      <modal-actions
+        :submit-text="user ? 'Save Changes' : 'Create User'"
+        :submit-icon="user ? 'mdi-content-save' : 'mdi-account-plus'"
+        :submit-disabled="!isFormValid"
+        :loading="loading"
+        @cancel="$emit('close')"
+        @submit="handleSubmit"
+      />
+    </v-card>
+  </v-dialog>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { userService } from '../services/user'
+// Vuetify components are auto-imported
+import ModalActions from './ModalActions.vue'
 
 const props = defineProps({
   show: {
     type: Boolean,
-    required: true
+    required: true,
   },
   user: {
     type: Object,
-    default: null
-  }
+    default: null,
+  },
 })
 
 const emit = defineEmits(['close', 'saved'])
 
+const dialogVisible = computed({
+  get: () => props.show,
+  set: (value) => {
+    if (!value) {
+      emit('close')
+    }
+  },
+})
+
 const loading = ref(false)
 const error = ref(null)
+const showPassword = ref(false)
+const formRef = ref(null)
+
 const formData = ref({
   username: '',
   email: '',
   password: '',
   role: 'Analyst',
-  is_active: true
+  is_active: true,
+})
+
+// Role options with descriptions and icons
+const roleOptions = [
+  {
+    value: 'Analyst',
+    title: 'Analyst',
+    description: 'Read-only access to assigned cases',
+    icon: 'mdi-chart-line',
+    color: 'warning',
+  },
+  {
+    value: 'Investigator',
+    title: 'Investigator',
+    description: 'Read/write access, can run plugins',
+    icon: 'mdi-account-search',
+    color: 'info',
+  },
+  {
+    value: 'Admin',
+    title: 'Administrator',
+    description: 'Full system access and user management',
+    icon: 'mdi-shield-check',
+    color: 'success',
+  },
+]
+
+// Validation rules
+const usernameRules = [
+  (v) => !!v || 'Username is required',
+  (v) => v.length >= 3 || 'Username must be at least 3 characters',
+  (v) => v.length <= 50 || 'Username must be less than 50 characters',
+  (v) =>
+    /^[a-zA-Z0-9_-]+$/.test(v) || 'Username can only contain letters, numbers, underscore and dash',
+]
+
+const emailRules = [
+  (v) => !!v || 'Email is required',
+  (v) => /.+@.+\..+/.test(v) || 'Email must be valid',
+]
+
+const passwordRules = [
+  (v) => !!v || 'Password is required',
+  (v) => v.length >= 8 || 'Password must be at least 8 characters',
+  (v) => /[A-Za-z]/.test(v) || 'Password must contain at least one letter',
+  (v) => /\d/.test(v) || 'Password must contain at least one number',
+]
+
+// Form validation
+const isFormValid = computed(() => {
+  if (!formData.value.username || !formData.value.email || !formData.value.role) {
+    return false
+  }
+
+  if (!props.user && !formData.value.password) {
+    return false
+  }
+
+  // Check email format
+  if (!/.+@.+\..+/.test(formData.value.email)) {
+    return false
+  }
+
+  // Check username format
+  if (formData.value.username.length < 3 || !/^[a-zA-Z0-9_-]+$/.test(formData.value.username)) {
+    return false
+  }
+
+  // Check password for new users
+  if (!props.user) {
+    if (
+      formData.value.password.length < 8 ||
+      !/[A-Za-z]/.test(formData.value.password) ||
+      !/\d/.test(formData.value.password)
+    ) {
+      return false
+    }
+  }
+
+  return true
 })
 
 const resetForm = () => {
@@ -141,19 +249,34 @@ const resetForm = () => {
     email: '',
     password: '',
     role: 'Analyst',
-    is_active: true
+    is_active: true,
   }
 }
 
-onMounted(() => {
+const updateFormData = () => {
   if (props.user) {
     formData.value = {
       ...formData.value,
       ...props.user,
-      password: '' // Don't include password when editing
+      password: '', // Don't include password when editing
     }
+  } else {
+    resetForm()
   }
+}
+
+onMounted(() => {
+  updateFormData()
 })
+
+// Watch for changes to the user prop to update form data
+watch(
+  () => props.user,
+  () => {
+    updateFormData()
+  },
+  { immediate: true },
+)
 
 const handleSubmit = async () => {
   try {
@@ -166,7 +289,7 @@ const handleSubmit = async () => {
       result = await userService.updateUser(props.user.id, {
         email: formData.value.email,
         role: formData.value.role,
-        is_active: formData.value.is_active
+        is_active: formData.value.is_active,
       })
     } else {
       // Create new user
@@ -175,7 +298,7 @@ const handleSubmit = async () => {
         email: formData.value.email,
         password: formData.value.password,
         role: formData.value.role,
-        is_active: true
+        is_active: true,
       })
     }
 

@@ -2,25 +2,129 @@
 File storage utilities for handling evidence uploads
 """
 
+import hashlib
+import urllib.parse
 from pathlib import Path
-from typing import Optional
-from fastapi import UploadFile, HTTPException
+from typing import Optional, Tuple
 
-from .security import validate_file_security, secure_filename_with_path
+from fastapi import HTTPException, UploadFile
+
+from .logging import get_security_logger
+from .security import secure_filename_with_path, validate_file_security
 
 UPLOAD_DIR = Path("uploads")
 if not UPLOAD_DIR.exists():
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def calculate_file_hash(content: bytes) -> str:
+    """
+    Calculate SHA-256 hash of file content.
+    Returns the hash as a hexadecimal string.
+    """
+    hasher = hashlib.sha256()
+    hasher.update(content)
+    return hasher.hexdigest()
+
+
+def normalize_folder_path(folder_path: str) -> str:
+    """
+    Normalize and validate a folder path to prevent directory traversal attacks.
+    Returns a safe, normalized folder path.
+    """
+    if not folder_path:
+        return ""
+
+    path = folder_path.strip().strip("/\\")
+
+    if "\x00" in path or any(ord(c) < 32 for c in path if c not in " "):
+        return ""
+
+    if len(path) > 255:
+        return ""
+
+    parts = []
+    for part in path.split("/"):
+        part = part.strip()
+        if not part or part in (".", "..", "..."):
+            continue
+
+        sanitized = "".join(c for c in part if c.isalnum() or c in "._- ")
+
+        if sanitized and len(sanitized) <= 100:
+            parts.append(sanitized)
+
+    return "/".join(parts) if parts else ""
+
+
+def create_folder(case_id: int, folder_path: str) -> Path:
+    """
+    Create a folder structure within a case directory.
+    Returns the path to the created folder.
+    """
+    if not isinstance(case_id, int) or case_id <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid case ID: {case_id}",
+        )
+
+    if not folder_path:
+        raise HTTPException(
+            status_code=400,
+            detail="Folder path is required",
+        )
+
+    normalized_path = normalize_folder_path(folder_path)
+    if not normalized_path:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid folder path",
+        )
+
+    case_dir = UPLOAD_DIR / str(case_id)
+    folder_dir = case_dir / normalized_path
+    folder_dir.mkdir(parents=True, exist_ok=True)
+    return folder_dir
+
+
+def delete_folder(case_id: int, folder_path: str) -> None:
+    """
+    Delete a folder and all its contents from a case directory.
+    """
+    if not isinstance(case_id, int) or case_id <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid case ID: {case_id}",
+        )
+
+    normalized_path = normalize_folder_path(folder_path)
+    if not normalized_path:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid folder path",
+        )
+
+    case_dir = UPLOAD_DIR / str(case_id)
+    folder_dir = case_dir / normalized_path
+
+    if folder_dir.exists() and folder_dir.is_dir():
+        import shutil
+
+        shutil.rmtree(folder_dir)
+
+    parent = folder_dir.parent
+    while parent != case_dir and parent.exists() and not any(parent.iterdir()):
+        parent.rmdir()
+        parent = parent.parent
+
+
 async def save_upload_file(
-    upload_file: UploadFile, case_id: int, subfolder: Optional[str] = None
-) -> str:
+    upload_file: UploadFile, case_id: int, folder_path: Optional[str] = None
+) -> Tuple[str, str]:
     """
     Save an uploaded file to the uploads directory.
-    Returns the relative path to the saved file.
+    Returns a tuple of (relative_path, file_hash).
     """
-    # Validate case_id
     if case_id is None:
         raise HTTPException(
             status_code=400,
@@ -33,7 +137,6 @@ async def save_upload_file(
             detail=f"Invalid case ID: {case_id}. Please ensure you're uploading to a valid case.",
         )
 
-    # Validate the file first
     if upload_file is None:
         raise HTTPException(
             status_code=400,
@@ -42,26 +145,53 @@ async def save_upload_file(
 
     await validate_file_security(upload_file)
 
+    security_logger = get_security_logger(
+        event="file_upload_validated",
+        filename=upload_file.filename,
+        case_id=case_id,
+        file_size=upload_file.size if hasattr(upload_file, "size") else None,
+    )
+    security_logger.info(f"File upload validated: {upload_file.filename}")
+
     try:
-        # Create case-specific directory
         case_dir = UPLOAD_DIR / str(case_id)
-        if subfolder:
-            case_dir = case_dir / subfolder
+        if folder_path:
+            normalized_path = normalize_folder_path(folder_path)
+            case_dir = case_dir / normalized_path
         case_dir.mkdir(parents=True, exist_ok=True)
 
         safe_filename = secure_filename_with_path(upload_file.filename, case_dir)
         file_path = case_dir / safe_filename
 
+        content = await upload_file.read()
+
+        if len(content) > 15 * 1024 * 1024:  # 15MB limit
+            raise HTTPException(
+                status_code=400, detail="File too large. Maximum size is 15MB"
+            )
+
+        file_hash = calculate_file_hash(content)
+
         with open(file_path, "wb") as buffer:
-            content = await upload_file.read()
             buffer.write(content)
 
-        # Return the relative path from the uploads directory
-        return str(file_path.relative_to(UPLOAD_DIR))
+        relative_path = str(file_path.relative_to(UPLOAD_DIR))
+
+        security_logger = get_security_logger(
+            event="file_upload_complete",
+            filename=upload_file.filename,
+            case_id=case_id,
+            relative_path=relative_path,
+            file_hash=file_hash,
+        )
+        security_logger.info(
+            f"File uploaded successfully: {upload_file.filename} to {relative_path}"
+        )
+
+        return relative_path, file_hash
     except HTTPException:
         raise
     except Exception as e:
-        # Clean up any partially created directories/files
         try:
             if "file_path" in locals() and file_path.exists():
                 file_path.unlink()
@@ -71,11 +201,21 @@ async def save_upload_file(
                 and not any(case_dir.iterdir())
             ):
                 case_dir.rmdir()
-        except:
-            pass
+        except Exception as cleanup_error:
+            security_logger = get_security_logger(
+                event="file_cleanup_error", case_id=case_id
+            )
+            security_logger.warning(
+                f"Failed to cleanup after file save error: {cleanup_error}"
+            )
+        security_logger = get_security_logger(
+            event="file_upload_error", filename=upload_file.filename, case_id=case_id
+        )
+        security_logger.error(f"Failed to save file {upload_file.filename}: {str(e)}")
+
         raise HTTPException(
             status_code=500,
-            detail=f"Could not save file: {str(e)}",
+            detail="Could not save file. Please try again or contact support.",
         )
 
 
@@ -98,14 +238,55 @@ def create_case_directory(case_id: int) -> Path:
 async def delete_file(relative_path: str) -> None:
     """Delete a file from the uploads directory."""
     try:
-        file_path = UPLOAD_DIR / relative_path
-        if file_path.exists():
+        if not relative_path:
+            raise HTTPException(status_code=400, detail="Invalid file path")
+
+        decoded_path = urllib.parse.unquote(relative_path)
+
+        if (
+            ".." in decoded_path
+            or relative_path.startswith("/")
+            or "\x00" in decoded_path
+            or "..." in decoded_path
+        ):
+            raise HTTPException(status_code=400, detail="Invalid file path")
+
+        normalized_path = normalize_folder_path(relative_path)
+        if not normalized_path:
+            raise HTTPException(status_code=400, detail="Invalid file path")
+
+        base_dir = UPLOAD_DIR.resolve()
+        file_path = (base_dir / normalized_path).resolve()
+
+        try:
+            file_path.relative_to(base_dir)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid file path")
+
+        if file_path == base_dir:
+            raise HTTPException(status_code=400, detail="Invalid file path")
+        if file_path.exists() and file_path.is_file():
             file_path.unlink()
 
-        # Remove empty parent directories
+            security_logger = get_security_logger(
+                event="file_delete_complete", file_path=relative_path
+            )
+            security_logger.info(f"File deleted successfully: {relative_path}")
         parent_dir = file_path.parent
-        while parent_dir != UPLOAD_DIR and not any(parent_dir.iterdir()):
+        while (
+            parent_dir != base_dir
+            and parent_dir.exists()
+            and not any(parent_dir.iterdir())
+        ):
             parent_dir.rmdir()
             parent_dir = parent_dir.parent
+
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Could not delete file: {str(e)}")
+        security_logger = get_security_logger(
+            event="file_delete_error", file_path=relative_path
+        )
+        security_logger.error(f"Failed to delete file {relative_path}: {str(e)}")
+
+        raise HTTPException(status_code=500, detail="Could not delete file")

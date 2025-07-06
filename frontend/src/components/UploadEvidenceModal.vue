@@ -1,156 +1,161 @@
 <template>
-  <div v-if="show" class="fixed inset-0 z-10 overflow-y-auto">
-    <div class="flex min-h-screen items-center justify-center px-4 pt-4 pb-20 text-center sm:block sm:p-0">
-      <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" @click="$emit('close')" />
+  <v-dialog v-model="dialogVisible" max-width="600px" persistent>
+    <v-card prepend-icon="mdi-cloud-upload" title="Upload Evidence">
+      <v-card-text>
+        <v-form ref="formRef" @submit.prevent="handleSubmit">
+          <!-- Target Folder Alert -->
+          <v-alert v-if="targetFolder" class="mb-4" icon="mdi-folder" type="info" variant="tonal">
+            Uploading to: <strong>{{ targetFolder.title }}</strong>
+          </v-alert>
 
-      <div class="inline-block transform overflow-hidden rounded-lg bg-white dark:bg-gray-800 px-4 pt-5 pb-4 text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6 sm:align-middle">
-        <div class="absolute top-0 right-0 pt-4 pr-4">
-          <button
-            type="button"
-            class="rounded-md bg-white dark:bg-gray-800 text-gray-400 hover:text-gray-500 focus:outline-none"
-            @click="$emit('close')"
+          <!-- Destination Folder Selection -->
+          <v-select
+            v-if="!targetFolder"
+            v-model="selectedFolder"
+            :items="folderOptions"
+            item-title="label"
+            item-value="value"
+            label="Destination Folder"
+            variant="outlined"
+            density="comfortable"
+            placeholder="Select a folder or upload to root"
+            clearable
+            class="mb-4"
           >
-            <span class="sr-only">Close</span>
-            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
+            <template v-slot:prepend-item>
+              <v-list-item title="📁 Root (No folder)" @click="selectedFolder = null" />
+              <v-divider />
+            </template>
+          </v-select>
 
-        <div class="sm:flex sm:items-start">
-          <div class="mt-3 w-full text-center sm:mt-0 sm:text-left">
-            <h3 class="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
-              Upload Evidence
-            </h3>
+          <!-- Category Selection -->
+          <v-select
+            v-model="form.category"
+            :items="CATEGORIES"
+            label="Category (Optional)"
+            variant="outlined"
+            density="comfortable"
+            placeholder="Select a category"
+            clearable
+            class="mb-4"
+          />
 
-            <form @submit.prevent="handleSubmit" class="mt-4 space-y-4">
-              <div>
-                <label for="category" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Category
-                </label>
-                <select
-                  id="category"
-                  v-model="form.category"
-                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-cyan-500 focus:ring-cyan-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm"
-                >
-                  <option v-for="category in CATEGORIES" :key="category" :value="category">
-                    {{ category }}
-                  </option>
-                </select>
+          <!-- Description -->
+          <v-textarea
+            v-model="form.description"
+            label="Description (Optional)"
+            rows="3"
+            variant="outlined"
+            density="comfortable"
+            class="mb-4"
+          />
+
+          <!-- File Upload Area -->
+          <v-card
+            variant="outlined"
+            class="upload-area mb-4"
+            :class="{ 'drag-over': isDragOver }"
+            @dragover.prevent="isDragOver = true"
+            @dragleave.prevent="isDragOver = false"
+            @drop.prevent="handleFileDrop"
+          >
+            <v-card-text class="text-center pa-8">
+              <v-icon class="mb-4" color="primary" size="64"> mdi-cloud-upload-outline </v-icon>
+
+              <div class="text-h6 mb-2">Drop files here or browse</div>
+
+              <v-btn
+                color="primary"
+                variant="outlined"
+                class="mb-4"
+                @click="$refs.fileInput.click()"
+              >
+                <v-icon start>mdi-file-plus</v-icon>
+                Choose Files
+              </v-btn>
+
+              <input
+                ref="fileInput"
+                type="file"
+                class="d-none"
+                @change="handleFileSelect"
+                accept="image/*,application/pdf,.doc,.docx,.txt"
+                multiple
+              />
+
+              <div class="text-body-2 text-medium-emphasis">
+                Images, PDF, DOC, DOCX or TXT up to 50MB
               </div>
+            </v-card-text>
+          </v-card>
 
-              <div>
-                <label for="description" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Description (Optional)
-                </label>
-                <textarea
-                  id="description"
-                  v-model="form.description"
-                  rows="3"
-                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-cyan-500 focus:ring-cyan-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm"
-                />
-              </div>
+          <!-- Selected Files Display -->
+          <v-card v-if="selectedFiles.length > 0" variant="outlined" class="mb-4">
+            <v-card-title class="text-subtitle-1">
+              Selected Files ({{ selectedFiles.length }})
+              <v-spacer />
+              <v-btn color="error" size="small" variant="text" @click="clearFiles">
+                <v-icon start>mdi-delete</v-icon>
+                Clear All
+              </v-btn>
+            </v-card-title>
 
-              <div>
-                <div 
-                  class="mt-1 flex justify-center rounded-md border-2 border-dashed border-gray-300 dark:border-gray-600 px-6 pt-5 pb-6"
-                  @dragover.prevent
-                  @drop.prevent="handleFileDrop"
-                >
-                  <div class="space-y-1 text-center">
-                    <svg
-                      class="mx-auto h-12 w-12 text-gray-400"
-                      stroke="currentColor"
-                      fill="none"
-                      viewBox="0 0 48 48"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      />
-                    </svg>
-                    <div class="flex text-sm text-gray-600 dark:text-gray-400">
-                      <label
-                        for="file-upload"
-                        class="relative cursor-pointer rounded-md bg-white dark:bg-gray-800 font-medium text-cyan-600 focus-within:outline-none focus-within:ring-2 focus-within:ring-cyan-500 focus-within:ring-offset-2 hover:text-cyan-500"
-                      >
-                        <span>Upload a file</span>
-                        <input
-                          id="file-upload"
-                          type="file"
-                          class="sr-only"
-                          @change="handleFileSelect"
-                          accept="image/*,application/pdf,.doc,.docx,.txt"
-                          multiple
-                        >
-                      </label>
-                      <p class="pl-1">or drag and drop</p>
-                    </div>
-                    <p class="text-xs text-gray-500 dark:text-gray-400">
-                      Images, PDF, DOC, DOCX or TXT up to 50MB
-                    </p>
-                    <div v-if="selectedFiles.length > 0" class="mt-2">
-                      <p class="text-sm text-gray-500 dark:text-gray-400">
-                        Selected {{ selectedFiles.length }} file(s):
-                      </p>
-                      <ul class="mt-1 space-y-1">
-                        <li v-for="file in selectedFiles" :key="file.name" class="flex items-center">
-                          <span class="text-sm text-gray-500 dark:text-gray-400">{{ file.name }}</span>
-                          <button
-                            @click="removeFile(file)"
-                            class="ml-2 text-cyan-600 hover:text-cyan-500"
-                          >
-                            Remove
-                          </button>
-                        </li>
-                      </ul>
-                      <button
-                        v-if="selectedFiles.length > 1"
-                        @click="clearFiles"
-                        class="mt-2 text-sm text-cyan-600 hover:text-cyan-500"
-                      >
-                        Remove All
-                      </button>
-                    </div>
-                    <div v-if="fileError" class="mt-2">
-                      <p class="text-sm text-red-600">
-                        {{ fileError }}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+            <v-divider />
 
-              <div class="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
-                <button
-                  type="submit"
-                  :disabled="uploading || selectedFiles.length === 0"
-                  class="inline-flex w-full justify-center rounded-md border border-transparent bg-cyan-600 px-4 py-2 text-base font-medium text-white shadow-sm hover:bg-cyan-700 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed sm:ml-3 sm:w-auto sm:text-sm"
-                >
-                  {{ uploading ? 'Uploading...' : 'Upload' }}
-                </button>
-                <button
-                  type="button"
-                  class="mt-3 inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-base font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 sm:mt-0 sm:w-auto sm:text-sm"
-                  @click="$emit('close')"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+            <v-list density="compact">
+              <v-list-item
+                v-for="file in selectedFiles"
+                :key="file.name"
+                :title="file.name"
+                :subtitle="`${(file.size / 1024 / 1024).toFixed(2)} MB`"
+              >
+                <template v-slot:prepend>
+                  <v-icon>{{ getFileIcon(file.name) }}</v-icon>
+                </template>
+
+                <template v-slot:append>
+                  <v-btn
+                    size="small"
+                    variant="text"
+                    color="error"
+                    icon="mdi-close"
+                    @click="removeFile(file)"
+                  />
+                </template>
+              </v-list-item>
+            </v-list>
+          </v-card>
+
+          <!-- Error Display -->
+          <v-alert v-if="fileError" class="mb-4" type="error" variant="tonal">
+            {{ fileError }}
+          </v-alert>
+        </v-form>
+      </v-card-text>
+
+      <v-divider />
+
+      <v-card-actions>
+        <v-spacer />
+        <v-btn :disabled="uploading" variant="text" @click="$emit('close')"> Cancel </v-btn>
+        <v-btn
+          color="primary"
+          variant="flat"
+          @click="handleSubmit"
+          :disabled="uploading || selectedFiles.length === 0"
+          :loading="uploading"
+        >
+          Upload
+        </v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
 </template>
 
 <script setup>
-import { ref, defineProps, defineEmits } from 'vue';
-import { evidenceService } from '../services/evidence';
+import { ref, defineProps, defineEmits, computed, watch, onMounted } from 'vue'
+import { evidenceService } from '../services/evidence'
+// Vuetify components are auto-imported
 
 const CATEGORIES = [
   'Social Media',
@@ -158,8 +163,8 @@ const CATEGORIES = [
   'Network Assets',
   'Communications',
   'Documents',
-  'Other'
-];
+  'Other',
+]
 
 const props = defineProps({
   show: {
@@ -170,74 +175,191 @@ const props = defineProps({
     type: Number,
     required: true,
   },
-});
+  targetFolder: {
+    type: Object,
+    default: null,
+  },
+})
 
-const emit = defineEmits(['close', 'uploaded']);
+const emit = defineEmits(['close', 'uploaded'])
+
+const dialogVisible = computed({
+  get: () => props.show,
+  set: (value) => {
+    if (!value) {
+      emit('close')
+    }
+  },
+})
 
 const form = ref({
   description: '',
-  category: 'Other',
-});
+  category: '',
+})
 
-const selectedFiles = ref([]);
-const uploading = ref(false);
-const fileError = ref(null);
+const selectedFiles = ref([])
+const uploading = ref(false)
+const fileError = ref(null)
+const selectedFolder = ref(null)
+const availableFolders = ref([])
+const loadingFolders = ref(false)
+const isDragOver = ref(false)
+const formRef = ref(null)
 
-function handleFileSelect(event) {
-  const files = Array.from(event.target.files);
-  const invalidFiles = files.filter(file => file.size > 50000000);
-  
-  if (invalidFiles.length > 0) {
-    fileError.value = `${invalidFiles.length} file(s) exceed 50MB size limit`;
-    return;
+// Computed properties
+const folderOptions = computed(() => {
+  const buildFolderTree = (folders, parentId = null, prefix = '') => {
+    const options = []
+    const children = folders.filter((f) => f.parent_folder_id === parentId && f.is_folder)
+
+    children.forEach((folder) => {
+      const label = prefix + '📁 ' + folder.title
+      options.push({
+        label,
+        value: folder,
+        folder,
+      })
+
+      // Add nested folders with indentation
+      const nestedOptions = buildFolderTree(folders, folder.id, prefix + '  ')
+      options.push(...nestedOptions)
+    })
+
+    return options
   }
 
-  selectedFiles.value = [...selectedFiles.value, ...files];
-  fileError.value = null;
+  return buildFolderTree(availableFolders.value)
+})
+
+// Methods
+const loadFolders = async () => {
+  if (!props.caseId) return
+
+  try {
+    loadingFolders.value = true
+    const folders = await evidenceService.getFolderTree(props.caseId)
+    availableFolders.value = folders
+  } catch (error) {
+    console.error('Failed to load folders:', error)
+  } finally {
+    loadingFolders.value = false
+  }
+}
+
+function handleFileSelect(event) {
+  const files = Array.from(event.target.files)
+  const invalidFiles = files.filter((file) => file.size > 50000000)
+
+  if (invalidFiles.length > 0) {
+    fileError.value = `${invalidFiles.length} file(s) exceed 50MB size limit`
+    return
+  }
+
+  selectedFiles.value = [...selectedFiles.value, ...files]
+  fileError.value = null
 }
 
 function handleFileDrop(event) {
-  const files = Array.from(event.dataTransfer.files);
-  const invalidFiles = files.filter(file => file.size > 50000000);
-  
+  isDragOver.value = false
+  const files = Array.from(event.dataTransfer.files)
+  const invalidFiles = files.filter((file) => file.size > 50000000)
+
   if (invalidFiles.length > 0) {
-    fileError.value = `${invalidFiles.length} file(s) exceed 50MB size limit`;
-    return;
+    fileError.value = `${invalidFiles.length} file(s) exceed 50MB size limit`
+    return
   }
 
-  selectedFiles.value = [...selectedFiles.value, ...files];
-  fileError.value = null;
+  selectedFiles.value = [...selectedFiles.value, ...files]
+  fileError.value = null
 }
 
 function removeFile(file) {
-  selectedFiles.value = selectedFiles.value.filter(f => f !== file);
+  selectedFiles.value = selectedFiles.value.filter((f) => f !== file)
 }
 
 function clearFiles() {
-  selectedFiles.value = [];
-  fileError.value = null;
+  selectedFiles.value = []
+  fileError.value = null
 }
 
 async function handleSubmit() {
   if (selectedFiles.value.length === 0) {
-    fileError.value = 'Please select at least one file';
-    return;
+    fileError.value = 'Please select at least one file'
+    return
   }
 
   try {
-    uploading.value = true;
+    uploading.value = true
+
+    // Determine target folder - either from prop (context menu) or user selection
+    const targetFolderData = props.targetFolder || selectedFolder.value
+
     const evidence = await evidenceService.createEvidence({
       description: form.value.description,
-      category: form.value.category,
+      category: form.value.category || 'Other',
       caseId: props.caseId,
-      files: selectedFiles.value
-    });
-    emit('uploaded', evidence);
-    emit('close');
-  } catch (error) {
-    fileError.value = 'Failed to upload files. Please try again.';
+      files: selectedFiles.value,
+      folderPath: targetFolderData?.folder_path,
+      parentFolderId: targetFolderData?.id,
+    })
+    emit('uploaded', evidence)
+    emit('close')
+  } catch {
+    fileError.value = 'Failed to upload files. Please try again.'
   } finally {
-    uploading.value = false;
+    uploading.value = false
   }
 }
+
+// Watch for dialog opening to load folders
+watch(
+  () => props.show,
+  (newShow) => {
+    if (newShow && props.caseId) {
+      loadFolders()
+    }
+  },
+)
+
+// Load folders on mount if dialog is already open
+onMounted(() => {
+  if (props.show && props.caseId) {
+    loadFolders()
+  }
+})
+
+// Helper function to get appropriate file icon
+function getFileIcon(fileName) {
+  const extension = fileName.split('.').pop().toLowerCase()
+
+  const iconMap = {
+    pdf: 'mdi-file-pdf-box',
+    doc: 'mdi-file-word-box',
+    docx: 'mdi-file-word-box',
+    txt: 'mdi-file-document-outline',
+    jpg: 'mdi-file-image',
+    jpeg: 'mdi-file-image',
+    png: 'mdi-file-image',
+    gif: 'mdi-file-image',
+    webp: 'mdi-file-image',
+    svg: 'mdi-file-image',
+  }
+
+  return iconMap[extension] || 'mdi-file-outline'
+}
 </script>
+
+<style scoped>
+.upload-area {
+  transition: all 0.2s ease-in-out;
+}
+
+.upload-area.drag-over {
+  border-color: rgb(var(--v-theme-primary));
+  background-color: rgb(var(--v-theme-primary), 0.04);
+}
+
+.upload-area:hover {
+  border-color: rgb(var(--v-theme-primary), 0.5);
+}
+</style>

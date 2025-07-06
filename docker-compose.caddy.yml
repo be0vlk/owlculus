@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  # Caddy reverse proxy with automatic HTTPS
+  caddy:
+    image: caddy:2-alpine
+    container_name: owlculus-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - frontend-network
+    depends_on:
+      - frontend
+      - backend
+    environment:
+      - ACME_AGREE=true
+
+  # Override frontend to remove port mapping (Caddy handles it)
+  frontend:
+    ports: [ ]
+
+  # Override backend to remove port mapping (Caddy handles it)
+  backend:
+    ports: [ ]
+
+volumes:
+  caddy_data:
+    name: owlculus_caddy_data
+  caddy_config:
+    name: owlculus_caddy_config

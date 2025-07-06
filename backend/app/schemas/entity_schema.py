@@ -3,8 +3,10 @@ Pydantic models for entities.
 """
 
 from datetime import datetime
-from typing import Optional, Dict, Any, List
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator, AnyHttpUrl
+from typing import Any, Dict, List, Optional
+
+from pydantic import AnyHttpUrl, BaseModel, ConfigDict, EmailStr, Field, model_validator
+
 from ..core.utils import get_utc_now
 
 
@@ -46,11 +48,16 @@ class NetworkAssets(BaseModel):
 class DomainData(EntityData):
     domain: str
     description: Optional[str] = None
+    notes: Optional[str] = None
+    sources: Optional[Dict[str, str]] = None
+    subdomains: Optional[List[Dict[str, Any]]] = None
 
 
 class IpAddressData(EntityData):
     ip_address: str
     description: Optional[str] = None
+    notes: Optional[str] = None
+    sources: Optional[Dict[str, str]] = None
 
 
 class Associates(BaseModel):
@@ -77,6 +84,8 @@ class PersonData(EntityData):
     usernames: Optional[list[str]] = None
     associates: Optional[Associates] = None
     other: Optional[str] = None
+    notes: Optional[str] = None
+    sources: Optional[Dict[str, str]] = None
 
 
 class Executives(BaseModel):
@@ -102,9 +111,10 @@ class CompanyData(EntityData):
     social_media: Optional[SocialMedia] = None
     executives: Optional[Executives] = None
     affiliates: Optional[Affiliates] = None
-    domains: Optional[List[str]] = None
     ip_addresses: Optional[List[str]] = None
     other: Optional[str] = None
+    notes: Optional[str] = None
+    sources: Optional[Dict[str, str]] = None
 
     @model_validator(mode="before")
     def validate_urls(cls, values):
@@ -117,12 +127,27 @@ class CompanyData(EntityData):
         return values
 
 
+class VehicleData(EntityData):
+    make: Optional[str] = None
+    model: Optional[str] = None
+    year: Optional[int] = None
+    vin: Optional[str] = None
+    license_plate: Optional[str] = None
+    color: Optional[str] = None
+    owner: Optional[str] = None
+    registration_state: Optional[str] = None
+    description: Optional[str] = None
+    notes: Optional[str] = None
+    sources: Optional[Dict[str, str]] = None
+
+
 # Map entity types to their respective data schemas
 ENTITY_TYPE_SCHEMAS = {
     "person": PersonData,
     "company": CompanyData,
     "domain": DomainData,
     "ip_address": IpAddressData,
+    "vehicle": VehicleData,
 }
 
 
@@ -174,6 +199,7 @@ class EntityCreate(BaseModel):
 class EntityUpdate(BaseModel):
     data: Dict[str, Any]
     updated_at: datetime = Field(default_factory=get_utc_now)
+    entity_type_hint: Optional[str] = Field(None, alias="__entity_type")
 
     @model_validator(mode="before")
     def validate_data(cls, values: Dict[str, Any]) -> Dict[str, Any]:

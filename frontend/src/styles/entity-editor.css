@@ -1,0 +1,18 @@
+/* Entity editor shared styles */
+
+/* Source field styling */
+.source-field .v-field {
+  background-color: rgb(var(--v-theme-surface-variant), 0.15) !important;
+}
+
+.source-field .v-label {
+  font-size: 0.875rem !important;
+  color: rgb(var(--v-theme-on-surface), 0.7) !important;
+}
+
+/* Utility classes */
+.gap-2 {
+  gap: 8px;
+}
+
+/* Note editor styles are now handled in NoteEditor.vue component */

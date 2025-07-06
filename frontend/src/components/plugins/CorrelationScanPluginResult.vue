@@ -1,119 +1,168 @@
 <template>
-  <div class="space-y-4">
+  <div class="d-flex flex-column ga-4">
     <template v-for="(resultItem, index) in normalizedResult" :key="index">
       <!-- Entity Match Card -->
-      <div v-if="resultItem.type === 'data'" class="bg-gray-50 dark:bg-gray-700 shadow rounded-lg">
+      <v-card v-if="resultItem.type === 'data'" elevation="2" rounded="lg">
         <!-- Entity Header -->
-        <div class="p-4 border-b border-gray-200 dark:border-gray-600">
-          <div class="flex items-center">
-            <svg class="w-5 h-5 mr-2 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                    d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-            </svg>
-            <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-100">
+        <v-card-text class="border-b">
+          <div class="d-flex align-center">
+            <v-icon icon="mdi-link" class="mr-2" color="grey-darken-1" />
+            <h3 class="text-h6 font-weight-medium">
               {{ resultItem.data.entity_name }}
             </h3>
-            <span class="ml-2 px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded-full">
+            <v-chip class="ml-2" color="primary" size="small" variant="tonal">
               {{ resultItem.data.entity_type }}
-            </span>
-            <span class="ml-2 px-2 py-1 text-xs font-medium" 
-                  :class="{
-                    'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200': resultItem.data.match_type === 'employer',
-                    'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200': resultItem.data.match_type === 'name'
-                  }">
-              {{ resultItem.data.match_type === 'employer' ? 'Employer Match' : 'Name Match' }}
-            </span>
+            </v-chip>
+            <v-chip
+              class="ml-2"
+              size="small"
+              :color="getMatchTypeColor(resultItem.data.match_type)"
+              variant="tonal"
+            >
+              {{ getMatchTypeLabel(resultItem.data.match_type) }}
+            </v-chip>
           </div>
-          
+
           <!-- Correlation Context -->
-          <div class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+          <div class="mt-2 text-body-2 text-medium-emphasis">
             <template v-if="resultItem.data.match_type === 'employer'">
-              Found multiple people who work at <span class="font-medium">{{ resultItem.data.employer_name }}</span>.
-              This employer connection may indicate a relationship between these cases.
+              Found multiple people who work at
+              <span class="font-weight-medium">{{ resultItem.data.employer_name }}</span
+              >. This employer connection may indicate a relationship between these cases.
+            </template>
+            <template v-else-if="resultItem.data.match_type === 'domain'">
+              Found multiple entities associated with the domain
+              <span class="font-weight-medium">{{ resultItem.data.domain }}</span
+              >. This domain connection may indicate a relationship between these cases or entities.
+            </template>
+            <template v-else-if="resultItem.data.match_type === 'vin'">
+              Found multiple vehicles with the same VIN
+              <span class="font-weight-medium">{{ resultItem.data.matched_value }}</span
+              >. This indicates the same vehicle appears in multiple cases, which strongly suggests
+              a connection between these investigations.
+            </template>
+            <template v-else-if="resultItem.data.match_type === 'license_plate'">
+              Found multiple vehicles with the same license plate
+              <span class="font-weight-medium">{{ resultItem.data.matched_value }}</span
+              >. This indicates the same vehicle appears in multiple cases, suggesting a connection
+              between these investigations.
             </template>
             <template v-else>
-              Found an entity named <span class="font-medium">{{ resultItem.data.entity_name }}</span> that appears in multiple cases.
-              This may indicate the same {{ resultItem.data.entity_type }} is involved in different investigations.
+              Found an entity named
+              <span class="font-weight-medium">{{ resultItem.data.entity_name }}</span> that appears
+              in multiple cases. This may indicate the same {{ resultItem.data.entity_type }} is
+              involved in different investigations.
             </template>
           </div>
-        </div>
+        </v-card-text>
 
         <!-- Matches List -->
-        <div class="p-4">
-          <div class="space-y-3">
-            <div v-for="(match, matchIndex) in resultItem.data.matches" 
-                 :key="matchIndex"
-                 class="bg-white dark:bg-gray-800 shadow rounded-lg p-4">
-              <div class="flex justify-between items-start">
-                <div class="space-y-1">
-                  <h4 class="text-sm font-semibold text-gray-800 dark:text-gray-100">
-                    Case #{{ match.case_number }}
-                  </h4>
-                  <p class="text-sm text-gray-600 dark:text-gray-400">
-                    {{ match.case_title }}
-                  </p>
-                  <template v-if="resultItem.data.match_type === 'employer' && match.person_name">
-                    <p class="text-sm text-purple-600 dark:text-purple-400">
-                      Person: {{ match.person_name }}
+        <v-card-text>
+          <div class="d-flex flex-column ga-3">
+            <v-card
+              v-for="(match, matchIndex) in resultItem.data.matches"
+              :key="matchIndex"
+              elevation="1"
+              rounded="lg"
+            >
+              <v-card-text>
+                <div class="d-flex justify-space-between align-start">
+                  <div class="d-flex flex-column ga-1">
+                    <h4 class="text-body-1 font-weight-medium">Case #{{ match.case_number }}</h4>
+                    <p class="text-body-2 text-medium-emphasis">
+                      {{ match.case_title }}
                     </p>
-                  </template>
+                    <template v-if="resultItem.data.match_type === 'employer' && match.person_name">
+                      <p class="text-body-2 text-secondary">Person: {{ match.person_name }}</p>
+                    </template>
+                  </div>
+                  <v-btn
+                    color="primary"
+                    variant="text"
+                    size="small"
+                    append-icon="mdi-chevron-right"
+                    @click="viewEntity(match)"
+                  >
+                    View Entity
+                  </v-btn>
                 </div>
-                <a :href="'/case/' + match.case_id" 
-                   class="flex items-center text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
-                  View Case
-                  <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                  </svg>
-                </a>
-              </div>
-            </div>
+              </v-card-text>
+            </v-card>
           </div>
-        </div>
-      </div>
+        </v-card-text>
+      </v-card>
 
       <!-- Error Message -->
-      <div v-else-if="resultItem.type === 'error'"
-           class="bg-red-50 dark:bg-red-900 border-l-4 border-red-400 p-4 rounded-lg">
-        <div class="flex">
-          <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <p class="ml-3 text-sm text-red-700 dark:text-red-200">
-            {{ resultItem.data.message }}
-          </p>
-        </div>
-      </div>
+      <v-alert v-else-if="resultItem.type === 'error'" border="start" elevation="2" type="error">
+        {{ resultItem.data.message }}
+      </v-alert>
+
+      <!-- Completion Message -->
+      <v-alert
+        v-else-if="resultItem.type === 'complete'"
+        type="success"
+        density="comfortable"
+        variant="tonal"
+      >
+        {{ resultItem.data.message }}
+      </v-alert>
     </template>
 
     <!-- No Results -->
-    <div v-if="!result || normalizedResult.length === 0" class="bg-gray-50 dark:bg-gray-700 shadow rounded-lg p-4 text-center">
-      <svg class="w-6 h-6 mx-auto text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-      </svg>
-      <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-        No correlations found
-      </p>
-    </div>
+    <v-card v-if="!result || normalizedResult.length === 0" elevation="2" rounded="lg">
+      <v-card-text class="text-center pa-8">
+        <v-icon icon="mdi-magnify" size="48" color="grey-darken-1" class="mb-3" />
+        <p class="text-body-2 text-medium-emphasis">No correlations found</p>
+      </v-card-text>
+    </v-card>
   </div>
 </template>
 
 <script setup>
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 
 const props = defineProps({
   result: {
     type: [Object, Array],
-    required: true
-  }
+    required: true,
+  },
 })
+
+const router = useRouter()
 
 const normalizedResult = computed(() => {
-  if (!props.result) return [];
-  return Array.isArray(props.result) ? props.result : [props.result];
+  if (!props.result) return []
+  return Array.isArray(props.result) ? props.result : [props.result]
 })
-</script>
 
-<style scoped>
-</style>
+const getMatchTypeLabel = (matchType) => {
+  const labels = {
+    name: 'Name Match',
+    employer: 'Employer Match',
+    domain: 'Domain Match',
+    vin: 'VIN Match',
+    license_plate: 'License Plate Match',
+  }
+  return labels[matchType] || 'Match'
+}
+
+const getMatchTypeColor = (matchType) => {
+  const colors = {
+    name: 'success',
+    employer: 'secondary',
+    domain: 'info',
+    vin: 'warning',
+    license_plate: 'warning',
+  }
+  return colors[matchType] || 'grey'
+}
+
+const viewEntity = (match) => {
+  // Navigate to the case with entity query parameter
+  router.push({
+    path: `/case/${match.case_id}`,
+    query: { entity: match.entity_id },
+  })
+}
+</script>

@@ -1,0 +1,165 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: '1.0'
+        reservations:
+          memory: 256m
+          cpus: '0.25'
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-owlculus}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-owlculus_secure_password}
+      POSTGRES_DB: ${POSTGRES_DB:-owlculus}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+    # Database port not exposed to host for security
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-owlculus} -d ${POSTGRES_DB:-owlculus}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - owlculus-network
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: '2.0'
+        reservations:
+          memory: 512m
+          cpus: '0.5'
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-owlculus}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-owlculus_secure_password}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-owlculus}
+      SECRET_KEY: ${SECRET_KEY:-development_key_not_secure}
+      FRONTEND_URL: ${FRONTEND_URL:-https://localhost}
+      BACKEND_URL: ${BACKEND_URL:-https://localhost/api}
+      UVICORN_FORWARDED_ALLOW_IPS: '*'
+    volumes:
+      - uploads_data:/app/uploads
+    expose:
+      - "8000"  # Internal only
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - owlculus-network
+
+  # Database Initialization
+  db-init:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-owlculus}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-owlculus_secure_password}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-owlculus}
+      SECRET_KEY: ${SECRET_KEY:-development_key_not_secure}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@owlculus.local}
+    command: python3 /app/init_db_auto.py
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./scripts/init_db_auto.py:/app/init_db_auto.py
+    networks:
+      - owlculus-network
+    restart: "no"
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: production
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: '0.5'
+        reservations:
+          memory: 128m
+          cpus: '0.1'
+    security_opt:
+      - no-new-privileges:true
+    expose:
+      - "80"  # Internal only
+    depends_on:
+      - backend
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - owlculus-network
+
+  # Caddy reverse proxy with automatic HTTPS
+  caddy:
+    image: caddy:2-alpine
+    container_name: owlculus-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - owlculus-network
+    depends_on:
+      - frontend
+      - backend
+    environment:
+      - ACME_AGREE=true
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+    driver: local
+  uploads_data:
+    driver: local
+  caddy_data:
+    name: owlculus_caddy_data
+  caddy_config:
+    name: owlculus_caddy_config
+
+networks:
+  owlculus-network:
+    driver: bridge

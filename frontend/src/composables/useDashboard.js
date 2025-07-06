@@ -1,4 +1,4 @@
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { caseService } from '../services/case'
@@ -11,7 +11,7 @@ export const columns = [
   { key: 'client_name', label: 'Client' },
   { key: 'status', label: 'Status' },
   { key: 'created_at', label: 'Created' },
-  { key: 'users', label: 'Assigned To' }
+  { key: 'users', label: 'Assigned To' },
 ]
 
 export function useDashboard() {
@@ -42,21 +42,19 @@ export function useDashboard() {
       }
       const casesData = await caseService.getCases(params)
       cases.value = casesData
-      
-      // Only try to load clients if user is admin
-      if (authStore.requiresAdmin()) {
-        try {
-          const clientsData = await clientService.getClients()
-          clients.value = clientsData.reduce((acc, client) => {
-            acc[client.id] = client
-            return acc
-          }, {})
-        } catch (err) {
-          console.error('Failed to load clients:', err)
-          // Don't set error state since this is expected for non-admin users
-        }
+
+      // Load clients for all authenticated users since read ops are not sensitive
+      try {
+        const clientsData = await clientService.getClients()
+        clients.value = clientsData.reduce((acc, client) => {
+          acc[client.id] = client
+          return acc
+        }, {})
+      } catch (err) {
+        console.error('Failed to load clients:', err)
+        // Don't set error state for client loading failures
       }
-      
+
       loading.value = false
     } catch (err) {
       error.value = 'Failed to load dashboard data'
@@ -69,6 +67,11 @@ export function useDashboard() {
     showClosedCases.value = !showClosedCases.value
     loadData()
   }
+
+  // Watch for changes to showClosedCases and reload data
+  watch(showClosedCases, () => {
+    loadData()
+  })
 
   const sortBy = (key) => {
     if (sortKey.value === key) {
@@ -84,8 +87,8 @@ export function useDashboard() {
   }
 
   const getAssignedUsers = (assignedUsers) => {
-    if (!assignedUsers || assignedUsers.length === 0) return 'Unassigned';
-    return assignedUsers.map(user => user.username).join(', ');
+    if (!assignedUsers || assignedUsers.length === 0) return 'Unassigned'
+    return assignedUsers.map((user) => user.username).join(', ')
   }
 
   const sortedAndFilteredCases = computed(() => {
@@ -94,22 +97,26 @@ export function useDashboard() {
     // Apply search filter
     if (searchQuery.value) {
       const query = searchQuery.value.toLowerCase()
-      filteredCases = filteredCases.filter(case_ => 
-        case_.case_number.toLowerCase().includes(query) ||
-        case_.title.toLowerCase().includes(query) ||
-        getClientName(case_.client_id).toLowerCase().includes(query) ||
-        case_.status.toLowerCase().includes(query)
-      )
+      filteredCases = filteredCases.filter((case_) => {
+        // Search in basic case fields
+        const basicFieldsMatch =
+          (case_.case_number || '').toLowerCase().includes(query) ||
+          (case_.title || '').toLowerCase().includes(query) ||
+          (getClientName(case_.client_id) || '').toLowerCase().includes(query) ||
+          (case_.status || '').toLowerCase().includes(query)
+
+        // Search in assigned user names
+        const assignedUsersMatch =
+          case_.users?.some((user) => (user.username || '').toLowerCase().includes(query)) || false
+
+        return basicFieldsMatch || assignedUsersMatch
+      })
     }
 
     // Apply sorting
     return [...filteredCases].sort((a, b) => {
-      let aValue = sortKey.value === 'client_name' 
-        ? getClientName(a.client_id) 
-        : a[sortKey.value]
-      let bValue = sortKey.value === 'client_name'
-        ? getClientName(b.client_id)
-        : b[sortKey.value]
+      let aValue = sortKey.value === 'client_name' ? getClientName(a.client_id) : a[sortKey.value]
+      let bValue = sortKey.value === 'client_name' ? getClientName(b.client_id) : b[sortKey.value]
 
       if (typeof aValue === 'string') aValue = aValue.toLowerCase()
       if (typeof bValue === 'string') bValue = bValue.toLowerCase()
@@ -129,7 +136,7 @@ export function useDashboard() {
     sortKey,
     sortOrder,
     showClosedCases,
-    
+
     // Methods
     loadData,
     sortBy,
@@ -137,8 +144,8 @@ export function useDashboard() {
     formatDate,
     getAssignedUsers,
     toggleClosedCases,
-    
+
     // Computed
-    sortedAndFilteredCases
+    sortedAndFilteredCases,
   }
 }

@@ -2,12 +2,14 @@
 Plugin schemas for request/response validation
 """
 
+from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel
-from typing import Dict, Any, Optional
 
 
 class PluginParameter(BaseModel):
     """Schema for plugin parameter metadata"""
+
     type: str
     description: str
     required: bool = False
@@ -30,6 +32,8 @@ class PluginMetadata(BaseModel):
     enabled: bool = True  # Whether the plugin is enabled
     category: str = "Other"  # Plugin category
     parameters: Dict[str, Dict[str, Any]] = {}  # Plugin parameters
+    api_key_requirements: List[str] = []  # List of required API key providers
+    api_key_status: Dict[str, bool] = {}  # Status of required API keys
 
 
 class PluginOutput(BaseModel):

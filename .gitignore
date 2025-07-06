@@ -163,3 +163,24 @@ playwright-report/
 
 chromedriver.exe
 uploads/
+.claude/
+CLAUDE.md
+.serena/
+
+# Sensitive data
+secrets/
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+config/secrets.*
+
+# Docker volumes data
+postgres_data/
+redis_data/
+
+megalinter-reports
+/.mega-linter.yml
+/.jscpd.json
+*plan.md

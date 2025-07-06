@@ -1,0 +1,196 @@
+body {
+    margin: 0;
+    padding: 0;
+    font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+    font-size: 15px;
+    color: #2c3e50;
+    background: #fafafa;
+    line-height: 1.6;
+    text-rendering: optimizelegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.container {
+    max-width: 600px;
+    margin: 0 auto;
+    background: white;
+    min-height: 100vh;
+    box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.2), 0 4px 5px 0 rgba(0, 0, 0, 0.14), 0 1px 10px 0 rgba(0, 0, 0, 0.12);
+}
+
+header {
+    background: linear-gradient(135deg, #00585f 0%, rgba(0, 88, 95, 0.8) 100%);
+    color: white;
+    padding: 24px;
+}
+
+header h1 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 500;
+}
+
+main {
+    padding: 30px;
+}
+
+.settings-section {
+    margin-bottom: 40px;
+    padding-bottom: 30px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.settings-section:last-child {
+    border-bottom: none;
+}
+
+.settings-section h2 {
+    margin: 0 0 20px;
+    font-size: 20px;
+    font-weight: 500;
+    color: #00585f;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    color: rgba(0, 0, 0, 0.87);
+    font-size: 14px;
+}
+
+.form-control {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid rgba(0, 0, 0, 0.38);
+    border-radius: 4px;
+    font-size: 15px;
+    background: white;
+    box-sizing: border-box;
+    transition: border-color 0.2s;
+    font-family: inherit;
+}
+
+.form-control:hover {
+    border-color: rgba(0, 0, 0, 0.87);
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: #00585f;
+    border-width: 2px;
+    padding: 11px 13px;
+}
+
+.help-text {
+    display: block;
+    margin-top: 5px;
+    font-size: 12px;
+    color: rgba(0, 0, 0, 0.6);
+}
+
+.btn {
+    padding: 8px 20px;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-transform: none;
+    letter-spacing: 0.025em;
+    min-height: 36px;
+    box-shadow: 0 3px 1px -2px rgba(0, 0, 0, 0.2), 0 2px 2px 0 rgba(0, 0, 0, 0.14), 0 1px 5px 0 rgba(0, 0, 0, 0.12);
+}
+
+.btn:hover {
+    box-shadow: 0 2px 4px -1px rgba(0, 0, 0, 0.2), 0 4px 5px 0 rgba(0, 0, 0, 0.14), 0 1px 10px 0 rgba(0, 0, 0, 0.12);
+}
+
+.btn-primary {
+    background: #00585f;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #006064;
+}
+
+.btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.btn-secondary {
+    background: #424242;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #303030;
+}
+
+.hidden {
+    display: none !important;
+}
+
+.auth-info {
+    background: #fafafa;
+    padding: 16px;
+    border-radius: 4px;
+    margin-bottom: 15px;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.auth-info p {
+    margin: 5px 0;
+    color: rgba(0, 0, 0, 0.87);
+}
+
+.auth-info strong {
+    color: #00585f;
+    font-weight: 600;
+}
+
+.message {
+    padding: 12px 15px;
+    border-radius: 4px;
+    margin-top: 20px;
+    animation: slideIn 0.3s ease-out;
+}
+
+.message.success {
+    background: #E8F5E9;
+    color: #1B5E20;
+    border: 1px solid #26A69A;
+}
+
+.message.error {
+    background: #FFEBEE;
+    color: #B71C1C;
+    border: 1px solid #B00020;
+}
+
+.message.info {
+    background: #E0F7FA;
+    color: #00585f;
+    border: 1px solid #00838F;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateY(-10px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}

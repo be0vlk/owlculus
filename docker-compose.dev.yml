@@ -1,0 +1,134 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: '1.0'
+        reservations:
+          memory: 256m
+          cpus: '0.25'
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-owlculus}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-owlculus_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-owlculus_dev}
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+    # Database port not exposed to host for security
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-owlculus} -d ${POSTGRES_DB:-owlculus_dev}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - backend-network
+
+  # Backend API (Development with hot reload)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+          cpus: '2.0'
+        reservations:
+          memory: 512m
+          cpus: '0.5'
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-owlculus}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-owlculus_dev_password}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-owlculus_dev}
+      SECRET_KEY: ${SECRET_KEY:-dev_secret_key_change_in_production}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      BACKEND_URL: ${BACKEND_URL:-http://localhost:8000}
+    volumes:
+      - ./backend:/app
+      - uploads_dev_data:/app/uploads
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - frontend-network
+      - backend-network
+
+  # Database Initialization
+  db-init:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-owlculus}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-owlculus_dev_password}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-owlculus_dev}
+      SECRET_KEY: ${SECRET_KEY:-dev_secret_key_change_in_production}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@owlculus.local}
+    volumes:
+      - ./backend:/app
+      - ./scripts/init_db_auto.py:/app/init_db_auto.py
+    command: python3 /app/init_db_auto.py
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - backend-network
+    restart: "no"
+
+  # Frontend (Development with hot reload)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: '1.0'
+        reservations:
+          memory: 256m
+          cpus: '0.25'
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    command: npm run dev -- --host 0.0.0.0
+    networks:
+      - frontend-network
+
+volumes:
+  postgres_dev_data:
+    driver: local
+  uploads_dev_data:
+    driver: local
+
+networks:
+  frontend-network:
+    driver: bridge
+  backend-network:
+    driver: bridge
+    internal: true
