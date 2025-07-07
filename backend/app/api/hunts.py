@@ -9,7 +9,14 @@ from app.core.websocket_manager import websocket_manager
 from app.database import models
 from app.schemas import hunt_schema as schemas
 from app.services.hunt_service import HuntService
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from sqlmodel import Session
 
 router = APIRouter()
@@ -236,7 +243,48 @@ async def stream_execution(
     - Progress updates
     - Error notifications
     - Final results
+
+    Authentication: Pass ephemeral token as query parameter ?token=<ephemeral_token>
+    The token must be obtained from POST /api/auth/websocket-token endpoint
     """
+    # Extract ephemeral token from query parameters
+    token = websocket.query_params.get("token")
+
+    if not token:
+        await websocket.close(
+            code=status.WS_1008_POLICY_VIOLATION, reason="Authentication required"
+        )
+        return
+
+    # Validate ephemeral token
+    try:
+        from app.core import security
+        from app.database.models import User
+
+        # Validate and consume the single-use token
+        user_id = security.ephemeral_token_manager.validate_token(token, execution_id)
+
+        if not user_id:
+            await websocket.close(
+                code=status.WS_1008_POLICY_VIOLATION, reason="Invalid or expired token"
+            )
+            return
+
+        # Get the user
+        current_user = db.get(User, user_id)
+        if not current_user or not current_user.is_active:
+            await websocket.close(
+                code=status.WS_1008_POLICY_VIOLATION, reason="Invalid user"
+            )
+            return
+
+    except Exception:
+        await websocket.close(
+            code=status.WS_1008_POLICY_VIOLATION, reason="Authentication failed"
+        )
+        return
+
+    # Accept connection after authentication and authorization
     await websocket.accept()
 
     try:
@@ -260,7 +308,10 @@ async def stream_execution(
 
     except WebSocketDisconnect:
         websocket_manager.disconnect(execution_id, websocket)
-    except Exception as e:
-        await websocket.send_json({"event_type": "error", "message": str(e)})
+    except Exception:
+        # Sanitize error messages to prevent information disclosure
+        await websocket.send_json(
+            {"event_type": "error", "message": "Connection error"}
+        )
         websocket_manager.disconnect(execution_id, websocket)
         await websocket.close()

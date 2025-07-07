@@ -78,13 +78,21 @@ export const huntService = {
    * @param {Function} onError - Error handler function
    * @returns {WebSocket} WebSocket connection
    */
-  createExecutionStream(executionId, onMessage, onError) {
-    const wsUrl = import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8000'
-    const ws = new WebSocket(`${wsUrl}/api/hunts/executions/${executionId}/stream`)
+  async createExecutionStream(executionId, onMessage, onError) {
+    try {
+      // Request ephemeral token from the API
+      const response = await api.post('/api/auth/websocket-token', {
+        execution_id: executionId
+      })
+      
+      const { token } = response.data
+      
+      const wsUrl = import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8000'
+      const ws = new WebSocket(`${wsUrl}/api/hunts/executions/${executionId}/stream?token=${encodeURIComponent(token)}`)
 
-    ws.onopen = () => {
-      console.log(`Hunt execution ${executionId} stream connected`)
-    }
+      ws.onopen = () => {
+        console.log(`Hunt execution ${executionId} stream connected`)
+      }
 
     ws.onmessage = (event) => {
       try {
@@ -122,7 +130,12 @@ export const huntService = {
     // Store ping interval on WebSocket for cleanup
     ws._pingInterval = pingInterval
 
-    return ws
+      return ws
+    } catch (error) {
+      console.error('Failed to create WebSocket connection:', error)
+      onError?.(error)
+      throw error
+    }
   },
 
   /**

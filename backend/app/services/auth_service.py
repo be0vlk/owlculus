@@ -6,9 +6,15 @@ from datetime import timedelta
 
 from app.core import security
 from app.core.config import settings
-from app.core.exceptions import AuthenticationException, BaseException
+from app.core.exceptions import (
+    AuthenticationException,
+    BaseException,
+    AuthorizationException,
+    ResourceNotFoundException,
+)
 from app.core.logging import get_security_logger
 from app.database import crud
+from app.database.models import User, HuntExecution
 from sqlmodel import Session
 
 
@@ -65,3 +71,75 @@ class AuthService:
                 error_type="system_error",
             )
             raise BaseException("Authentication service error")
+
+    async def create_websocket_token(
+        self, execution_id: int, current_user: User
+    ) -> dict:
+        """
+        Create a single-use ephemeral token for WebSocket authentication
+
+        Args:
+            execution_id: The hunt execution ID
+            current_user: The authenticated user
+
+        Returns:
+            Dict containing the token, execution_id, and expiration time
+        """
+        auth_logger = get_security_logger(
+            user_id=current_user.id,
+            username=current_user.username,
+            action="create_websocket_token",
+            execution_id=execution_id,
+        )
+
+        try:
+            # Get the execution
+            execution = self.db.get(HuntExecution, execution_id)
+            if not execution:
+                auth_logger.warning(
+                    "WebSocket token creation failed: execution not found",
+                    event_type="ws_token_failed",
+                    failure_reason="execution_not_found",
+                )
+                raise ResourceNotFoundException("Execution not found")
+
+            # Check if user has access to the case
+            from app.core.dependencies import check_case_access
+
+            try:
+                check_case_access(self.db, execution.case_id, current_user)
+            except Exception:
+                auth_logger.warning(
+                    "WebSocket token creation failed: access denied",
+                    event_type="ws_token_failed",
+                    failure_reason="access_denied",
+                    case_id=execution.case_id,
+                )
+                raise AuthorizationException("Access denied")
+
+            # Create ephemeral token
+            token = security.ephemeral_token_manager.create_token(
+                current_user.id, execution_id
+            )
+
+            auth_logger.info(
+                "WebSocket token created successfully",
+                event_type="ws_token_created",
+                case_id=execution.case_id,
+            )
+
+            return {
+                "token": token,
+                "execution_id": execution_id,
+                "expires_in": security.ephemeral_token_manager.token_ttl,
+            }
+
+        except (ResourceNotFoundException, AuthorizationException):
+            raise
+        except Exception as e:
+            auth_logger.error(
+                f"WebSocket token creation error: {str(e)}",
+                event_type="ws_token_error",
+                error_type="system_error",
+            )
+            raise BaseException("WebSocket token service error")

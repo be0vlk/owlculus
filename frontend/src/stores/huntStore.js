@@ -345,12 +345,15 @@ export const useHuntStore = defineStore('hunt', () => {
       // Don't immediately remove on error, let it retry
     }
 
-    try {
-      const ws = huntService.createExecutionStream(executionId, onMessage, onError)
-      websocketConnections.value.set(executionId, ws)
-    } catch (err) {
-      console.error('Failed to create WebSocket connection:', err)
-    }
+    huntService
+      .createExecutionStream(executionId, onMessage, onError)
+      .then((ws) => {
+        websocketConnections.value.set(executionId, ws)
+      })
+      .catch((err) => {
+        console.error('Failed to create WebSocket connection:', err)
+        error.value = 'Failed to connect to execution stream'
+      })
   }
 
   function unsubscribeFromExecution(executionId) {
