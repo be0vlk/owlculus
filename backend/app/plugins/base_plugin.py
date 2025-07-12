@@ -145,8 +145,7 @@ class BasePlugin(ABC):
         self, db: Session, case_id: int
     ) -> Optional[Tuple[str, Optional[int]]]:
         """
-        Ensure that evidence folders exist for plugin results.
-        If no folders exist, create a default folder structure based on evidence categories.
+        Ensure that the "Plugin Results" folder exists for storing plugin/hunt results.
 
         Args:
             db: Database session
@@ -157,26 +156,25 @@ class BasePlugin(ABC):
         """
         from sqlmodel import select
 
-        # Check if any folders exist for this case
-        existing_folders = db.exec(
+        # Check if "Plugin Results" folder exists for this case
+        plugin_results_folder = db.exec(
             select(models.Evidence).where(
                 models.Evidence.case_id == case_id,
                 models.Evidence.is_folder == True,
+                models.Evidence.title == "Plugin Results",
             )
         ).first()
 
-        if existing_folders:
-            # Folders already exist, find the best match for our evidence category
-            return await self._get_best_folder_path(db, case_id)
+        if plugin_results_folder:
+            return plugin_results_folder.folder_path, plugin_results_folder.id
 
-        # No folders exist, create a default folder for this plugin's evidence category
+        # Create "Plugin Results" folder
         evidence_service = EvidenceService(db)
 
-        # Create evidence category folder
         folder_data = FolderCreate(
             case_id=case_id,
-            title=self.evidence_category,
-            description=f"Auto-created folder for {self.evidence_category} evidence",
+            title="Plugin Results",
+            description="Auto-created folder for all plugin and hunt results",
             folder_path=None,  # Will be set to title by the service
             parent_folder_id=None,
         )
@@ -186,11 +184,10 @@ class BasePlugin(ABC):
                 folder_data=folder_data,
                 current_user=self._current_user,
             )
-            # Return the folder path and ID of the newly created folder
             if created_folder:
                 return created_folder.folder_path, created_folder.id
             else:
-                return self.evidence_category, None
+                return "Plugin Results", None
         except Exception:
             # If folder creation fails, return None to save to root
             return None, None
@@ -199,7 +196,9 @@ class BasePlugin(ABC):
         self, db: Session, case_id: int
     ) -> Optional[Tuple[str, Optional[int]]]:
         """
-        Find the best folder path for saving plugin evidence when folders already exist.
+        Find the "Plugin Results" folder for saving plugin evidence.
+        This method is kept for backward compatibility but now just delegates
+        to _ensure_evidence_folder_exists since we always use the same folder.
 
         Args:
             db: Database session
@@ -208,50 +207,9 @@ class BasePlugin(ABC):
         Returns:
             Tuple of (folder_path, parent_folder_id) to use, or (None, None) if no suitable folder found
         """
-        from sqlmodel import select
-
-        # First, try to find a folder that matches our evidence category exactly
-        category_folder = db.exec(
-            select(models.Evidence).where(
-                models.Evidence.case_id == case_id,
-                models.Evidence.is_folder == True,
-                models.Evidence.title == self.evidence_category,
-            )
-        ).first()
-
-        if category_folder:
-            return category_folder.folder_path, category_folder.id
-
-        # If no exact match, try to find a folder with similar category
-        folders = db.exec(
-            select(models.Evidence).where(
-                models.Evidence.case_id == case_id,
-                models.Evidence.is_folder == True,
-            )
-        ).all()
-
-        # Look for folders with category-related names
-        category_keywords = self.evidence_category.lower().split()
-        for folder in folders:
-            folder_title = folder.title.lower()
-            if any(keyword in folder_title for keyword in category_keywords):
-                return folder.folder_path, folder.id
-
-        # If no good match found, prefer "Other" folder as fallback
-        other_folder = None
-        for folder in folders:
-            if folder.title.lower() == "other":
-                other_folder = folder
-                break
-
-        if other_folder:
-            return other_folder.folder_path, other_folder.id
-
-        # If no "Other" folder exists, use the first available folder
-        if folders:
-            return folders[0].folder_path, folders[0].id
-
-        return None, None
+        # Simply delegate to _ensure_evidence_folder_exists which will find or create
+        # the "Plugin Results" folder
+        return await self._ensure_evidence_folder_exists(db, case_id)
 
     async def _save_evidence_to_case(
         self,
