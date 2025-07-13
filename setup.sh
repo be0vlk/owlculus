@@ -553,7 +553,14 @@ setup_owlculus() {
         print_status "Generating secure credentials..."
         SECRET_KEY=$(generate_secret_key)
         DB_PASSWORD=$(openssl rand -base64 32 | tr -d /=+ | cut -c -25)
-        
+
+		# Set DB port comment depending on deployment type
+		if [ "$DEPLOYMENT_TYPE" = "local_dev" ]; then
+			DB_PORT_COMMENT="# Database port is external only for development"
+		else
+			DB_PORT_COMMENT="# Database port is internal only for security"
+		fi
+
         # Create .env file directly with all values
         cat > .env << EOF
 SECRET_KEY=$SECRET_KEY
@@ -567,7 +574,7 @@ ADMIN_EMAIL=$ADMIN_EMAIL
 # Port Configuration
 FRONTEND_PORT=$FRONTEND_PORT
 BACKEND_PORT=$BACKEND_PORT
-# Database port is internal only for security
+$DB_PORT_COMMENT
 DB_PORT=5432
 
 # URL Configuration  

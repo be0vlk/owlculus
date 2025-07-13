@@ -20,7 +20,8 @@ services:
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
       - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
-    # Database port not exposed to host for security
+    ports:
+      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-owlculus} -d ${POSTGRES_DB:-owlculus_dev}"]
       interval: 10s
@@ -131,4 +132,3 @@ networks:
     driver: bridge
   backend-network:
     driver: bridge
-    internal: true
