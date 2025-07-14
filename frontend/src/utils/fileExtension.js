@@ -25,6 +25,11 @@ export const MimeGroups = Object.freeze({
   WORD: ['application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
 })
 
+export const SUPPORTED_PREVIEW_TYPES = Object.freeze([
+  'TEXT',
+  'IMAGE',
+]);
+
 /**
  * Get file type group by extension
  * @param {string} ext file extension (without dot)
@@ -50,4 +55,27 @@ export function getFileTypeByExtension(ext) {
 export function getIconByExtension(ext) {
   const type = getFileTypeByExtension(ext)
   return FileTypeIcons[type] || FileTypeIcons.DEFAULT
+}
+
+export function getFileTypeByMime(mimeType) {
+  if (!mimeType) {
+    return 'DEFAULT';
+  }
+  const normalizedMime = mimeType.toLowerCase();
+
+  for (const [group, mimePatterns] of Object.entries(MimeGroups)) {
+    for (const pattern of mimePatterns) {
+      if (pattern.endsWith('/*')) {
+        const prefix = pattern.slice(0, -2);
+        if (normalizedMime.startsWith(prefix + '/')) {
+          return group;
+        }
+      } else {
+        if (normalizedMime === pattern) {
+          return group;
+        }
+      }
+    }
+  }
+  return 'DEFAULT';
 }

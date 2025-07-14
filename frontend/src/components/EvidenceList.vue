@@ -269,7 +269,11 @@ import EvidenceTemplateSelectionModal from './EvidenceTemplateSelectionModal.vue
 import RenameDialog from './RenameDialog.vue'
 import { useFolderIcons } from '../composables/useFolderIcons'
 import { useDragAndDrop } from '../composables/useDragAndDrop'
-import { getFileTypeByExtension, getIconByExtension } from '@/utils/fileExtension.js'
+import {
+  getFileTypeByExtension,
+  getIconByExtension,
+  SUPPORTED_PREVIEW_TYPES
+} from '@/utils/fileExtension.js'
 
 const props = defineProps({
   evidenceList: {
@@ -300,15 +304,9 @@ const emit = defineEmits([
   'refresh',
   'upload-to-folder',
   'extract-metadata',
-  'view-text-content',
-  'view-image-content',
+  'view-content',
   'evidence-moved',
 ])
-
-const fileTypeActions = {
-  TEXT: 'view-text-content',
-  IMAGE: 'view-image-content',
-}
 
 // Composables
 const { getFolderColor, getFolderIcon } = useFolderIcons()
@@ -415,18 +413,19 @@ const getFileIcon = (item) => {
 }
 
 function hasFileAction(item) {
-  const fileExtension = item.title.split('.').pop()
-  const type = getFileTypeByExtension(fileExtension)
-  return !!fileTypeActions[type]
+  if (!item || !item.title) {
+    return false;
+  }
+
+  const fileExtension = item.title.split('.').pop();
+  const type = getFileTypeByExtension(fileExtension);
+
+  return SUPPORTED_PREVIEW_TYPES.includes(type);
 }
 
 const handleFileDoubleClick = (item) => {
-  const fileExtension = item.title.split('.').pop()
-  const type = getFileTypeByExtension(fileExtension)
-
-  const event = fileTypeActions[type]
-  if (event) {
-    emit(event, item)
+  if (hasFileAction(item)) {
+    emit('view-content', item);
   }
 }
 

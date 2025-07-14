@@ -128,8 +128,7 @@
                 @refresh="loadEvidence"
                 @upload-to-folder="handleUploadToFolder"
                 @extract-metadata="handleExtractMetadata"
-                @view-text-content="handleViewTextContent"
-                @view-image-content="handleViewImageContent"
+                @view-content="handleViewFileContent"
                 @evidence-moved="handleEvidenceMoved"
               />
             </div>
@@ -337,21 +336,14 @@
     :metadata="extractedMetadata"
   />
 
-  <TextContentModal
-    v-model="showTextContentModal"
-    :content="textContent"
-    :error="textContentError"
-    :evidence-item="selectedEvidenceForTextContent"
-    :file-info="textFileInfo"
-    :loading="loadingTextContent"
-  />
-
-  <ImageContentModal
-    v-model="showImageContentModal"
-    :error="imageContentError"
-    :evidence-item="selectedEvidenceForImageContent"
-    :file-info="imageFileInfo"
-    :loading="loadingImageContent"
+  <FileContentModal
+    v-model="showFileContentModal"
+    :evidence-item="selectedEvidenceForContent"
+    :content="fileContent"
+    :file-info="fileContentInfo"
+    :loading="loadingFileContent"
+    :error="fileContentError"
+    @download="handleDownloadEvidence"
   />
 
   <!-- Entity Creation Success Dialog -->
@@ -400,8 +392,7 @@ import NoteEditor from '../components/NoteEditor.vue'
 import EvidenceList from '../components/EvidenceList.vue'
 import UploadEvidenceModal from '../components/UploadEvidenceModal.vue'
 import MetadataModal from '../components/MetadataModal.vue'
-import TextContentModal from '../components/TextContentModal.vue'
-import ImageContentModal from '../components/ImageContentModal.vue'
+import FileContentModal from '../components/FileContentModal.vue'
 import CaseTasks from './cases/CaseTasks.vue'
 import { caseService } from '../services/case'
 import { clientService } from '../services/client'
@@ -439,18 +430,12 @@ const extractedMetadata = ref(null)
 const loadingMetadata = ref(false)
 const metadataError = ref('')
 
-const showTextContentModal = ref(false)
-const selectedEvidenceForTextContent = ref(null)
-const textContent = ref('')
-const textFileInfo = ref(null)
-const loadingTextContent = ref(false)
-const textContentError = ref('')
-
-const showImageContentModal = ref(false)
-const selectedEvidenceForImageContent = ref(null)
-const imageFileInfo = ref(null)
-const loadingImageContent = ref(false)
-const imageContentError = ref('')
+const showFileContentModal = ref(false)
+const selectedEvidenceForContent = ref(null)
+const fileContent = ref(null)
+const fileContentInfo = ref(null)
+const loadingFileContent = ref(false)
+const fileContentError = ref('')
 
 const isEditingNotes = ref(false)
 const savingNotes = ref(false)
@@ -674,43 +659,16 @@ const handleExtractMetadata = async (evidenceItem) => {
   }
 }
 
-const handleViewTextContent = async (evidenceItem) => {
-  selectedEvidenceForTextContent.value = evidenceItem
-  textContent.value = ''
-  textFileInfo.value = null
-  textContentError.value = ''
-  loadingTextContent.value = true
-  showTextContentModal.value = true
+const handleViewFileContent = async (evidenceItem) => {
+  selectedEvidenceForContent.value = evidenceItem;
 
-  try {
-    const response = await evidenceService.getEvidenceContent(evidenceItem.id)
-    if (response.success) {
-      textContent.value = response.content
-      textFileInfo.value = response.file_info
-    } else {
-      textContentError.value = response.error || 'Failed to load file content'
-    }
-  } catch (error) {
-    textContentError.value =
-      error.response?.data?.detail || error.message || 'Failed to load file content'
-  } finally {
-    loadingTextContent.value = false
-  }
-}
+  fileContent.value = null;
+  fileContentInfo.value = null;
+  fileContentError.value = '';
+  loadingFileContent.value = false;
 
-const handleViewImageContent = async (evidenceItem) => {
-  selectedEvidenceForImageContent.value = evidenceItem
-  imageFileInfo.value = null
-  imageContentError.value = ''
-  loadingImageContent.value = false // Set to false since ImageContentModal handles its own loading
-  showImageContentModal.value = true
-
-  // Set basic file info that we have
-  imageFileInfo.value = {
-    filename: evidenceItem.title,
-    file_size: evidenceItem.file_size || 0, // This might need to be added to the evidence model
-  }
-}
+  showFileContentModal.value = true;
+};
 
 // Hunt-related methods
 const loadCaseHuntExecutions = async () => {
