@@ -11,10 +11,18 @@ export const FileTypeIcons = Object.freeze({
   PDF: 'mdi-file-pdf-box',
   WORD: 'mdi-file-word-box',
   IMAGE: 'mdi-file-image',
-  VIDEO: 'mdi-file-video-box',
-  AUDIO: 'mdi-file-music-box',
+  VIDEO: 'mdi-file-video',
+  AUDIO: 'mdi-file-music',
   TEXT: 'mdi-file-document-outline',
   DEFAULT: 'mdi-file-document',
+})
+
+export const MimeGroups = Object.freeze({
+  IMAGE: ['image/*'],
+  VIDEO: ['video/*'],
+  AUDIO: ['audio/*'],
+  PDF: ['application/pdf'],
+  WORD: ['application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
 })
 
 /**
