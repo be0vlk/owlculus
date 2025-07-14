@@ -99,7 +99,7 @@
                   v-else
                   :icon="getFileIcon(item)"
                   color="grey-darken-1"
-                  :class="{ 'cursor-pointer': isTextFile(item) || isImageFile(item) }"
+                  class="cursor-pointer"
                   @contextmenu.prevent="showContextMenu($event, item)"
                   @dblclick="handleFileDoubleClick(item)"
                 />
@@ -120,10 +120,7 @@
               >
                 <span
                   class="tree-item-title"
-                  :class="{
-                    'text-file-title': isTextFile(item),
-                    'image-file-title': isImageFile(item),
-                  }"
+                  :class="{ 'title-supported-file': hasFileAction(item) }"
                   @contextmenu.prevent="showContextMenu($event, item)"
                   @dblclick="handleFileDoubleClick(item)"
                 >
@@ -272,6 +269,7 @@ import EvidenceTemplateSelectionModal from './EvidenceTemplateSelectionModal.vue
 import RenameDialog from './RenameDialog.vue'
 import { useFolderIcons } from '../composables/useFolderIcons'
 import { useDragAndDrop } from '../composables/useDragAndDrop'
+import { getFileTypeByExtension, getIconByExtension } from '@/utils/fileExtension.js'
 
 const props = defineProps({
   evidenceList: {
@@ -306,6 +304,11 @@ const emit = defineEmits([
   'view-image-content',
   'evidence-moved',
 ])
+
+const fileTypeActions = {
+  TEXT: 'view-text-content',
+  IMAGE: 'view-image-content',
+}
 
 // Composables
 const { getFolderColor, getFolderIcon } = useFolderIcons()
@@ -406,73 +409,24 @@ const treeItems = computed(() => {
 const getFileIcon = (item) => {
   if (item.is_folder) return 'mdi-folder'
 
-  const fileExtension = item.title.split('.').pop()?.toLowerCase()
+  const fileExtension = item.title.split('.').pop()
 
-  switch (fileExtension) {
-    case 'pdf':
-      return 'mdi-file-pdf-box'
-    case 'doc':
-    case 'docx':
-      return 'mdi-file-word-box'
-    case 'jpg':
-    case 'jpeg':
-    case 'png':
-    case 'gif':
-      return 'mdi-file-image-box'
-    case 'mp4':
-    case 'avi':
-    case 'mov':
-      return 'mdi-file-video-box'
-    case 'mp3':
-    case 'wav':
-      return 'mdi-file-music-box'
-    case 'txt':
-      return 'mdi-file-document-outline'
-    default:
-      return 'mdi-file-document'
-  }
+  return getIconByExtension(fileExtension)
 }
 
-const isTextFile = (item) => {
-  if (item.is_folder || item.evidence_type !== 'file') return false
-
-  const fileExtension = item.title.split('.').pop()?.toLowerCase()
-  const textExtensions = [
-    'txt',
-    'log',
-    'csv',
-    'json',
-    'md',
-    'yaml',
-    'yml',
-    'xml',
-    'html',
-    'css',
-    'js',
-    'py',
-    'sql',
-    'conf',
-    'ini',
-    'cfg',
-  ]
-
-  return textExtensions.includes(fileExtension)
-}
-
-const isImageFile = (item) => {
-  if (item.is_folder || item.evidence_type !== 'file') return false
-
-  const fileExtension = item.title.split('.').pop()?.toLowerCase()
-  const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg']
-
-  return imageExtensions.includes(fileExtension)
+function hasFileAction(item) {
+  const fileExtension = item.title.split('.').pop()
+  const type = getFileTypeByExtension(fileExtension)
+  return !!fileTypeActions[type]
 }
 
 const handleFileDoubleClick = (item) => {
-  if (isTextFile(item)) {
-    emit('view-text-content', item)
-  } else if (isImageFile(item)) {
-    emit('view-image-content', item)
+  const fileExtension = item.title.split('.').pop()
+  const type = getFileTypeByExtension(fileExtension)
+
+  const event = fileTypeActions[type]
+  if (event) {
+    emit(event, item)
   }
 }
 
@@ -690,22 +644,12 @@ defineExpose({
   text-decoration: underline;
 }
 
-.text-file-title {
-  color: rgb(var(--v-theme-primary));
-  font-weight: 500;
-}
-
-.text-file-title:hover {
-  color: rgb(var(--v-theme-primary-darken-1));
-  text-decoration: underline;
-}
-
-.image-file-title {
+.title-supported-file {
   color: rgb(var(--v-theme-success));
   font-weight: 500;
 }
 
-.image-file-title:hover {
+.title-supported-file:hover {
   color: rgb(var(--v-theme-success-darken-1));
   text-decoration: underline;
 }
