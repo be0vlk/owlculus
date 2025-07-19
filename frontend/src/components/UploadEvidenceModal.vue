@@ -79,13 +79,9 @@
                 type="file"
                 class="d-none"
                 @change="handleFileSelect"
-                accept="image/*,application/pdf,.doc,.docx,.txt"
+                :accept="acceptString"
                 multiple
               />
-
-              <div class="text-body-2 text-medium-emphasis">
-                Images, PDF, DOC, DOCX or TXT up to 50MB
-              </div>
             </v-card-text>
           </v-card>
 
@@ -155,6 +151,7 @@
 <script setup>
 import { ref, defineProps, defineEmits, computed, watch, onMounted } from 'vue'
 import { evidenceService } from '../services/evidence'
+import { FileExtensionGroups, getIconByExtension, MimeGroups } from '@/utils/fileExtension.js'
 // Vuetify components are auto-imported
 
 const CATEGORIES = [
@@ -329,24 +326,20 @@ onMounted(() => {
 })
 
 // Helper function to get appropriate file icon
-function getFileIcon(fileName) {
-  const extension = fileName.split('.').pop().toLowerCase()
+const getFileIcon = (item) => {
+  const fileExtension = item.split('.').pop().toLowerCase()
 
-  const iconMap = {
-    pdf: 'mdi-file-pdf-box',
-    doc: 'mdi-file-word-box',
-    docx: 'mdi-file-word-box',
-    txt: 'mdi-file-document-outline',
-    jpg: 'mdi-file-image',
-    jpeg: 'mdi-file-image',
-    png: 'mdi-file-image',
-    gif: 'mdi-file-image',
-    webp: 'mdi-file-image',
-    svg: 'mdi-file-image',
-  }
-
-  return iconMap[extension] || 'mdi-file-outline'
+  return getIconByExtension(fileExtension)
 }
+
+const acceptedExtensions = Object.values(FileExtensionGroups)
+  .flat()
+  .map(ext => `.${ext}`)
+
+const acceptedMimes = Object.values(MimeGroups).flat()
+
+const acceptString = [...acceptedMimes, ...acceptedExtensions].join(',')
+
 </script>
 
 <style scoped>
