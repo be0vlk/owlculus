@@ -212,11 +212,11 @@
                     class="metadata-item pa-3 mb-2"
                   >
                     <div class="d-flex justify-space-between align-start">
-                      <div class="flex-grow-1">
-                        <div class="text-caption text-medium-emphasis">
+                      <div class="flex-grow-1" style="min-width: 0; overflow: hidden;">
+                        <div class="text-caption text-medium-emphasis text-truncate">
                           {{ formatFieldName(key) }}
                         </div>
-                        <div class="text-body-2 font-weight-medium">
+                        <div class="text-body-2 font-weight-medium text-break">
                           {{ formatFieldValue(key, value) }}
                         </div>
                       </div>
@@ -375,6 +375,8 @@ const openInMaps = (coordinates) => {
   border-radius: 8px;
   border: 1px solid rgba(var(--v-theme-outline), 0.2);
   transition: background-color 0.2s ease;
+  overflow: hidden;
+  word-wrap: break-word;
 }
 
 .metadata-item:hover {

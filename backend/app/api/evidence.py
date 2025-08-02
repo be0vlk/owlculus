@@ -240,8 +240,13 @@ async def extract_evidence_metadata(
             detail="Cannot extract metadata from folders or evidence without files",
         )
 
+    # Construct full file path
+    from app.core.file_storage import UPLOAD_DIR
+    
+    full_file_path = UPLOAD_DIR / evidence.content
+
     # Check if file type is supported
-    if not exiftool_service.is_supported_file(evidence.content):
+    if not exiftool_service.is_supported_file(str(full_file_path)):
         return {
             "success": False,
             "error": "Unsupported file type for metadata extraction",
@@ -252,12 +257,6 @@ async def extract_evidence_metadata(
                 else "unknown"
             ),
         }
-
-    # Construct full file path
-
-    from app.core.file_storage import UPLOAD_DIR
-
-    full_file_path = UPLOAD_DIR / evidence.content
 
     # Extract metadata
     metadata_result = await exiftool_service.extract_metadata(str(full_file_path))
