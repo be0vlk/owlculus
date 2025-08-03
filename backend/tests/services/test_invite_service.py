@@ -4,22 +4,22 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from app import schemas
 from app.core.exceptions import (
-	BaseException,
-	DuplicateResourceException,
-	ResourceNotFoundException,
+    BaseException,
+    DuplicateResourceException,
+    ResourceNotFoundException,
 )
 from app.database import models
 from app.services.invite_service import (
-	INVITE_EXPIRATION_HOURS,
-	TOKEN_LENGTH,
-	InvalidInviteException,
-	InviteException,
-	InviteRegistrationException,
-	InviteService,
-	InviteValidator,
-	InviteValidationResult,
-	SecurityLogger,
-	UserValidator,
+    INVITE_EXPIRATION_HOURS,
+    TOKEN_LENGTH,
+    InvalidInviteException,
+    InviteException,
+    InviteRegistrationException,
+    InviteService,
+    InviteValidator,
+    InviteValidationResult,
+    SecurityLogger,
+    UserValidator,
 )
 from sqlmodel import Session
 
@@ -53,7 +53,7 @@ def current_user():
         username="admin",
         email="admin@test.com",
         role="admin",
-        created_at=datetime.utcnow()
+        created_at=datetime.utcnow(),
     )
 
 
@@ -67,7 +67,7 @@ def valid_invite():
         created_at=datetime.utcnow(),
         expires_at=datetime.utcnow() + timedelta(hours=48),
         used_at=None,
-        created_by_id=1
+        created_by_id=1,
     )
 
 
@@ -81,7 +81,7 @@ def expired_invite():
         created_at=datetime.utcnow() - timedelta(hours=72),
         expires_at=datetime.utcnow() - timedelta(hours=24),
         used_at=None,
-        created_by_id=1
+        created_by_id=1,
     )
 
 
@@ -95,7 +95,7 @@ def used_invite():
         created_at=datetime.utcnow() - timedelta(hours=24),
         expires_at=datetime.utcnow() + timedelta(hours=24),
         used_at=datetime.utcnow() - timedelta(hours=12),
-        created_by_id=1
+        created_by_id=1,
     )
 
 
@@ -147,18 +147,24 @@ class TestUserValidator:
         mock_user_repo.get_user_by_email.return_value = None
 
         validator = UserValidator(mock_user_repo)
-        error = await validator.validate_registration(mock_db, "newuser", "new@test.com")
+        error = await validator.validate_registration(
+            mock_db, "newuser", "new@test.com"
+        )
 
         assert error is None
         mock_user_repo.get_user_by_username.assert_called_once_with(mock_db, "newuser")
-        mock_user_repo.get_user_by_email.assert_called_once_with(mock_db, "new@test.com")
+        mock_user_repo.get_user_by_email.assert_called_once_with(
+            mock_db, "new@test.com"
+        )
 
     @pytest.mark.asyncio
     async def test_validate_registration_username_taken(self, mock_user_repo, mock_db):
         mock_user_repo.get_user_by_username.return_value = Mock()  # User exists
 
         validator = UserValidator(mock_user_repo)
-        error = await validator.validate_registration(mock_db, "existinguser", "new@test.com")
+        error = await validator.validate_registration(
+            mock_db, "existinguser", "new@test.com"
+        )
 
         assert error == "Username already taken"
 
@@ -168,14 +174,16 @@ class TestUserValidator:
         mock_user_repo.get_user_by_email.return_value = Mock()  # User exists
 
         validator = UserValidator(mock_user_repo)
-        error = await validator.validate_registration(mock_db, "newuser", "existing@test.com")
+        error = await validator.validate_registration(
+            mock_db, "newuser", "existing@test.com"
+        )
 
         assert error == "Email already registered"
 
 
 # Unit Tests for SecurityLogger
 class TestSecurityLogger:
-    @patch('app.services.invite_service.get_security_logger')
+    @patch("app.services.invite_service.get_security_logger")
     def test_log_success(self, mock_get_logger):
         mock_logger = Mock()
         mock_get_logger.return_value = mock_logger
@@ -183,10 +191,12 @@ class TestSecurityLogger:
         logger = SecurityLogger({"action": "test"})
         logger.log_success("test_event", "Test message", extra_field="value")
 
-        mock_logger.bind.assert_called_once_with(event_type="test_event", extra_field="value")
+        mock_logger.bind.assert_called_once_with(
+            event_type="test_event", extra_field="value"
+        )
         mock_logger.bind().info.assert_called_once_with("Test message")
 
-    @patch('app.services.invite_service.get_security_logger')
+    @patch("app.services.invite_service.get_security_logger")
     def test_log_failure(self, mock_get_logger):
         mock_logger = Mock()
         mock_get_logger.return_value = mock_logger
@@ -195,12 +205,11 @@ class TestSecurityLogger:
         logger.log_failure("test_event", "Test failure", "invalid_input")
 
         mock_logger.bind.assert_called_once_with(
-            event_type="test_event",
-            failure_reason="invalid_input"
+            event_type="test_event", failure_reason="invalid_input"
         )
         mock_logger.bind().warning.assert_called_once_with("Test failure")
 
-    @patch('app.services.invite_service.get_security_logger')
+    @patch("app.services.invite_service.get_security_logger")
     def test_log_error(self, mock_get_logger):
         mock_logger = Mock()
         mock_get_logger.return_value = mock_logger
@@ -210,16 +219,19 @@ class TestSecurityLogger:
         logger.log_error("test_event", "Test error message", test_error)
 
         mock_logger.bind.assert_called_once_with(
-            event_type="test_event",
-            error_type="system_error"
+            event_type="test_event", error_type="system_error"
         )
-        mock_logger.bind().error.assert_called_once_with("Test error message: Test error")
+        mock_logger.bind().error.assert_called_once_with(
+            "Test error message: Test error"
+        )
 
 
 # Integration Tests for InviteService
 class TestInviteService:
     @pytest.mark.asyncio
-    async def test_create_invite_success(self, invite_service, mock_invite_repo, current_user):
+    async def test_create_invite_success(
+        self, invite_service, mock_invite_repo, current_user
+    ):
         # Arrange
         invite_create = schemas.InviteCreate(role="Investigator")
         expected_invite = models.Invite(
@@ -228,14 +240,16 @@ class TestInviteService:
             role="Investigator",
             created_at=datetime.utcnow(),
             expires_at=datetime.utcnow() + timedelta(hours=48),
-            created_by_id=current_user.id
+            created_by_id=current_user.id,
         )
         mock_invite_repo.create_invite.return_value = expected_invite
 
         # Act
-        with patch('app.services.invite_service.secrets.token_urlsafe') as mock_token:
+        with patch("app.services.invite_service.secrets.token_urlsafe") as mock_token:
             mock_token.return_value = "generated-token"
-            result = await invite_service.create_invite(invite_create, current_user=current_user)
+            result = await invite_service.create_invite(
+                invite_create, current_user=current_user
+            )
 
         # Assert
         assert result == expected_invite
@@ -243,7 +257,9 @@ class TestInviteService:
         mock_invite_repo.create_invite.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_create_invite_database_error(self, invite_service, mock_invite_repo, current_user):
+    async def test_create_invite_database_error(
+        self, invite_service, mock_invite_repo, current_user
+    ):
         # Arrange
         invite_create = schemas.InviteCreate(role="Admin")
         mock_invite_repo.create_invite.side_effect = Exception("Database error")
@@ -255,12 +271,21 @@ class TestInviteService:
         assert str(exc_info.value) == "Database error"
 
     @pytest.mark.asyncio
-    async def test_get_invites(self, invite_service, mock_invite_repo, current_user, valid_invite, expired_invite):
+    async def test_get_invites(
+        self,
+        invite_service,
+        mock_invite_repo,
+        current_user,
+        valid_invite,
+        expired_invite,
+    ):
         # Arrange
         mock_invite_repo.get_all_invites.return_value = [valid_invite, expired_invite]
 
         # Act
-        result = await invite_service.get_invites(skip=0, limit=10, current_user=current_user)
+        result = await invite_service.get_invites(
+            skip=0, limit=10, current_user=current_user
+        )
 
         # Assert
         assert len(result) == 2
@@ -272,7 +297,9 @@ class TestInviteService:
         assert result[1].is_used is False
 
     @pytest.mark.asyncio
-    async def test_validate_invite_valid(self, invite_service, mock_invite_repo, valid_invite):
+    async def test_validate_invite_valid(
+        self, invite_service, mock_invite_repo, valid_invite
+    ):
         # Arrange
         mock_invite_repo.get_invite_by_token.return_value = valid_invite
 
@@ -285,7 +312,9 @@ class TestInviteService:
         assert result.error is None
 
     @pytest.mark.asyncio
-    async def test_validate_invite_expired(self, invite_service, mock_invite_repo, expired_invite):
+    async def test_validate_invite_expired(
+        self, invite_service, mock_invite_repo, expired_invite
+    ):
         # Arrange
         mock_invite_repo.get_invite_by_token.return_value = expired_invite
 
@@ -305,7 +334,7 @@ class TestInviteService:
             username="newuser",
             email="new@test.com",
             password="securepass123",
-            token="test-token-12345"
+            token="test-token-12345",
         )
 
         new_user = models.User(
@@ -313,7 +342,7 @@ class TestInviteService:
             username="newuser",
             email="new@test.com",
             role="investigator",
-            created_at=datetime.utcnow()
+            created_at=datetime.utcnow(),
         )
 
         mock_invite_repo.get_invite_by_token.return_value = valid_invite
@@ -330,7 +359,9 @@ class TestInviteService:
         assert result.email == "new@test.com"
         assert result.role == "investigator"
 
-        mock_invite_repo.mark_invite_used.assert_called_once_with(invite_service.db, valid_invite)
+        mock_invite_repo.mark_invite_used.assert_called_once_with(
+            invite_service.db, valid_invite
+        )
 
     @pytest.mark.asyncio
     async def test_register_user_with_invalid_invite(
@@ -341,7 +372,7 @@ class TestInviteService:
             username="newuser",
             email="new@test.com",
             password="securepass123",
-            token="invalid-token"
+            token="invalid-token",
         )
 
         mock_invite_repo.get_invite_by_token.return_value = None
@@ -361,7 +392,7 @@ class TestInviteService:
             username="existinguser",
             email="new@test.com",
             password="securepass123",
-            token="test-token-12345"
+            token="test-token-12345",
         )
 
         mock_invite_repo.get_invite_by_token.return_value = valid_invite
@@ -386,7 +417,9 @@ class TestInviteService:
 
         # Assert
         assert result is True
-        mock_invite_repo.delete_invite.assert_called_once_with(invite_service.db, invite_id=1)
+        mock_invite_repo.delete_invite.assert_called_once_with(
+            invite_service.db, invite_id=1
+        )
 
     @pytest.mark.asyncio
     async def test_delete_invite_not_found(
@@ -426,7 +459,9 @@ class TestInviteService:
 
         # Assert
         assert result == 5
-        mock_invite_repo.delete_expired_invites.assert_called_once_with(invite_service.db)
+        mock_invite_repo.delete_expired_invites.assert_called_once_with(
+            invite_service.db
+        )
 
 
 # Performance Tests
@@ -439,7 +474,9 @@ class TestPerformance:
         import time
 
         # Arrange
-        mock_invite_repo.create_invite.return_value = Mock(id=1, created_at=datetime.utcnow())
+        mock_invite_repo.create_invite.return_value = Mock(
+            id=1, created_at=datetime.utcnow()
+        )
         invite_create = schemas.InviteCreate(role="Investigator")
 
         # Act
@@ -484,12 +521,12 @@ class TestEdgeCases:
             created_at=now - timedelta(hours=24),
             expires_at=now.replace(tzinfo=None),  # Store as naive datetime (DB format)
             used_at=None,
-            created_by_id=1
+            created_by_id=1,
         )
         mock_invite_repo.get_invite_by_token.return_value = boundary_invite
 
         # Act
-        with patch('app.services.invite_service.get_utc_now', return_value=now):
+        with patch("app.services.invite_service.get_utc_now", return_value=now):
             result = await invite_service.validate_invite("boundary-token")
 
         # Assert
@@ -506,7 +543,7 @@ class TestEdgeCases:
             username="user1",
             email="user1@test.com",
             password="password123",
-            token="test-token-12345"
+            token="test-token-12345",
         )
 
         # First call succeeds
@@ -520,7 +557,7 @@ class TestEdgeCases:
             username="user1",
             email="user1@test.com",
             role="investigator",
-            created_at=datetime.utcnow()
+            created_at=datetime.utcnow(),
         )
         mock_user_repo.create_user_from_invite.return_value = new_user
 
@@ -536,7 +573,7 @@ class TestEdgeCases:
             created_at=valid_invite.created_at,
             expires_at=valid_invite.expires_at,
             used_at=datetime.utcnow(),  # Now it's used
-            created_by_id=valid_invite.created_by_id
+            created_by_id=valid_invite.created_by_id,
         )
         mock_invite_repo.get_invite_by_token.return_value = used_invite
 
@@ -544,7 +581,7 @@ class TestEdgeCases:
             username="user2",
             email="user2@test.com",
             password="password123",
-            token="test-token-12345"
+            token="test-token-12345",
         )
 
         # Assert - Second registration should fail
