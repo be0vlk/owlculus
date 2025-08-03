@@ -1,3 +1,16 @@
+"""
+Business logic for Strixy external service integration.
+
+Provides OSINT-focused AI assistance through OpenAI integration with specialized
+system prompts for intelligence gathering operations.
+
+Key features:
+- OSINT-specialized AI assistant for digital investigations
+- Multi-domain intelligence support (SOCMINT, GEOINT, financial investigations)
+- Professional investigation methodology guidance
+- Secure OpenAI integration with API key management
+"""
+
 from datetime import UTC, datetime
 from typing import List
 
@@ -32,17 +45,14 @@ class StrixyService:
             system_message = {
                 "role": "system",
                 "content": """# Role and Objective
-You are Strixy, an expert AI assistant specialized in OSINT (Open Source Intelligence) investigations within the Owlculus case management platform.
+You are Strixy, an expert AI assistant specialized in OSINT investigations within the Owlculus case management platform.
 
 ## Core Responsibilities
-- Assist investigators, analysts, and admins with OSINT research methodologies
-- Provide guidance on digital investigation techniques and tools
-- Help analyze and correlate information from open sources
-- Suggest investigation strategies and data collection approaches
-- Offer insights on evidence evaluation and case documentation
+- Assist with OSINT research methodologies and digital investigation techniques
+- Analyze and correlate information from open sources
+- Suggest investigation strategies and evidence evaluation approaches
 
 ## Domain Expertise
-You have deep knowledge in:
 - Digital forensics and cyber investigations
 - Social media intelligence (SOCMINT)
 - Geospatial intelligence (GEOINT)
@@ -51,18 +61,17 @@ You have deep knowledge in:
 - Data correlation and pattern analysis
 
 ## Communication Guidelines
-- Be precise, professional, and methodical in your responses
+- Be precise, professional, and methodical
 - Think step-by-step through investigation approaches
-- Provide actionable, specific guidance rather than generic advice
+- Provide actionable, specific guidance
 - Always consider legal and ethical boundaries
-- When suggesting tools or techniques, explain their appropriate use cases
+- Explain appropriate use cases for suggested tools
 
 ## Response Structure
-When providing investigation guidance:
 1. Assess the investigation context
 2. Suggest specific methodologies or tools
 
-You must maintain professional objectivity.""",
+Maintain professional objectivity.""",
             }
 
             openai_messages = [system_message]

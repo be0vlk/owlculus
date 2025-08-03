@@ -1,3 +1,18 @@
+"""
+Business logic for user invitation management.
+
+This module handles invite creation, validation, expiration, and acceptance workflows.
+Provides comprehensive invitation system with security logging, token generation,
+and user registration through invitation tokens.
+
+Key features include:
+- Secure invitation token generation with cryptographic strength and expiration management
+- Multi-stage validation workflow with token verification and user data validation
+- Comprehensive security logging with detailed audit trails and failure tracking
+- Role-based invitation system supporting different user privilege levels
+- Automated cleanup processes for expired invitations and maintenance operations
+"""
+
 import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -14,7 +29,6 @@ from app.core.utils import get_utc_now
 from app.database import crud, models
 from sqlmodel import Session
 
-# Constants
 TOKEN_LENGTH = 32
 INVITE_EXPIRATION_HOURS = 48
 MIN_USERNAME_LENGTH = 3
@@ -22,7 +36,6 @@ MAX_USERNAME_LENGTH = 50
 MIN_PASSWORD_LENGTH = 8
 
 
-# Custom exceptions for better error handling
 class InviteException(BaseException):
     """Base exception for invite-related errors"""
 
@@ -41,7 +54,6 @@ class InviteRegistrationException(InviteException):
     pass
 
 
-# Protocols for dependency inversion
 class InviteRepository(Protocol):
     """Protocol for invite data access operations"""
 
@@ -80,11 +92,8 @@ class UserRepository(Protocol):
     ) -> models.User: ...
 
 
-# Helper classes for better organization
 @dataclass
 class InviteValidationResult:
-    """Result of invite validation"""
-
     valid: bool
     role: Optional[str] = None
     expires_at: Optional[str] = None
@@ -99,13 +108,11 @@ class SecurityLogger:
         self._logger = get_security_logger(**base_context)
 
     def log_success(self, event_type: str, message: str, **extra_context):
-        """Log successful operation"""
         self._logger.bind(event_type=event_type, **extra_context).info(message)
 
     def log_failure(
         self, event_type: str, message: str, failure_reason: str, **extra_context
     ):
-        """Log failed operation"""
         self._logger.bind(
             event_type=event_type, failure_reason=failure_reason, **extra_context
         ).warning(message)
@@ -113,7 +120,6 @@ class SecurityLogger:
     def log_error(
         self, event_type: str, message: str, error: Exception, **extra_context
     ):
-        """Log system error"""
         self._logger.bind(
             event_type=event_type, error_type="system_error", **extra_context
         ).error(f"{message}: {str(error)}")
@@ -123,7 +129,6 @@ class InviteValidator:
     """Handles invite validation logic"""
 
     def validate_token(self, invite: Optional[models.Invite]) -> InviteValidationResult:
-        """Validate an invite token"""
         if not invite:
             return InviteValidationResult(valid=False, error="Invalid invite token")
 
@@ -140,7 +145,6 @@ class InviteValidator:
         )
 
     def _is_expired(self, invite: models.Invite) -> bool:
-        """Check if invite has expired"""
         now = get_utc_now()
         return invite.expires_at.replace(tzinfo=timezone.utc) <= now
 
@@ -154,7 +158,6 @@ class UserValidator:
     async def validate_registration(
         self, db: Session, username: str, email: str
     ) -> Optional[str]:
-        """Validate user registration data. Returns error message if invalid."""
         if await self.user_repo.get_user_by_username(db, username):
             return "Username already taken"
 
@@ -174,7 +177,7 @@ class InviteService:
         user_repo: Optional[UserRepository] = None,
     ):
         self.db = db
-        self.invite_repo = invite_repo or crud  # Default to existing crud module
+        self.invite_repo = invite_repo or crud
         self.user_repo = user_repo or crud
         self.validator = InviteValidator()
         self.user_validator = UserValidator(self.user_repo)
@@ -182,7 +185,6 @@ class InviteService:
     async def create_invite(
         self, invite: schemas.InviteCreate, *, current_user: models.User
     ) -> models.Invite:
-        """Create a new invite with automatic token generation"""
         logger = SecurityLogger(
             {
                 "admin_user_id": current_user.id,
@@ -220,14 +222,12 @@ class InviteService:
     async def get_invites(
         self, skip: int = 0, limit: int = 100, *, current_user: models.User
     ) -> list[schemas.InviteListResponse]:
-        """Get all invites with computed status fields"""
         invites = await self.invite_repo.get_all_invites(
             self.db, skip=skip, limit=limit
         )
         return [self._map_invite_to_response(invite) for invite in invites]
 
     async def validate_invite(self, token: str) -> schemas.InviteValidation:
-        """Validate an invite token"""
         invite = await self.invite_repo.get_invite_by_token(self.db, token=token)
         result = self.validator.validate_token(invite)
 
@@ -241,7 +241,6 @@ class InviteService:
     async def register_user_with_invite(
         self, registration: schemas.UserRegistration
     ) -> schemas.UserRegistrationResponse:
-        """Register a new user using an invite token"""
         logger = SecurityLogger(
             {
                 "action": "register_with_invite",
@@ -250,20 +249,16 @@ class InviteService:
         )
 
         try:
-            # Validate invite
             invite = await self._validate_and_get_invite(registration.token, logger)
 
-            # Validate user data
             await self._validate_user_registration(
                 registration.username, registration.email, logger
             )
 
-            # Create user
             user = await self._create_user_from_registration(
                 registration, invite, logger
             )
 
-            # Mark invite as used
             await self.invite_repo.mark_invite_used(self.db, invite)
 
             logger.log_success(
@@ -290,7 +285,6 @@ class InviteService:
             raise InviteException("Internal server error")
 
     async def delete_invite(self, invite_id: int, *, current_user: models.User) -> bool:
-        """Delete an unused invite"""
         logger = SecurityLogger(
             {
                 "admin_user_id": current_user.id,
@@ -321,22 +315,17 @@ class InviteService:
             raise InviteException("Internal server error")
 
     async def cleanup_expired_invites(self, *, current_user: models.User) -> int:
-        """Remove all expired invites from the system"""
         return await self.invite_repo.delete_expired_invites(self.db)
 
-    # Private helper methods
     def _generate_secure_token(self) -> str:
-        """Generate a cryptographically secure token"""
         return secrets.token_urlsafe(TOKEN_LENGTH)
 
     def _calculate_expiration(self) -> datetime:
-        """Calculate invite expiration time"""
         return get_utc_now() + timedelta(hours=INVITE_EXPIRATION_HOURS)
 
     def _map_invite_to_response(
         self, invite: models.Invite
     ) -> schemas.InviteListResponse:
-        """Map database invite to response schema"""
         now = get_utc_now()
         return schemas.InviteListResponse(
             id=invite.id,
@@ -351,7 +340,6 @@ class InviteService:
     def _map_user_to_response(
         self, user: models.User
     ) -> schemas.UserRegistrationResponse:
-        """Map database user to response schema"""
         return schemas.UserRegistrationResponse(
             id=user.id,
             username=user.username,
@@ -363,7 +351,6 @@ class InviteService:
     async def _validate_and_get_invite(
         self, token: str, logger: SecurityLogger
     ) -> models.Invite:
-        """Validate and retrieve invite, raising appropriate exceptions"""
         validation = await self.validate_invite(token)
         if not validation.valid:
             logger.log_failure(
@@ -388,7 +375,6 @@ class InviteService:
     async def _validate_user_registration(
         self, username: str, email: str, logger: SecurityLogger
     ) -> None:
-        """Validate user registration data"""
         error = await self.user_validator.validate_registration(
             self.db, username, email
         )
@@ -406,7 +392,6 @@ class InviteService:
         invite: models.Invite,
         logger: SecurityLogger,
     ) -> models.User:
-        """Create user from registration data"""
         return await self.user_repo.create_user_from_invite(
             db=self.db,
             username=registration.username,
@@ -418,7 +403,6 @@ class InviteService:
     async def _get_invite_by_id(
         self, invite_id: int, logger: SecurityLogger
     ) -> models.Invite:
-        """Get invite by ID or raise exception"""
         invite = self.db.get(models.Invite, invite_id)
         if not invite:
             logger.log_failure(
@@ -432,7 +416,6 @@ class InviteService:
     def _validate_invite_deletion(
         self, invite: models.Invite, logger: SecurityLogger
     ) -> None:
-        """Validate that invite can be deleted"""
         if invite.used_at:
             logger.log_failure(
                 "invite_deletion_failed",

@@ -1,11 +1,21 @@
 """
-Task management API endpoints
+Task Management API for Owlculus OSINT Platform.
+
+This module provides comprehensive task management capabilities for OSINT investigations,
+enabling structured workflow coordination and team collaboration within cases.
+
+Key features include:
+- Task template system with pre-defined investigation workflows
+- CRUD operations for investigation tasks with role-based permissions
+- Bulk task operations for efficient team management and assignment
+- Case-integrated task tracking with lead investigator controls
+- Status management and progress tracking for investigation milestones
+- Flexible task assignment with case team member validation
 """
 
 from typing import List
 
 from app import schemas
-from app.core.roles import UserRole
 from app.core.dependencies import (
     admin_only,
     check_case_access,
@@ -18,6 +28,7 @@ from app.core.exceptions import (
     ResourceNotFoundException,
     ValidationException,
 )
+from app.core.roles import UserRole
 from app.database.connection import get_db
 from app.database.models import User
 from app.services.task_service import TaskService
@@ -28,14 +39,12 @@ from sqlmodel import Session
 router = APIRouter()
 
 
-# Template endpoints
 @router.get("/templates", response_model=List[schemas.TaskTemplateResponse])
 async def list_templates(
     include_inactive: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """List all available task templates"""
     service = TaskService(db)
     try:
         templates = await service.get_templates(
@@ -55,7 +64,6 @@ async def create_template(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Create a custom task template (Admin only)"""
     service = TaskService(db)
     try:
         return await service.create_custom_template(
@@ -75,10 +83,8 @@ async def update_template(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Update a task template (Admin only)"""
     service = TaskService(db)
     try:
-        # Filter out None values to only update provided fields
         update_data = {k: v for k, v in updates.model_dump().items() if v is not None}
         return await service.update_template(
             template_id, update_data, current_user=current_user
@@ -98,7 +104,6 @@ async def delete_template(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Delete a task template (Admin only)"""
     service = TaskService(db)
     try:
         success = await service.delete_template(template_id, current_user=current_user)
@@ -112,17 +117,13 @@ async def delete_template(
         )
 
 
-# Task CRUD endpoints
 @router.get("/", response_model=List[schemas.TaskResponse])
 async def list_tasks(
     filters: schemas.TaskFilter = Depends(),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """List tasks with optional filters"""
     service = TaskService(db)
-
-    # Check case access if filtering by case
     if filters.case_id:
         try:
             check_case_access(db, filters.case_id, current_user)
@@ -159,8 +160,6 @@ async def create_task(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Create a new task for a case (Admin or Case Lead only)"""
-    # Check if user is admin or case lead (this also verifies case access)
     if not is_case_lead(db, task.case_id, current_user):
         raise HTTPException(
             status_code=http_status.HTTP_403_FORBIDDEN,
@@ -180,18 +179,13 @@ async def create_task(
         )
 
 
-# Bulk operation endpoints (must come before /{task_id} routes)
 @router.post("/bulk/assign", response_model=List[schemas.TaskResponse])
 async def bulk_assign_tasks(
     data: schemas.BulkTaskAssign,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Bulk assign tasks to a user (Admin or Case Lead only)"""
     service = TaskService(db)
-
-    # For bulk operations, we'll check permissions in the service layer for each task
-    # This is because tasks might belong to different cases
     try:
         return await service.bulk_assign(
             data.task_ids, data.user_id, current_user=current_user
@@ -208,7 +202,6 @@ async def bulk_update_status(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Bulk update task status"""
     service = TaskService(db)
     try:
         return await service.bulk_update_status(
@@ -226,11 +219,9 @@ async def get_task(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get a specific task by ID"""
     service = TaskService(db)
     try:
         task = await service.get_task(task_id, current_user=current_user)
-        # Check case access
         try:
             check_case_access(db, task.case_id, current_user)
         except AuthorizationException:
@@ -258,10 +249,7 @@ async def update_task(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Update a task - Full edit for admins/leads, limited edit for assignees"""
     service = TaskService(db)
-
-    # First check if the task exists and user has access
     try:
         task = await service.get_task(task_id, current_user=current_user)
         check_case_access(db, task.case_id, current_user)
@@ -272,8 +260,6 @@ async def update_task(
         )
     except ResourceNotFoundException as e:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
-
-    # Check if user can edit this task
     is_admin_or_lead = current_user.role == UserRole.ADMIN.value or is_case_lead(
         db, task.case_id, current_user
     )
@@ -285,10 +271,7 @@ async def update_task(
             detail="Only admins, case leads, or the assigned user can update this task",
         )
 
-    # Filter out None values to only update provided fields
     update_data = {k: v for k, v in updates.model_dump().items() if v is not None}
-
-    # If user is assignee (not admin/lead), restrict what they can update
     if is_assignee and not is_admin_or_lead:
         allowed_fields = {"status", "custom_fields"}
         restricted_updates = {
@@ -322,7 +305,6 @@ async def delete_task(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Delete a task (Admin only)"""
     service = TaskService(db)
     try:
         success = await service.delete_task(task_id, current_user=current_user)
@@ -336,7 +318,6 @@ async def delete_task(
         )
 
 
-# Task operation endpoints
 @router.post("/{task_id}/assign", response_model=schemas.TaskResponse)
 async def assign_task(
     task_id: int,
@@ -344,21 +325,15 @@ async def assign_task(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Assign or unassign a task to/from a user (Admin or Case Lead only)"""
     service = TaskService(db)
-
-    # First check if the task exists
     try:
         task = await service.get_task(task_id, current_user=current_user)
 
-        # Check if user is admin or case lead (this also verifies case access)
         if not is_case_lead(db, task.case_id, current_user):
             raise HTTPException(
                 status_code=http_status.HTTP_403_FORBIDDEN,
                 detail="Only admins or case leads can assign tasks",
             )
-
-        # If assigning to someone, verify they have access to the case
         if user_id:
             user = db.get(User, user_id)
             if user:
@@ -388,10 +363,7 @@ async def update_task_status(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Update task status"""
     service = TaskService(db)
-
-    # First check if the task exists and user has access
     try:
         task = await service.get_task(task_id, current_user=current_user)
         check_case_access(db, task.case_id, current_user)

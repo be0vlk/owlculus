@@ -1,5 +1,16 @@
 """
-API endpoints for hunt operations
+Hunt Operations API for Owlculus OSINT Platform.
+
+This module provides automated OSINT workflow execution capabilities through the hunt system,
+enabling complex multi-step investigations with real-time monitoring and results tracking.
+
+Key features include:
+- Hunt definition management with customizable workflow parameters
+- Asynchronous hunt execution with progress tracking and status updates
+- Real-time WebSocket streaming for live hunt monitoring and results
+- Case-integrated hunt results with automatic evidence and entity creation
+- Multi-step workflow coordination with conditional execution paths
+- Secure hunt execution with role-based permissions and access controls
 """
 
 from typing import List
@@ -27,15 +38,10 @@ async def list_hunts(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    List all available hunts
-
-    Returns a list of hunt definitions that can be executed.
-    """
+    """List all available hunts"""
     service = HuntService(db)
     hunts = await service.list_hunts(current_user=current_user)
 
-    # Add step count from definition
     response = []
     for hunt in hunts:
         hunt_dict = hunt.__dict__.copy()
@@ -97,7 +103,6 @@ async def execute_hunt(
             current_user=current_user,
         )
 
-        # Load related hunt data
         hunt = db.get(models.Hunt, execution.hunt_id)
 
         response = schemas.HuntExecutionResponse(
@@ -139,7 +144,6 @@ async def get_execution_status(
     if not execution:
         raise HTTPException(status_code=404, detail="Hunt execution not found")
 
-    # Load related data
     hunt = db.get(models.Hunt, execution.hunt_id)
     case = db.get(models.Case, execution.case_id)
     created_by = db.get(models.User, execution.created_by_id)
@@ -197,7 +201,6 @@ async def list_case_executions(
     service = HuntService(db)
     executions = await service.list_case_executions(case_id, current_user=current_user)
 
-    # Enhance with hunt info
     response = []
     for execution in executions:
         hunt = db.get(models.Hunt, execution.hunt_id)
@@ -247,7 +250,6 @@ async def stream_execution(
     Authentication: Pass ephemeral token as query parameter ?token=<ephemeral_token>
     The token must be obtained from POST /api/auth/websocket-token endpoint
     """
-    # Extract ephemeral token from query parameters
     token = websocket.query_params.get("token")
 
     if not token:
@@ -256,12 +258,10 @@ async def stream_execution(
         )
         return
 
-    # Validate ephemeral token
     try:
         from app.core import security
         from app.database.models import User
 
-        # Validate and consume the single-use token
         user_id = security.ephemeral_token_manager.validate_token(token, execution_id)
 
         if not user_id:
@@ -270,7 +270,6 @@ async def stream_execution(
             )
             return
 
-        # Get the user
         current_user = db.get(User, user_id)
         if not current_user or not current_user.is_active:
             await websocket.close(
@@ -284,14 +283,11 @@ async def stream_execution(
         )
         return
 
-    # Accept connection after authentication and authorization
     await websocket.accept()
 
     try:
-        # Register this websocket connection with the manager
         await websocket_manager.connect(execution_id, websocket)
 
-        # Send initial connection message
         await websocket.send_json(
             {
                 "execution_id": execution_id,
@@ -300,7 +296,6 @@ async def stream_execution(
             }
         )
 
-        # Keep connection alive
         while True:
             data = await websocket.receive_text()
             if data == "ping":
@@ -309,7 +304,6 @@ async def stream_execution(
     except WebSocketDisconnect:
         websocket_manager.disconnect(execution_id, websocket)
     except Exception:
-        # Sanitize error messages to prevent information disclosure
         await websocket.send_json(
             {"event_type": "error", "message": "Connection error"}
         )

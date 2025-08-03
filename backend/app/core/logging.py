@@ -1,3 +1,11 @@
+"""
+Application logging configuration and structured logging utilities.
+
+This module sets up structured logging using Loguru with context information,
+configurable log levels, file rotation, and security-focused logging features.
+It includes context variables for tracking client IP and user agent across requests.
+"""
+
 import sys
 from contextvars import ContextVar
 from pathlib import Path

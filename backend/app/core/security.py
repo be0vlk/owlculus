@@ -1,3 +1,11 @@
+"""
+Security utilities for password hashing, JWT tokens, file validation, and API key encryption.
+
+This module provides comprehensive security functionality including password verification,
+JWT token creation and validation, secure file upload handling, API key encryption/decryption,
+and ephemeral token management for WebSocket authentication.
+"""
+
 import base64
 import os
 import secrets

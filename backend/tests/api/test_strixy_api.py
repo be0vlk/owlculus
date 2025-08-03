@@ -1,3 +1,11 @@
+"""
+Test suite for Strixy API endpoints.
+
+This module tests Strixy service integration, data processing,
+chat functionality, and error handling for the OSINT AI assistant
+integration endpoints.
+"""
+
 from unittest.mock import Mock, patch
 
 import pytest

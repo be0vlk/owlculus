@@ -1,3 +1,11 @@
+"""
+Application configuration settings and environment variable management.
+
+This module defines configuration classes for database connections, logging,
+CORS settings, authentication parameters, and other application settings.
+It uses Pydantic for settings validation and environment variable handling.
+"""
+
 import os
 
 import dotenv

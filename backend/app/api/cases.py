@@ -1,11 +1,27 @@
 """
-Case management API
+Case Management API for Owlculus OSINT Platform.
+
+This module provides comprehensive case management endpoints for digital investigations,
+supporting the complete lifecycle of OSINT cases from creation to completion.
+
+Key features include:
+- Full CRUD operations for investigation cases with role-based access control
+- Multi-user case assignment with lead investigator designation
+- Case team management with granular permission controls
+- Integrated entity management for tracking persons, organizations, and digital assets
+- Status tracking and workflow management for investigation progress
+- Secure case access validation ensuring data isolation between investigations
 """
 
 from typing import List, Optional
 
 from app import schemas
-from app.core.dependencies import admin_only, get_current_user, no_analyst, check_case_access
+from app.core.dependencies import (
+    admin_only,
+    get_current_user,
+    no_analyst,
+    check_case_access,
+)
 from app.core.exceptions import (
     AuthorizationException,
     BaseException,
@@ -104,14 +120,10 @@ async def add_user_to_case(
 ):
     case_service = CaseService(db)
     try:
-        # Get is_lead from body, default to False
         is_lead = body.get("is_lead", False) if body else False
-        
+
         return await case_service.add_user_to_case(
-            case_id=case_id, 
-            user_id=user_id, 
-            current_user=current_user,
-            is_lead=is_lead
+            case_id=case_id, user_id=user_id, current_user=current_user, is_lead=is_lead
         )
     except AuthorizationException:
         raise HTTPException(status_code=403, detail="Not authorized")
@@ -138,7 +150,7 @@ async def update_case_user_lead_status(
             case_id=case_id,
             user_id=user_id,
             is_lead=update_data.is_lead,
-            current_user=current_user
+            current_user=current_user,
         )
     except AuthorizationException:
         raise HTTPException(status_code=403, detail="Not authorized")
@@ -170,22 +182,23 @@ async def remove_user_from_case(
     except BaseException:
         raise HTTPException(status_code=500, detail="Internal server error")
 
+
 @router.get("/{case_id}/users", response_model=list[schemas.User])
 async def get_case_users(
     case_id: int,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    """Get all users assigned to a case - accessible by all case members"""
-    # Check if user has access to this case
+    """Get all users assigned to a case"""
     try:
         check_case_access(db, case_id, current_user)
     except AuthorizationException:
-        raise HTTPException(status_code=403, detail="Not authorized to access this case")
+        raise HTTPException(
+            status_code=403, detail="Not authorized to access this case"
+        )
     except ResourceNotFoundException:
         raise HTTPException(status_code=404, detail="Case not found")
-    
-    # Get the case with users
+
     case_service = CaseService(db)
     try:
         case = await case_service.get_case(case_id=case_id, current_user=current_user)

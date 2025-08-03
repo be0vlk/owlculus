@@ -1,5 +1,12 @@
 """
 Pydantic models for entities.
+
+Key features include:
+- Comprehensive entity type support for OSINT investigations (person, company, domain, IP, vehicle)
+- Structured data validation for each entity type with specialized schema classes
+- Entity relationship tracking with associates, affiliates, and network assets
+- Dynamic entity validation with type-specific schema enforcement
+- Source attribution and metadata tracking for evidence chain preservation
 """
 
 from datetime import datetime

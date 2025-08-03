@@ -1,5 +1,19 @@
 """
-Service for managing and executing plugins
+Plugin management and execution service for Owlculus OSINT tool integration.
+
+This module handles all plugin-related operations including dynamic plugin loading,
+execution management, and evidence collection integration. Provides extensible
+OSINT tool integration with automatic plugin discovery, parameter validation,
+and real-time streaming execution for investigation workflows.
+
+Key features include:
+- Dynamic plugin discovery and loading from filesystem
+- Plugin metadata management and introspection
+- Streaming plugin execution with real-time output
+- Automatic evidence collection and storage
+- Plugin parameter validation and type checking
+- User context and session management
+- Error handling and resource cleanup
 """
 
 import importlib
@@ -29,7 +43,6 @@ class PluginService:
                     f"..plugins.{module_name}", package=__package__
                 )
 
-                # Find plugin classes in the module
                 for _, obj in inspect.getmembers(module):
                     if (
                         inspect.isclass(obj)

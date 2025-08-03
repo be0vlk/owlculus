@@ -1,5 +1,16 @@
 """
-Evidence management API
+Evidence Management API for Owlculus OSINT Platform.
+
+This module provides comprehensive digital evidence management capabilities for OSINT investigations,
+ensuring proper chain of custody and forensic integrity of collected data.
+
+Key features include:
+- Multi-file evidence upload with automated metadata extraction
+- Hierarchical folder organization with template-based structure creation
+- File content preview and secure download capabilities for various media types
+- ExifTool integration for comprehensive metadata analysis of digital artifacts
+- Case-based evidence isolation with role-based access controls
+- Evidence categorization and search functionality for large investigations
 """
 
 from typing import Optional
@@ -56,7 +67,6 @@ async def create_evidence(
             )
             results.append(evidence)
         except Exception:
-            # If one file fails, continue with the rest
             continue
 
     if not results:
@@ -110,7 +120,6 @@ async def get_evidence_content(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    """Get text content of evidence file for viewing."""
     evidence_service = EvidenceService(db)
     return await evidence_service.get_evidence_content(
         evidence_id=evidence_id,
@@ -124,7 +133,6 @@ async def get_evidence_image(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    """Get image file for viewing."""
     evidence_service = EvidenceService(db)
     return await evidence_service.get_evidence_image(
         evidence_id=evidence_id,
@@ -157,8 +165,6 @@ async def delete_evidence(
     result = await evidence_service.delete_evidence(
         evidence_id=evidence_id, current_user=current_user
     )
-    # If result is None, the evidence was already deleted (race condition)
-    # Still return 204 as the end state is what the client wanted
 
 
 @router.post(
@@ -212,8 +218,6 @@ async def delete_folder(
     result = await evidence_service.delete_folder(
         folder_id=folder_id, current_user=current_user
     )
-    # If result is None, the folder was already deleted (race condition)
-    # Still return 204 as the end state is what the client wanted
 
 
 @router.get("/{evidence_id}/metadata")
@@ -222,11 +226,9 @@ async def extract_evidence_metadata(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    """Extract metadata from evidence file using ExifTool"""
     evidence_service = EvidenceService(db)
     exiftool_service = ExifToolService()
 
-    # Get the evidence record
     evidence = await evidence_service.get_evidence(
         evidence_id=evidence_id, current_user=current_user
     )
@@ -240,12 +242,10 @@ async def extract_evidence_metadata(
             detail="Cannot extract metadata from folders or evidence without files",
         )
 
-    # Construct full file path
     from app.core.file_storage import UPLOAD_DIR
-    
+
     full_file_path = UPLOAD_DIR / evidence.content
 
-    # Check if file type is supported
     if not exiftool_service.is_supported_file(str(full_file_path)):
         return {
             "success": False,
@@ -258,7 +258,6 @@ async def extract_evidence_metadata(
             ),
         }
 
-    # Extract metadata
     metadata_result = await exiftool_service.extract_metadata(str(full_file_path))
 
     if "error" in metadata_result:
@@ -282,7 +281,6 @@ async def apply_folder_template(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    """Apply a folder template to create folder structure for a case."""
     evidence_service = EvidenceService(db)
     return await evidence_service.create_folders_from_template(
         case_id=case_id,

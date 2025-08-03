@@ -1,3 +1,18 @@
+"""
+Main API router configuration that aggregates all API endpoints.
+
+This module sets up the primary API router by including all sub-routers for different
+functional areas including authentication, users, cases, clients, plugins, evidence,
+system configuration, invites, external services, hunts, and tasks.
+
+Key features include:
+- Centralized routing configuration with organized endpoint grouping and tagging
+- Modular API structure supporting authentication, case management, and OSINT operations
+- Plugin system integration with dynamic endpoint registration and execution
+- Evidence and entity management with comprehensive data handling capabilities
+- Administrative functionality including user management, invitations, and system configuration
+"""
+
 from fastapi import APIRouter
 
 from . import (

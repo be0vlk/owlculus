@@ -1,8 +1,16 @@
+"""
+Database connection management and session handling for Owlculus.
+
+This module provides database connection utilities including engine configuration,
+database creation, table initialization, and session management. It uses SQLModel
+with PostgreSQL and includes connection pooling and health check configuration.
+"""
+
 from sqlalchemy_utils import create_database, database_exists
 from sqlmodel import Session, create_engine
 
-from ..core.config import settings
 from .models import SQLModel
+from ..core.config import settings
 
 engine = create_engine(
     settings.get_database_url(),

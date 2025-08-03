@@ -1,5 +1,12 @@
 """
 Holehe plugin for checking email account registrations across platforms
+
+Key features include:
+- Email account discovery across 120+ platforms using account recovery verification
+- Dynamic platform module loading with automatic service detection
+- Concurrent platform checking with configurable timeout and rate limiting
+- Social media and service registration validation with partial information extraction
+- Focused results showing only confirmed account registrations and active profiles
 """
 
 import asyncio

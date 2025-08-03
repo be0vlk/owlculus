@@ -1,3 +1,18 @@
+"""
+Business logic for system configuration management.
+
+This module handles system settings, configuration validation, and updates including
+case number templates, API key management, evidence folder templates, and
+administrative system configuration functionality.
+
+Key features include:
+- Dynamic case number template system with prefix support and validation
+- Encrypted API key management with secure storage and retrieval mechanisms
+- Evidence folder template configuration for consistent case organization
+- Comprehensive configuration validation with detailed error handling and logging
+- Administrative controls with security logging and audit trail functionality
+"""
+
 import os
 from typing import Dict, List, Optional, Tuple
 
@@ -10,7 +25,6 @@ from ..core.security import decrypt_api_key, encrypt_api_key
 from ..core.utils import get_utc_now
 from ..database import models
 
-# Constants for case number templates
 CASE_NUMBER_TEMPLATE_MONTHLY = "YYMM-NN"
 CASE_NUMBER_TEMPLATE_PREFIX = "PREFIX-YYMM-NN"
 VALID_CASE_NUMBER_TEMPLATES = [
@@ -18,18 +32,14 @@ VALID_CASE_NUMBER_TEMPLATES = [
     CASE_NUMBER_TEMPLATE_PREFIX,
 ]
 
-# Constants for prefix validation
 PREFIX_MIN_LENGTH = 2
 PREFIX_MAX_LENGTH = 8
-
-# Template display names
 TEMPLATE_DISPLAY_NAMES = {
     CASE_NUMBER_TEMPLATE_MONTHLY: "Monthly Reset (YYMM-NN)",
     CASE_NUMBER_TEMPLATE_PREFIX: "Prefix + Monthly Reset (PREFIX-YYMM-NN)",
 }
 
 
-# Custom exceptions
 class SystemConfigError(Exception):
     """Base exception for system configuration errors"""
 
@@ -166,30 +176,23 @@ class SystemConfigService:
         )
 
         try:
-            # Validate inputs
             SystemConfigValidator.validate_case_number_template(case_number_template)
             SystemConfigValidator.validate_case_number_prefix(
                 case_number_prefix, case_number_template
             )
 
-            # Normalize prefix
             case_number_prefix = self._normalize_prefix(
                 case_number_template, case_number_prefix
             )
 
-            # Get current configuration
             config = await self.get_configuration()
             old_template = config.case_number_template
             old_prefix = config.case_number_prefix
 
-            # Update configuration
             config.case_number_template = case_number_template
             config.case_number_prefix = case_number_prefix
 
-            # Save changes
             config = self._save_configuration(config)
-
-            # Log success
             config_logger.bind(
                 old_template=old_template,
                 new_template=case_number_template,
@@ -311,11 +314,8 @@ class SystemConfigService:
                 )
                 config_logger = config_logger.bind(**metadata)
 
-            # Update configuration
             config.api_keys = current_keys
             config = self._save_configuration(config)
-
-            # Log success
             config_logger.bind(event_type=f"api_key_{operation_type}_success").info(
                 f"API key {operation_type}d successfully for provider: {provider}"
             )
@@ -412,7 +412,6 @@ class SystemConfigService:
             return None
 
         except Exception:
-            # Fallback to environment variable on any error
             return self._get_env_api_key(provider)
 
     @admin_only()
@@ -472,21 +471,16 @@ class SystemConfigService:
         )
 
         try:
-            # Validate all templates
             for template_key, template_data in templates.items():
                 SystemConfigValidator.validate_evidence_template(
                     template_data, template_key
                 )
 
-            # Get current configuration
             config = await self.get_configuration()
             old_template_count = len(config.evidence_folder_templates or {})
 
-            # Update templates
             config.evidence_folder_templates = templates
             config = self._save_configuration(config)
-
-            # Log success
             config_logger.bind(
                 template_count=len(templates),
                 old_template_count=old_template_count,

@@ -1,5 +1,18 @@
 """
-Client service layer handling all client-related business logic
+Client management service for Owlculus OSINT case management platform.
+
+This module handles all client-related business logic including client registration,
+profile management, and data validation. Provides secure client operations with
+email uniqueness enforcement, comprehensive error handling, and audit logging
+for OSINT investigation client management.
+
+Key features include:
+- Client creation and profile management with data validation
+- Email uniqueness enforcement with race condition handling
+- Secure client updates with constraint validation
+- Client deletion with case dependency checking
+- Comprehensive security logging and audit trails
+- Role-based access control for client operations
 """
 
 from app import schemas
@@ -35,7 +48,6 @@ class ClientService:
         )
 
         try:
-            # Check for duplicate email
             existing = await crud.get_client_by_email(self.db, email=client.email)
             if existing:
                 client_logger.bind(
@@ -91,7 +103,6 @@ class ClientService:
                 ).warning("Client update failed: client not found")
                 raise ResourceNotFoundException(f"Client with id {client_id} not found")
 
-            # Check email uniqueness if being updated
             if client_update.email and client_update.email != db_client.email:
                 existing = await crud.get_client_by_email(
                     self.db, email=client_update.email
@@ -137,7 +148,6 @@ class ClientService:
                 ).warning("Client deletion failed: client not found")
                 raise ResourceNotFoundException(f"Client with id {client_id} not found")
 
-            # Check if client has any associated cases
             client_cases = await crud.get_cases(self.db)
             cases_for_client = [
                 case for case in client_cases if case.client_id == client_id

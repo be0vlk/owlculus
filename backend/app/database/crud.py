@@ -1,3 +1,11 @@
+"""
+Generic CRUD (Create, Read, Update, Delete) operations for database models.
+
+This module provides base CRUD operations for all database models including users,
+clients, cases, entities, and invites. It includes validation, error handling,
+duplicate checking, and relationship management functionality.
+"""
+
 from typing import Optional
 
 from sqlalchemy.exc import IntegrityError
@@ -250,23 +258,19 @@ async def add_user_to_case(
     existing_link = db.exec(
         select(models.CaseUserLink).where(
             models.CaseUserLink.case_id == case.id,
-            models.CaseUserLink.user_id == user.id
+            models.CaseUserLink.user_id == user.id,
         )
     ).first()
-    
+
     if existing_link:
         # If already exists, just update is_lead if needed
         existing_link.is_lead = is_lead
         db.add(existing_link)
     else:
         # Create new link with is_lead flag
-        link = models.CaseUserLink(
-            case_id=case.id,
-            user_id=user.id,
-            is_lead=is_lead
-        )
+        link = models.CaseUserLink(case_id=case.id, user_id=user.id, is_lead=is_lead)
         db.add(link)
-    
+
     case.updated_at = get_utc_now()
     db.add(case)
     db.commit()
@@ -293,23 +297,23 @@ async def update_case_user_lead_status(
     link = db.exec(
         select(models.CaseUserLink).where(
             models.CaseUserLink.case_id == case_id,
-            models.CaseUserLink.user_id == user_id
+            models.CaseUserLink.user_id == user_id,
         )
     ).first()
-    
+
     if not link:
         raise ValueError(f"User {user_id} not found in case {case_id}")
-    
+
     # Update the is_lead status
     link.is_lead = is_lead
     db.add(link)
-    
+
     # Update case timestamp
     case = db.get(models.Case, case_id)
     if case:
         case.updated_at = get_utc_now()
         db.add(case)
-    
+
     db.commit()
     db.refresh(case)
     return case

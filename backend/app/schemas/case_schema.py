@@ -1,3 +1,17 @@
+"""
+Pydantic schemas for case management data validation.
+
+This module defines request and response models for case creation, updates,
+retrieval, and user assignment functionality including case lead management.
+
+Key features include:
+- OSINT case lifecycle management with status tracking
+- Case-user assignment models with lead investigator designation
+- Comprehensive case metadata validation including client associations
+- Flexible case updates with timestamp tracking
+- Role-based case access control and user management
+"""
+
 from datetime import datetime
 from typing import Literal, Optional
 
@@ -9,6 +23,7 @@ from ..core.utils import get_utc_now
 
 class CaseUser(User):
     """User with case-specific information"""
+
     is_lead: bool = False
 
 
@@ -47,10 +62,12 @@ class Case(CaseBase):
 
 class CaseUserAdd(BaseModel):
     """Schema for adding a user to a case"""
+
     user_id: int
     is_lead: bool = False
 
 
 class CaseUserUpdate(BaseModel):
     """Schema for updating a user's case role"""
+
     is_lead: bool

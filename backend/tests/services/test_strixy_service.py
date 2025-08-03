@@ -1,3 +1,11 @@
+"""
+Test suite for Strixy service business logic.
+
+This module tests Strixy integration, data processing, error handling,
+OpenAI API interaction, and OSINT-focused AI assistant functionality
+within the Strixy service layer.
+"""
+
 from unittest.mock import Mock, patch
 
 import pytest

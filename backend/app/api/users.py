@@ -1,5 +1,16 @@
 """
-User management API
+User Management API for Owlculus OSINT Platform.
+
+This module provides comprehensive user account management for the Owlculus platform,
+supporting role-based access control and secure user administration for investigation teams.
+
+Key features include:
+- User account CRUD operations with admin-level controls
+- Role-based permission management (Admin, Manager, Investigator, Viewer)
+- Secure password management with self-service and admin reset capabilities
+- User profile management with investigation team integration
+- Multi-level access controls ensuring proper separation of duties
+- Account lifecycle management supporting team member onboarding and offboarding
 """
 
 from app import schemas

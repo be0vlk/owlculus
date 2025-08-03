@@ -1,5 +1,12 @@
 """
 Base plugin class that all plugins must inherit from
+
+Key features include:
+- Abstract plugin interface with standardized parameters and execution flow
+- Automatic evidence collection and case storage with folder management
+- Entity creation system for IP addresses and other discovered assets
+- Async subprocess execution with real-time output streaming
+- Plugin metadata management and API key requirement validation
 """
 
 import asyncio

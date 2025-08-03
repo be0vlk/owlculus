@@ -1,3 +1,11 @@
+"""
+pytest configuration and shared test fixtures.
+
+This module provides database fixtures, authentication setup, test utilities,
+and comprehensive test data fixtures for the entire test suite. Includes
+mock users, cases, clients, entities, and evidence for testing.
+"""
+
 import os
 from datetime import timedelta
 

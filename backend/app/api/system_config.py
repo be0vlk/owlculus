@@ -1,3 +1,18 @@
+"""
+API endpoints for system configuration management.
+
+This module manages application settings, configuration updates, system parameters,
+API key management, case number templates, and evidence folder templates.
+Provides administrative endpoints for system configuration.
+
+Key features include:
+- System-wide configuration management with validation and template support
+- Encrypted API key storage and management for external service integrations
+- Case number template configuration with prefix support and preview functionality
+- Evidence folder template management for consistent case organization
+- Administrative access controls with comprehensive security logging and audit trails
+"""
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session
 
@@ -17,7 +32,6 @@ async def get_configuration(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get current system configuration (admin only)."""
     config_service = SystemConfigService(db)
     config = await config_service.get_configuration_admin(current_user=current_user)
     return system_config_schema.SystemConfigurationResponse.from_model(config)
@@ -31,7 +45,6 @@ async def update_configuration(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Update system configuration (admin only)."""
     config_service = SystemConfigService(db)
     try:
         config = await config_service.update_configuration(
@@ -54,10 +67,8 @@ async def set_api_key(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Set or update an API key for a specific provider (admin only)."""
     config_service = SystemConfigService(db)
     try:
-        # Validate that at least one field is provided
         if not api_key_data.api_key and not api_key_data.name:
             raise HTTPException(
                 status_code=400, detail="Either api_key or name must be provided"
@@ -85,7 +96,6 @@ async def remove_api_key(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Remove an API key for a specific provider (admin only)."""
     config_service = SystemConfigService(db)
     try:
         config = await config_service.remove_api_key(
@@ -102,7 +112,6 @@ async def list_api_keys(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List all configured API keys with masked keys (admin only)."""
     config_service = SystemConfigService(db)
     return await config_service.list_api_keys(current_user=current_user)
 
@@ -116,7 +125,6 @@ async def get_api_key_status(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Check if a specific provider has an API key configured."""
     config_service = SystemConfigService(db)
     is_configured = config_service.is_provider_configured(provider)
     return system_config_schema.APIKeyStatusResponse(
@@ -131,10 +139,8 @@ async def preview_case_number_template(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Preview what a case number would look like with given template and prefix."""
     config_service = SystemConfigService(db)
     try:
-        # Validate template
         if template not in ["YYMM-NN", "PREFIX-YYMM-NN"]:
             raise HTTPException(status_code=400, detail="Invalid template")
 
@@ -157,7 +163,6 @@ async def get_evidence_folder_templates(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get evidence folder templates (admin only)."""
     config_service = SystemConfigService(db)
     templates = await config_service.get_evidence_folder_templates()
     return system_config_schema.EvidenceFolderTemplatesResponse(templates=templates)
@@ -169,10 +174,8 @@ async def update_evidence_folder_templates(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Update evidence folder templates (admin only)."""
     config_service = SystemConfigService(db)
     try:
-        # Convert Pydantic models to dictionaries
         templates_dict = {}
         for key, template in templates_data.templates.items():
             templates_dict[key] = template.model_dump()
@@ -181,7 +184,6 @@ async def update_evidence_folder_templates(
             templates=templates_dict,
             current_user=current_user,
         )
-        # Return updated templates
         updated_templates = await config_service.get_evidence_folder_templates()
         return system_config_schema.EvidenceFolderTemplatesResponse(
             templates=updated_templates

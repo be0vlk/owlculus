@@ -1,3 +1,11 @@
+"""
+Test suite for invitation service business logic.
+
+This module tests invite workflows, validation, expiration handling,
+user registration through invites, security logging, and error handling
+within the invitation service layer.
+"""
+
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, Mock, patch
 

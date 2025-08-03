@@ -30,10 +30,9 @@ collaborate, and run OSINT tools directly in your browser.
 The information you need to get started is hosted right here on GitHub in the [Wiki](https://github.com/be0vlk/owlculus/wiki) but if you need any additional guidance, please feel free to open a [Discussion](https://github.com/be0vlk/owlculus/discussions)
 
 ## Contributing
+GitHub Issues and Pull Requests always welcome! Oh and make sure to at least read the CONTRIBUTING.md readme first for some basic guidelines.
 
 If you find the app useful and feel so inclined, please consider fueling my future coding sessions with a donation
 below. Anything and everything helps and is greatly appreciated :)
-
-GitHub Issues and Pull Requests always welcome too!
 
 <a href="https://www.buymeacoffee.com/be0vlk" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>

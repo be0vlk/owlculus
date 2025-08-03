@@ -1,5 +1,15 @@
 """
-Client management API
+Client Management API for Owlculus OSINT Platform.
+
+This module provides client organization management for the Owlculus platform,
+enabling structured relationship management for OSINT service delivery.
+
+Key features include:
+- Client organization CRUD operations with admin-level controls
+- Hierarchical client-case relationships for multi-client investigations
+- Secure client data isolation and access control
+- Client metadata management for billing and reporting integration
+- Role-based permissions ensuring only authorized personnel can manage clients
 """
 
 from app import schemas

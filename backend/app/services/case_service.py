@@ -1,5 +1,18 @@
 """
-Case service layer handling all case-related business logic
+Case management service for Owlculus OSINT investigations platform.
+
+This module handles all case-related business logic including case creation,
+user assignment, case number generation, and access control. Provides comprehensive
+case lifecycle management with automated numbering, user role validation,
+and security logging for OSINT investigation workflows.
+
+Key features include:
+- Automated case number generation with configurable templates
+- Role-based case access control and user assignment
+- Case lead management with analyst role restrictions
+- Comprehensive security logging and audit trails
+- Transaction-safe operations with proper error handling
+- Integration with system configuration for numbering schemes
 """
 
 from datetime import datetime
@@ -34,7 +47,6 @@ class CaseService:
         year = str(current_time.year)[2:]
         month = str(current_time.month).zfill(2)
 
-        # Build search pattern based on template
         if (
             config.case_number_template == "PREFIX-YYMM-NN"
             and config.case_number_prefix
@@ -51,9 +63,7 @@ class CaseService:
         if not cases:
             return f"{base_format}-01"
 
-        # Get the highest number from the last part after the final dash
         highest = max(int(case.case_number.split("-")[-1]) for case in cases)
-        # Increment and ensure 2 digits
         next_number = str(highest + 1).zfill(2)
         return f"{base_format}-{next_number}"
 
@@ -68,7 +78,6 @@ class CaseService:
         )
 
         try:
-            # Use transaction to ensure atomicity
             with transaction(self.db):
                 # Always generate a new case number, ignoring any provided value
                 case_data = case.model_dump()
@@ -108,7 +117,7 @@ class CaseService:
         status: str | None = None,
     ) -> list[models.Case]:
         from app.core.dependencies import load_case_with_users
-        
+
         if current_user.role == UserRole.ADMIN.value:
             stmt = select(models.Case)
             if status:
@@ -117,7 +126,6 @@ class CaseService:
             result = self.db.exec(stmt)
             cases = result.all()
         else:
-            # For non-admin users, only return cases they are associated with
             stmt = (
                 select(models.Case)
                 .join(models.CaseUserLink)
@@ -129,7 +137,6 @@ class CaseService:
             result = self.db.exec(stmt)
             cases = result.all()
 
-        # Load each case with users including is_lead information
         cases_with_users = []
         for case in cases:
             case_with_users = load_case_with_users(self.db, case.id)
@@ -141,16 +148,13 @@ class CaseService:
     async def get_case(self, case_id: int, current_user: models.User) -> models.Case:
         from app.core.dependencies import load_case_with_users
 
-        # First check access
         check_case_access(self.db, case_id, current_user)
 
-        # Then load case with users including is_lead information
         return load_case_with_users(self.db, case_id)
 
     async def update_case(
         self, case_id: int, case_update: schemas.CaseUpdate, current_user: models.User
     ) -> models.Case:
-        # Check if user is not an analyst
         if current_user.role == UserRole.ANALYST.value:
             raise AuthorizationException("Not authorized")
 
@@ -209,9 +213,12 @@ class CaseService:
             raise BaseException("Internal server error")
 
     async def add_user_to_case(
-        self, case_id: int, user_id: int, current_user: models.User, is_lead: bool = False
+        self,
+        case_id: int,
+        user_id: int,
+        current_user: models.User,
+        is_lead: bool = False,
     ) -> models.Case:
-        # Check if user is admin
         if current_user.role != UserRole.ADMIN.value:
             raise AuthorizationException("Not authorized")
 
@@ -278,7 +285,6 @@ class CaseService:
     async def remove_user_from_case(
         self, case_id: int, user_id: int, current_user: models.User
     ) -> models.Case:
-        # Check if user is admin
         if current_user.role != UserRole.ADMIN.value:
             raise AuthorizationException("Not authorized")
 
@@ -330,7 +336,6 @@ class CaseService:
     async def update_case_user_lead_status(
         self, case_id: int, user_id: int, is_lead: bool, current_user: models.User
     ) -> models.Case:
-        # Check if user is admin
         if current_user.role != UserRole.ADMIN.value:
             raise AuthorizationException("Not authorized")
 
@@ -343,7 +348,6 @@ class CaseService:
         )
 
         try:
-            # Check if case exists
             db_case = await crud.get_case(self.db, case_id=case_id)
             if not db_case:
                 case_logger.bind(
@@ -352,7 +356,6 @@ class CaseService:
                 ).warning("Update case user lead status failed: case not found")
                 raise ResourceNotFoundException("Case not found")
 
-            # Check if user exists
             db_user = await crud.get_user(self.db, user_id=user_id)
             if not db_user:
                 case_logger.bind(
@@ -361,12 +364,13 @@ class CaseService:
                 ).warning("Update case user lead status failed: user not found")
                 raise ResourceNotFoundException("User not found")
 
-            # Check if user is assigned to case
             if db_user not in db_case.users:
                 case_logger.bind(
                     event_type="case_user_lead_update_failed",
                     failure_reason="user_not_in_case",
-                ).warning("Update case user lead status failed: user not assigned to case")
+                ).warning(
+                    "Update case user lead status failed: user not assigned to case"
+                )
                 raise ValidationException("User is not assigned to this case")
 
             # Check if user is analyst and being set as lead
@@ -374,10 +378,11 @@ class CaseService:
                 case_logger.bind(
                     event_type="case_user_lead_update_failed",
                     failure_reason="analyst_cannot_be_lead",
-                ).warning("Update case user lead status failed: analyst cannot be set as lead")
+                ).warning(
+                    "Update case user lead status failed: analyst cannot be set as lead"
+                )
                 raise ValidationException("Analysts cannot be set as case leads")
 
-            # Update the lead status
             updated_case = await crud.update_case_user_lead_status(
                 self.db, case_id=case_id, user_id=user_id, is_lead=is_lead
             )

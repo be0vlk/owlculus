@@ -1,5 +1,19 @@
 """
-Evidence service for handling evidence-related operations.
+Evidence management service for Owlculus OSINT case file handling and storage.
+
+This module handles all evidence-related operations including file uploads,
+folder management, evidence validation, and secure file access. Provides
+comprehensive evidence lifecycle management with file hashing, content viewing,
+template-based folder structures, and role-based access control for OSINT investigations.
+
+Key features include:
+- Secure file upload and storage with hash validation
+- Hierarchical folder structure with template support
+- Evidence content viewing for text and image files
+- File download and streaming capabilities
+- Role-based access control (no analyst modifications)
+- Comprehensive security logging and audit trails
+- Evidence deletion with physical file cleanup
 """
 
 from typing import List, Optional
@@ -40,7 +54,6 @@ class EvidenceService:
         )
 
         try:
-            # Check case access
             try:
                 case = check_case_access(self.db, evidence.case_id, current_user)
             except HTTPException as e:
@@ -56,7 +69,7 @@ class EvidenceService:
                     ).warning("Evidence creation failed: not authorized")
                 raise
 
-            # Check if folders exist before allowing file uploads (excluding folder creation itself)
+            # Prevent file uploads when no folder structure exists for organization
             if evidence.evidence_type == "file" and not evidence.is_folder:
                 existing_folders = self.db.exec(
                     select(models.Evidence).where(
@@ -76,7 +89,6 @@ class EvidenceService:
                         detail="Cannot upload files without any folders. Create a folder first to organize evidence.",
                     )
 
-            # For file uploads, save the file and get the path
             if evidence.evidence_type == "file" and not evidence.is_folder:
                 if not file:
                     evidence_logger.bind(
@@ -90,7 +102,6 @@ class EvidenceService:
                         detail="File is required for file-type evidence",
                     )
                 try:
-                    # Save the file and get its path and hash
                     relative_path, file_hash = await save_upload_file(
                         upload_file=file,
                         case_id=evidence.case_id,
@@ -98,7 +109,7 @@ class EvidenceService:
                     )
                     evidence.content = relative_path
                     evidence.file_hash = file_hash
-                    # Update title to show actual saved filename (handles duplicates)
+                    # Update title to reflect actual saved filename after duplicate handling
                     evidence.title = relative_path.split("/")[-1]
                 except HTTPException:
                     raise
@@ -111,7 +122,6 @@ class EvidenceService:
                         status_code=500, detail=f"Error saving file: {str(e)}"
                     )
 
-            # Create the evidence record
             db_evidence = models.Evidence(
                 case_id=evidence.case_id,
                 title=evidence.title,
@@ -144,7 +154,7 @@ class EvidenceService:
         except HTTPException:
             raise
         except Exception as e:
-            # If there was an error, try to delete the uploaded file
+            # Clean up uploaded file on database operation failure
             if evidence.evidence_type == "file" and evidence.content:
                 try:
                     await delete_file(evidence.content)
@@ -164,10 +174,8 @@ class EvidenceService:
         skip: int = 0,
         limit: int = 100,
     ) -> List[models.Evidence]:
-        # Check case access
         check_case_access(self.db, case_id, current_user)
 
-        # Get evidence for the case
         query = (
             select(models.Evidence)
             .where(models.Evidence.case_id == case_id)
@@ -183,7 +191,6 @@ class EvidenceService:
         if not evidence:
             raise HTTPException(status_code=404, detail="Evidence not found")
 
-        # Check case access
         check_case_access(self.db, evidence.case_id, current_user)
 
         return evidence
@@ -203,7 +210,6 @@ class EvidenceService:
         )
 
         try:
-            # Get existing evidence
             db_evidence = self.db.get(models.Evidence, evidence_id)
             if not db_evidence:
                 evidence_logger.bind(
@@ -212,7 +218,6 @@ class EvidenceService:
                 ).warning("Evidence update failed: evidence not found")
                 raise HTTPException(status_code=404, detail="Evidence not found")
 
-            # Check case access
             try:
                 check_case_access(self.db, db_evidence.case_id, current_user)
             except HTTPException as e:
@@ -228,7 +233,6 @@ class EvidenceService:
                     ).warning("Evidence update failed: not authorized")
                 raise
 
-            # Update fields if provided
             if evidence_update.title is not None:
                 db_evidence.title = evidence_update.title
             if evidence_update.description is not None:
@@ -288,16 +292,14 @@ class EvidenceService:
         )
 
         try:
-            # Try to get the evidence directly first
             evidence = self.db.get(models.Evidence, evidence_id)
             if not evidence:
-                # If not found, it may have already been deleted (race condition in mass delete)
+                # Handle race condition where evidence may already be deleted in bulk operations
                 evidence_logger.bind(
                     event_type="evidence_already_deleted",
                 ).info("Evidence already deleted or not found")
                 return None
 
-            # Check case access
             try:
                 check_case_access(self.db, evidence.case_id, current_user)
             except HTTPException:
@@ -307,7 +309,6 @@ class EvidenceService:
                 ).warning("Evidence deletion failed: not authorized")
                 raise
 
-            # Delete the file if it's a file-type evidence and has content
             if evidence.evidence_type == "file" and evidence.content:
                 try:
                     await delete_file(evidence.content)
@@ -322,7 +323,6 @@ class EvidenceService:
                         status_code=500, detail=f"Error deleting file: {str(e)}"
                     )
 
-            # Delete the database record
             self.db.delete(evidence)
             self.db.commit()
 
@@ -359,7 +359,6 @@ class EvidenceService:
         )
 
         try:
-            # Get evidence
             evidence = self.db.exec(
                 select(models.Evidence).where(models.Evidence.id == evidence_id)
             ).first()
@@ -370,7 +369,6 @@ class EvidenceService:
                 ).warning("Evidence download failed: evidence not found")
                 raise HTTPException(status_code=404, detail="Evidence not found")
 
-            # Check case access
             try:
                 check_case_access(self.db, evidence.case_id, current_user)
             except HTTPException as e:
@@ -386,7 +384,6 @@ class EvidenceService:
                     ).warning("Evidence download failed: not authorized")
                 raise
 
-            # For file evidence, return a FileResponse
             if evidence.evidence_type == "file":
 
                 from app.core.file_storage import UPLOAD_DIR
@@ -447,7 +444,6 @@ class EvidenceService:
         )
 
         try:
-            # Get evidence
             evidence = await self.get_evidence(evidence_id, current_user)
 
             if evidence.is_folder:
@@ -482,9 +478,9 @@ class EvidenceService:
                 ).warning("Evidence content view failed: file not found on disk")
                 raise HTTPException(status_code=404, detail="File not found")
 
-            # Check file size (limit to 1MB for viewing)
+            # Limit file size to prevent memory issues with large files
             file_size = file_path.stat().st_size
-            max_size = 1024 * 1024  # 1MB
+            max_size = 1024 * 1024
             if file_size > max_size:
                 evidence_logger.bind(
                     event_type="evidence_content_view_failed",
@@ -497,7 +493,6 @@ class EvidenceService:
                     detail=f"File too large for viewing. Maximum size: {max_size // 1024}KB",
                 )
 
-            # Check if file type is viewable as text
             viewable_extensions = {
                 ".txt",
                 ".log",
@@ -529,9 +524,7 @@ class EvidenceService:
                     detail=f"File type '{file_extension}' is not supported for text viewing",
                 )
 
-            # Read file content with encoding detection
             try:
-                # First, detect encoding
                 with open(file_path, "rb") as f:
                     raw_content = f.read()
 
@@ -539,7 +532,7 @@ class EvidenceService:
                 encoding = encoding_result.get("encoding", "utf-8")
                 confidence = encoding_result.get("confidence", 0)
 
-                # Try to decode with detected encoding, fallback to utf-8
+                # Decode with detected encoding, fallback to utf-8 with error replacement
                 try:
                     content = raw_content.decode(encoding)
                 except UnicodeDecodeError:
@@ -601,7 +594,6 @@ class EvidenceService:
         )
 
         try:
-            # Get evidence
             evidence = await self.get_evidence(evidence_id, current_user)
 
             if evidence.is_folder:
@@ -636,7 +628,6 @@ class EvidenceService:
                 ).warning("Evidence image view failed: file not found on disk")
                 raise HTTPException(status_code=404, detail="File not found")
 
-            # Check if file type is viewable as image
             viewable_extensions = {
                 ".jpg",
                 ".jpeg",
@@ -659,9 +650,9 @@ class EvidenceService:
                     detail=f"File type '{file_extension}' is not supported for image viewing",
                 )
 
-            # Check file size (limit to 10MB for viewing)
+            # Limit image size to prevent excessive memory usage
             file_size = file_path.stat().st_size
-            max_size = 10 * 1024 * 1024  # 10MB
+            max_size = 10 * 1024 * 1024
             if file_size > max_size:
                 evidence_logger.bind(
                     event_type="evidence_image_view_failed",
@@ -674,7 +665,6 @@ class EvidenceService:
                     detail=f"Image too large for viewing. Maximum size: {max_size // 1024 // 1024}MB",
                 )
 
-            # Get media type based on extension
             media_types = {
                 ".jpg": "image/jpeg",
                 ".jpeg": "image/jpeg",
@@ -726,7 +716,6 @@ class EvidenceService:
         )
 
         try:
-            # Check case access
             try:
                 check_case_access(self.db, folder_data.case_id, current_user)
             except HTTPException as e:
@@ -742,7 +731,6 @@ class EvidenceService:
                     ).warning("Folder creation failed: not authorized")
                 raise
 
-            # Build folder path
             folder_path = folder_data.folder_path or ""
             if folder_data.parent_folder_id:
                 parent_folder = self.db.get(
@@ -763,7 +751,6 @@ class EvidenceService:
             else:
                 folder_path = folder_data.title
 
-            # Create physical folder
             try:
                 create_folder(folder_data.case_id, folder_path)
             except HTTPException:
@@ -779,7 +766,6 @@ class EvidenceService:
                     status_code=500, detail=f"Error creating folder: {str(e)}"
                 )
 
-            # Create folder record
             db_folder = models.Evidence(
                 case_id=folder_data.case_id,
                 title=folder_data.title,
@@ -810,7 +796,7 @@ class EvidenceService:
         except HTTPException:
             raise
         except Exception as e:
-            # Clean up physical folder if database operation fails
+            # Clean up physical folder on database failure
             try:
                 delete_folder(folder_data.case_id, folder_path)
             except:
@@ -826,10 +812,8 @@ class EvidenceService:
         self, case_id: int, current_user: models.User
     ) -> List[models.Evidence]:
         """Get the folder tree structure for a case."""
-        # Check case access
         check_case_access(self.db, case_id, current_user)
 
-        # Get all evidence including folders for the case
         query = select(models.Evidence).where(models.Evidence.case_id == case_id)
         return list(self.db.exec(query))
 
@@ -856,7 +840,6 @@ class EvidenceService:
                 ).warning("Folder update failed: folder not found")
                 raise HTTPException(status_code=404, detail="Folder not found")
 
-            # Check case access
             try:
                 check_case_access(self.db, db_folder.case_id, current_user)
             except HTTPException as e:
@@ -872,7 +855,6 @@ class EvidenceService:
                     ).warning("Folder update failed: not authorized")
                 raise
 
-            # Update fields if provided
             if folder_update.title is not None:
                 db_folder.title = folder_update.title
             if folder_update.description is not None:
@@ -920,7 +902,7 @@ class EvidenceService:
         try:
             db_folder = self.db.get(models.Evidence, folder_id)
             if not db_folder:
-                # If not found, it may have already been deleted (race condition in mass delete)
+                # Handle race condition in bulk delete operations
                 folder_logger.bind(
                     event_type="folder_already_deleted",
                 ).info("Folder already deleted or not found")
@@ -933,7 +915,6 @@ class EvidenceService:
                 ).warning("Folder deletion failed: not a folder")
                 raise HTTPException(status_code=404, detail="Folder not found")
 
-            # Check case access
             try:
                 check_case_access(self.db, db_folder.case_id, current_user)
             except HTTPException as e:
@@ -949,7 +930,6 @@ class EvidenceService:
                     ).warning("Folder deletion failed: not authorized")
                 raise
 
-            # Delete physical folder and contents
             if db_folder.folder_path:
                 try:
                     delete_folder(db_folder.case_id, db_folder.folder_path)
@@ -964,8 +944,7 @@ class EvidenceService:
                         status_code=500, detail=f"Error deleting folder: {str(e)}"
                     )
 
-            # Delete all evidence records in this folder and subfolders
-            # Get all evidence in this folder path
+            # Remove all evidence records within this folder hierarchy
             subfolder_evidence = self.db.exec(
                 select(models.Evidence).where(
                     models.Evidence.case_id == db_folder.case_id,
@@ -973,11 +952,9 @@ class EvidenceService:
                 )
             ).all()
 
-            # Delete all subfolder evidence
             for evidence in subfolder_evidence:
                 self.db.delete(evidence)
 
-            # Delete the folder record itself
             self.db.delete(db_folder)
             self.db.commit()
 
@@ -1017,7 +994,6 @@ class EvidenceService:
         )
 
         try:
-            # Check case access
             try:
                 check_case_access(self.db, case_id, current_user)
             except HTTPException as e:
@@ -1033,7 +1009,6 @@ class EvidenceService:
                     ).warning("Folder template apply failed: not authorized")
                 raise
 
-            # Get templates from system configuration
             from app.services.system_config_service import SystemConfigService
 
             config_service = SystemConfigService(self.db)
@@ -1054,7 +1029,6 @@ class EvidenceService:
             template = templates[template_name]
             created_folders = []
 
-            # Recursive function to create folders
             def create_folder_hierarchy(
                 folders: list, parent_path: str = "", parent_id: Optional[int] = None
             ):
@@ -1063,12 +1037,10 @@ class EvidenceService:
                     if not folder_name:
                         continue
 
-                    # Create folder path
                     folder_path = (
                         f"{parent_path}/{folder_name}" if parent_path else folder_name
                     )
 
-                    # Create folder record
                     folder_data = schemas.FolderCreate(
                         title=folder_name,
                         description=folder_info.get("description", ""),
@@ -1077,7 +1049,6 @@ class EvidenceService:
                         parent_folder_id=parent_id,
                     )
 
-                    # Create the folder
                     new_folder = models.Evidence(
                         case_id=folder_data.case_id,
                         title=folder_data.title,
@@ -1093,28 +1064,23 @@ class EvidenceService:
                         updated_at=get_utc_now(),
                     )
                     self.db.add(new_folder)
-                    self.db.flush()  # Get the ID without committing
+                    self.db.flush()
 
-                    # Create physical folder
                     create_folder(case_id, new_folder.folder_path)
 
                     created_folders.append(new_folder)
 
-                    # Create subfolders if any
                     subfolders = folder_info.get("subfolders", [])
                     if subfolders:
                         create_folder_hierarchy(
                             subfolders, new_folder.folder_path, new_folder.id
                         )
 
-            # Create all folders from template
             template_folders = template.get("folders", [])
             create_folder_hierarchy(template_folders)
 
-            # Commit all changes
             self.db.commit()
 
-            # Refresh all folder objects
             for folder in created_folders:
                 self.db.refresh(folder)
 

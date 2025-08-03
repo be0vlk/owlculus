@@ -1,3 +1,11 @@
+"""
+Test suite for case management API endpoints.
+
+This module tests case CRUD operations, validation, authorization,
+user assignment, and role-based access control for case management
+API endpoints.
+"""
+
 import pytest
 from app.core.config import settings
 from app.core.dependencies import get_current_user, get_db

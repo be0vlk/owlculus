@@ -1,3 +1,11 @@
+"""
+FastAPI dependency injection utilities and authentication middleware.
+
+This module provides authentication dependencies, authorization decorators,
+role-based access control, and case access validation utilities for the
+FastAPI application. It handles JWT token validation and user permissions.
+"""
+
 from functools import wraps
 
 from app.core import security

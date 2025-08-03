@@ -1,5 +1,12 @@
 """
 Evidence schemas for the application.
+
+Key features include:
+- OSINT evidence management with file and text content validation
+- Hierarchical folder structure support for evidence organization
+- Evidence categorization with predefined OSINT categories
+- File integrity validation with SHA-256 hash verification
+- Case-integrated evidence storage with user attribution tracking
 """
 
 from datetime import datetime

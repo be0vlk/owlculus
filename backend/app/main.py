@@ -1,3 +1,18 @@
+"""
+FastAPI application entry point and configuration for Owlculus OSINT platform.
+
+This module initializes the FastAPI application with middleware, CORS configuration,
+logging setup, and API route inclusion. It serves as the main entry point for the
+Owlculus backend application.
+
+Key features include:
+- FastAPI application initialization with OpenAPI documentation integration
+- CORS middleware configuration for secure frontend-backend communication
+- Request logging middleware with client IP and user agent tracking
+- Application lifespan management with structured logging setup
+- API router inclusion and centralized route management for OSINT endpoints
+"""
+
 from contextlib import asynccontextmanager
 
 from app.api.router import api_router

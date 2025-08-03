@@ -1,5 +1,19 @@
 """
-Service for managing and executing hunts
+Hunt management and execution service for Owlculus OSINT automated workflows.
+
+This module handles all hunt-related operations including hunt definition loading,
+execution management, and asynchronous workflow orchestration. Provides automated
+OSINT investigation workflows that chain multiple plugins together with parameter
+validation, progress tracking, and real-time status updates.
+
+Key features include:
+- Dynamic hunt definition loading from filesystem
+- Hunt execution with async background processing
+- Parameter validation and workflow configuration
+- Real-time execution status and progress tracking
+- Case access control and security validation
+- Plugin chaining and data flow management
+- Comprehensive logging and error handling
 """
 
 import asyncio
@@ -19,7 +33,6 @@ security_logger = get_security_logger
 
 
 class HuntService:
-    """Service for managing hunt definitions and executions"""
 
     def __init__(self, db: Session):
         self.db = db
@@ -28,7 +41,6 @@ class HuntService:
         self._sync_hunts_to_db()
 
     def _load_hunt_definitions(self):
-        """Load built-in hunt definitions from the definitions directory"""
         definitions_dir = os.path.join(
             os.path.dirname(os.path.dirname(__file__)), "hunts", "definitions"
         )
@@ -41,7 +53,6 @@ class HuntService:
                         f"app.hunts.definitions.{module_name}"
                     )
 
-                    # Find hunt classes in the module
                     for name, obj in inspect.getmembers(module):
                         if (
                             inspect.isclass(obj)
@@ -57,7 +68,6 @@ class HuntService:
                     ).error(f"Failed to load hunt {module_name}: {e}")
 
     def _sync_hunts_to_db(self):
-        """Sync loaded hunt definitions to database"""
         for hunt_name, hunt_class in self._hunt_classes.items():
             # Pass database session to hunt constructor for dynamic parameter configuration
             try:
@@ -66,20 +76,17 @@ class HuntService:
                 # Fallback for hunts that don't accept db_session parameter
                 hunt_instance = hunt_class()
 
-            # Check if hunt already exists
             existing_hunt = self.db.exec(
                 select(Hunt).where(Hunt.name == hunt_name)
             ).first()
 
             if existing_hunt:
-                # Update existing hunt definition
                 existing_hunt.display_name = hunt_instance.display_name
                 existing_hunt.description = hunt_instance.description
                 existing_hunt.category = hunt_instance.category
                 existing_hunt.version = hunt_instance.version
                 existing_hunt.definition_json = hunt_instance.to_definition()
             else:
-                # Create new hunt record
                 new_hunt = Hunt(
                     name=hunt_name,
                     display_name=hunt_instance.display_name,
@@ -94,7 +101,6 @@ class HuntService:
         self.db.commit()
 
     async def list_hunts(self, *, current_user: User) -> List[Hunt]:
-        """List all available hunts"""
         hunts = self.db.exec(
             select(Hunt)
             .where(Hunt.is_active == True)
@@ -103,7 +109,6 @@ class HuntService:
         return list(hunts)
 
     async def get_hunt(self, hunt_id: int, *, current_user: User) -> Optional[Hunt]:
-        """Get a specific hunt by ID"""
         return self.db.get(Hunt, hunt_id)
 
     @no_analyst()
@@ -115,13 +120,10 @@ class HuntService:
         *,
         current_user: User,
     ) -> HuntExecution:
-        """Create and start a new hunt execution"""
-        # Verify hunt exists
         hunt = self.db.get(Hunt, hunt_id)
         if not hunt or not hunt.is_active:
             raise ValueError("Hunt not found or inactive")
 
-        # Check case access
         check_case_access(self.db, case_id, current_user)
 
         # Validate parameters if hunt class is available
@@ -136,7 +138,6 @@ class HuntService:
         else:
             validated_params = initial_parameters
 
-        # Create execution record
         execution = HuntExecution(
             hunt_id=hunt_id,
             case_id=case_id,
@@ -148,22 +149,18 @@ class HuntService:
         self.db.commit()
         self.db.refresh(execution)
 
-        # Start async execution
         asyncio.create_task(self._run_hunt_async(execution.id, current_user.id))
 
         return execution
 
     async def _run_hunt_async(self, execution_id: int, user_id: int):
-        """Run hunt execution in background"""
         execution = None
         db = None
         try:
-            # Get fresh database session for async execution
             from app.core.dependencies import get_db
 
             db = next(get_db())
 
-            # Get execution and user
             execution = db.get(HuntExecution, execution_id)
             user = db.get(User, user_id)
 
@@ -175,7 +172,6 @@ class HuntService:
                 ).error(f"Hunt execution {execution_id} or user {user_id} not found")
                 return
 
-            # Get hunt definition
             hunt = db.get(Hunt, execution.hunt_id)
             if not hunt:
                 security_logger(
@@ -183,7 +179,6 @@ class HuntService:
                 ).error(f"Hunt {execution.hunt_id} not found")
                 return
 
-            # Execute hunt
             executor = HuntExecutor(db)
             await executor.execute_hunt(execution, hunt.definition_json, user)
 
@@ -191,7 +186,6 @@ class HuntService:
             security_logger(
                 action="hunt_execution_failed", execution_id=execution_id, error=str(e)
             ).error(f"Hunt execution {execution_id} failed: {e}")
-            # Update execution status
             if execution and db:
                 execution.status = "failed"
                 execution.completed_at = get_utc_now()
@@ -203,18 +197,14 @@ class HuntService:
     async def get_execution(
         self, execution_id: int, *, current_user: User
     ) -> Optional[HuntExecution]:
-        """Get hunt execution details"""
         execution = self.db.get(HuntExecution, execution_id)
         if execution:
-            # Check case access
             check_case_access(self.db, execution.case_id, current_user)
         return execution
 
     async def list_case_executions(
         self, case_id: int, *, current_user: User
     ) -> List[HuntExecution]:
-        """List all hunt executions for a case"""
-        # Check case access
         check_case_access(self.db, case_id, current_user)
 
         executions = self.db.exec(
@@ -229,19 +219,16 @@ class HuntService:
     async def cancel_execution(
         self, execution_id: int, *, current_user: User
     ) -> HuntExecution:
-        """Cancel a running hunt execution"""
         execution = self.db.get(HuntExecution, execution_id)
         if not execution:
             raise ValueError("Hunt execution not found")
 
-        # Check case access
         check_case_access(self.db, execution.case_id, current_user)
 
         # Only running executions can be cancelled
         if execution.status != "running":
             raise ValueError("Only running executions can be cancelled")
 
-        # Cancel execution
         executor = HuntExecutor(self.db)
         await executor.cancel_execution(execution_id)
 
@@ -251,7 +238,6 @@ class HuntService:
     async def get_execution_steps(
         self, execution_id: int, *, current_user: User
     ) -> List[HuntStep]:
-        """Get all steps for a hunt execution"""
         execution = await self.get_execution(execution_id, current_user=current_user)
         if not execution:
             raise ValueError("Hunt execution not found")

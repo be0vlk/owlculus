@@ -1,5 +1,19 @@
 """
-Task service layer handling all task-related business logic
+Task management service for Owlculus OSINT investigation workflow coordination.
+
+This module handles all task-related business logic including task creation,
+assignment, status tracking, and template management. Provides structured
+task workflows with role-based access control, bulk operations, and comprehensive
+audit logging for OSINT investigation case management.
+
+Key features include:
+- Task creation with template-based initialization
+- Task assignment and status lifecycle management
+- Role-based task access control and filtering
+- Bulk task operations for efficient workflow management
+- Custom task templates with field validation
+- Case-based task organization and access control
+- Comprehensive audit logging and status tracking
 """
 
 from datetime import datetime
@@ -21,7 +35,6 @@ class TaskService:
     def __init__(self, db: Session):
         self.db = db
 
-    # Template Management
     async def get_templates(
         self, include_inactive: bool = False, *, current_user: models.User
     ) -> List[models.TaskTemplate]:
@@ -42,7 +55,6 @@ class TaskService:
         self.db.commit()
         self.db.refresh(template)
 
-        # Log the action
         logger = get_security_logger(
             admin_user_id=current_user.id,
             action="create_task_template",
@@ -53,19 +65,16 @@ class TaskService:
 
         return template
 
-    # Task CRUD Operations
     async def create_task(
         self, case_id: int, task_data: dict, *, current_user: models.User
     ) -> models.Task:
         """Create a new task for a case"""
-        # Create the task
         task = models.Task(case_id=case_id, assigned_by_id=current_user.id, **task_data)
 
         self.db.add(task)
         self.db.commit()
         self.db.refresh(task)
 
-        # Log the action
         logger = get_security_logger(
             user_id=current_user.id,
             action="create_task",
@@ -91,26 +100,22 @@ class TaskService:
         """Get tasks with filters"""
         query = select(models.Task)
 
-        # Filter by case if specified
         if case_id:
             query = query.where(models.Task.case_id == case_id)
         else:
-            # If no specific case is requested and user is not admin,
-            # filter to only show tasks from cases the user has access to
+            # Filter to only show tasks from cases the user has access to for non-admin users
             if current_user.role != UserRole.ADMIN.value:
-                # Get all case IDs the user has access to
                 user_case_ids = self.db.exec(
-                    select(models.CaseUserLink.case_id)
-                    .where(models.CaseUserLink.user_id == current_user.id)
+                    select(models.CaseUserLink.case_id).where(
+                        models.CaseUserLink.user_id == current_user.id
+                    )
                 ).all()
-                
+
                 if user_case_ids:
                     query = query.where(models.Task.case_id.in_(user_case_ids))
                 else:
-                    # User has no case assignments, return empty list
                     return []
 
-        # Apply other filters
         if assigned_to_id:
             query = query.where(models.Task.assigned_to_id == assigned_to_id)
         if status:
@@ -118,7 +123,6 @@ class TaskService:
         if priority:
             query = query.where(models.Task.priority == priority)
 
-        # Apply pagination
         query = query.offset(skip).limit(limit)
 
         tasks = self.db.exec(query).all()
@@ -138,15 +142,12 @@ class TaskService:
         """Update a task"""
         task = await self.get_task(task_id, current_user=current_user)
 
-        # Track what fields are being updated for logging
         updated_fields = []
 
-        # Update fields
         for key, value in updates.items():
             if hasattr(task, key):
-                # Special handling for custom_fields to merge rather than replace
+                # Merge custom_fields rather than replace
                 if key == "custom_fields" and task.custom_fields:
-                    # Merge new custom field values with existing ones
                     existing_custom_fields = task.custom_fields or {}
                     merged_custom_fields = {**existing_custom_fields, **value}
                     setattr(task, key, merged_custom_fields)
@@ -154,12 +155,10 @@ class TaskService:
                     setattr(task, key, value)
                 updated_fields.append(key)
 
-        # Handle status completion tracking
         if "status" in updates and updates["status"] == TaskStatus.COMPLETED.value:
             task.completed_at = datetime.utcnow()
             task.completed_by_id = current_user.id
         elif "status" in updates and updates["status"] != TaskStatus.COMPLETED.value:
-            # Clear completion data if status is changed from completed
             task.completed_at = None
             task.completed_by_id = None
 
@@ -169,7 +168,6 @@ class TaskService:
         self.db.commit()
         self.db.refresh(task)
 
-        # Log the action with details about what was updated
         logger = get_security_logger(
             user_id=current_user.id,
             action="update_task",
@@ -189,7 +187,6 @@ class TaskService:
         self.db.delete(task)
         self.db.commit()
 
-        # Log the action
         logger = get_security_logger(
             admin_user_id=current_user.id,
             action="delete_task",
@@ -200,14 +197,12 @@ class TaskService:
 
         return True
 
-    # Task Operations
     async def assign_task(
         self, task_id: int, user_id: Optional[int], *, current_user: models.User
     ) -> models.Task:
         """Assign or unassign a task to a user"""
         task = await self.get_task(task_id, current_user=current_user)
 
-        # If assigning to someone, verify they exist
         if user_id:
             user = self.db.get(models.User, user_id)
             if not user:
@@ -220,7 +215,6 @@ class TaskService:
         self.db.commit()
         self.db.refresh(task)
 
-        # Log the action
         logger = get_security_logger(
             user_id=current_user.id,
             action="assign_task",
@@ -236,7 +230,6 @@ class TaskService:
         self, task_id: int, status: str, *, current_user: models.User
     ) -> models.Task:
         """Update task status"""
-        # Validate status
         if status not in [s.value for s in TaskStatus]:
             raise ValidationException("Invalid status")
 
@@ -245,12 +238,10 @@ class TaskService:
         task.status = status
         task.updated_at = datetime.utcnow()
 
-        # If marking as completed, set completion info
         if status == TaskStatus.COMPLETED.value:
             task.completed_at = datetime.utcnow()
             task.completed_by_id = current_user.id
         else:
-            # If moving away from completed, clear completion info
             task.completed_at = None
             task.completed_by_id = None
 
@@ -258,7 +249,6 @@ class TaskService:
         self.db.commit()
         self.db.refresh(task)
 
-        # Log the action
         logger = get_security_logger(
             user_id=current_user.id,
             action="update_task_status",
@@ -280,12 +270,9 @@ class TaskService:
 
         for task_id in task_ids:
             try:
-                # Get the task to check its case
                 task = await self.get_task(task_id, current_user=current_user)
 
-                # Check if user is admin or case lead for this task's case
                 if not is_case_lead(self.db, task.case_id, current_user):
-                    # Skip tasks where user is not lead
                     continue
 
                 task = await self.assign_task(
@@ -293,7 +280,6 @@ class TaskService:
                 )
                 updated_tasks.append(task)
             except (ResourceNotFoundException, BaseException):
-                # Skip tasks that can't be assigned
                 continue
 
         return updated_tasks
@@ -311,7 +297,6 @@ class TaskService:
                 )
                 updated_tasks.append(task)
             except (ResourceNotFoundException, ValidationException, BaseException):
-                # Skip tasks that can't be updated
                 continue
 
         return updated_tasks
@@ -329,7 +314,6 @@ class TaskService:
         if not template:
             raise ResourceNotFoundException(f"Task template {template_id} not found")
 
-        # Update allowed fields
         for field, value in updates.items():
             if field in [
                 "display_name",
@@ -346,7 +330,6 @@ class TaskService:
         self.db.commit()
         self.db.refresh(template)
 
-        # Log the action
         logger = get_security_logger(
             user_id=current_user.id,
             action="update_task_template",
@@ -370,7 +353,6 @@ class TaskService:
         if not template:
             raise ResourceNotFoundException(f"Task template {template_id} not found")
 
-        # Check if template is in use
         tasks_using_template = (
             self.db.query(models.Task)
             .filter(models.Task.template_id == template_id)
@@ -385,7 +367,6 @@ class TaskService:
         self.db.delete(template)
         self.db.commit()
 
-        # Log the action
         logger = get_security_logger(
             user_id=current_user.id,
             action="delete_task_template",

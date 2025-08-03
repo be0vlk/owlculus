@@ -1,5 +1,12 @@
 """
 Plugin schemas for request/response validation
+
+Key features include:
+- OSINT plugin metadata validation with display names and categories
+- Plugin parameter schema definitions with type validation and defaults
+- Plugin execution request models with flexible parameter handling
+- API key requirement tracking and status validation
+- Standardized plugin output format for consistent OSINT tool results
 """
 
 from typing import Any, Dict, List, Optional

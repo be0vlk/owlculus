@@ -1,3 +1,11 @@
+"""
+SQLAlchemy database models for all Owlculus application entities.
+
+This module defines the complete database schema using SQLModel for the OSINT platform,
+including models for users, cases, clients, evidence, entities, hunts, tasks, and
+system configuration. All models include proper relationships and constraints.
+"""
+
 from datetime import datetime
 from typing import List, Optional
 

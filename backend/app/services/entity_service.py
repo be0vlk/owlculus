@@ -1,5 +1,18 @@
 """
-Entity service layer handling all entity-related business logic
+Entity management service for Owlculus OSINT data collection and tracking.
+
+This module handles all entity-related business logic including entity creation,
+validation, duplicate detection, and relationship management. Provides secure
+entity operations with case access control, data enrichment capabilities,
+and specialized search functions for OSINT investigation workflows.
+
+Key features include:
+- Entity creation with duplicate detection and validation
+- Case-based entity access control and filtering
+- Entity enrichment with description augmentation
+- Specialized entity search by type (IP addresses, domains)
+- Transaction-safe operations with proper error handling
+- Integration with case access control system
 """
 
 from typing import Optional
@@ -28,7 +41,6 @@ class EntityService:
         skip: int = 0,
         limit: int = 100,
     ) -> list[models.Entity]:
-        # Check case access
         check_case_access(self.db, case_id, current_user)
 
         query = select(models.Entity).where(models.Entity.case_id == case_id)
@@ -49,7 +61,6 @@ class EntityService:
         if not db_entity:
             raise ResourceNotFoundException("Entity not found")
 
-        # Check case access
         check_case_access(self.db, db_entity.case_id, current_user)
 
         return db_entity
@@ -60,13 +71,9 @@ class EntityService:
         entity: schemas.EntityCreate,
         current_user: models.User,
     ) -> models.Entity:
-        # Check case access
         check_case_access(self.db, case_id, current_user)
 
-        # Check for duplicates using crud function
         await crud.check_entity_duplicates(self.db, case_id, entity)
-
-        # Use transaction for entity creation
         with transaction(self.db):
             db_entity = models.Entity(
                 case_id=case_id,
@@ -92,7 +99,6 @@ class EntityService:
         if not db_entity:
             raise ResourceNotFoundException("Entity not found")
 
-        # Check case access
         check_case_access(self.db, db_entity.case_id, current_user)
 
         # Add entity type to update data for validation
@@ -100,17 +106,13 @@ class EntityService:
         entity_update_dict["__entity_type"] = db_entity.entity_type
 
         try:
-            # Revalidate with entity type
             validated_update = schemas.EntityUpdate(**entity_update_dict)
         except ValueError as e:
             raise ValidationException(str(e))
 
-        # Check for duplicates using crud function
         await crud.check_entity_duplicates(
             self.db, db_entity.case_id, validated_update, entity_id
         )
-
-        # Use transaction for entity update
         with transaction(self.db):
             db_entity.data = validated_update.data
             db_entity.updated_at = get_utc_now()
@@ -130,10 +132,7 @@ class EntityService:
         if not db_entity:
             raise ResourceNotFoundException("Entity not found")
 
-        # Check case access
         check_case_access(self.db, db_entity.case_id, current_user)
-
-        # Use transaction for entity deletion
         with transaction(self.db):
             self.db.delete(db_entity)
 
@@ -141,7 +140,6 @@ class EntityService:
         self, case_id: int, ip_address: str, current_user: models.User
     ) -> Optional[models.Entity]:
         """Find an existing IP address entity in the given case"""
-        # Check case access
         check_case_access(self.db, case_id, current_user)
 
         query = select(models.Entity).where(
@@ -156,7 +154,6 @@ class EntityService:
         self, case_id: int, domain: str, current_user: models.User
     ) -> Optional[models.Entity]:
         """Find an existing domain entity in the given case (case-insensitive)"""
-        # Check case access
         check_case_access(self.db, case_id, current_user)
 
         query = select(models.Entity).where(
@@ -178,20 +175,16 @@ class EntityService:
         if not db_entity:
             raise ResourceNotFoundException("Entity not found")
 
-        # Check case access
         check_case_access(self.db, db_entity.case_id, current_user)
 
         current_description = db_entity.data.get("description", "")
 
         if current_description:
-            # Append new description with separator
             enriched_description = f"{current_description}\n\n--- Additional Info ---\n{additional_description}"
         else:
             enriched_description = additional_description
 
-        # Use transaction for entity update
         with transaction(self.db):
-            # Update the entity data with enriched description
             updated_data = db_entity.data.copy()
             updated_data["description"] = enriched_description
 

@@ -1,3 +1,11 @@
+"""
+Test suite for evidence service business logic.
+
+This module tests evidence management, file handling, metadata processing,
+folder operations, validation, and security functionality within the
+evidence service layer.
+"""
+
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest

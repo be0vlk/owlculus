@@ -1,3 +1,11 @@
+"""
+Test suite for case service business logic.
+
+This module tests case management operations, validation, workflows,
+user assignment, role management, and access control functionality
+within the case service layer.
+"""
+
 from datetime import datetime
 
 import pytest
@@ -729,12 +737,12 @@ async def test_add_duplicate_user_to_case(
     case = await case_service_instance.get_case(sample_case.id, test_admin)
     user_dict = {u.id: u for u in case.users}
     assert user_dict[test_user.id].is_lead is False
-    
+
     # Try to add them again with is_lead=True - should update is_lead instead of failing
     updated_case = await case_service_instance.add_user_to_case(
         sample_case.id, test_user.id, current_user=test_admin, is_lead=True
     )
-    
+
     # Verify user is still there but now as lead
     case = await case_service_instance.get_case(sample_case.id, test_admin)
     user_dict = {u.id: u for u in case.users}
@@ -744,27 +752,23 @@ async def test_add_duplicate_user_to_case(
 
 @pytest.mark.asyncio
 async def test_get_case_with_is_lead_info(
-        case_service_instance: case_service.CaseService,
-        sample_case: models.Case,
-        test_user: models.User,
-        test_admin: models.User,
-        session: Session,
+    case_service_instance: case_service.CaseService,
+    sample_case: models.Case,
+    test_user: models.User,
+    test_admin: models.User,
+    session: Session,
 ):
     """Test that is_lead information is properly included in case response"""
     # Add test_user as case lead
     case_link = models.CaseUserLink(
-        case_id=sample_case.id,
-        user_id=test_user.id,
-        is_lead=True
+        case_id=sample_case.id, user_id=test_user.id, is_lead=True
     )
     session.add(case_link)
     session.commit()
 
     # Add admin as non-lead
     admin_link = models.CaseUserLink(
-        case_id=sample_case.id,
-        user_id=test_admin.id,
-        is_lead=False
+        case_id=sample_case.id, user_id=test_admin.id, is_lead=False
     )
     session.add(admin_link)
     session.commit()
@@ -797,14 +801,14 @@ async def test_add_user_to_case_with_is_lead(
     updated_case = await case_service_instance.add_user_to_case(
         sample_case.id, test_user.id, current_user=test_admin, is_lead=True
     )
-    
+
     # Verify user was added
     user_ids = [u.id for u in updated_case.users]
     assert test_user.id in user_ids
-    
+
     # Get the case with is_lead info
     case_with_users = await case_service_instance.get_case(sample_case.id, test_admin)
-    
+
     # Find the user and verify is_lead is True
     user_dict = {u.id: u for u in case_with_users.users}
     assert test_user.id in user_dict
@@ -824,22 +828,22 @@ async def test_update_case_user_lead_status(
     case_with_users = await case_service_instance.get_case(sample_case.id, test_admin)
     user_dict = {u.id: u for u in case_with_users.users}
     assert user_dict[test_user.id].is_lead is False
-    
+
     # Update to lead
     await case_service_instance.update_case_user_lead_status(
         sample_case.id, test_user.id, is_lead=True, current_user=test_admin
     )
-    
+
     # Verify update
     case_with_users = await case_service_instance.get_case(sample_case.id, test_admin)
     user_dict = {u.id: u for u in case_with_users.users}
     assert user_dict[test_user.id].is_lead is True
-    
+
     # Update back to non-lead
     await case_service_instance.update_case_user_lead_status(
         sample_case.id, test_user.id, is_lead=False, current_user=test_admin
     )
-    
+
     # Verify update
     case_with_users = await case_service_instance.get_case(sample_case.id, test_admin)
     user_dict = {u.id: u for u in case_with_users.users}
@@ -904,14 +908,14 @@ async def test_analyst_can_be_added_as_non_lead(
     updated_case = await case_service_instance.add_user_to_case(
         sample_case.id, test_analyst.id, current_user=test_admin, is_lead=False
     )
-    
+
     # Verify analyst was added
     user_ids = [u.id for u in updated_case.users]
     assert test_analyst.id in user_ids
-    
+
     # Get the case with is_lead info
     case_with_users = await case_service_instance.get_case(sample_case.id, test_admin)
-    
+
     # Find the analyst and verify is_lead is False
     user_dict = {u.id: u for u in case_with_users.users}
     assert test_analyst.id in user_dict
@@ -929,13 +933,11 @@ async def test_analyst_cannot_be_updated_to_lead(
     """Test that analysts cannot be updated to lead status"""
     # First add analyst as non-lead
     link = models.CaseUserLink(
-        case_id=sample_case.id,
-        user_id=test_analyst.id,
-        is_lead=False
+        case_id=sample_case.id, user_id=test_analyst.id, is_lead=False
     )
     session.add(link)
     session.commit()
-    
+
     # Try to update to lead - should fail
     with pytest.raises(ValidationException) as excinfo:
         await case_service_instance.update_case_user_lead_status(
@@ -957,21 +959,21 @@ async def test_existing_analyst_lead_can_be_removed_as_lead(
     link = models.CaseUserLink(
         case_id=sample_case.id,
         user_id=test_analyst.id,
-        is_lead=True  # Legacy data where analyst was allowed to be lead
+        is_lead=True,  # Legacy data where analyst was allowed to be lead
     )
     session.add(link)
     session.commit()
-    
+
     # Verify initial state
     case_with_users = await case_service_instance.get_case(sample_case.id, test_admin)
     user_dict = {u.id: u for u in case_with_users.users}
     assert user_dict[test_analyst.id].is_lead is True
-    
+
     # Should be able to remove lead status
     await case_service_instance.update_case_user_lead_status(
         sample_case.id, test_analyst.id, is_lead=False, current_user=test_admin
     )
-    
+
     # Verify update
     case_with_users = await case_service_instance.get_case(sample_case.id, test_admin)
     user_dict = {u.id: u for u in case_with_users.users}
@@ -990,7 +992,7 @@ async def test_investigator_can_be_set_as_lead(
     updated_case = await case_service_instance.add_user_to_case(
         sample_case.id, test_user.id, current_user=test_admin, is_lead=True
     )
-    
+
     # Verify investigator was added as lead
     case_with_users = await case_service_instance.get_case(sample_case.id, test_admin)
     user_dict = {u.id: u for u in case_with_users.users}
@@ -1016,12 +1018,12 @@ async def test_admin_can_be_set_as_lead(
     session.add(another_admin)
     session.commit()
     session.refresh(another_admin)
-    
+
     # Add admin as lead - should succeed
     updated_case = await case_service_instance.add_user_to_case(
         sample_case.id, another_admin.id, current_user=test_admin, is_lead=True
     )
-    
+
     # Verify admin was added as lead
     case_with_users = await case_service_instance.get_case(sample_case.id, test_admin)
     user_dict = {u.id: u for u in case_with_users.users}

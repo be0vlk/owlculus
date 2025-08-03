@@ -1,3 +1,11 @@
+"""
+Test suite for system configuration service business logic.
+
+This module tests configuration management, validation, updates,
+API key handling, case number templates, evidence folder templates,
+and administrative configuration functionality.
+"""
+
 import os
 from datetime import datetime, timedelta
 from typing import Dict, Optional

@@ -1,3 +1,11 @@
+"""
+Test suite for client service business logic.
+
+This module tests client management operations, validation,
+CRUD functionality, and error handling within the client
+service layer.
+"""
+
 import pytest
 from app import schemas
 from app.core.exceptions import (

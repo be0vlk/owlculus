@@ -1,5 +1,19 @@
 """
-User service layer handling all user-related business logic
+User management service for Owlculus OSINT platform access control and authentication.
+
+This module handles all user-related business logic including user creation,
+profile management, password operations, and role-based access control.
+Provides comprehensive user lifecycle management with security validation,
+privilege escalation protection, and audit logging for OSINT investigation platforms.
+
+Key features include:
+- User creation with role validation and duplicate checking
+- Secure password management with hash validation
+- Role-based access control with privilege escalation protection
+- Admin password reset capabilities with security logging
+- User profile updates with constraint validation
+- Comprehensive security audit logging and monitoring
+- Superadmin protection and special privilege handling
 """
 
 from app import schemas
@@ -58,7 +72,6 @@ class UserService:
             try:
                 new_user = await crud.create_user(self.db, user=user)
             except ValueError as e:
-                # Handle database constraint violations
                 error_msg = str(e).lower()
                 if "username already exists" in error_msg:
                     user_logger.bind(
@@ -102,13 +115,11 @@ class UserService:
     async def get_users(
         self, current_user: models.User, skip: int = 0, limit: int = 100
     ) -> list[schemas.User]:
-        # Add input validation to prevent DoS via excessive pagination
         MAX_LIMIT = 200
         if limit > MAX_LIMIT:
             limit = MAX_LIMIT
 
         db_users = await crud.get_users(self.db, skip=skip, limit=limit)
-        # Convert database models to safe schemas that exclude sensitive fields
         return [schemas.User.model_validate(user) for user in db_users]
 
     async def update_user(
@@ -189,7 +200,6 @@ class UserService:
             )
 
             if is_self_update and not is_admin:
-                # Remove privileged fields that users cannot change themselves
                 if "role" in update_data:
                     user_logger.bind(
                         event_type="privilege_escalation_attempt",
@@ -211,7 +221,6 @@ class UserService:
                     self.db, user_id=user_id, user=sanitized_update
                 )
             except ValueError as e:
-                # Handle database constraint violations
                 error_msg = str(e).lower()
                 if "username already exists" in error_msg:
                     user_logger.bind(
