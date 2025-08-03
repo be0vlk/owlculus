@@ -1,401 +1,440 @@
 """
-Tests for AuthService functionality
+Comprehensive test suite for refactored authentication service
 """
 
-from datetime import timedelta
-from unittest.mock import Mock, patch
-
 import pytest
-from app.core import security
-from app.core.config import settings
+from datetime import timedelta
+from unittest.mock import AsyncMock, Mock, patch
+
 from app.core.exceptions import (
     AuthenticationException,
+    AuthorizationException,
     BaseException,
+    ResourceNotFoundException,
 )
-from app.database import models
-from app.services.auth_service import AuthService
-from sqlmodel import Session
+from app.database.models import HuntExecution, User
+from app.services.auth_service import (
+    AUTH_SERVICE_ERROR,
+    ACCESS_DENIED_ERROR,
+    AuthService,
+    AuthenticationService,
+    AuthToken,
+    BcryptPasswordHasher,
+    DatabaseCaseAccessChecker,
+    DatabaseExecutionRepository,
+    DatabaseUserRepository,
+    EXECUTION_NOT_FOUND_ERROR,
+    INVALID_CREDENTIALS_ERROR,
+    JWTTokenGenerator,
+    TOKEN_TYPE_BEARER,
+    WEBSOCKET_TOKEN_ERROR,
+    WEBSOCKET_TOKEN_TTL_SECONDS,
+    WebSocketToken,
+    WebSocketTokenService,
+)
 
 
-class TestAuthService:
-    """Test cases for AuthService"""
-
-    @pytest.fixture(name="auth_service_instance")
-    def auth_service_fixture(self, session: Session):
-        """Create an AuthService instance for testing"""
-        return AuthService(session)
-
-    def test_init_auth_service(self, session: Session):
-        """Test AuthService initialization"""
-        service = AuthService(session)
-        assert service.db == session
-
+class TestAuthenticationService:
+    """Test suite for AuthenticationService"""
+    
+    @pytest.fixture
+    def mock_user_repository(self):
+        repo = Mock()
+        repo.get_by_username = AsyncMock()
+        return repo
+    
+    @pytest.fixture
+    def mock_password_hasher(self):
+        hasher = Mock()
+        hasher.verify = Mock()
+        return hasher
+    
+    @pytest.fixture
+    def mock_token_generator(self):
+        generator = Mock()
+        generator.create_access_token = Mock(return_value="test_token")
+        generator.create_ephemeral_token = Mock(return_value="ephemeral_token")
+        return generator
+    
+    @pytest.fixture
+    def auth_service(self, mock_user_repository, mock_password_hasher, mock_token_generator):
+        return AuthenticationService(
+            user_repository=mock_user_repository,
+            password_hasher=mock_password_hasher,
+            token_generator=mock_token_generator
+        )
+    
+    @pytest.fixture
+    def test_user(self):
+        user = Mock(spec=User)
+        user.id = 1
+        user.username = "testuser"
+        user.password_hash = "hashed_password"
+        user.role = "Investigator"
+        return user
+    
     @pytest.mark.asyncio
-    async def test_authenticate_user_success(
+    async def test_authenticate_success(
         self,
-        auth_service_instance: AuthService,
-        test_admin: models.User,
+        auth_service,
+        mock_user_repository,
+        mock_password_hasher,
+        mock_token_generator,
+        test_user
     ):
-        """Test successful user authentication"""
-        username = "testuser"
-        password = "testpass123"
-
-        # Mock crud.get_user_by_username to return a user
-        with patch(
-            "app.services.auth_service.crud.get_user_by_username"
-        ) as mock_get_user:
-            # Create a mock user with hashed password
-            mock_user = Mock()
-            mock_user.username = username
-            mock_user.password_hash = security.get_password_hash(password)
-            mock_get_user.return_value = mock_user
-
-            # Mock security.verify_password to return True
-            with patch(
-                "app.services.auth_service.security.verify_password"
-            ) as mock_verify:
-                mock_verify.return_value = True
-
-                # Mock security.create_access_token
-                with patch(
-                    "app.services.auth_service.security.create_access_token"
-                ) as mock_create_token:
-                    mock_token = "mock_access_token"
-                    mock_create_token.return_value = mock_token
-
-                    result = await auth_service_instance.authenticate_user(
-                        username, password
-                    )
-
-                    # Verify the result
-                    assert result["access_token"] == mock_token
-                    assert result["token_type"] == "bearer"
-
-                    # Verify the mocks were called correctly
-                    mock_get_user.assert_called_once_with(
-                        auth_service_instance.db, username=username
-                    )
-                    mock_verify.assert_called_once_with(
-                        password, mock_user.password_hash
-                    )
-                    mock_create_token.assert_called_once()
-
-                    # Verify token creation parameters
-                    call_args = mock_create_token.call_args
-                    assert call_args[1]["data"]["sub"] == username
-                    assert isinstance(call_args[1]["expires_delta"], timedelta)
-                    assert (
-                        call_args[1]["expires_delta"].total_seconds()
-                        == settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
-                    )
-
+        """Test successful authentication"""
+        mock_user_repository.get_by_username.return_value = test_user
+        mock_password_hasher.verify.return_value = True
+        
+        with patch('app.services.auth_service.get_security_logger') as mock_logger:
+            result = await auth_service.authenticate("testuser", "password123")
+        
+        assert isinstance(result, AuthToken)
+        assert result.access_token == "test_token"
+        assert result.token_type == TOKEN_TYPE_BEARER
+        
+        mock_user_repository.get_by_username.assert_called_once_with("testuser")
+        mock_password_hasher.verify.assert_called_once_with("password123", "hashed_password")
+    
+    @pytest.mark.asyncio
+    async def test_authenticate_empty_credentials(self, auth_service):
+        """Test authentication with empty credentials"""
+        with pytest.raises(AuthenticationException) as exc_info:
+            await auth_service.authenticate("", "password")
+        assert str(exc_info.value) == INVALID_CREDENTIALS_ERROR
+        
+        with pytest.raises(AuthenticationException) as exc_info:
+            await auth_service.authenticate("user", "")
+        assert str(exc_info.value) == INVALID_CREDENTIALS_ERROR
+    
+    @pytest.mark.asyncio
+    async def test_authenticate_long_credentials(self, auth_service):
+        """Test authentication with overly long credentials"""
+        with pytest.raises(AuthenticationException) as exc_info:
+            await auth_service.authenticate("a" * 101, "password")
+        assert str(exc_info.value) == INVALID_CREDENTIALS_ERROR
+        
+        with pytest.raises(AuthenticationException) as exc_info:
+            await auth_service.authenticate("user", "a" * 201)
+        assert str(exc_info.value) == INVALID_CREDENTIALS_ERROR
+    
     @pytest.mark.asyncio
     async def test_authenticate_user_not_found(
         self,
-        auth_service_instance: AuthService,
+        auth_service,
+        mock_user_repository
     ):
-        """Test authentication with non-existent user"""
-        username = "nonexistent"
-        password = "password"
-
-        # Mock crud.get_user_by_username to return None
-        with patch(
-            "app.services.auth_service.crud.get_user_by_username"
-        ) as mock_get_user:
-            mock_get_user.return_value = None
-
+        """Test authentication when user doesn't exist"""
+        mock_user_repository.get_by_username.return_value = None
+        
+        with patch('app.services.auth_service.get_security_logger') as mock_logger:
             with pytest.raises(AuthenticationException) as exc_info:
-                await auth_service_instance.authenticate_user(username, password)
-
-            assert "Incorrect username or password" in str(exc_info.value)
-
-            mock_get_user.assert_called_once_with(
-                auth_service_instance.db, username=username
-            )
-
+                await auth_service.authenticate("nonexistent", "password")
+        
+        assert str(exc_info.value) == INVALID_CREDENTIALS_ERROR
+    
     @pytest.mark.asyncio
-    async def test_authenticate_user_wrong_password(
+    async def test_authenticate_invalid_password(
         self,
-        auth_service_instance: AuthService,
+        auth_service,
+        mock_user_repository,
+        mock_password_hasher,
+        test_user
     ):
-        """Test authentication with incorrect password"""
-        username = "testuser"
-        password = "wrongpassword"
-        correct_password = "correctpassword"
-
-        # Mock crud.get_user_by_username to return a user
-        with patch(
-            "app.services.auth_service.crud.get_user_by_username"
-        ) as mock_get_user:
-            mock_user = Mock()
-            mock_user.username = username
-            mock_user.password_hash = security.get_password_hash(correct_password)
-            mock_get_user.return_value = mock_user
-
-            # Mock security.verify_password to return False
-            with patch(
-                "app.services.auth_service.security.verify_password"
-            ) as mock_verify:
-                mock_verify.return_value = False
-
-                with pytest.raises(AuthenticationException) as exc_info:
-                    await auth_service_instance.authenticate_user(username, password)
-
-                assert "Incorrect username or password" in str(exc_info.value)
-
-                mock_get_user.assert_called_once_with(
-                    auth_service_instance.db, username=username
-                )
-                mock_verify.assert_called_once_with(password, mock_user.password_hash)
-
-    @pytest.mark.asyncio
-    async def test_authenticate_user_with_real_password_hashing(
-        self,
-        auth_service_instance: AuthService,
-    ):
-        """Test authentication with real password hashing functions"""
-        username = "testuser"
-        password = "testpass123"
-
-        # Create a real password hash
-        password_hash = security.get_password_hash(password)
-
-        # Mock crud.get_user_by_username to return a user with real hash
-        with patch(
-            "app.services.auth_service.crud.get_user_by_username"
-        ) as mock_get_user:
-            mock_user = Mock()
-            mock_user.username = username
-            mock_user.password_hash = password_hash
-            mock_get_user.return_value = mock_user
-
-            # Mock security.create_access_token
-            with patch(
-                "app.services.auth_service.security.create_access_token"
-            ) as mock_create_token:
-                mock_token = "real_test_token"
-                mock_create_token.return_value = mock_token
-
-                # Don't mock verify_password - let it use the real function
-                result = await auth_service_instance.authenticate_user(
-                    username, password
-                )
-
-                assert result["access_token"] == mock_token
-                assert result["token_type"] == "bearer"
-
-                mock_get_user.assert_called_once_with(
-                    auth_service_instance.db, username=username
-                )
-                mock_create_token.assert_called_once()
-
-    @pytest.mark.asyncio
-    async def test_authenticate_user_with_real_password_hashing_wrong_password(
-        self,
-        auth_service_instance: AuthService,
-    ):
-        """Test authentication failure with real password hashing"""
-        username = "testuser"
-        correct_password = "correctpass123"
-        wrong_password = "wrongpass123"
-
-        # Create a real password hash for the correct password
-        password_hash = security.get_password_hash(correct_password)
-
-        # Mock crud.get_user_by_username to return a user with real hash
-        with patch(
-            "app.services.auth_service.crud.get_user_by_username"
-        ) as mock_get_user:
-            mock_user = Mock()
-            mock_user.username = username
-            mock_user.password_hash = password_hash
-            mock_get_user.return_value = mock_user
-
-            # Don't mock verify_password - let it use the real function
+        """Test authentication with invalid password"""
+        mock_user_repository.get_by_username.return_value = test_user
+        mock_password_hasher.verify.return_value = False
+        
+        with patch('app.services.auth_service.get_security_logger') as mock_logger:
             with pytest.raises(AuthenticationException) as exc_info:
-                await auth_service_instance.authenticate_user(username, wrong_password)
-
-            assert "Incorrect username or password" in str(exc_info.value)
-
+                await auth_service.authenticate("testuser", "wrongpassword")
+        
+        assert str(exc_info.value) == INVALID_CREDENTIALS_ERROR
+    
     @pytest.mark.asyncio
-    async def test_authenticate_user_token_creation_with_custom_expiry(
+    async def test_authenticate_system_error(
         self,
-        auth_service_instance: AuthService,
+        auth_service,
+        mock_user_repository
     ):
-        """Test that token creation uses settings for expiry time"""
-        username = "testuser"
-        password = "testpass123"
-
-        # Mock the settings to have a specific expire time
-        original_expire_minutes = settings.ACCESS_TOKEN_EXPIRE_MINUTES
-        test_expire_minutes = 60  # 1 hour
-
-        try:
-            settings.ACCESS_TOKEN_EXPIRE_MINUTES = test_expire_minutes
-
-            with patch(
-                "app.services.auth_service.crud.get_user_by_username"
-            ) as mock_get_user:
-                mock_user = Mock()
-                mock_user.username = username
-                mock_user.password_hash = security.get_password_hash(password)
-                mock_get_user.return_value = mock_user
-
-                with patch(
-                    "app.services.auth_service.security.verify_password"
-                ) as mock_verify:
-                    mock_verify.return_value = True
-
-                    with patch(
-                        "app.services.auth_service.security.create_access_token"
-                    ) as mock_create_token:
-                        mock_token = "custom_expiry_token"
-                        mock_create_token.return_value = mock_token
-
-                        result = await auth_service_instance.authenticate_user(
-                            username, password
-                        )
-
-                        assert result["access_token"] == mock_token
-
-                        # Verify the expiry time was set correctly
-                        call_args = mock_create_token.call_args
-                        expires_delta = call_args[1]["expires_delta"]
-                        assert expires_delta.total_seconds() == test_expire_minutes * 60
-
-        finally:
-            # Restore original setting
-            settings.ACCESS_TOKEN_EXPIRE_MINUTES = original_expire_minutes
-
-    @pytest.mark.asyncio
-    async def test_authenticate_user_database_error(
-        self,
-        auth_service_instance: AuthService,
-    ):
-        """Test authentication when database operation fails"""
-        username = "testuser"
-        password = "testpass123"
-
-        # Mock crud.get_user_by_username to raise an exception
-        with patch(
-            "app.services.auth_service.crud.get_user_by_username"
-        ) as mock_get_user:
-            mock_get_user.side_effect = Exception("Database connection error")
-
+        """Test authentication system error handling"""
+        mock_user_repository.get_by_username.side_effect = Exception("Database error")
+        
+        with patch('app.services.auth_service.get_security_logger') as mock_logger:
             with pytest.raises(BaseException) as exc_info:
-                await auth_service_instance.authenticate_user(username, password)
+                await auth_service.authenticate("testuser", "password")
+        
+        assert str(exc_info.value) == AUTH_SERVICE_ERROR
 
-            assert "Authentication service error" in str(exc_info.value)
-            mock_get_user.assert_called_once_with(
-                auth_service_instance.db, username=username
-            )
 
-    @pytest.mark.asyncio
-    async def test_authenticate_user_empty_credentials(
+class TestWebSocketTokenService:
+    """Test suite for WebSocketTokenService"""
+    
+    @pytest.fixture
+    def mock_execution_repository(self):
+        repo = Mock()
+        repo.get_by_id = Mock()
+        return repo
+    
+    @pytest.fixture
+    def mock_case_access_checker(self):
+        checker = Mock()
+        checker.has_access = Mock()
+        return checker
+    
+    @pytest.fixture
+    def mock_token_generator(self):
+        generator = Mock()
+        generator.create_ephemeral_token = Mock(return_value="ws_token")
+        return generator
+    
+    @pytest.fixture
+    def ws_token_service(
         self,
-        auth_service_instance: AuthService,
+        mock_execution_repository,
+        mock_case_access_checker,
+        mock_token_generator
     ):
-        """Test authentication with empty credentials"""
-        # Test empty username
-        with patch(
-            "app.services.auth_service.crud.get_user_by_username"
-        ) as mock_get_user:
-            mock_get_user.return_value = None
-
-            with pytest.raises(AuthenticationException) as exc_info:
-                await auth_service_instance.authenticate_user("", "password")
-
-            assert "Incorrect username or password" in str(exc_info.value)
-
-        # Test empty password
-        with patch(
-            "app.services.auth_service.crud.get_user_by_username"
-        ) as mock_get_user:
-            mock_user = Mock()
-            mock_user.username = "testuser"
-            mock_user.password_hash = security.get_password_hash("realpassword")
-            mock_get_user.return_value = mock_user
-
-            with patch(
-                "app.services.auth_service.security.verify_password"
-            ) as mock_verify:
-                mock_verify.return_value = False
-
-                with pytest.raises(AuthenticationException) as exc_info:
-                    await auth_service_instance.authenticate_user("testuser", "")
-
-                assert "Incorrect username or password" in str(exc_info.value)
-
+        return WebSocketTokenService(
+            execution_repository=mock_execution_repository,
+            case_access_checker=mock_case_access_checker,
+            token_generator=mock_token_generator
+        )
+    
+    @pytest.fixture
+    def test_user(self):
+        user = Mock(spec=User)
+        user.id = 1
+        user.username = "testuser"
+        user.role = "Investigator"
+        return user
+    
+    @pytest.fixture
+    def test_execution(self):
+        execution = Mock(spec=HuntExecution)
+        execution.id = 100
+        execution.case_id = 10
+        return execution
+    
     @pytest.mark.asyncio
-    async def test_authenticate_user_token_creation_error(
+    async def test_create_token_success(
         self,
-        auth_service_instance: AuthService,
+        ws_token_service,
+        mock_execution_repository,
+        mock_case_access_checker,
+        mock_token_generator,
+        test_user,
+        test_execution
     ):
-        """Test authentication when token creation fails"""
-        username = "testuser"
-        password = "testpass123"
-
-        with patch(
-            "app.services.auth_service.crud.get_user_by_username"
-        ) as mock_get_user:
-            mock_user = Mock()
-            mock_user.username = username
-            mock_user.password_hash = security.get_password_hash(password)
-            mock_get_user.return_value = mock_user
-
-            with patch(
-                "app.services.auth_service.security.verify_password"
-            ) as mock_verify:
-                mock_verify.return_value = True
-
-                with patch(
-                    "app.services.auth_service.security.create_access_token"
-                ) as mock_create_token:
-                    mock_create_token.side_effect = Exception("Token creation failed")
-
-                    with pytest.raises(BaseException) as exc_info:
-                        await auth_service_instance.authenticate_user(
-                            username, password
-                        )
-
-                    assert "Authentication service error" in str(exc_info.value)
-
+        """Test successful WebSocket token creation"""
+        mock_execution_repository.get_by_id.return_value = test_execution
+        mock_case_access_checker.has_access.return_value = True
+        
+        with patch('app.services.auth_service.get_security_logger') as mock_logger:
+            result = await ws_token_service.create_token(100, test_user)
+        
+        assert isinstance(result, WebSocketToken)
+        assert result.token == "ws_token"
+        assert result.execution_id == 100
+        assert result.expires_in == WEBSOCKET_TOKEN_TTL_SECONDS
+        
+        mock_execution_repository.get_by_id.assert_called_once_with(100)
+        mock_case_access_checker.has_access.assert_called_once_with(10, test_user)
+        mock_token_generator.create_ephemeral_token.assert_called_once_with(1, 100)
+    
     @pytest.mark.asyncio
-    async def test_authenticate_user_integration_with_real_user(
+    async def test_create_token_execution_not_found(
         self,
-        auth_service_instance: AuthService,
-        test_admin: models.User,
+        ws_token_service,
+        mock_execution_repository,
+        test_user
     ):
-        """Test authentication using a real user from test fixtures"""
-        username = test_admin.username
-        # We need to know the original password since test_admin has hashed password
-        password = "admin_password"  # This should match what's used in conftest.py
+        """Test token creation with non-existent execution"""
+        mock_execution_repository.get_by_id.return_value = None
+        
+        with patch('app.services.auth_service.get_security_logger') as mock_logger:
+            with pytest.raises(ResourceNotFoundException) as exc_info:
+                await ws_token_service.create_token(999, test_user)
+        
+        assert str(exc_info.value) == EXECUTION_NOT_FOUND_ERROR
+    
+    @pytest.mark.asyncio
+    async def test_create_token_access_denied(
+        self,
+        ws_token_service,
+        mock_execution_repository,
+        mock_case_access_checker,
+        test_user,
+        test_execution
+    ):
+        """Test token creation with access denied"""
+        mock_execution_repository.get_by_id.return_value = test_execution
+        mock_case_access_checker.has_access.return_value = False
+        
+        with patch('app.services.auth_service.get_security_logger') as mock_logger:
+            with pytest.raises(AuthorizationException) as exc_info:
+                await ws_token_service.create_token(100, test_user)
+        
+        assert str(exc_info.value) == ACCESS_DENIED_ERROR
+    
+    @pytest.mark.asyncio
+    async def test_create_token_system_error(
+        self,
+        ws_token_service,
+        mock_execution_repository,
+        test_user
+    ):
+        """Test token creation system error handling"""
+        mock_execution_repository.get_by_id.side_effect = Exception("Database error")
+        
+        with patch('app.services.auth_service.get_security_logger') as mock_logger:
+            with pytest.raises(BaseException) as exc_info:
+                await ws_token_service.create_token(100, test_user)
+        
+        assert str(exc_info.value) == WEBSOCKET_TOKEN_ERROR
 
-        # Mock crud to return our test user
-        with patch(
-            "app.services.auth_service.crud.get_user_by_username"
-        ) as mock_get_user:
-            mock_get_user.return_value = test_admin
 
-            # Mock verify_password to return True for this test
-            with patch(
-                "app.services.auth_service.security.verify_password"
-            ) as mock_verify:
-                mock_verify.return_value = True
+class TestAuthServiceFacade:
+    """Test suite for AuthService facade"""
+    
+    @pytest.fixture
+    def mock_db(self):
+        return Mock()
+    
+    @pytest.fixture
+    def auth_service(self, mock_db):
+        return AuthService(mock_db)
+    
+    @pytest.mark.asyncio
+    async def test_authenticate_user_facade(self, auth_service):
+        """Test authenticate_user facade method"""
+        mock_auth_result = AuthToken(access_token="test_token", token_type="bearer")
+        
+        with patch.object(
+            auth_service.auth_service,
+            'authenticate',
+            new_callable=AsyncMock,
+            return_value=mock_auth_result
+        ) as mock_authenticate:
+            result = await auth_service.authenticate_user("user", "pass")
+        
+        assert result == {"access_token": "test_token", "token_type": "bearer"}
+        mock_authenticate.assert_called_once_with("user", "pass")
+    
+    @pytest.mark.asyncio
+    async def test_create_websocket_token_facade(self, auth_service):
+        """Test create_websocket_token facade method"""
+        mock_user = Mock(spec=User)
+        mock_ws_result = WebSocketToken(
+            token="ws_token",
+            execution_id=100,
+            expires_in=30
+        )
+        
+        with patch.object(
+            auth_service.ws_token_service,
+            'create_token',
+            new_callable=AsyncMock,
+            return_value=mock_ws_result
+        ) as mock_create_token:
+            result = await auth_service.create_websocket_token(100, mock_user)
+        
+        assert result == {
+            "token": "ws_token",
+            "execution_id": 100,
+            "expires_in": 30
+        }
+        mock_create_token.assert_called_once_with(100, mock_user)
 
-                with patch(
-                    "app.services.auth_service.security.create_access_token"
-                ) as mock_create_token:
-                    mock_token = "integration_test_token"
-                    mock_create_token.return_value = mock_token
 
-                    result = await auth_service_instance.authenticate_user(
-                        username, password
-                    )
+class TestDatabaseImplementations:
+    """Test suite for database implementation classes"""
+    
+    @pytest.fixture
+    def mock_db(self):
+        return Mock()
+    
+    @pytest.mark.asyncio
+    async def test_database_user_repository(self, mock_db):
+        """Test DatabaseUserRepository"""
+        repo = DatabaseUserRepository(mock_db)
+        
+        with patch('app.services.auth_service.crud.get_user_by_username', new_callable=AsyncMock) as mock_crud:
+            mock_crud.return_value = "test_user"
+            result = await repo.get_by_username("testuser")
+        
+        assert result == "test_user"
+        mock_crud.assert_called_once_with(mock_db, username="testuser")
+    
+    def test_database_execution_repository(self, mock_db):
+        """Test DatabaseExecutionRepository"""
+        repo = DatabaseExecutionRepository(mock_db)
+        mock_db.get.return_value = "test_execution"
+        
+        result = repo.get_by_id(100)
+        
+        assert result == "test_execution"
+        mock_db.get.assert_called_once_with(HuntExecution, 100)
+    
+    def test_database_case_access_checker_has_access(self, mock_db):
+        """Test DatabaseCaseAccessChecker with access"""
+        checker = DatabaseCaseAccessChecker(mock_db)
+        mock_user = Mock()
+        
+        with patch('app.core.dependencies.check_case_access') as mock_check:
+            result = checker.has_access(10, mock_user)
+        
+        assert result is True
+        mock_check.assert_called_once_with(mock_db, 10, mock_user)
+    
+    def test_database_case_access_checker_no_access(self, mock_db):
+        """Test DatabaseCaseAccessChecker without access"""
+        checker = DatabaseCaseAccessChecker(mock_db)
+        mock_user = Mock()
+        
+        with patch('app.core.dependencies.check_case_access') as mock_check:
+            mock_check.side_effect = Exception("Access denied")
+            result = checker.has_access(10, mock_user)
+        
+        assert result is False
 
-                    assert result["access_token"] == mock_token
-                    assert result["token_type"] == "bearer"
 
-                    # Verify the token was created with the correct username
-                    call_args = mock_create_token.call_args
-                    assert call_args[1]["data"]["sub"] == username
+class TestUtilityClasses:
+    """Test suite for utility classes"""
+    
+    def test_bcrypt_password_hasher(self):
+        """Test BcryptPasswordHasher"""
+        hasher = BcryptPasswordHasher()
+        
+        with patch('app.services.auth_service.security.verify_password') as mock_verify:
+            mock_verify.return_value = True
+            result = hasher.verify("plain", "hashed")
+        
+        assert result is True
+        mock_verify.assert_called_once_with("plain", "hashed")
+    
+    def test_jwt_token_generator_access_token(self):
+        """Test JWTTokenGenerator access token creation"""
+        generator = JWTTokenGenerator()
+        expires = timedelta(minutes=30)
+        
+        with patch('app.services.auth_service.security.create_access_token') as mock_create:
+            mock_create.return_value = "jwt_token"
+            result = generator.create_access_token("user", expires)
+        
+        assert result == "jwt_token"
+        mock_create.assert_called_once_with(
+            data={"sub": "user"},
+            expires_delta=expires
+        )
+    
+    def test_jwt_token_generator_ephemeral_token(self):
+        """Test JWTTokenGenerator ephemeral token creation"""
+        generator = JWTTokenGenerator()
+        
+        with patch('app.services.auth_service.security.ephemeral_token_manager.create_token') as mock_create:
+            mock_create.return_value = "ephemeral_token"
+            result = generator.create_ephemeral_token(1, 100)
+        
+        assert result == "ephemeral_token"
+        mock_create.assert_called_once_with(1, 100)

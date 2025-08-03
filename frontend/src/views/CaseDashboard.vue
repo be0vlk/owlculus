@@ -489,7 +489,7 @@ function showEntityDetails(entity) {
   showEntityDetailsModal.value = true
 }
 
-async function handleEditEntity(updatedEntity, createdAssociates = []) {
+async function handleEditEntity(updatedEntity) {
   // Update selectedEntity if it's the one being edited
   if (selectedEntity.value?.id === updatedEntity.id) {
     selectedEntity.value = { ...updatedEntity }

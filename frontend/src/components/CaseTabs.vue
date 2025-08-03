@@ -1,15 +1,17 @@
 <template>
-  <v-tabs v-model="activeTab" color="primary">
-    <v-tab v-for="tab in tabs" :key="tab.name" :text="tab.label" :value="tab.name" />
-  </v-tabs>
+  <div>
+    <v-tabs v-model="activeTab" color="primary">
+      <v-tab v-for="tab in tabs" :key="tab.name" :text="tab.label" :value="tab.name" />
+    </v-tabs>
 
-  <v-tabs-window v-model="activeTab">
-    <v-tabs-window-item v-for="tab in tabs" :key="tab.name" :value="tab.name">
-      <v-container class="pa-4">
-        <slot :active-tab="tab.name" />
-      </v-container>
-    </v-tabs-window-item>
-  </v-tabs-window>
+    <v-window v-model="activeTab" :touch="false" :transition="false">
+      <v-window-item v-for="tab in tabs" :key="tab.name" :value="tab.name" eager :transition="false">
+        <v-container class="pa-4">
+          <slot :active-tab="tab.name" />
+        </v-container>
+      </v-window-item>
+    </v-window>
+  </div>
 </template>
 
 <script setup>
@@ -25,3 +27,10 @@ const props = defineProps({
 
 const activeTab = ref(props.tabs[0]?.name)
 </script>
+
+<style scoped>
+/* Workaround for Vuetify 3 scroll-to-top bug */
+.v-window {
+  min-height: 200px; /* Prevents height collapse during transitions */
+}
+</style>
