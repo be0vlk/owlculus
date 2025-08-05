@@ -5,15 +5,6 @@ This module handles all user-related business logic including user creation,
 profile management, password operations, and role-based access control.
 Provides comprehensive user lifecycle management with security validation,
 privilege escalation protection, and audit logging for OSINT investigation platforms.
-
-Key features include:
-- User creation with role validation and duplicate checking
-- Secure password management with hash validation
-- Role-based access control with privilege escalation protection
-- Admin password reset capabilities with security logging
-- User profile updates with constraint validation
-- Comprehensive security audit logging and monitoring
-- Superadmin protection and special privilege handling
 """
 
 from app import schemas

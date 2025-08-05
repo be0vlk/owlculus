@@ -3,13 +3,6 @@ Pydantic schemas for user invitation data validation.
 
 This module defines request and response models for invite creation, acceptance,
 management, and user registration through invitation tokens with role validation.
-
-Key features include:
-- Invitation token creation with role-based access control
-- User registration validation through secure invitation tokens
-- Comprehensive invitation management with expiry tracking
-- Role validation for OSINT platform access levels
-- Field validation for username and password security requirements
 """
 
 from datetime import datetime

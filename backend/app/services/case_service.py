@@ -5,14 +5,6 @@ This module handles all case-related business logic including case creation,
 user assignment, case number generation, and access control. Provides comprehensive
 case lifecycle management with automated numbering, user role validation,
 and security logging for OSINT investigation workflows.
-
-Key features include:
-- Automated case number generation with configurable templates
-- Role-based case access control and user assignment
-- Case lead management with analyst role restrictions
-- Comprehensive security logging and audit trails
-- Transaction-safe operations with proper error handling
-- Integration with system configuration for numbering schemes
 """
 
 from datetime import datetime
@@ -20,11 +12,11 @@ from datetime import datetime
 from app import schemas
 from app.core.dependencies import check_case_access
 from app.core.exceptions import (
-    AuthorizationException,
-    BaseException,
-    DuplicateResourceException,
-    ResourceNotFoundException,
-    ValidationException,
+	AuthorizationException,
+	BaseException,
+	DuplicateResourceException,
+	ResourceNotFoundException,
+	ValidationException,
 )
 from app.core.file_storage import create_case_directory
 from app.core.logging import get_security_logger

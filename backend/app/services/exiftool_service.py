@@ -5,15 +5,6 @@ This module provides comprehensive metadata extraction from digital files using 
 following clean architecture and SOLID principles. Supports forensic analysis of images,
 videos, and documents with structured data extraction, GPS location parsing,
 and camera information analysis for OSINT investigations.
-
-Key features include:
-- Multi-format metadata extraction (images, videos, documents)
-- Structured data processing with categorized output
-- GPS coordinate and timestamp extraction
-- Camera settings and technical metadata analysis
-- File validation and type detection
-- Modular architecture with dependency injection
-- Error handling and logging for forensic workflows
 """
 
 import os

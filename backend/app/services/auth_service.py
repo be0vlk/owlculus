@@ -5,13 +5,6 @@ This module provides comprehensive authentication services including user login,
 JWT token management, and ephemeral WebSocket tokens for real-time hunt execution.
 Implements security best practices with structured logging, input validation,
 and role-based access control for case management operations.
-
-Key features include:
-- JWT-based user authentication with configurable expiration
-- Ephemeral WebSocket tokens for secure real-time communication
-- Comprehensive security logging and audit trails
-- Modular architecture with dependency injection for testability
-- Case access validation for WebSocket connections
 """
 
 from abc import ABC, abstractmethod
@@ -22,10 +15,10 @@ from typing import Optional, Protocol
 from app.core import security
 from app.core.config import settings
 from app.core.exceptions import (
-    AuthenticationException,
-    AuthorizationException,
-    BaseException,
-    ResourceNotFoundException,
+	AuthenticationException,
+	AuthorizationException,
+	BaseException,
+	ResourceNotFoundException,
 )
 from app.core.logging import get_security_logger
 from app.database import crud

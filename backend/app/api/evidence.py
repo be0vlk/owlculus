@@ -3,14 +3,6 @@ Evidence Management API for Owlculus OSINT Platform.
 
 This module provides comprehensive digital evidence management capabilities for OSINT investigations,
 ensuring proper chain of custody and forensic integrity of collected data.
-
-Key features include:
-- Multi-file evidence upload with automated metadata extraction
-- Hierarchical folder organization with template-based structure creation
-- File content preview and secure download capabilities for various media types
-- ExifTool integration for comprehensive metadata analysis of digital artifacts
-- Case-based evidence isolation with role-based access controls
-- Evidence categorization and search functionality for large investigations
 """
 
 from typing import Optional

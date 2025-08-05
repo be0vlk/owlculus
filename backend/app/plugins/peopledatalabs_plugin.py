@@ -1,12 +1,5 @@
 """
 Enrich person and company data using People Data Labs API
-
-Key features include:
-- Dual-mode enrichment supporting both person and company intelligence gathering
-- Multi-criteria search using email, phone, name, LinkedIn, and other identifiers
-- Comprehensive profile data extraction including employment history and education records
-- Company intelligence with employee counts, technology stacks, and industry classifications
-- Custom evidence formatting with confidence scoring and API credit usage tracking
 """
 
 from typing import Any, AsyncGenerator, Dict, List, Optional

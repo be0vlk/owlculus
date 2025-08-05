@@ -4,13 +4,6 @@ API endpoints for managing user invitations and account creation requests.
 This module handles invite creation, retrieval, validation, acceptance, and deletion.
 Provides endpoints for user registration through invitation tokens and administrative
 invite management functionality.
-
-Key features include:
-- Secure invitation token generation and validation with expiration management
-- Role-based invite creation with administrative access controls
-- User registration workflow with invite token verification and account creation
-- Comprehensive invite lifecycle management including cleanup of expired tokens
-- Security logging and audit trail for all invitation-related operations
 """
 
 from app import schemas

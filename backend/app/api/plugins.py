@@ -3,14 +3,6 @@ Plugin Management and Execution API for Owlculus OSINT Platform.
 
 This module provides the core plugin system interface for executing OSINT tools and services,
 enabling extensible investigation capabilities through a standardized plugin architecture.
-
-Key features include:
-- Plugin discovery and metadata retrieval for available OSINT tools
-- Secure plugin execution with streaming JSON response handling
-- Role-based plugin access control preventing unauthorized tool usage
-- Standardized plugin interface supporting various OSINT data sources
-- Error handling and logging for plugin execution monitoring
-- Extensible architecture allowing custom OSINT tool integration
 """
 
 import json

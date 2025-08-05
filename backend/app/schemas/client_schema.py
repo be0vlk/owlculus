@@ -4,13 +4,6 @@ Pydantic schemas for client data validation.
 This module defines request and response models for client management,
 including client creation, updates, and information retrieval with
 associated case relationships.
-
-Key features include:
-- Client contact information validation with email and phone verification
-- Comprehensive client profile management for OSINT case assignments
-- Client-case relationship tracking and association management
-- Flexible client data updates with timestamp preservation
-- Contact information validation including EmailStr type enforcement
 """
 
 from datetime import datetime

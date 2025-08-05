@@ -1,12 +1,5 @@
 """
 DNS lookup plugin for resolving domain names to IP addresses and performing reverse DNS lookups
-
-Key features include:
-- Bidirectional DNS resolution supporting both forward and reverse lookups
-- Multiple DNS record type queries including A, AAAA, MX, TXT, NS, and CNAME records
-- Concurrent DNS resolution with custom nameserver support and timeout configuration
-- Bulk domain processing with comma-separated input handling
-- Automatic IP address entity creation with DNS context and record type metadata
 """
 
 import asyncio

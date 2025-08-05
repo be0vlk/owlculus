@@ -3,31 +3,23 @@ Case Management API for Owlculus OSINT Platform.
 
 This module provides comprehensive case management endpoints for digital investigations,
 supporting the complete lifecycle of OSINT cases from creation to completion.
-
-Key features include:
-- Full CRUD operations for investigation cases with role-based access control
-- Multi-user case assignment with lead investigator designation
-- Case team management with granular permission controls
-- Integrated entity management for tracking persons, organizations, and digital assets
-- Status tracking and workflow management for investigation progress
-- Secure case access validation ensuring data isolation between investigations
 """
 
 from typing import List, Optional
 
 from app import schemas
 from app.core.dependencies import (
-    admin_only,
-    get_current_user,
-    no_analyst,
-    check_case_access,
+	admin_only,
+	get_current_user,
+	no_analyst,
+	check_case_access,
 )
 from app.core.exceptions import (
-    AuthorizationException,
-    BaseException,
-    DuplicateResourceException,
-    ResourceNotFoundException,
-    ValidationException,
+	AuthorizationException,
+	BaseException,
+	DuplicateResourceException,
+	ResourceNotFoundException,
+	ValidationException,
 )
 from app.database import models
 from app.database.connection import get_db

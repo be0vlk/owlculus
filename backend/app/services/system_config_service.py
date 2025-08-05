@@ -4,13 +4,6 @@ Business logic for system configuration management.
 This module handles system settings, configuration validation, and updates including
 case number templates, API key management, evidence folder templates, and
 administrative system configuration functionality.
-
-Key features include:
-- Dynamic case number template system with prefix support and validation
-- Encrypted API key management with secure storage and retrieval mechanisms
-- Evidence folder template configuration for consistent case organization
-- Comprehensive configuration validation with detailed error handling and logging
-- Administrative controls with security logging and audit trail functionality
 """
 
 import os

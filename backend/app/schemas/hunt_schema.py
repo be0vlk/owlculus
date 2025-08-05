@@ -1,12 +1,5 @@
 """
 Pydantic schemas for hunt operations
-
-Key features include:
-- Hunt workflow execution models with real-time progress tracking
-- Multi-step OSINT hunt orchestration with plugin chaining
-- Hunt execution status monitoring with comprehensive step tracking
-- WebSocket event schemas for real-time hunt progress updates
-- Case-integrated hunt management with parameter validation
 """
 
 from datetime import datetime
