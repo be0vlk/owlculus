@@ -1,12 +1,5 @@
 """
 Plugin for scanning and correlating entity names across cases
-
-Key features include:
-- Cross-case entity correlation with name, employer, domain, and vehicle identifier matching
-- Role-based access control ensuring users only see authorized case correlations
-- Dynamic entity type detection with flexible identifier field mapping
-- Multi-criteria relationship discovery including VIN, license plate, and domain associations
-- Comprehensive evidence reporting with relationship context and case connection analysis
 """
 
 from typing import Any, AsyncGenerator, Dict, List, Optional, get_origin

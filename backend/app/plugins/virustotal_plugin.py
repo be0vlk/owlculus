@@ -1,12 +1,5 @@
 """
 Analyze files, URLs, domains, and IPs using VirusTotal threat intelligence
-
-Key features include:
-- Multi-target analysis supporting file hashes, URLs, domains, and IP addresses
-- Automatic target type detection and validation with intelligent routing
-- Comprehensive threat intelligence with vendor detection statistics and verdicts
-- Detailed metadata extraction for files, domains, and network assets
-- Custom evidence formatting with detection summaries and threat categorization
 """
 
 import asyncio

@@ -1,12 +1,5 @@
 """
 Shodan plugin for searching hosts and services using Shodan API
-
-Key features include:
-- Multi-mode search supporting IP lookup, hostname search, and general Shodan queries
-- Comprehensive host intelligence with service enumeration and vulnerability detection
-- Automatic search type detection based on input format (IP, hostname, or query)
-- Detailed service banner extraction with port, protocol, and version information
-- Custom IP entity creation with rich Shodan context and geolocation metadata
 """
 
 import time

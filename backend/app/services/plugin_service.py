@@ -5,15 +5,6 @@ This module handles all plugin-related operations including dynamic plugin loadi
 execution management, and evidence collection integration. Provides extensible
 OSINT tool integration with automatic plugin discovery, parameter validation,
 and real-time streaming execution for investigation workflows.
-
-Key features include:
-- Dynamic plugin discovery and loading from filesystem
-- Plugin metadata management and introspection
-- Streaming plugin execution with real-time output
-- Automatic evidence collection and storage
-- Plugin parameter validation and type checking
-- User context and session management
-- Error handling and resource cleanup
 """
 
 import importlib

@@ -5,14 +5,6 @@ This module handles all client-related business logic including client registrat
 profile management, and data validation. Provides secure client operations with
 email uniqueness enforcement, comprehensive error handling, and audit logging
 for OSINT investigation client management.
-
-Key features include:
-- Client creation and profile management with data validation
-- Email uniqueness enforcement with race condition handling
-- Secure client updates with constraint validation
-- Client deletion with case dependency checking
-- Comprehensive security logging and audit trails
-- Role-based access control for client operations
 """
 
 from app import schemas

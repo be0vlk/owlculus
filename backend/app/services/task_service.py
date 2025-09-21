@@ -5,15 +5,6 @@ This module handles all task-related business logic including task creation,
 assignment, status tracking, and template management. Provides structured
 task workflows with role-based access control, bulk operations, and comprehensive
 audit logging for OSINT investigation case management.
-
-Key features include:
-- Task creation with template-based initialization
-- Task assignment and status lifecycle management
-- Role-based task access control and filtering
-- Bulk task operations for efficient workflow management
-- Custom task templates with field validation
-- Case-based task organization and access control
-- Comprehensive audit logging and status tracking
 """
 
 from datetime import datetime
@@ -21,9 +12,9 @@ from typing import List, Optional
 
 from app.core.enums import TaskStatus
 from app.core.exceptions import (
-    BaseException,
-    ResourceNotFoundException,
-    ValidationException,
+	BaseException,
+	ResourceNotFoundException,
+	ValidationException,
 )
 from app.core.logging import get_security_logger
 from app.core.roles import UserRole

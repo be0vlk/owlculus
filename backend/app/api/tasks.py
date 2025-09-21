@@ -3,30 +3,22 @@ Task Management API for Owlculus OSINT Platform.
 
 This module provides comprehensive task management capabilities for OSINT investigations,
 enabling structured workflow coordination and team collaboration within cases.
-
-Key features include:
-- Task template system with pre-defined investigation workflows
-- CRUD operations for investigation tasks with role-based permissions
-- Bulk task operations for efficient team management and assignment
-- Case-integrated task tracking with lead investigator controls
-- Status management and progress tracking for investigation milestones
-- Flexible task assignment with case team member validation
 """
 
 from typing import List
 
 from app import schemas
 from app.core.dependencies import (
-    admin_only,
-    check_case_access,
-    get_current_user,
-    is_case_lead,
+	admin_only,
+	check_case_access,
+	get_current_user,
+	is_case_lead,
 )
 from app.core.exceptions import (
-    AuthorizationException,
-    BaseException,
-    ResourceNotFoundException,
-    ValidationException,
+	AuthorizationException,
+	BaseException,
+	ResourceNotFoundException,
+	ValidationException,
 )
 from app.core.roles import UserRole
 from app.database.connection import get_db

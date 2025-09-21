@@ -3,14 +3,6 @@ Hunt Operations API for Owlculus OSINT Platform.
 
 This module provides automated OSINT workflow execution capabilities through the hunt system,
 enabling complex multi-step investigations with real-time monitoring and results tracking.
-
-Key features include:
-- Hunt definition management with customizable workflow parameters
-- Asynchronous hunt execution with progress tracking and status updates
-- Real-time WebSocket streaming for live hunt monitoring and results
-- Case-integrated hunt results with automatic evidence and entity creation
-- Multi-step workflow coordination with conditional execution paths
-- Secure hunt execution with role-based permissions and access controls
 """
 
 from typing import List
@@ -21,12 +13,12 @@ from app.database import models
 from app.schemas import hunt_schema as schemas
 from app.services.hunt_service import HuntService
 from fastapi import (
-    APIRouter,
-    Depends,
-    HTTPException,
-    WebSocket,
-    WebSocketDisconnect,
-    status,
+	APIRouter,
+	Depends,
+	HTTPException,
+	WebSocket,
+	WebSocketDisconnect,
+	status,
 )
 from sqlmodel import Session
 

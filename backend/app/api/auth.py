@@ -3,23 +3,16 @@ Authentication API for Owlculus OSINT Platform.
 
 This module provides JWT-based authentication endpoints for the Owlculus platform,
 enabling secure access to digital investigation tools and case management features.
-
-Key features include:
-- JWT token authentication with refresh capabilities
-- Single-use ephemeral tokens for secure WebSocket authentication
-- Role-based access control integration for investigation workflows
-- Secure password-based login with comprehensive error handling
-- Time-limited WebSocket tokens for real-time hunt execution monitoring
 """
 
 from typing import Annotated
 
 from app.core.dependencies import get_current_user
 from app.core.exceptions import (
-    AuthenticationException,
-    BaseException,
-    AuthorizationException,
-    ResourceNotFoundException,
+	AuthenticationException,
+	BaseException,
+	AuthorizationException,
+	ResourceNotFoundException,
 )
 from app.database import models
 from app.database.connection import get_db

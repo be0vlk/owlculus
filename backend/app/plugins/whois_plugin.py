@@ -1,12 +1,5 @@
 """
 Query domain Whois information using python-whois library
-
-Key features include:
-- Comprehensive domain registration and ownership information retrieval
-- Automatic domain age calculation and expiration warning detection
-- Contact information extraction including registrant, admin, and technical contacts
-- Name server enumeration and domain status analysis
-- Custom evidence formatting with organized sections for registration details and warnings
 """
 
 import asyncio

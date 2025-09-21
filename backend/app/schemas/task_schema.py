@@ -1,12 +1,5 @@
 """
 Task-related Pydantic schemas for request/response validation
-
-Key features include:
-- Task template management with customizable definitions for OSINT workflows
-- Task assignment and status tracking with priority and deadline management
-- Comprehensive task lifecycle validation from creation to completion
-- Bulk task operations for efficient OSINT case management
-- Task filtering and querying with flexible search parameters
 """
 
 from datetime import datetime

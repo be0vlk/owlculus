@@ -1,12 +1,5 @@
 """
 Enumerate subdomains via Certificate Transparency logs, HackerTarget, and SecurityTrails with DNS verification
-
-Key features include:
-- Multi-source subdomain discovery using Certificate Transparency, HackerTarget, and SecurityTrails APIs
-- Concurrent DNS resolution with configurable concurrency limits for performance tuning
-- Automatic IP address entity creation with rich metadata and source attribution
-- Parent domain entity management with subdomain relationship tracking
-- Comprehensive result deduplication and source tracking across multiple discovery methods
 """
 
 import asyncio
@@ -17,8 +10,8 @@ import aiohttp
 import dns.asyncresolver
 from app.core.dependencies import get_db
 from app.schemas.entity_schema import (
-    DomainData,
-    EntityCreate,
+	DomainData,
+	EntityCreate,
 )
 from app.services.entity_service import EntityService
 from sqlmodel import Session

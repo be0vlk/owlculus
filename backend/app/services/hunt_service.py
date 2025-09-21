@@ -5,15 +5,6 @@ This module handles all hunt-related operations including hunt definition loadin
 execution management, and asynchronous workflow orchestration. Provides automated
 OSINT investigation workflows that chain multiple plugins together with parameter
 validation, progress tracking, and real-time status updates.
-
-Key features include:
-- Dynamic hunt definition loading from filesystem
-- Hunt execution with async background processing
-- Parameter validation and workflow configuration
-- Real-time execution status and progress tracking
-- Case access control and security validation
-- Plugin chaining and data flow management
-- Comprehensive logging and error handling
 """
 
 import asyncio

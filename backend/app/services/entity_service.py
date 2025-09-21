@@ -5,14 +5,6 @@ This module handles all entity-related business logic including entity creation,
 validation, duplicate detection, and relationship management. Provides secure
 entity operations with case access control, data enrichment capabilities,
 and specialized search functions for OSINT investigation workflows.
-
-Key features include:
-- Entity creation with duplicate detection and validation
-- Case-based entity access control and filtering
-- Entity enrichment with description augmentation
-- Specialized entity search by type (IP addresses, domains)
-- Transaction-safe operations with proper error handling
-- Integration with case access control system
 """
 
 from typing import Optional
@@ -20,8 +12,8 @@ from typing import Optional
 from app import schemas
 from app.core.dependencies import check_case_access
 from app.core.exceptions import (
-    ResourceNotFoundException,
-    ValidationException,
+	ResourceNotFoundException,
+	ValidationException,
 )
 from app.core.utils import get_utc_now
 from app.database import crud, models

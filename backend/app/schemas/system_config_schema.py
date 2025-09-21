@@ -4,13 +4,6 @@ Pydantic schemas for system configuration data validation.
 This module defines request and response models for system settings,
 configuration updates, API key management, case number templates,
 and evidence folder template management.
-
-Key features include:
-- Case numbering template validation with customizable prefix support
-- API key management schemas for OSINT service integration
-- Evidence folder template configuration for organized case management
-- System configuration validation with field constraints
-- Comprehensive admin configuration management for OSINT platform settings
 """
 
 from datetime import datetime

@@ -4,13 +4,6 @@ API endpoints for system configuration management.
 This module manages application settings, configuration updates, system parameters,
 API key management, case number templates, and evidence folder templates.
 Provides administrative endpoints for system configuration.
-
-Key features include:
-- System-wide configuration management with validation and template support
-- Encrypted API key storage and management for external service integrations
-- Case number template configuration with prefix support and preview functionality
-- Evidence folder template management for consistent case organization
-- Administrative access controls with comprehensive security logging and audit trails
 """
 
 from fastapi import APIRouter, Depends, HTTPException

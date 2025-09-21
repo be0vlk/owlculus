@@ -5,26 +5,17 @@ This module handles all evidence-related operations including file uploads,
 folder management, evidence validation, and secure file access. Provides
 comprehensive evidence lifecycle management with file hashing, content viewing,
 template-based folder structures, and role-based access control for OSINT investigations.
-
-Key features include:
-- Secure file upload and storage with hash validation
-- Hierarchical folder structure with template support
-- Evidence content viewing for text and image files
-- File download and streaming capabilities
-- Role-based access control (no analyst modifications)
-- Comprehensive security logging and audit trails
-- Evidence deletion with physical file cleanup
 """
 
 from typing import List, Optional
 
 from app.core.dependencies import check_case_access, no_analyst
 from app.core.file_storage import (
-    create_folder,
-    delete_file,
-    delete_folder,
-    normalize_folder_path,
-    save_upload_file,
+	create_folder,
+	delete_file,
+	delete_folder,
+	normalize_folder_path,
+	save_upload_file,
 )
 from app.core.logging import get_security_logger
 from app.core.utils import get_utc_now

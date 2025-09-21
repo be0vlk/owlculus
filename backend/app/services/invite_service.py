@@ -4,13 +4,6 @@ Business logic for user invitation management.
 This module handles invite creation, validation, expiration, and acceptance workflows.
 Provides comprehensive invitation system with security logging, token generation,
 and user registration through invitation tokens.
-
-Key features include:
-- Secure invitation token generation with cryptographic strength and expiration management
-- Multi-stage validation workflow with token verification and user data validation
-- Comprehensive security logging with detailed audit trails and failure tracking
-- Role-based invitation system supporting different user privilege levels
-- Automated cleanup processes for expired invitations and maintenance operations
 """
 
 import secrets
@@ -20,9 +13,9 @@ from typing import Optional, Protocol
 
 from app import schemas
 from app.core.exceptions import (
-    BaseException,
-    DuplicateResourceException,
-    ResourceNotFoundException,
+	BaseException,
+	DuplicateResourceException,
+	ResourceNotFoundException,
 )
 from app.core.logging import get_security_logger
 from app.core.utils import get_utc_now
