@@ -9,14 +9,15 @@ from typing import Annotated
 
 from app.core.dependencies import get_current_user
 from app.core.exceptions import (
-	AuthenticationException,
-	BaseException,
-	AuthorizationException,
-	ResourceNotFoundException,
+    AuthenticationException,
+    AuthorizationException,
+    BaseException,
+    ResourceNotFoundException,
 )
+from app.core.setup import is_setup_required
 from app.database import models
 from app.database.connection import get_db
-from app.schemas.auth_schema import Token
+from app.schemas.auth_schema import SetupStatus, Token
 from app.services.auth_service import AuthService
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -24,6 +25,12 @@ from pydantic import BaseModel
 from sqlmodel import Session
 
 router = APIRouter()
+
+
+@router.get("/setup-status", response_model=SetupStatus)
+def get_setup_status(db: Annotated[Session, Depends(get_db)]) -> SetupStatus:
+    """Report whether this installation still needs its first user."""
+    return SetupStatus(setup_required=is_setup_required(db))
 
 
 @router.post("/login", response_model=Token)

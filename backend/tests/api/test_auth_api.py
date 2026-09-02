@@ -43,6 +43,32 @@ def override_get_db_factory(session: Session):
 class TestAuthAPI:
     """Test cases for authentication API endpoints"""
 
+    def test_setup_status_requires_setup_when_no_users_exist(self, session: Session):
+        """An empty installation exposes only that initial setup is required."""
+        app.dependency_overrides[get_db] = override_get_db_factory(session)
+
+        try:
+            response = client.get("/api/auth/setup-status")
+
+            assert response.status_code == status.HTTP_200_OK
+            assert response.json() == {"setup_required": True}
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_setup_status_is_complete_when_a_user_exists(
+        self, session: Session, test_user_with_password: tuple[User, str]
+    ):
+        """An existing installation does not re-enter initial setup."""
+        app.dependency_overrides[get_db] = override_get_db_factory(session)
+
+        try:
+            response = client.get("/api/auth/setup-status")
+
+            assert response.status_code == status.HTTP_200_OK
+            assert response.json() == {"setup_required": False}
+        finally:
+            app.dependency_overrides.clear()
+
     def test_login_success(
         self, session: Session, test_user_with_password: tuple[User, str]
     ):

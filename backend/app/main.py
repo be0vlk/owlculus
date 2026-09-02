@@ -12,15 +12,20 @@ from app.api.router import api_router
 from app.core.config import settings
 from app.core.dependencies import get_client_ip, get_user_agent
 from app.core.logging import client_ip_context, setup_logging, user_agent_context
+from app.core.setup import check_and_generate_setup_token
+from app.database.connection import engine
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
+from sqlmodel import Session
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()
     logger.info("Owlculus backend starting up")
+    with Session(engine) as session:
+        check_and_generate_setup_token(session)
     yield
     logger.info("Owlculus backend shutting down")
 
