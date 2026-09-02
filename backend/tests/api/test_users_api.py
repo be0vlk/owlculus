@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import pytest
 from app.core.dependencies import get_current_user, get_db
+from app.core.security import get_password_hash
 from app.database.models import User
 from app.main import app
 from fastapi import status
@@ -211,6 +212,49 @@ class TestUsersAPI:
         finally:
             app.dependency_overrides.clear()
 
+    def test_legacy_local_email_user_can_log_in_and_read_self(self, session: Session):
+        """Persisted legacy emails remain readable through authenticated APIs."""
+        legacy_user = User(
+            username="legacyadmin",
+            email="admin@owlculus.local",
+            password_hash=get_password_hash("legacy-password"),
+            is_active=True,
+            role="Admin",
+            is_superadmin=True,
+        )
+        session.add(legacy_user)
+        session.commit()
+        session.refresh(legacy_user)
+        app.dependency_overrides[get_db] = override_get_db_factory(session)
+
+        try:
+            login_response = client.post(
+                "/api/auth/login",
+                data={"username": "legacyadmin", "password": "legacy-password"},
+            )
+            assert login_response.status_code == status.HTTP_200_OK
+
+            response = client.get(
+                "/api/users/me",
+                headers={
+                    "Authorization": f"Bearer {login_response.json()['access_token']}"
+                },
+            )
+
+            assert response.status_code == status.HTTP_200_OK
+            assert response.json() == {
+                "id": legacy_user.id,
+                "username": "legacyadmin",
+                "email": "admin@owlculus.local",
+                "role": "Admin",
+                "is_active": True,
+                "is_superadmin": True,
+                "created_at": legacy_user.created_at.isoformat(),
+                "updated_at": legacy_user.updated_at.isoformat(),
+            }
+        finally:
+            app.dependency_overrides.clear()
+
     def test_read_self_unauthorized(self):
         """Test self profile retrieval without authentication"""
         response = client.get("/api/users/me")
@@ -253,6 +297,46 @@ class TestUsersAPI:
 
                 response = client.get("/api/users/?skip=10&limit=5")
                 assert response.status_code == status.HTTP_200_OK
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_get_users_serializes_legacy_local_email(
+        self, session: Session, test_admin: User
+    ):
+        """User listings retain persisted legacy email addresses."""
+        legacy_user = User(
+            username="legacyuser",
+            email="user@owlculus.local",
+            password_hash="dummy_hash",
+            is_active=True,
+            role="Investigator",
+        )
+        session.add(legacy_user)
+        session.commit()
+        session.refresh(legacy_user)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
+        )
+        app.dependency_overrides[get_db] = override_get_db_factory(session)
+
+        try:
+            response = client.get("/api/users/")
+
+            assert response.status_code == status.HTTP_200_OK
+            serialized_user = next(
+                user for user in response.json() if user["id"] == legacy_user.id
+            )
+            assert serialized_user["email"] == "user@owlculus.local"
+            assert set(serialized_user) == {
+                "id",
+                "username",
+                "email",
+                "role",
+                "is_active",
+                "is_superadmin",
+                "created_at",
+                "updated_at",
+            }
         finally:
             app.dependency_overrides.clear()
 
@@ -649,6 +733,47 @@ class TestUsersAPI:
 
         try:
             response = client.post("/api/users/", json=user_data)
+            assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        finally:
+            app.dependency_overrides.clear()
+
+    @pytest.mark.parametrize(
+        ("method", "path", "payload"),
+        [
+            (
+                "post",
+                "/api/users/",
+                {
+                    "username": "newuser",
+                    "email": "newuser@owlculus.local",
+                    "password": "password123",
+                    "role": "Analyst",
+                    "is_active": True,
+                },
+            ),
+            ("put", "/api/users/{user_id}", {"email": "newuser@owlculus.local"}),
+        ],
+    )
+    def test_user_writes_reject_local_email(
+        self,
+        session: Session,
+        test_admin: User,
+        test_user: User,
+        method: str,
+        path: str,
+        payload: dict,
+    ):
+        """User input validation continues to reject reserved email suffixes."""
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
+        )
+        app.dependency_overrides[get_db] = override_get_db_factory(session)
+
+        try:
+            response = getattr(client, method)(
+                path.format(user_id=test_user.id), json=payload
+            )
+
             assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
         finally:
             app.dependency_overrides.clear()

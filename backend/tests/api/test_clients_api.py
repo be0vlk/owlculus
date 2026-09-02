@@ -119,6 +119,40 @@ class TestClientsAPI:
         finally:
             app.dependency_overrides.clear()
 
+    def test_get_clients_serializes_personal_client_legacy_local_email(
+        self, session: Session, test_admin: User
+    ):
+        """Client listings retain a persisted Personal client legacy email."""
+        personal_client = Client(name="Personal", email="admin@owlculus.local")
+        session.add(personal_client)
+        session.commit()
+        session.refresh(personal_client)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
+        )
+        app.dependency_overrides[get_db] = override_get_db_factory(session)
+
+        try:
+            response = client.get("/api/clients/")
+
+            assert response.status_code == status.HTTP_200_OK
+            serialized_client = next(
+                item for item in response.json() if item["id"] == personal_client.id
+            )
+            assert serialized_client["email"] == "admin@owlculus.local"
+            assert set(serialized_client) == {
+                "id",
+                "name",
+                "email",
+                "phone",
+                "address",
+                "created_at",
+                "updated_at",
+                "cases",
+            }
+        finally:
+            app.dependency_overrides.clear()
+
     def test_get_clients_forbidden_analyst(self, session: Session, test_analyst: User):
         """Test clients listing forbidden for analyst"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -337,6 +371,45 @@ class TestClientsAPI:
                 f"/api/clients/{test_client_data.id}", json=update_data
             )
             assert response.status_code == status.HTTP_403_FORBIDDEN
+        finally:
+            app.dependency_overrides.clear()
+
+    @pytest.mark.parametrize(
+        ("method", "path", "payload"),
+        [
+            (
+                "post",
+                "/api/clients/",
+                {"name": "Reserved Email", "email": "client@owlculus.local"},
+            ),
+            (
+                "put",
+                "/api/clients/{client_id}",
+                {"email": "client@owlculus.local"},
+            ),
+        ],
+    )
+    def test_client_writes_reject_local_email(
+        self,
+        session: Session,
+        test_admin: User,
+        test_client_data: Client,
+        method: str,
+        path: str,
+        payload: dict,
+    ):
+        """Client input validation continues to reject reserved email suffixes."""
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
+        )
+        app.dependency_overrides[get_db] = override_get_db_factory(session)
+
+        try:
+            response = getattr(client, method)(
+                path.format(client_id=test_client_data.id), json=payload
+            )
+
+            assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
         finally:
             app.dependency_overrides.clear()
 
