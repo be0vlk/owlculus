@@ -51,8 +51,8 @@ RUN pip install --no-cache /wheels/* \
 # Copy application code
 COPY . .
 
-# Create uploads directory and set permissions
-RUN mkdir -p uploads && \
+# Create persistent directories and set permissions
+RUN mkdir -p uploads data/setup && \
     chown -R app:app /app
 
 # Switch to non-root user

@@ -73,11 +73,12 @@ services:
       FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-172.29.0.254}
     volumes:
       - uploads_data:/app/uploads
+      - setup_data:/app/data/setup
     expose:
       - "8000"  # Internal only
     depends_on:
-      postgres:
-        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     healthcheck:
@@ -168,6 +169,8 @@ volumes:
   postgres_data:
     driver: local
   uploads_data:
+    driver: local
+  setup_data:
     driver: local
   redis_data:
     driver: local

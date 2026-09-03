@@ -75,6 +75,62 @@ def test_compose_initialization_uses_the_backend_module_without_admin_credential
 
 @pytest.mark.parametrize(
     "compose_file",
+    SUPPORTED_COMPOSE_FILES,
+)
+def test_compose_backend_starts_after_successful_database_initialization(compose_file):
+    """Every backend starts only after the healthy database is initialized."""
+    configuration = yaml.safe_load((REPOSITORY_ROOT / compose_file).read_text())
+    services = configuration["services"]
+
+    assert services["db-init"]["depends_on"]["postgres"] == {
+        "condition": "service_healthy"
+    }
+    assert services["backend"]["depends_on"]["db-init"] == {
+        "condition": "service_completed_successfully"
+    }
+
+
+@pytest.mark.parametrize(
+    ("compose_file", "volume_name"),
+    [
+        ("docker-compose.yml", "setup_data"),
+        ("docker-compose.dev.yml", "setup_dev_data"),
+        ("docker-compose.reverse-proxy.yml", "setup_data"),
+    ],
+)
+def test_compose_persists_setup_data_only_for_the_backend(compose_file, volume_name):
+    """Pending setup credentials persist without reaching browser-facing services."""
+    configuration = yaml.safe_load((REPOSITORY_ROOT / compose_file).read_text())
+    services = configuration["services"]
+    setup_mount = f"{volume_name}:/app/data/setup"
+
+    assert configuration["volumes"][volume_name] == {"driver": "local"}
+    assert setup_mount in services["backend"]["volumes"]
+    assert {
+        service_name
+        for service_name, service in services.items()
+        if any(
+            volume.split(":", maxsplit=1)[0] == volume_name
+            for volume in service.get("volumes", [])
+        )
+    } == {"backend"}
+
+
+def test_development_topology_keeps_hot_reload_and_published_ports():
+    """Setup persistence does not change the existing development workflow."""
+    configuration = yaml.safe_load(
+        (REPOSITORY_ROOT / "docker-compose.dev.yml").read_text()
+    )
+    backend = configuration["services"]["backend"]
+    frontend = configuration["services"]["frontend"]
+
+    assert backend["command"].endswith("--proxy-headers --reload")
+    assert backend["ports"] == ["${BACKEND_PORT:-8000}:8000"]
+    assert frontend["ports"] == ["${FRONTEND_PORT:-5173}:5173"]
+
+
+@pytest.mark.parametrize(
+    "compose_file",
     [path.name for path in REPOSITORY_ROOT.glob("docker-compose*.yml")],
 )
 def test_admin_bootstrap_variables_are_absent_from_every_compose_file(compose_file):

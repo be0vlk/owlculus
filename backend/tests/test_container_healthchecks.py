@@ -8,6 +8,13 @@ import yaml
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
 
+def test_backend_image_excludes_runtime_setup_data():
+    """A local pending setup token can never be copied into an image layer."""
+    dockerignore = (REPOSITORY_ROOT / "backend/.dockerignore").read_text().splitlines()
+
+    assert "data/setup/" in dockerignore
+
+
 @pytest.mark.parametrize(
     "dockerfile",
     ["backend/Dockerfile", "backend/Dockerfile.dev"],
@@ -18,6 +25,19 @@ def test_backend_images_check_process_liveness(dockerfile):
 
     assert "HEALTHCHECK" in contents
     assert "http://localhost:8000/health/live" in contents
+
+
+@pytest.mark.parametrize(
+    "dockerfile",
+    ["backend/Dockerfile", "backend/Dockerfile.dev"],
+)
+def test_backend_images_own_persistent_directories_as_the_runtime_user(dockerfile):
+    """Fresh named volumes inherit writable ownership for the non-root process."""
+    contents = (REPOSITORY_ROOT / dockerfile).read_text()
+    runtime_instructions = contents[: contents.index("USER app")]
+
+    assert "mkdir -p uploads data/setup" in runtime_instructions
+    assert "chown -R app:app /app" in runtime_instructions
 
 
 @pytest.mark.parametrize(

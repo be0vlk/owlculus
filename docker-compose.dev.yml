@@ -75,11 +75,12 @@ services:
     volumes:
       - ./backend:/app
       - uploads_dev_data:/app/uploads
+      - setup_dev_data:/app/data/setup
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     depends_on:
-      postgres:
-        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --reload
@@ -148,6 +149,8 @@ volumes:
   postgres_dev_data:
     driver: local
   uploads_dev_data:
+    driver: local
+  setup_dev_data:
     driver: local
   redis_dev_data:
     driver: local
