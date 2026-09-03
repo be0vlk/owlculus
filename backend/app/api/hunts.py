@@ -5,27 +5,30 @@ This module provides automated OSINT workflow execution capabilities through the
 enabling complex multi-step investigations with real-time monitoring and results tracking.
 """
 
-from typing import List
+
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
+from sqlmodel import Session
 
 from app.core.dependencies import get_current_user, get_db, no_analyst
+from app.core.exceptions import AuthorizationException, ResourceNotFoundException
 from app.core.websocket_manager import websocket_manager
 from app.database import models
 from app.schemas import hunt_schema as schemas
+from app.services.export_service import ExportService, HuntExecutionExportFormat
 from app.services.hunt_service import HuntService
-from fastapi import (
-	APIRouter,
-	Depends,
-	HTTPException,
-	WebSocket,
-	WebSocketDisconnect,
-	status,
-)
-from sqlmodel import Session
 
 router = APIRouter()
 
 
-@router.get("/", response_model=List[schemas.HuntResponse])
+@router.get("/", response_model=list[schemas.HuntResponse])
 async def list_hunts(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -45,6 +48,33 @@ async def list_hunts(
         response.append(schemas.HuntResponse(**hunt_dict))
 
     return response
+
+
+@router.get("/executions/{execution_id}/export")
+async def export_execution(
+    execution_id: int,
+    format: HuntExecutionExportFormat,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Download a backend-generated hunt execution export."""
+    service = ExportService(db)
+    try:
+        artifact = service.export_hunt_execution(
+            execution_id=execution_id,
+            current_user=current_user,
+            export_format=format,
+        )
+    except ResourceNotFoundException as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except AuthorizationException as error:
+        raise HTTPException(status_code=403, detail=str(error)) from error
+
+    return Response(
+        content=artifact.content,
+        media_type=artifact.media_type,
+        headers={"Content-Disposition": f'attachment; filename="{artifact.filename}"'},
+    )
 
 
 @router.get("/{hunt_id}", response_model=schemas.HuntResponse)
@@ -104,11 +134,11 @@ async def execute_hunt(
                     **hunt.__dict__,
                     initial_parameters=hunt.definition_json.get(
                         "initial_parameters", {}
-                    )
+                    ),
                 )
                 if hunt
                 else None
-            )
+            ),
         )
 
         return response
@@ -151,7 +181,7 @@ async def get_execution_status(
         hunt=(
             schemas.HuntResponse(
                 **hunt.__dict__,
-                initial_parameters=hunt.definition_json.get("initial_parameters", {})
+                initial_parameters=hunt.definition_json.get("initial_parameters", {}),
             )
             if hunt
             else None
@@ -174,7 +204,7 @@ async def get_execution_status(
             }
             if created_by
             else None
-        )
+        ),
     )
 
     return response
@@ -182,7 +212,7 @@ async def get_execution_status(
 
 @router.get(
     "/cases/{case_id}/executions",
-    response_model=List[schemas.HuntExecutionListResponse],
+    response_model=list[schemas.HuntExecutionListResponse],
 )
 async def list_case_executions(
     case_id: int,

@@ -1,4 +1,5 @@
 import api from './api'
+import { createDownloadArtifact } from '@/utils/download'
 
 /**
  * Hunt API service for managing OSINT hunt workflows
@@ -49,6 +50,14 @@ export const huntService = {
       params: { include_steps: includeSteps },
     })
     return response.data
+  },
+
+  async exportExecution(executionId, format) {
+    const response = await api.get(`/api/hunts/executions/${executionId}/export`, {
+      params: { format },
+      responseType: 'blob',
+    })
+    return createDownloadArtifact(response.data, response.headers)
   },
 
   /**

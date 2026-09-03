@@ -11,6 +11,7 @@ filetype
 chardet
 selenium
 beautifulsoup4
+fpdf2
 python-dotenv
 holehe
 pyexiftool

@@ -13,6 +13,7 @@ dependencies = [
     "dnspython==2.8.0",
     "fastapi[standard]==0.115.6",
     "filetype==1.2.0",
+    "fpdf2==2.8.8",
     "holehe==1.61",
     "loguru==0.7.3",
     "openai==3.7.0",
@@ -38,6 +39,7 @@ dependencies = [
 dev = [
     "black==26.5.1",
     "mypy>=1.17,<2",
+    "pypdf==6.16.2",
     "pytest==9.1.1",
     "pytest-asyncio==1.4.0",
     "ruff==0.16.5",

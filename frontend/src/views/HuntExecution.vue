@@ -12,7 +12,7 @@
         >
           Refresh
         </v-btn>
-        <v-menu v-if="hasResults">
+        <v-menu v-if="canExport">
           <template #activator="{ props }">
             <v-btn color="white" prepend-icon="mdi-download" v-bind="props" variant="outlined">
               Export
@@ -337,11 +337,11 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useHuntStore } from '@/stores/huntStore.js'
+import { huntService } from '@/services/hunt'
 import { useNotifications } from '@/composables/useNotifications'
 import { formatDate } from '@/composables/dateUtils'
 import {
   calculateDuration,
-  exportToJSON,
   formatFileSize,
   formatParameterName,
   formatTime,
@@ -350,6 +350,7 @@ import {
   getStatusIcon,
   getStatusText,
 } from '@/utils/huntDisplayUtils'
+import { downloadBlob } from '@/utils/download'
 import BaseDashboard from '@/components/BaseDashboard.vue'
 import HuntResultsSummary from '@/components/hunts/HuntResultsSummary.vue'
 import HuntStepResults from '@/components/hunts/HuntStepResults.vue'
@@ -395,8 +396,8 @@ const statusText = computed(() => {
   return getStatusText(execution.value.status)
 })
 
-const hasResults = computed(() => {
-  return execution.value?.status === 'completed' || execution.value?.status === 'partial'
+const canExport = computed(() => {
+  return execution.value && !['pending', 'running'].includes(execution.value.status)
 })
 
 const filteredSteps = computed(() => {
@@ -469,34 +470,23 @@ const handleCancelExecution = async () => {
   }
 }
 
-const exportPDF = async () => {
+const exportExecution = async (format) => {
   try {
-    exportingPDF.value = true
-    showNotification('PDF export functionality not yet implemented', 'info')
-    // TODO: Implement PDF export
+    exportingPDF.value = format === 'pdf'
+    const artifact = await huntService.exportExecution(executionId.value, format)
+    downloadBlob(artifact, `hunt-execution-${executionId.value}.${format}`)
+    showNotification('Results exported successfully', 'success')
   } catch (error) {
-    console.error('Failed to export PDF:', error)
-    showNotification('Failed to export PDF', 'error')
+    console.error(`Failed to export ${format.toUpperCase()}:`, error)
+    showNotification(`Failed to export ${format.toUpperCase()}`, 'error')
   } finally {
     exportingPDF.value = false
   }
 }
 
-const exportJSON = () => {
-  try {
-    const data = {
-      execution: execution.value,
-      timestamp: new Date().toISOString(),
-      export_version: '1.0',
-    }
+const exportPDF = () => exportExecution('pdf')
 
-    exportToJSON(data, `hunt_execution_${executionId.value}_results.json`)
-    showNotification('Results exported successfully', 'success')
-  } catch (error) {
-    console.error('Failed to export JSON:', error)
-    showNotification('Failed to export JSON', 'error')
-  }
-}
+const exportJSON = () => exportExecution('json')
 
 const viewEvidence = (evidence) => {
   // Navigate to evidence view
