@@ -59,6 +59,18 @@ def test_unknown_provider_is_rejected_before_key_editing(client, test_admin):
     assert response.status_code == 422
 
 
+def test_existing_custom_provider_option_remains_editable(client, test_admin):
+    authenticate_as(test_admin)
+
+    response = client.put(
+        "/api/admin/configuration/api-keys/custom",
+        json={"api_key": "custom-secret", "name": "Custom"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["api_keys_configured"] == ["custom"]
+
+
 def test_stored_key_round_trips_from_admin_route_through_vault(
     client, session, test_admin
 ):

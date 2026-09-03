@@ -19,7 +19,7 @@ from ..core.logging import get_security_logger
 from ..core.security import encrypt_api_key
 from ..core.utils import get_utc_now
 from ..database import models
-from .api_key_vault import Provider
+from .api_key_vault import Provider, StoredApiKey
 
 CASE_NUMBER_TEMPLATE_MONTHLY = "YYMM-NN"
 CASE_NUMBER_TEMPLATE_PREFIX = "PREFIX-YYMM-NN"
@@ -116,6 +116,16 @@ class SystemConfigService:
         self.db = db
         self._clock = clock
 
+    def _persist_configuration(
+        self, config: models.SystemConfiguration
+    ) -> models.SystemConfiguration:
+        """Persist an administrative configuration change."""
+        config.updated_at = self._clock()
+        self.db.add(config)
+        self.db.commit()
+        self.db.refresh(config)
+        return config
+
     async def get_configuration(
         self, current_user: Optional[models.User] = None
     ) -> models.SystemConfiguration:
@@ -172,10 +182,7 @@ class SystemConfigService:
             config.case_number_template = case_number_template
             config.case_number_prefix = case_number_prefix
 
-            config.updated_at = self._clock()
-            self.db.add(config)
-            self.db.commit()
-            self.db.refresh(config)
+            config = self._persist_configuration(config)
             config_logger.bind(
                 old_template=old_template,
                 new_template=case_number_template,
@@ -244,38 +251,36 @@ class SystemConfigService:
             if is_new_key:
                 if not api_key:
                     raise ApiKeyError("API key is required for new providers")
-                current_keys[provider_name] = {
-                    "api_key": encrypt_api_key(api_key),
-                    "name": name,
-                    "is_active": True,
-                    "created_at": self._clock().isoformat(),
-                }
+                current_keys[provider_name] = StoredApiKey(
+                    encrypted_key=encrypt_api_key(api_key),
+                    name=name,
+                    is_active=True,
+                    created_at=self._clock().isoformat(),
+                ).to_mapping()
             else:
-                existing_data = current_keys[provider_name].copy()
+                existing_key = StoredApiKey.from_mapping(
+                    provider_name, current_keys[provider_name]
+                )
                 key_being_updated = api_key is not None
-                current_keys[provider_name] = {
-                    "api_key": (
+                current_keys[provider_name] = StoredApiKey(
+                    encrypted_key=(
                         encrypt_api_key(api_key)
                         if api_key
-                        else existing_data.get("api_key")
+                        else existing_key.encrypted_key
                     ),
-                    "name": name,
-                    "is_active": True,
-                    "created_at": existing_data.get("created_at")
-                    or self._clock().isoformat(),
-                }
+                    name=name,
+                    is_active=True,
+                    created_at=existing_key.created_at or self._clock().isoformat(),
+                ).to_mapping()
                 config_logger = config_logger.bind(
-                    old_name=existing_data.get("name", "Unknown"),
+                    old_name=existing_key.name,
                     new_name=name,
                     key_updated=key_being_updated,
                     metadata_only=not key_being_updated,
                 )
 
             config.api_keys = current_keys
-            config.updated_at = self._clock()
-            self.db.add(config)
-            self.db.commit()
-            self.db.refresh(config)
+            config = self._persist_configuration(config)
             config_logger.bind(event_type=f"api_key_{operation_type}_success").info(
                 f"API key {operation_type}d successfully for provider: {provider}"
             )
@@ -323,11 +328,7 @@ class SystemConfigService:
                 removed_key_data = current_keys[provider_name]
                 del current_keys[provider_name]
                 config.api_keys = current_keys
-                config.updated_at = self._clock()
-
-                self.db.add(config)
-                self.db.commit()
-                self.db.refresh(config)
+                config = self._persist_configuration(config)
 
                 config_logger.bind(
                     removed_key_name=removed_key_data.get("name"),
@@ -363,11 +364,12 @@ class SystemConfigService:
 
             result = {}
             for provider, key_data in config.api_keys.items():
-                if key_data.get("is_active", True):
+                stored_key = StoredApiKey.from_mapping(provider, key_data)
+                if stored_key.is_active:
                     result[provider] = {
-                        "name": key_data.get("name", provider),
+                        "name": stored_key.name,
                         "is_configured": True,
-                        "created_at": key_data.get("created_at"),
+                        "created_at": stored_key.created_at,
                     }
 
             return result
@@ -384,10 +386,7 @@ class SystemConfigService:
         config = await self.get_configuration()
         if not config.evidence_folder_templates:
             config.evidence_folder_templates = DEFAULT_TEMPLATES.copy()
-            config.updated_at = self._clock()
-            self.db.add(config)
-            self.db.commit()
-            self.db.refresh(config)
+            config = self._persist_configuration(config)
         return config.evidence_folder_templates
 
     @admin_only()
@@ -410,10 +409,7 @@ class SystemConfigService:
             old_template_count = len(config.evidence_folder_templates or {})
 
             config.evidence_folder_templates = templates
-            config.updated_at = self._clock()
-            self.db.add(config)
-            self.db.commit()
-            self.db.refresh(config)
+            config = self._persist_configuration(config)
             config_logger.bind(
                 template_count=len(templates),
                 old_template_count=old_template_count,

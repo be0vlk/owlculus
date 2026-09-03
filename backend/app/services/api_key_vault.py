@@ -1,9 +1,13 @@
 """Provider-typed access to third-party API keys."""
 
 import os
+from collections.abc import Mapping
+from dataclasses import dataclass
 from enum import StrEnum
-from typing import Mapping, Protocol
+from typing import Protocol
 
+from cryptography.fernet import InvalidToken
+from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session, select
 
 from app.core.logging import get_security_logger
@@ -14,6 +18,7 @@ from app.database.models import SystemConfiguration
 class Provider(StrEnum):
     """Third-party providers supported by Owlculus."""
 
+    CUSTOM = "custom"
     OPENAI = "openai"
     PEOPLE_DATA_LABS = "people_data_labs"
     SECURITYTRAILS = "securitytrails"
@@ -29,6 +34,36 @@ class ApiKeyVault(Protocol):
     def is_configured(self, provider: Provider) -> bool: ...
 
 
+@dataclass(frozen=True)
+class StoredApiKey:
+    """The encrypted API-key record persisted in system configuration."""
+
+    encrypted_key: str | None
+    name: str
+    is_active: bool
+    created_at: str | None
+
+    @classmethod
+    def from_mapping(cls, provider: str, data: Mapping[str, object]) -> "StoredApiKey":
+        encrypted_key = data.get("api_key")
+        name = data.get("name")
+        created_at = data.get("created_at")
+        return cls(
+            encrypted_key=encrypted_key if isinstance(encrypted_key, str) else None,
+            name=name if isinstance(name, str) else provider,
+            is_active=data.get("is_active", True) is not False,
+            created_at=created_at if isinstance(created_at, str) else None,
+        )
+
+    def to_mapping(self) -> dict[str, object]:
+        return {
+            "api_key": self.encrypted_key,
+            "name": self.name,
+            "is_active": self.is_active,
+            "created_at": self.created_at,
+        }
+
+
 class ConfigurationApiKeyVault:
     """Read encrypted configuration keys, falling back to the environment."""
 
@@ -39,7 +74,7 @@ class ConfigurationApiKeyVault:
     def get_key(self, provider: Provider) -> str | None:
         try:
             config = self._db.exec(select(SystemConfiguration)).first()
-        except Exception as error:
+        except SQLAlchemyError as error:
             self._log.bind(
                 provider=provider.value,
                 event_type="api_key_database_unavailable",
@@ -49,13 +84,15 @@ class ConfigurationApiKeyVault:
         key_data: dict | None = (
             (config.api_keys or {}).get(provider.value) if config else None
         )
-        encrypted_key = key_data.get("api_key") if key_data is not None else None
-        if encrypted_key and key_data is not None and key_data.get("is_active", True):
+        stored_key = (
+            StoredApiKey.from_mapping(provider.value, key_data) if key_data else None
+        )
+        if stored_key and stored_key.encrypted_key and stored_key.is_active:
             try:
-                decrypted_key = decrypt_api_key(encrypted_key)
+                decrypted_key = decrypt_api_key(stored_key.encrypted_key)
                 if decrypted_key:
                     return decrypted_key
-            except Exception as error:
+            except InvalidToken as error:
                 self._log.bind(
                     provider=provider.value,
                     event_type="api_key_decrypt_failed",
@@ -79,7 +116,7 @@ class ConfigurationApiKeyVault:
 
 
 class StaticApiKeyVault:
-    """In-memory vault for tests and other fixed configurations."""
+    """In-memory vault adapter for tests."""
 
     def __init__(self, keys: Mapping[Provider, str | None]) -> None:
         self._keys = dict(keys)

@@ -2,6 +2,8 @@
 
 from unittest.mock import Mock
 
+from sqlalchemy.exc import OperationalError
+
 from app.core.security import encrypt_api_key
 from app.database.models import SystemConfiguration
 from app.services.api_key_vault import (
@@ -76,7 +78,9 @@ def test_decrypt_failure_is_logged_before_environment_fallback(session, monkeypa
 def test_database_failure_is_logged_before_environment_fallback(monkeypatch):
     log = Mock()
     unavailable_session = Mock()
-    unavailable_session.exec.side_effect = RuntimeError("database unavailable")
+    unavailable_session.exec.side_effect = OperationalError(
+        "select configuration", {}, RuntimeError("database unavailable")
+    )
     monkeypatch.setenv("PEOPLE_DATA_LABS_API_KEY", "environment-key")
 
     vault = ConfigurationApiKeyVault(unavailable_session, log=log)
@@ -99,6 +103,7 @@ def test_static_vault_implements_lookup_and_configured_contract():
 
 def test_provider_enum_covers_every_current_consumer():
     assert {provider.value for provider in Provider} == {
+        "custom",
         "openai",
         "people_data_labs",
         "securitytrails",
