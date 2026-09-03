@@ -23,8 +23,8 @@ class TestPeopledatalabsPlugin:
         )
         assert plugin.category == "Person"
         assert plugin.evidence_category == "Associates"
-        assert plugin.api_key_requirements == ["peopledatalabs"]
-        assert "save_to_case" in plugin.parameters
+        assert plugin.api_key_requirements == ["people_data_labs"]
+        assert "save_to_case" in plugin.get_metadata()["parameters"]
 
     def test_plugin_parameters(self, plugin):
         """Test plugin parameters are defined correctly"""

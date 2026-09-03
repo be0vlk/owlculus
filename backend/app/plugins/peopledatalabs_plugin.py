@@ -18,7 +18,7 @@ class PeopledatalabsPlugin(BasePlugin):
         self.category = "Person"  # Person, Network, Company, Other
         self.evidence_category = "Associates"  # Social Media, Associates, Network Assets, Communications, Documents, Other
         self.save_to_case = False  # Whether to auto-save results as evidence
-        self.api_key_requirements = ["peopledatalabs"]  # Required API key providers
+        self.api_key_requirements = ["people_data_labs"]  # Required API key providers
         self.parameters = {
             "search_type": {
                 "type": "string",
@@ -126,7 +126,7 @@ class PeopledatalabsPlugin(BasePlugin):
 
             # Get API key from system configuration
             config_service = SystemConfigService(self.db_session)
-            api_key = config_service.get_api_key("peopledatalabs")
+            api_key = config_service.get_api_key("people_data_labs")
 
             if not api_key:
                 yield {
