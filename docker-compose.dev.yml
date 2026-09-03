@@ -30,6 +30,7 @@ services:
       SECRET_KEY: ${SECRET_KEY:-dev_secret_key_change_in_production}
       FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-172.30.0.254}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      OWLCULUS_LOG_FILE: ${OWLCULUS_LOG_FILE:-logs/owlculus.log}
     volumes:
       - ./backend:/app
       - uploads_dev_data:/app/uploads

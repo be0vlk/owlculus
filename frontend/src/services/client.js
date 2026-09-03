@@ -2,7 +2,7 @@ import api from './api'
 
 export const clientService = {
   async getClients() {
-    const response = await api.get('/api/clients')
+    const response = await api.get('/api/clients/')
     return response.data
   },
 

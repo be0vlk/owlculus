@@ -102,7 +102,7 @@ describe('setup page', () => {
       'Password',
       'Confirm Password',
     ])
-    expect(fields[0].attributes('placeholder')).toBe('Find this in the server console output')
+    expect(fields[0].attributes('placeholder')).toBe('Find this in the server console output.')
     expect(fields[0].attributes()).toHaveProperty('autofocus')
     expect(fields[1].attributes('autocomplete')).toBe('username')
     expect(fields[2].attributes('autocomplete')).toBe('email')

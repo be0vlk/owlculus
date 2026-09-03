@@ -2,7 +2,7 @@ import api from './api'
 
 export const caseService = {
   async getCases(params = {}) {
-    const response = await api.get('/api/cases', { params })
+    const response = await api.get('/api/cases/', { params })
     return response.data
   },
 

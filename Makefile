@@ -1,5 +1,5 @@
 # Owlculus Docker Management
-.PHONY: help setup setup-dev start start-dev stop restart logs clean build rebuild test
+.PHONY: help setup setup-dev start start-dev stop restart logs clean build rebuild test test-browser
 
 COMPOSE = ./scripts/compose.sh direct
 DEV_COMPOSE = ./scripts/compose.sh development
@@ -20,6 +20,7 @@ help:
 	@echo "  rebuild     - Rebuild Docker images (no cache)"
 	@echo "  clean       - Stop and remove all containers, networks, and volumes"
 	@echo "  test        - Run backend tests"
+	@echo "  test-browser - Run the first-install browser journey against ephemeral stacks"
 	@echo ""
 
 # Setup commands
@@ -78,6 +79,10 @@ clean:
 test:
 	@echo "🧪 Running backend tests..."
 	$(COMPOSE) exec backend python3 -m pytest tests/ -v
+
+test-browser:
+	@echo "🧪 Running first-install browser journey..."
+	cd frontend && npm run test:e2e
 
 # Development helpers
 shell-backend:

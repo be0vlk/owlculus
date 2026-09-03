@@ -31,7 +31,7 @@
                   autofocus
                   class="mb-4"
                   label="Setup Token"
-                  placeholder="Find this in the server console output"
+                  placeholder="Find this in the server console output."
                   prepend-inner-icon="mdi-key-variant"
                   required
                   variant="outlined"
