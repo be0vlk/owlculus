@@ -9,13 +9,10 @@ import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
-from pathlib import Path
 from types import UnionType
 from typing import Any, Union, get_args, get_origin
 
 from bs4 import BeautifulSoup
-from fpdf import FPDF
-from fpdf.enums import WrapMode, XPos, YPos
 from pydantic import BaseModel
 from sqlmodel import Session, col, select
 
@@ -25,6 +22,15 @@ from app.core.logging import get_security_logger
 from app.core.utils import get_utc_now
 from app.database import models
 from app.schemas.entity_schema import ENTITY_TYPE_SCHEMAS, NetworkAssets
+from app.services.hunt_execution_export import (
+    HuntCaseSnapshot,
+    HuntCreatorSnapshot,
+    HuntDetailsSnapshot,
+    HuntExecutionExportFormat,
+    HuntExecutionSnapshot,
+    HuntStepSnapshot,
+    render_hunt_execution,
+)
 
 
 class _NetworkAssetsExportData(NetworkAssets):
@@ -41,12 +47,6 @@ ENTITY_EXPORT_SCHEMAS: dict[str, type[BaseModel]] = {
     "vehicle": ENTITY_TYPE_SCHEMAS["vehicle"],
 }
 
-FONT_DIR = Path(__file__).resolve().parent.parent / "assets" / "fonts"
-HUNT_OUTPUT_LIMIT_BYTES = 32 * 1024
-HUNT_OUTPUT_TRUNCATION_NOTICE = (
-    "[Output truncated. Full output is available in the JSON export.]"
-)
-
 
 @dataclass(frozen=True)
 class ExportArtifact:
@@ -61,13 +61,6 @@ class EntityExportFormat(StrEnum):
     """Supported standalone entity export representations."""
 
     CSV = "csv"
-    JSON = "json"
-
-
-class HuntExecutionExportFormat(StrEnum):
-    """Supported hunt execution export representations."""
-
-    PDF = "pdf"
     JSON = "json"
 
 
@@ -126,8 +119,8 @@ class ExportService:
             raise ResourceNotFoundException("Hunt execution not found")
 
         check_case_access(self.db, execution.case_id, current_user)
-        representation = self._hunt_execution_representation(execution)
-        hunt_name = filesystem_safe_name(representation["hunt"]["name"])
+        snapshot = self._hunt_execution_snapshot(execution)
+        hunt_name = filesystem_safe_name(snapshot.hunt.name)
         exported_at = get_utc_now()
         export_logger = get_security_logger(
             user_id=current_user.id,
@@ -137,12 +130,7 @@ class ExportService:
             format=export_format.value,
         )
         try:
-            if export_format is HuntExecutionExportFormat.PDF:
-                content = self.write_hunt_execution_pdf(representation, exported_at)
-                media_type = "application/pdf"
-            else:
-                content = self.write_hunt_execution_json(representation, exported_at)
-                media_type = "application/json"
+            rendered = render_hunt_execution(snapshot, exported_at, export_format)
         except Exception:
             export_logger.bind(event_type="export_generation_failed").exception(
                 "Hunt execution export failed"
@@ -154,161 +142,16 @@ class ExportService:
         ).info("Hunt execution export generated")
 
         return ExportArtifact(
-            content=content,
-            media_type=media_type,
+            content=rendered.content,
+            media_type=rendered.media_type,
             filename=(
                 f"hunt-execution-{execution_id}-{hunt_name}.{export_format.value}"
             ),
         )
 
-    def write_hunt_execution_json(
-        self, representation: dict[str, Any], exported_at: datetime
-    ) -> bytes:
-        """Serialize the stable, lossless hunt execution export envelope."""
-        return json.dumps(
-            {
-                "execution": representation,
-                "timestamp": _iso_utc(exported_at),
-                "export_version": "1.0",
-            },
-            ensure_ascii=False,
-        ).encode("utf-8")
-
-    def write_hunt_execution_pdf(
-        self, representation: dict[str, Any], exported_at: datetime
-    ) -> bytes:
-        """Render a standalone Unicode PDF report for a hunt execution."""
-        pdf = _HuntExecutionPDF(_iso_utc(exported_at))
-        pdf.add_font("DejaVu", fname=FONT_DIR / "DejaVuSans.ttf")
-        pdf.add_font("DejaVuMono", fname=FONT_DIR / "DejaVuSansMono.ttf")
-        pdf.set_auto_page_break(auto=True, margin=18)
-        pdf.set_title(
-            f"{representation['hunt']['display_name']} - "
-            f"Execution #{representation['id']}"
-        )
-        pdf.add_page()
-
-        pdf.set_font("DejaVu", size=18)
-        _pdf_text(pdf, representation["hunt"]["display_name"], line_height=9)
-        pdf.set_font("DejaVu", size=13)
-        _pdf_text(pdf, f"Execution #{representation['id']}", line_height=7)
-        pdf.ln(2)
-
-        case = representation.get("case") or {}
-        creator = representation.get("created_by") or {}
-        title_details = [
-            ("Case", f"{case.get('case_number', '')} - {case.get('title', '')}"),
-            ("Status", representation["status"]),
-            ("Progress", f"{representation['progress'] * 100:g}%"),
-            ("Created by", creator.get("username", "")),
-            ("Created", representation["created_at"]),
-            ("Started", representation.get("started_at") or "Not started"),
-            ("Completed", representation.get("completed_at") or "Not completed"),
-            (
-                "Duration",
-                _duration_text(
-                    representation.get("started_at"),
-                    representation.get("completed_at"),
-                ),
-            ),
-        ]
-        _pdf_key_value_table(pdf, title_details)
-
-        _pdf_heading(pdf, "Hunt")
-        _pdf_key_value_table(pdf, [("Category", representation["hunt"]["category"])])
-        pdf.set_font("DejaVu", size=10)
-        _pdf_text(pdf, representation["hunt"]["description"])
-
-        _pdf_heading(pdf, "Initial Parameters")
-        initial_parameters = representation.get("initial_parameters") or {}
-        if initial_parameters:
-            _pdf_key_value_table(
-                pdf,
-                [
-                    (str(key), _readable_value(value))
-                    for key, value in initial_parameters.items()
-                ],
-            )
-        else:
-            _pdf_text(pdf, "No initial parameters")
-
-        _pdf_heading(pdf, "Execution Steps")
-        steps = representation.get("steps") or []
-        if not steps:
-            _pdf_text(pdf, "No steps recorded")
-        for index, step in enumerate(steps, start=1):
-            pdf.set_font("DejaVu", size=12)
-            _pdf_text(
-                pdf,
-                f"Step {index}: {step['step_id']} ({step['plugin_name']})",
-                line_height=7,
-            )
-            _pdf_key_value_table(
-                pdf,
-                [
-                    ("Status", step["status"]),
-                    ("Started", step.get("started_at") or "Not started"),
-                    ("Completed", step.get("completed_at") or "Not completed"),
-                    (
-                        "Duration",
-                        _duration_text(
-                            step.get("started_at"), step.get("completed_at")
-                        ),
-                    ),
-                    ("Retry count", str(step["retry_count"])),
-                ],
-            )
-            pdf.set_font("DejaVu", size=10)
-            _pdf_text(pdf, "Parameters")
-            parameters = step.get("parameters") or {}
-            if parameters:
-                _pdf_key_value_table(
-                    pdf,
-                    [
-                        (str(key), _readable_value(value))
-                        for key, value in parameters.items()
-                    ],
-                )
-            else:
-                _pdf_text(pdf, "No parameters")
-
-            if step.get("error_details"):
-                pdf.set_text_color(160, 0, 0)
-                _pdf_text(pdf, f"Error: {step['error_details']}")
-                pdf.set_text_color(0, 0, 0)
-
-            pdf.set_font("DejaVu", size=10)
-            _pdf_text(pdf, "Output")
-            output_text = json.dumps(
-                step.get("output"), ensure_ascii=False, indent=2, default=str
-            )
-            output_text, truncated = _truncate_utf8(
-                output_text, HUNT_OUTPUT_LIMIT_BYTES
-            )
-            if truncated:
-                notice_size = len(HUNT_OUTPUT_TRUNCATION_NOTICE.encode("utf-8")) + 1
-                output_text, _ = _truncate_utf8(
-                    output_text, HUNT_OUTPUT_LIMIT_BYTES - notice_size
-                )
-                output_text = f"{output_text}\n{HUNT_OUTPUT_TRUNCATION_NOTICE}"
-            pdf.set_fill_color(245, 245, 245)
-            pdf.set_font("DejaVuMono", size=8)
-            _pdf_text(pdf, output_text, line_height=4, fill=True)
-            pdf.ln(2)
-
-        evidence_references = _evidence_references(representation.get("context_data"))
-        if evidence_references:
-            _pdf_heading(pdf, "Evidence References")
-            pdf.set_font("DejaVu", size=10)
-            for title, folder_path in evidence_references:
-                suffix = f" - {folder_path}" if folder_path else ""
-                _pdf_text(pdf, f"• {title}{suffix}")
-
-        return bytes(pdf.output())
-
-    def _hunt_execution_representation(
+    def _hunt_execution_snapshot(
         self, execution: models.HuntExecution
-    ) -> dict[str, Any]:
+    ) -> HuntExecutionSnapshot:
         hunt = self.db.get(models.Hunt, execution.hunt_id)
         case = self.db.get(models.Case, execution.case_id)
         creator = self.db.get(models.User, execution.created_by_id)
@@ -319,71 +162,61 @@ class ExportService:
                 .order_by(col(models.HuntStep.id))
             )
         )
-        hunt_data = None
-        if hunt is not None:
-            hunt_data = {
-                "id": hunt.id,
-                "name": hunt.name,
-                "display_name": hunt.display_name,
-                "description": hunt.description,
-                "category": hunt.category,
-                "version": hunt.version,
-                "is_active": hunt.is_active,
-                "initial_parameters": hunt.definition_json.get(
-                    "initial_parameters", {}
-                ),
-                "step_count": len(hunt.definition_json.get("steps", [])),
-                "created_at": _iso_utc(hunt.created_at),
-                "updated_at": _iso_utc(hunt.updated_at),
-            }
-        return {
-            "id": execution.id,
-            "hunt_id": execution.hunt_id,
-            "case_id": execution.case_id,
-            "status": execution.status,
-            "progress": execution.progress,
-            "initial_parameters": execution.initial_parameters,
-            "context_data": execution.context_data,
-            "started_at": _optional_iso_utc(execution.started_at),
-            "completed_at": _optional_iso_utc(execution.completed_at),
-            "created_at": _iso_utc(execution.created_at),
-            "created_by_id": execution.created_by_id,
-            "hunt": hunt_data,
-            "steps": [
-                {
-                    "id": step.id,
-                    "execution_id": step.execution_id,
-                    "step_id": step.step_id,
-                    "plugin_name": step.plugin_name,
-                    "status": step.status,
-                    "parameters": step.parameters,
-                    "output": step.output,
-                    "error_details": step.error_details,
-                    "retry_count": step.retry_count,
-                    "started_at": _optional_iso_utc(step.started_at),
-                    "completed_at": _optional_iso_utc(step.completed_at),
-                }
+        if hunt is None or case is None or creator is None:
+            raise ResourceNotFoundException("Hunt execution related data not found")
+
+        return HuntExecutionSnapshot(
+            id=execution.id,
+            hunt_id=execution.hunt_id,
+            case_id=execution.case_id,
+            status=execution.status,
+            progress=execution.progress,
+            initial_parameters=execution.initial_parameters,
+            context_data=execution.context_data,
+            started_at=execution.started_at,
+            completed_at=execution.completed_at,
+            created_at=execution.created_at,
+            created_by_id=execution.created_by_id,
+            hunt=HuntDetailsSnapshot(
+                id=hunt.id,
+                name=hunt.name,
+                display_name=hunt.display_name,
+                description=hunt.description,
+                category=hunt.category,
+                version=hunt.version,
+                is_active=hunt.is_active,
+                initial_parameters=hunt.definition_json.get("initial_parameters", {}),
+                step_count=len(hunt.definition_json.get("steps", [])),
+                created_at=hunt.created_at,
+                updated_at=hunt.updated_at,
+            ),
+            steps=[
+                HuntStepSnapshot(
+                    id=step.id,
+                    execution_id=step.execution_id,
+                    step_id=step.step_id,
+                    plugin_name=step.plugin_name,
+                    status=step.status,
+                    parameters=step.parameters,
+                    output=step.output,
+                    error_details=step.error_details,
+                    retry_count=step.retry_count,
+                    started_at=step.started_at,
+                    completed_at=step.completed_at,
+                )
                 for step in steps
             ],
-            "case": (
-                {
-                    "id": case.id,
-                    "title": case.title,
-                    "case_number": case.case_number,
-                }
-                if case is not None
-                else None
+            case=HuntCaseSnapshot(
+                id=case.id,
+                title=case.title,
+                case_number=case.case_number,
             ),
-            "created_by": (
-                {
-                    "id": creator.id,
-                    "email": creator.email,
-                    "username": creator.username,
-                }
-                if creator is not None
-                else None
+            created_by=HuntCreatorSnapshot(
+                id=creator.id,
+                email=str(creator.email),
+                username=creator.username,
             ),
-        }
+        )
 
     def write_entity_csv(
         self,
@@ -629,107 +462,3 @@ def _iso_utc(value: datetime) -> str:
     if value.tzinfo is None:
         value = value.replace(tzinfo=UTC)
     return value.astimezone(UTC).isoformat()
-
-
-def _optional_iso_utc(value: datetime | None) -> str | None:
-    return _iso_utc(value) if value is not None else None
-
-
-class _HuntExecutionPDF(FPDF):
-    def __init__(self, exported_at: str):
-        super().__init__()
-        self.exported_at = exported_at
-
-    def footer(self) -> None:
-        self.set_y(-13)
-        self.set_font("DejaVu", size=8)
-        self.set_text_color(90, 90, 90)
-        self.cell(
-            0,
-            5,
-            text=f"Exported {self.exported_at}    Page {self.page_no()}",
-            align="C",
-        )
-
-
-def _pdf_heading(pdf: FPDF, text: str) -> None:
-    pdf.ln(3)
-    pdf.set_text_color(0, 0, 0)
-    pdf.set_font("DejaVu", size=14)
-    _pdf_text(pdf, text, line_height=8)
-
-
-def _pdf_text(pdf: FPDF, text: Any, line_height: float = 5, fill: bool = False) -> None:
-    pdf.multi_cell(
-        0,
-        line_height,
-        text=str(text),
-        fill=fill,
-        new_x=XPos.LMARGIN,
-        new_y=YPos.NEXT,
-        wrapmode=WrapMode.CHAR,
-        padding=1 if fill else 0,
-    )
-
-
-def _pdf_key_value_table(pdf: FPDF, rows: list[tuple[str, str]]) -> None:
-    for label, value in rows:
-        pdf.set_font("DejaVu", size=9)
-        pdf.set_fill_color(235, 238, 242)
-        pdf.cell(42, 6, text=str(label), border=1, fill=True)
-        pdf.multi_cell(
-            0,
-            6,
-            text=str(value),
-            border=1,
-            new_x=XPos.LMARGIN,
-            new_y=YPos.NEXT,
-            wrapmode=WrapMode.CHAR,
-        )
-
-
-def _readable_value(value: Any) -> str:
-    if isinstance(value, (dict, list)):
-        return json.dumps(value, ensure_ascii=False, sort_keys=True)
-    return str(value)
-
-
-def _duration_text(start: str | None, end: str | None) -> str:
-    if not start or not end:
-        return "Not available"
-    duration = datetime.fromisoformat(end) - datetime.fromisoformat(start)
-    total_seconds = max(0, int(duration.total_seconds()))
-    hours, remainder = divmod(total_seconds, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    if hours:
-        return f"{hours}h {minutes}m {seconds}s"
-    if minutes:
-        return f"{minutes}m {seconds}s"
-    return f"{seconds}s"
-
-
-def _truncate_utf8(value: str, max_bytes: int) -> tuple[str, bool]:
-    encoded = value.encode("utf-8")
-    if len(encoded) <= max_bytes:
-        return value, False
-    return encoded[:max_bytes].decode("utf-8", errors="ignore"), True
-
-
-def _evidence_references(context_data: Any) -> list[tuple[str, str]]:
-    if not isinstance(context_data, dict):
-        return []
-    references = context_data.get("evidence_refs")
-    if not isinstance(references, list):
-        return []
-    results: list[tuple[str, str]] = []
-    for reference in references:
-        if isinstance(reference, dict):
-            results.append(
-                (
-                    str(reference.get("title") or reference.get("id") or "Evidence"),
-                    str(reference.get("folder_path") or ""),
-                )
-            )
-        else:
-            results.append((str(reference), ""))
-    return results

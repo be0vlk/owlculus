@@ -5,7 +5,6 @@ This module provides automated OSINT workflow execution capabilities through the
 enabling complex multi-step investigations with real-time monitoring and results tracking.
 """
 
-
 from fastapi import (
     APIRouter,
     Depends,
@@ -22,7 +21,8 @@ from app.core.exceptions import AuthorizationException, ResourceNotFoundExceptio
 from app.core.websocket_manager import websocket_manager
 from app.database import models
 from app.schemas import hunt_schema as schemas
-from app.services.export_service import ExportService, HuntExecutionExportFormat
+from app.services.export_service import ExportService
+from app.services.hunt_execution_export import HuntExecutionExportFormat
 from app.services.hunt_service import HuntService
 
 router = APIRouter()
