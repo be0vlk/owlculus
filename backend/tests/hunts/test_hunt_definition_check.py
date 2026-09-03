@@ -9,6 +9,7 @@ from app.hunts.hunt_definition_check import (
     HuntDefinitionCheck,
     HuntDefinitionError,
 )
+from app.hunts.hunt_registry import HuntRegistry
 from app.services.plugin_service import PluginService
 
 PLUGIN_CATALOGUE = {
@@ -101,6 +102,20 @@ def test_definition_check_names_hunt_and_step_for_a_malformed_expression():
         match=r"(?s)MalformedHunt.*lookup.*initial\.\.target",
     ):
         HuntDefinitionCheck(PLUGIN_CATALOGUE).check(MalformedHunt())
+
+
+def test_registry_names_a_hunt_that_constructs_a_malformed_step_eagerly():
+    class EagerMalformedHunt(ExampleHunt):
+        def __init__(self):
+            super().__init__([step(parameter_mapping={"domain": "initial..target"})])
+
+    registry = HuntRegistry.from_classes([EagerMalformedHunt])
+
+    with pytest.raises(
+        HuntDefinitionError,
+        match=r"(?s)EagerMalformedHunt.*lookup.*initial\.\.target",
+    ):
+        registry.check(HuntDefinitionCheck(PLUGIN_CATALOGUE))
 
 
 def test_definition_serializes_validated_input_expressions_as_strings():
