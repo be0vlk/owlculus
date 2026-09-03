@@ -1,4 +1,5 @@
 import api from './api'
+import { createDownloadArtifact } from '@/utils/download'
 
 export const caseService = {
   async getCases(params = {}) {
@@ -9,6 +10,13 @@ export const caseService = {
   async getCase(id) {
     const response = await api.get(`/api/cases/${id}`)
     return response.data
+  },
+
+  async exportCase(id) {
+    const response = await api.get(`/api/cases/${id}/export`, {
+      responseType: 'blob',
+    })
+    return createDownloadArtifact(response.data, response.headers)
   },
 
   async createCase(caseData) {

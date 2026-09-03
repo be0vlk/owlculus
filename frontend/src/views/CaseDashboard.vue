@@ -7,6 +7,15 @@
     <template #header-actions>
       <div v-if="caseData" class="d-flex align-center ga-4">
         <v-btn-group variant="outlined" divided>
+          <v-btn
+            data-testid="case-export-button"
+            color="white"
+            prepend-icon="mdi-download"
+            :loading="exportingCase"
+            @click="handleExportCase"
+          >
+            Export
+          </v-btn>
           <v-btn color="white" prepend-icon="mdi-pencil" @click="showEditModal = true">
             Edit Case
           </v-btn>
@@ -283,6 +292,18 @@
     </div>
   </BaseDashboard>
 
+  <v-snackbar
+    v-model="snackbar.show"
+    :color="snackbar.color"
+    :timeout="snackbar.timeout"
+    location="top center"
+  >
+    {{ snackbar.text }}
+    <template #actions>
+      <v-btn variant="text" @click="closeNotification">Close</v-btn>
+    </template>
+  </v-snackbar>
+
   <!-- Modals -->
   <EditCaseModal
     v-if="caseData"
@@ -380,6 +401,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { useNotifications } from '../composables/useNotifications'
 import BaseDashboard from '../components/BaseDashboard.vue'
 import CaseDetail from '../components/CaseDetail.vue'
 import EntityDataTable from '../components/entities/EntityDataTable.vue'
@@ -406,6 +428,7 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const huntStore = useHuntStore()
+const { snackbar, showNotification, closeNotification } = useNotifications()
 const loading = ref(false)
 const error = ref(null)
 const caseData = ref(null)
@@ -442,6 +465,7 @@ const isEditingNotes = ref(false)
 const savingNotes = ref(false)
 const originalNotes = ref('')
 const entityServiceRef = entityService
+const exportingCase = ref(false)
 
 // Hunt-related reactive data
 const caseHuntExecutions = ref([])
@@ -600,6 +624,23 @@ const handleDownloadEvidence = async (evidenceItem) => {
   }
 }
 
+const handleExportCase = async () => {
+  if (!caseData.value || exportingCase.value) return
+
+  try {
+    exportingCase.value = true
+    const artifact = await caseService.exportCase(Number(route.params.id))
+    const safeCaseNumber = caseData.value.case_number.replace(/[\\/]/g, '-')
+    downloadBlob(artifact, `${safeCaseNumber}-export.zip`)
+    showNotification('Case exported successfully', 'success')
+  } catch (error) {
+    console.error('Failed to export case:', error)
+    showNotification('Failed to export case', 'error')
+  } finally {
+    exportingCase.value = false
+  }
+}
+
 const handleDeleteEvidence = async (evidenceItem) => {
   if (!confirm('Are you sure you want to delete this evidence?')) return
 
@@ -654,15 +695,15 @@ const handleExtractMetadata = async (evidenceItem) => {
 }
 
 const handleViewFileContent = async (evidenceItem) => {
-  selectedEvidenceForContent.value = evidenceItem;
+  selectedEvidenceForContent.value = evidenceItem
 
-  fileContent.value = null;
-  fileContentInfo.value = null;
-  fileContentError.value = '';
-  loadingFileContent.value = false;
+  fileContent.value = null
+  fileContentInfo.value = null
+  fileContentError.value = ''
+  loadingFileContent.value = false
 
-  showFileContentModal.value = true;
-};
+  showFileContentModal.value = true
+}
 
 // Hunt-related methods
 const loadCaseHuntExecutions = async () => {

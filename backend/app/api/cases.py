@@ -27,7 +27,9 @@ from app.services.case_service import CaseService
 from app.services.entity_service import EntityService
 from app.services.export_service import EntityExportFormat, ExportService
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi.responses import FileResponse
 from sqlmodel import Session
+from starlette.background import BackgroundTask
 
 router = APIRouter()
 
@@ -200,6 +202,28 @@ async def get_case_users(
         raise HTTPException(status_code=404, detail=str(e))
     except BaseException:
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/{case_id}/export")
+async def export_case(
+    case_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    export_service = ExportService(db)
+    try:
+        artifact = export_service.export_case_bundle(case_id, current_user)
+    except ResourceNotFoundException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except AuthorizationException as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
+    return FileResponse(
+        path=artifact.path,
+        media_type="application/zip",
+        filename=artifact.filename,
+        background=BackgroundTask(artifact.path.unlink, missing_ok=True),
+    )
 
 
 # Entity endpoints

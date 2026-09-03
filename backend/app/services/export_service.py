@@ -6,9 +6,12 @@ import csv
 import io
 import json
 import re
+import tempfile
+import zipfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
+from pathlib import Path, PurePosixPath
 from types import UnionType
 from typing import Any, Union, get_args, get_origin
 
@@ -16,9 +19,11 @@ from bs4 import BeautifulSoup
 from pydantic import BaseModel
 from sqlmodel import Session, col, select
 
+from app.core import file_storage
 from app.core.dependencies import check_case_access, no_analyst
 from app.core.exceptions import ResourceNotFoundException
 from app.core.logging import get_security_logger
+from app.core.roles import UserRole
 from app.core.utils import get_utc_now
 from app.database import models
 from app.schemas.entity_schema import ENTITY_TYPE_SCHEMAS, NetworkAssets
@@ -54,6 +59,14 @@ class ExportArtifact:
 
     content: bytes
     media_type: str
+    filename: str
+
+
+@dataclass(frozen=True)
+class CaseBundleArtifact:
+    """A temporary case archive ready to be streamed and removed."""
+
+    path: Path
     filename: str
 
 
@@ -105,6 +118,366 @@ class ExportService:
             media_type=media_type,
             filename=f"{safe_case_number}-entities-{export_date}.{export_format.value}",
         )
+
+    def export_case_bundle(
+        self, case_id: int, current_user: models.User
+    ) -> CaseBundleArtifact:
+        """Assemble a complete case snapshot in a temporary ZIP archive."""
+        case = check_case_access(self.db, case_id, current_user)
+        exported_at = get_utc_now()
+        safe_case_number = filesystem_safe_name(case.case_number)
+        root = f"{safe_case_number}/"
+        export_logger = get_security_logger(
+            user_id=current_user.id,
+            requesting_user=current_user.username,
+            case_id=case_id,
+            export_kind="case",
+            format="zip",
+        )
+        with tempfile.NamedTemporaryFile(
+            prefix="owlculus-case-export-", suffix=".zip", delete=False
+        ) as temporary_file:
+            temporary_path = Path(temporary_file.name)
+
+        try:
+            with zipfile.ZipFile(
+                temporary_path,
+                mode="w",
+                compression=zipfile.ZIP_DEFLATED,
+            ) as archive:
+                self._write_case_metadata(
+                    archive, root, case, current_user, exported_at
+                )
+                if case.notes:
+                    _write_zip_bytes(
+                        archive,
+                        f"{root}notes.html",
+                        case.notes.encode("utf-8"),
+                    )
+                entities = self._get_entities(case_id, None, None)
+                _write_zip_bytes(
+                    archive,
+                    f"{root}entities/entities.json",
+                    self.write_entity_json(entities),
+                )
+                for entity_type in ENTITY_EXPORT_SCHEMAS:
+                    typed_entities = [
+                        entity
+                        for entity in entities
+                        if entity.entity_type == entity_type
+                    ]
+                    if typed_entities:
+                        _write_zip_bytes(
+                            archive,
+                            f"{root}entities/{entity_type}.csv",
+                            self.write_entity_csv(typed_entities),
+                        )
+                self._write_evidence(archive, root, case_id)
+                tasks = list(
+                    self.db.exec(
+                        select(models.Task)
+                        .where(models.Task.case_id == case_id)
+                        .order_by(col(models.Task.id))
+                    )
+                )
+                _write_zip_bytes(
+                    archive,
+                    f"{root}tasks/tasks.json",
+                    self.write_task_json(tasks),
+                )
+                _write_zip_bytes(
+                    archive,
+                    f"{root}tasks/tasks.csv",
+                    self.write_task_csv(tasks),
+                )
+                if current_user.role != UserRole.ANALYST.value:
+                    self._write_hunts(archive, root, case_id, exported_at)
+        except Exception:
+            temporary_path.unlink(missing_ok=True)
+            export_logger.bind(event_type="export_generation_failed").exception(
+                "Case export failed"
+            )
+            raise
+
+        export_logger.bind(event_type="export_generated").info("Case export generated")
+
+        return CaseBundleArtifact(
+            path=temporary_path,
+            filename=(
+                f"{safe_case_number}-export-{exported_at.date().isoformat()}.zip"
+            ),
+        )
+
+    def _write_case_metadata(
+        self,
+        archive: zipfile.ZipFile,
+        root: str,
+        case: models.Case,
+        current_user: models.User,
+        exported_at: datetime,
+    ) -> None:
+        client = self.db.get(models.Client, case.client_id) if case.client_id else None
+        assigned_users = list(
+            self.db.exec(
+                select(models.User, models.CaseUserLink.is_lead)
+                .join(
+                    models.CaseUserLink,
+                    col(models.CaseUserLink.user_id) == models.User.id,
+                )
+                .where(models.CaseUserLink.case_id == case.id)
+                .order_by(col(models.User.id))
+            )
+        )
+        metadata = {
+            "id": case.id,
+            "case_number": case.case_number,
+            "title": case.title,
+            "status": case.status,
+            "client": (
+                {"id": client.id, "name": client.name} if client is not None else None
+            ),
+            "users": [
+                {
+                    "username": user.username,
+                    "role": user.role,
+                    "is_lead": is_lead,
+                }
+                for user, is_lead in assigned_users
+            ],
+            "created_at": _iso_utc(case.created_at),
+            "updated_at": _iso_utc(case.updated_at),
+            "exported_at": _iso_utc(exported_at),
+            "exported_by": current_user.username,
+        }
+        _write_zip_json(archive, f"{root}case.json", metadata)
+
+    def write_task_json(self, tasks: list[models.Task]) -> bytes:
+        """Serialize case tasks with readable relationship names."""
+        return json.dumps(
+            self._task_records(tasks),
+            ensure_ascii=False,
+            default=_json_default,
+        ).encode("utf-8")
+
+    def write_task_csv(self, tasks: list[models.Task]) -> bytes:
+        """Serialize case tasks using the stable task spreadsheet contract."""
+        output = io.StringIO(newline="")
+        writer = csv.DictWriter(
+            output, fieldnames=TASK_CSV_COLUMNS, lineterminator="\r\n"
+        )
+        writer.writeheader()
+        for record in self._task_records(tasks):
+            writer.writerow(
+                {
+                    column: (
+                        json.dumps(record[column], ensure_ascii=False)
+                        if column == "custom_fields" and record[column] is not None
+                        else record[column]
+                    )
+                    for column in TASK_CSV_COLUMNS
+                }
+            )
+        return output.getvalue().encode("utf-8")
+
+    def _write_evidence(
+        self, archive: zipfile.ZipFile, root: str, case_id: int
+    ) -> None:
+        evidence_records = list(
+            self.db.exec(
+                select(models.Evidence)
+                .where(models.Evidence.case_id == case_id)
+                .order_by(col(models.Evidence.id))
+            )
+        )
+        creator_ids = {evidence.created_by_id for evidence in evidence_records}
+        creator_names = (
+            {
+                user.id: user.username
+                for user in self.db.exec(
+                    select(models.User).where(col(models.User.id).in_(creator_ids))
+                )
+            }
+            if creator_ids
+            else {}
+        )
+        manifest = []
+        upload_root = file_storage.UPLOAD_DIR.resolve()
+
+        for evidence in evidence_records:
+            folder_path = _safe_archive_path(evidence.folder_path)
+            evidence_root = f"{root}evidence/"
+            destination_folder = (
+                f"{evidence_root}{folder_path}/" if folder_path else evidence_root
+            )
+            file_name: str | None = None
+            exported = True
+            reason: str | None = None
+
+            if evidence.is_folder:
+                _write_zip_bytes(archive, destination_folder, b"")
+            elif evidence.evidence_type == "text":
+                file_name = f"{_safe_archive_component(evidence.title)}.txt"
+                _write_zip_bytes(
+                    archive,
+                    f"{destination_folder}{file_name}",
+                    (evidence.content or "").encode("utf-8"),
+                )
+            elif evidence.evidence_type == "file":
+                file_name = PurePosixPath(
+                    (evidence.content or "").replace("\\", "/")
+                ).name or _safe_archive_component(evidence.title)
+                source_path = (
+                    file_storage.UPLOAD_DIR / (evidence.content or "")
+                ).resolve()
+                if not _is_stored_evidence_file(source_path, upload_root):
+                    exported = False
+                    reason = "File not found on disk"
+                    get_security_logger(
+                        case_id=case_id,
+                        evidence_id=evidence.id,
+                        file_path=str(source_path),
+                        event_type="case_export_evidence_missing",
+                    ).warning("Case export evidence file not found on disk")
+                else:
+                    archive.write(
+                        source_path,
+                        arcname=f"{destination_folder}{file_name}",
+                        compress_type=zipfile.ZIP_STORED,
+                    )
+            else:
+                exported = False
+                reason = f"Unsupported evidence type: {evidence.evidence_type}"
+
+            manifest_record = {
+                "id": evidence.id,
+                "title": evidence.title,
+                "description": evidence.description,
+                "category": evidence.category,
+                "evidence_type": evidence.evidence_type,
+                "folder_path": evidence.folder_path,
+                "file_name": file_name,
+                "file_hash": evidence.file_hash,
+                "is_folder": evidence.is_folder,
+                "parent_folder_id": evidence.parent_folder_id,
+                "created_by": creator_names.get(evidence.created_by_id, ""),
+                "created_at": _iso_utc(evidence.created_at),
+                "updated_at": _iso_utc(evidence.updated_at),
+                "exported": exported,
+            }
+            if reason is not None:
+                manifest_record["reason"] = reason
+            manifest.append(manifest_record)
+
+        _write_zip_json(archive, f"{root}evidence/manifest.json", manifest)
+
+    def _task_records(self, tasks: list[models.Task]) -> list[dict[str, Any]]:
+        user_ids = {
+            user_id
+            for task in tasks
+            for user_id in (
+                task.assigned_to_id,
+                task.assigned_by_id,
+                task.completed_by_id,
+            )
+            if user_id is not None
+        }
+        usernames = (
+            {
+                user.id: user.username
+                for user in self.db.exec(
+                    select(models.User).where(col(models.User.id).in_(user_ids))
+                )
+            }
+            if user_ids
+            else {}
+        )
+        template_ids = {
+            task.template_id for task in tasks if task.template_id is not None
+        }
+        templates = (
+            {
+                template.id: template.name
+                for template in self.db.exec(
+                    select(models.TaskTemplate).where(
+                        col(models.TaskTemplate.id).in_(template_ids)
+                    )
+                )
+            }
+            if template_ids
+            else {}
+        )
+
+        return [
+            {
+                "id": task.id,
+                "title": task.title,
+                "description": task.description,
+                "status": task.status,
+                "priority": task.priority,
+                "assigned_to": usernames.get(task.assigned_to_id),
+                "assigned_by": usernames.get(task.assigned_by_id),
+                "due_date": _optional_iso_utc(task.due_date),
+                "completed_at": _optional_iso_utc(task.completed_at),
+                "completed_by": usernames.get(task.completed_by_id),
+                "template": templates.get(task.template_id),
+                "custom_fields": task.custom_fields,
+                "created_at": _iso_utc(task.created_at),
+                "updated_at": _iso_utc(task.updated_at),
+            }
+            for task in tasks
+        ]
+
+    def _write_hunts(
+        self,
+        archive: zipfile.ZipFile,
+        root: str,
+        case_id: int,
+        exported_at: datetime,
+    ) -> None:
+        executions = list(
+            self.db.exec(
+                select(models.HuntExecution)
+                .where(models.HuntExecution.case_id == case_id)
+                .order_by(col(models.HuntExecution.created_at).desc())
+            )
+        )
+        snapshots = [
+            self._hunt_execution_snapshot(execution) for execution in executions
+        ]
+        _write_zip_json(
+            archive,
+            f"{root}hunts/executions.json",
+            [
+                {
+                    "id": snapshot.id,
+                    "hunt_id": snapshot.hunt_id,
+                    "case_id": snapshot.case_id,
+                    "status": snapshot.status,
+                    "progress": snapshot.progress,
+                    "initial_parameters": snapshot.initial_parameters,
+                    "started_at": snapshot.started_at,
+                    "completed_at": snapshot.completed_at,
+                    "created_at": snapshot.created_at,
+                    "created_by_id": snapshot.created_by_id,
+                    "hunt_display_name": snapshot.hunt.display_name,
+                    "hunt_category": snapshot.hunt.category,
+                }
+                for snapshot in snapshots
+            ],
+        )
+        for snapshot in snapshots:
+            hunt_name = filesystem_safe_name(snapshot.hunt.name)
+            execution_root = f"{root}hunts/{snapshot.id}-{hunt_name}/"
+            for export_format in (
+                HuntExecutionExportFormat.JSON,
+                HuntExecutionExportFormat.PDF,
+            ):
+                rendered = render_hunt_execution(snapshot, exported_at, export_format)
+                _write_zip_bytes(
+                    archive,
+                    f"{execution_root}execution.{export_format.value}",
+                    rendered.content,
+                )
 
     @no_analyst()
     def export_hunt_execution(
@@ -462,3 +835,71 @@ def _iso_utc(value: datetime) -> str:
     if value.tzinfo is None:
         value = value.replace(tzinfo=UTC)
     return value.astimezone(UTC).isoformat()
+
+
+TASK_CSV_COLUMNS = [
+    "id",
+    "title",
+    "description",
+    "status",
+    "priority",
+    "assigned_to",
+    "assigned_by",
+    "due_date",
+    "completed_at",
+    "completed_by",
+    "template",
+    "custom_fields",
+    "created_at",
+    "updated_at",
+]
+
+
+def _write_zip_json(archive: zipfile.ZipFile, member_name: str, value: Any) -> None:
+    _write_zip_bytes(
+        archive,
+        member_name,
+        json.dumps(value, ensure_ascii=False, default=_json_default).encode("utf-8"),
+    )
+
+
+def _write_zip_bytes(
+    archive: zipfile.ZipFile, member_name: str, content: bytes
+) -> None:
+    archive.writestr(member_name, content, compress_type=zipfile.ZIP_DEFLATED)
+
+
+def _optional_iso_utc(value: datetime | None) -> str | None:
+    return _iso_utc(value) if value is not None else None
+
+
+def _json_default(value: Any) -> str:
+    if isinstance(value, datetime):
+        return _iso_utc(value)
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+
+
+def _safe_archive_path(value: str | None) -> str:
+    if not value:
+        return ""
+    return "/".join(
+        _safe_archive_component(part)
+        for part in value.replace("\\", "/").split("/")
+        if part not in ("", ".", "..")
+    )
+
+
+def _safe_archive_component(value: str) -> str:
+    component = "".join(
+        "-" if character in "/\\" or ord(character) < 32 else character
+        for character in value
+    ).strip()
+    return component if component not in ("", ".", "..") else "evidence"
+
+
+def _is_stored_evidence_file(source_path: Path, upload_root: Path) -> bool:
+    try:
+        source_path.relative_to(upload_root)
+    except ValueError:
+        return False
+    return source_path.is_file()
