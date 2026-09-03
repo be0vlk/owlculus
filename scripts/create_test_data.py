@@ -119,7 +119,7 @@ async def create_test_data(
 
             if not personal_client:
                 print(
-                    "ERROR: Personal client not found. Please run init_db_auto.py first."
+                    "ERROR: Personal client not found. Please run the db-init service first."
                 )
                 return
 

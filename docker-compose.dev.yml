@@ -86,13 +86,9 @@ services:
       POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-owlculus_dev}
       SECRET_KEY: ${SECRET_KEY:-dev_secret_key_change_in_production}
-      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@owlculus.local}
     volumes:
       - ./backend:/app
-      - ./scripts/init_db_auto.py:/app/init_db_auto.py
-    command: python3 /app/init_db_auto.py
+    command: python3 -m app.database.init_db
     depends_on:
       postgres:
         condition: service_healthy

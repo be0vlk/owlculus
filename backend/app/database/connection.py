@@ -6,11 +6,12 @@ database creation, table initialization, and session management. It uses SQLMode
 with PostgreSQL and includes connection pooling and health check configuration.
 """
 
+from sqlalchemy.engine import Engine
 from sqlalchemy_utils import create_database, database_exists
 from sqlmodel import Session, create_engine
 
-from .models import SQLModel
 from ..core.config import settings
+from .models import SQLModel
 
 engine = create_engine(
     settings.get_database_url(),
@@ -22,10 +23,10 @@ engine = create_engine(
 )
 
 
-def create_db_and_tables():
-    if not database_exists(engine.url):
-        create_database(engine.url)
-    SQLModel.metadata.create_all(engine)
+def create_db_and_tables(database_engine: Engine = engine) -> None:
+    if not database_exists(database_engine.url):
+        create_database(database_engine.url)
+    SQLModel.metadata.create_all(database_engine)
 
 
 def get_db():
