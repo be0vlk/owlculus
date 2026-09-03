@@ -16,17 +16,25 @@ from app.main import app
 
 
 @pytest.fixture
-def export_admin(session: Session) -> User:
-    user = User(
-        username="export-admin",
-        email="export-admin@example.com",
-        password_hash="unused",
-        role="Admin",
-    )
-    session.add(user)
-    session.commit()
-    session.refresh(user)
-    return user
+def export_user_factory(session: Session):
+    def create_user(username: str, role: str) -> User:
+        user = User(
+            username=username,
+            email=f"{username}@example.com",
+            password_hash="unused",
+            role=role,
+        )
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+        return user
+
+    return create_user
+
+
+@pytest.fixture
+def export_admin(export_user_factory) -> User:
+    return export_user_factory("export-admin", "Admin")
 
 
 @pytest.fixture
@@ -41,17 +49,8 @@ def export_case(session: Session, export_admin: User) -> Case:
 
 
 @pytest.fixture
-def export_investigator(session: Session) -> User:
-    user = User(
-        username="export-investigator",
-        email="export-investigator@example.com",
-        password_hash="unused",
-        role="Investigator",
-    )
-    session.add(user)
-    session.commit()
-    session.refresh(user)
-    return user
+def export_investigator(export_user_factory) -> User:
+    return export_user_factory("export-investigator", "Investigator")
 
 
 @pytest.fixture

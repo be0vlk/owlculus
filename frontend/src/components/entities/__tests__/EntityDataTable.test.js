@@ -1,6 +1,6 @@
 import { defineComponent } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import EntityDataTable from '../EntityDataTable.vue'
 import { downloadBlob } from '@/utils/download'
@@ -54,6 +54,7 @@ const global = {
     VCardTitle: PassthroughStub,
     VCardText: PassthroughStub,
     VCardActions: PassthroughStub,
+    VSnackbar: PassthroughStub,
   },
 }
 
@@ -64,14 +65,16 @@ const matchingEntity = {
   created_at: '2026-09-01T00:00:00Z',
 }
 
-const mountTable = async (entities = [matchingEntity]) => {
-  const response = {
-    data: new Blob(['export']),
+const mountTable = async (entities = [matchingEntity], exportError = null) => {
+  const download = {
+    blob: new Blob(['export']),
     headers: { 'content-disposition': 'attachment; filename="export.csv"' },
   }
   const entityService = {
     getCaseEntities: vi.fn().mockResolvedValue(entities),
-    exportEntities: vi.fn().mockResolvedValue(response),
+    exportEntities: exportError
+      ? vi.fn().mockRejectedValue(exportError)
+      : vi.fn().mockResolvedValue(download),
     deleteEntity: vi.fn(),
   }
   const wrapper = mount(EntityDataTable, {
@@ -79,18 +82,23 @@ const mountTable = async (entities = [matchingEntity]) => {
     global,
   })
   await flushPromises()
-  return { wrapper, entityService, response }
+  return { wrapper, entityService, download }
 }
 
 describe('EntityDataTable exports', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
   it.each(['csv', 'json'])(
     'exports current filters as %s through the download helper',
     async (format) => {
-      const { wrapper, entityService, response } = await mountTable()
+      const { wrapper, entityService, download } = await mountTable()
       await wrapper.get('[data-testid="select-person"]').trigger('click')
       await wrapper.get('[data-testid="entity-search"]').setValue('needle')
       await flushPromises()
@@ -104,7 +112,7 @@ describe('EntityDataTable exports', () => {
         search: 'needle',
       })
       expect(downloadBlob).toHaveBeenCalledWith(
-        response,
+        download,
         expect.stringMatching(new RegExp(`^case-42-entities-\\d{4}-\\d{2}-\\d{2}\\.${format}$`)),
       )
     },
@@ -114,5 +122,19 @@ describe('EntityDataTable exports', () => {
     const { wrapper } = await mountTable([])
 
     expect(wrapper.get('[data-testid="entity-export-button"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('shows an error notification when an export fails', async () => {
+    const { wrapper } = await mountTable(
+      [matchingEntity],
+      new Error('The export service is unavailable'),
+    )
+
+    await wrapper.get('[data-testid="export-csv"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="entity-export-error"]').text()).toContain(
+      'Failed to export entities',
+    )
   })
 })

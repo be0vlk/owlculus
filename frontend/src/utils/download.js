@@ -34,9 +34,11 @@ export const getDownloadFilename = (headers, fallbackFilename) => {
   return filename ? safeDownloadName(filename, fallbackFilename) : fallbackFilename
 }
 
-export const downloadBlob = (response, fallbackFilename) => {
-  const blob = response.data
-  const filename = getDownloadFilename(response.headers, fallbackFilename)
+export const createDownloadArtifact = (blob, headers) => ({ blob, headers })
+
+export const downloadBlob = (artifact, fallbackFilename) => {
+  const filename = getDownloadFilename(artifact.headers, fallbackFilename)
+  const blob = artifact.blob
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url

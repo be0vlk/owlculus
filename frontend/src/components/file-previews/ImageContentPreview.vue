@@ -228,8 +228,8 @@ const downloadImage = async () => {
   if (!props.evidenceItem) return
 
   try {
-    const response = await evidenceService.downloadEvidence(props.evidenceItem.id)
-    downloadBlob(response, props.evidenceItem.title)
+    const download = await evidenceService.downloadEvidence(props.evidenceItem.id)
+    downloadBlob(download, props.evidenceItem.title)
   } catch (err) {
     console.error('Failed to download image:', err)
   }

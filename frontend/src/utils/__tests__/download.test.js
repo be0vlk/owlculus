@@ -29,7 +29,7 @@ describe('downloadBlob', () => {
 
     downloadBlob(
       {
-        data: blob,
+        blob,
         headers: { 'content-disposition': 'attachment; filename="CASE-001-entities.csv"' },
       },
       'entities.csv',
@@ -45,7 +45,7 @@ describe('downloadBlob', () => {
   it('decodes a UTF-8 Content-Disposition filename', () => {
     downloadBlob(
       {
-        data: new Blob(['export']),
+        blob: new Blob(['export']),
         headers: { get: () => "attachment; filename*=UTF-8''M%C3%BCnchen-entities.json" },
       },
       'entities.json',
@@ -55,7 +55,7 @@ describe('downloadBlob', () => {
   })
 
   it('uses the fallback when the response has no filename', () => {
-    downloadBlob({ data: new Blob(['export']), headers: {} }, 'entities.csv')
+    downloadBlob({ blob: new Blob(['export']), headers: {} }, 'entities.csv')
 
     expect(clickedAnchor.download).toBe('entities.csv')
   })

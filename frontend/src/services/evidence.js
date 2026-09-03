@@ -1,4 +1,5 @@
 import api from './api'
+import { createDownloadArtifact } from '@/utils/download'
 
 export const evidenceService = {
   async getEvidenceForCase(caseId) {
@@ -36,9 +37,10 @@ export const evidenceService = {
   },
 
   async downloadEvidence(evidenceId) {
-    return api.get(`/api/evidence/${evidenceId}/download`, {
+    const response = await api.get(`/api/evidence/${evidenceId}/download`, {
       responseType: 'blob',
     })
+    return createDownloadArtifact(response.data, response.headers)
   },
 
   async deleteEvidence(evidenceId) {

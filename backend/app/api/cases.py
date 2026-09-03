@@ -5,7 +5,7 @@ This module provides comprehensive case management endpoints for digital investi
 supporting the complete lifecycle of OSINT cases from creation to completion.
 """
 
-from typing import List, Literal, Optional
+from typing import List, Optional
 
 from app import schemas
 from app.core.dependencies import (
@@ -25,7 +25,7 @@ from app.database import models
 from app.database.connection import get_db
 from app.services.case_service import CaseService
 from app.services.entity_service import EntityService
-from app.services.export_service import ExportService
+from app.services.export_service import EntityExportFormat, ExportService
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlmodel import Session
 
@@ -206,7 +206,7 @@ async def get_case_users(
 @router.get("/{case_id}/entities/export", tags=["entities"])
 async def export_case_entities(
     case_id: int,
-    format: Literal["csv", "json"] = "csv",
+    format: EntityExportFormat = EntityExportFormat.CSV,
     entity_type: list[str] | None = Query(default=None),
     search: str | None = None,
     db: Session = Depends(get_db),

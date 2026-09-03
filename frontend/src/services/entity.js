@@ -1,9 +1,22 @@
 import api from './api'
+import { createDownloadArtifact } from '@/utils/download'
+
+const ENTITY_FETCH_PAGE_SIZE = 1000
 
 export const entityService = {
   async getCaseEntities(caseId) {
-    const response = await api.get(`/api/cases/${caseId}/entities`)
-    return response.data
+    const entities = []
+    let skip = 0
+
+    while (true) {
+      const response = await api.get(`/api/cases/${caseId}/entities`, {
+        params: { skip, limit: ENTITY_FETCH_PAGE_SIZE },
+      })
+      const page = response.data || []
+      entities.push(...page)
+      if (page.length < ENTITY_FETCH_PAGE_SIZE) return entities
+      skip += ENTITY_FETCH_PAGE_SIZE
+    }
   },
 
   async getCaseEntitiesPaginated(caseId, params = {}) {
@@ -64,8 +77,12 @@ export const entityService = {
     entityTypes.forEach((type) => queryParams.append('entity_type', type))
     if (search) queryParams.append('search', search)
 
-    return api.get(`/api/cases/${caseId}/entities/export?${queryParams.toString()}`, {
-      responseType: 'blob',
-    })
+    const response = await api.get(
+      `/api/cases/${caseId}/entities/export?${queryParams.toString()}`,
+      {
+        responseType: 'blob',
+      },
+    )
+    return createDownloadArtifact(response.data, response.headers)
   },
 }

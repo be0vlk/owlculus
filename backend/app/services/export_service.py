@@ -8,6 +8,7 @@ import json
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from enum import StrEnum
 from types import UnionType
 from typing import Any, Union, get_args, get_origin
 
@@ -46,6 +47,13 @@ class ExportArtifact:
     filename: str
 
 
+class EntityExportFormat(StrEnum):
+    """Supported standalone entity export representations."""
+
+    CSV = "csv"
+    JSON = "json"
+
+
 class ExportService:
     """Own export access checks, filtering, serialization, and audit logging."""
 
@@ -56,7 +64,7 @@ class ExportService:
         self,
         case_id: int,
         current_user: models.User,
-        export_format: str,
+        export_format: EntityExportFormat,
         entity_types: list[str] | None = None,
         search: str | None = None,
     ) -> ExportArtifact:
@@ -66,7 +74,7 @@ class ExportService:
         safe_case_number = filesystem_safe_name(case.case_number)
         export_date = get_utc_now().date().isoformat()
 
-        if export_format == "json":
+        if export_format is EntityExportFormat.JSON:
             content = self.write_entity_json(entities)
             media_type = "application/json"
         else:
@@ -78,14 +86,14 @@ class ExportService:
             requesting_user=current_user.username,
             case_id=case_id,
             export_kind="entities",
-            format=export_format,
+            format=export_format.value,
             event_type="export_generated",
         ).info("Entity export generated")
 
         return ExportArtifact(
             content=content,
             media_type=media_type,
-            filename=f"{safe_case_number}-entities-{export_date}.{export_format}",
+            filename=f"{safe_case_number}-entities-{export_date}.{export_format.value}",
         )
 
     def write_entity_csv(

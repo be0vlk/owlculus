@@ -593,8 +593,8 @@ const loadEvidence = async () => {
 
 const handleDownloadEvidence = async (evidenceItem) => {
   try {
-    const response = await evidenceService.downloadEvidence(evidenceItem.id)
-    downloadBlob(response, evidenceItem.title)
+    const download = await evidenceService.downloadEvidence(evidenceItem.id)
+    downloadBlob(download, evidenceItem.title)
   } catch (error) {
     console.error('Failed to download evidence:', error)
   }

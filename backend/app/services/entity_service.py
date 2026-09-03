@@ -18,7 +18,7 @@ from app.core.exceptions import (
 from app.core.utils import get_utc_now
 from app.database import crud, models
 from app.database.db_utils import transaction
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 
 class EntityService:
@@ -40,7 +40,7 @@ class EntityService:
         if entity_type:
             query = query.where(models.Entity.entity_type == entity_type)
 
-        query = query.offset(skip).limit(limit)
+        query = query.order_by(col(models.Entity.id)).offset(skip).limit(limit)
         result = self.db.exec(query)
         return list(result)
 

@@ -191,6 +191,18 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <v-snackbar
+      v-model="showExportError"
+      data-testid="entity-export-error"
+      color="error"
+      :timeout="6000"
+    >
+      {{ exportErrorMessage }}
+      <template #actions>
+        <v-btn variant="text" @click="showExportError = false">Close</v-btn>
+      </template>
+    </v-snackbar>
   </div>
 </template>
 
@@ -232,6 +244,8 @@ const deleteDialog = ref(false)
 const itemsToDelete = ref([])
 const deleting = ref(false)
 const exporting = ref(false)
+const showExportError = ref(false)
+const exportErrorMessage = ref('')
 
 // Configuration
 const itemsPerPageOptions = [
@@ -451,15 +465,17 @@ const exportEntities = async (format) => {
 
   exporting.value = true
   try {
-    const response = await props.entityService.exportEntities(props.caseId, {
+    const download = await props.entityService.exportEntities(props.caseId, {
       format,
       entityTypes: selectedTypes.value,
       search: search.value,
     })
     const date = new Date().toISOString().split('T')[0]
-    downloadBlob(response, `case-${props.caseId}-entities-${date}.${format}`)
+    downloadBlob(download, `case-${props.caseId}-entities-${date}.${format}`)
   } catch (error) {
     console.error('Error exporting entities:', error)
+    exportErrorMessage.value = error.response?.data?.detail || 'Failed to export entities'
+    showExportError.value = true
   } finally {
     exporting.value = false
   }
