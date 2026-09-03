@@ -5,9 +5,13 @@ Base hunt class that all hunts must inherit from
 from abc import ABC, abstractmethod
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
-from .step_input_resolver import HuntInputExpression
+from .step_input_resolver import (
+    HuntInputExpression,
+    InputExpressionError,
+    parse_input_expression,
+)
 
 
 class HuntStepDefinition(BaseModel):
@@ -22,6 +26,21 @@ class HuntStepDefinition(BaseModel):
     static_parameters: dict[str, Any] = Field(default_factory=dict)
     optional: bool = False
     save_to_case: bool = True
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_input_expressions(cls, data: Any) -> Any:
+        """Attach the step identifier to malformed-expression errors."""
+        if not isinstance(data, dict):
+            return data
+
+        step_id = data.get("step_id", "<unknown>")
+        for expression in data.get("parameter_mapping", {}).values():
+            try:
+                parse_input_expression(expression)
+            except InputExpressionError as error:
+                raise ValueError(f"Step {step_id}: {error}") from error
+        return data
 
 
 class BaseHunt(ABC):

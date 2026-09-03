@@ -3,6 +3,8 @@
 from collections.abc import Collection, Mapping
 from typing import NoReturn
 
+from pydantic import ValidationError
+
 from .base_hunt import BaseHunt, HuntStepDefinition
 
 
@@ -18,7 +20,12 @@ class HuntDefinitionCheck:
 
     def check(self, hunt: BaseHunt) -> None:
         earlier_steps: set[str] = set()
-        for step in hunt.get_steps():
+        try:
+            steps = hunt.get_steps()
+        except ValidationError as error:
+            raise HuntDefinitionError(f"Hunt {hunt.name}: {error}") from error
+
+        for step in steps:
             self._check_step(hunt, step, earlier_steps)
             earlier_steps.add(step.step_id)
 

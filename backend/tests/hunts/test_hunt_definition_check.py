@@ -87,6 +87,22 @@ def test_rejects_a_malformed_mapping_expression():
         step(parameter_mapping={"domain": "initial..target"})
 
 
+def test_definition_check_names_hunt_and_step_for_a_malformed_expression():
+    class MalformedHunt(ExampleHunt):
+        def __init__(self):
+            super().__init__([])
+            self.name = "MalformedHunt"
+
+        def get_steps(self):
+            return [step(parameter_mapping={"domain": "initial..target"})]
+
+    with pytest.raises(
+        HuntDefinitionError,
+        match=r"(?s)MalformedHunt.*lookup.*initial\.\.target",
+    ):
+        HuntDefinitionCheck(PLUGIN_CATALOGUE).check(MalformedHunt())
+
+
 def test_definition_serializes_validated_input_expressions_as_strings():
     hunt = ExampleHunt([step()])
 

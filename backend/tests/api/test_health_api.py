@@ -1,5 +1,7 @@
 """Public API contract tests for liveness and readiness health checks."""
 
+import asyncio
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.exc import SQLAlchemyError
@@ -13,6 +15,9 @@ def available_rate_limit_storage(monkeypatch):
     """Keep readiness tests focused unless they explicitly simulate Redis failure."""
     monkeypatch.setattr(
         main_module, "is_rate_limit_storage_ready", lambda: True, raising=False
+    )
+    monkeypatch.setattr(
+        main_module.app.state, "hunt_sync_complete", True, raising=False
     )
 
 
@@ -104,6 +109,9 @@ async def test_readiness_reports_a_missing_schema(monkeypatch):
     monkeypatch.setattr(
         main_module.app.state, "setup_token_check_complete", False, raising=False
     )
+    monkeypatch.setattr(
+        main_module.app.state, "hunt_sync_complete", False, raising=False
+    )
 
     response = await request_without_lifespan("/health/ready")
 
@@ -128,6 +136,9 @@ async def test_readiness_reports_an_unreachable_database(monkeypatch):
     monkeypatch.setattr(main_module, "engine", UnreachableDatabase())
     monkeypatch.setattr(
         main_module.app.state, "setup_token_check_complete", True, raising=False
+    )
+    monkeypatch.setattr(
+        main_module.app.state, "hunt_sync_complete", False, raising=False
     )
 
     response = await request_without_lifespan("/health/ready")
@@ -212,6 +223,7 @@ async def test_process_stays_live_and_becomes_ready_after_late_schema_initializa
     monkeypatch.setattr(
         "app.core.setup.SETUP_TOKEN_FILE", tmp_path / "setup" / ".setup_token"
     )
+    monkeypatch.setattr(main_module, "HUNT_SYNC_RETRY_SECONDS", 0.01)
 
     async with main_module.lifespan(main_module.app):
         liveness = await request_without_lifespan("/health/live")
@@ -228,6 +240,7 @@ async def test_process_stays_live_and_becomes_ready_after_late_schema_initializa
         }
 
         SQLModel.metadata.create_all(database_engine)
+        await asyncio.sleep(0.02)
         ready = await request_without_lifespan("/health/ready")
 
         assert ready.status_code == 200
