@@ -68,12 +68,17 @@ class HuntExecutor:
 
             # Execute steps with dependency management
             completed_steps: set[str] = set()
+            failed_steps: set[str] = set()
             failed_required_steps: set[str] = set()
 
             while len(completed_steps) < len(steps):
                 # Find executable steps (dependencies satisfied)
                 executable = self._find_executable_steps(
-                    steps, completed_steps, failed_required_steps, context
+                    steps,
+                    completed_steps,
+                    failed_steps,
+                    failed_required_steps,
+                    context,
                 )
 
                 if not executable:
@@ -105,6 +110,7 @@ class HuntExecutor:
                         )
                     # Plugin adapters can fail with provider-specific exceptions.
                     except Exception as e:  # noqa: BLE001
+                        failed_steps.add(step_def.step_id)
                         if not step_def.optional:
                             failed_required_steps.add(step_def.step_id)
                         context.mark_step_failed(step_def.step_id)
@@ -134,7 +140,7 @@ class HuntExecutor:
             for step_def in steps:
                 if (
                     step_def.step_id not in completed_steps
-                    and step_def.step_id not in failed_required_steps
+                    and step_def.step_id not in failed_steps
                 ):
                     context.mark_step_skipped(step_def.step_id)
                     step_record = step_records[step_def.step_id]
@@ -164,6 +170,7 @@ class HuntExecutor:
         self,
         steps: list[HuntStepDefinition],
         completed_steps: set[str],
+        failed_steps: set[str],
         failed_required_steps: set[str],
         context: HuntContext,
     ) -> list[HuntStepDefinition]:
@@ -171,7 +178,7 @@ class HuntExecutor:
         executable = []
 
         for step in steps:
-            if step.step_id in completed_steps or step.step_id in failed_required_steps:
+            if step.step_id in completed_steps or step.step_id in failed_steps:
                 continue
 
             # Check if dependencies are satisfied

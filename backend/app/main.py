@@ -48,19 +48,42 @@ def _complete_setup_token_check(application: FastAPI) -> bool:
     return True
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    setup_logging()
-    logger.info("Owlculus backend starting up")
-    app.state.setup_token_check_complete = False
-    setup_complete = _complete_setup_token_check(app)
+def _check_hunt_definitions() -> None:
+    """Fail startup if a shipped hunt cannot be executed by the plugin catalogue."""
     with Session(engine) as session:
         definition_check = HuntDefinitionCheck(
             PluginService(session).parameter_catalogue()
         )
         shipped_hunt_registry.check(definition_check)
-        if setup_complete:
+
+
+def _complete_hunt_sync(application: FastAPI) -> bool:
+    """Synchronize checked hunts once the database schema is available."""
+    if application.state.hunt_sync_complete:
+        return True
+
+    try:
+        with Session(engine) as session:
             shipped_hunt_registry.sync(session)
+    except SQLAlchemyError:
+        logger.warning(
+            "Hunt definition sync is incomplete; readiness remains unavailable"
+        )
+        return False
+
+    application.state.hunt_sync_complete = True
+    return True
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    setup_logging()
+    logger.info("Owlculus backend starting up")
+    app.state.setup_token_check_complete = False
+    app.state.hunt_sync_complete = False
+    _check_hunt_definitions()
+    _complete_setup_token_check(app)
+    _complete_hunt_sync(app)
     yield
     logger.info("Owlculus backend shutting down")
 
@@ -73,6 +96,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.state.setup_token_check_complete = False
+app.state.hunt_sync_complete = False
 app.add_exception_handler(DomainException, handle_domain_exception)
 
 
@@ -127,10 +151,12 @@ def _readiness_status() -> tuple[bool, dict[str, str]]:
 
     if checks["database"] == "ok" and checks["schema"] == "ok":
         _complete_setup_token_check(app)
+        _complete_hunt_sync(app)
 
     checks["setup_token"] = (
         "ok" if app.state.setup_token_check_complete else "incomplete"
     )
+    checks["hunt_registry"] = "ok" if app.state.hunt_sync_complete else "incomplete"
     checks["rate_limit_storage"] = (
         "ok" if is_rate_limit_storage_ready() else "unavailable"
     )

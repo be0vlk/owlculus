@@ -1,5 +1,6 @@
 """Hunt executor event and input-flow tests."""
 
+import asyncio
 from unittest.mock import MagicMock
 
 import pytest
@@ -67,7 +68,7 @@ def hunt_definition(*steps):
     return {"steps": list(steps)}
 
 
-def step(step_id, *, depends_on=None, plugin_name="test_plugin"):
+def step(step_id, *, depends_on=None, plugin_name="test_plugin", optional=False):
     return {
         "step_id": step_id,
         "plugin_name": plugin_name,
@@ -77,7 +78,7 @@ def step(step_id, *, depends_on=None, plugin_name="test_plugin"):
         "parameter_mapping": {},
         "static_parameters": {},
         "save_to_case": False,
-        "optional": False,
+        "optional": optional,
     }
 
 
@@ -128,6 +129,29 @@ async def test_executor_records_required_step_failure(db_session):
         HuntEvent.complete(1),
     ]
     assert run.status == "partial"
+
+
+@pytest.mark.asyncio
+async def test_executor_treats_an_optional_failure_as_terminal(db_session):
+    recorder = EventRecorder()
+    plugins = PluginCatalogueStub({"failing_plugin": RuntimeError("plugin failed")})
+    executor = HuntExecutor(db_session, recorder, plugin_service=plugins)
+    db_session.add = MagicMock()
+    db_session.commit = MagicMock()
+    run = execution()
+
+    await asyncio.wait_for(
+        executor.execute_hunt(
+            run,
+            hunt_definition(step("step1", plugin_name="failing_plugin", optional=True)),
+            user(),
+        ),
+        timeout=0.1,
+    )
+
+    assert plugins.calls["failing_plugin"] == [{"case_id": 1, "save_to_case": False}]
+    assert recorder.events[-1] == HuntEvent.complete(1)
+    assert run.status == "completed"
 
 
 @pytest.mark.asyncio

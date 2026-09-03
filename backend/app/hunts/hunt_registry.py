@@ -2,7 +2,7 @@
 
 import importlib
 import inspect
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 
 from sqlmodel import Session, select
@@ -46,18 +46,17 @@ class HuntRegistry:
         hunt_class = self._hunt_classes.get(name)
         return hunt_class() if hunt_class is not None else None
 
+    def _definitions(self) -> Iterator[tuple[str, BaseHunt]]:
+        for name, hunt_class in self._hunt_classes.items():
+            yield name, hunt_class()
+
     def check(self, definition_check: HuntDefinitionCheck) -> None:
-        for name in self.names():
-            hunt = self.create(name)
-            if hunt is not None:
-                definition_check.check(hunt)
+        for _, hunt in self._definitions():
+            definition_check.check(hunt)
 
     def sync(self, session: Session) -> None:
         """Upsert all checked definitions in one startup transaction."""
-        for name in self.names():
-            hunt = self.create(name)
-            if hunt is None:
-                continue
+        for name, hunt in self._definitions():
             stored = session.exec(select(Hunt).where(Hunt.name == name)).first()
             if stored is None:
                 stored = Hunt(

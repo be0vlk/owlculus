@@ -153,7 +153,6 @@ def generate_hunt_definition(config: Dict[str, Any]) -> str:
                 "display_name": "WHOIS lookup",
                 "description": "Get domain registration information",
                 "parameter_mapping": {"domain": "initial.target"},
-                "timeout_seconds": 120,
             },
             {
                 "step_id": "dns_records",
@@ -217,11 +216,6 @@ def generate_hunt_definition(config: Dict[str, Any]) -> str:
         if step.get("depends_on"):
             deps = ", ".join(f'"{d}"' for d in step["depends_on"])
             step_lines.append(f"                depends_on=[{deps}],")
-
-        if step.get("timeout_seconds"):
-            step_lines.append(
-                f"                timeout_seconds={step['timeout_seconds']},"
-            )
 
         if step.get("optional"):
             step_lines.append("                optional=True,")

@@ -61,6 +61,7 @@ async def test_readiness_is_ready_after_schema_and_setup_initialization(
             "database": "ok",
             "schema": "ok",
             "setup_token": "ok",
+            "hunt_registry": "ok",
             "rate_limit_storage": "ok",
         },
     }
@@ -90,6 +91,7 @@ async def test_readiness_waits_for_the_startup_setup_token_check(
             "database": "ok",
             "schema": "ok",
             "setup_token": "incomplete",
+            "hunt_registry": "ok",
             "rate_limit_storage": "ok",
         },
     }
@@ -110,6 +112,7 @@ async def test_readiness_reports_a_missing_schema(monkeypatch):
         "database": "ok",
         "schema": "missing",
         "setup_token": "incomplete",
+        "hunt_registry": "incomplete",
         "rate_limit_storage": "ok",
     }
 
@@ -136,6 +139,7 @@ async def test_readiness_reports_an_unreachable_database(monkeypatch):
             "database": "unavailable",
             "schema": "unavailable",
             "setup_token": "ok",
+            "hunt_registry": "incomplete",
             "rate_limit_storage": "ok",
         },
     }
@@ -159,6 +163,7 @@ async def test_health_alias_has_the_readiness_contract(engine, monkeypatch):
             "database": "ok",
             "schema": "ok",
             "setup_token": "ok",
+            "hunt_registry": "ok",
             "rate_limit_storage": "ok",
         },
     }
@@ -218,6 +223,7 @@ async def test_process_stays_live_and_becomes_ready_after_late_schema_initializa
             "database": "ok",
             "schema": "missing",
             "setup_token": "incomplete",
+            "hunt_registry": "incomplete",
             "rate_limit_storage": "ok",
         }
 
@@ -229,6 +235,7 @@ async def test_process_stays_live_and_becomes_ready_after_late_schema_initializa
             "database": "ok",
             "schema": "ok",
             "setup_token": "ok",
+            "hunt_registry": "ok",
             "rate_limit_storage": "ok",
         }
 
@@ -251,6 +258,7 @@ async def test_readiness_reports_unavailable_rate_limit_storage(engine, monkeypa
             "database": "ok",
             "schema": "ok",
             "setup_token": "ok",
+            "hunt_registry": "ok",
             "rate_limit_storage": "unavailable",
         },
     }
