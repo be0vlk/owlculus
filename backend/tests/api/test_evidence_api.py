@@ -5,13 +5,14 @@ Comprehensive tests for evidence API endpoints
 from unittest.mock import patch
 
 import pytest
-from app.core.dependencies import get_current_user, get_db
-from app.database.models import Case, CaseUserLink, Client, Evidence, User
-from app.main import app
 from fastapi import status
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
+from app.core.dependencies import get_current_user, get_db
+from app.core.exceptions import ValidationException
+from app.database.models import Case, CaseUserLink, Client, Evidence, User
+from app.main import app
 
 
 @pytest.fixture
@@ -142,13 +143,87 @@ class TestEvidenceAPI:
 
     # GET /api/evidence/case/{case_id} tests
 
+    @pytest.mark.parametrize("path_suffix", ["", "/folder-tree"])
+    def test_unassigned_case_is_forbidden_through_real_router(
+        self,
+        session: Session,
+        test_user: User,
+        test_case: Case,
+        client: TestClient,
+        path_suffix: str,
+    ):
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_user
+        )
+        app.dependency_overrides[get_db] = override_get_db_factory(session)
+
+        try:
+            response = client.get(f"/api/evidence/case/{test_case.id}{path_suffix}")
+            assert response.status_code == status.HTTP_403_FORBIDDEN
+        finally:
+            app.dependency_overrides.clear()
+
+    @pytest.mark.parametrize("path_suffix", ["", "/folder-tree"])
+    def test_missing_case_is_not_found_through_real_router(
+        self,
+        session: Session,
+        test_admin: User,
+        client: TestClient,
+        path_suffix: str,
+    ):
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
+        )
+        app.dependency_overrides[get_db] = override_get_db_factory(session)
+
+        try:
+            response = client.get(f"/api/evidence/case/99999{path_suffix}")
+            assert response.status_code == status.HTTP_404_NOT_FOUND
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_multi_upload_reports_created_and_failed_items(
+        self,
+        session: Session,
+        test_admin: User,
+        test_evidence: Evidence,
+        client: TestClient,
+    ):
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
+        )
+        app.dependency_overrides[get_db] = override_get_db_factory(session)
+
+        try:
+            with patch(
+                "app.services.evidence_service.EvidenceService.create_evidence",
+                side_effect=[test_evidence, ValidationException("unsafe file")],
+            ):
+                response = client.post(
+                    "/api/evidence?title=Multiple+Files&case_id=1&category=Other",
+                    files=[
+                        ("files", ("created.txt", b"created", "text/plain")),
+                        ("files", ("failed.txt", b"failed", "text/plain")),
+                    ],
+                )
+
+            assert response.status_code == status.HTTP_201_CREATED
+            assert [item["id"] for item in response.json()["created"]] == [
+                test_evidence.id
+            ]
+            assert response.json()["failed"] == [
+                {"filename": "failed.txt", "error": "unsafe file"}
+            ]
+        finally:
+            app.dependency_overrides.clear()
+
     def test_get_case_evidence_success(
         self,
         session: Session,
         test_admin: User,
         test_case: Case,
         test_evidence: Evidence,
-    client: TestClient,
+        client: TestClient,
     ):
         """Test successful case evidence listing"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -171,8 +246,11 @@ class TestEvidenceAPI:
             app.dependency_overrides.clear()
 
     def test_get_case_evidence_with_pagination(
-        self, session: Session, test_admin: User, test_case: Case,
-    client: TestClient,
+        self,
+        session: Session,
+        test_admin: User,
+        test_case: Case,
+        client: TestClient,
     ):
         """Test case evidence listing with pagination"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -194,8 +272,11 @@ class TestEvidenceAPI:
             app.dependency_overrides.clear()
 
     def test_get_case_evidence_forbidden_non_assigned(
-        self, session: Session, test_user: User, test_case: Case,
-    client: TestClient,
+        self,
+        session: Session,
+        test_user: User,
+        test_case: Case,
+        client: TestClient,
     ):
         """Test case evidence listing forbidden for non-assigned user"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -221,8 +302,11 @@ class TestEvidenceAPI:
     # GET /api/evidence/{evidence_id} tests
 
     def test_get_evidence_success(
-        self, session: Session, test_admin: User, test_evidence: Evidence,
-    client: TestClient,
+        self,
+        session: Session,
+        test_admin: User,
+        test_evidence: Evidence,
+        client: TestClient,
     ):
         """Test successful evidence retrieval"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -244,7 +328,9 @@ class TestEvidenceAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_get_evidence_not_found(self, session: Session, test_admin: User, client: TestClient):
+    def test_get_evidence_not_found(
+        self, session: Session, test_admin: User, client: TestClient
+    ):
         """Test evidence retrieval with non-existent ID"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_admin
@@ -269,8 +355,12 @@ class TestEvidenceAPI:
     # GET /api/evidence/{evidence_id}/download tests
 
     def test_download_evidence_success(
-        self, session: Session, test_admin: User, test_evidence: Evidence,
-    client: TestClient,
+        self,
+        session: Session,
+        test_admin: User,
+        test_evidence: Evidence,
+        client: TestClient,
+        tmp_path,
     ):
         """Test successful evidence download"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -282,20 +372,18 @@ class TestEvidenceAPI:
             with patch(
                 "app.services.evidence_service.EvidenceService.download_evidence"
             ) as mock_download:
-                # Create a simple response instead of FileResponse which requires real file
-                from fastapi.responses import Response
-
-                mock_response = Response(
-                    content=b"test file content", media_type="application/octet-stream"
-                )
-                mock_download.return_value = mock_response
+                stored_file = tmp_path / "evidence.txt"
+                stored_file.write_bytes(b"test file content")
+                mock_download.return_value = stored_file
 
                 response = client.get(f"/api/evidence/{test_evidence.id}/download")
                 assert response.status_code == status.HTTP_200_OK
         finally:
             app.dependency_overrides.clear()
 
-    def test_download_evidence_not_found(self, session: Session, test_admin: User, client: TestClient):
+    def test_download_evidence_not_found(
+        self, session: Session, test_admin: User, client: TestClient
+    ):
         """Test evidence download with non-existent ID"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_admin
@@ -320,8 +408,11 @@ class TestEvidenceAPI:
     # PUT /api/evidence/{evidence_id} tests
 
     def test_update_evidence_success(
-        self, session: Session, test_admin: User, test_evidence: Evidence,
-    client: TestClient,
+        self,
+        session: Session,
+        test_admin: User,
+        test_evidence: Evidence,
+        client: TestClient,
     ):
         """Test successful evidence update"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -353,7 +444,9 @@ class TestEvidenceAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_update_evidence_not_found(self, session: Session, test_admin: User, client: TestClient):
+    def test_update_evidence_not_found(
+        self, session: Session, test_admin: User, client: TestClient
+    ):
         """Test evidence update with non-existent ID"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_admin
@@ -378,8 +471,11 @@ class TestEvidenceAPI:
             app.dependency_overrides.clear()
 
     def test_update_evidence_forbidden_analyst(
-        self, session: Session, test_analyst: User, test_evidence: Evidence,
-    client: TestClient,
+        self,
+        session: Session,
+        test_analyst: User,
+        test_evidence: Evidence,
+        client: TestClient,
     ):
         """Test evidence update forbidden for analyst"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -409,8 +505,11 @@ class TestEvidenceAPI:
     # DELETE /api/evidence/{evidence_id} tests
 
     def test_delete_evidence_success(
-        self, session: Session, test_admin: User, test_evidence: Evidence,
-    client: TestClient,
+        self,
+        session: Session,
+        test_admin: User,
+        test_evidence: Evidence,
+        client: TestClient,
     ):
         """Test successful evidence deletion"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -425,13 +524,13 @@ class TestEvidenceAPI:
                 mock_delete.return_value = test_evidence
 
                 response = client.delete(f"/api/evidence/{test_evidence.id}")
-                assert response.status_code == status.HTTP_200_OK
-                data = response.json()
-                assert data["id"] == test_evidence.id
+                assert response.status_code == status.HTTP_204_NO_CONTENT
         finally:
             app.dependency_overrides.clear()
 
-    def test_delete_evidence_not_found(self, session: Session, test_admin: User, client: TestClient):
+    def test_delete_evidence_not_found(
+        self, session: Session, test_admin: User, client: TestClient
+    ):
         """Test evidence deletion with non-existent ID"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_admin
@@ -454,8 +553,11 @@ class TestEvidenceAPI:
             app.dependency_overrides.clear()
 
     def test_delete_evidence_forbidden_analyst(
-        self, session: Session, test_analyst: User, test_evidence: Evidence,
-    client: TestClient,
+        self,
+        session: Session,
+        test_analyst: User,
+        test_evidence: Evidence,
+        client: TestClient,
     ):
         """Test evidence deletion forbidden for analyst"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -481,8 +583,11 @@ class TestEvidenceAPI:
     # Folder management tests
 
     def test_create_folder_success(
-        self, session: Session, test_admin: User, test_case: Case,
-    client: TestClient,
+        self,
+        session: Session,
+        test_admin: User,
+        test_case: Case,
+        client: TestClient,
     ):
         """Test successful folder creation"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -513,7 +618,7 @@ class TestEvidenceAPI:
                 mock_create.return_value = mock_folder
 
                 response = client.post("/api/evidence/folders", json=folder_data)
-                assert response.status_code == status.HTTP_200_OK
+                assert response.status_code == status.HTTP_201_CREATED
                 data = response.json()
                 assert data["title"] == folder_data["title"]
                 assert data["evidence_type"] == "folder"
@@ -521,8 +626,12 @@ class TestEvidenceAPI:
             app.dependency_overrides.clear()
 
     def test_get_folder_tree_success(
-        self, session: Session, test_admin: User, test_case: Case, test_folder: Evidence,
-    client: TestClient,
+        self,
+        session: Session,
+        test_admin: User,
+        test_case: Case,
+        test_folder: Evidence,
+        client: TestClient,
     ):
         """Test successful folder tree retrieval"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -545,8 +654,11 @@ class TestEvidenceAPI:
             app.dependency_overrides.clear()
 
     def test_update_folder_success(
-        self, session: Session, test_admin: User, test_folder: Evidence,
-    client: TestClient,
+        self,
+        session: Session,
+        test_admin: User,
+        test_folder: Evidence,
+        client: TestClient,
     ):
         """Test successful folder update"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -575,8 +687,11 @@ class TestEvidenceAPI:
             app.dependency_overrides.clear()
 
     def test_delete_folder_success(
-        self, session: Session, test_admin: User, test_folder: Evidence,
-    client: TestClient,
+        self,
+        session: Session,
+        test_admin: User,
+        test_folder: Evidence,
+        client: TestClient,
     ):
         """Test successful folder deletion"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -591,9 +706,7 @@ class TestEvidenceAPI:
                 mock_delete.return_value = test_folder
 
                 response = client.delete(f"/api/evidence/folders/{test_folder.id}")
-                assert response.status_code == status.HTTP_200_OK
-                data = response.json()
-                assert data["id"] == test_folder.id
+                assert response.status_code == status.HTTP_204_NO_CONTENT
         finally:
             app.dependency_overrides.clear()
 
@@ -629,8 +742,11 @@ class TestEvidenceAPI:
     # Edge cases and validation tests
 
     def test_evidence_api_pagination_edge_cases(
-        self, session: Session, test_admin: User, test_case: Case,
-    client: TestClient,
+        self,
+        session: Session,
+        test_admin: User,
+        test_case: Case,
+        client: TestClient,
     ):
         """Test pagination with edge case values"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -659,7 +775,9 @@ class TestEvidenceAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_evidence_api_invalid_case_id(self, session: Session, test_admin: User, client: TestClient):
+    def test_evidence_api_invalid_case_id(
+        self, session: Session, test_admin: User, client: TestClient
+    ):
         """Test evidence endpoints with invalid case ID"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_admin
@@ -683,8 +801,10 @@ class TestEvidenceAPI:
             app.dependency_overrides.clear()
 
     def test_evidence_api_error_format_consistency(
-        self, session: Session, test_admin: User,
-    client: TestClient,
+        self,
+        session: Session,
+        test_admin: User,
+        client: TestClient,
     ):
         """Test consistent error response format"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -712,8 +832,11 @@ class TestEvidenceAPI:
             app.dependency_overrides.clear()
 
     def test_evidence_api_response_time(
-        self, session: Session, test_admin: User, test_case: Case,
-    client: TestClient,
+        self,
+        session: Session,
+        test_admin: User,
+        test_case: Case,
+        client: TestClient,
     ):
         """Test API response time performance"""
         import time

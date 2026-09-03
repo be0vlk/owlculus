@@ -13,6 +13,7 @@ from sqlmodel import Session, select
 
 from ..core.dependencies import admin_only
 from ..core.evidence_templates import DEFAULT_TEMPLATES
+from ..core.exceptions import BaseException as DomainException
 from ..core.logging import get_security_logger
 from ..core.security import decrypt_api_key, encrypt_api_key
 from ..core.utils import get_utc_now
@@ -33,7 +34,7 @@ TEMPLATE_DISPLAY_NAMES = {
 }
 
 
-class SystemConfigError(Exception):
+class SystemConfigError(DomainException):
     """Base exception for system configuration errors"""
 
     pass

@@ -9,16 +9,21 @@ FastAPI application. It handles JWT token validation and user permissions.
 from functools import wraps
 from ipaddress import ip_address, ip_network
 
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import OAuth2PasswordBearer
+from sqlmodel import Session, select
+
 from app.core import security
 from app.core.config import settings
-from app.core.exceptions import AuthorizationException, ResourceNotFoundException
+from app.core.exceptions import (
+    AuthenticationException,
+    AuthorizationException,
+    ResourceNotFoundException,
+)
 from app.core.roles import UserRole
 from app.database import crud
 from app.database.connection import get_db
 from app.database.models import Case, User
-from fastapi import Depends, HTTPException, Request, status
-from fastapi.security import OAuth2PasswordBearer
-from sqlmodel import Session, select
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
 optional_oauth2_scheme = OAuth2PasswordBearer(
@@ -170,27 +175,36 @@ def admin_only():
     return decorator
 
 
-def no_analyst():
+def no_analyst(*, domain_exceptions: bool = False):
     """Decorator to check if user is not an analyst"""
 
     def decorator(func):
         import inspect
 
+        signature = inspect.signature(func)
+
         def _check_analyst_permission(current_user):
             if not current_user:
+                if domain_exceptions:
+                    raise AuthenticationException("Not authorized")
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authorized"
                 )
             if current_user.role == UserRole.ANALYST.value:
+                if domain_exceptions:
+                    raise AuthorizationException("Not authorized")
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized"
                 )
+
+        def _get_bound_current_user(args, kwargs):
+            return signature.bind(*args, **kwargs).arguments.get("current_user")
 
         if inspect.iscoroutinefunction(func):
 
             @wraps(func)
             async def async_wrapper(*args, **kwargs):
-                current_user = kwargs.get("current_user")
+                current_user = _get_bound_current_user(args, kwargs)
                 _check_analyst_permission(current_user)
                 return await func(*args, **kwargs)
 
@@ -199,7 +213,7 @@ def no_analyst():
 
             @wraps(func)
             def sync_wrapper(*args, **kwargs):
-                current_user = kwargs.get("current_user")
+                current_user = _get_bound_current_user(args, kwargs)
                 _check_analyst_permission(current_user)
                 return func(*args, **kwargs)
 

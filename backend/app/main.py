@@ -8,13 +8,6 @@ Owlculus backend application.
 
 from contextlib import asynccontextmanager
 
-from app.api.router import api_router
-from app.core.config import settings
-from app.core.dependencies import get_client_ip, get_user_agent
-from app.core.logging import client_ip_context, setup_logging, user_agent_context
-from app.core.rate_limiting import is_rate_limit_storage_ready
-from app.core.setup import check_and_generate_setup_token
-from app.database.connection import engine
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -22,6 +15,16 @@ from loguru import logger
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session, SQLModel
+
+from app.api.router import api_router
+from app.core.config import settings
+from app.core.dependencies import get_client_ip, get_user_agent
+from app.core.exception_handler import handle_domain_exception
+from app.core.exceptions import BaseException as DomainException
+from app.core.logging import client_ip_context, setup_logging, user_agent_context
+from app.core.rate_limiting import is_rate_limit_storage_ready
+from app.core.setup import check_and_generate_setup_token
+from app.database.connection import engine
 
 
 def _complete_setup_token_check(application: FastAPI) -> bool:
@@ -60,6 +63,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.state.setup_token_check_complete = False
+app.add_exception_handler(DomainException, handle_domain_exception)
 
 
 # Set all CORS enabled origins

@@ -22,6 +22,7 @@ from fastapi import HTTPException, UploadFile
 from werkzeug.utils import secure_filename
 
 from .config import settings
+from .exceptions import ValidationException
 from .utils import get_utc_now
 
 
@@ -93,7 +94,7 @@ async def validate_file_security(file: UploadFile) -> None:
     Uses filetype for proper file type detection, with special handling for text files.
     """
     if not file.filename:
-        raise HTTPException(status_code=400, detail="No file name provided")
+        raise ValidationException("No file name provided")
 
     file_size = 0
     chunk_size = 1024 * 1024  # 1MB chunks
@@ -108,9 +109,8 @@ async def validate_file_security(file: UploadFile) -> None:
         file_size += len(chunk)
         if file_size > MAX_FILE_SIZE:
             await file.seek(0)
-            raise HTTPException(
-                status_code=400,
-                detail=f"File too large. Maximum size is {MAX_FILE_SIZE / (1024 * 1024)}MB",
+            raise ValidationException(
+                f"File too large. Maximum size is {MAX_FILE_SIZE / (1024 * 1024)}MB"
             )
 
     await file.seek(0)
@@ -130,7 +130,7 @@ async def validate_file_security(file: UploadFile) -> None:
         except UnicodeDecodeError:
             pass
 
-    raise HTTPException(status_code=400, detail="File type not allowed")
+    raise ValidationException("File type not allowed")
 
 
 def secure_filename_with_path(filename: str, base_path: Path) -> str:
