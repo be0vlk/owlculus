@@ -56,7 +56,6 @@ class HuntStepSnapshot(BaseModel):
     parameters: dict[str, Any]
     output: dict[str, Any] | None
     error_details: str | None
-    retry_count: int
     started_at: datetime | None
     completed_at: datetime | None
 
@@ -208,7 +207,6 @@ def _render_step(pdf: FPDF, step: HuntStepSnapshot, index: int) -> None:
             ("Started", _optional_iso_utc(step.started_at) or "Not started"),
             ("Completed", _optional_iso_utc(step.completed_at) or "Not completed"),
             ("Duration", _duration_text(step.started_at, step.completed_at)),
-            ("Retry count", str(step.retry_count)),
         ],
     )
     pdf.set_font("DejaVu", size=10)

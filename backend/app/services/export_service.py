@@ -556,7 +556,6 @@ class ExportService:
                     parameters=step.parameters,
                     output=step.output,
                     error_details=step.error_details,
-                    retry_count=step.retry_count,
                     started_at=step.started_at,
                     completed_at=step.completed_at,
                 )

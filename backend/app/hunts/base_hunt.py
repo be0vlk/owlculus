@@ -3,9 +3,9 @@ Base hunt class that all hunts must inherit from
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List
+from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class HuntStepDefinition(BaseModel):
@@ -15,12 +15,10 @@ class HuntStepDefinition(BaseModel):
     plugin_name: str
     display_name: str
     description: str
-    depends_on: List[str] = []
-    parameter_mapping: Dict[str, str] = {}
-    static_parameters: Dict[str, Any] = {}
+    depends_on: list[str] = Field(default_factory=list)
+    parameter_mapping: dict[str, str] = Field(default_factory=dict)
+    static_parameters: dict[str, Any] = Field(default_factory=dict)
     optional: bool = False
-    timeout_seconds: int = 300
-    max_retries: int = 3
     save_to_case: bool = True
 
 
@@ -33,14 +31,13 @@ class BaseHunt(ABC):
         self.description: str = ""
         self.category: str = "general"
         self.version: str = "1.0.0"
-        self.initial_parameters: Dict[str, Dict[str, Any]] = {}
+        self.initial_parameters: dict[str, dict[str, Any]] = {}
 
     @abstractmethod
-    def get_steps(self) -> List[HuntStepDefinition]:
+    def get_steps(self) -> list[HuntStepDefinition]:
         """Return the ordered list of steps for this hunt"""
-        pass
 
-    def validate_parameters(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
+    def validate_parameters(self, parameters: dict[str, Any]) -> dict[str, Any]:
         """Validate and clean initial parameters"""
         validated = {}
 
@@ -65,7 +62,7 @@ class BaseHunt(ABC):
             "category": self.category,
             "version": self.version,
             "initial_parameters": self.initial_parameters,
-            "steps": [step.dict() for step in self.get_steps()],
+            "steps": [step.model_dump() for step in self.get_steps()],
         }
 
     def get_metadata(self) -> dict:

@@ -25,6 +25,9 @@ from app.core.logging import client_ip_context, setup_logging, user_agent_contex
 from app.core.rate_limiting import is_rate_limit_storage_ready
 from app.core.setup import check_and_generate_setup_token
 from app.database.connection import engine
+from app.hunts.hunt_definition_check import HuntDefinitionCheck
+from app.hunts.hunt_registry import shipped_hunt_registry
+from app.services.plugin_service import PluginService
 
 
 def _complete_setup_token_check(application: FastAPI) -> bool:
@@ -50,7 +53,14 @@ async def lifespan(app: FastAPI):
     setup_logging()
     logger.info("Owlculus backend starting up")
     app.state.setup_token_check_complete = False
-    _complete_setup_token_check(app)
+    setup_complete = _complete_setup_token_check(app)
+    with Session(engine) as session:
+        definition_check = HuntDefinitionCheck(
+            PluginService(session).parameter_catalogue()
+        )
+        shipped_hunt_registry.check(definition_check)
+        if setup_complete:
+            shipped_hunt_registry.sync(session)
     yield
     logger.info("Owlculus backend shutting down")
 

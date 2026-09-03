@@ -2,24 +2,32 @@
 Hunt executor for orchestrating hunt workflows
 """
 
-from typing import List, Set
+from typing import Any
+
+from sqlmodel import Session
 
 from app.core.utils import get_utc_now
-from app.core.websocket_manager import websocket_manager
 from app.database.models import HuntExecution, HuntStep, User
 from app.services.plugin_service import PluginService
-from sqlmodel import Session
 
 from .base_hunt import HuntStepDefinition
 from .hunt_context import HuntContext
+from .hunt_event import HuntEvent, HuntNotifier
 
 
 class HuntExecutor:
     """Executes hunt workflows with state management"""
 
-    def __init__(self, db: Session):
+    def __init__(
+        self,
+        db: Session,
+        notifier: HuntNotifier,
+        *,
+        plugin_service: Any | None = None,
+    ):
         self.db = db
-        self.plugin_service = PluginService(db)
+        self.notifier = notifier
+        self.plugin_service = plugin_service or PluginService(db)
 
     async def execute_hunt(
         self, execution: HuntExecution, hunt_definition: dict, current_user: User
@@ -34,6 +42,9 @@ class HuntExecutor:
         """
         context = HuntContext(execution.initial_parameters)
         steps = [HuntStepDefinition(**step) for step in hunt_definition["steps"]]
+        if execution.id is None:
+            raise ValueError("Hunt execution must be stored before it can run")
+        execution_id = execution.id
 
         try:
             # Update execution status
@@ -56,8 +67,8 @@ class HuntExecutor:
             self.db.commit()
 
             # Execute steps with dependency management
-            completed_steps = set()
-            failed_required_steps = set()
+            completed_steps: set[str] = set()
+            failed_required_steps: set[str] = set()
 
             while len(completed_steps) < len(steps):
                 # Find executable steps (dependencies satisfied)
@@ -87,10 +98,13 @@ class HuntExecutor:
 
                         # Send step completion notification
                         progress = len(completed_steps) / len(steps)
-                        await websocket_manager.send_step_complete(
-                            execution.id, step_def.step_id, progress
+                        await self.notifier.broadcast(
+                            HuntEvent.step_complete(
+                                execution_id, step_def.step_id, progress
+                            )
                         )
-                    except Exception as e:
+                    # Plugin adapters can fail with provider-specific exceptions.
+                    except Exception as e:  # noqa: BLE001
                         if not step_def.optional:
                             failed_required_steps.add(step_def.step_id)
                         context.mark_step_failed(step_def.step_id)
@@ -101,8 +115,10 @@ class HuntExecutor:
 
                         # Send step failure notification
                         progress = len(completed_steps) / len(steps)
-                        await websocket_manager.send_step_failed(
-                            execution.id, step_def.step_id, progress
+                        await self.notifier.broadcast(
+                            HuntEvent.step_failed(
+                                execution_id, step_def.step_id, progress
+                            )
                         )
 
                 # Update progress
@@ -110,8 +126,8 @@ class HuntExecutor:
                 self.db.commit()
 
                 # Send WebSocket notification
-                await websocket_manager.send_progress_update(
-                    execution.id, execution.progress
+                await self.notifier.broadcast(
+                    HuntEvent.progress(execution_id, execution.progress)
                 )
 
             # Mark skipped steps
@@ -132,7 +148,7 @@ class HuntExecutor:
             self.db.commit()
 
             # Send completion notification
-            await websocket_manager.send_execution_complete(execution.id)
+            await self.notifier.broadcast(HuntEvent.complete(execution_id))
 
         except Exception as e:
             # Handle catastrophic failure
@@ -141,16 +157,16 @@ class HuntExecutor:
             self.db.commit()
 
             # Send error notification
-            await websocket_manager.send_execution_error(execution.id, str(e))
+            await self.notifier.broadcast(HuntEvent.error(execution_id, str(e)))
             raise
 
     def _find_executable_steps(
         self,
-        steps: List[HuntStepDefinition],
-        completed_steps: Set[str],
-        failed_required_steps: Set[str],
+        steps: list[HuntStepDefinition],
+        completed_steps: set[str],
+        failed_required_steps: set[str],
         context: HuntContext,
-    ) -> List[HuntStepDefinition]:
+    ) -> list[HuntStepDefinition]:
         """Find steps that can be executed based on dependencies"""
         executable = []
 
@@ -198,8 +214,10 @@ class HuntExecutor:
         # Send notification that step is starting
         # Include step_id so frontend knows which step is running
         progress = len(completed_steps) / total_steps
-        await websocket_manager.send_progress_update(
-            execution.id, progress, step_def.step_id
+        if execution.id is None:
+            raise ValueError("Hunt execution must be stored before a step can run")
+        await self.notifier.broadcast(
+            HuntEvent.progress(execution.id, progress, step_def.step_id)
         )
 
         # Execute plugin

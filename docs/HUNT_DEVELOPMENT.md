@@ -11,8 +11,9 @@ Hunts in Owlculus are implemented as Python classes that inherit from `BaseHunt`
 1. **BaseHunt** (`/backend/app/hunts/base_hunt.py`) - Abstract base class all hunts inherit from
 2. **HuntExecutor** (`/backend/app/hunts/hunt_executor.py`) - Orchestrates step execution with dependency management
 3. **HuntContext** (`/backend/app/hunts/hunt_context.py`) - Manages data flow between steps
-4. **HuntService** (`/backend/app/services/hunt_service.py`) - Service layer for hunt management
-5. **Database Models** - Hunt, HuntExecution, and HuntStep track definitions and runs
+4. **HuntRegistry** (`/backend/app/hunts/hunt_registry.py`) - Discovers, checks, and synchronizes definitions at startup
+5. **HuntService** (`/backend/app/services/hunt_service.py`) - Service layer for hunt execution and queries
+6. **Database Models** - Hunt, HuntExecution, and HuntStep track definitions and runs
 
 ## Creating a New Hunt
 
@@ -61,8 +62,7 @@ class YourHunt(BaseHunt):
                 description="What this step does",
                 parameter_mapping={
                     "plugin_param": "initial.target"
-                },
-                timeout_seconds=300
+                }
             ),
             HuntStepDefinition(
                 step_id="step2",
@@ -90,8 +90,6 @@ Each step in your hunt workflow is defined with these parameters:
 - **static_parameters**: Fixed parameters passed to the plugin
 - **depends_on**: List of step_ids that must complete first
 - **optional**: Whether step failure should stop the hunt
-- **timeout_seconds**: Maximum execution time (default: 300)
-- **max_retries**: Retry attempts on failure (default: 3)
 - **save_to_case**: Save results as evidence (default: True)
 
 ### 3. Parameter Mapping Syntax
@@ -118,41 +116,10 @@ Mapping prefixes:
 - `initial.` - References initial hunt parameters
 - `{step_id}.` - References output from a previous step
 
-### 4. Dynamic Parameters Based on Configuration
-
-Hunts can adapt their parameters based on available API keys:
-
-```python
-def __init__(self, db_session: Optional[Session] = None):
-    super().__init__()
-    # ... other initialization ...
-    # db_session parameter enables dynamic parameter configuration based on API availability
-    self.initial_parameters = self._build_parameters(db_session)
-
-def _build_parameters(self, db_session: Optional[Session] = None) -> dict:
-    """Build parameters dynamically"""
-    params = {
-        "target": {
-            "type": "string",
-            "required": True
-        }
-    }
-    
-    # Only add parameter if API key is configured
-    if self._check_api_key_available(db_session, "shodan"):
-        params["enable_shodan"] = {
-            "type": "boolean",
-            "description": "Use Shodan for enhanced scanning",
-            "default": False
-        }
-    
-    return params
-```
-
 ## Hunt Execution Flow
 
-1. **Discovery**: HuntService loads all hunt classes from definitions directory
-2. **Registration**: Hunts are synced to database with their JSON definitions
+1. **Discovery**: HuntRegistry loads all hunt classes from the definitions directory
+2. **Registration**: Hunt definitions are checked and synced to the database once at startup
 3. **Execution Request**: User selects hunt and provides initial parameters
 4. **Validation**: Hunt validates parameters using `validate_parameters()`
 5. **Execution**: HuntExecutor manages the workflow:
@@ -160,7 +127,6 @@ def _build_parameters(self, db_session: Optional[Session] = None) -> dict:
    - Resolves step dependencies
    - Executes steps in order (respecting dependencies)
    - Manages parameter resolution via HuntContext
-   - Handles retries and timeouts
    - Updates progress in real-time
 
 ## Real Example: Domain Hunt
@@ -179,16 +145,14 @@ class DomainHunt(BaseHunt):
                 display_name="WHOIS lookup",
                 description="Get domain registration information",
                 parameter_mapping={"domain": "initial.domain"},
-                timeout_seconds=120,
                 optional=True
             ),
             HuntStepDefinition(
                 step_id="dns_records",
-                plugin_name="DnsLookupPlugin", 
+                plugin_name="DnsLookup", 
                 display_name="DNS records lookup",
                 description="Retrieve all DNS records for the domain",
-                parameter_mapping={"domain": "initial.domain"},
-                timeout_seconds=180
+                parameter_mapping={"domain": "initial.domain"}
             ),
             HuntStepDefinition(
                 step_id="subdomain_enum",
@@ -199,7 +163,6 @@ class DomainHunt(BaseHunt):
                     "domain": "initial.domain",
                     "concurrency": "initial.subdomain_concurrency"
                 },
-                timeout_seconds=600,
                 optional=True
             ),
             HuntStepDefinition(
@@ -213,7 +176,6 @@ class DomainHunt(BaseHunt):
                 },
                 static_parameters={"search_type": "ip", "limit": 10.0},
                 depends_on=["dns_records"],
-                timeout_seconds=90,
                 optional=True
             )
         ]
@@ -223,7 +185,7 @@ class DomainHunt(BaseHunt):
 
 Currently available plugins include:
 - **WhoisPlugin** - Domain registration information
-- **DnsLookupPlugin** - DNS record retrieval  
+- **DnsLookup** - DNS record retrieval  
 - **SubdomainEnumPlugin** - Subdomain discovery and enumeration
 - **ShodanPlugin** - IP address and service analysis
 - **HolehePlugin** - Email account discovery across platforms
@@ -280,10 +242,9 @@ Plugins used in hunts must:
 
 1. **Step Dependencies**: Only add dependencies when output from one step is needed by another
 2. **Optional Steps**: Mark steps as optional if their failure shouldn't stop the investigation
-3. **Timeouts**: Set realistic timeouts based on plugin behavior
-4. **Parameter Validation**: Implement thorough validation in `validate_parameters()`
-5. **Error Messages**: Provide clear descriptions to help users understand failures
-6. **Evidence Storage**: Use `save_to_case=True` for steps that produce valuable evidence
+3. **Parameter Validation**: Implement thorough validation in `validate_parameters()`
+4. **Error Messages**: Provide clear descriptions to help users understand failures
+5. **Evidence Storage**: Use `save_to_case=True` for steps that produce valuable evidence
 
 ## Frontend Integration
 
