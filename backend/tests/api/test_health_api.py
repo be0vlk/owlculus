@@ -3,12 +3,12 @@
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.exc import SQLAlchemyError
-from sqlmodel import create_engine
+from sqlmodel import SQLModel, create_engine
 
 from app import main as main_module
 
 
-async def get(path: str):
+async def request_without_lifespan(path: str):
     """Issue a request without invoking the production application's lifespan."""
     async with AsyncClient(
         transport=ASGITransport(app=main_module.app), base_url="http://test"
@@ -26,7 +26,7 @@ async def test_liveness_is_healthy_without_touching_the_database(monkeypatch):
 
     monkeypatch.setattr(main_module, "engine", DatabaseMustNotBeUsed())
 
-    response = await get("/health/live")
+    response = await request_without_lifespan("/health/live")
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/json"
@@ -43,7 +43,7 @@ async def test_readiness_is_ready_after_schema_and_setup_initialization(
         main_module.app.state, "setup_token_check_complete", True, raising=False
     )
 
-    response = await get("/health/ready")
+    response = await request_without_lifespan("/health/ready")
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/json"
@@ -54,14 +54,21 @@ async def test_readiness_is_ready_after_schema_and_setup_initialization(
 
 
 @pytest.mark.asyncio
-async def test_readiness_waits_for_the_startup_setup_token_check(engine, monkeypatch):
+async def test_readiness_waits_for_the_startup_setup_token_check(
+    engine, tmp_path, monkeypatch
+):
     """A usable schema is insufficient until startup setup initialization finishes."""
+    blocked_parent = tmp_path / "not-a-directory"
+    blocked_parent.write_text("blocks setup-token storage")
     monkeypatch.setattr(main_module, "engine", engine)
+    monkeypatch.setattr(
+        "app.core.setup.SETUP_TOKEN_FILE", blocked_parent / ".setup_token"
+    )
     monkeypatch.setattr(
         main_module.app.state, "setup_token_check_complete", False, raising=False
     )
 
-    response = await get("/health/ready")
+    response = await request_without_lifespan("/health/ready")
 
     assert response.status_code == 503
     assert response.json() == {
@@ -82,7 +89,7 @@ async def test_readiness_reports_a_missing_schema(monkeypatch):
         main_module.app.state, "setup_token_check_complete", False, raising=False
     )
 
-    response = await get("/health/ready")
+    response = await request_without_lifespan("/health/ready")
 
     assert response.status_code == 503
     assert response.json()["checks"] == {
@@ -105,7 +112,7 @@ async def test_readiness_reports_an_unreachable_database(monkeypatch):
         main_module.app.state, "setup_token_check_complete", True, raising=False
     )
 
-    response = await get("/health/ready")
+    response = await request_without_lifespan("/health/ready")
 
     assert response.status_code == 503
     assert response.json() == {
@@ -127,7 +134,7 @@ async def test_health_alias_has_the_readiness_contract(engine, monkeypatch):
         main_module.app.state, "setup_token_check_complete", True, raising=False
     )
 
-    response = await get("/health")
+    response = await request_without_lifespan("/health")
 
     assert response.status_code == 200
     assert response.json() == {
@@ -148,3 +155,37 @@ async def test_startup_marks_the_setup_token_check_complete(
 
     async with main_module.lifespan(main_module.app):
         assert main_module.app.state.setup_token_check_complete is True
+
+
+@pytest.mark.asyncio
+async def test_process_stays_live_and_becomes_ready_after_late_schema_initialization(
+    tmp_path, monkeypatch
+):
+    """Startup exposes health checks while waiting for database initialization."""
+    database_engine = create_engine("sqlite://")
+    monkeypatch.setattr(main_module, "engine", database_engine)
+    monkeypatch.setattr(
+        "app.core.setup.SETUP_TOKEN_FILE", tmp_path / "setup" / ".setup_token"
+    )
+
+    async with main_module.lifespan(main_module.app):
+        liveness = await request_without_lifespan("/health/live")
+        waiting = await request_without_lifespan("/health/ready")
+
+        assert liveness.status_code == 200
+        assert waiting.status_code == 503
+        assert waiting.json()["checks"] == {
+            "database": "ok",
+            "schema": "missing",
+            "setup_token": "incomplete",
+        }
+
+        SQLModel.metadata.create_all(database_engine)
+        ready = await request_without_lifespan("/health/ready")
+
+        assert ready.status_code == 200
+        assert ready.json()["checks"] == {
+            "database": "ok",
+            "schema": "ok",
+            "setup_token": "ok",
+        }

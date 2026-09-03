@@ -24,14 +24,30 @@ from app.core.setup import check_and_generate_setup_token
 from app.database.connection import engine
 
 
+def _complete_setup_token_check(application: FastAPI) -> bool:
+    """Attempt setup-token initialization without preventing process startup."""
+    if application.state.setup_token_check_complete:
+        return True
+
+    try:
+        with Session(engine) as session:
+            check_and_generate_setup_token(session)
+    except (OSError, RuntimeError, SQLAlchemyError):
+        logger.warning(
+            "Initial setup-token check is incomplete; readiness remains unavailable"
+        )
+        return False
+
+    application.state.setup_token_check_complete = True
+    return True
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()
     logger.info("Owlculus backend starting up")
     app.state.setup_token_check_complete = False
-    with Session(engine) as session:
-        check_and_generate_setup_token(session)
-    app.state.setup_token_check_complete = True
+    _complete_setup_token_check(app)
     yield
     logger.info("Owlculus backend shutting down")
 
@@ -96,6 +112,9 @@ def _readiness_status() -> tuple[bool, dict[str, str]]:
     except SQLAlchemyError:
         checks["database"] = "unavailable"
         checks["schema"] = "unavailable"
+
+    if checks["database"] == "ok" and checks["schema"] == "ok":
+        _complete_setup_token_check(app)
 
     checks["setup_token"] = (
         "ok" if app.state.setup_token_check_complete else "incomplete"
