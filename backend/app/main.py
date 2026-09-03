@@ -8,24 +8,30 @@ Owlculus backend application.
 
 from contextlib import asynccontextmanager
 
+from fastapi import FastAPI, Request, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from loguru import logger
+from sqlalchemy import inspect, text
+from sqlalchemy.exc import SQLAlchemyError
+from sqlmodel import Session, SQLModel
+
 from app.api.router import api_router
 from app.core.config import settings
 from app.core.dependencies import get_client_ip, get_user_agent
 from app.core.logging import client_ip_context, setup_logging, user_agent_context
 from app.core.setup import check_and_generate_setup_token
 from app.database.connection import engine
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from loguru import logger
-from sqlmodel import Session
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()
     logger.info("Owlculus backend starting up")
+    app.state.setup_token_check_complete = False
     with Session(engine) as session:
         check_and_generate_setup_token(session)
+    app.state.setup_token_check_complete = True
     yield
     logger.info("Owlculus backend shutting down")
 
@@ -38,6 +44,7 @@ app = FastAPI(
     lifespan=lifespan,
     proxy_headers=True,
 )
+app.state.setup_token_check_complete = False
 
 
 # Set all CORS enabled origins
@@ -63,6 +70,50 @@ async def request_info_middleware(request: Request, call_next):
 
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
+
+
+@app.get("/health/live")
+async def liveness_check() -> dict[str, str]:
+    """Report process liveness without checking external dependencies."""
+    return {"status": "healthy"}
+
+
+def _readiness_status() -> tuple[bool, dict[str, str]]:
+    """Check the database, required schema, and startup setup-token state."""
+    checks: dict[str, str] = {}
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+            checks["database"] = "ok"
+            try:
+                present_tables = set(inspect(connection).get_table_names())
+                required_tables = set(SQLModel.metadata.tables)
+                checks["schema"] = (
+                    "ok" if required_tables <= present_tables else "missing"
+                )
+            except SQLAlchemyError:
+                checks["schema"] = "unavailable"
+    except SQLAlchemyError:
+        checks["database"] = "unavailable"
+        checks["schema"] = "unavailable"
+
+    checks["setup_token"] = (
+        "ok" if app.state.setup_token_check_complete else "incomplete"
+    )
+    return all(check == "ok" for check in checks.values()), checks
+
+
+@app.get("/health/ready")
+@app.get("/health")
+async def readiness_check() -> JSONResponse:
+    """Report whether Owlculus can accept application traffic."""
+    ready, checks = _readiness_status()
+    return JSONResponse(
+        status_code=(
+            status.HTTP_200_OK if ready else status.HTTP_503_SERVICE_UNAVAILABLE
+        ),
+        content={"status": "ready" if ready else "not_ready", "checks": checks},
+    )
 
 
 @app.get("/")
