@@ -5,12 +5,13 @@ import inspect
 from collections.abc import Iterable, Iterator
 from pathlib import Path
 
+from pydantic import ValidationError
 from sqlmodel import Session, select
 
 from app.database.models import Hunt
 
 from .base_hunt import BaseHunt
-from .hunt_definition_check import HuntDefinitionCheck
+from .hunt_definition_check import HuntDefinitionCheck, HuntDefinitionError
 
 type HuntClass = type[BaseHunt]
 
@@ -48,7 +49,11 @@ class HuntRegistry:
 
     def _definitions(self) -> Iterator[tuple[str, BaseHunt]]:
         for name, hunt_class in self._hunt_classes.items():
-            yield name, hunt_class()
+            try:
+                hunt = hunt_class()
+            except ValidationError as error:
+                raise HuntDefinitionError(f"Hunt {name}: {error}") from error
+            yield name, hunt
 
     def check(self, definition_check: HuntDefinitionCheck) -> None:
         for _, hunt in self._definitions():
