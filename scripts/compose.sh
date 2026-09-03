@@ -21,7 +21,8 @@ case "$topology" in
         compose_files+=(-f "$repository_root/docker-compose.dev.yml")
         ;;
     reverse-proxy)
-        compose_files+=(-f "$repository_root/docker-compose.reverse-proxy.yml")
+        # Production uses the same Caddy stack in both modes. Set DOMAIN in the
+        # environment to opt into hostname matching and automatic HTTPS.
         ;;
     *)
         echo "Unknown Compose topology: $topology" >&2

@@ -34,6 +34,8 @@ services:
       - ./backend:/app
       - uploads_dev_data:/app/uploads
       - setup_dev_data:/app/data/setup
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
 
   db-init:
     build: *backend-development-build
@@ -57,10 +59,10 @@ services:
         reservations:
           memory: 256m
           cpus: "0.25"
-    environment:
+    environment: !override
       NODE_ENV: development
       API_PROXY_TARGET: http://backend:8000
-    volumes:
+    volumes: !override
       - ./frontend:/app
       - /app/node_modules
     ports: !override

@@ -70,7 +70,7 @@ fi
 
 
 # Default configuration values
-DEFAULT_FRONTEND_PORT=8081
+DEFAULT_FRONTEND_PORT=80
 DEFAULT_BACKEND_PORT=8000
 DEFAULT_DB_PORT=5432
 DEFAULT_DOMAIN="localhost"
@@ -82,6 +82,7 @@ FRONTEND_PORT=""
 BACKEND_PORT=""
 DB_PORT=""
 DOMAIN=""
+CADDY_DOMAIN=""
 ADMIN_USERNAME=""
 ADMIN_EMAIL=""
 ADMIN_PASSWORD=""
@@ -133,6 +134,33 @@ validate_port() {
         return 0
     else
         return 1
+    fi
+}
+
+# Derive operator-facing URLs without changing the browser's same-origin contract.
+configure_service_urls() {
+    if [ "$DEPLOYMENT_TYPE" = "remote" ]; then
+        FRONTEND_URL="https://$DOMAIN"
+        BACKEND_API_URL="https://$DOMAIN/api"
+    elif [ "$USE_REVERSE_PROXY" = "true" ]; then
+        if [ "$USE_HTTPS" = "true" ]; then
+            FRONTEND_URL="https://$DOMAIN"
+            BACKEND_API_URL="https://$DOMAIN/api"
+        else
+            FRONTEND_URL="http://$DOMAIN"
+            BACKEND_API_URL="http://$DOMAIN/api"
+        fi
+    else
+        FRONTEND_URL="http://$DOMAIN:$FRONTEND_PORT"
+        if [ "$FRONTEND_PORT" = "80" ]; then
+            FRONTEND_URL="http://$DOMAIN"
+        fi
+
+        if [ "$DEPLOYMENT_TYPE" = "local_dev" ]; then
+            BACKEND_API_URL="http://$DOMAIN:$BACKEND_PORT"
+        else
+            BACKEND_API_URL="$FRONTEND_URL/api"
+        fi
     fi
 }
 
@@ -189,6 +217,7 @@ interactive_config() {
         while true; do
             DOMAIN=$(prompt_with_default "Domain name (e.g., owlculus.example.com)" "owlculus.example.com")
             if [ -n "$DOMAIN" ] && [[ "$DOMAIN" != "localhost" ]]; then
+                CADDY_DOMAIN="$DOMAIN"
                 break
             fi
             print_error "Please enter a valid domain name (not localhost)"
@@ -215,6 +244,7 @@ interactive_config() {
         
         # Use localhost defaults for local deployments
         DOMAIN="$DEFAULT_DOMAIN"
+        CADDY_DOMAIN=""
         FRONTEND_PORT="$DEFAULT_FE_PORT"
         BACKEND_PORT="$DEFAULT_BACKEND_PORT"
         
@@ -224,7 +254,11 @@ interactive_config() {
         print_status "Using localhost defaults:"
         print_status "  Domain: $DOMAIN"
         print_status "  Frontend port: $FRONTEND_PORT"
-        print_status "  Backend port: $BACKEND_PORT"
+        if [ "$DEPLOYMENT_TYPE" = "local_dev" ]; then
+            print_status "  Backend port: $BACKEND_PORT (development only)"
+        else
+            print_status "  Backend API: Same origin through Caddy"
+        fi
         print_status "  Database: Internal port 5432 (not exposed to host for security)"
         
         USE_REVERSE_PROXY="false"
@@ -260,29 +294,7 @@ interactive_config() {
         print_error "Please enter a valid email address"
     done
     
-    # Construct URLs based on deployment type
-    if [ "$DEPLOYMENT_TYPE" = "remote" ]; then
-        # Remote deployments always use HTTPS
-        FRONTEND_URL="https://$DOMAIN"
-        BACKEND_API_URL="https://$DOMAIN/api"
-    elif [ "$USE_REVERSE_PROXY" = "true" ]; then
-        if [ "$USE_HTTPS" = "true" ]; then
-            FRONTEND_URL="https://$DOMAIN"
-            BACKEND_API_URL="https://$DOMAIN/api"
-        else
-            FRONTEND_URL="http://$DOMAIN"
-            BACKEND_API_URL="http://$DOMAIN/api"
-        fi
-    else
-        # Direct access URLs with ports
-        FRONTEND_URL="http://$DOMAIN:$FRONTEND_PORT"
-        BACKEND_API_URL="http://$DOMAIN:$BACKEND_PORT"
-        
-        # Clean up URLs if using standard ports
-        if [ "$FRONTEND_PORT" = "80" ]; then
-            FRONTEND_URL="http://$DOMAIN"
-        fi
-    fi
+    configure_service_urls
     
     echo ""
     echo "Configuration Summary:"
@@ -310,7 +322,9 @@ interactive_config() {
         echo "Frontend URL: $FRONTEND_URL"
         echo "Backend API URL: $BACKEND_API_URL"
         echo "Frontend Port: $FRONTEND_PORT"
-        echo "Backend Port: $BACKEND_PORT"
+        if [ "$DEPLOYMENT_TYPE" = "local_dev" ]; then
+            echo "Backend Port: $BACKEND_PORT (development only)"
+        fi
     fi
     echo "Database: Internal only (not exposed)"
     echo "Admin Username: $ADMIN_USERNAME"
@@ -467,20 +481,14 @@ set_defaults() {
     fi
     
     DOMAIN="$DEFAULT_DOMAIN"
+    CADDY_DOMAIN=""
     FRONTEND_PORT="$DEFAULT_FE_PORT"
     BACKEND_PORT="$DEFAULT_BACKEND_PORT"
     DB_PORT="$DEFAULT_DB_PORT"
     USE_REVERSE_PROXY="false"
     USE_HTTPS="false"
     
-    # Construct URLs
-    BACKEND_API_URL="http://$DOMAIN:$BACKEND_PORT"
-    FRONTEND_URL="http://$DOMAIN:$FRONTEND_PORT"
-    
-    # Clean up frontend URL if using standard port
-    if [ "$FRONTEND_PORT" = "80" ]; then
-        FRONTEND_URL="http://$DOMAIN"
-    fi
+    configure_service_urls
     
     ADMIN_USERNAME="$DEFAULT_ADMIN_USERNAME"
     ADMIN_EMAIL="$DEFAULT_ADMIN_EMAIL"
@@ -563,6 +571,7 @@ POSTGRES_DB=owlculus
 ADMIN_USERNAME=$ADMIN_USERNAME
 ADMIN_PASSWORD=$ADMIN_PASSWORD
 ADMIN_EMAIL=$ADMIN_EMAIL
+DOMAIN=$CADDY_DOMAIN
 
 # Port Configuration
 FRONTEND_PORT=$FRONTEND_PORT
@@ -585,36 +594,12 @@ EOF
         print_status ".env file already exists, using existing configuration"
     fi
     
-    # Create frontend .env file with API URL
-    print_status "Creating frontend environment configuration..."
-    
-    if [ "$DEPLOYMENT_TYPE" = "remote" ]; then
-        # For remote deployments, use relative paths (empty VITE_API_BASE_URL)
-        cat > frontend/.env << EOF
+    # Browser requests use the current Vite/Caddy origin in every topology.
+    print_status "Creating same-origin frontend configuration..."
+    cat > frontend/.env << EOF
 VITE_API_BASE_URL=
 EOF
-        print_success "Frontend configured to use relative API paths for reverse proxy"
-    else
-        # For local deployments, use full URL
-        cat > frontend/.env << EOF
-VITE_API_BASE_URL=$BACKEND_API_URL
-EOF
-        print_success "Frontend configuration created with API URL: $BACKEND_API_URL"
-    fi
-    
-    # Create Caddyfile if using reverse proxy
-    if [ "$USE_REVERSE_PROXY" = "true" ]; then
-        print_status "Creating Caddyfile from template..."
-        
-        if [ -f "examples/Caddyfile" ]; then
-            # Replace the domain placeholder in the template
-            sed "s/owlculus\.example\.com/$DOMAIN/g" examples/Caddyfile > Caddyfile
-            print_success "Caddyfile created for domain: $DOMAIN"
-        else
-            print_error "Caddyfile template not found in examples/Caddyfile"
-            exit 1
-        fi
-    fi
+    print_success "Frontend configured to use relative API paths"
     
     # Determine compose files based on deployment type
     if [ "$DEPLOYMENT_TYPE" = "remote" ]; then
@@ -659,19 +644,24 @@ EOF
         print_success "Frontend URL: $FRONTEND_URL"
         print_success "Backend API URL: $BACKEND_API_URL"
         print_status "Note: HTTPS certificates will be automatically obtained on first access"
-    else
-        # Test backend
-        if curl -f -s "$BACKEND_API_URL/" > /dev/null; then
-            print_success "Backend is running at $BACKEND_API_URL"
+    elif [ "$DEPLOYMENT_TYPE" = "local_dev" ]; then
+        # The development backend remains directly reachable for local tooling.
+        if curl -f -s "http://$DOMAIN:$BACKEND_PORT/health/ready" > /dev/null; then
+            print_success "Development backend is ready"
         else
-            print_warning "Backend may still be starting up at $BACKEND_API_URL"
+            print_warning "Development backend may still be starting up"
         fi
-        
-        # Test frontend
+
         if curl -f -s "$FRONTEND_URL/" > /dev/null; then
             print_success "Frontend is running at $FRONTEND_URL"
         else
             print_warning "Frontend may still be starting up at $FRONTEND_URL"
+        fi
+    else
+        if curl -f -s "$FRONTEND_URL/health/ready" > /dev/null; then
+            print_success "Caddy gateway is ready at $FRONTEND_URL"
+        else
+            print_warning "Caddy gateway may still be starting up at $FRONTEND_URL"
         fi
     fi
     

@@ -11,15 +11,19 @@ COMPOSE_SCRIPT = REPOSITORY_ROOT / "scripts/compose.sh"
 SUPPORTED_TOPOLOGIES = ("direct", "development", "reverse-proxy")
 
 
-def load_compose_configuration(topology: str) -> dict[str, Any]:
+def load_compose_configuration(
+    topology: str, *, environment_overrides: dict[str, str] | None = None
+) -> dict[str, Any]:
     """Render one supported topology through Docker Compose's merge semantics."""
     environment = os.environ.copy()
     for variable in (
         "BACKEND_PORT",
         "BACKEND_URL",
+        "DOMAIN",
         "FORWARDED_ALLOW_IPS",
         "FRONTEND_PORT",
         "FRONTEND_URL",
+        "HTTPS_PORT",
         "POSTGRES_DB",
         "POSTGRES_PASSWORD",
         "POSTGRES_USER",
@@ -27,6 +31,7 @@ def load_compose_configuration(topology: str) -> dict[str, Any]:
         "SECRET_KEY",
     ):
         environment.pop(variable, None)
+    environment.update(environment_overrides or {})
 
     completed = subprocess.run(
         [

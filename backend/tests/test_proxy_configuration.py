@@ -32,7 +32,7 @@ def test_caddy_topology_trusts_only_the_gateway_container():
     backend_environment = configuration["services"]["backend"]["environment"]
     assert backend_environment["FORWARDED_ALLOW_IPS"] == proxy_address
     assert (
-        configuration["services"]["caddy"]["networks"]["frontend-network"][
+        configuration["services"]["frontend"]["networks"]["frontend-network"][
             "ipv4_address"
         ]
         == proxy_address
