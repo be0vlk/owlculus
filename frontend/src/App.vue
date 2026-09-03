@@ -1,6 +1,7 @@
 <template>
   <v-app>
-    <router-view />
+    <FullPageLoading v-if="!authStore.isInitialized" />
+    <router-view v-else />
 
     <!-- Global session expiration notification -->
     <v-snackbar
@@ -20,9 +21,13 @@
 <script setup>
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useDarkMode } from '@/composables/useDarkMode'
+import FullPageLoading from '@/components/FullPageLoading.vue'
+import { useAuthStore } from '@/stores/auth'
 
 // Initialize dark mode
 useDarkMode()
+const authStore = useAuthStore()
+authStore.init()
 
 // Global session expiration notification
 const sessionSnackbar = ref({

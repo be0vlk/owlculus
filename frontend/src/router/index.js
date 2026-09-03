@@ -1,10 +1,16 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
-const routes = [
+export const routes = [
   {
     path: '/',
     redirect: '/cases',
+  },
+  {
+    path: '/setup',
+    name: 'Setup',
+    component: () => import('../views/Setup.vue'),
+    meta: { requiresAuth: false },
   },
   {
     path: '/login',
@@ -86,10 +92,69 @@ const routes = [
   },
 ]
 
-const router = createRouter({
-  history: createWebHistory(),
-  routes,
-})
+export function createAppRouter(history = createWebHistory(), appRoutes = routes) {
+  const router = createRouter({ history, routes: appRoutes })
+
+  router.beforeEach(async (to, from, next) => {
+    const authStore = useAuthStore()
+    const requiresAuth = to.matched.some((record) => record.meta.requiresAuth)
+    const requiresAdmin = to.matched.some((record) => record.meta.requiresAdmin)
+    const requiresNotAnalyst = to.matched.some((record) => record.meta.requiresNotAnalyst)
+    const isSetupRoute = to.path === '/setup'
+    const isLoginRoute = to.path === '/login'
+
+    if (requiresAuth || isLoginRoute || isSetupRoute) {
+      if (!authStore.isInitialized) {
+        await authStore.init()
+      }
+    }
+
+    if (authStore.setupRequired && (requiresAuth || isLoginRoute)) {
+      next('/setup')
+      return
+    }
+
+    if (isSetupRoute) {
+      if (authStore.isAuthenticated) {
+        next('/cases')
+        return
+      }
+
+      if (!authStore.setupRequired) {
+        next('/login')
+        return
+      }
+    }
+
+    if (requiresAuth) {
+      if (!authStore.isAuthenticated) {
+        next('/login')
+        return
+      }
+
+      if (requiresAdmin && authStore.user?.role !== 'Admin') {
+        next('/cases')
+        return
+      }
+
+      if (requiresNotAnalyst && authStore.user?.role === 'Analyst') {
+        next('/cases')
+        return
+      }
+    }
+
+    if (isLoginRoute && authStore.isAuthenticated) {
+      next('/cases')
+      return
+    }
+
+    next()
+  })
+
+  return router
+}
+
+const router = createAppRouter()
 
 // Listen for unauthorized API responses and redirect to login
 // This prevents circular dependency with the API service
@@ -103,55 +168,6 @@ window.addEventListener('api:unauthorized', () => {
       }, 100)
     })
   }
-})
-
-// Navigation guard
-router.beforeEach(async (to, from, next) => {
-  const authStore = useAuthStore()
-  const requiresAuth = to.matched.some((record) => record.meta.requiresAuth)
-  const requiresAdmin = to.matched.some((record) => record.meta.requiresAdmin)
-  const requiresNotAnalyst = to.matched.some((record) => record.meta.requiresNotAnalyst)
-
-  // Only initialize auth store if route requires authentication or we're checking login redirect
-  if (requiresAuth || to.path === '/login') {
-    if (!authStore.isInitialized) {
-      await authStore.init()
-    }
-  }
-
-  // Check if route requires authentication
-  if (requiresAuth) {
-    if (!authStore.isAuthenticated) {
-      next('/login')
-      return
-    }
-
-    // Check if route requires admin privileges
-    if (requiresAdmin) {
-      if (authStore.user?.role !== 'Admin') {
-        // Redirect directly to cases instead of root to avoid extra redirect
-        next('/cases')
-        return
-      }
-    }
-
-    // Check if route restricts Analyst access
-    if (requiresNotAnalyst) {
-      if (authStore.user?.role === 'Analyst') {
-        // Redirect analysts to cases page
-        next('/cases')
-        return
-      }
-    }
-  }
-
-  // If on login page and already authenticated, redirect to cases
-  if (to.path === '/login' && authStore.isAuthenticated) {
-    next('/cases')
-    return
-  }
-
-  next()
 })
 
 export default router

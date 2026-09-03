@@ -72,4 +72,24 @@ describe('browser HTTP clients', () => {
       axiosMock.instances.every(({ config }) => config.baseURL === 'https://api.dev.example'),
     ).toBe(true)
   })
+
+  it('uses the public auth client for setup without persisting authentication', async () => {
+    localStorage.clear()
+    const { authService } = await import('../auth')
+    const administrator = {
+      setup_token: 'server-token',
+      username: 'owl_admin',
+      email: 'admin@example.com',
+      password: 'long-password',
+    }
+
+    await authService.getSetupStatus()
+    await authService.createAdministrator(administrator)
+
+    expect(axiosMock.instances).toHaveLength(1)
+    expect(axiosMock.instances[0].get).toHaveBeenCalledWith('/api/auth/setup-status')
+    expect(axiosMock.instances[0].post).toHaveBeenCalledWith('/api/users/', administrator)
+    expect(localStorage.getItem('access_token')).toBeNull()
+    expect(localStorage.getItem('token_type')).toBeNull()
+  })
 })

@@ -11,6 +11,16 @@ const authApi = axios.create({
 })
 
 export const authService = {
+  async getSetupStatus() {
+    const response = await authApi.get('/api/auth/setup-status')
+    return response.data
+  },
+
+  async createAdministrator(userData) {
+    const response = await authApi.post('/api/users/', userData)
+    return response.data
+  },
+
   async login(username, password) {
     const formData = new FormData()
     formData.append('username', username)
