@@ -17,16 +17,7 @@ vi.mock('../../composables/useDarkMode', () => ({
   useDarkMode: () => ({ isDark: { value: false } }),
 }))
 
-vi.mock('../../services/auth', () => ({
-  authService: {
-    createAdministrator: vi.fn(),
-    getSetupStatus: vi.fn(),
-    getCurrentUser: vi.fn(),
-    isAuthenticated: vi.fn(() => false),
-    logout: vi.fn(),
-    login: vi.fn(),
-  },
-}))
+vi.mock('../../services/auth')
 
 const LayoutStub = defineComponent({ template: '<div><slot /></div>' })
 const FormStub = defineComponent({

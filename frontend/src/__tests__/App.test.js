@@ -10,15 +10,7 @@ vi.mock('../composables/useDarkMode', () => ({
   useDarkMode: vi.fn(),
 }))
 
-vi.mock('../services/auth', () => ({
-  authService: {
-    getSetupStatus: vi.fn(),
-    getCurrentUser: vi.fn(),
-    isAuthenticated: vi.fn(() => false),
-    logout: vi.fn(),
-    login: vi.fn(),
-  },
-}))
+vi.mock('../services/auth')
 
 const LayoutStub = defineComponent({ template: '<div><slot /><slot name="actions" /></div>' })
 
@@ -41,8 +33,12 @@ describe('application authentication loading state', () => {
           VApp: LayoutStub,
           VSnackbar: LayoutStub,
           VBtn: LayoutStub,
-          RouterView: defineComponent({ template: '<main data-testid="route-content">Login</main>' }),
-          FullPageLoading: defineComponent({ template: '<main data-testid="full-page-loading" />' }),
+          RouterView: defineComponent({
+            template: '<main data-testid="route-content">Login</main>',
+          }),
+          FullPageLoading: defineComponent({
+            template: '<main data-testid="full-page-loading" />',
+          }),
         },
       },
     })

@@ -6,15 +6,7 @@ import { authService } from '../../services/auth'
 import { useAuthStore } from '../../stores/auth'
 import { createAppRouter, routes } from '../index'
 
-vi.mock('../../services/auth', () => ({
-  authService: {
-    getSetupStatus: vi.fn(),
-    getCurrentUser: vi.fn(),
-    isAuthenticated: vi.fn(),
-    logout: vi.fn(),
-    login: vi.fn(),
-  },
-}))
+vi.mock('../../services/auth')
 
 describe('setup-aware routing', () => {
   const testRoutes = routes.map((route) => ({

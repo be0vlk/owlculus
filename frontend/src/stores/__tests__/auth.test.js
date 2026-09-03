@@ -4,15 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { authService } from '../../services/auth'
 import { useAuthStore } from '../auth'
 
-vi.mock('../../services/auth', () => ({
-  authService: {
-    getSetupStatus: vi.fn(),
-    getCurrentUser: vi.fn(),
-    isAuthenticated: vi.fn(),
-    logout: vi.fn(),
-    login: vi.fn(),
-  },
-}))
+vi.mock('../../services/auth')
 
 describe('auth store setup initialization', () => {
   beforeEach(() => {
