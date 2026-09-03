@@ -1,4 +1,5 @@
 import { fileURLToPath, URL } from 'node:url'
+import process from 'node:process'
 
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
@@ -15,6 +16,7 @@ export default defineConfig({
     },
   },
   server: {
+    host: '0.0.0.0',
     cors: false,
     hmr: {
       // Reduce HMR aggressiveness during navigation
@@ -22,7 +24,7 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: process.env.API_PROXY_TARGET || 'http://localhost:8000',
         changeOrigin: true,
         ws: true,
       },

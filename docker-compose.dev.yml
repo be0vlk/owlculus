@@ -112,6 +112,7 @@ services:
       - no-new-privileges:true
     environment:
       - NODE_ENV=development
+      - API_PROXY_TARGET=http://backend:8000
     volumes:
       - ./frontend:/app
       - /app/node_modules

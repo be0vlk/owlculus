@@ -1,10 +1,9 @@
 import axios from 'axios'
 import { authService } from './auth'
+import { apiBaseURL } from './config'
 
-// The override is only for unusual development and test setups. Browser requests
-// are same-origin by default because service paths begin with /api.
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || undefined,
+  baseURL: apiBaseURL,
   headers: {
     'Content-Type': 'application/json',
   },

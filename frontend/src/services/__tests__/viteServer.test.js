@@ -1,17 +1,45 @@
 // @vitest-environment node
 
-import { describe, expect, it } from 'vitest'
-import viteConfig from '../../../vite.config'
+import { readFile } from 'node:fs/promises'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 describe('Vite development server', () => {
-  it('proxies same-origin API and WebSocket traffic to the local backend', () => {
-    expect(viteConfig.server.cors).toBe(false)
-    expect(viteConfig.server.proxy).toMatchObject({
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  it('proxies same-origin API and WebSocket traffic to the local backend', async () => {
+    const { default: config } = await import('../../../vite.config')
+
+    expect(config.server.host).toBe('0.0.0.0')
+    expect(config.server.cors).toBe(false)
+    expect(config.server.proxy).toMatchObject({
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,
         ws: true,
       },
     })
+  })
+
+  it('lets a server-side environment setting target a containerized backend', async () => {
+    vi.stubEnv('API_PROXY_TARGET', 'http://backend:8000')
+
+    try {
+      const { default: config } = await import('../../../vite.config')
+
+      expect(config.server.proxy['/api'].target).toBe('http://backend:8000')
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('configures the development container to proxy to its backend service', async () => {
+    const composeFile = await readFile(
+      new URL('../../../../docker-compose.dev.yml', import.meta.url),
+      'utf8',
+    )
+
+    expect(composeFile).toContain('API_PROXY_TARGET=http://backend:8000')
   })
 })
