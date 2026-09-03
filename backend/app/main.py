@@ -6,7 +6,8 @@ logging setup, and API route inclusion. It serves as the main entry point for th
 Owlculus backend application.
 """
 
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,6 +29,8 @@ from app.database.connection import engine
 from app.hunts.hunt_definition_check import HuntDefinitionCheck
 from app.hunts.hunt_registry import shipped_hunt_registry
 from app.services.plugin_service import PluginService
+
+HUNT_SYNC_RETRY_SECONDS = 1.0
 
 
 def _complete_setup_token_check(application: FastAPI) -> bool:
@@ -75,6 +78,13 @@ def _complete_hunt_sync(application: FastAPI) -> bool:
     return True
 
 
+async def _retry_hunt_sync_during_startup(application: FastAPI) -> None:
+    """Keep degraded startup ownership of the sync until the schema appears."""
+    while not application.state.hunt_sync_complete:
+        await asyncio.sleep(HUNT_SYNC_RETRY_SECONDS)
+        _complete_hunt_sync(application)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()
@@ -83,9 +93,17 @@ async def lifespan(app: FastAPI):
     app.state.hunt_sync_complete = False
     _check_hunt_definitions()
     _complete_setup_token_check(app)
-    _complete_hunt_sync(app)
-    yield
-    logger.info("Owlculus backend shutting down")
+    hunt_sync_task = None
+    if not _complete_hunt_sync(app):
+        hunt_sync_task = asyncio.create_task(_retry_hunt_sync_during_startup(app))
+    try:
+        yield
+    finally:
+        if hunt_sync_task is not None:
+            hunt_sync_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await hunt_sync_task
+        logger.info("Owlculus backend shutting down")
 
 
 app = FastAPI(
@@ -151,7 +169,6 @@ def _readiness_status() -> tuple[bool, dict[str, str]]:
 
     if checks["database"] == "ok" and checks["schema"] == "ok":
         _complete_setup_token_check(app)
-        _complete_hunt_sync(app)
 
     checks["setup_token"] = (
         "ok" if app.state.setup_token_check_complete else "incomplete"

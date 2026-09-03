@@ -2,6 +2,7 @@
 Hunt executor for orchestrating hunt workflows
 """
 
+from dataclasses import dataclass, field
 from typing import Any
 
 from sqlmodel import Session
@@ -13,6 +14,31 @@ from app.services.plugin_service import PluginService
 from .base_hunt import HuntStepDefinition
 from .hunt_context import HuntContext
 from .hunt_event import HuntEvent, HuntNotifier
+
+
+@dataclass
+class HuntStepState:
+    """Track which hunt steps have reached a terminal state."""
+
+    completed: set[str] = field(default_factory=set)
+    failed: set[str] = field(default_factory=set)
+    failed_required: set[str] = field(default_factory=set)
+
+    def record_failure(self, step: HuntStepDefinition) -> None:
+        self.failed.add(step.step_id)
+        if not step.optional:
+            self.failed_required.add(step.step_id)
+
+    def is_terminal(self, step_id: str) -> bool:
+        return step_id in self.completed or step_id in self.failed
+
+    def dependencies_completed(self, step: HuntStepDefinition) -> bool:
+        return all(dependency in self.completed for dependency in step.depends_on)
+
+    def has_failed_required_dependency(self, step: HuntStepDefinition) -> bool:
+        return any(
+            dependency in self.failed_required for dependency in step.depends_on
+        )
 
 
 class HuntExecutor:
@@ -67,17 +93,13 @@ class HuntExecutor:
             self.db.commit()
 
             # Execute steps with dependency management
-            completed_steps: set[str] = set()
-            failed_steps: set[str] = set()
-            failed_required_steps: set[str] = set()
+            step_state = HuntStepState()
 
-            while len(completed_steps) < len(steps):
+            while len(step_state.completed) < len(steps):
                 # Find executable steps (dependencies satisfied)
                 executable = self._find_executable_steps(
                     steps,
-                    completed_steps,
-                    failed_steps,
-                    failed_required_steps,
+                    step_state,
                     context,
                 )
 
@@ -96,13 +118,13 @@ class HuntExecutor:
                             context,
                             execution,
                             current_user,
-                            completed_steps,
+                            step_state.completed,
                             len(steps),
                         )
-                        completed_steps.add(step_def.step_id)
+                        step_state.completed.add(step_def.step_id)
 
                         # Send step completion notification
-                        progress = len(completed_steps) / len(steps)
+                        progress = len(step_state.completed) / len(steps)
                         await self.notifier.broadcast(
                             HuntEvent.step_complete(
                                 execution_id, step_def.step_id, progress
@@ -110,9 +132,7 @@ class HuntExecutor:
                         )
                     # Plugin adapters can fail with provider-specific exceptions.
                     except Exception as e:  # noqa: BLE001
-                        failed_steps.add(step_def.step_id)
-                        if not step_def.optional:
-                            failed_required_steps.add(step_def.step_id)
+                        step_state.record_failure(step_def)
                         context.mark_step_failed(step_def.step_id)
                         step_record.status = "failed"
                         step_record.error_details = str(e)
@@ -120,7 +140,7 @@ class HuntExecutor:
                         self.db.commit()
 
                         # Send step failure notification
-                        progress = len(completed_steps) / len(steps)
+                        progress = len(step_state.completed) / len(steps)
                         await self.notifier.broadcast(
                             HuntEvent.step_failed(
                                 execution_id, step_def.step_id, progress
@@ -128,7 +148,7 @@ class HuntExecutor:
                         )
 
                 # Update progress
-                execution.progress = len(completed_steps) / len(steps)
+                execution.progress = len(step_state.completed) / len(steps)
                 self.db.commit()
 
                 # Send WebSocket notification
@@ -139,8 +159,7 @@ class HuntExecutor:
             # Mark skipped steps
             for step_def in steps:
                 if (
-                    step_def.step_id not in completed_steps
-                    and step_def.step_id not in failed_steps
+                    not step_state.is_terminal(step_def.step_id)
                 ):
                     context.mark_step_skipped(step_def.step_id)
                     step_record = step_records[step_def.step_id]
@@ -148,7 +167,9 @@ class HuntExecutor:
                     step_record.completed_at = get_utc_now()
 
             # Complete execution
-            execution.status = "completed" if not failed_required_steps else "partial"
+            execution.status = (
+                "completed" if not step_state.failed_required else "partial"
+            )
             execution.completed_at = get_utc_now()
             execution.context_data = context.to_dict()
             self.db.commit()
@@ -169,23 +190,18 @@ class HuntExecutor:
     def _find_executable_steps(
         self,
         steps: list[HuntStepDefinition],
-        completed_steps: set[str],
-        failed_steps: set[str],
-        failed_required_steps: set[str],
+        step_state: HuntStepState,
         context: HuntContext,
     ) -> list[HuntStepDefinition]:
         """Find steps that can be executed based on dependencies"""
         executable = []
 
         for step in steps:
-            if step.step_id in completed_steps or step.step_id in failed_steps:
+            if step_state.is_terminal(step.step_id):
                 continue
 
-            # Check if dependencies are satisfied
-            deps_satisfied = all(dep in completed_steps for dep in step.depends_on)
-
-            # Check if any required dependency failed
-            deps_failed = any(dep in failed_required_steps for dep in step.depends_on)
+            deps_satisfied = step_state.dependencies_completed(step)
+            deps_failed = step_state.has_failed_required_dependency(step)
 
             if deps_satisfied and not deps_failed:
                 executable.append(step)
