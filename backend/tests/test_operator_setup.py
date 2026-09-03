@@ -129,8 +129,10 @@ def test_test_data_helper_requires_operator_identity_without_a_password_flag():
     assert "--password" not in help_text
 
 
-def test_container_test_data_runner_forwards_operator_credentials(tmp_path: Path):
-    """The Docker helper passes the operator's chosen login to the data script."""
+def test_container_test_data_runner_forwards_username_without_password_argument(
+    tmp_path: Path,
+):
+    """The Docker helper passes identity without exposing the password in argv."""
     scripts = tmp_path / "scripts"
     scripts.mkdir()
     shutil.copy2(REPOSITORY_ROOT / "scripts/run_test_data.sh", scripts)
