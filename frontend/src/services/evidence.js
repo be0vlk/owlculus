@@ -36,10 +36,9 @@ export const evidenceService = {
   },
 
   async downloadEvidence(evidenceId) {
-    const response = await api.get(`/api/evidence/${evidenceId}/download`, {
+    return api.get(`/api/evidence/${evidenceId}/download`, {
       responseType: 'blob',
     })
-    return response.data
   },
 
   async deleteEvidence(evidenceId) {

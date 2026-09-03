@@ -399,6 +399,7 @@ import { clientService } from '../services/client'
 import { entityService } from '../services/entity'
 import { evidenceService } from '../services/evidence'
 import { useHuntStore } from '../stores/huntStore.js'
+import { downloadBlob } from '../utils/download'
 import { formatHuntExecutionTitle } from '../utils/huntDisplayUtils'
 
 const route = useRoute()
@@ -592,15 +593,8 @@ const loadEvidence = async () => {
 
 const handleDownloadEvidence = async (evidenceItem) => {
   try {
-    const blob = await evidenceService.downloadEvidence(evidenceItem.id)
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = evidenceItem.title
-    document.body.appendChild(a)
-    a.click()
-    window.URL.revokeObjectURL(url)
-    document.body.removeChild(a)
+    const response = await evidenceService.downloadEvidence(evidenceItem.id)
+    downloadBlob(response, evidenceItem.title)
   } catch (error) {
     console.error('Failed to download evidence:', error)
   }

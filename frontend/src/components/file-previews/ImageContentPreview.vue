@@ -98,6 +98,7 @@
 <script setup>
 import { computed, ref, watch, onUnmounted } from 'vue'
 import { evidenceService } from '@/services/evidence.js'
+import { downloadBlob } from '@/utils/download'
 
 const props = defineProps({
   evidenceItem: {
@@ -227,15 +228,8 @@ const downloadImage = async () => {
   if (!props.evidenceItem) return
 
   try {
-    const blob = await evidenceService.downloadEvidence(props.evidenceItem.id)
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = props.evidenceItem.title
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    window.URL.revokeObjectURL(url)
+    const response = await evidenceService.downloadEvidence(props.evidenceItem.id)
+    downloadBlob(response, props.evidenceItem.title)
   } catch (err) {
     console.error('Failed to download image:', err)
   }

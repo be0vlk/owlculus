@@ -43,6 +43,7 @@
         <v-toolbar flat>
           <v-text-field
             v-model="search"
+            data-testid="entity-search"
             prepend-inner-icon="mdi-magnify"
             label="Search entities"
             single-line
@@ -69,14 +70,35 @@
           </v-btn>
 
           <!-- Export Button -->
-          <v-btn
-            variant="outlined"
-            size="small"
-            prepend-icon="mdi-download"
-            @click="exportEntities"
-          >
-            Export
-          </v-btn>
+          <v-menu>
+            <template #activator="{ props: menuProps }">
+              <v-btn
+                v-bind="menuProps"
+                data-testid="entity-export-button"
+                variant="outlined"
+                size="small"
+                prepend-icon="mdi-download"
+                :disabled="totalItems === 0 || exporting"
+                :loading="exporting"
+              >
+                Export
+              </v-btn>
+            </template>
+            <v-list density="compact">
+              <v-list-item
+                data-testid="export-csv"
+                prepend-icon="mdi-file-delimited"
+                title="Export as CSV"
+                @click="exportEntities('csv')"
+              />
+              <v-list-item
+                data-testid="export-json"
+                prepend-icon="mdi-code-json"
+                title="Export as JSON"
+                @click="exportEntities('json')"
+              />
+            </v-list>
+          </v-menu>
         </v-toolbar>
       </template>
 
@@ -175,6 +197,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { formatDate } from '@/composables/dateUtils'
+import { downloadBlob } from '@/utils/download'
 
 const props = defineProps({
   caseId: {
@@ -208,6 +231,7 @@ const selected = ref([])
 const deleteDialog = ref(false)
 const itemsToDelete = ref([])
 const deleting = ref(false)
+const exporting = ref(false)
 
 // Configuration
 const itemsPerPageOptions = [
@@ -422,39 +446,22 @@ const performDelete = async () => {
   }
 }
 
-const exportEntities = () => {
+const exportEntities = async (format) => {
+  if (totalItems.value === 0 || exporting.value) return
+
+  exporting.value = true
   try {
-    const filteredEntities = entities.value || []
-
-    if (filteredEntities.length === 0) {
-      return
-    }
-
-    const headers = ['Type', 'Name', 'Description', 'Created']
-    const csvData = [
-      headers.join(','),
-      ...filteredEntities.map((entity) =>
-        [
-          getTypeLabel(entity.entity_type),
-          `"${getEntityName(entity).replace(/"/g, '""')}"`,
-          `"${(entity.data.description || '').replace(/"/g, '""')}"`,
-          formatDate(entity.created_at),
-        ].join(','),
-      ),
-    ].join('\n')
-
-    const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' })
-    const link = document.createElement('a')
-    const url = URL.createObjectURL(blob)
-    link.setAttribute('href', url)
-    link.setAttribute('download', `entities-${new Date().toISOString().split('T')[0]}.csv`)
-    link.style.visibility = 'hidden'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
+    const response = await props.entityService.exportEntities(props.caseId, {
+      format,
+      entityTypes: selectedTypes.value,
+      search: search.value,
+    })
+    const date = new Date().toISOString().split('T')[0]
+    downloadBlob(response, `case-${props.caseId}-entities-${date}.${format}`)
   } catch (error) {
     console.error('Error exporting entities:', error)
+  } finally {
+    exporting.value = false
   }
 }
 

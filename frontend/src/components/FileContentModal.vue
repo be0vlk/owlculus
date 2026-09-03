@@ -160,7 +160,8 @@ const fetchFileContent = async (item) => {
       fileInfo.value = info;
       fileContent.value = content;
     } else if (currentRequestType === 'IMAGE') {
-      const fileBlob = await evidenceService.downloadEvidence(item.id);
+      const response = await evidenceService.downloadEvidence(item.id);
+      const fileBlob = response.data;
 
       fileContent.value = URL.createObjectURL(fileBlob);
 

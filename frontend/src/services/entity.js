@@ -58,4 +58,14 @@ export const entityService = {
     const response = await api.get(`/api/cases/${caseId}/entities/${entityId}`)
     return response.data
   },
+
+  async exportEntities(caseId, { format = 'csv', entityTypes = [], search = '' } = {}) {
+    const queryParams = new URLSearchParams({ format })
+    entityTypes.forEach((type) => queryParams.append('entity_type', type))
+    if (search) queryParams.append('search', search)
+
+    return api.get(`/api/cases/${caseId}/entities/export?${queryParams.toString()}`, {
+      responseType: 'blob',
+    })
+  },
 }

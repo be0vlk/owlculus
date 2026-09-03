@@ -5,7 +5,7 @@ This module provides comprehensive case management endpoints for digital investi
 supporting the complete lifecycle of OSINT cases from creation to completion.
 """
 
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from app import schemas
 from app.core.dependencies import (
@@ -25,7 +25,8 @@ from app.database import models
 from app.database.connection import get_db
 from app.services.case_service import CaseService
 from app.services.entity_service import EntityService
-from fastapi import APIRouter, Depends, HTTPException, status
+from app.services.export_service import ExportService
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlmodel import Session
 
 router = APIRouter()
@@ -202,6 +203,38 @@ async def get_case_users(
 
 
 # Entity endpoints
+@router.get("/{case_id}/entities/export", tags=["entities"])
+async def export_case_entities(
+    case_id: int,
+    format: Literal["csv", "json"] = "csv",
+    entity_type: list[str] | None = Query(default=None),
+    search: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user),
+):
+    export_service = ExportService(db)
+    try:
+        artifact = export_service.export_entities(
+            case_id=case_id,
+            current_user=current_user,
+            export_format=format,
+            entity_types=entity_type,
+            search=search,
+        )
+    except ResourceNotFoundException as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except AuthorizationException as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
+    return Response(
+        content=artifact.content,
+        media_type=artifact.media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{artifact.filename}"'
+        },
+    )
+
+
 @router.get(
     "/{case_id}/entities", response_model=List[schemas.Entity], tags=["entities"]
 )
