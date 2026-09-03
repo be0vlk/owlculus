@@ -48,10 +48,11 @@ class StoredApiKey:
         encrypted_key = data.get("api_key")
         name = data.get("name")
         created_at = data.get("created_at")
+        is_active = data.get("is_active", True)
         return cls(
             encrypted_key=encrypted_key if isinstance(encrypted_key, str) else None,
             name=name if isinstance(name, str) else provider,
-            is_active=data.get("is_active", True) is not False,
+            is_active=is_active if isinstance(is_active, bool) else False,
             created_at=created_at if isinstance(created_at, str) else None,
         )
 

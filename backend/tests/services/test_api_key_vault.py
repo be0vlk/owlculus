@@ -75,6 +75,27 @@ def test_decrypt_failure_is_logged_before_environment_fallback(session, monkeypa
     )
 
 
+def test_malformed_active_flag_does_not_activate_stored_credential(
+    session, monkeypatch
+):
+    session.add(
+        SystemConfiguration(
+            api_keys={
+                Provider.OPENAI.value: {
+                    "api_key": encrypt_api_key("stored-key"),
+                    "is_active": "yes",
+                }
+            }
+        )
+    )
+    session.commit()
+    monkeypatch.setenv("OPENAI_API_KEY", "environment-key")
+
+    assert (
+        ConfigurationApiKeyVault(session).get_key(Provider.OPENAI) == "environment-key"
+    )
+
+
 def test_database_failure_is_logged_before_environment_fallback(monkeypatch):
     log = Mock()
     unavailable_session = Mock()
