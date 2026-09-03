@@ -3,7 +3,9 @@
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Annotated, Any
+
+from pydantic import BeforeValidator, PlainSerializer
 
 
 class InputExpressionError(ValueError):
@@ -20,6 +22,19 @@ class AbsentInput:
 
 ABSENT = AbsentInput()
 
+
+@dataclass(frozen=True)
+class InputExpression:
+    """A parsed, validated reference to an initial input or earlier step output."""
+
+    text: str
+    source: str
+    path: tuple[str | int, ...]
+
+    def __str__(self) -> str:
+        return self.text
+
+
 _IDENTIFIER = r"[A-Za-z_][A-Za-z0-9_]*"
 _EXPRESSION = re.compile(
     rf"^(?P<root>{_IDENTIFIER})(?P<path>(?:\.{_IDENTIFIER}(?:\[\d+\])*)+)$"
@@ -27,8 +42,10 @@ _EXPRESSION = re.compile(
 _PATH_TOKEN = re.compile(rf"\.({_IDENTIFIER})|\[(\d+)\]")
 
 
-def parse_input_expression(expression: str) -> tuple[str, tuple[str | int, ...]]:
+def parse_input_expression(expression: str | InputExpression) -> InputExpression:
     """Parse an expression into its source name and traversal path."""
+    if isinstance(expression, InputExpression):
+        return expression
     match = _EXPRESSION.fullmatch(expression)
     if match is None or not match.group("path"):
         raise InputExpressionError(f"Invalid hunt input expression {expression!r}")
@@ -37,25 +54,32 @@ def parse_input_expression(expression: str) -> tuple[str, tuple[str | int, ...]]
     for token in _PATH_TOKEN.finditer(match.group("path")):
         key, index = token.groups()
         path.append(key if key is not None else int(index))
-    return match.group("root"), tuple(path)
+    return InputExpression(expression, match.group("root"), tuple(path))
+
+
+type HuntInputExpression = Annotated[
+    InputExpression,
+    BeforeValidator(parse_input_expression),
+    PlainSerializer(lambda expression: expression.text, return_type=str),
+]
 
 
 def resolve_step_input(
-    expression: str,
+    expression: str | InputExpression,
     initial_parameters: Mapping[str, Any],
     step_outputs: Mapping[str, Any],
 ) -> Any | AbsentInput:
     """Resolve one mapping expression without mutating hunt state."""
-    source, path = parse_input_expression(expression)
+    parsed = parse_input_expression(expression)
     current: Any
-    if source == "initial":
+    if parsed.source == "initial":
         current = initial_parameters
-    elif source in step_outputs:
-        current = step_outputs[source]
+    elif parsed.source in step_outputs:
+        current = step_outputs[parsed.source]
     else:
         return ABSENT
 
-    for part in path:
+    for part in parsed.path:
         if isinstance(part, str) and isinstance(current, Mapping):
             if part not in current:
                 return ABSENT

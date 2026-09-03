@@ -4,7 +4,6 @@ from collections.abc import Collection, Mapping
 from typing import NoReturn
 
 from .base_hunt import BaseHunt, HuntStepDefinition
-from .step_input_resolver import InputExpressionError, parse_input_expression
 
 
 class HuntDefinitionError(ValueError):
@@ -54,20 +53,15 @@ class HuntDefinitionCheck:
                 )
 
         for expression in step.parameter_mapping.values():
-            try:
-                source, path = parse_input_expression(expression)
-            except InputExpressionError as error:
-                self._fail(hunt, step, str(error))
-
-            if source == "initial":
-                initial_parameter = path[0]
+            if expression.source == "initial":
+                initial_parameter = expression.path[0]
                 if initial_parameter not in hunt.initial_parameters:
                     self._fail(
                         hunt,
                         step,
                         f"input '{expression}' names an unknown initial parameter",
                     )
-            elif source not in earlier_steps:
+            elif expression.source not in earlier_steps:
                 self._fail(
                     hunt,
                     step,

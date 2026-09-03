@@ -1,6 +1,7 @@
 """Registration checks for hunt definitions."""
 
 import pytest
+from pydantic import ValidationError
 
 from app.hunts.base_hunt import BaseHunt, HuntStepDefinition
 from app.hunts.definitions import DomainHunt, PersonHunt
@@ -79,13 +80,19 @@ def test_rejects_a_mapping_that_references_a_later_step():
 
 
 def test_rejects_a_malformed_mapping_expression():
-    hunt = ExampleHunt([step(parameter_mapping={"domain": "initial..target"})])
-
     with pytest.raises(
-        HuntDefinitionError,
-        match=r"ExampleHunt.*lookup.*initial\.\.target",
+        ValidationError,
+        match=r"initial\.\.target",
     ):
-        HuntDefinitionCheck(PLUGIN_CATALOGUE).check(hunt)
+        step(parameter_mapping={"domain": "initial..target"})
+
+
+def test_definition_serializes_validated_input_expressions_as_strings():
+    hunt = ExampleHunt([step()])
+
+    assert hunt.to_definition()["steps"][0]["parameter_mapping"] == {
+        "domain": "initial.target"
+    }
 
 
 @pytest.mark.parametrize("hunt", [DomainHunt(), PersonHunt()])

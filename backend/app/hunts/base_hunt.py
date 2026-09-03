@@ -7,6 +7,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from .step_input_resolver import HuntInputExpression
+
 
 class HuntStepDefinition(BaseModel):
     """Definition of a single step in a hunt workflow"""
@@ -16,7 +18,7 @@ class HuntStepDefinition(BaseModel):
     display_name: str
     description: str
     depends_on: list[str] = Field(default_factory=list)
-    parameter_mapping: dict[str, str] = Field(default_factory=dict)
+    parameter_mapping: dict[str, HuntInputExpression] = Field(default_factory=dict)
     static_parameters: dict[str, Any] = Field(default_factory=dict)
     optional: bool = False
     save_to_case: bool = True
