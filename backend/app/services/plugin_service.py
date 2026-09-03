@@ -10,7 +10,8 @@ and real-time streaming execution for investigation workflows.
 import importlib
 import inspect
 import os
-from typing import Any, AsyncGenerator, Dict, Type
+from collections.abc import AsyncGenerator
+from typing import Any
 
 from sqlmodel import Session
 
@@ -23,7 +24,8 @@ from .api_key_vault import Provider
 
 class PluginService:
     def __init__(self, db: Session):
-        self._plugins: Dict[str, Type[BasePlugin]] = {}
+        self._plugins: dict[str, type[BasePlugin]] = {}
+        self._parameter_catalogue: dict[str, set[str]] = {}
         self.db = db
         self._load_plugins()
 
@@ -51,13 +53,21 @@ class PluginService:
                                 f"{obj.__name__} declares unknown API key provider"
                             )
                         self._plugins[obj.__name__] = obj
+                        self._parameter_catalogue[obj.__name__] = set(plugin.parameters)
 
     def get_plugin(self, name: str) -> BasePlugin:
         if name not in self._plugins:
             raise ResourceNotFoundException(f"Plugin {name} not found")
         return self._plugins[name](db_session=self.db)
 
-    async def list_plugins(self, *, current_user: User) -> Dict[str, Any]:
+    def parameter_catalogue(self) -> dict[str, set[str]]:
+        """Return the declared input names for every discovered plugin."""
+        return {
+            name: parameters.copy()
+            for name, parameters in self._parameter_catalogue.items()
+        }
+
+    async def list_plugins(self, *, current_user: User) -> dict[str, Any]:
         plugins_metadata = {}
         for name, plugin_class in self._plugins.items():
             plugin_instance = plugin_class(db_session=self.db)
@@ -66,8 +76,8 @@ class PluginService:
         return plugins_metadata
 
     async def execute_plugin(
-        self, name: str, params: Dict[str, Any] = None, *, current_user: User
-    ) -> AsyncGenerator[str, None]:
+        self, name: str, params: dict[str, Any] | None = None, *, current_user: User
+    ) -> AsyncGenerator[dict[str, Any], None]:
         plugin = self.get_plugin(name)
         plugin._current_user = current_user
         return plugin.execute_with_evidence_collection(params or {})

@@ -2,8 +2,6 @@
 Person investigation hunt definition
 """
 
-from typing import List
-
 from ..base_hunt import BaseHunt, HuntStepDefinition
 
 
@@ -28,7 +26,7 @@ class PersonHunt(BaseHunt):
             },
         }
 
-    def get_steps(self) -> List[HuntStepDefinition]:
+    def get_steps(self) -> list[HuntStepDefinition]:
         return [
             HuntStepDefinition(
                 step_id="email_check",

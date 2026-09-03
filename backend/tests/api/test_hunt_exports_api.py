@@ -67,7 +67,6 @@ def hunt_export_execution(session: Session, hunt_export_user: User) -> HuntExecu
             parameters={"country": "España"},
             output={"finding": "München Москва"},
             error_details="Remote source timed out",
-            retry_count=2,
             started_at=datetime(2026, 8, 1, 10, 0, tzinfo=UTC),
             completed_at=datetime(2026, 8, 1, 10, 1, tzinfo=UTC),
         )

@@ -8,90 +8,38 @@ validation, progress tracking, and real-time status updates.
 """
 
 import asyncio
-import importlib
-import inspect
-import os
-from typing import Any, Dict, List, Optional, Type
+from collections.abc import Callable
+from typing import Any
+
+from sqlmodel import Session, select
 
 from app.core.dependencies import check_case_access, no_analyst
 from app.core.logging import get_security_logger
 from app.core.utils import get_utc_now
+from app.core.websocket_manager import websocket_manager
 from app.database.models import Hunt, HuntExecution, HuntStep, User
-from app.hunts import BaseHunt, HuntExecutor
-from sqlmodel import Session, select
+from app.hunts.hunt_executor import HuntExecutor
+from app.hunts.hunt_registry import HuntRegistry, shipped_hunt_registry
 
 security_logger = get_security_logger
 
 
 class HuntService:
 
-    def __init__(self, db: Session):
+    def __init__(
+        self,
+        db: Session,
+        *,
+        registry: HuntRegistry = shipped_hunt_registry,
+        executor_factory: Callable[[Session], HuntExecutor] | None = None,
+    ):
         self.db = db
-        self._hunt_classes: Dict[str, Type[BaseHunt]] = {}
-        self._load_hunt_definitions()
-        self._sync_hunts_to_db()
-
-    def _load_hunt_definitions(self):
-        definitions_dir = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)), "hunts", "definitions"
+        self.registry = registry
+        self._executor_factory = executor_factory or (
+            lambda session: HuntExecutor(session, websocket_manager)
         )
 
-        for filename in os.listdir(definitions_dir):
-            if filename.endswith("_hunt.py") and filename != "__init__.py":
-                module_name = filename[:-3]
-                try:
-                    module = importlib.import_module(
-                        f"app.hunts.definitions.{module_name}"
-                    )
-
-                    for name, obj in inspect.getmembers(module):
-                        if (
-                            inspect.isclass(obj)
-                            and issubclass(obj, BaseHunt)
-                            and obj != BaseHunt
-                        ):
-                            self._hunt_classes[obj.__name__] = obj
-                except Exception as e:
-                    security_logger(
-                        action="hunt_definition_load_failed",
-                        module=module_name,
-                        error=str(e),
-                    ).error(f"Failed to load hunt {module_name}: {e}")
-
-    def _sync_hunts_to_db(self):
-        for hunt_name, hunt_class in self._hunt_classes.items():
-            # Pass database session to hunt constructor for dynamic parameter configuration
-            try:
-                hunt_instance = hunt_class(db_session=self.db)
-            except TypeError:
-                # Fallback for hunts that don't accept db_session parameter
-                hunt_instance = hunt_class()
-
-            existing_hunt = self.db.exec(
-                select(Hunt).where(Hunt.name == hunt_name)
-            ).first()
-
-            if existing_hunt:
-                existing_hunt.display_name = hunt_instance.display_name
-                existing_hunt.description = hunt_instance.description
-                existing_hunt.category = hunt_instance.category
-                existing_hunt.version = hunt_instance.version
-                existing_hunt.definition_json = hunt_instance.to_definition()
-            else:
-                new_hunt = Hunt(
-                    name=hunt_name,
-                    display_name=hunt_instance.display_name,
-                    description=hunt_instance.description,
-                    category=hunt_instance.category,
-                    version=hunt_instance.version,
-                    definition_json=hunt_instance.to_definition(),
-                    is_active=True,
-                )
-                self.db.add(new_hunt)
-
-        self.db.commit()
-
-    async def list_hunts(self, *, current_user: User) -> List[Hunt]:
+    async def list_hunts(self, *, current_user: User) -> list[Hunt]:
         hunts = self.db.exec(
             select(Hunt)
             .where(Hunt.is_active == True)
@@ -99,7 +47,7 @@ class HuntService:
         ).all()
         return list(hunts)
 
-    async def get_hunt(self, hunt_id: int, *, current_user: User) -> Optional[Hunt]:
+    async def get_hunt(self, hunt_id: int, *, current_user: User) -> Hunt | None:
         return self.db.get(Hunt, hunt_id)
 
     @no_analyst()
@@ -107,7 +55,7 @@ class HuntService:
         self,
         hunt_id: int,
         case_id: int,
-        initial_parameters: Dict[str, Any],
+        initial_parameters: dict[str, Any],
         *,
         current_user: User,
     ) -> HuntExecution:
@@ -117,14 +65,8 @@ class HuntService:
 
         check_case_access(self.db, case_id, current_user)
 
-        # Validate parameters if hunt class is available
-        if hunt.name in self._hunt_classes:
-            # Pass database session to hunt constructor for dynamic parameter configuration
-            try:
-                hunt_instance = self._hunt_classes[hunt.name](db_session=self.db)
-            except TypeError:
-                # Fallback for hunts that don't accept db_session parameter
-                hunt_instance = self._hunt_classes[hunt.name]()
+        hunt_instance = self.registry.create(hunt.name)
+        if hunt_instance is not None:
             validated_params = hunt_instance.validate_parameters(initial_parameters)
         else:
             validated_params = initial_parameters
@@ -170,10 +112,10 @@ class HuntService:
                 ).error(f"Hunt {execution.hunt_id} not found")
                 return
 
-            executor = HuntExecutor(db)
+            executor = self._executor_factory(db)
             await executor.execute_hunt(execution, hunt.definition_json, user)
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - background jobs must record failure
             security_logger(
                 action="hunt_execution_failed", execution_id=execution_id, error=str(e)
             ).error(f"Hunt execution {execution_id} failed: {e}")
@@ -187,7 +129,7 @@ class HuntService:
 
     async def get_execution(
         self, execution_id: int, *, current_user: User
-    ) -> Optional[HuntExecution]:
+    ) -> HuntExecution | None:
         execution = self.db.get(HuntExecution, execution_id)
         if execution:
             check_case_access(self.db, execution.case_id, current_user)
@@ -195,7 +137,7 @@ class HuntService:
 
     async def list_case_executions(
         self, case_id: int, *, current_user: User
-    ) -> List[HuntExecution]:
+    ) -> list[HuntExecution]:
         check_case_access(self.db, case_id, current_user)
 
         executions = self.db.exec(
@@ -220,7 +162,7 @@ class HuntService:
         if execution.status != "running":
             raise ValueError("Only running executions can be cancelled")
 
-        executor = HuntExecutor(self.db)
+        executor = self._executor_factory(self.db)
         await executor.cancel_execution(execution_id)
 
         self.db.refresh(execution)
@@ -228,7 +170,7 @@ class HuntService:
 
     async def get_execution_steps(
         self, execution_id: int, *, current_user: User
-    ) -> List[HuntStep]:
+    ) -> list[HuntStep]:
         execution = await self.get_execution(execution_id, current_user=current_user)
         if not execution:
             raise ValueError("Hunt execution not found")

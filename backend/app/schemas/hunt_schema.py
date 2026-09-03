@@ -47,7 +47,6 @@ class HuntStepResponse(BaseModel):
     parameters: Dict[str, Any]
     output: Optional[Dict[str, Any]] = None
     error_details: Optional[str] = None
-    retry_count: int
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 
@@ -101,14 +100,3 @@ class HuntExecutionListResponse(BaseModel):
     class Config:
         orm_mode = True
 
-
-class HuntProgressEvent(BaseModel):
-    """WebSocket event for hunt progress updates"""
-
-    execution_id: int
-    event_type: str  # started, step_complete, step_failed, complete, error
-    step_id: Optional[str] = None
-    progress: float
-    message: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
-    data: Optional[Dict[str, Any]] = None

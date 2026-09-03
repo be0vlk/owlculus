@@ -172,7 +172,6 @@ class HuntStep(SQLModel, table=True):
     parameters: dict = Field(sa_column=Column(JSON))
     output: Optional[dict] = Field(default=None, sa_column=Column(JSON))
     error_details: Optional[str] = None
-    retry_count: int = Field(default=0)
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 

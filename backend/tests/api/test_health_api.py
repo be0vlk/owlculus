@@ -1,10 +1,11 @@
 """Public API contract tests for liveness and readiness health checks."""
 
 import pytest
-from app import main as main_module
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import SQLModel, create_engine
+
+from app import main as main_module
 
 
 @pytest.fixture(autouse=True)
@@ -175,6 +176,25 @@ async def test_startup_marks_the_setup_token_check_complete(
 
     async with main_module.lifespan(main_module.app):
         assert main_module.app.state.setup_token_check_complete is True
+
+
+@pytest.mark.asyncio
+async def test_startup_syncs_hunt_definitions_once(engine, tmp_path, monkeypatch):
+    monkeypatch.setattr(main_module, "engine", engine)
+    monkeypatch.setattr(
+        "app.core.setup.SETUP_TOKEN_FILE", tmp_path / "setup" / ".setup_token"
+    )
+    sync_calls = []
+    monkeypatch.setattr(
+        main_module.shipped_hunt_registry,
+        "sync",
+        lambda session: sync_calls.append(session),
+    )
+
+    async with main_module.lifespan(main_module.app):
+        pass
+
+    assert len(sync_calls) == 1
 
 
 @pytest.mark.asyncio

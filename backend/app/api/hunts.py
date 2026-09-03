@@ -20,6 +20,7 @@ from app.core.dependencies import get_current_user, get_db, no_analyst
 from app.core.exceptions import AuthorizationException, ResourceNotFoundException
 from app.core.websocket_manager import websocket_manager
 from app.database import models
+from app.hunts.hunt_event import HuntEvent
 from app.schemas import hunt_schema as schemas
 from app.services.export_service import ExportService
 from app.services.hunt_execution_export import HuntExecutionExportFormat
@@ -310,13 +311,7 @@ async def stream_execution(
     try:
         await websocket_manager.connect(execution_id, websocket)
 
-        await websocket.send_json(
-            {
-                "execution_id": execution_id,
-                "event_type": "connected",
-                "message": "WebSocket connection established",
-            }
-        )
+        await websocket.send_json(HuntEvent.connected(execution_id).to_wire())
 
         while True:
             data = await websocket.receive_text()
