@@ -1,0 +1,45 @@
+"""Shared interface for inspecting supported Docker Compose topologies."""
+
+import json
+import os
+import subprocess
+from pathlib import Path
+from typing import Any
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+COMPOSE_SCRIPT = REPOSITORY_ROOT / "scripts/compose.sh"
+SUPPORTED_TOPOLOGIES = ("direct", "development", "reverse-proxy")
+
+
+def load_compose_configuration(topology: str) -> dict[str, Any]:
+    """Render one supported topology through Docker Compose's merge semantics."""
+    environment = os.environ.copy()
+    for variable in (
+        "BACKEND_PORT",
+        "BACKEND_URL",
+        "FORWARDED_ALLOW_IPS",
+        "FRONTEND_PORT",
+        "FRONTEND_URL",
+        "POSTGRES_DB",
+        "POSTGRES_PASSWORD",
+        "POSTGRES_USER",
+        "REDIS_URL",
+        "SECRET_KEY",
+    ):
+        environment.pop(variable, None)
+
+    completed = subprocess.run(
+        [
+            COMPOSE_SCRIPT,
+            topology,
+            "config",
+            "--format",
+            "json",
+        ],
+        cwd=REPOSITORY_ROOT,
+        env=environment,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return json.loads(completed.stdout)

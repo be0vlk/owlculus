@@ -1,6 +1,6 @@
 # Multi-stage build for Python backend
 # Builder stage - includes build tools
-FROM python:3.12-slim as builder
+FROM python:3.12-slim AS builder
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -22,7 +22,7 @@ COPY requirements.txt .
 RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.txt
 
 # Runtime stage - minimal dependencies
-FROM python:3.12-slim as runtime
+FROM python:3.12-slim AS runtime-base
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -65,5 +65,12 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health/live || exit 1
 
-# Default command
+# Development runtime with hot reload
+FROM runtime-base AS development
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--reload"]
+
+# Production runtime
+FROM runtime-base AS production
+
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]

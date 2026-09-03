@@ -42,7 +42,7 @@ else
     print_success "Docker is already installed"
 fi
 
-if command_exists docker-compose || command docker compose version &>/dev/null; then
+if docker compose version &>/dev/null; then
     print_success "Docker Compose is already installed"
 else
     print_status "Docker Compose not found. Installing..."
@@ -50,7 +50,7 @@ else
     sudo apt-get update
     sudo apt-get install -qq -y docker-compose-v2
     
-    if command_exists docker-compose || command docker compose version &>/dev/null; then
+    if docker compose version &>/dev/null; then
         print_success "Docker Compose installed successfully"
     else
         print_error "Failed to install Docker Compose v2"
@@ -89,6 +89,10 @@ USE_REVERSE_PROXY="false"
 USE_HTTPS="false"
 INTERACTIVE_MODE="true"
 DEPLOYMENT_TYPE=""
+COMPOSE_SCRIPT="./scripts/compose.sh"
+DIRECT_TOPOLOGY="direct"
+DEV_TOPOLOGY="development"
+REVERSE_PROXY_TOPOLOGY="reverse-proxy"
 
 # Function to check if command exists
 command_exists() {
@@ -369,14 +373,14 @@ clean_docker_artifacts() {
     print_warning "Cleaning up Owlculus Docker artifacts..."
     
     # Stop and remove containers for both production and dev
-    if docker compose -f docker-compose.yml ps -q 2>/dev/null | grep -q .; then
+    if "$COMPOSE_SCRIPT" "$DIRECT_TOPOLOGY" ps -q 2>/dev/null | grep -q .; then
         print_status "Stopping production containers..."
-        docker compose -f docker-compose.yml down 2>/dev/null || true
+        "$COMPOSE_SCRIPT" "$DIRECT_TOPOLOGY" down 2>/dev/null || true
     fi
     
-    if docker compose -f docker-compose.dev.yml ps -q 2>/dev/null | grep -q .; then
+    if "$COMPOSE_SCRIPT" "$DEV_TOPOLOGY" ps -q 2>/dev/null | grep -q .; then
         print_status "Stopping development containers..."
-        docker compose -f docker-compose.dev.yml down 2>/dev/null || true
+        "$COMPOSE_SCRIPT" "$DEV_TOPOLOGY" down 2>/dev/null || true
     fi
     
     # Remove Owlculus volumes
@@ -416,8 +420,7 @@ clean_docker_artifacts() {
 
 # Function to create test data
 create_test_data() {
-    local MODE="$1"
-    local COMPOSE_FILES="$2"
+    local COMPOSE_TOPOLOGY="$1"
     
     print_status "Creating test data..."
     
@@ -428,13 +431,8 @@ create_test_data() {
     # Pass the admin password from the environment
     local ADMIN_PASS=$(grep "^ADMIN_PASSWORD=" .env | cut -d'=' -f2)
     
-    if [ "$MODE" = "dev" ] || [ "$MODE" = "development" ]; then
-        $DOCKER_COMPOSE_CMD $COMPOSE_FILES cp scripts/create_test_data.py backend:/tmp/create_test_data.py
-        $DOCKER_COMPOSE_CMD $COMPOSE_FILES exec -w /app backend python3 /tmp/create_test_data.py --password "$ADMIN_PASS"
-    else
-        $DOCKER_COMPOSE_CMD $COMPOSE_FILES cp scripts/create_test_data.py backend:/tmp/create_test_data.py
-        $DOCKER_COMPOSE_CMD $COMPOSE_FILES exec -w /app backend python3 /tmp/create_test_data.py --password "$ADMIN_PASS"
-    fi
+    "$DOCKER_COMPOSE_CMD" "$COMPOSE_TOPOLOGY" cp scripts/create_test_data.py backend:/tmp/create_test_data.py
+    "$DOCKER_COMPOSE_CMD" "$COMPOSE_TOPOLOGY" exec -w /app backend python3 /tmp/create_test_data.py --password "$ADMIN_PASS"
     
     if [ $? -eq 0 ]; then
         print_success "Test data created successfully!"
@@ -517,17 +515,12 @@ setup_owlculus() {
     fi
     
     # Check if Docker Compose is available
-    if ! docker compose version >/dev/null 2>&1 && ! command_exists docker-compose; then
-        print_error "Docker Compose is not available. Please install Docker Compose."
+    if ! docker compose version >/dev/null 2>&1; then
+        print_error "Docker Compose v2 is not available. Please install the Docker Compose plugin."
         exit 1
     fi
-    
-    # Use docker compose if available, fallback to docker-compose
-    if docker compose version >/dev/null 2>&1; then
-        DOCKER_COMPOSE_CMD="docker compose"
-    else
-        DOCKER_COMPOSE_CMD="docker-compose"
-    fi
+
+    DOCKER_COMPOSE_CMD="$COMPOSE_SCRIPT"
     
     print_status "Docker and Docker Compose are available"
     
@@ -626,30 +619,30 @@ EOF
     # Determine compose files based on deployment type
     if [ "$DEPLOYMENT_TYPE" = "remote" ]; then
         print_status "Starting Owlculus for remote deployment..."
-        COMPOSE_FILES="-f docker-compose.reverse-proxy.yml"
-        print_status "Using all-in-one configuration with Caddy reverse proxy"
+        COMPOSE_TOPOLOGY="$REVERSE_PROXY_TOPOLOGY"
+        print_status "Using the shared configuration with the Caddy reverse-proxy overlay"
     elif [ "$MODE" = "dev" ] || [ "$MODE" = "development" ]; then
         print_status "Starting Owlculus in development mode..."
-        COMPOSE_FILES="-f docker-compose.dev.yml"
+        COMPOSE_TOPOLOGY="$DEV_TOPOLOGY"
     else
         print_status "Starting Owlculus in production mode..."
-        COMPOSE_FILES="-f docker-compose.yml"
+        COMPOSE_TOPOLOGY="$DIRECT_TOPOLOGY"
     fi
     
     # Build Docker images
     print_status "Building Docker images..."
     if [ "$VERBOSE" = "true" ]; then
-        $DOCKER_COMPOSE_CMD $COMPOSE_FILES build
+        "$DOCKER_COMPOSE_CMD" "$COMPOSE_TOPOLOGY" build
     else
-        $DOCKER_COMPOSE_CMD $COMPOSE_FILES build > /dev/null 2>&1
+        "$DOCKER_COMPOSE_CMD" "$COMPOSE_TOPOLOGY" build > /dev/null 2>&1
     fi
     
     # Start services
     print_status "Starting services..."
     if [ "$VERBOSE" = "true" ]; then
-        $DOCKER_COMPOSE_CMD $COMPOSE_FILES up -d
+        "$DOCKER_COMPOSE_CMD" "$COMPOSE_TOPOLOGY" up -d
     else
-        $DOCKER_COMPOSE_CMD $COMPOSE_FILES up -d > /dev/null 2>&1
+        "$DOCKER_COMPOSE_CMD" "$COMPOSE_TOPOLOGY" up -d > /dev/null 2>&1
     fi
     
     # Wait for services to be healthy
@@ -707,16 +700,16 @@ EOF
     echo ""
     echo "Useful commands:"
     echo "   Show credentials: cat .env"
-    echo "   Stop services:    $DOCKER_COMPOSE_CMD $COMPOSE_FILES down"
-    echo "   View logs:        $DOCKER_COMPOSE_CMD $COMPOSE_FILES logs -f"
-    echo "   Restart services: $DOCKER_COMPOSE_CMD $COMPOSE_FILES restart"
-    echo "   Shell access:     $DOCKER_COMPOSE_CMD $COMPOSE_FILES exec backend bash"
+    echo "   Stop services:    $DOCKER_COMPOSE_CMD $COMPOSE_TOPOLOGY down"
+    echo "   View logs:        $DOCKER_COMPOSE_CMD $COMPOSE_TOPOLOGY logs -f"
+    echo "   Restart services: $DOCKER_COMPOSE_CMD $COMPOSE_TOPOLOGY restart"
+    echo "   Shell access:     $DOCKER_COMPOSE_CMD $COMPOSE_TOPOLOGY exec backend bash"
     echo ""
     
     # Create test data if requested
     if [ "$CREATE_TESTDATA" = "true" ]; then
         echo ""
-        create_test_data "$MODE" "$COMPOSE_FILES"
+        create_test_data "$COMPOSE_TOPOLOGY"
     fi
     
     # Display admin credentials at the very end if they were generated

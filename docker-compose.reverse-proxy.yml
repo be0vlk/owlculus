@@ -1,145 +1,19 @@
+# Reverse-proxy adapter; apply after docker-compose.yml.
 services:
-  # PostgreSQL Database
-  postgres:
-    image: postgres:15-alpine
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 512m
-          cpus: '1.0'
-        reservations:
-          memory: 256m
-          cpus: '0.25'
-    security_opt:
-      - no-new-privileges:true
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-owlculus}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-owlculus_secure_password}
-      POSTGRES_DB: ${POSTGRES_DB:-owlculus}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
-    # Database port not exposed to host for security
-    healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-owlculus} -d ${POSTGRES_DB:-owlculus}" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - owlculus-network
-
-  # Shared rate-limit storage
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - owlculus-network
-
-  # Backend API
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 1g
-          cpus: '2.0'
-        reservations:
-          memory: 512m
-          cpus: '0.5'
-    security_opt:
-      - no-new-privileges:true
+    ports: !reset []
+    expose:
+      - "8000"
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-owlculus}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-owlculus_secure_password}
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-      POSTGRES_DB: ${POSTGRES_DB:-owlculus}
-      SECRET_KEY: ${SECRET_KEY:-development_key_not_secure}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       FRONTEND_URL: ${FRONTEND_URL:-https://localhost}
       BACKEND_URL: ${BACKEND_URL:-https://localhost/api}
       FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-172.29.0.254}
-    volumes:
-      - uploads_data:/app/uploads
-      - setup_data:/app/data/setup
-    expose:
-      - "8000"  # Internal only
-    depends_on:
-      db-init:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:8000/health/ready" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    networks:
-      - owlculus-network
 
-  # Database Initialization
-  db-init:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-owlculus}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-owlculus_secure_password}
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-      POSTGRES_DB: ${POSTGRES_DB:-owlculus}
-      SECRET_KEY: ${SECRET_KEY:-development_key_not_secure}
-    command: python3 -m app.database.init_db
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - owlculus-network
-    restart: "no"
-
-  # Frontend
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      target: production
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 256m
-          cpus: '0.5'
-        reservations:
-          memory: 128m
-          cpus: '0.1'
-    security_opt:
-      - no-new-privileges:true
+    ports: !reset []
     expose:
-      - "80"  # Internal only
-    depends_on:
-      - backend
-    healthcheck:
-      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/" ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    networks:
-      - owlculus-network
+      - "80"
 
-  # Caddy reverse proxy with automatic HTTPS
   caddy:
     image: caddy:2-alpine
     container_name: owlculus-caddy
@@ -152,36 +26,27 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     networks:
-      owlculus-network:
+      frontend-network:
         ipv4_address: 172.29.0.254
     depends_on:
       - frontend
       - backend
     environment:
-      - ACME_AGREE=true
+      ACME_AGREE: "true"
     healthcheck:
-      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/" ]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/"]
       interval: 30s
       timeout: 10s
       retries: 3
 
 volumes:
-  postgres_data:
-    driver: local
-  uploads_data:
-    driver: local
-  setup_data:
-    driver: local
-  redis_data:
-    driver: local
   caddy_data:
     name: owlculus_caddy_data
   caddy_config:
     name: owlculus_caddy_config
 
 networks:
-  owlculus-network:
-    driver: bridge
+  frontend-network:
     ipam:
       config:
         - subnet: 172.29.0.0/24

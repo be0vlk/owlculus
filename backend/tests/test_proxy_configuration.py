@@ -1,20 +1,20 @@
 """Deployment contract tests for the trusted reverse-proxy boundary."""
 
-from pathlib import Path
-
 import pytest
-import yaml
+
 from app.core.config import settings
+from tests.deployment import (
+    REPOSITORY_ROOT,
+    SUPPORTED_TOPOLOGIES,
+    load_compose_configuration,
+)
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
+def test_backend_image_enables_proxy_headers_explicitly():
+    """Both backend image targets make Uvicorn apply its proxy trust list."""
+    contents = (REPOSITORY_ROOT / "backend/Dockerfile").read_text()
 
-@pytest.mark.parametrize("dockerfile", ["backend/Dockerfile", "backend/Dockerfile.dev"])
-def test_backend_images_enable_proxy_headers_explicitly(dockerfile):
-    """Container commands make Uvicorn apply its configured proxy trust list."""
-    contents = (REPOSITORY_ROOT / dockerfile).read_text()
-
-    assert '"--proxy-headers"' in contents
+    assert contents.count('"--proxy-headers"') == 2
 
 
 def test_direct_backend_defaults_to_loopback_proxy_trust_only():
@@ -24,51 +24,42 @@ def test_direct_backend_defaults_to_loopback_proxy_trust_only():
     assert trusted_proxies == {"127.0.0.1", "::1"}
 
 
-@pytest.mark.parametrize(
-    ("compose_file", "network_name", "proxy_address"),
-    [
-        ("docker-compose.caddy.yml", "frontend-network", "172.28.0.254"),
-        ("docker-compose.reverse-proxy.yml", "owlculus-network", "172.29.0.254"),
-    ],
-)
-def test_caddy_topologies_trust_only_the_gateway_container(
-    compose_file, network_name, proxy_address
-):
-    """Each Caddy topology gives its gateway the one address Uvicorn trusts."""
-    configuration = yaml.safe_load((REPOSITORY_ROOT / compose_file).read_text())
+def test_caddy_topology_trusts_only_the_gateway_container():
+    """The Caddy adapter gives its gateway the one address Uvicorn trusts."""
+    configuration = load_compose_configuration("reverse-proxy")
+    proxy_address = "172.29.0.254"
 
     backend_environment = configuration["services"]["backend"]["environment"]
-    assert backend_environment["FORWARDED_ALLOW_IPS"].endswith(f":-{proxy_address}}}")
+    assert backend_environment["FORWARDED_ALLOW_IPS"] == proxy_address
     assert (
-        configuration["services"]["caddy"]["networks"][network_name]["ipv4_address"]
+        configuration["services"]["caddy"]["networks"]["frontend-network"][
+            "ipv4_address"
+        ]
         == proxy_address
     )
-    assert configuration["networks"][network_name]["ipam"]["config"] == [
+    assert configuration["networks"]["frontend-network"]["ipam"]["config"] == [
         {"subnet": f"{proxy_address.rsplit('.', 1)[0]}.0/24"}
     ]
 
 
 @pytest.mark.parametrize(
-    "compose_file",
-    [
-        "docker-compose.yml",
-        "docker-compose.dev.yml",
-        "docker-compose.reverse-proxy.yml",
-    ],
+    "topology",
+    SUPPORTED_TOPOLOGIES,
 )
-def test_compose_backends_share_persistent_rate_limit_storage(compose_file):
+def test_compose_backends_share_persistent_rate_limit_storage(topology):
     """Every backend topology persists counters in its shared Redis service."""
-    configuration = yaml.safe_load((REPOSITORY_ROOT / compose_file).read_text())
+    configuration = load_compose_configuration(topology)
     redis_service = configuration["services"]["redis"]
     backend = configuration["services"]["backend"]
 
     assert redis_service["command"] == ["redis-server", "--appendonly", "yes"]
     assert redis_service["volumes"] == [
-        (
-            "redis_dev_data:/data"
-            if compose_file == "docker-compose.dev.yml"
-            else "redis_data:/data"
-        )
+        {
+            "type": "volume",
+            "source": ("redis_dev_data" if topology == "development" else "redis_data"),
+            "target": "/data",
+            "volume": {},
+        }
     ]
-    assert backend["environment"]["REDIS_URL"].endswith(":-redis://redis:6379/0}")
-    assert backend["depends_on"]["redis"] == {"condition": "service_healthy"}
+    assert backend["environment"]["REDIS_URL"] == "redis://redis:6379/0"
+    assert backend["depends_on"]["redis"]["condition"] == "service_healthy"

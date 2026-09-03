@@ -41,7 +41,7 @@ describe('Vite development server', () => {
       'utf8',
     )
 
-    expect(composeFile).toContain('API_PROXY_TARGET=http://backend:8000')
+    expect(composeFile).toContain('API_PROXY_TARGET: http://backend:8000')
     expect(composeFile).toContain('FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-172.30.0.254}')
     expect(composeFile).toContain('ipv4_address: 172.30.0.254')
   })

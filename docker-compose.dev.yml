@@ -1,147 +1,73 @@
+# Development adapter; apply after docker-compose.yml.
+x-backend-development-build: &backend-development-build
+  context: ./backend
+  dockerfile: Dockerfile
+  target: development
+
 services:
-  # PostgreSQL Database
   postgres:
-    image: postgres:15-alpine
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 512m
-          cpus: '1.0'
-        reservations:
-          memory: 256m
-          cpus: '0.25'
-    security_opt:
-      - no-new-privileges:true
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-owlculus}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-owlculus_dev_password}
       POSTGRES_DB: ${POSTGRES_DB:-owlculus_dev}
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
-      - ./scripts/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
     ports:
       - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-owlculus} -d ${POSTGRES_DB:-owlculus_dev}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - backend-network
 
-  # Shared rate-limit storage
   redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis_dev_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - backend-network
 
-  # Backend API (Development with hot reload)
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile.dev
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 1g
-          cpus: '2.0'
-        reservations:
-          memory: 512m
-          cpus: '0.5'
-    security_opt:
-      - no-new-privileges:true
+    build: *backend-development-build
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-owlculus}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-owlculus_dev_password}
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-owlculus_dev}
       SECRET_KEY: ${SECRET_KEY:-dev_secret_key_change_in_production}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-172.30.0.254}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
-      BACKEND_URL: ${BACKEND_URL:-http://localhost:8000}
     volumes:
       - ./backend:/app
       - uploads_dev_data:/app/uploads
       - setup_dev_data:/app/data/setup
-    ports:
-      - "${BACKEND_PORT:-8000}:8000"
-    depends_on:
-      db-init:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --reload
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health/ready"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    networks:
-      - backend-network
-      - frontend-network
 
-  # Database Initialization
   db-init:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile.dev
+    build: *backend-development-build
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-owlculus}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-owlculus_dev_password}
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-owlculus_dev}
       SECRET_KEY: ${SECRET_KEY:-dev_secret_key_change_in_production}
     volumes:
       - ./backend:/app
-    command: python3 -m app.database.init_db
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - backend-network
-    restart: "no"
 
-  # Frontend (Development with hot reload)
   frontend:
-    build:
+    build: !override
       context: ./frontend
       dockerfile: Dockerfile.dev
-    restart: unless-stopped
     deploy:
       resources:
         limits:
           memory: 512m
-          cpus: '1.0'
+          cpus: "1.0"
         reservations:
           memory: 256m
-          cpus: '0.25'
-    security_opt:
-      - no-new-privileges:true
+          cpus: "0.25"
     environment:
-      - NODE_ENV=development
-      - API_PROXY_TARGET=http://backend:8000
+      NODE_ENV: development
+      API_PROXY_TARGET: http://backend:8000
     volumes:
       - ./frontend:/app
       - /app/node_modules
-    ports:
+    ports: !override
       - "${FRONTEND_PORT:-5173}:5173"
     command: npm run dev -- --host 0.0.0.0
-    networks:
+    healthcheck: !reset null
+    networks: !override
       frontend-network:
         ipv4_address: 172.30.0.254
 
@@ -157,9 +83,8 @@ volumes:
 
 networks:
   frontend-network:
-    driver: bridge
     ipam:
       config:
         - subnet: 172.30.0.0/24
   backend-network:
-    driver: bridge
+    internal: false

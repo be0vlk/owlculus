@@ -1,11 +1,12 @@
 """Deployment contract tests for backend container healthchecks."""
 
-from pathlib import Path
-
 import pytest
-import yaml
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+from tests.deployment import (
+    REPOSITORY_ROOT,
+    SUPPORTED_TOPOLOGIES,
+    load_compose_configuration,
+)
 
 
 def test_backend_image_excludes_runtime_setup_data():
@@ -15,25 +16,29 @@ def test_backend_image_excludes_runtime_setup_data():
     assert "data/setup/" in dockerignore
 
 
-@pytest.mark.parametrize(
-    "dockerfile",
-    ["backend/Dockerfile", "backend/Dockerfile.dev"],
-)
-def test_backend_images_check_process_liveness(dockerfile):
-    """Backend images determine container health through the liveness endpoint."""
-    contents = (REPOSITORY_ROOT / dockerfile).read_text()
+def test_backend_image_exposes_production_and_development_targets():
+    """One backend image definition supplies both supported runtime adapters."""
+    contents = (REPOSITORY_ROOT / "backend/Dockerfile").read_text()
+
+    assert "AS development" in contents
+    assert "AS production" in contents
+    development_target = contents.split("AS development", maxsplit=1)[1].split(
+        "AS production", maxsplit=1
+    )[0]
+    assert '"--reload"' in development_target
+
+
+def test_backend_image_checks_process_liveness():
+    """The shared backend image determines health through the liveness endpoint."""
+    contents = (REPOSITORY_ROOT / "backend/Dockerfile").read_text()
 
     assert "HEALTHCHECK" in contents
     assert "http://localhost:8000/health/live" in contents
 
 
-@pytest.mark.parametrize(
-    "dockerfile",
-    ["backend/Dockerfile", "backend/Dockerfile.dev"],
-)
-def test_backend_images_own_persistent_directories_as_the_runtime_user(dockerfile):
+def test_backend_image_owns_persistent_directories_as_the_runtime_user():
     """Fresh named volumes inherit writable ownership for the non-root process."""
-    contents = (REPOSITORY_ROOT / dockerfile).read_text()
+    contents = (REPOSITORY_ROOT / "backend/Dockerfile").read_text()
     runtime_instructions = contents[: contents.index("USER app")]
 
     assert "mkdir -p uploads data/setup" in runtime_instructions
@@ -41,16 +46,12 @@ def test_backend_images_own_persistent_directories_as_the_runtime_user(dockerfil
 
 
 @pytest.mark.parametrize(
-    "compose_file",
-    [
-        "docker-compose.yml",
-        "docker-compose.dev.yml",
-        "docker-compose.reverse-proxy.yml",
-    ],
+    "topology",
+    SUPPORTED_TOPOLOGIES,
 )
-def test_compose_backend_healthchecks_wait_for_readiness(compose_file):
+def test_compose_backend_healthchecks_wait_for_readiness(topology):
     """Every supported topology gates backend health on full readiness."""
-    configuration = yaml.safe_load((REPOSITORY_ROOT / compose_file).read_text())
+    configuration = load_compose_configuration(topology)
 
     command = configuration["services"]["backend"]["healthcheck"]["test"]
 

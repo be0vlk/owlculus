@@ -1,6 +1,9 @@
 # Owlculus Docker Management
 .PHONY: help setup setup-dev start start-dev stop restart logs clean build rebuild test
 
+COMPOSE = ./scripts/compose.sh direct
+DEV_COMPOSE = ./scripts/compose.sh development
+
 # Default target
 help:
 	@echo "🦉 Owlculus Docker Management"
@@ -31,61 +34,61 @@ setup-dev:
 # Service management
 start:
 	@echo "▶️  Starting Owlculus (production)..."
-	docker compose up -d
+	$(COMPOSE) up -d
 
 start-dev:
 	@echo "▶️  Starting Owlculus (development)..."
-	docker compose -f docker-compose.dev.yml up -d
+	$(DEV_COMPOSE) up -d
 
 stop:
 	@echo "⏹️  Stopping Owlculus..."
-	docker compose down
-	docker compose -f docker-compose.dev.yml down
+	$(COMPOSE) down
+	$(DEV_COMPOSE) down
 
 restart:
 	@echo "🔄 Restarting Owlculus..."
-	docker compose restart
-	docker compose -f docker-compose.dev.yml restart
+	$(COMPOSE) restart
+	$(DEV_COMPOSE) restart
 
 # Monitoring
 logs:
 	@echo "📋 Viewing service logs (Ctrl+C to exit)..."
-	docker compose logs -f
+	$(COMPOSE) logs -f
 
 # Build commands
 build:
 	@echo "🔨 Building Docker images..."
-	docker compose build
+	$(COMPOSE) build
 
 rebuild:
 	@echo "🔨 Rebuilding Docker images (no cache)..."
-	docker compose build --no-cache
-	docker compose -f docker-compose.dev.yml build --no-cache
+	$(COMPOSE) build --no-cache
+	$(DEV_COMPOSE) build --no-cache
 
 # Cleanup
 clean:
 	@echo "🧹 Cleaning up all Docker resources..."
 	@echo "⚠️  This will destroy all data! Press Ctrl+C to cancel..."
 	@sleep 5
-	docker compose down -v --remove-orphans
-	docker compose -f docker-compose.dev.yml down -v --remove-orphans
+	$(COMPOSE) down -v --remove-orphans
+	$(DEV_COMPOSE) down -v --remove-orphans
 	docker system prune -f
 
 # Testing
 test:
 	@echo "🧪 Running backend tests..."
-	docker compose exec backend python3 -m pytest tests/ -v
+	$(COMPOSE) exec backend python3 -m pytest tests/ -v
 
 # Development helpers
 shell-backend:
 	@echo "🐚 Opening backend shell..."
-	docker compose exec backend bash
+	$(COMPOSE) exec backend bash
 
 shell-db:
 	@echo "🐚 Opening database shell..."
-	docker compose exec postgres psql -U owlculus -d owlculus
+	$(COMPOSE) exec postgres psql -U owlculus -d owlculus
 
 # Status
 status:
 	@echo "📊 Service Status:"
-	docker compose ps
+	$(COMPOSE) ps

@@ -1,20 +1,11 @@
 """Behavioral tests for deployment database initialization."""
 
-from pathlib import Path
-
 import pytest
-import yaml
 from sqlmodel import Session, create_engine, select
 
 from app.database.init_db import initialize_database
 from app.database.models import Client, User
-
-REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-SUPPORTED_COMPOSE_FILES = [
-    "docker-compose.yml",
-    "docker-compose.dev.yml",
-    "docker-compose.reverse-proxy.yml",
-]
+from tests.deployment import SUPPORTED_TOPOLOGIES, load_compose_configuration
 
 
 def test_fresh_initialization_creates_personal_client_without_a_user(tmp_path):
@@ -48,17 +39,21 @@ def test_repeated_initialization_does_not_duplicate_seed_data(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "compose_file",
-    SUPPORTED_COMPOSE_FILES,
+    "topology",
+    SUPPORTED_TOPOLOGIES,
 )
 def test_compose_initialization_uses_the_backend_module_without_admin_credentials(
-    compose_file,
+    topology,
 ):
     """Every topology invokes the shared initializer without default credentials."""
-    configuration = yaml.safe_load((REPOSITORY_ROOT / compose_file).read_text())
+    configuration = load_compose_configuration(topology)
     initialization_service = configuration["services"]["db-init"]
 
-    assert initialization_service["command"] == "python3 -m app.database.init_db"
+    assert initialization_service["command"] == [
+        "python3",
+        "-m",
+        "app.database.init_db",
+    ]
     assert (
         not {
             "ADMIN_USERNAME",
@@ -74,69 +69,85 @@ def test_compose_initialization_uses_the_backend_module_without_admin_credential
 
 
 @pytest.mark.parametrize(
-    "compose_file",
-    SUPPORTED_COMPOSE_FILES,
+    "topology",
+    SUPPORTED_TOPOLOGIES,
 )
-def test_compose_backend_starts_after_successful_database_initialization(compose_file):
+def test_compose_backend_starts_after_successful_database_initialization(topology):
     """Every backend starts only after the healthy database is initialized."""
-    configuration = yaml.safe_load((REPOSITORY_ROOT / compose_file).read_text())
+    configuration = load_compose_configuration(topology)
     services = configuration["services"]
 
-    assert services["db-init"]["depends_on"]["postgres"] == {
-        "condition": "service_healthy"
-    }
-    assert services["backend"]["depends_on"]["db-init"] == {
-        "condition": "service_completed_successfully"
-    }
+    assert (
+        services["db-init"]["depends_on"]["postgres"]["condition"] == "service_healthy"
+    )
+    assert (
+        services["backend"]["depends_on"]["db-init"]["condition"]
+        == "service_completed_successfully"
+    )
 
 
 @pytest.mark.parametrize(
-    ("compose_file", "volume_name"),
+    ("topology", "volume_name"),
     [
-        ("docker-compose.yml", "setup_data"),
-        ("docker-compose.dev.yml", "setup_dev_data"),
-        ("docker-compose.reverse-proxy.yml", "setup_data"),
+        ("direct", "setup_data"),
+        ("development", "setup_dev_data"),
+        ("reverse-proxy", "setup_data"),
     ],
 )
-def test_compose_persists_setup_data_only_for_the_backend(compose_file, volume_name):
+def test_compose_persists_setup_data_only_for_the_backend(topology, volume_name):
     """Pending setup credentials persist without reaching browser-facing services."""
-    configuration = yaml.safe_load((REPOSITORY_ROOT / compose_file).read_text())
+    configuration = load_compose_configuration(topology)
     services = configuration["services"]
-    setup_mount = f"{volume_name}:/app/data/setup"
 
-    assert configuration["volumes"][volume_name] == {"driver": "local"}
-    assert setup_mount in services["backend"]["volumes"]
+    assert configuration["volumes"][volume_name]["driver"] == "local"
+    assert {
+        volume["source"]: volume["target"] for volume in services["backend"]["volumes"]
+    }[volume_name] == "/app/data/setup"
     assert {
         service_name
         for service_name, service in services.items()
         if any(
-            volume.split(":", maxsplit=1)[0] == volume_name
-            for volume in service.get("volumes", [])
+            volume.get("source") == volume_name for volume in service.get("volumes", [])
         )
     } == {"backend"}
 
 
 def test_development_topology_keeps_hot_reload_and_published_ports():
     """Setup persistence does not change the existing development workflow."""
-    configuration = yaml.safe_load(
-        (REPOSITORY_ROOT / "docker-compose.dev.yml").read_text()
-    )
+    configuration = load_compose_configuration("development")
     backend = configuration["services"]["backend"]
     frontend = configuration["services"]["frontend"]
 
-    assert backend["command"].endswith("--proxy-headers --reload")
-    assert backend["ports"] == ["${BACKEND_PORT:-8000}:8000"]
-    assert frontend["ports"] == ["${FRONTEND_PORT:-5173}:5173"]
+    assert backend["build"]["target"] == "development"
+    assert backend["ports"] == [
+        {
+            "mode": "ingress",
+            "protocol": "tcp",
+            "published": "8000",
+            "target": 8000,
+        }
+    ]
+    assert frontend["ports"] == [
+        {
+            "mode": "ingress",
+            "protocol": "tcp",
+            "published": "5173",
+            "target": 5173,
+        }
+    ]
 
 
 @pytest.mark.parametrize(
-    "compose_file",
-    [path.name for path in REPOSITORY_ROOT.glob("docker-compose*.yml")],
+    "topology",
+    SUPPORTED_TOPOLOGIES,
 )
-def test_admin_bootstrap_variables_are_absent_from_every_compose_file(compose_file):
+def test_admin_bootstrap_variables_are_absent_from_every_compose_file(topology):
     """No shipped Compose overlay advertises obsolete administrator seeding."""
-    contents = (REPOSITORY_ROOT / compose_file).read_text()
+    configuration = load_compose_configuration(topology)
+    environment_names = {
+        name
+        for service in configuration["services"].values()
+        for name in service.get("environment", {})
+    }
 
-    assert "ADMIN_USERNAME" not in contents
-    assert "ADMIN_PASSWORD" not in contents
-    assert "ADMIN_EMAIL" not in contents
+    assert not {"ADMIN_USERNAME", "ADMIN_PASSWORD", "ADMIN_EMAIL"} & environment_names

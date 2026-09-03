@@ -1,3 +1,8 @@
+x-backend-build: &backend-build
+  context: ./backend
+  dockerfile: Dockerfile
+  target: production
+
 services:
   # PostgreSQL Database
   postgres:
@@ -46,9 +51,7 @@ services:
 
   # Backend API
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    build: *backend-build
     restart: unless-stopped
     deploy:
       resources:
@@ -92,9 +95,7 @@ services:
 
   # Database Initialization
   db-init:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    build: *backend-build
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-owlculus}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-owlculus_secure_password}
