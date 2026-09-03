@@ -1,13 +1,10 @@
 import axios from 'axios'
 import { authService } from './auth'
 
-// Use relative URLs when VITE_API_BASE_URL is empty (for reverse proxy setups)
-// Only fall back to localhost:8000 if the env var is not defined at all
+// The override is only for unusual development and test setups. Browser requests
+// are same-origin by default because service paths begin with /api.
 const api = axios.create({
-  baseURL:
-    import.meta.env.VITE_API_BASE_URL !== undefined
-      ? import.meta.env.VITE_API_BASE_URL
-      : 'http://localhost:8000',
+  baseURL: import.meta.env.VITE_API_BASE_URL || undefined,
   headers: {
     'Content-Type': 'application/json',
   },

@@ -15,9 +15,17 @@ export default defineConfig({
     },
   },
   server: {
+    cors: false,
     hmr: {
       // Reduce HMR aggressiveness during navigation
       overlay: false,
+    },
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        ws: true,
+      },
     },
   },
   build: {
