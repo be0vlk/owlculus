@@ -22,7 +22,7 @@ A browser extension that allows you to capture web pages and send them as eviden
 ## Configuration
 
 1. Click the extension icon and then "Open Settings"
-2. Configure your Owlculus API endpoint (e.g., `http://localhost:8000`)
+2. Configure your Owlculus site endpoint (e.g., `http://localhost`)
 3. Login with your Owlculus credentials
 4. The extension will remember your authentication
 

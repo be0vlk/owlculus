@@ -131,10 +131,11 @@ def test_setup_script_preserves_same_origin_gateway_defaults():
     assert 'DEFAULT_FRONTEND_PORT=80\n' in contents
     assert 'CADDY_DOMAIN=""' in contents
     assert "DOMAIN=$CADDY_DOMAIN" in contents
-    assert 'BACKEND_API_URL="$FRONTEND_URL/api"' in contents
+    assert "BACKEND_API_URL=" not in contents
+    assert "FRONTEND_URL=$FRONTEND_URL" not in contents
+    assert "VITE_API_BASE_URL=" not in contents
     assert "VITE_API_BASE_URL=$BACKEND_API_URL" not in contents
     assert 'curl -f -s "$FRONTEND_URL/health/ready"' in contents
-    assert 'curl -f -s "$BACKEND_API_URL/"' not in contents
 
 
 def test_no_compose_file_references_nginx_or_an_operator_created_caddyfile():

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Test data creation script for Owlculus
 Creates sample data for manual testing through the UI
@@ -254,9 +253,8 @@ async def create_test_data(
             print("   - Client: Personal")
             print("   - Entity: John Doe")
             print("   - Evidence folders: Person investigation template")
-            print("")
+            print()
             print("Available test users:")
-            print("   - admin / admin (Admin role)")
             print("   - analyst / anapassword1 (Analyst role)")
             print("   - investigator / invpassword1 (Investigator role)")
 
@@ -270,10 +268,10 @@ async def create_test_data(
 def main():
     parser = argparse.ArgumentParser(description="Create test data for Owlculus")
     parser.add_argument(
-        "--username", "-u", default="admin", help="Admin username (default: admin)"
+        "--username", "-u", required=True, help="Your administrator username"
     )
     parser.add_argument(
-        "--password", "-p", default="admin", help="Admin password (default: admin)"
+        "--password", "-p", required=True, help="Your administrator password"
     )
     parser.add_argument(
         "--url",

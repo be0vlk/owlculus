@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Owlculus Docker Setup Script
-# Interactive setup with customizable defaults
+# Interactive deployment setup
 
 # Colors for output
 CYAN='\033[0;36m'
@@ -74,8 +74,6 @@ DEFAULT_FRONTEND_PORT=80
 DEFAULT_BACKEND_PORT=8000
 DEFAULT_DB_PORT=5432
 DEFAULT_DOMAIN="localhost"
-DEFAULT_ADMIN_USERNAME="admin"
-DEFAULT_ADMIN_EMAIL="admin@example.com"
 
 # Configuration variables
 FRONTEND_PORT=""
@@ -83,9 +81,6 @@ BACKEND_PORT=""
 DB_PORT=""
 DOMAIN=""
 CADDY_DOMAIN=""
-ADMIN_USERNAME=""
-ADMIN_EMAIL=""
-ADMIN_PASSWORD=""
 USE_REVERSE_PROXY="false"
 USE_HTTPS="false"
 INTERACTIVE_MODE="true"
@@ -141,25 +136,16 @@ validate_port() {
 configure_service_urls() {
     if [ "$DEPLOYMENT_TYPE" = "remote" ]; then
         FRONTEND_URL="https://$DOMAIN"
-        BACKEND_API_URL="https://$DOMAIN/api"
     elif [ "$USE_REVERSE_PROXY" = "true" ]; then
         if [ "$USE_HTTPS" = "true" ]; then
             FRONTEND_URL="https://$DOMAIN"
-            BACKEND_API_URL="https://$DOMAIN/api"
         else
             FRONTEND_URL="http://$DOMAIN"
-            BACKEND_API_URL="http://$DOMAIN/api"
         fi
     else
         FRONTEND_URL="http://$DOMAIN:$FRONTEND_PORT"
         if [ "$FRONTEND_PORT" = "80" ]; then
             FRONTEND_URL="http://$DOMAIN"
-        fi
-
-        if [ "$DEPLOYMENT_TYPE" = "local_dev" ]; then
-            BACKEND_API_URL="http://$DOMAIN:$BACKEND_PORT"
-        else
-            BACKEND_API_URL="$FRONTEND_URL/api"
         fi
     fi
 }
@@ -265,35 +251,6 @@ interactive_config() {
         USE_HTTPS="false"
     fi
     
-    echo ""
-    echo "Admin Account Configuration:"
-    echo "---------------------------"
-    
-    while true; do
-        ADMIN_USERNAME=$(prompt_with_default "Admin username" "$DEFAULT_ADMIN_USERNAME")
-        if [ -n "$ADMIN_USERNAME" ]; then
-            break
-        fi
-        print_error "Username cannot be empty"
-    done
-    
-    echo -n "Admin password (leave empty for auto-generated): "
-    read -s ADMIN_PASSWORD
-    echo ""
-    
-    if [ -z "$ADMIN_PASSWORD" ]; then
-        ADMIN_PASSWORD=$(openssl rand -base64 24 | tr -d /=+ | cut -c -12)
-        print_status "Auto-generated secure admin password"
-    fi
-    
-    while true; do
-        ADMIN_EMAIL=$(prompt_with_default "Admin email" "$DEFAULT_ADMIN_EMAIL")
-        if [[ "$ADMIN_EMAIL" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
-            break
-        fi
-        print_error "Please enter a valid email address"
-    done
-    
     configure_service_urls
     
     echo ""
@@ -320,16 +277,12 @@ interactive_config() {
     else
         echo "Domain: $DOMAIN"
         echo "Frontend URL: $FRONTEND_URL"
-        echo "Backend API URL: $BACKEND_API_URL"
         echo "Frontend Port: $FRONTEND_PORT"
         if [ "$DEPLOYMENT_TYPE" = "local_dev" ]; then
             echo "Backend Port: $BACKEND_PORT (development only)"
         fi
     fi
     echo "Database: Internal only (not exposed)"
-    echo "Admin Username: $ADMIN_USERNAME"
-    echo "Admin Email: $ADMIN_EMAIL"
-    echo "Admin Password: [set]"
     echo ""
     
     while true; do
@@ -361,7 +314,6 @@ show_usage() {
     echo "  --verbose       Show all Docker build/start output"
     echo "  --non-interactive  Use default values without prompting"
     echo "  --clean         Remove all Owlculus Docker containers, images, and volumes before setup"
-    echo "  --testdata      Create test data after setup (Test Case 1, users, etc.)"
     echo
     echo "Interactive Setup Options:"
     echo "  1. Local development - Hot-reload enabled for development"
@@ -374,7 +326,6 @@ show_usage() {
     echo "  $0 --non-interactive        # Non-interactive local production setup"
     echo "  $0 dev --verbose            # Development setup with full Docker output"
     echo "  $0 --clean                  # Clean setup (removes Owlculus Docker artifacts)"
-    echo "  $0 dev --testdata           # Development setup with test data"
     echo
     echo "Requirements:"
     echo "  - Docker"
@@ -432,39 +383,6 @@ clean_docker_artifacts() {
     echo
 }
 
-# Function to create test data
-create_test_data() {
-    local COMPOSE_TOPOLOGY="$1"
-    
-    print_status "Creating test data..."
-    
-    # Wait a bit longer for services to be fully ready
-    sleep 5
-    
-    # Copy and run the test data script inside the backend container
-    # Pass the admin password from the environment
-    local ADMIN_PASS=$(grep "^ADMIN_PASSWORD=" .env | cut -d'=' -f2)
-    
-    "$DOCKER_COMPOSE_CMD" "$COMPOSE_TOPOLOGY" cp scripts/create_test_data.py backend:/tmp/create_test_data.py
-    "$DOCKER_COMPOSE_CMD" "$COMPOSE_TOPOLOGY" exec -w /app backend python3 /tmp/create_test_data.py --password "$ADMIN_PASS"
-    
-    if [ $? -eq 0 ]; then
-        print_success "Test data created successfully!"
-        echo ""
-        echo "Test data includes:"
-        echo "   • Test Case 1 with Personal client"
-        echo "   • John Doe person entity"
-        echo "   • Person evidence template folders"
-        echo "   • Additional test users:"
-        echo "     - analyst / anapassword1 (Analyst role)"
-        echo "     - investigator / invpassword1 (Investigator role)"
-        echo ""
-    else
-        print_error "Test data creation failed. Check the output above."
-        return 1
-    fi
-}
-
 # Function to set defaults for non-interactive mode
 set_defaults() {
     local MODE="$1"
@@ -490,9 +408,6 @@ set_defaults() {
     
     configure_service_urls
     
-    ADMIN_USERNAME="$DEFAULT_ADMIN_USERNAME"
-    ADMIN_EMAIL="$DEFAULT_ADMIN_EMAIL"
-    ADMIN_PASSWORD=$(openssl rand -base64 16 | tr -d /=+ | cut -c -12)
 }
 
 # Main setup function
@@ -500,8 +415,6 @@ setup_owlculus() {
     local MODE="${1:-production}"
     local VERBOSE="${2:-false}"
     local CLEAN="${3:-false}"
-    local CREATE_TESTDATA="${4:-false}"
-    local ADMIN_PASSWORD_TO_DISPLAY=""
     
     # Run cleanup if requested
     if [ "$CLEAN" = "true" ]; then
@@ -568,9 +481,6 @@ SECRET_KEY=$SECRET_KEY
 POSTGRES_USER=owlculus
 POSTGRES_PASSWORD=$DB_PASSWORD
 POSTGRES_DB=owlculus
-ADMIN_USERNAME=$ADMIN_USERNAME
-ADMIN_PASSWORD=$ADMIN_PASSWORD
-ADMIN_EMAIL=$ADMIN_EMAIL
 DOMAIN=$CADDY_DOMAIN
 
 # Port Configuration
@@ -579,27 +489,15 @@ BACKEND_PORT=$BACKEND_PORT
 $DB_PORT_COMMENT
 DB_PORT=5432
 
-# URL Configuration  
-FRONTEND_URL=$FRONTEND_URL
-BACKEND_URL=$BACKEND_API_URL
-
 # Reverse Proxy Configuration
 USE_REVERSE_PROXY=$USE_REVERSE_PROXY
 USE_HTTPS=$USE_HTTPS
 EOF
         
         print_success ".env file created with configuration"
-        ADMIN_PASSWORD_TO_DISPLAY="$ADMIN_PASSWORD"
     else
         print_status ".env file already exists, using existing configuration"
     fi
-    
-    # Browser requests use the current Vite/Caddy origin in every topology.
-    print_status "Creating same-origin frontend configuration..."
-    cat > frontend/.env << EOF
-VITE_API_BASE_URL=
-EOF
-    print_success "Frontend configured to use relative API paths"
     
     # Determine compose files based on deployment type
     if [ "$DEPLOYMENT_TYPE" = "remote" ]; then
@@ -642,7 +540,6 @@ EOF
     if [ "$USE_REVERSE_PROXY" = "true" ]; then
         print_status "Caddy reverse proxy is handling requests"
         print_success "Frontend URL: $FRONTEND_URL"
-        print_success "Backend API URL: $BACKEND_API_URL"
         print_status "Note: HTTPS certificates will be automatically obtained on first access"
     elif [ "$DEPLOYMENT_TYPE" = "local_dev" ]; then
         # The development backend remains directly reachable for local tooling.
@@ -678,46 +575,34 @@ EOF
         echo "   • Automatic HTTPS with Let's Encrypt certificates"
         echo "   • All services accessible through single endpoint"
         echo "   • Frontend: https://$DOMAIN"
-        echo "   • Backend API: https://$DOMAIN/api"
         echo "   • No exposed ports except 80/443"
         echo ""
         print_warning "Important: Ensure DNS for $DOMAIN points to this server!"
     else
         echo "   Frontend: $FRONTEND_URL"
-        echo "   Backend API: $BACKEND_API_URL"
     fi
+
+    echo ""
+    echo "Complete first-run setup:"
+    echo "   1. Retrieve the setup token with: docker compose logs backend"
+    echo "   2. Open $FRONTEND_URL/setup"
+    echo "   3. Create your administrator account, then log in normally"
     
     echo ""
     echo "Useful commands:"
-    echo "   Show credentials: cat .env"
+    echo "   Review config:    cat .env"
     echo "   Stop services:    $DOCKER_COMPOSE_CMD $COMPOSE_TOPOLOGY down"
     echo "   View logs:        $DOCKER_COMPOSE_CMD $COMPOSE_TOPOLOGY logs -f"
     echo "   Restart services: $DOCKER_COMPOSE_CMD $COMPOSE_TOPOLOGY restart"
     echo "   Shell access:     $DOCKER_COMPOSE_CMD $COMPOSE_TOPOLOGY exec backend bash"
     echo ""
     
-    # Create test data if requested
-    if [ "$CREATE_TESTDATA" = "true" ]; then
-        echo ""
-        create_test_data "$COMPOSE_TOPOLOGY"
-    fi
-    
-    # Display admin credentials at the very end if they were generated
-    if [ -n "$ADMIN_PASSWORD_TO_DISPLAY" ]; then
-        echo "Generated admin credentials:"
-        echo "   Username: $ADMIN_USERNAME"
-        echo "   Password: $ADMIN_PASSWORD_TO_DISPLAY"
-        echo ""
-        print_warning "Save the admin password above - you'll need it to log in!"
-        echo ""
-    fi
 }
 
 # Parse arguments
 MODE="production"
 VERBOSE="false"
 CLEAN="false"
-CREATE_TESTDATA="false"
 
 # Parse arguments in order
 for arg in "$@"; do
@@ -730,9 +615,6 @@ for arg in "$@"; do
             ;;
         --clean)
             CLEAN="true"
-            ;;
-        --testdata)
-            CREATE_TESTDATA="true"
             ;;
         production|prod|dev|development|help)
             MODE="$arg"
@@ -748,10 +630,10 @@ fi
 # Main script logic
 case "$MODE" in
     production|prod)
-        setup_owlculus "production" "$VERBOSE" "$CLEAN" "$CREATE_TESTDATA"
+        setup_owlculus "production" "$VERBOSE" "$CLEAN"
         ;;
     development|dev)
-        setup_owlculus "dev" "$VERBOSE" "$CLEAN" "$CREATE_TESTDATA"
+        setup_owlculus "dev" "$VERBOSE" "$CLEAN"
         ;;
     help|--help|-h)
         show_usage
