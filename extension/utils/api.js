@@ -14,7 +14,7 @@ class OwlculusAPI {
             CONFIG_KEYS.TOKEN_TYPE,
         ]);
 
-        this.baseURL = config[CONFIG_KEYS.API_ENDPOINT] || "http://localhost:8000";
+        this.baseURL = config[CONFIG_KEYS.API_ENDPOINT] || "http://localhost";
         this.token = config[CONFIG_KEYS.AUTH_TOKEN];
         this.tokenType = config[CONFIG_KEYS.TOKEN_TYPE] || "bearer";
     }

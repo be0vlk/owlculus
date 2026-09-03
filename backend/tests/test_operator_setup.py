@@ -105,8 +105,8 @@ def test_clean_setup_removes_legacy_local_configuration(setup_workspace):
     assert not (workspace / "frontend/.env").exists()
 
 
-def test_test_data_helper_requires_operator_credentials():
-    """Sample data cannot fall back to a known administrator login."""
+def test_test_data_helper_requires_operator_identity_without_a_password_flag():
+    """Sample data cannot fall back to defaults or expose a password in argv."""
     completed = subprocess.run(
         [sys.executable, REPOSITORY_ROOT / "scripts/create_test_data.py"],
         cwd=REPOSITORY_ROOT,
@@ -117,8 +117,16 @@ def test_test_data_helper_requires_operator_credentials():
 
     assert completed.returncode == 2
     assert "--username" in completed.stderr
-    assert "--password" in completed.stderr
     assert "required" in completed.stderr
+
+    help_text = subprocess.run(
+        [sys.executable, REPOSITORY_ROOT / "scripts/create_test_data.py", "--help"],
+        cwd=REPOSITORY_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    assert "--password" not in help_text
 
 
 def test_container_test_data_runner_forwards_operator_credentials(tmp_path: Path):
@@ -139,8 +147,6 @@ def test_container_test_data_runner_forwards_operator_credentials(tmp_path: Path
             "scripts/run_test_data.sh",
             "--username",
             "chosen_admin",
-            "--password",
-            "chosen_password",
         ],
         cwd=tmp_path,
         check=True,
@@ -150,7 +156,7 @@ def test_container_test_data_runner_forwards_operator_credentials(tmp_path: Path
 
     calls = compose_calls.read_text()
     assert "--username chosen_admin" in calls
-    assert "--password chosen_password" in calls
+    assert "--password" not in calls
 
 
 def test_operator_documentation_explains_the_first_run_lifecycle():
@@ -170,3 +176,16 @@ def test_operator_documentation_explains_the_first_run_lifecycle():
 
     browser_docs = readme + (REPOSITORY_ROOT / "extension/README.md").read_text()
     assert "http://localhost:8000" not in browser_docs
+    assert "--password" not in readme
+
+
+def test_browser_extension_defaults_to_the_public_gateway():
+    """Extension guidance and requests use the browser-facing site origin."""
+    api_client = (REPOSITORY_ROOT / "extension/utils/api.js").read_text()
+    options_page = (REPOSITORY_ROOT / "extension/options/options.html").read_text()
+    manifest = (REPOSITORY_ROOT / "extension/manifest.json").read_text()
+
+    assert '|| "http://localhost"' in api_client
+    assert 'placeholder="http://localhost"' in options_page
+    assert '"http://localhost/*"' in manifest
+    assert "http://localhost:8000" not in api_client + options_page + manifest

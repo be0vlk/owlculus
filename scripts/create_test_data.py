@@ -5,6 +5,7 @@ Creates sample data for manual testing through the UI
 
 import argparse
 import asyncio
+import getpass
 import json
 
 import httpx
@@ -271,19 +272,19 @@ def main():
         "--username", "-u", required=True, help="Your administrator username"
     )
     parser.add_argument(
-        "--password", "-p", required=True, help="Your administrator password"
-    )
-    parser.add_argument(
         "--url",
         default="http://localhost:8000",
         help="Backend URL (default: http://localhost:8000)",
     )
 
     args = parser.parse_args()
+    password = getpass.getpass("Administrator password: ")
+    if not password:
+        parser.error("administrator password cannot be empty")
 
     import sys
 
-    result = asyncio.run(create_test_data(args.username, args.password, args.url))
+    result = asyncio.run(create_test_data(args.username, password, args.url))
     if result is False:
         sys.exit(1)
 

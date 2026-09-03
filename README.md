@@ -70,8 +70,10 @@ After creating the administrator, development test data can be loaded with crede
 chosen by the operator:
 
 ```bash
-./scripts/run_test_data.sh --username YOUR_USERNAME --password YOUR_PASSWORD
+./scripts/run_test_data.sh --username YOUR_USERNAME
 ```
+
+The helper prompts for the administrator password without placing it in shell history.
 
 More documentation is hosted in the [GitHub Wiki](https://github.com/be0vlk/owlculus/wiki).
 If you need additional guidance, please open a [Discussion](https://github.com/be0vlk/owlculus/discussions).
