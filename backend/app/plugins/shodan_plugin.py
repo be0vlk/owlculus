@@ -5,9 +5,10 @@ Shodan plugin for searching hosts and services using Shodan API
 import time
 from typing import Any, AsyncGenerator, Dict, Optional
 
-from app.core.dependencies import get_db
-from app.services.system_config_service import SystemConfigService
 from sqlmodel import Session
+
+from app.core.dependencies import get_db
+from app.services.api_key_vault import ConfigurationApiKeyVault, Provider
 
 from .base_plugin import BasePlugin
 
@@ -23,7 +24,7 @@ class ShodanPlugin(BasePlugin):
         self.category = "Network"
         self.evidence_category = "Network Assets"
         self.save_to_case = False
-        self.api_key_requirements = ["shodan"]
+        self.api_key_requirements = [Provider.SHODAN]
         self.parameters = {
             "query": {
                 "type": "string",
@@ -317,8 +318,8 @@ class ShodanPlugin(BasePlugin):
 
         try:
             # Retrieve Shodan API key using the centralized system
-            config_service = SystemConfigService(db)
-            shodan_api_key = config_service.get_api_key("shodan")
+            vault = self._api_key_vault or ConfigurationApiKeyVault(db)
+            shodan_api_key = vault.get_key(Provider.SHODAN)
 
             if not shodan_api_key:
                 yield {

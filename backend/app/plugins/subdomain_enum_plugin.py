@@ -8,13 +8,15 @@ from typing import Any, AsyncGenerator, Dict, List, Optional, Set
 
 import aiohttp
 import dns.asyncresolver
+from sqlmodel import Session
+
 from app.core.dependencies import get_db
 from app.schemas.entity_schema import (
-	DomainData,
-	EntityCreate,
+    DomainData,
+    EntityCreate,
 )
+from app.services.api_key_vault import ConfigurationApiKeyVault, Provider
 from app.services.entity_service import EntityService
-from sqlmodel import Session
 
 from .base_plugin import BasePlugin
 
@@ -159,10 +161,10 @@ class SubdomainEnumPlugin(BasePlugin):
         securitytrails_key = None
         if use_securitytrails:
             if self._db_session:
-                from app.services.system_config_service import SystemConfigService
-
-                config_service = SystemConfigService(self._db_session)
-                securitytrails_key = config_service.get_api_key("securitytrails")
+                vault = self._api_key_vault or ConfigurationApiKeyVault(
+                    self._db_session
+                )
+                securitytrails_key = vault.get_key(Provider.SECURITYTRAILS)
 
                 if not securitytrails_key:
                     yield {

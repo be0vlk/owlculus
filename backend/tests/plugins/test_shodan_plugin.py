@@ -5,18 +5,21 @@ Tests for the Shodan plugin
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+
 from app.plugins.shodan_plugin import ShodanPlugin
+from app.services.api_key_vault import ApiKeyVault
 from app.services.entity_service import EntityService
-from app.services.system_config_service import SystemConfigService
 
 
 class TestShodanPlugin:
     """Test cases for ShodanPlugin"""
 
     @pytest.fixture
-    def plugin(self):
+    def plugin(self, mock_config_service):
         """Create a ShodanPlugin instance for testing"""
-        return ShodanPlugin()
+        plugin = ShodanPlugin()
+        plugin._api_key_vault = mock_config_service
+        return plugin
 
     @pytest.fixture
     def mock_db_session(self):
@@ -25,8 +28,8 @@ class TestShodanPlugin:
 
     @pytest.fixture
     def mock_config_service(self):
-        """Mock SystemConfigService"""
-        return Mock(spec=SystemConfigService)
+        """Mock the API-key vault seam."""
+        return Mock(spec=ApiKeyVault)
 
     def test_plugin_initialization(self, plugin):
         """Test plugin is initialized correctly"""
@@ -107,10 +110,10 @@ class TestShodanPlugin:
         """Test error when API key is not configured"""
         # Setup mocks
         mock_get_db.return_value = iter([mock_db_session])
-        mock_config_service.get_api_key.return_value = None
+        mock_config_service.get_key.return_value = None
 
         with patch(
-            "app.plugins.shodan_plugin.SystemConfigService",
+            "app.plugins.shodan_plugin.ConfigurationApiKeyVault",
             return_value=mock_config_service,
         ):
             params = {"query": "apache"}
@@ -131,7 +134,7 @@ class TestShodanPlugin:
         """Test successful IP address search"""
         # Setup mocks
         mock_get_db.return_value = iter([mock_db_session])
-        mock_config_service.get_api_key.return_value = "test_api_key"
+        mock_config_service.get_key.return_value = "test_api_key"
 
         # Mock Shodan API response
         mock_host_info = {
@@ -155,7 +158,7 @@ class TestShodanPlugin:
         }
 
         with patch(
-            "app.plugins.shodan_plugin.SystemConfigService",
+            "app.plugins.shodan_plugin.ConfigurationApiKeyVault",
             return_value=mock_config_service,
         ), patch("shodan.Shodan") as mock_shodan_class:
 
@@ -190,7 +193,7 @@ class TestShodanPlugin:
         """Test successful hostname search"""
         # Setup mocks
         mock_get_db.return_value = iter([mock_db_session])
-        mock_config_service.get_api_key.return_value = "test_api_key"
+        mock_config_service.get_key.return_value = "test_api_key"
 
         # Mock Shodan API response
         mock_search_results = {
@@ -215,7 +218,7 @@ class TestShodanPlugin:
         }
 
         with patch(
-            "app.plugins.shodan_plugin.SystemConfigService",
+            "app.plugins.shodan_plugin.ConfigurationApiKeyVault",
             return_value=mock_config_service,
         ), patch("shodan.Shodan") as mock_shodan_class:
 
@@ -249,7 +252,7 @@ class TestShodanPlugin:
         """Test successful general search"""
         # Setup mocks
         mock_get_db.return_value = iter([mock_db_session])
-        mock_config_service.get_api_key.return_value = "test_api_key"
+        mock_config_service.get_key.return_value = "test_api_key"
 
         # Mock Shodan API response
         mock_search_results = {
@@ -272,7 +275,7 @@ class TestShodanPlugin:
         }
 
         with patch(
-            "app.plugins.shodan_plugin.SystemConfigService",
+            "app.plugins.shodan_plugin.ConfigurationApiKeyVault",
             return_value=mock_config_service,
         ), patch("shodan.Shodan") as mock_shodan_class:
 
@@ -310,10 +313,10 @@ class TestShodanPlugin:
 
         # Setup mocks
         mock_get_db.return_value = iter([mock_db_session])
-        mock_config_service.get_api_key.return_value = "test_api_key"
+        mock_config_service.get_key.return_value = "test_api_key"
 
         with patch(
-            "app.plugins.shodan_plugin.SystemConfigService",
+            "app.plugins.shodan_plugin.ConfigurationApiKeyVault",
             return_value=mock_config_service,
         ), patch("shodan.Shodan") as mock_shodan_class:
 
@@ -344,10 +347,10 @@ class TestShodanPlugin:
 
         # Setup mocks
         mock_get_db.return_value = iter([mock_db_session])
-        mock_config_service.get_api_key.return_value = "test_api_key"
+        mock_config_service.get_key.return_value = "test_api_key"
 
         with patch(
-            "app.plugins.shodan_plugin.SystemConfigService",
+            "app.plugins.shodan_plugin.ConfigurationApiKeyVault",
             return_value=mock_config_service,
         ), patch("shodan.Shodan") as mock_shodan_class:
 
@@ -380,10 +383,10 @@ class TestShodanPlugin:
             return iter([mock_db_session])
 
         mock_get_db.side_effect = get_db_iter
-        mock_config_service.get_api_key.return_value = None  # Will fail early
+        mock_config_service.get_key.return_value = None  # Will fail early
 
         with patch(
-            "app.plugins.shodan_plugin.SystemConfigService",
+            "app.plugins.shodan_plugin.ConfigurationApiKeyVault",
             return_value=mock_config_service,
         ):
             # Test limit too high
@@ -414,7 +417,7 @@ class TestShodanPlugin:
         """Test automatic detection of IP addresses in general search"""
         # Setup mocks
         mock_get_db.return_value = iter([mock_db_session])
-        mock_config_service.get_api_key.return_value = "test_api_key"
+        mock_config_service.get_key.return_value = "test_api_key"
 
         mock_host_info = {
             "ip_str": "1.1.1.1",
@@ -427,7 +430,7 @@ class TestShodanPlugin:
         }
 
         with patch(
-            "app.plugins.shodan_plugin.SystemConfigService",
+            "app.plugins.shodan_plugin.ConfigurationApiKeyVault",
             return_value=mock_config_service,
         ), patch("shodan.Shodan") as mock_shodan_class:
 
@@ -453,7 +456,7 @@ class TestShodanPlugin:
         """Test automatic detection of hostnames in general search"""
         # Setup mocks
         mock_get_db.return_value = iter([mock_db_session])
-        mock_config_service.get_api_key.return_value = "test_api_key"
+        mock_config_service.get_key.return_value = "test_api_key"
 
         mock_search_results = {
             "total": 1,
@@ -471,7 +474,7 @@ class TestShodanPlugin:
         }
 
         with patch(
-            "app.plugins.shodan_plugin.SystemConfigService",
+            "app.plugins.shodan_plugin.ConfigurationApiKeyVault",
             return_value=mock_config_service,
         ), patch("shodan.Shodan") as mock_shodan_class:
 

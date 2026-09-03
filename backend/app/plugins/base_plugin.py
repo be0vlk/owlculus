@@ -12,17 +12,18 @@ from concurrent.futures import ThreadPoolExecutor
 from tempfile import SpooledTemporaryFile
 from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple, Union
 
+from fastapi import UploadFile
+from sqlmodel import Session
+
 from app.core.dependencies import get_db
 from app.core.utils import get_utc_now
 from app.database import models
 from app.schemas import evidence_schema as schemas
 from app.schemas.entity_schema import EntityCreate, IpAddressData
 from app.schemas.evidence_schema import EvidenceCreate, FolderCreate
+from app.services.api_key_vault import ApiKeyVault, ConfigurationApiKeyVault, Provider
 from app.services.entity_service import EntityService
 from app.services.evidence_service import EvidenceService
-from app.services.system_config_service import SystemConfigService
-from fastapi import UploadFile
-from sqlalchemy.orm import Session
 
 
 class BasePlugin(ABC):
@@ -39,7 +40,7 @@ class BasePlugin(ABC):
         self.evidence_category: str = "Other"  # Category for evidence storage
         self.parameters: Dict[str, Dict[str, Any]] = {}
         self.save_to_case: bool = False  # Whether to save plugin output as evidence
-        self.api_key_requirements: List[str] = []  # List of required API key providers
+        self.api_key_requirements: List[Provider] = []
         self._executor = ThreadPoolExecutor(
             max_workers=3, thread_name_prefix=f"{self.name}_executor"
         )
@@ -49,6 +50,9 @@ class BasePlugin(ABC):
         )  # Collect results for evidence saving
         self._current_params: Optional[Dict[str, Any]] = None
         self._db_session: Optional[Session] = db_session
+        self._api_key_vault: ApiKeyVault | None = (
+            ConfigurationApiKeyVault(db_session) if db_session else None
+        )
 
         self._validate_evidence_category()
 
@@ -396,11 +400,11 @@ class BasePlugin(ABC):
         if not self.api_key_requirements:
             return {}
 
-        config_service = SystemConfigService(db)
+        vault = self._api_key_vault or ConfigurationApiKeyVault(db)
         api_key_status = {}
 
         for provider in self.api_key_requirements:
-            api_key_status[provider] = config_service.is_provider_configured(provider)
+            api_key_status[provider.value] = vault.is_configured(provider)
 
         return api_key_status
 

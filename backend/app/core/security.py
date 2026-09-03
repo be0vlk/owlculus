@@ -183,12 +183,9 @@ def decrypt_api_key(encrypted_key: str) -> str:
     if not encrypted_key:
         return ""
 
-    try:
-        fernet = Fernet(_get_encryption_key())
-        decrypted = fernet.decrypt(encrypted_key.encode())
-        return decrypted.decode()
-    except Exception:
-        return ""
+    fernet = Fernet(_get_encryption_key())
+    decrypted = fernet.decrypt(encrypted_key.encode())
+    return decrypted.decode()
 
 
 # Ephemeral Token Management for WebSocket Authentication

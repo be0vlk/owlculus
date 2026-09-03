@@ -9,9 +9,10 @@ import time
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
 import vt
-from app.core.dependencies import get_db
-from app.services.system_config_service import SystemConfigService
 from sqlmodel import Session
+
+from app.core.dependencies import get_db
+from app.services.api_key_vault import ConfigurationApiKeyVault, Provider
 
 from .base_plugin import BasePlugin
 
@@ -27,7 +28,7 @@ class VirustotalPlugin(BasePlugin):
         self.category = "Other"  # Person, Network, Company, Other
         self.evidence_category = "Other"  # Social Media, Associates, Network Assets, Communications, Documents, Other
         self.save_to_case = False  # Whether to auto-save results as evidence
-        self.api_key_requirements = ["virustotal"]  # Required API key providers
+        self.api_key_requirements = [Provider.VIRUSTOTAL]
         self.parameters = {
             "target": {
                 "type": "string",
@@ -181,8 +182,8 @@ class VirustotalPlugin(BasePlugin):
 
         try:
             # Retrieve API key
-            config_service = SystemConfigService(db)
-            api_key = config_service.get_api_key("virustotal")
+            vault = self._api_key_vault or ConfigurationApiKeyVault(db)
+            api_key = vault.get_key(Provider.VIRUSTOTAL)
 
             if not api_key:
                 yield {

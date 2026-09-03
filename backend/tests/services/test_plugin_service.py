@@ -2,15 +2,17 @@
 Tests for PluginService functionality
 """
 
+from types import ModuleType
 from typing import Any, AsyncGenerator, Dict, Optional
 from unittest.mock import Mock, patch
 
 import pytest
+from sqlmodel import Session
+
 from app.core.exceptions import ResourceNotFoundException
 from app.database import models
 from app.plugins.base_plugin import BasePlugin
 from app.services.plugin_service import PluginService
-from sqlmodel import Session
 
 
 # Mock plugin for testing
@@ -62,20 +64,40 @@ class TestPluginService:
     def test_load_plugins_functionality(self, session: Session):
         """Test that plugin loading creates a service with plugins"""
         # Mock the plugin loading to avoid loading real plugins that may have dependencies
-        with patch.object(PluginService, "_load_plugins") as mock_load:
+        with patch.object(PluginService, "_load_plugins"):
             service = PluginService(session)
-            
+
             # Manually add some test plugins
-            service._plugins = {
-                "TestPlugin1": MockPlugin,
-                "TestPlugin2": MockPlugin
-            }
+            service._plugins = {"TestPlugin1": MockPlugin, "TestPlugin2": MockPlugin}
 
             # Should have loaded some plugins
             assert isinstance(service._plugins, dict)
             assert len(service._plugins) == 2
             assert "TestPlugin1" in service._plugins
             assert "TestPlugin2" in service._plugins
+
+    def test_loading_plugin_with_unknown_provider_fails(self, session, monkeypatch):
+        class UnknownProviderPlugin(MockPlugin):
+            def __init__(self, db_session=None):
+                super().__init__(db_session=db_session)
+                self.api_key_requirements = ["misspelled-provider"]
+
+        plugin_module = ModuleType("unknown_provider_plugin")
+        plugin_module.UnknownProviderPlugin = UnknownProviderPlugin
+        monkeypatch.setattr(
+            "app.services.plugin_service.os.listdir",
+            lambda _: ["unknown_provider_plugin.py"],
+        )
+        monkeypatch.setattr(
+            "app.services.plugin_service.importlib.import_module",
+            lambda *args, **kwargs: plugin_module,
+        )
+
+        with pytest.raises(
+            ValueError,
+            match="UnknownProviderPlugin declares unknown API key provider",
+        ):
+            PluginService(session)
 
     def test_get_plugin_success(self, plugin_service_instance: PluginService):
         """Test successful plugin retrieval"""
@@ -85,7 +107,9 @@ class TestPluginService:
 
     def test_get_plugin_not_found(self, plugin_service_instance: PluginService):
         """Test plugin retrieval with non-existent plugin"""
-        with pytest.raises(ResourceNotFoundException, match="Plugin NonExistent not found"):
+        with pytest.raises(
+            ResourceNotFoundException, match="Plugin NonExistent not found"
+        ):
             plugin_service_instance.get_plugin("NonExistent")
 
     @pytest.mark.asyncio
@@ -117,7 +141,7 @@ class TestPluginService:
         """Test that service layer accepts analyst users (authorization at API layer)"""
         # Service layer should accept all users now
         plugins = await plugin_service_instance.list_plugins(current_user=test_analyst)
-        
+
         assert isinstance(plugins, dict)
         assert "MockPlugin" in plugins
 
@@ -160,7 +184,9 @@ class TestPluginService:
         test_admin: models.User,
     ):
         """Test plugin execution with non-existent plugin"""
-        with pytest.raises(ResourceNotFoundException, match="Plugin NonExistent not found"):
+        with pytest.raises(
+            ResourceNotFoundException, match="Plugin NonExistent not found"
+        ):
             await plugin_service_instance.execute_plugin(
                 "NonExistent", {}, current_user=test_admin
             )
@@ -181,7 +207,7 @@ class TestPluginService:
 
             mock_execute.return_value = mock_generator()
 
-            result_generator = await plugin_service_instance.execute_plugin(
+            await plugin_service_instance.execute_plugin(
                 "MockPlugin", current_user=test_admin
             )
 
@@ -199,17 +225,17 @@ class TestPluginService:
         with patch.object(
             MockPlugin, "execute_with_evidence_collection"
         ) as mock_execute:
-            
+
             async def mock_generator():
                 yield {"type": "data", "data": {"test": "result"}}
-            
+
             mock_execute.return_value = mock_generator()
-            
+
             # Service layer should accept all users now
             result_generator = await plugin_service_instance.execute_plugin(
                 "MockPlugin", {}, current_user=test_analyst
             )
-            
+
             # Verify it works
             results = [result async for result in result_generator]
             assert len(results) == 1
@@ -220,7 +246,7 @@ class TestPluginService:
         with patch.object(PluginService, "_load_plugins"):
             service1 = PluginService(session)
             service2 = PluginService(session)
-            
+
             # They should be different instances
             assert service1 is not service2
             assert isinstance(service1, PluginService)
@@ -236,7 +262,7 @@ class TestPluginService:
         mock_listdir.return_value = []
 
         with patch("app.services.plugin_service.importlib.import_module"):
-            service = PluginService(session)
+            PluginService(session)
 
             # Verify correct directory path construction
             expected_plugins_dir = "/mock/path/plugins"
@@ -280,7 +306,9 @@ class TestPluginService:
 
         class AnotherMockPlugin(BasePlugin):
             def __init__(self, db_session=None):
-                super().__init__(display_name="Another Mock Plugin", db_session=db_session)
+                super().__init__(
+                    display_name="Another Mock Plugin", db_session=db_session
+                )
 
             def parse_output(self, line):
                 return None

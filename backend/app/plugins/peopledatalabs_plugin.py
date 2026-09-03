@@ -6,6 +6,8 @@ from typing import Any, AsyncGenerator, Dict, List, Optional
 
 from sqlmodel import Session
 
+from app.services.api_key_vault import Provider
+
 from .base_plugin import BasePlugin
 
 
@@ -18,7 +20,7 @@ class PeopledatalabsPlugin(BasePlugin):
         self.category = "Person"  # Person, Network, Company, Other
         self.evidence_category = "Associates"  # Social Media, Associates, Network Assets, Communications, Documents, Other
         self.save_to_case = False  # Whether to auto-save results as evidence
-        self.api_key_requirements = ["people_data_labs"]  # Required API key providers
+        self.api_key_requirements = [Provider.PEOPLE_DATA_LABS]
         self.parameters = {
             "search_type": {
                 "type": "string",
@@ -94,14 +96,14 @@ class PeopledatalabsPlugin(BasePlugin):
             return
 
         # Check API key requirements
-        if not self.db_session:
+        if not self._db_session:
             yield {
                 "type": "error",
                 "data": {"message": "Database session not available"},
             }
             return
 
-        api_key_status = self.check_api_key_requirements(self.db_session)
+        api_key_status = self.check_api_key_requirements(self._db_session)
         missing_keys = [
             provider
             for provider, configured in api_key_status.items()
@@ -121,12 +123,10 @@ class PeopledatalabsPlugin(BasePlugin):
 
         try:
             # Import People Data Labs client
-            from app.services.system_config_service import SystemConfigService
             from peopledatalabs import PDLPY
 
-            # Get API key from system configuration
-            config_service = SystemConfigService(self.db_session)
-            api_key = config_service.get_api_key("people_data_labs")
+            assert self._api_key_vault is not None
+            api_key = self._api_key_vault.get_key(Provider.PEOPLE_DATA_LABS)
 
             if not api_key:
                 yield {

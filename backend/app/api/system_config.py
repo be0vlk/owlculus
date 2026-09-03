@@ -13,6 +13,7 @@ from ..core.dependencies import get_current_user
 from ..database import models
 from ..database.connection import get_db
 from ..schemas import system_config_schema
+from ..services.api_key_vault import ConfigurationApiKeyVault, Provider
 from ..services.system_config_service import SystemConfigService
 
 router = APIRouter()
@@ -46,6 +47,8 @@ async def update_configuration(
             current_user=current_user,
         )
         return system_config_schema.SystemConfigurationResponse.from_model(config)
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -55,7 +58,7 @@ async def update_configuration(
     response_model=system_config_schema.SystemConfigurationResponse,
 )
 async def set_api_key(
-    provider: str,
+    provider: Provider,
     api_key_data: system_config_schema.APIKeyUpdate,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -70,10 +73,12 @@ async def set_api_key(
         config = await config_service.set_api_key(
             provider=provider,
             api_key=api_key_data.api_key,
-            name=api_key_data.name or f"{provider.title()} API",
+            name=api_key_data.name or f"{provider.value.title()} API",
             current_user=current_user,
         )
         return system_config_schema.SystemConfigurationResponse.from_model(config)
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -85,7 +90,7 @@ async def set_api_key(
     response_model=system_config_schema.SystemConfigurationResponse,
 )
 async def remove_api_key(
-    provider: str,
+    provider: Provider,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -96,6 +101,8 @@ async def remove_api_key(
             current_user=current_user,
         )
         return system_config_schema.SystemConfigurationResponse.from_model(config)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -114,21 +121,23 @@ async def list_api_keys(
     response_model=system_config_schema.APIKeyStatusResponse,
 )
 async def get_api_key_status(
-    provider: str,
+    provider: Provider,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     config_service = SystemConfigService(db)
-    is_configured = config_service.is_provider_configured(provider)
+    await config_service.get_configuration_admin(current_user=current_user)
+    vault = ConfigurationApiKeyVault(db)
+    is_configured = vault.is_configured(provider)
     return system_config_schema.APIKeyStatusResponse(
-        provider=provider, is_configured=is_configured
+        provider=provider.value, is_configured=is_configured
     )
 
 
 @router.get("/configuration/preview")
 async def preview_case_number_template(
     template: str,
-    prefix: str = None,
+    prefix: str | None = None,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

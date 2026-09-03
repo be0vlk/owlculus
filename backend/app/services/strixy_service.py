@@ -14,22 +14,23 @@ Key features:
 from datetime import UTC, datetime
 from typing import List
 
-from app.schemas.strixy_schema import ChatMessage, ChatResponse
-from app.services.system_config_service import SystemConfigService
 from fastapi import HTTPException, status
 from openai import OpenAI
 from sqlmodel import Session
 
+from app.schemas.strixy_schema import ChatMessage, ChatResponse
+from app.services.api_key_vault import ApiKeyVault, ConfigurationApiKeyVault, Provider
+
 
 class StrixyService:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, api_key_vault: ApiKeyVault | None = None):
         self.db = db
-        self.config_service = SystemConfigService(db)
-        self._client = None
+        self.api_key_vault = api_key_vault or ConfigurationApiKeyVault(db)
+        self._client: OpenAI | None = None
 
     def _get_openai_client(self) -> OpenAI:
         if self._client is None:
-            api_key = self.config_service.get_api_key("openai")
+            api_key = self.api_key_vault.get_key(Provider.OPENAI)
             if not api_key:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,

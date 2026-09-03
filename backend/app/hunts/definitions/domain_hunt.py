@@ -6,22 +6,31 @@ from typing import List, Optional
 
 from sqlmodel import Session
 
+from app.services.api_key_vault import ApiKeyVault, ConfigurationApiKeyVault, Provider
+
 from ..base_hunt import BaseHunt, HuntStepDefinition
 
 
 class DomainHunt(BaseHunt):
     """Comprehensive domain and infrastructure investigation"""
 
-    def __init__(self, db_session: Optional[Session] = None):
+    def __init__(
+        self,
+        db_session: Optional[Session] = None,
+        api_key_vault: ApiKeyVault | None = None,
+    ):
         super().__init__()
         self.display_name = "Domain Investigation"
         self.description = "Comprehensive analysis of a domain including WHOIS, DNS, subdomains, and associated infrastructure"
         self.category = "domain"
 
         # Build parameters dynamically based on API key availability
-        self.initial_parameters = self._build_parameters(db_session)
+        vault = api_key_vault or (
+            ConfigurationApiKeyVault(db_session) if db_session else None
+        )
+        self.initial_parameters = self._build_parameters(vault)
 
-    def _build_parameters(self, db_session: Optional[Session] = None) -> dict:
+    def _build_parameters(self, api_key_vault: ApiKeyVault | None = None) -> dict:
         """Build parameters dynamically based on available API keys"""
         base_parameters = {
             "domain": {
@@ -38,7 +47,7 @@ class DomainHunt(BaseHunt):
         }
 
         # Only add SecurityTrails parameter if API key is configured
-        if self._is_securitytrails_available(db_session):
+        if api_key_vault and api_key_vault.is_configured(Provider.SECURITYTRAILS):
             base_parameters["use_securitytrails"] = {
                 "type": "boolean",
                 "description": "Enable SecurityTrails API for enhanced subdomain discovery",
@@ -47,22 +56,6 @@ class DomainHunt(BaseHunt):
             }
 
         return base_parameters
-
-    def _is_securitytrails_available(
-        self, db_session: Optional[Session] = None
-    ) -> bool:
-        """Check if SecurityTrails API key is configured"""
-        if not db_session:
-            return False
-
-        try:
-            from app.services.system_config_service import SystemConfigService
-
-            config_service = SystemConfigService(db_session)
-            return config_service.is_provider_configured("securitytrails")
-        except Exception:
-            # If we can't check, assume it's not available
-            return False
 
     def get_steps(self) -> List[HuntStepDefinition]:
         # Build subdomain enumeration parameter mapping based on available parameters

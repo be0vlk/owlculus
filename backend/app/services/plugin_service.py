@@ -12,11 +12,13 @@ import inspect
 import os
 from typing import Any, AsyncGenerator, Dict, Type
 
-from app.core.exceptions import ResourceNotFoundException
 from sqlmodel import Session
+
+from app.core.exceptions import ResourceNotFoundException
 
 from ..database.models import User
 from ..plugins.base_plugin import BasePlugin
+from .api_key_vault import Provider
 
 
 class PluginService:
@@ -40,6 +42,14 @@ class PluginService:
                         and issubclass(obj, BasePlugin)
                         and obj != BasePlugin
                     ):
+                        plugin = obj(db_session=self.db)
+                        if any(
+                            not isinstance(provider, Provider)
+                            for provider in plugin.api_key_requirements
+                        ):
+                            raise ValueError(
+                                f"{obj.__name__} declares unknown API key provider"
+                            )
                         self._plugins[obj.__name__] = obj
 
     def get_plugin(self, name: str) -> BasePlugin:
