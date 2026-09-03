@@ -7,7 +7,6 @@ import CaseDashboard from '../CaseDashboard.vue'
 const mocks = vi.hoisted(() => ({
   exportCase: vi.fn(),
   downloadBlob: vi.fn(),
-  showNotification: vi.fn(),
   getCase: vi.fn(),
   getClient: vi.fn(),
   getFolderTree: vi.fn(),
@@ -49,14 +48,6 @@ vi.mock('@/services/evidence', () => ({
 
 vi.mock('@/utils/download', () => ({ downloadBlob: mocks.downloadBlob }))
 
-vi.mock('@/composables/useNotifications', () => ({
-  useNotifications: () => ({
-    snackbar: { value: { show: false, text: '', color: 'success', timeout: 4000 } },
-    showNotification: mocks.showNotification,
-    closeNotification: vi.fn(),
-  }),
-}))
-
 const BaseDashboardStub = defineComponent({
   template: '<div><slot name="header-actions" /><slot /></div>',
 })
@@ -67,6 +58,11 @@ const ButtonStub = defineComponent({
   template:
     '<button v-bind="$attrs" :data-loading="String(loading)" @click="$emit(\'click\')"><slot /></button>',
 })
+const SnackbarStub = defineComponent({
+  props: { modelValue: Boolean, color: String },
+  template:
+    '<div v-if="modelValue" data-testid="case-export-notification" :data-color="color"><slot /></div>',
+})
 
 const mountDashboard = async () => {
   const wrapper = shallowMount(CaseDashboard, {
@@ -75,6 +71,7 @@ const mountDashboard = async () => {
         BaseDashboard: BaseDashboardStub,
         VBtn: ButtonStub,
         VBtnGroup: defineComponent({ template: '<div><slot /></div>' }),
+        VSnackbar: SnackbarStub,
       },
     },
   })
@@ -120,7 +117,9 @@ describe('CaseDashboard export', () => {
     await flushPromises()
 
     expect(mocks.downloadBlob).toHaveBeenCalledWith(artifact, 'CASE-042-export.zip')
-    expect(mocks.showNotification).toHaveBeenCalledWith('Case exported successfully', 'success')
+    const notification = wrapper.get('[data-testid="case-export-notification"]')
+    expect(notification.text()).toContain('Case exported successfully')
+    expect(notification.attributes('data-color')).toBe('success')
     expect(exportButton.attributes('data-loading')).toBe('false')
   })
 
@@ -133,6 +132,8 @@ describe('CaseDashboard export', () => {
     await flushPromises()
 
     expect(mocks.downloadBlob).not.toHaveBeenCalled()
-    expect(mocks.showNotification).toHaveBeenCalledWith('Failed to export case', 'error')
+    const notification = wrapper.get('[data-testid="case-export-notification"]')
+    expect(notification.text()).toContain('Failed to export case')
+    expect(notification.attributes('data-color')).toBe('error')
   })
 })

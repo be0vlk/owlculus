@@ -695,15 +695,15 @@ const handleExtractMetadata = async (evidenceItem) => {
 }
 
 const handleViewFileContent = async (evidenceItem) => {
-  selectedEvidenceForContent.value = evidenceItem
+  selectedEvidenceForContent.value = evidenceItem;
 
-  fileContent.value = null
-  fileContentInfo.value = null
-  fileContentError.value = ''
-  loadingFileContent.value = false
+  fileContent.value = null;
+  fileContentInfo.value = null;
+  fileContentError.value = '';
+  loadingFileContent.value = false;
 
-  showFileContentModal.value = true
-}
+  showFileContentModal.value = true;
+};
 
 // Hunt-related methods
 const loadCaseHuntExecutions = async () => {

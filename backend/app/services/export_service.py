@@ -289,16 +289,8 @@ class ExportService:
                 .order_by(col(models.Evidence.id))
             )
         )
-        creator_ids = {evidence.created_by_id for evidence in evidence_records}
-        creator_names = (
-            {
-                user.id: user.username
-                for user in self.db.exec(
-                    select(models.User).where(col(models.User.id).in_(creator_ids))
-                )
-            }
-            if creator_ids
-            else {}
+        creator_names = self._usernames_by_id(
+            {evidence.created_by_id for evidence in evidence_records}
         )
         manifest = []
         upload_root = file_storage.UPLOAD_DIR.resolve()
@@ -381,16 +373,7 @@ class ExportService:
             )
             if user_id is not None
         }
-        usernames = (
-            {
-                user.id: user.username
-                for user in self.db.exec(
-                    select(models.User).where(col(models.User.id).in_(user_ids))
-                )
-            }
-            if user_ids
-            else {}
-        )
+        usernames = self._usernames_by_id(user_ids)
         template_ids = {
             task.template_id for task in tasks if task.template_id is not None
         }
@@ -701,11 +684,13 @@ class ExportService:
         ]
 
     def _creator_names(self, entities: list[models.Entity]) -> dict[int, str]:
-        creator_ids = {entity.created_by_id for entity in entities}
-        if not creator_ids:
+        return self._usernames_by_id({entity.created_by_id for entity in entities})
+
+    def _usernames_by_id(self, user_ids: set[int]) -> dict[int, str]:
+        if not user_ids:
             return {}
         users = self.db.exec(
-            select(models.User).where(col(models.User.id).in_(creator_ids))
+            select(models.User).where(col(models.User.id).in_(user_ids))
         )
         return {user.id: user.username for user in users if user.id is not None}
 

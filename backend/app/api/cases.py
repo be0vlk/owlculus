@@ -205,7 +205,7 @@ async def get_case_users(
 
 
 @router.get("/{case_id}/export")
-async def export_case(
+def export_case(
     case_id: int,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),

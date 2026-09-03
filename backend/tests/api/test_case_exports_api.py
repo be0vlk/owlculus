@@ -32,6 +32,10 @@ from app.database.models import (
     User,
 )
 from app.main import app
+from app.services.hunt_execution_export import (
+    HuntExecutionExportFormat,
+    RenderedHuntExecutionExport,
+)
 
 
 @pytest.fixture
@@ -367,7 +371,10 @@ def test_case_bundle_preserves_the_evidence_tree_and_records_missing_files(
     session.commit()
     app.dependency_overrides[get_current_user] = lambda: case_export_user
 
-    response = client.get(f"{settings.API_V1_STR}/cases/{case_export_case.id}/export")
+    with patch("app.services.export_service.get_security_logger") as logger_factory:
+        response = client.get(
+            f"{settings.API_V1_STR}/cases/{case_export_case.id}/export"
+        )
 
     assert response.status_code == 200
     with ZipFile(BytesIO(response.content)) as archive:
@@ -408,6 +415,9 @@ def test_case_bundle_preserves_the_evidence_tree_and_records_missing_files(
         missing_file = next(item for item in manifest if item["title"] == "missing.pdf")
         assert missing_file["exported"] is False
         assert missing_file["reason"] == "File not found on disk"
+    logger_factory.return_value.warning.assert_called_once_with(
+        "Case export evidence file not found on disk"
+    )
 
 
 def test_analyst_case_bundle_omits_hunts(
@@ -502,3 +512,64 @@ def test_case_bundle_logs_the_export_event(
         and call.kwargs.get("requesting_user") == "case-exporter"
         for call in logger_factory.call_args_list
     )
+
+
+def test_case_bundle_pdf_failure_returns_500_logs_and_removes_the_temp_file(
+    client: TestClient,
+    session: Session,
+    case_export_user: User,
+    case_export_case: Case,
+    tmp_path,
+    monkeypatch,
+):
+    hunt = Hunt(
+        name="failing_hunt",
+        display_name="Failing Hunt",
+        description="Rendering fails",
+        category="person",
+        definition_json={"steps": []},
+    )
+    session.add(hunt)
+    session.commit()
+    session.refresh(hunt)
+    session.add(
+        HuntExecution(
+            hunt_id=hunt.id,
+            case_id=case_export_case.id,
+            status="failed",
+            progress=0,
+            initial_parameters={},
+            created_by_id=case_export_user.id,
+        )
+    )
+    session.commit()
+    app.dependency_overrides[get_current_user] = lambda: case_export_user
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    rendered_json = RenderedHuntExecutionExport(
+        content=b"{}", media_type="application/json"
+    )
+
+    with (
+        patch(
+            "app.services.export_service.render_hunt_execution",
+            side_effect=[rendered_json, RuntimeError("PDF render failed")],
+        ) as render,
+        patch("app.services.export_service.get_security_logger") as logger_factory,
+        TestClient(app, raise_server_exceptions=False) as tolerant_client,
+    ):
+        response = tolerant_client.get(
+            f"{settings.API_V1_STR}/cases/{case_export_case.id}/export"
+        )
+
+    assert response.status_code == 500
+    assert [call.args[2] for call in render.call_args_list] == [
+        HuntExecutionExportFormat.JSON,
+        HuntExecutionExportFormat.PDF,
+    ]
+    logger_factory.return_value.bind.assert_any_call(
+        event_type="export_generation_failed"
+    )
+    logger_factory.return_value.bind.return_value.exception.assert_called_once_with(
+        "Case export failed"
+    )
+    assert list(tmp_path.glob("owlculus-case-export-*.zip")) == []
