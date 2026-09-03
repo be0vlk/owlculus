@@ -9,20 +9,14 @@ integration endpoints.
 from unittest.mock import Mock, patch
 
 import pytest
-from app.main import app
 from app.schemas.strixy_schema import ChatResponse
 from fastapi import HTTPException
-from fastapi.testclient import TestClient
 
 
 class TestStrixyAPI:
     @pytest.fixture
-    def client(self):
-        return TestClient(app)
-
-    @pytest.fixture
-    def auth_headers(self, test_user_token):
-        return {"Authorization": f"Bearer {test_user_token}"}
+    def auth_headers(self, user_token):
+        return {"Authorization": f"Bearer {user_token}"}
 
     @patch("app.api.strixy.StrixyService")
     def test_chat_success(self, mock_service_class, client, auth_headers):

@@ -10,7 +10,6 @@ import os
 from datetime import timedelta
 
 import pytest
-from app.database import crud
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlmodel import Session, SQLModel, create_engine
@@ -24,28 +23,29 @@ os.environ.setdefault("POSTGRES_PORT", "5432")
 os.environ.setdefault("POSTGRES_DB", "test_db")
 os.environ.setdefault("FRONTEND_URL", "http://localhost:3000")
 
+from app import main as main_module
+from app.core import file_storage
 from app.core.config import settings
-from app.core.dependencies import get_current_user
+from app.core.dependencies import get_current_user, get_db
 from app.core.security import (
     create_access_token,
     get_password_hash,
     verify_access_token,
 )
-from app.database import models
-from app.main import app
+from app.database import crud, models
 
-# Use an in-memory SQLite database for testing
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
+app = main_module.app
 
 
 @pytest.fixture(name="engine")
-def engine_fixture():
+def engine_fixture(tmp_path):
+    database_path = tmp_path / "test.db"
     engine = create_engine(
-        SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+        f"sqlite:///{database_path}", connect_args={"check_same_thread": False}
     )
     SQLModel.metadata.create_all(engine)
     yield engine
-    SQLModel.metadata.drop_all(engine)
+    engine.dispose()
 
 
 @pytest.fixture(name="session")
@@ -62,14 +62,32 @@ def session_fixture(engine):
 
 
 @pytest.fixture(name="client")
-def client_fixture(session):
+def client_fixture(engine, session, tmp_path, monkeypatch):
+    monkeypatch.setattr(main_module, "engine", engine)
+    monkeypatch.setattr(file_storage, "UPLOAD_DIR", tmp_path / "uploads")
+    monkeypatch.setattr(
+        "app.core.setup.SETUP_TOKEN_FILE", tmp_path / "setup" / ".setup_token"
+    )
+
     def get_session_override():
         return session
 
-    app.dependency_overrides[Session] = get_session_override
-    client = TestClient(app)
-    yield client
+    app.dependency_overrides[get_db] = get_session_override
+
+    with TestClient(app) as client:
+        yield client
+
+
+@pytest.fixture(autouse=True)
+def isolate_application_test_state():
+    """Restore mutable FastAPI test state even when a test fails."""
+    original_overrides = app.dependency_overrides.copy()
+    original_application_state = app.state._state.copy()
+    yield
     app.dependency_overrides.clear()
+    app.dependency_overrides.update(original_overrides)
+    app.state._state.clear()
+    app.state._state.update(original_application_state)
 
 
 @pytest.fixture(name="test_admin")
@@ -181,7 +199,7 @@ def analyst_token_fixture(test_analyst):
 def override_auth_fixture(session):
     """Override authentication dependencies for testing"""
 
-    async def mock_get_current_user(token: str = None):
+    async def mock_get_current_user(token: str | None = None):
         if not token:
             raise HTTPException(status_code=401, detail="Not authenticated")
         try:

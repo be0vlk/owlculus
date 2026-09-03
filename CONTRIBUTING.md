@@ -25,6 +25,17 @@ Thank you for your interest in contributing to this project! Please follow these
 - Make sure to update existing tests in `/backend/tests` or create new tests as needed for any changes to backend functionality.
 - Exact testing strategy is up to you, just get as much coverage as you can.
 
+The backend uses its uv lockfile for a reproducible local test environment:
+
+```bash
+cd backend
+uv sync --locked
+uv run --locked pytest
+```
+
+Run the commands outside a restricted sandbox that blocks the worker thread used
+by Starlette's synchronous `TestClient`.
+
 ## Naming & Documentation
 
 - Prefer clear and descriptive method and class names over excessive code comments. Well-named methods and classes often make code self-explanatory.

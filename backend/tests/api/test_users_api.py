@@ -26,7 +26,6 @@ from httpx import ASGITransport, AsyncClient
 from loguru import logger
 from sqlmodel import Session, select
 
-client = TestClient(app)
 
 
 @pytest.fixture
@@ -684,7 +683,7 @@ class TestUsersAPI:
         ) as async_client:
             return await async_client.post("/api/users/", json=payload)
 
-    def test_create_user_success_admin(self, session: Session, test_admin: User):
+    def test_create_user_success_admin(self, session: Session, test_admin: User, client: TestClient):
         """Test successful user creation by admin"""
         app.dependency_overrides[get_optional_current_user] = (
             override_get_current_user_factory(test_admin)
@@ -722,7 +721,7 @@ class TestUsersAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_create_user_forbidden_non_admin(self, session: Session, test_user: User):
+    def test_create_user_forbidden_non_admin(self, session: Session, test_user: User, client: TestClient):
         """Test user creation forbidden for non-admin"""
         app.dependency_overrides[get_optional_current_user] = (
             override_get_current_user_factory(test_user)
@@ -752,7 +751,7 @@ class TestUsersAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_create_user_invalid_data(self, session: Session, test_admin: User):
+    def test_create_user_invalid_data(self, session: Session, test_admin: User, client: TestClient):
         """Test user creation with invalid data"""
         app.dependency_overrides[get_optional_current_user] = (
             override_get_current_user_factory(test_admin)
@@ -768,7 +767,7 @@ class TestUsersAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_create_user_duplicate_username(self, session: Session, test_admin: User):
+    def test_create_user_duplicate_username(self, session: Session, test_admin: User, client: TestClient):
         """Test user creation with duplicate username"""
         app.dependency_overrides[get_optional_current_user] = (
             override_get_current_user_factory(test_admin)
@@ -800,7 +799,7 @@ class TestUsersAPI:
 
     # GET /api/users/me tests
 
-    def test_read_self_success(self, session: Session, test_user: User):
+    def test_read_self_success(self, session: Session, test_user: User, client: TestClient):
         """Test successful self profile retrieval"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_user
@@ -816,7 +815,7 @@ class TestUsersAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_legacy_local_email_user_can_log_in_and_read_self(self, session: Session):
+    def test_legacy_local_email_user_can_log_in_and_read_self(self, session: Session, client: TestClient):
         """Persisted legacy emails remain readable through authenticated APIs."""
         legacy_user = User(
             username="legacyadmin",
@@ -859,7 +858,7 @@ class TestUsersAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_read_self_unauthorized(self):
+    def test_read_self_unauthorized(self, client: TestClient):
         """Test self profile retrieval without authentication"""
         response = client.get("/api/users/me")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -867,7 +866,8 @@ class TestUsersAPI:
     # GET /api/users/ tests
 
     def test_get_users_success_admin(
-        self, session: Session, test_admin: User, test_user: User
+        self, session: Session, test_admin: User, test_user: User,
+    client: TestClient,
     ):
         """Test successful users listing by admin"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -888,7 +888,7 @@ class TestUsersAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_get_users_with_pagination(self, session: Session, test_admin: User):
+    def test_get_users_with_pagination(self, session: Session, test_admin: User, client: TestClient):
         """Test users listing with pagination"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_admin
@@ -905,7 +905,8 @@ class TestUsersAPI:
             app.dependency_overrides.clear()
 
     def test_get_users_serializes_legacy_local_email(
-        self, session: Session, test_admin: User
+        self, session: Session, test_admin: User,
+    client: TestClient,
     ):
         """User listings retain persisted legacy email addresses."""
         legacy_user = User(
@@ -944,7 +945,7 @@ class TestUsersAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_get_users_forbidden_non_admin(self, session: Session, test_user: User):
+    def test_get_users_forbidden_non_admin(self, session: Session, test_user: User, client: TestClient):
         """Test users listing forbidden for non-admin"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_user
@@ -967,7 +968,8 @@ class TestUsersAPI:
     # PUT /api/users/{user_id} tests
 
     def test_update_user_success_admin(
-        self, session: Session, test_admin: User, test_user: User
+        self, session: Session, test_admin: User, test_user: User,
+    client: TestClient,
     ):
         """Test successful user update by admin"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -1000,7 +1002,7 @@ class TestUsersAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_update_user_self(self, session: Session, test_user: User):
+    def test_update_user_self(self, session: Session, test_user: User, client: TestClient):
         """Test user updating their own profile"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_user
@@ -1025,7 +1027,7 @@ class TestUsersAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_update_user_not_found(self, session: Session, test_admin: User):
+    def test_update_user_not_found(self, session: Session, test_admin: User, client: TestClient):
         """Test user update with non-existent ID"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_admin
@@ -1050,7 +1052,8 @@ class TestUsersAPI:
             app.dependency_overrides.clear()
 
     def test_update_user_forbidden_other_user(
-        self, session: Session, test_user: User, test_analyst: User
+        self, session: Session, test_user: User, test_analyst: User,
+    client: TestClient,
     ):
         """Test user update forbidden for other users"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -1077,7 +1080,7 @@ class TestUsersAPI:
 
     # PUT /api/users/me/password tests
 
-    def test_change_password_success(self, session: Session, test_user: User):
+    def test_change_password_success(self, session: Session, test_user: User, client: TestClient):
         """Test successful password change"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_user
@@ -1102,7 +1105,7 @@ class TestUsersAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_change_password_wrong_current(self, session: Session, test_user: User):
+    def test_change_password_wrong_current(self, session: Session, test_user: User, client: TestClient):
         """Test password change with wrong current password"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_user
@@ -1129,7 +1132,7 @@ class TestUsersAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_change_password_weak_password(self, session: Session, test_user: User):
+    def test_change_password_weak_password(self, session: Session, test_user: User, client: TestClient):
         """Test password change with weak password"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_user
@@ -1159,7 +1162,8 @@ class TestUsersAPI:
     # PUT /api/users/{user_id}/password tests
 
     def test_admin_reset_password_success(
-        self, session: Session, test_admin: User, test_user: User
+        self, session: Session, test_admin: User, test_user: User,
+    client: TestClient,
     ):
         """Test successful admin password reset"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -1185,7 +1189,8 @@ class TestUsersAPI:
             app.dependency_overrides.clear()
 
     def test_admin_reset_password_forbidden_non_admin(
-        self, session: Session, test_user: User, test_analyst: User
+        self, session: Session, test_user: User, test_analyst: User,
+    client: TestClient,
     ):
         """Test admin password reset forbidden for non-admin"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -1213,7 +1218,8 @@ class TestUsersAPI:
             app.dependency_overrides.clear()
 
     def test_admin_reset_password_user_not_found(
-        self, session: Session, test_admin: User
+        self, session: Session, test_admin: User,
+    client: TestClient,
     ):
         """Test admin password reset with non-existent user"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -1240,7 +1246,7 @@ class TestUsersAPI:
 
     # Authentication and authorization tests
 
-    def test_users_api_unauthorized(self):
+    def test_users_api_unauthorized(self, client: TestClient):
         """Test users API endpoints without authentication"""
         endpoints = [
             (
@@ -1278,7 +1284,7 @@ class TestUsersAPI:
 
     # Edge cases and validation tests
 
-    def test_users_api_pagination_edge_cases(self, session: Session, test_admin: User):
+    def test_users_api_pagination_edge_cases(self, session: Session, test_admin: User, client: TestClient):
         """Test pagination with edge case values"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_admin
@@ -1299,7 +1305,7 @@ class TestUsersAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_users_api_invalid_role(self, session: Session, test_admin: User):
+    def test_users_api_invalid_role(self, session: Session, test_admin: User, client: TestClient):
         """Test user creation with invalid role"""
         app.dependency_overrides[get_optional_current_user] = (
             override_get_current_user_factory(test_admin)
@@ -1320,7 +1326,7 @@ class TestUsersAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_users_api_invalid_email_format(self, session: Session, test_admin: User):
+    def test_users_api_invalid_email_format(self, session: Session, test_admin: User, client: TestClient):
         """Test user creation with invalid email format"""
         app.dependency_overrides[get_optional_current_user] = (
             override_get_current_user_factory(test_admin)
@@ -1366,6 +1372,7 @@ class TestUsersAPI:
         method: str,
         path: str,
         payload: dict,
+    client: TestClient,
     ):
         """User input validation continues to reject reserved email suffixes."""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -1383,7 +1390,8 @@ class TestUsersAPI:
             app.dependency_overrides.clear()
 
     def test_users_api_error_format_consistency(
-        self, session: Session, test_admin: User
+        self, session: Session, test_admin: User,
+    client: TestClient,
     ):
         """Test consistent error response format"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -1409,7 +1417,7 @@ class TestUsersAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_users_api_response_time(self, session: Session, test_admin: User):
+    def test_users_api_response_time(self, session: Session, test_admin: User, client: TestClient):
         """Test API response time performance"""
         import time
 

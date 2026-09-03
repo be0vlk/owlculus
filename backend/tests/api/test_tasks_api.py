@@ -22,7 +22,6 @@ from fastapi import status
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-client = TestClient(app)
 
 
 @pytest.fixture
@@ -167,7 +166,7 @@ def override_get_current_user_factory(user: User):
 class TestTaskTemplatesAPI:
     """Test task template endpoints"""
 
-    def test_list_templates_success(self, session: Session, test_admin: User, test_template: TaskTemplate):
+    def test_list_templates_success(self, session: Session, test_admin: User, test_template: TaskTemplate, client: TestClient):
         """Test successful template listing"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(test_admin)
         app.dependency_overrides[get_db] = override_get_db_factory(session)
@@ -181,12 +180,12 @@ class TestTaskTemplatesAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_list_templates_unauthorized(self):
+    def test_list_templates_unauthorized(self, client: TestClient):
         """Test template listing without authentication"""
         response = client.get("/api/tasks/templates")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
-    def test_create_template_success_admin(self, session: Session, test_admin: User):
+    def test_create_template_success_admin(self, session: Session, test_admin: User, client: TestClient):
         """Test successful template creation by admin"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(test_admin)
         app.dependency_overrides[get_db] = override_get_db_factory(session)
@@ -210,7 +209,7 @@ class TestTaskTemplatesAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_create_template_forbidden_non_admin(self, session: Session, test_user: User):
+    def test_create_template_forbidden_non_admin(self, session: Session, test_user: User, client: TestClient):
         """Test template creation forbidden for non-admin"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(test_user)
         app.dependency_overrides[get_db] = override_get_db_factory(session)
@@ -236,7 +235,8 @@ class TestTasksAPI:
     """Test task CRUD endpoints"""
 
     def test_list_tasks_success(
-        self, session: Session, test_user: User, test_case_with_user: Case, test_task: Task
+        self, session: Session, test_user: User, test_case_with_user: Case, test_task: Task,
+    client: TestClient,
     ):
         """Test successful task listing"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(test_user)
@@ -252,7 +252,8 @@ class TestTasksAPI:
             app.dependency_overrides.clear()
 
     def test_list_tasks_by_case(
-        self, session: Session, test_admin: User, test_case: Case, test_task: Task
+        self, session: Session, test_admin: User, test_case: Case, test_task: Task,
+    client: TestClient,
     ):
         """Test listing tasks filtered by case"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(test_admin)
@@ -268,7 +269,8 @@ class TestTasksAPI:
             app.dependency_overrides.clear()
 
     def test_list_tasks_forbidden_no_case_access(
-        self, session: Session, test_user: User, test_case: Case, test_task: Task
+        self, session: Session, test_user: User, test_case: Case, test_task: Task,
+    client: TestClient,
     ):
         """Test listing tasks for case without access"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(test_user)
@@ -281,7 +283,8 @@ class TestTasksAPI:
             app.dependency_overrides.clear()
 
     def test_create_task_success(
-        self, session: Session, test_user: User, test_case_with_user: Case, test_template: TaskTemplate
+        self, session: Session, test_user: User, test_case_with_user: Case, test_template: TaskTemplate,
+    client: TestClient,
     ):
         """Test successful task creation"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(test_user)
@@ -308,7 +311,8 @@ class TestTasksAPI:
             app.dependency_overrides.clear()
 
     def test_create_task_forbidden_no_case_access(
-        self, session: Session, test_user: User, test_case: Case
+        self, session: Session, test_user: User, test_case: Case,
+    client: TestClient,
     ):
         """Test task creation forbidden without case access"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(test_user)
@@ -328,7 +332,8 @@ class TestTasksAPI:
             app.dependency_overrides.clear()
 
     def test_get_task_success(
-        self, session: Session, test_admin: User, test_task: Task
+        self, session: Session, test_admin: User, test_task: Task,
+    client: TestClient,
     ):
         """Test successful task retrieval"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(test_admin)
@@ -343,7 +348,7 @@ class TestTasksAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_get_task_not_found(self, session: Session, test_admin: User):
+    def test_get_task_not_found(self, session: Session, test_admin: User, client: TestClient):
         """Test getting non-existent task"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(test_admin)
         app.dependency_overrides[get_db] = override_get_db_factory(session)
@@ -355,7 +360,8 @@ class TestTasksAPI:
             app.dependency_overrides.clear()
 
     def test_get_task_forbidden_no_case_access(
-        self, session: Session, test_user: User, test_task: Task
+        self, session: Session, test_user: User, test_task: Task,
+    client: TestClient,
     ):
         """Test getting task without case access"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(test_user)
@@ -368,7 +374,8 @@ class TestTasksAPI:
             app.dependency_overrides.clear()
 
     def test_update_task_success(
-        self, session: Session, test_admin: User, test_task: Task
+        self, session: Session, test_admin: User, test_task: Task,
+    client: TestClient,
     ):
         """Test successful task update"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(test_admin)
@@ -389,7 +396,7 @@ class TestTasksAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_update_task_not_found(self, session: Session, test_admin: User):
+    def test_update_task_not_found(self, session: Session, test_admin: User, client: TestClient):
         """Test updating non-existent task"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(test_admin)
         app.dependency_overrides[get_db] = override_get_db_factory(session)
@@ -402,7 +409,7 @@ class TestTasksAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_delete_task_success(self, session: Session, test_admin: User, test_task: Task):
+    def test_delete_task_success(self, session: Session, test_admin: User, test_task: Task, client: TestClient):
         """Test successful task deletion by admin"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(test_admin)
         app.dependency_overrides[get_db] = override_get_db_factory(session)
@@ -415,7 +422,8 @@ class TestTasksAPI:
             app.dependency_overrides.clear()
 
     def test_delete_task_forbidden_non_admin(
-        self, session: Session, test_user: User, test_case_with_user: Case
+        self, session: Session, test_user: User, test_case_with_user: Case,
+    client: TestClient,
     ):
         """Test task deletion forbidden for non-admin"""
         # Create task in case where user has access
@@ -444,7 +452,8 @@ class TestTaskOperationsAPI:
     """Test task operation endpoints"""
 
     def test_assign_task_success(
-        self, session: Session, test_admin: User, test_user: User, test_case_with_user: Case, test_task: Task
+        self, session: Session, test_admin: User, test_user: User, test_case_with_user: Case, test_task: Task,
+    client: TestClient,
     ):
         """Test successful task assignment"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(test_admin)
@@ -459,7 +468,8 @@ class TestTaskOperationsAPI:
             app.dependency_overrides.clear()
 
     def test_assign_task_user_no_case_access(
-        self, session: Session, test_admin: User, test_analyst: User, test_task: Task
+        self, session: Session, test_admin: User, test_analyst: User, test_task: Task,
+    client: TestClient,
     ):
         """Test assigning task to user without case access"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(test_admin)
@@ -472,7 +482,8 @@ class TestTaskOperationsAPI:
             app.dependency_overrides.clear()
 
     def test_unassign_task_success(
-        self, session: Session, test_admin: User, test_task: Task
+        self, session: Session, test_admin: User, test_task: Task,
+    client: TestClient,
     ):
         """Test successful task unassignment"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(test_admin)
@@ -487,7 +498,8 @@ class TestTaskOperationsAPI:
             app.dependency_overrides.clear()
 
     def test_update_task_status_success(
-        self, session: Session, test_admin: User, test_task: Task
+        self, session: Session, test_admin: User, test_task: Task,
+    client: TestClient,
     ):
         """Test successful task status update"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(test_admin)
@@ -504,7 +516,8 @@ class TestTaskOperationsAPI:
             app.dependency_overrides.clear()
 
     def test_update_task_status_invalid(
-        self, session: Session, test_admin: User, test_task: Task
+        self, session: Session, test_admin: User, test_task: Task,
+    client: TestClient,
     ):
         """Test updating task with invalid status"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(test_admin)
@@ -517,7 +530,8 @@ class TestTaskOperationsAPI:
             app.dependency_overrides.clear()
 
     def test_update_task_status_completed(
-        self, session: Session, test_admin: User, test_task: Task
+        self, session: Session, test_admin: User, test_task: Task,
+    client: TestClient,
     ):
         """Test updating task status to completed"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(test_admin)
@@ -540,7 +554,8 @@ class TestBulkTaskOperationsAPI:
     """Test bulk task operation endpoints"""
 
     def test_bulk_assign_tasks_success(
-        self, session: Session, test_admin: User, test_user: User, test_case_with_user: Case
+        self, session: Session, test_admin: User, test_user: User, test_case_with_user: Case,
+    client: TestClient,
     ):
         """Test successful bulk task assignment"""
         # Create multiple tasks
@@ -580,7 +595,8 @@ class TestBulkTaskOperationsAPI:
             app.dependency_overrides.clear()
 
     def test_bulk_update_status_success(
-        self, session: Session, test_admin: User, test_case: Case
+        self, session: Session, test_admin: User, test_case: Case,
+    client: TestClient,
     ):
         """Test successful bulk task status update"""
         # Create multiple tasks
@@ -622,7 +638,8 @@ class TestTaskAccessControl:
     """Test access control scenarios for tasks"""
 
     def test_analyst_can_view_tasks_with_case_access(
-        self, session: Session, test_analyst: User, test_case: Case, test_task: Task
+        self, session: Session, test_analyst: User, test_case: Case, test_task: Task,
+    client: TestClient,
     ):
         """Test analyst can view tasks when they have case access"""
         # Give analyst access to the case
@@ -645,7 +662,8 @@ class TestTaskAccessControl:
             app.dependency_overrides.clear()
 
     def test_analyst_cannot_modify_tasks(
-        self, session: Session, test_analyst: User, test_case: Case, test_task: Task
+        self, session: Session, test_analyst: User, test_case: Case, test_task: Task,
+    client: TestClient,
     ):
         """Test analyst cannot modify tasks even with case access"""
         # Give analyst access to the case
@@ -671,7 +689,7 @@ class TestTaskAccessControl:
 class TestTaskPagination:
     """Test task pagination"""
 
-    def test_task_pagination(self, session: Session, test_admin: User, test_case: Case):
+    def test_task_pagination(self, session: Session, test_admin: User, test_case: Case, client: TestClient):
         """Test task listing with pagination"""
         # Create 15 tasks
         for i in range(15):

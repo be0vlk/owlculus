@@ -13,7 +13,6 @@ from fastapi import status
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-client = TestClient(app)
 
 
 @pytest.fixture
@@ -96,6 +95,7 @@ class TestSystemConfigAPI:
         session: Session,
         test_admin: User,
         test_system_config: SystemConfiguration,
+    client: TestClient,
     ):
         """Test successful configuration retrieval by admin"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -121,7 +121,8 @@ class TestSystemConfigAPI:
             app.dependency_overrides.clear()
 
     def test_get_configuration_creates_default(
-        self, session: Session, test_admin: User
+        self, session: Session, test_admin: User,
+    client: TestClient,
     ):
         """Test configuration retrieval creates default when none exists"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -151,7 +152,8 @@ class TestSystemConfigAPI:
             app.dependency_overrides.clear()
 
     def test_get_configuration_forbidden_non_admin(
-        self, session: Session, test_user: User
+        self, session: Session, test_user: User,
+    client: TestClient,
     ):
         """Test configuration retrieval forbidden for non-admin"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -166,7 +168,8 @@ class TestSystemConfigAPI:
             app.dependency_overrides.clear()
 
     def test_get_configuration_forbidden_analyst(
-        self, session: Session, test_analyst: User
+        self, session: Session, test_analyst: User,
+    client: TestClient,
     ):
         """Test configuration retrieval forbidden for analyst"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -180,7 +183,7 @@ class TestSystemConfigAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_get_configuration_unauthorized(self):
+    def test_get_configuration_unauthorized(self, client: TestClient):
         """Test configuration retrieval without authentication"""
         response = client.get("/api/admin/configuration")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -192,6 +195,7 @@ class TestSystemConfigAPI:
         session: Session,
         test_admin: User,
         test_system_config: SystemConfiguration,
+    client: TestClient,
     ):
         """Test successful configuration update with YYMM-NN template"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -224,6 +228,7 @@ class TestSystemConfigAPI:
         session: Session,
         test_admin: User,
         test_system_config: SystemConfiguration,
+    client: TestClient,
     ):
         """Test successful configuration update with PREFIX-YYMM-NN template"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -255,7 +260,8 @@ class TestSystemConfigAPI:
             app.dependency_overrides.clear()
 
     def test_update_configuration_invalid_template(
-        self, session: Session, test_admin: User
+        self, session: Session, test_admin: User,
+    client: TestClient,
     ):
         """Test configuration update with invalid template"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -276,7 +282,8 @@ class TestSystemConfigAPI:
             app.dependency_overrides.clear()
 
     def test_update_configuration_missing_prefix_for_prefix_template(
-        self, session: Session, test_admin: User
+        self, session: Session, test_admin: User,
+    client: TestClient,
     ):
         """Test configuration update with PREFIX template but missing prefix"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -297,7 +304,8 @@ class TestSystemConfigAPI:
             app.dependency_overrides.clear()
 
     def test_update_configuration_invalid_prefix(
-        self, session: Session, test_admin: User
+        self, session: Session, test_admin: User,
+    client: TestClient,
     ):
         """Test configuration update with invalid prefix"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -318,7 +326,8 @@ class TestSystemConfigAPI:
             app.dependency_overrides.clear()
 
     def test_update_configuration_forbidden_non_admin(
-        self, session: Session, test_user: User
+        self, session: Session, test_user: User,
+    client: TestClient,
     ):
         """Test configuration update forbidden for non-admin"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -334,7 +343,7 @@ class TestSystemConfigAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_update_configuration_unauthorized(self):
+    def test_update_configuration_unauthorized(self, client: TestClient):
         """Test configuration update without authentication"""
         update_data = {"case_number_template": "YYMM-NN", "case_number_prefix": None}
 
@@ -342,7 +351,8 @@ class TestSystemConfigAPI:
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_update_configuration_invalid_data_format(
-        self, session: Session, test_admin: User
+        self, session: Session, test_admin: User,
+    client: TestClient,
     ):
         """Test configuration update with invalid data format"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -362,7 +372,8 @@ class TestSystemConfigAPI:
     # GET /api/system_config/configuration/preview tests
 
     def test_preview_configuration_success_yymm(
-        self, session: Session, test_admin: User
+        self, session: Session, test_admin: User,
+    client: TestClient,
     ):
         """Test successful configuration preview with YYMM-NN template"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -393,7 +404,8 @@ class TestSystemConfigAPI:
             app.dependency_overrides.clear()
 
     def test_preview_configuration_success_prefix(
-        self, session: Session, test_admin: User
+        self, session: Session, test_admin: User,
+    client: TestClient,
     ):
         """Test successful configuration preview with PREFIX-YYMM-NN template"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -429,7 +441,8 @@ class TestSystemConfigAPI:
             app.dependency_overrides.clear()
 
     def test_preview_configuration_invalid_template(
-        self, session: Session, test_admin: User
+        self, session: Session, test_admin: User,
+    client: TestClient,
     ):
         """Test configuration preview with invalid template"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -448,7 +461,8 @@ class TestSystemConfigAPI:
             app.dependency_overrides.clear()
 
     def test_preview_configuration_missing_template(
-        self, session: Session, test_admin: User
+        self, session: Session, test_admin: User,
+    client: TestClient,
     ):
         """Test configuration preview without template parameter"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -463,7 +477,8 @@ class TestSystemConfigAPI:
             app.dependency_overrides.clear()
 
     def test_preview_configuration_forbidden_non_admin(
-        self, session: Session, test_user: User
+        self, session: Session, test_user: User,
+    client: TestClient,
     ):
         """Test configuration preview forbidden for non-admin"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -477,7 +492,7 @@ class TestSystemConfigAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_preview_configuration_unauthorized(self):
+    def test_preview_configuration_unauthorized(self, client: TestClient):
         """Test configuration preview without authentication"""
         response = client.get("/api/admin/configuration/preview?template=YYMM-NN")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -485,7 +500,8 @@ class TestSystemConfigAPI:
     # Edge cases and validation tests
 
     def test_configuration_api_special_characters_in_prefix(
-        self, session: Session, test_admin: User
+        self, session: Session, test_admin: User,
+    client: TestClient,
     ):
         """Test configuration with special characters in prefix"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -506,7 +522,8 @@ class TestSystemConfigAPI:
             app.dependency_overrides.clear()
 
     def test_configuration_api_prefix_too_long(
-        self, session: Session, test_admin: User
+        self, session: Session, test_admin: User,
+    client: TestClient,
     ):
         """Test configuration with prefix too long"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -531,6 +548,7 @@ class TestSystemConfigAPI:
         session: Session,
         test_admin: User,
         test_system_config: SystemConfiguration,
+    client: TestClient,
     ):
         """Test configuration with mixed case prefix"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -565,6 +583,7 @@ class TestSystemConfigAPI:
         session: Session,
         test_admin: User,
         test_system_config: SystemConfiguration,
+    client: TestClient,
     ):
         """Test configuration update with explicit null values"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -596,6 +615,7 @@ class TestSystemConfigAPI:
         session: Session,
         test_admin: User,
         test_system_config: SystemConfiguration,
+    client: TestClient,
     ):
         """Test consistent response format across endpoints"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -632,7 +652,7 @@ class TestSystemConfigAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_configuration_api_response_time(self, session: Session, test_admin: User):
+    def test_configuration_api_response_time(self, session: Session, test_admin: User, client: TestClient):
         """Test API response time performance"""
         import time
 
@@ -668,7 +688,8 @@ class TestSystemConfigAPI:
             app.dependency_overrides.clear()
 
     def test_preview_configuration_empty_prefix(
-        self, session: Session, test_admin: User
+        self, session: Session, test_admin: User,
+    client: TestClient,
     ):
         """Test configuration preview with empty prefix parameter"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -706,6 +727,7 @@ class TestAPIKeyManagementAPI:
         session: Session,
         test_admin: User,
         test_system_config: SystemConfiguration,
+    client: TestClient,
     ):
         """Test successful API key setting"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -740,7 +762,7 @@ class TestAPIKeyManagementAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_set_api_key_forbidden_non_admin(self, session: Session, test_user: User):
+    def test_set_api_key_forbidden_non_admin(self, session: Session, test_user: User, client: TestClient):
         """Test API key setting forbidden for non-admin"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_user
@@ -757,7 +779,7 @@ class TestAPIKeyManagementAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_set_api_key_unauthorized(self):
+    def test_set_api_key_unauthorized(self, client: TestClient):
         """Test API key setting without authentication"""
         api_key_data = {"api_key": "sk-test123456789", "name": "OpenAI API"}
 
@@ -766,7 +788,7 @@ class TestAPIKeyManagementAPI:
         )
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
-    def test_set_api_key_missing_key(self, session: Session, test_admin: User):
+    def test_set_api_key_missing_key(self, session: Session, test_admin: User, client: TestClient):
         """Test API key setting with missing key"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_admin
@@ -790,6 +812,7 @@ class TestAPIKeyManagementAPI:
         session: Session,
         test_admin: User,
         test_system_config: SystemConfiguration,
+    client: TestClient,
     ):
         """Test successful API key removal"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -815,7 +838,8 @@ class TestAPIKeyManagementAPI:
             app.dependency_overrides.clear()
 
     def test_remove_api_key_forbidden_non_admin(
-        self, session: Session, test_user: User
+        self, session: Session, test_user: User,
+    client: TestClient,
     ):
         """Test API key removal forbidden for non-admin"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -829,14 +853,14 @@ class TestAPIKeyManagementAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_remove_api_key_unauthorized(self):
+    def test_remove_api_key_unauthorized(self, client: TestClient):
         """Test API key removal without authentication"""
         response = client.delete("/api/admin/configuration/api-keys/openai")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     # GET /api/admin/configuration/api-keys tests
 
-    def test_list_api_keys_success(self, session: Session, test_admin: User):
+    def test_list_api_keys_success(self, session: Session, test_admin: User, client: TestClient):
         """Test successful API keys listing"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_admin
@@ -872,7 +896,7 @@ class TestAPIKeyManagementAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_list_api_keys_empty(self, session: Session, test_admin: User):
+    def test_list_api_keys_empty(self, session: Session, test_admin: User, client: TestClient):
         """Test API keys listing when none configured"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_admin
@@ -892,7 +916,7 @@ class TestAPIKeyManagementAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_list_api_keys_forbidden_non_admin(self, session: Session, test_user: User):
+    def test_list_api_keys_forbidden_non_admin(self, session: Session, test_user: User, client: TestClient):
         """Test API keys listing forbidden for non-admin"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_user
@@ -905,14 +929,14 @@ class TestAPIKeyManagementAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_list_api_keys_unauthorized(self):
+    def test_list_api_keys_unauthorized(self, client: TestClient):
         """Test API keys listing without authentication"""
         response = client.get("/api/admin/configuration/api-keys")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     # GET /api/admin/configuration/api-keys/{provider}/status tests
 
-    def test_get_api_key_status_configured(self, session: Session, test_admin: User):
+    def test_get_api_key_status_configured(self, session: Session, test_admin: User, client: TestClient):
         """Test API key status when provider is configured"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_admin
@@ -934,7 +958,8 @@ class TestAPIKeyManagementAPI:
             app.dependency_overrides.clear()
 
     def test_get_api_key_status_not_configured(
-        self, session: Session, test_admin: User
+        self, session: Session, test_admin: User,
+    client: TestClient,
     ):
         """Test API key status when provider is not configured"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -959,7 +984,8 @@ class TestAPIKeyManagementAPI:
             app.dependency_overrides.clear()
 
     def test_get_api_key_status_forbidden_non_admin(
-        self, session: Session, test_user: User
+        self, session: Session, test_user: User,
+    client: TestClient,
     ):
         """Test API key status forbidden for non-admin"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -973,7 +999,7 @@ class TestAPIKeyManagementAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_get_api_key_status_unauthorized(self):
+    def test_get_api_key_status_unauthorized(self, client: TestClient):
         """Test API key status without authentication"""
         response = client.get("/api/admin/configuration/api-keys/openai/status")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
@@ -985,6 +1011,7 @@ class TestAPIKeyManagementAPI:
         session: Session,
         test_admin: User,
         test_system_config: SystemConfiguration,
+    client: TestClient,
     ):
         """Test complete API key management workflow"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(

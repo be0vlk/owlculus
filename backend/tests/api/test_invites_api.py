@@ -11,7 +11,6 @@ from fastapi import status
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-client = TestClient(app)
 
 
 @pytest.fixture
@@ -76,7 +75,7 @@ def override_get_current_user_factory(user: User):
 class TestInvitesAPI:
     """Test cases for invites API endpoints"""
 
-    def test_create_invite_success_admin(self, session: Session, test_admin: User):
+    def test_create_invite_success_admin(self, session: Session, test_admin: User, client: TestClient):
         """Test successful invite creation by admin"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_admin
@@ -95,7 +94,8 @@ class TestInvitesAPI:
             app.dependency_overrides.clear()
 
     def test_create_invite_forbidden_investigator(
-        self, session: Session, test_investigator: User
+        self, session: Session, test_investigator: User,
+    client: TestClient,
     ):
         """Test invite creation forbidden for investigator"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -111,7 +111,8 @@ class TestInvitesAPI:
             app.dependency_overrides.clear()
 
     def test_create_invite_forbidden_analyst(
-        self, session: Session, test_analyst: User
+        self, session: Session, test_analyst: User,
+    client: TestClient,
     ):
         """Test invite creation forbidden for analyst"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -126,13 +127,13 @@ class TestInvitesAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_create_invite_unauthorized(self):
+    def test_create_invite_unauthorized(self, client: TestClient):
         """Test invite creation without authentication"""
         invite_data = {"role": "Investigator"}
         response = client.post("/api/invites/", json=invite_data)
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
-    def test_get_invites_success_admin(self, session: Session, test_admin: User):
+    def test_get_invites_success_admin(self, session: Session, test_admin: User, client: TestClient):
         """Test successful invites listing by admin"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_admin
@@ -148,7 +149,8 @@ class TestInvitesAPI:
             app.dependency_overrides.clear()
 
     def test_get_invites_forbidden_investigator(
-        self, session: Session, test_investigator: User
+        self, session: Session, test_investigator: User,
+    client: TestClient,
     ):
         """Test invites listing forbidden for investigator"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -162,7 +164,7 @@ class TestInvitesAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_get_invites_forbidden_analyst(self, session: Session, test_analyst: User):
+    def test_get_invites_forbidden_analyst(self, session: Session, test_analyst: User, client: TestClient):
         """Test invites listing forbidden for analyst"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_analyst
@@ -175,12 +177,12 @@ class TestInvitesAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_get_invites_unauthorized(self):
+    def test_get_invites_unauthorized(self, client: TestClient):
         """Test invites listing without authentication"""
         response = client.get("/api/invites/")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
-    def test_validate_invite_success(self, session: Session):
+    def test_validate_invite_success(self, session: Session, client: TestClient):
         """Test successful invite validation (no auth required)"""
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -193,7 +195,7 @@ class TestInvitesAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_register_user_success(self, session: Session):
+    def test_register_user_success(self, session: Session, client: TestClient):
         """Test successful user registration with invite (no auth required)"""
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -214,7 +216,7 @@ class TestInvitesAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_delete_invite_success_admin(self, session: Session, test_admin: User):
+    def test_delete_invite_success_admin(self, session: Session, test_admin: User, client: TestClient):
         """Test successful invite deletion by admin"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_admin
@@ -242,7 +244,8 @@ class TestInvitesAPI:
             app.dependency_overrides.clear()
 
     def test_delete_invite_forbidden_investigator(
-        self, session: Session, test_investigator: User
+        self, session: Session, test_investigator: User,
+    client: TestClient,
     ):
         """Test invite deletion forbidden for investigator"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -257,7 +260,8 @@ class TestInvitesAPI:
             app.dependency_overrides.clear()
 
     def test_delete_invite_forbidden_analyst(
-        self, session: Session, test_analyst: User
+        self, session: Session, test_analyst: User,
+    client: TestClient,
     ):
         """Test invite deletion forbidden for analyst"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -271,12 +275,12 @@ class TestInvitesAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_delete_invite_unauthorized(self):
+    def test_delete_invite_unauthorized(self, client: TestClient):
         """Test invite deletion without authentication"""
         response = client.delete("/api/invites/1")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
-    def test_delete_invite_not_found(self, session: Session, test_admin: User):
+    def test_delete_invite_not_found(self, session: Session, test_admin: User, client: TestClient):
         """Test deleting non-existent invite returns 404"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_admin
@@ -290,7 +294,8 @@ class TestInvitesAPI:
             app.dependency_overrides.clear()
 
     def test_cleanup_expired_invites_success_admin(
-        self, session: Session, test_admin: User
+        self, session: Session, test_admin: User,
+    client: TestClient,
     ):
         """Test successful cleanup of expired invites by admin"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -307,7 +312,8 @@ class TestInvitesAPI:
             app.dependency_overrides.clear()
 
     def test_cleanup_expired_invites_forbidden_investigator(
-        self, session: Session, test_investigator: User
+        self, session: Session, test_investigator: User,
+    client: TestClient,
     ):
         """Test cleanup forbidden for investigator"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -322,7 +328,8 @@ class TestInvitesAPI:
             app.dependency_overrides.clear()
 
     def test_cleanup_expired_invites_forbidden_analyst(
-        self, session: Session, test_analyst: User
+        self, session: Session, test_analyst: User,
+    client: TestClient,
     ):
         """Test cleanup forbidden for analyst"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -336,12 +343,12 @@ class TestInvitesAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_cleanup_expired_invites_unauthorized(self):
+    def test_cleanup_expired_invites_unauthorized(self, client: TestClient):
         """Test cleanup without authentication"""
         response = client.post("/api/invites/cleanup")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
-    def test_register_duplicate_username(self, session: Session, test_admin: User):
+    def test_register_duplicate_username(self, session: Session, test_admin: User, client: TestClient):
         """Test registration with duplicate username"""
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -369,7 +376,7 @@ class TestInvitesAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_register_duplicate_email(self, session: Session, test_admin: User):
+    def test_register_duplicate_email(self, session: Session, test_admin: User, client: TestClient):
         """Test registration with duplicate email"""
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
