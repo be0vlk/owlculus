@@ -4,16 +4,24 @@ import hmac
 import os
 import secrets
 import sys
+import threading
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
+from typing import Iterator
+
+from sqlalchemy import text
+from sqlalchemy.engine import Connection
+from sqlmodel import Session, select
 
 from app.database.models import User
-from sqlmodel import Session, select
 
 _DEFAULT_SETUP_DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "setup"
 SETUP_DATA_DIR = Path(
     os.environ.get("OWLCULUS_SETUP_DATA_DIR", str(_DEFAULT_SETUP_DATA_DIR))
 )
 SETUP_TOKEN_FILE = SETUP_DATA_DIR / ".setup_token"
+_SQLITE_FIRST_USER_LOCK = threading.Lock()
+_POSTGRES_FIRST_USER_LOCK_ID = 719_225_404
 
 
 def _write_private_temp_file(token: str, destination: Path) -> Path:
@@ -86,6 +94,34 @@ def validate_setup_token(token: str | None) -> bool:
 def clear_setup_token() -> None:
     """Remove the pending setup token if one exists."""
     SETUP_TOKEN_FILE.unlink(missing_ok=True)
+
+
+@contextmanager
+def serialize_first_user_creation(session: Session) -> Iterator[None]:
+    """Serialize the empty-table check and first-user insert for supported databases."""
+    bind = session.get_bind()
+    dialect_name = bind.dialect.name
+    externally_managed_connection = isinstance(bind, Connection)
+
+    if dialect_name == "sqlite" and not externally_managed_connection:
+        session.rollback()
+
+    lock = _SQLITE_FIRST_USER_LOCK if dialect_name == "sqlite" else nullcontext()
+    with lock:
+        if dialect_name == "sqlite" and not externally_managed_connection:
+            session.execute(text("BEGIN IMMEDIATE"))
+        elif dialect_name == "postgresql":
+            session.execute(
+                text("SELECT pg_advisory_xact_lock(:lock_id)"),
+                {"lock_id": _POSTGRES_FIRST_USER_LOCK_ID},
+            )
+
+        try:
+            yield
+        except Exception:
+            if not externally_managed_connection:
+                session.rollback()
+            raise
 
 
 def is_setup_required(session: Session) -> bool:

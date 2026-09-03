@@ -8,6 +8,10 @@ FastAPI application. It handles JWT token validation and user permissions.
 
 from functools import wraps
 
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import OAuth2PasswordBearer
+from sqlmodel import Session, select
+
 from app.core import security
 from app.core.config import settings
 from app.core.exceptions import AuthorizationException, ResourceNotFoundException
@@ -15,11 +19,29 @@ from app.core.roles import UserRole
 from app.database import crud
 from app.database.connection import get_db
 from app.database.models import Case, User
-from fastapi import Depends, HTTPException, Request, status
-from fastapi.security import OAuth2PasswordBearer
-from sqlmodel import Session, select
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
+optional_oauth2_scheme = OAuth2PasswordBearer(
+    tokenUrl=f"{settings.API_V1_STR}/auth/login", auto_error=False
+)
+
+
+async def _resolve_current_user(db: Session, token: str) -> User:
+    """Resolve and validate a bearer token into an active user."""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"Authorization": "Bearer"},
+    )
+    username = security.verify_access_token(token, credentials_exception)
+    user = await crud.get_user_by_username(db, username=username)
+    if user is None:
+        raise credentials_exception
+
+    if not user.is_active:
+        raise HTTPException(status_code=400, detail="Inactive user")
+
+    return user
 
 
 def get_client_ip(request: Request) -> str:
@@ -44,21 +66,17 @@ def get_user_agent(request: Request) -> str:
 async def get_current_user(
     db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)
 ) -> User:
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"Authorization": "Bearer"},
-    )
-    username = security.verify_access_token(token, credentials_exception)
-    user = await crud.get_user_by_username(db, username=username)
-    if user is None:
-        raise credentials_exception
+    return await _resolve_current_user(db, token)
 
-    # Check if user is active
-    if not user.is_active:
-        raise HTTPException(status_code=400, detail="Inactive user")
 
-    return user
+async def get_optional_current_user(
+    db: Session = Depends(get_db),
+    token: str | None = Depends(optional_oauth2_scheme),
+) -> User | None:
+    """Return no user when a bearer token is absent, while rejecting invalid tokens."""
+    if token is None:
+        return None
+    return await _resolve_current_user(db, token)
 
 
 # async def get_current_active_user(

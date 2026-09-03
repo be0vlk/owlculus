@@ -7,8 +7,14 @@ Provides comprehensive user lifecycle management with security validation,
 privilege escalation protection, and audit logging for OSINT investigation platforms.
 """
 
+import re
+
+from sqlmodel import Session
+
 from app import schemas
+from app.core import setup
 from app.core.exceptions import (
+    AuthenticationException,
     AuthorizationException,
     BaseException,
     DuplicateResourceException,
@@ -18,12 +24,87 @@ from app.core.exceptions import (
 from app.core.logging import get_security_logger
 from app.core.roles import UserRole
 from app.database import crud, models
-from sqlmodel import Session
+
+_BOOTSTRAP_USERNAME_PATTERN = re.compile(r"[A-Za-z0-9_]{3,50}\Z")
 
 
 class UserService:
     def __init__(self, db: Session):
         self.db = db
+
+    @staticmethod
+    def _validate_bootstrap_credentials(user: schemas.BootstrapUserCreate) -> None:
+        if not _BOOTSTRAP_USERNAME_PATTERN.fullmatch(user.username):
+            raise ValidationException(
+                "Username must be 3-50 characters and contain only letters, numbers, and underscores"
+            )
+        if len(user.password) < 10:
+            raise ValidationException("Password must be at least 10 characters")
+
+    async def create_bootstrap_user(self, user_data: object) -> schemas.User:
+        """Create the only first user after validating the one-time setup token."""
+        raw_username = (
+            user_data.get("username") if isinstance(user_data, dict) else None
+        )
+        bootstrap_logger = get_security_logger(
+            action="create_user",
+            target_username=raw_username if isinstance(raw_username, str) else None,
+            event_type="user_creation_attempt",
+            is_bootstrap=True,
+        )
+
+        if not setup.is_setup_required(self.db):
+            raise AuthenticationException("Authentication required")
+
+        submitted_token = (
+            user_data.get("setup_token") if isinstance(user_data, dict) else None
+        )
+        if not setup.validate_setup_token(
+            submitted_token if isinstance(submitted_token, str) else None
+        ):
+            bootstrap_logger.bind(
+                event_type="user_creation_failed",
+                failure_reason="invalid_setup_token",
+            ).warning("Bootstrap user creation failed: invalid setup token")
+            raise AuthorizationException("Invalid setup token")
+
+        user = schemas.BootstrapUserCreate.model_validate(user_data)
+        self._validate_bootstrap_credentials(user)
+
+        try:
+            with setup.serialize_first_user_creation(self.db):
+                if not setup.is_setup_required(self.db):
+                    bootstrap_logger.bind(
+                        event_type="user_creation_failed",
+                        failure_reason="setup_already_completed",
+                    ).warning("Bootstrap user creation failed: setup already completed")
+                    raise AuthorizationException("Setup already completed")
+
+                forced_user = schemas.UserCreate(
+                    username=user.username,
+                    email=user.email,
+                    password=user.password,
+                    role=UserRole.ADMIN,
+                    is_active=True,
+                    is_superadmin=True,
+                )
+                new_user = await crud.create_user(self.db, user=forced_user)
+
+            setup.clear_setup_token()
+            bootstrap_logger.bind(
+                user_id=new_user.id,
+                role=new_user.role,
+                event_type="user_creation_success",
+            ).info("Bootstrap administrator created successfully")
+            return schemas.User.model_validate(new_user)
+        except (AuthorizationException, ValidationException):
+            raise
+        except Exception as e:
+            bootstrap_logger.bind(
+                event_type="user_creation_error",
+                error_type="system_error",
+            ).error(f"Bootstrap user creation error: {str(e)}")
+            raise BaseException("Internal server error")
 
     async def create_user(
         self, user: schemas.UserCreate, current_user: models.User

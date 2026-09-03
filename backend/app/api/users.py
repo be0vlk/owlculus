@@ -5,36 +5,67 @@ This module provides comprehensive user account management for the Owlculus plat
 supporting role-based access control and secure user administration for investigation teams.
 """
 
+from typing import Any
+
+from fastapi import APIRouter, Body, Depends, HTTPException, status
+from fastapi.exceptions import RequestValidationError
+from pydantic import ValidationError as PydanticValidationError
+from sqlmodel import Session
+
 from app import schemas
-from app.core.dependencies import admin_only, get_current_user
+from app.core.dependencies import (
+    admin_only,
+    get_current_user,
+    get_optional_current_user,
+)
 from app.core.exceptions import (
+    AuthenticationException,
     AuthorizationException,
     BaseException,
     DuplicateResourceException,
     ResourceNotFoundException,
     ValidationException,
 )
+from app.core.roles import UserRole
 from app.database import models
 from app.database.connection import get_db
 from app.services.user_service import UserService
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlmodel import Session
 
 router = APIRouter()
 
 
 @router.post("/", response_model=schemas.User, status_code=status.HTTP_201_CREATED)
-@admin_only()
 async def create_user(
-    user: schemas.UserCreate,
+    user_data: Any = Body(...),
     db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
+    current_user: models.User | None = Depends(get_optional_current_user),
 ):
     user_service = UserService(db)
     try:
+        if current_user is None:
+            return await user_service.create_bootstrap_user(user_data=user_data)
+        user = schemas.UserCreate.model_validate(user_data)
+        if current_user.role != UserRole.ADMIN.value:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized"
+            )
         return await user_service.create_user(user=user, current_user=current_user)
+    except PydanticValidationError as e:
+        errors = []
+        for error in e.errors():
+            body_error = dict(error)
+            body_error["loc"] = ("body", *error["loc"])
+            body_error.pop("input", None)
+            errors.append(body_error)
+        raise RequestValidationError(errors) from e
     except DuplicateResourceException as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except AuthenticationException as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(e),
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     except AuthorizationException as e:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
     except ValidationException as e:

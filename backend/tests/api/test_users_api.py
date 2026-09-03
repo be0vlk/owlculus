@@ -2,16 +2,28 @@
 Comprehensive tests for users API endpoints
 """
 
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 from unittest.mock import patch
 
 import pytest
-from app.core.dependencies import get_current_user, get_db
+from fastapi import FastAPI, status
+from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
+from sqlmodel import Session, select
+
+from app.api import auth as auth_api
+from app.api import users as users_api
+from app.core import setup
+from app.core.dependencies import (
+    get_current_user,
+    get_db,
+    get_optional_current_user,
+)
 from app.core.security import get_password_hash
 from app.database.models import User
 from app.main import app
-from fastapi import status
-from fastapi.testclient import TestClient
-from sqlmodel import Session
 
 client = TestClient(app)
 
@@ -75,15 +87,369 @@ def override_get_current_user_factory(user: User):
     return override_get_current_user
 
 
+def bootstrap_test_app(session: Session) -> FastAPI:
+    """Build the API seam without running the production lifespan."""
+
+    async def override_get_db():
+        return session
+
+    test_app = FastAPI()
+    test_app.include_router(auth_api.router, prefix="/api/auth")
+    test_app.include_router(users_api.router, prefix="/api/users")
+    test_app.dependency_overrides[get_db] = override_get_db
+    return test_app
+
+
+@pytest.fixture
+def pending_setup_token(tmp_path, monkeypatch) -> str:
+    """Persist a pending token behind the setup store's public boundary."""
+    monkeypatch.setattr(setup, "SETUP_TOKEN_FILE", tmp_path / ".setup_token")
+    return setup.generate_setup_token()
+
+
 class TestUsersAPI:
     """Test cases for users API endpoints"""
 
     # POST /api/users/ tests
 
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "privilege_fields",
+        [
+            {},
+            {"role": "Analyst", "is_active": False, "is_superadmin": False},
+            {"role": "Owner", "is_active": "not-a-bool", "is_superadmin": {}},
+        ],
+        ids=[
+            "account-fields-only",
+            "client-privileges-ignored",
+            "invalid-client-privileges-ignored",
+        ],
+    )
+    async def test_bootstrap_creates_forced_first_administrator(
+        self, session: Session, pending_setup_token: str, privilege_fields
+    ):
+        """A pending setup token creates exactly the privileged first account."""
+        test_app = bootstrap_test_app(session)
+
+        with patch("app.services.user_service.get_security_logger") as get_logger:
+            async with AsyncClient(
+                transport=ASGITransport(app=test_app), base_url="http://testserver"
+            ) as async_client:
+                response = await async_client.post(
+                    "/api/users/",
+                    json={
+                        "username": "first_admin",
+                        "email": "first_admin@example.com",
+                        "password": "secure-passphrase",
+                        "setup_token": pending_setup_token,
+                        **privilege_fields,
+                    },
+                )
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.json() == {
+            "id": response.json()["id"],
+            "username": "first_admin",
+            "email": "first_admin@example.com",
+            "role": "Admin",
+            "is_active": True,
+            "is_superadmin": True,
+            "created_at": response.json()["created_at"],
+            "updated_at": response.json()["updated_at"],
+        }
+        persisted_user = session.get(User, response.json()["id"])
+        assert persisted_user.role == "Admin"
+        assert persisted_user.is_active is True
+        assert persisted_user.is_superadmin is True
+        assert setup.get_setup_token() is None
+
+        assert setup.is_setup_required(session) is False
+        assert "setup_token" not in response.text
+        assert pending_setup_token not in response.text
+        get_logger.assert_called_once_with(
+            action="create_user",
+            target_username="first_admin",
+            event_type="user_creation_attempt",
+            is_bootstrap=True,
+        )
+        get_logger.return_value.bind.assert_called_once_with(
+            user_id=response.json()["id"],
+            role="Admin",
+            event_type="user_creation_success",
+        )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("submitted_token", [None, "wrong-token"])
+    async def test_bootstrap_rejects_invalid_token_without_consuming_it(
+        self, session: Session, pending_setup_token: str, submitted_token
+    ):
+        """Missing and invalid setup tokens are logged safely and remain retryable."""
+        payload = {
+            "username": "first_admin",
+            "email": "not-an-email",
+            "password": "secure-passphrase",
+            "role": "Owner",
+        }
+        if submitted_token is not None:
+            payload["setup_token"] = submitted_token
+
+        with patch("app.services.user_service.get_security_logger") as get_logger:
+            response = await self._post_bootstrap(session, payload)
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.json() == {"detail": "Invalid setup token"}
+        assert setup.validate_setup_token(pending_setup_token) is True
+        assert setup.is_setup_required(session) is True
+        assert "user_creation_failed" in str(get_logger.mock_calls)
+        assert "invalid_setup_token" in str(get_logger.mock_calls)
+        assert pending_setup_token not in str(get_logger.mock_calls)
+        assert "secure-passphrase" not in str(get_logger.mock_calls)
+        if submitted_token is not None:
+            assert submitted_token not in str(get_logger.mock_calls)
+
+    @pytest.mark.asyncio
+    async def test_anonymous_creation_stays_unauthorized_after_setup(
+        self, session: Session, test_user: User, pending_setup_token: str
+    ):
+        """A stale-looking setup token never reopens anonymous user creation."""
+        response = await self._post_bootstrap(
+            session,
+            {
+                "username": "another_user",
+                "email": "not-an-email",
+                "password": "secure-passphrase",
+                "role": "Owner",
+                "setup_token": pending_setup_token,
+            },
+        )
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert response.json() == {"detail": "Authentication required"}
+        assert setup.validate_setup_token(pending_setup_token) is True
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("field", "value", "expected_status"),
+        [
+            ("username", "ab", status.HTTP_400_BAD_REQUEST),
+            ("username", "invalid-name", status.HTTP_400_BAD_REQUEST),
+            ("username", "a" * 51, status.HTTP_400_BAD_REQUEST),
+            ("password", "short", status.HTTP_400_BAD_REQUEST),
+            ("email", "admin@owlculus.local", status.HTTP_422_UNPROCESSABLE_ENTITY),
+        ],
+    )
+    async def test_bootstrap_validation_preserves_token(
+        self, session: Session, pending_setup_token: str, field, value, expected_status
+    ):
+        """Invalid first-administrator credentials leave setup retryable."""
+        payload = {
+            "username": "first_admin",
+            "email": "first_admin@example.com",
+            "password": "secure-passphrase",
+            "setup_token": pending_setup_token,
+        }
+        payload[field] = value
+
+        response = await self._post_bootstrap(session, payload)
+
+        assert response.status_code == expected_status
+        assert setup.validate_setup_token(pending_setup_token) is True
+        assert setup.is_setup_required(session) is True
+
+    @pytest.mark.asyncio
+    async def test_bootstrap_validation_response_never_echoes_secrets(
+        self, session: Session, pending_setup_token: str
+    ):
+        """A schema error does not copy request-only secrets into its response."""
+        password = "secure-passphrase"
+
+        response = await self._post_bootstrap(
+            session,
+            {
+                "email": "first_admin@example.com",
+                "password": password,
+                "setup_token": pending_setup_token,
+            },
+        )
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert pending_setup_token not in response.text
+        assert password not in response.text
+
+    @pytest.mark.asyncio
+    async def test_bootstrap_database_error_preserves_token(
+        self, session: Session, pending_setup_token: str
+    ):
+        """An insert failure does not consume the setup token."""
+        with patch(
+            "app.services.user_service.crud.create_user",
+            side_effect=RuntimeError("simulated insert failure"),
+        ):
+            response = await self._post_bootstrap(
+                session,
+                {
+                    "username": "first_admin",
+                    "email": "first_admin@example.com",
+                    "password": "secure-passphrase",
+                    "setup_token": pending_setup_token,
+                },
+            )
+
+        assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert setup.validate_setup_token(pending_setup_token) is True
+        assert setup.is_setup_required(session) is True
+
+    def test_concurrent_bootstrap_requests_create_one_user(
+        self, engine, pending_setup_token: str, monkeypatch
+    ):
+        """Two valid contenders serialize, and the loser cannot create a user."""
+        validation_barrier = Barrier(2)
+        validate_setup_token = setup.validate_setup_token
+
+        def synchronize_after_validation(submitted_token):
+            is_valid = validate_setup_token(submitted_token)
+            validation_barrier.wait(timeout=5)
+            return is_valid
+
+        monkeypatch.setattr(setup, "validate_setup_token", synchronize_after_validation)
+
+        async def submit(index: int):
+            with Session(engine) as thread_session:
+                return await self._post_bootstrap(
+                    thread_session,
+                    {
+                        "username": f"admin_{index}",
+                        "email": f"admin_{index}@example.com",
+                        "password": "secure-passphrase",
+                        "setup_token": pending_setup_token,
+                    },
+                )
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            responses = list(
+                executor.map(lambda index: asyncio.run(submit(index)), range(2))
+            )
+
+        assert sorted(response.status_code for response in responses) == [201, 403]
+        losing_response = next(
+            response for response in responses if response.status_code == 403
+        )
+        assert losing_response.json() == {"detail": "Setup already completed"}
+        with Session(engine) as verification_session:
+            users = verification_session.exec(select(User)).all()
+        assert len(users) == 1
+        assert setup.get_setup_token() is None
+
+    @pytest.mark.asyncio
+    async def test_authenticated_admin_creation_remains_available(
+        self, session: Session, test_admin: User
+    ):
+        """Bootstrap support leaves ordinary Admin-managed creation unchanged."""
+        response = await self._post_as_user(
+            session,
+            test_admin,
+            {
+                "username": "managed_user",
+                "email": "managed_user@example.com",
+                "password": "password123",
+                "role": "Investigator",
+                "is_active": True,
+            },
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.json()["role"] == "Investigator"
+        assert response.json()["is_superadmin"] is False
+
+    @pytest.mark.asyncio
+    async def test_authenticated_admin_creation_still_requires_active_state(
+        self, session: Session, test_admin: User
+    ):
+        """The ordinary request schema still requires an explicit active state."""
+        response = await self._post_as_user(
+            session,
+            test_admin,
+            {
+                "username": "managed_user",
+                "email": "managed_user@example.com",
+                "password": "password123",
+                "role": "Investigator",
+            },
+        )
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+    @pytest.mark.asyncio
+    async def test_authenticated_non_admin_creation_remains_forbidden(
+        self, session: Session, test_user: User
+    ):
+        """The anonymous exception does not weaken steady-state authorization."""
+        response = await self._post_as_user(
+            session,
+            test_user,
+            {
+                "username": "managed_user",
+                "email": "managed_user@example.com",
+                "password": "password123",
+                "role": "Investigator",
+                "is_active": True,
+            },
+        )
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.json() == {"detail": "Not authorized"}
+
+    @pytest.mark.asyncio
+    async def test_authenticated_admin_still_cannot_create_superadmin(
+        self, session: Session, test_admin: User
+    ):
+        """Only a superadmin may grant superadmin on the ordinary path."""
+        response = await self._post_as_user(
+            session,
+            test_admin,
+            {
+                "username": "managed_admin",
+                "email": "managed_admin@example.com",
+                "password": "password123",
+                "role": "Admin",
+                "is_active": True,
+                "is_superadmin": True,
+            },
+        )
+
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.json() == {
+            "detail": "Only superadmin can create superadmin users"
+        }
+
+    @staticmethod
+    async def _post_bootstrap(session: Session, payload: dict):
+        test_app = bootstrap_test_app(session)
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://testserver"
+        ) as async_client:
+            return await async_client.post("/api/users/", json=payload)
+
+    @staticmethod
+    async def _post_as_user(session: Session, user: User, payload: dict):
+        test_app = bootstrap_test_app(session)
+
+        async def override_get_optional_current_user():
+            return user
+
+        test_app.dependency_overrides[get_optional_current_user] = (
+            override_get_optional_current_user
+        )
+        async with AsyncClient(
+            transport=ASGITransport(app=test_app), base_url="http://testserver"
+        ) as async_client:
+            return await async_client.post("/api/users/", json=payload)
+
     def test_create_user_success_admin(self, session: Session, test_admin: User):
         """Test successful user creation by admin"""
-        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
-            test_admin
+        app.dependency_overrides[get_optional_current_user] = (
+            override_get_current_user_factory(test_admin)
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -120,8 +486,8 @@ class TestUsersAPI:
 
     def test_create_user_forbidden_non_admin(self, session: Session, test_user: User):
         """Test user creation forbidden for non-admin"""
-        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
-            test_user
+        app.dependency_overrides[get_optional_current_user] = (
+            override_get_current_user_factory(test_user)
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -150,8 +516,8 @@ class TestUsersAPI:
 
     def test_create_user_invalid_data(self, session: Session, test_admin: User):
         """Test user creation with invalid data"""
-        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
-            test_admin
+        app.dependency_overrides[get_optional_current_user] = (
+            override_get_current_user_factory(test_admin)
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -166,8 +532,8 @@ class TestUsersAPI:
 
     def test_create_user_duplicate_username(self, session: Session, test_admin: User):
         """Test user creation with duplicate username"""
-        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
-            test_admin
+        app.dependency_overrides[get_optional_current_user] = (
+            override_get_current_user_factory(test_admin)
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -697,8 +1063,8 @@ class TestUsersAPI:
 
     def test_users_api_invalid_role(self, session: Session, test_admin: User):
         """Test user creation with invalid role"""
-        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
-            test_admin
+        app.dependency_overrides[get_optional_current_user] = (
+            override_get_current_user_factory(test_admin)
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -718,8 +1084,8 @@ class TestUsersAPI:
 
     def test_users_api_invalid_email_format(self, session: Session, test_admin: User):
         """Test user creation with invalid email format"""
-        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
-            test_admin
+        app.dependency_overrides[get_optional_current_user] = (
+            override_get_current_user_factory(test_admin)
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
