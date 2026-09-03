@@ -5,17 +5,13 @@ Comprehensive tests for users API endpoints
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
-from fastapi import FastAPI, status
-from fastapi.testclient import TestClient
-from httpx import ASGITransport, AsyncClient
-from sqlmodel import Session, select
-
 from app.api import auth as auth_api
 from app.api import users as users_api
-from app.core import setup
+from app.core import rate_limiting, setup
+from app.core.config import settings
 from app.core.dependencies import (
     get_current_user,
     get_db,
@@ -24,6 +20,11 @@ from app.core.dependencies import (
 from app.core.security import get_password_hash
 from app.database.models import User
 from app.main import app
+from fastapi import FastAPI, status
+from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
+from loguru import logger
+from sqlmodel import Session, select
 
 client = TestClient(app)
 
@@ -94,10 +95,36 @@ def bootstrap_test_app(session: Session) -> FastAPI:
         return session
 
     test_app = FastAPI()
+    test_app.state.bootstrap_rate_limiter = rate_limiting.InMemoryClientRateLimiter(
+        max_attempts=3, window_seconds=60 * 60
+    )
     test_app.include_router(auth_api.router, prefix="/api/auth")
     test_app.include_router(users_api.router, prefix="/api/users")
     test_app.dependency_overrides[get_db] = override_get_db
     return test_app
+
+
+async def submit_bootstrap_attempts(
+    test_app: FastAPI,
+    payload: dict,
+    client_address: str,
+    *,
+    count: int = 4,
+    headers_for_attempt=None,
+):
+    """Submit repeated bootstrap attempts from one observable client address."""
+    transport = ASGITransport(app=test_app, client=(client_address, 41000))
+    async with AsyncClient(
+        transport=transport, base_url="http://testserver"
+    ) as async_client:
+        return [
+            await async_client.post(
+                "/api/users/",
+                json=payload,
+                headers=headers_for_attempt(index) if headers_for_attempt else None,
+            )
+            for index in range(count)
+        ]
 
 
 @pytest.fixture
@@ -105,6 +132,17 @@ def pending_setup_token(tmp_path, monkeypatch) -> str:
     """Persist a pending token behind the setup store's public boundary."""
     monkeypatch.setattr(setup, "SETUP_TOKEN_FILE", tmp_path / ".setup_token")
     return setup.generate_setup_token()
+
+
+@pytest.fixture
+def invalid_bootstrap_payload() -> dict:
+    """Return a valid-shaped bootstrap submission carrying the wrong token."""
+    return {
+        "username": "first_admin",
+        "email": "first_admin@example.com",
+        "password": "secure-passphrase",
+        "setup_token": "wrong-token",
+    }
 
 
 class TestUsersAPI:
@@ -207,6 +245,206 @@ class TestUsersAPI:
         assert "secure-passphrase" not in str(get_logger.mock_calls)
         if submitted_token is not None:
             assert submitted_token not in str(get_logger.mock_calls)
+
+    @pytest.mark.asyncio
+    async def test_bootstrap_limits_each_client_to_three_attempts_per_hour(
+        self,
+        session: Session,
+        pending_setup_token: str,
+        invalid_bootstrap_payload: dict,
+    ):
+        """A client's fourth anonymous attempt is throttled without affecting peers."""
+        test_app = bootstrap_test_app(session)
+        responses = await submit_bootstrap_attempts(
+            test_app, invalid_bootstrap_payload, "198.51.100.10"
+        )
+
+        assert [response.status_code for response in responses] == [403, 403, 403, 429]
+
+        other_response = await submit_bootstrap_attempts(
+            test_app,
+            invalid_bootstrap_payload,
+            "198.51.100.11",
+            count=1,
+        )
+        assert other_response[0].status_code == status.HTTP_403_FORBIDDEN
+
+    @pytest.mark.asyncio
+    async def test_bootstrap_uses_atomic_persistent_redis_limit(
+        self,
+        session: Session,
+        pending_setup_token: str,
+        invalid_bootstrap_payload: dict,
+    ):
+        """The deployed limiter atomically prunes, counts, stores, and expires attempts."""
+        redis_client = AsyncMock()
+        redis_client.eval.side_effect = [1, 1, 1, 0]
+        test_app = bootstrap_test_app(session)
+        test_app.state.bootstrap_rate_limiter = rate_limiting.RedisClientRateLimiter(
+            redis_client, max_attempts=3, window_seconds=60 * 60
+        )
+
+        responses = await submit_bootstrap_attempts(
+            test_app, invalid_bootstrap_payload, "198.51.100.12"
+        )
+
+        assert [response.status_code for response in responses] == [403, 403, 403, 429]
+        assert redis_client.eval.await_count == 4
+        eval_calls = redis_client.eval.await_args_list
+        script = eval_calls[0].args[0]
+        assert "redis.call('TIME')" in script
+        assert "ZREMRANGEBYSCORE" in script
+        assert "ZCARD" in script
+        assert "ZADD" in script
+        assert "PEXPIRE" in script
+        assert {call.args[2] for call in eval_calls} == {
+            "owlculus:bootstrap-rate-limit:198.51.100.12"
+        }
+        assert {call.args[3:5] for call in eval_calls} == {(3_600_000, 3)}
+        assert len({call.args[5] for call in eval_calls}) == 4
+
+    @pytest.mark.asyncio
+    async def test_untrusted_peer_cannot_spoof_rate_limit_or_security_log_address(
+        self,
+        session: Session,
+        pending_setup_token: str,
+        invalid_bootstrap_payload: dict,
+    ):
+        """Forwarded headers from an untrusted socket peer never identify the client."""
+        test_app = bootstrap_test_app(session)
+        peer_address = "198.51.100.20"
+        records = []
+        sink_id = logger.add(lambda message: records.append(message.record))
+
+        try:
+            responses = await submit_bootstrap_attempts(
+                test_app,
+                invalid_bootstrap_payload,
+                peer_address,
+                headers_for_attempt=lambda index: {
+                    "X-Forwarded-For": f"203.0.113.{index + 1}"
+                },
+            )
+        finally:
+            logger.remove(sink_id)
+
+        assert [response.status_code for response in responses] == [403, 403, 403, 429]
+        rate_limit_records = [
+            record
+            for record in records
+            if record["extra"].get("event_type") == "rate_limit_exceeded"
+        ]
+        assert len(rate_limit_records) == 1
+        assert rate_limit_records[0]["extra"]["client_ip"] == peer_address
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "forwarded_headers",
+        [
+            {"X-Forwarded-For": "203.0.113.40"},
+            {"X-Real-IP": "203.0.113.40"},
+        ],
+        ids=["forwarded-for", "real-ip"],
+    )
+    async def test_trusted_proxy_uses_forwarded_address_for_limit_and_logs(
+        self,
+        session: Session,
+        pending_setup_token: str,
+        invalid_bootstrap_payload: dict,
+        monkeypatch,
+        forwarded_headers: dict[str, str],
+    ):
+        """A trusted gateway's forwarded address identifies the submitting client."""
+        proxy_address = "192.0.2.10"
+        forwarded_address = "203.0.113.40"
+        monkeypatch.setattr(settings, "FORWARDED_ALLOW_IPS", proxy_address)
+        test_app = bootstrap_test_app(session)
+        records = []
+        sink_id = logger.add(lambda message: records.append(message.record))
+
+        try:
+            responses = await submit_bootstrap_attempts(
+                test_app,
+                invalid_bootstrap_payload,
+                proxy_address,
+                headers_for_attempt=lambda _index: forwarded_headers,
+            )
+        finally:
+            logger.remove(sink_id)
+
+        assert [response.status_code for response in responses] == [403, 403, 403, 429]
+        rate_limit_records = [
+            record
+            for record in records
+            if record["extra"].get("event_type") == "rate_limit_exceeded"
+        ]
+        assert len(rate_limit_records) == 1
+        assert rate_limit_records[0]["extra"]["client_ip"] == forwarded_address
+
+    @pytest.mark.asyncio
+    async def test_bootstrap_limit_resets_after_one_hour(
+        self,
+        session: Session,
+        pending_setup_token: str,
+        invalid_bootstrap_payload: dict,
+        monkeypatch,
+    ):
+        """A client may retry once its one-hour attempt window has elapsed."""
+        current_time = [1000.0]
+        monkeypatch.setattr(rate_limiting, "monotonic", lambda: current_time[0])
+        test_app = bootstrap_test_app(session)
+        initial_responses = await submit_bootstrap_attempts(
+            test_app, invalid_bootstrap_payload, "198.51.100.30"
+        )
+        current_time[0] += 3601
+        response_after_window = await submit_bootstrap_attempts(
+            test_app,
+            invalid_bootstrap_payload,
+            "198.51.100.30",
+            count=1,
+        )
+
+        assert [response.status_code for response in initial_responses] == [
+            403,
+            403,
+            403,
+            429,
+        ]
+        assert response_after_window[0].status_code == status.HTTP_403_FORBIDDEN
+
+    @pytest.mark.asyncio
+    async def test_authenticated_admin_creation_is_not_rate_limited(
+        self, session: Session, test_admin: User
+    ):
+        """The bootstrap throttle does not reduce authenticated Admin availability."""
+        test_app = bootstrap_test_app(session)
+
+        async def override_get_optional_current_user():
+            return test_admin
+
+        test_app.dependency_overrides[get_optional_current_user] = (
+            override_get_optional_current_user
+        )
+        transport = ASGITransport(app=test_app, client=("198.51.100.50", 41000))
+
+        async with AsyncClient(
+            transport=transport, base_url="http://testserver"
+        ) as async_client:
+            responses = [
+                await async_client.post(
+                    "/api/users/",
+                    json={
+                        "username": f"managed_user_{index}",
+                        "email": f"managed_user_{index}@example.com",
+                        "password": "password123",
+                        "role": "Investigator",
+                        "is_active": True,
+                    },
+                )
+                for index in range(4)
+            ]
+
+        assert [response.status_code for response in responses] == [201, 201, 201, 201]
 
     @pytest.mark.asyncio
     async def test_anonymous_creation_stays_unauthorized_after_setup(

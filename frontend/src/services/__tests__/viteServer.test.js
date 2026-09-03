@@ -17,6 +17,7 @@ describe('Vite development server', () => {
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,
+        xfwd: true,
         ws: true,
       },
     })
@@ -41,5 +42,7 @@ describe('Vite development server', () => {
     )
 
     expect(composeFile).toContain('API_PROXY_TARGET=http://backend:8000')
+    expect(composeFile).toContain('FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-172.30.0.254}')
+    expect(composeFile).toContain('ipv4_address: 172.30.0.254')
   })
 })

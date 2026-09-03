@@ -1,11 +1,18 @@
 """Public API contract tests for liveness and readiness health checks."""
 
 import pytest
+from app import main as main_module
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import SQLModel, create_engine
 
-from app import main as main_module
+
+@pytest.fixture(autouse=True)
+def available_rate_limit_storage(monkeypatch):
+    """Keep readiness tests focused unless they explicitly simulate Redis failure."""
+    monkeypatch.setattr(
+        main_module, "is_rate_limit_storage_ready", lambda: True, raising=False
+    )
 
 
 async def request_without_lifespan(path: str):
@@ -49,7 +56,12 @@ async def test_readiness_is_ready_after_schema_and_setup_initialization(
     assert response.headers["content-type"] == "application/json"
     assert response.json() == {
         "status": "ready",
-        "checks": {"database": "ok", "schema": "ok", "setup_token": "ok"},
+        "checks": {
+            "database": "ok",
+            "schema": "ok",
+            "setup_token": "ok",
+            "rate_limit_storage": "ok",
+        },
     }
 
 
@@ -77,6 +89,7 @@ async def test_readiness_waits_for_the_startup_setup_token_check(
             "database": "ok",
             "schema": "ok",
             "setup_token": "incomplete",
+            "rate_limit_storage": "ok",
         },
     }
 
@@ -96,6 +109,7 @@ async def test_readiness_reports_a_missing_schema(monkeypatch):
         "database": "ok",
         "schema": "missing",
         "setup_token": "incomplete",
+        "rate_limit_storage": "ok",
     }
 
 
@@ -121,6 +135,7 @@ async def test_readiness_reports_an_unreachable_database(monkeypatch):
             "database": "unavailable",
             "schema": "unavailable",
             "setup_token": "ok",
+            "rate_limit_storage": "ok",
         },
     }
     assert "internal connection details" not in response.text
@@ -139,7 +154,12 @@ async def test_health_alias_has_the_readiness_contract(engine, monkeypatch):
     assert response.status_code == 200
     assert response.json() == {
         "status": "ready",
-        "checks": {"database": "ok", "schema": "ok", "setup_token": "ok"},
+        "checks": {
+            "database": "ok",
+            "schema": "ok",
+            "setup_token": "ok",
+            "rate_limit_storage": "ok",
+        },
     }
 
 
@@ -178,6 +198,7 @@ async def test_process_stays_live_and_becomes_ready_after_late_schema_initializa
             "database": "ok",
             "schema": "missing",
             "setup_token": "incomplete",
+            "rate_limit_storage": "ok",
         }
 
         SQLModel.metadata.create_all(database_engine)
@@ -188,4 +209,28 @@ async def test_process_stays_live_and_becomes_ready_after_late_schema_initializa
             "database": "ok",
             "schema": "ok",
             "setup_token": "ok",
+            "rate_limit_storage": "ok",
         }
+
+
+@pytest.mark.asyncio
+async def test_readiness_reports_unavailable_rate_limit_storage(engine, monkeypatch):
+    """Readiness fails closed when bootstrap throttling cannot be enforced."""
+    monkeypatch.setattr(main_module, "engine", engine)
+    monkeypatch.setattr(
+        main_module.app.state, "setup_token_check_complete", True, raising=False
+    )
+    monkeypatch.setattr(main_module, "is_rate_limit_storage_ready", lambda: False)
+
+    response = await request_without_lifespan("/health/ready")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "status": "not_ready",
+        "checks": {
+            "database": "ok",
+            "schema": "ok",
+            "setup_token": "ok",
+            "rate_limit_storage": "unavailable",
+        },
+    }

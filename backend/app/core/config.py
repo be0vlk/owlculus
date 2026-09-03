@@ -46,6 +46,8 @@ class Settings(BaseSettings):
         "http://localhost:80",
         "http://localhost:8081",
     ]
+    FORWARDED_ALLOW_IPS: str = os.environ.get("FORWARDED_ALLOW_IPS", "127.0.0.1,::1")
+    REDIS_URL: str = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
     ALGORITHM: str = "HS256"
 
     def get_database_url(self) -> str:

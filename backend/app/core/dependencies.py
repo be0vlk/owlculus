@@ -7,10 +7,7 @@ FastAPI application. It handles JWT token validation and user permissions.
 """
 
 from functools import wraps
-
-from fastapi import Depends, HTTPException, Request, status
-from fastapi.security import OAuth2PasswordBearer
-from sqlmodel import Session, select
+from ipaddress import ip_address, ip_network
 
 from app.core import security
 from app.core.config import settings
@@ -19,6 +16,9 @@ from app.core.roles import UserRole
 from app.database import crud
 from app.database.connection import get_db
 from app.database.models import Case, User
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import OAuth2PasswordBearer
+from sqlmodel import Session, select
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
 optional_oauth2_scheme = OAuth2PasswordBearer(
@@ -45,17 +45,64 @@ async def _resolve_current_user(db: Session, token: str) -> User:
 
 
 def get_client_ip(request: Request) -> str:
+    """Return a forwarded address only when the socket peer is trusted."""
+    if not request.client:
+        return "unknown"
+
+    peer_address = request.client.host
+    if not _is_trusted_proxy(peer_address):
+        return peer_address
+
     forwarded_for = request.headers.get("X-Forwarded-For")
     if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
+        forwarded_addresses = [
+            address.strip() for address in forwarded_for.split(",") if address.strip()
+        ]
+        for forwarded_address in reversed(forwarded_addresses):
+            normalized_address = _normalize_ip_address(forwarded_address)
+            if normalized_address is None:
+                return peer_address
+            if not _is_trusted_proxy(normalized_address):
+                return normalized_address
+        if forwarded_addresses:
+            return _normalize_ip_address(forwarded_addresses[0]) or peer_address
 
     real_ip = request.headers.get("X-Real-IP")
     if real_ip:
-        return real_ip.strip()
-    if request.client:
-        return request.client.host
+        return _normalize_ip_address(real_ip.strip()) or peer_address
 
-    return "unknown"
+    return peer_address
+
+
+def _normalize_ip_address(address: str) -> str | None:
+    try:
+        return str(ip_address(address))
+    except ValueError:
+        return None
+
+
+def _is_trusted_proxy(address: str) -> bool:
+    normalized_address = _normalize_ip_address(address)
+    if normalized_address is None:
+        return False
+
+    trusted_proxies = [
+        proxy.strip()
+        for proxy in settings.FORWARDED_ALLOW_IPS.split(",")
+        if proxy.strip()
+    ]
+    if "*" in trusted_proxies:
+        return True
+
+    client_address = ip_address(normalized_address)
+    for trusted_proxy in trusted_proxies:
+        try:
+            if client_address in ip_network(trusted_proxy, strict=False):
+                return True
+        except ValueError:
+            continue
+
+    return False
 
 
 def get_user_agent(request: Request) -> str:
@@ -214,10 +261,10 @@ def is_case_lead(db: Session, case_id: int, current_user: User) -> bool:
 
     # Check the CaseUserLink table for is_lead flag
     from app.database.models import CaseUserLink
+
     link = db.exec(
         select(CaseUserLink).where(
-            CaseUserLink.case_id == case_id,
-            CaseUserLink.user_id == current_user.id
+            CaseUserLink.case_id == case_id, CaseUserLink.user_id == current_user.id
         )
     ).first()
 
@@ -227,7 +274,8 @@ def is_case_lead(db: Session, case_id: int, current_user: User) -> bool:
 def load_case_with_users(db: Session, case_id: int):
     """Load a case with users including is_lead information."""
     from app.database.models import CaseUserLink
-    from app.schemas.case_schema import Case as CaseSchema, CaseUser
+    from app.schemas.case_schema import Case as CaseSchema
+    from app.schemas.case_schema import CaseUser
 
     # Load the case
     case = db.exec(select(Case).where(Case.id == case_id)).first()
@@ -240,17 +288,16 @@ def load_case_with_users(db: Session, case_id: int):
         # Get the is_lead flag from CaseUserLink
         link = db.exec(
             select(CaseUserLink).where(
-                CaseUserLink.case_id == case_id,
-                CaseUserLink.user_id == user.id
+                CaseUserLink.case_id == case_id, CaseUserLink.user_id == user.id
             )
         ).first()
 
         # Create CaseUser with is_lead information
         case_user_data = user.model_dump()
-        case_user_data['is_lead'] = link.is_lead if link else False
+        case_user_data["is_lead"] = link.is_lead if link else False
         case_users.append(CaseUser(**case_user_data))
 
     # Create a CaseSchema object with the enriched users
     case_data = case.model_dump()
-    case_data['users'] = case_users
+    case_data["users"] = case_users
     return CaseSchema(**case_data)

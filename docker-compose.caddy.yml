@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Caddy reverse proxy with automatic HTTPS
   caddy:
@@ -14,7 +12,8 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     networks:
-      - frontend-network
+      frontend-network:
+        ipv4_address: 172.28.0.254
     depends_on:
       - frontend
       - backend
@@ -28,9 +27,17 @@ services:
   # Override backend to remove port mapping (Caddy handles it)
   backend:
     ports: [ ]
+    environment:
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-172.28.0.254}
 
 volumes:
   caddy_data:
     name: owlculus_caddy_data
   caddy_config:
     name: owlculus_caddy_config
+
+networks:
+  frontend-network:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24

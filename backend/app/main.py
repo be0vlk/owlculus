@@ -8,6 +8,13 @@ Owlculus backend application.
 
 from contextlib import asynccontextmanager
 
+from app.api.router import api_router
+from app.core.config import settings
+from app.core.dependencies import get_client_ip, get_user_agent
+from app.core.logging import client_ip_context, setup_logging, user_agent_context
+from app.core.rate_limiting import is_rate_limit_storage_ready
+from app.core.setup import check_and_generate_setup_token
+from app.database.connection import engine
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -15,13 +22,6 @@ from loguru import logger
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session, SQLModel
-
-from app.api.router import api_router
-from app.core.config import settings
-from app.core.dependencies import get_client_ip, get_user_agent
-from app.core.logging import client_ip_context, setup_logging, user_agent_context
-from app.core.setup import check_and_generate_setup_token
-from app.database.connection import engine
 
 
 def _complete_setup_token_check(application: FastAPI) -> bool:
@@ -58,7 +58,6 @@ app = FastAPI(
     description=settings.DESCRIPTION,
     version=settings.VERSION,
     lifespan=lifespan,
-    proxy_headers=True,
 )
 app.state.setup_token_check_complete = False
 
@@ -81,8 +80,7 @@ async def request_info_middleware(request: Request, call_next):
     user_agent = get_user_agent(request)
     client_ip_context.set(client_ip)
     user_agent_context.set(user_agent)
-    response = await call_next(request)
-    return response
+    return await call_next(request)
 
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
@@ -95,7 +93,7 @@ async def liveness_check() -> dict[str, str]:
 
 
 def _readiness_status() -> tuple[bool, dict[str, str]]:
-    """Check the database, required schema, and startup setup-token state."""
+    """Check the database, schema, setup token, and rate-limit storage."""
     checks: dict[str, str] = {}
     try:
         with engine.connect() as connection:
@@ -118,6 +116,9 @@ def _readiness_status() -> tuple[bool, dict[str, str]]:
 
     checks["setup_token"] = (
         "ok" if app.state.setup_token_check_complete else "incomplete"
+    )
+    checks["rate_limit_storage"] = (
+        "ok" if is_rate_limit_storage_ready() else "unavailable"
     )
     return all(check == "ok" for check in checks.values()), checks
 

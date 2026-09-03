@@ -7,14 +7,10 @@ supporting role-based access control and secure user administration for investig
 
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends, HTTPException, status
-from fastapi.exceptions import RequestValidationError
-from pydantic import ValidationError as PydanticValidationError
-from sqlmodel import Session
-
 from app import schemas
 from app.core.dependencies import (
     admin_only,
+    get_client_ip,
     get_current_user,
     get_optional_current_user,
 )
@@ -26,16 +22,24 @@ from app.core.exceptions import (
     ResourceNotFoundException,
     ValidationException,
 )
+from app.core.logging import get_security_logger
+from app.core.rate_limiting import get_bootstrap_rate_limiter
 from app.core.roles import UserRole
+from app.core.setup import is_setup_required
 from app.database import models
 from app.database.connection import get_db
 from app.services.user_service import UserService
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
+from fastapi.exceptions import RequestValidationError
+from pydantic import ValidationError as PydanticValidationError
+from sqlmodel import Session
 
 router = APIRouter()
 
 
 @router.post("/", response_model=schemas.User, status_code=status.HTTP_201_CREATED)
 async def create_user(
+    request: Request,
     user_data: Any = Body(...),
     db: Session = Depends(get_db),
     current_user: models.User | None = Depends(get_optional_current_user),
@@ -43,6 +47,19 @@ async def create_user(
     user_service = UserService(db)
     try:
         if current_user is None:
+            if is_setup_required(db):
+                client_address = get_client_ip(request)
+                if not await get_bootstrap_rate_limiter(request).allow(client_address):
+                    get_security_logger(
+                        action="create_user",
+                        event_type="rate_limit_exceeded",
+                        is_bootstrap=True,
+                        client_ip=client_address,
+                    ).warning("Bootstrap user creation rate limit exceeded")
+                    raise HTTPException(
+                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                        detail="Too many setup attempts. Please try again later.",
+                    )
             return await user_service.create_bootstrap_user(user_data=user_data)
         user = schemas.UserCreate.model_validate(user_data)
         if current_user.role != UserRole.ADMIN.value:

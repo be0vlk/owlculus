@@ -30,6 +30,21 @@ services:
     networks:
       - backend-network
 
+  # Shared rate-limit storage
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_dev_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - backend-network
+
   # Backend API (Development with hot reload)
   backend:
     build:
@@ -53,6 +68,8 @@ services:
       POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-owlculus_dev}
       SECRET_KEY: ${SECRET_KEY:-dev_secret_key_change_in_production}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-172.30.0.254}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
       BACKEND_URL: ${BACKEND_URL:-http://localhost:8000}
     volumes:
@@ -63,7 +80,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      redis:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --reload
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health/ready"]
       interval: 30s
@@ -71,8 +90,8 @@ services:
       retries: 3
       start_period: 40s
     networks:
-      - frontend-network
       - backend-network
+      - frontend-network
 
   # Database Initialization
   db-init:
@@ -122,16 +141,22 @@ services:
       - "${FRONTEND_PORT:-5173}:5173"
     command: npm run dev -- --host 0.0.0.0
     networks:
-      - frontend-network
+      frontend-network:
+        ipv4_address: 172.30.0.254
 
 volumes:
   postgres_dev_data:
     driver: local
   uploads_dev_data:
     driver: local
+  redis_dev_data:
+    driver: local
 
 networks:
   frontend-network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
   backend-network:
     driver: bridge

@@ -29,6 +29,21 @@ services:
     networks:
       - owlculus-network
 
+  # Shared rate-limit storage
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - owlculus-network
+
   # Backend API
   backend:
     build:
@@ -52,15 +67,18 @@ services:
       POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-owlculus}
       SECRET_KEY: ${SECRET_KEY:-development_key_not_secure}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       FRONTEND_URL: ${FRONTEND_URL:-https://localhost}
       BACKEND_URL: ${BACKEND_URL:-https://localhost/api}
-      UVICORN_FORWARDED_ALLOW_IPS: '*'
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-172.29.0.254}
     volumes:
       - uploads_data:/app/uploads
     expose:
       - "8000"  # Internal only
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/health/ready" ]
@@ -133,7 +151,8 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     networks:
-      - owlculus-network
+      owlculus-network:
+        ipv4_address: 172.29.0.254
     depends_on:
       - frontend
       - backend
@@ -150,6 +169,8 @@ volumes:
     driver: local
   uploads_data:
     driver: local
+  redis_data:
+    driver: local
   caddy_data:
     name: owlculus_caddy_data
   caddy_config:
@@ -158,3 +179,6 @@ volumes:
 networks:
   owlculus-network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.29.0.0/24
