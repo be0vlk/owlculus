@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 
 import pytest
+from sqlalchemy import event
 from sqlmodel import Session, select
 
 from app.core.exceptions import (
@@ -68,14 +69,23 @@ def test_concurrent_creates_translate_integrity_error_with_real_transactions(eng
         setup_session.add(admin)
         setup_session.commit()
 
-    contenders_ready = Barrier(2)
+    inserts_ready = Barrier(2)
+    insert_attempts: list[str] = []
+
+    def synchronize_user_inserts(
+        _connection, _cursor, statement, _parameters, _context, _executemany
+    ):
+        if statement.lstrip().upper().startswith("INSERT INTO USER"):
+            insert_attempts.append(statement)
+            inserts_ready.wait(timeout=5)
+
+    event.listen(engine, "before_cursor_execute", synchronize_user_inserts)
 
     def create_contender():
         with Session(engine) as contender_session:
             contender_admin = contender_session.exec(
                 select(User).where(User.username == "race-admin")
             ).one()
-            contenders_ready.wait(timeout=5)
             try:
                 return asyncio.run(
                     UserService(contender_session).create_user(
@@ -86,9 +96,13 @@ def test_concurrent_creates_translate_integrity_error_with_real_transactions(eng
             except DuplicateResourceException as error:
                 return error
 
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        outcomes = list(executor.map(lambda _: create_contender(), range(2)))
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            outcomes = list(executor.map(lambda _: create_contender(), range(2)))
+    finally:
+        event.remove(engine, "before_cursor_execute", synchronize_user_inserts)
 
+    assert len(insert_attempts) == 2
     duplicates = [
         outcome
         for outcome in outcomes
