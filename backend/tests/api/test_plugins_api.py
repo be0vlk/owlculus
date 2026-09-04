@@ -1,5 +1,6 @@
 """HTTP contracts for plugin listing and NDJSON execution."""
 
+import json
 from collections.abc import AsyncGenerator
 from contextlib import nullcontext
 from typing import Any
@@ -14,9 +15,10 @@ from app.api.plugins import (
     get_plugin_session_factory,
 )
 from app.core.dependencies import get_current_user
-from app.database.models import User
+from app.database.models import Case, CaseUserLink, Entity, User
 from app.main import app
 from app.plugins.base_plugin import BasePlugin, PluginRun, ResultEvent
+from app.plugins.correlation_plugin import CorrelationScan
 from app.plugins.peopledatalabs_plugin import PeopledatalabsPlugin
 from app.plugins.plugin_registry import PluginRegistry
 from app.services.api_key_vault import Provider, StaticApiKeyVault
@@ -89,6 +91,69 @@ def test_execute_real_plugin_ends_with_complete(
         '{"type": "status", "data": {"message": "Starting"}}',
         '{"type": "data", "data": {"query": "owl"}}',
         '{"type": "complete", "data": {}}',
+    ]
+
+
+def test_correlation_catalogue_and_result_wire_contract(
+    client: TestClient, session: Session, test_user: User
+):
+    source_case = Case(case_number="CORR-HTTP-1", title="Source investigation")
+    other_case = Case(case_number="CORR-HTTP-2", title="Other investigation")
+    session.add_all([source_case, other_case])
+    session.flush()
+    session.add_all(
+        [
+            CaseUserLink(case_id=source_case.id, user_id=test_user.id),
+            CaseUserLink(case_id=other_case.id, user_id=test_user.id),
+            Entity(
+                case_id=source_case.id,
+                entity_type="person",
+                data={"first_name": "Ada", "last_name": "Lovelace"},
+                created_by_id=test_user.id,
+            ),
+            Entity(
+                case_id=other_case.id,
+                entity_type="person",
+                data={"first_name": "Ada", "last_name": "Lovelace"},
+                created_by_id=test_user.id,
+            ),
+        ]
+    )
+    session.commit()
+    configure_plugins(session, test_user, [CorrelationScan])
+
+    catalogue = client.get("/api/plugins/").json()["CorrelationScan"]
+    response = client.post(
+        "/api/plugins/CorrelationScan/execute",
+        json={"case_id": source_case.id},
+    )
+
+    assert catalogue["parameters"]["case_id"] == {
+        "type": "integer",
+        "description": "ID of the case to scan",
+        "required": True,
+    }
+    assert [json.loads(line) for line in response.text.splitlines()] == [
+        {
+            "type": "data",
+            "data": {
+                "entity_id": 1,
+                "entity_name": "Ada Lovelace",
+                "entity_type": "person",
+                "match_type": "name",
+                "case_id": source_case.id,
+                "matches": [
+                    {
+                        "entity_id": 2,
+                        "entity_type": "person",
+                        "case_id": other_case.id,
+                        "case_number": "CORR-HTTP-2",
+                        "case_title": "Other investigation",
+                    }
+                ],
+            },
+        },
+        {"type": "complete", "data": {}},
     ]
 
 

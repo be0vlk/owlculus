@@ -25,6 +25,7 @@ from app.core.logging import get_security_logger
 from app.core.utils import get_utc_now
 from app.database import models
 from app.schemas.entity_schema import ENTITY_TYPE_SCHEMAS, NetworkAssets
+from app.schemas.entity_schema import entity_display_name as entity_data_display_name
 from app.services.case_access import CaseAccess
 from app.services.hunt_execution_export import (
     HuntCaseSnapshot,
@@ -699,27 +700,7 @@ def filesystem_safe_name(value: str) -> str:
 
 def entity_display_name(entity: models.Entity) -> str:
     """Return the entity name displayed in export rows and matched by search."""
-    data = entity.data
-    if entity.entity_type == "person":
-        return " ".join(
-            part for part in (data.get("first_name"), data.get("last_name")) if part
-        )
-    if entity.entity_type == "company":
-        return str(data.get("name") or "")
-    if entity.entity_type == "domain":
-        return str(data.get("domain") or "")
-    if entity.entity_type == "ip_address":
-        return str(data.get("ip_address") or "")
-    if entity.entity_type == "vehicle":
-        return " ".join(
-            str(part)
-            for part in (data.get("year"), data.get("make"), data.get("model"))
-            if part not in (None, "")
-        )
-    if entity.entity_type == "network_assets":
-        assets = data.get("domains") or data.get("subdomains") or []
-        return str(assets[0]) if assets else ""
-    return ""
+    return entity_data_display_name(entity.entity_type, entity.data)
 
 
 def html_to_plain_text(value: str) -> str:
