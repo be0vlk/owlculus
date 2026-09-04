@@ -3,6 +3,7 @@
 import importlib
 import inspect
 from copy import deepcopy
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -82,6 +83,7 @@ class PluginRegistry:
         }
 
 
-shipped_plugin_registry = PluginRegistry.from_directory(
-    Path(__file__).parent, "app.plugins"
-)
+@lru_cache(maxsize=1)
+def get_shipped_plugin_registry() -> PluginRegistry:
+    """Build the production registry once when application startup requests it."""
+    return PluginRegistry.from_directory(Path(__file__).parent, "app.plugins")

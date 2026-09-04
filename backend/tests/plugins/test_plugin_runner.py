@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 
 from app.plugins.base_plugin import BasePlugin, PluginRun, ResultEvent
-from app.plugins.plugin_registry import PluginRegistry, shipped_plugin_registry
+from app.plugins.plugin_registry import PluginRegistry, get_shipped_plugin_registry
 from app.plugins.plugin_runner import PluginRunner
 
 
@@ -20,14 +20,6 @@ class TrivialPlugin(BasePlugin):
         self, params: dict[str, Any], ctx: PluginRun
     ) -> AsyncGenerator[ResultEvent, None]:
         yield self.data({"query": params["query"]})
-
-
-class ThrowingPlugin(BasePlugin):
-    async def run(
-        self, params: dict[str, Any], ctx: PluginRun
-    ) -> AsyncGenerator[ResultEvent, None]:
-        raise RuntimeError("provider exploded")
-        yield  # pragma: no cover
 
 
 def test_class_list_registry_exposes_cached_metadata_and_parameter_catalogue():
@@ -44,7 +36,7 @@ def test_directory_registry_contains_shipped_plugins():
         "HolehePlugin",
         "ShodanPlugin",
         "WhoisPlugin",
-    } <= set(shipped_plugin_registry.parameter_catalogue())
+    } <= set(get_shipped_plugin_registry().parameter_catalogue())
 
 
 @pytest.mark.asyncio
@@ -68,9 +60,9 @@ async def test_runner_appends_one_terminal_complete_event(session, test_user):
 
 @pytest.mark.asyncio
 async def test_runner_converts_plugin_exception_to_error_then_complete(
-    session, test_user
+    session, test_user, throwing_plugin_class
 ):
-    registry = PluginRegistry.from_classes([ThrowingPlugin])
+    registry = PluginRegistry.from_classes([throwing_plugin_class])
     runner = PluginRunner(registry)
     run = PluginRun.for_test(
         session=session,
@@ -83,6 +75,7 @@ async def test_runner_converts_plugin_exception_to_error_then_complete(
     events = [event async for event in runner.run("ThrowingPlugin", {}, run)]
 
     assert events == [
+        ResultEvent.data({"partial": True}),
         ResultEvent.error("Plugin execution error: provider exploded"),
         ResultEvent.complete(),
     ]

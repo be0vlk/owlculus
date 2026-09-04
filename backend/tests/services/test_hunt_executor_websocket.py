@@ -29,14 +29,6 @@ class TrivialPlugin(BasePlugin):
         yield self.data({"result": "ok"})
 
 
-class FailingPlugin(BasePlugin):
-    async def run(
-        self, params: dict[str, Any], ctx: PluginRun
-    ) -> AsyncGenerator[ResultEvent, None]:
-        raise RuntimeError("provider exploded")
-        yield  # pragma: no cover
-
-
 class FirstPlugin(BasePlugin):
     async def run(
         self, params: dict[str, Any], ctx: PluginRun
@@ -138,14 +130,14 @@ async def test_executor_persists_declared_step_output_and_progress_events(
 
 @pytest.mark.asyncio
 async def test_throwing_plugin_is_a_persisted_failed_step(
-    session: Session, test_user: User
+    session: Session, test_user: User, throwing_plugin_class
 ):
     recorder = EventRecorder()
     execution = stored_execution(session, test_user)
 
-    await executor(session, recorder, [FailingPlugin]).execute_hunt(
+    await executor(session, recorder, [throwing_plugin_class]).execute_hunt(
         execution,
-        {"steps": [step("lookup", plugin_name="FailingPlugin")]},
+        {"steps": [step("lookup", plugin_name="ThrowingPlugin")]},
         test_user,
     )
 
@@ -155,9 +147,9 @@ async def test_throwing_plugin_is_a_persisted_failed_step(
     assert persisted.status == "failed"
     assert persisted.error_details == "Plugin execution error: provider exploded"
     assert persisted.output == {
-        "results": [],
-        "result_count": 0,
-        "plugin": "FailingPlugin",
+        "results": [{"partial": True}],
+        "result_count": 1,
+        "plugin": "ThrowingPlugin",
         "errors": [{"message": "Plugin execution error: provider exploded"}],
     }
     assert execution.status == "partial"
@@ -166,14 +158,14 @@ async def test_throwing_plugin_is_a_persisted_failed_step(
 
 @pytest.mark.asyncio
 async def test_optional_plugin_failure_is_terminal_and_hunt_completes(
-    session: Session, test_user: User
+    session: Session, test_user: User, throwing_plugin_class
 ):
     recorder = EventRecorder()
     execution = stored_execution(session, test_user)
 
-    await executor(session, recorder, [FailingPlugin]).execute_hunt(
+    await executor(session, recorder, [throwing_plugin_class]).execute_hunt(
         execution,
-        {"steps": [step("lookup", plugin_name="FailingPlugin", optional=True)]},
+        {"steps": [step("lookup", plugin_name="ThrowingPlugin", optional=True)]},
         test_user,
     )
 

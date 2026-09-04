@@ -11,7 +11,7 @@ from collections.abc import AsyncGenerator, Callable
 from contextlib import AbstractContextManager
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 
@@ -19,18 +19,19 @@ from ..core.dependencies import get_current_user
 from ..database.connection import get_db
 from ..database.db_utils import get_session
 from ..database.models import User
-from ..plugins.plugin_registry import PluginRegistry, shipped_plugin_registry
+from ..plugins.plugin_context import ProductionPluginRunAdapter
+from ..plugins.plugin_registry import PluginRegistry
 from ..plugins.plugin_runner import PluginRunner
 from ..schemas.plugin_schema import PluginMetadata
 from ..services.api_key_vault import ApiKeyVault, ConfigurationApiKeyVault
-from ..services.plugin_service import PluginService
+from ..services.case_access import CaseAccess
 
 router = APIRouter(tags=["plugins"])
 
 
-def get_plugin_registry() -> PluginRegistry:
-    """Return the catalogue constructed once when the application is imported."""
-    return shipped_plugin_registry
+def get_plugin_registry(request: Request) -> PluginRegistry:
+    """Return the catalogue built during application startup."""
+    return request.app.state.plugin_registry
 
 
 def get_plugin_runner(
@@ -49,6 +50,19 @@ def get_plugin_session_factory() -> Callable[[], AbstractContextManager[Session]
     return get_session
 
 
+def build_run_adapter(
+    api_keys: ApiKeyVault,
+    session_factory: Callable[[], AbstractContextManager[Session]],
+) -> ProductionPluginRunAdapter:
+    """Bind streamed runs to their own session and credential adapter."""
+    api_key_vault_factory = (
+        ConfigurationApiKeyVault
+        if isinstance(api_keys, ConfigurationApiKeyVault)
+        else lambda _: api_keys
+    )
+    return ProductionPluginRunAdapter(session_factory, api_key_vault_factory)
+
+
 @router.get("/", response_model=dict[str, PluginMetadata])
 async def list_plugins(
     current_user: User = Depends(get_current_user),
@@ -56,8 +70,8 @@ async def list_plugins(
     api_keys: ApiKeyVault = Depends(get_plugin_api_keys),
     registry: PluginRegistry = Depends(get_plugin_registry),
 ):
-    plugin_svc = PluginService(db, api_keys, registry=registry)
-    return await plugin_svc.list_plugins(current_user=current_user)
+    CaseAccess(db).require_non_analyst(current_user)
+    return registry.metadata(api_keys)
 
 
 @router.post("/{plugin_name}/execute")
@@ -70,17 +84,19 @@ async def execute_plugin(
     session_factory: Callable[[], AbstractContextManager[Session]] = Depends(
         get_plugin_session_factory
     ),
-    registry: PluginRegistry = Depends(get_plugin_registry),
     runner: PluginRunner = Depends(get_plugin_runner),
 ):
-    plugin_svc = PluginService(
-        db, api_keys, registry=registry, session_factory=session_factory
-    )
-    plugin_svc.require_execution_access(current_user)
+    CaseAccess(db).require_non_analyst(current_user)
     run_params = params or {}
+    run_adapter = build_run_adapter(api_keys, session_factory)
 
     async def stream() -> AsyncGenerator[str, None]:
-        with plugin_svc.open_run(run_params, current_user=current_user) as run:
+        case_id = run_params.get("case_id")
+        with run_adapter.open(
+            user=current_user,
+            case_id=case_id if isinstance(case_id, int) else None,
+            save_to_case=run_params.get("save_to_case") is True,
+        ) as run:
             async for event in runner.run(plugin_name, run_params, run):
                 yield json.dumps(event.to_wire()) + "\n"
 

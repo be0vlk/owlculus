@@ -92,11 +92,10 @@ async def test_test_adapters_collect_evidence_without_service_patches(
         save_to_case=True,
     )
 
+    runner = PluginRunner(PluginRegistry.from_classes([ContractPlugin]))
     events = [
         event
-        async for event in ContractPlugin().execute_with_evidence_collection(
-            {"target": "finding"}, ctx
-        )
+        async for event in runner.run("ContractPlugin", {"target": "finding"}, ctx)
     ]
 
     assert events[1] == ResultEvent.data({"target": "finding"})

@@ -7,7 +7,9 @@ mock users, cases, clients, entities, and evidence for testing.
 """
 
 import os
+from collections.abc import AsyncGenerator
 from datetime import timedelta
+from typing import Any
 
 import pytest
 from fastapi import HTTPException
@@ -34,8 +36,25 @@ from app.core.security import (
 )
 from app.database import crud, models
 from app.database.connection import get_db
+from app.plugins.base_plugin import BasePlugin, PluginRun, ResultEvent
 
 app = main_module.app
+
+
+class ThrowingPlugin(BasePlugin):
+    """Shared failure adapter for runner boundary tests."""
+
+    async def run(
+        self, params: dict[str, Any], ctx: PluginRun
+    ) -> AsyncGenerator[ResultEvent, None]:
+        yield self.data({"partial": True})
+        raise RuntimeError("provider exploded")
+        yield  # pragma: no cover
+
+
+@pytest.fixture(name="throwing_plugin_class")
+def throwing_plugin_class_fixture():
+    return ThrowingPlugin
 
 
 @pytest.fixture(name="engine")
@@ -209,8 +228,8 @@ def override_auth_fixture(session):
             if not user:
                 raise HTTPException(status_code=401)
             return user
-        except:
-            raise HTTPException(status_code=401)
+        except Exception as error:
+            raise HTTPException(status_code=401) from error
 
     app.dependency_overrides[get_current_user] = mock_get_current_user
     app.dependency_overrides[get_current_user] = mock_get_current_user
