@@ -26,13 +26,14 @@ os.environ.setdefault("FRONTEND_URL", "http://localhost:3000")
 from app import main as main_module
 from app.core import file_storage
 from app.core.config import settings
-from app.core.dependencies import get_current_user, get_db
+from app.core.dependencies import get_current_user
 from app.core.security import (
     create_access_token,
     get_password_hash,
     verify_access_token,
 )
 from app.database import crud, models
+from app.database.connection import get_db
 
 app = main_module.app
 

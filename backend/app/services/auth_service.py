@@ -12,18 +12,20 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import Optional, Protocol
 
+from sqlmodel import Session
+
 from app.core import security
 from app.core.config import settings
 from app.core.exceptions import (
-	AuthenticationException,
-	AuthorizationException,
-	BaseException,
-	ResourceNotFoundException,
+    AuthenticationException,
+    AuthorizationException,
+    BaseException,
+    ResourceNotFoundException,
 )
 from app.core.logging import get_security_logger
 from app.database import crud
 from app.database.models import HuntExecution, User
-from sqlmodel import Session
+from app.services.case_access import CaseAccess
 
 DEFAULT_TOKEN_EXPIRY_MINUTES = 30
 TOKEN_TYPE_BEARER = "bearer"
@@ -132,13 +134,11 @@ class DatabaseCaseAccessChecker(CaseAccessChecker):
     """Database implementation of case access checker"""
 
     def __init__(self, db: Session):
-        self.db = db
+        self.access = CaseAccess(db)
 
     def has_access(self, case_id: int, user: User) -> bool:
-        from app.core.dependencies import check_case_access
-
         try:
-            check_case_access(self.db, case_id, user)
+            self.access.readable(user, case_id)
             return True
         except Exception:
             return False

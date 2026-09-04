@@ -15,7 +15,6 @@ from ..database import models
 from ..database.connection import get_db
 from ..schemas import system_config_schema
 from ..services.api_key_vault import ConfigurationApiKeyVault, Provider
-from ..services.case_access import CaseAccess
 from ..services.system_config_service import SystemConfigService
 
 router = APIRouter()
@@ -124,13 +123,10 @@ async def preview_case_number_template(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    CaseAccess().require_admin(current_user)
     config_service = SystemConfigService(db)
-    if template not in ["YYMM-NN", "PREFIX-YYMM-NN"]:
-        raise ValidationException("Invalid template")
-
-    example = config_service.generate_example_case_number(template, prefix)
-    display_name = config_service.get_template_display_name(template)
+    example, display_name = config_service.preview_case_number_template(
+        template, prefix, current_user
+    )
     return system_config_schema.SystemConfigurationPreview(
         template=template,
         prefix=prefix,

@@ -4,20 +4,152 @@ import ast
 import inspect
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from pathlib import Path
 from textwrap import dedent
 
 import pytest
 from sqlalchemy import event
 from sqlmodel import Session
 
-from app.core.dependencies import admin_only, no_analyst
 from app.core.exceptions import AuthorizationException
 from app.database import models
 from app.services.case_access import CaseAccess
 from app.services.case_service import CaseService
 from app.services.entity_service import EntityService
+from app.services.evidence_service import EvidenceService
 from app.services.export_service import ExportService
 from app.services.hunt_service import HuntService
+from app.services.system_config_service import SystemConfigService
+from app.services.task_service import TaskService
+from app.services.user_service import UserService
+
+ROUTE_AUTHORIZATION_NAMES = {
+    "CaseAccess",
+    "admin_only",
+    "authorize",
+    "case_must_be_open",
+    "check_case_access",
+    "is_case_lead",
+    "no_analyst",
+}
+
+
+def test_routes_do_not_perform_authorization() -> None:
+    """Keep authentication at HTTP boundaries and authorization in services."""
+    api_directory = Path(__file__).parents[2] / "app" / "api"
+    violations: list[str] = []
+
+    for route_path in sorted(api_directory.glob("*.py")):
+        tree = ast.parse(route_path.read_text())
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Name) and node.id in ROUTE_AUTHORIZATION_NAMES:
+                violations.append(f"{route_path.name}:{node.lineno}:{node.id}")
+
+    assert violations == []
+
+
+def test_dependencies_exposes_only_request_and_token_dependencies() -> None:
+    dependency_path = Path(__file__).parents[2] / "app" / "core" / "dependencies.py"
+    tree = ast.parse(dependency_path.read_text())
+    public_functions = {
+        node.name
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and not node.name.startswith("_")
+    }
+
+    assert public_functions == {
+        "get_client_ip",
+        "get_current_user",
+        "get_optional_current_user",
+        "get_user_agent",
+    }
+
+
+def _case_access_calls(service: type, method_name: str) -> list[str]:
+    tree = ast.parse(dedent(inspect.getsource(getattr(service, method_name))))
+    return [
+        node.func.attr
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Attribute)
+        and isinstance(node.func.value.value, ast.Name)
+        and node.func.value.value.id == "self"
+        and node.func.value.attr == "access"
+    ]
+
+
+@pytest.mark.parametrize(
+    ("method_name", "policies"),
+    [
+        ("create_evidence", ["writable"]),
+        ("get_case_evidence", ["readable"]),
+        ("get_evidence", ["readable"]),
+        ("update_evidence", ["writable"]),
+        ("delete_evidence", ["writable"]),
+        ("download_evidence", ["readable"]),
+        ("create_folder", ["writable"]),
+        ("get_folder_tree", ["readable"]),
+        ("update_folder", ["writable"]),
+        ("delete_folder", ["writable"]),
+        ("create_folders_from_template", ["writable"]),
+    ],
+)
+def test_evidence_service_declares_case_access_policy(
+    method_name: str, policies: list[str]
+) -> None:
+    assert _case_access_calls(EvidenceService, method_name) == policies
+
+
+@pytest.mark.parametrize(
+    ("method_name", "policies"),
+    [
+        ("create_custom_template", ["require_admin"]),
+        ("create_task", ["lead"]),
+        ("get_tasks", ["readable", "is_admin"]),
+        ("get_task", ["readable"]),
+        ("update_task", ["readable", "lead"]),
+        ("delete_task", ["require_admin"]),
+        ("assign_task", ["lead", "readable"]),
+        ("update_status", ["readable"]),
+        ("update_template", ["require_admin"]),
+        ("delete_template", ["require_admin"]),
+    ],
+)
+def test_task_service_declares_case_access_policy(
+    method_name: str, policies: list[str]
+) -> None:
+    assert _case_access_calls(TaskService, method_name) == policies
+
+
+@pytest.mark.parametrize(
+    "method_name",
+    [
+        "get_configuration_admin",
+        "update_configuration",
+        "set_api_key",
+        "remove_api_key",
+        "list_api_keys",
+        "preview_case_number_template",
+        "update_evidence_folder_templates",
+    ],
+)
+def test_system_configuration_service_declares_admin_policy(method_name: str) -> None:
+    assert _case_access_calls(SystemConfigService, method_name) == ["require_admin"]
+
+
+@pytest.mark.parametrize(
+    "method_name",
+    [
+        "create_user_from_payload",
+        "get_users",
+        "admin_reset_password",
+        "delete_user",
+    ],
+)
+def test_user_service_declares_admin_policy(method_name: str) -> None:
+    assert _case_access_calls(UserService, method_name) == ["require_admin"]
 
 
 @contextmanager
@@ -356,25 +488,6 @@ async def test_operation_permission_matrix(
                 access.require_admin(user)
             else:
                 getattr(access, policy)(user, test_case.id)
-
-
-@pytest.mark.asyncio
-async def test_legacy_role_decorators_accept_positional_current_user(
-    session: Session, access_users: dict[str, models.User]
-):
-    @admin_only()
-    async def admin_operation(current_user: models.User):
-        return current_user
-
-    @no_analyst()
-    async def investigator_operation(current_user: models.User):
-        return current_user
-
-    assert await admin_operation(access_users["admin"]) is access_users["admin"]
-    assert (
-        await investigator_operation(access_users["investigator"])
-        is access_users["investigator"]
-    )
 
 
 @pytest.mark.asyncio

@@ -10,21 +10,29 @@ audit logging for OSINT investigation case management.
 from datetime import datetime
 from typing import List, Optional
 
+from sqlmodel import Session, select
+
 from app.core.enums import TaskStatus
 from app.core.exceptions import (
-	BaseException,
-	ResourceNotFoundException,
-	ValidationException,
+    BaseException,
+    ResourceNotFoundException,
+    ValidationException,
 )
 from app.core.logging import get_security_logger
-from app.core.roles import UserRole
 from app.database import models
-from sqlmodel import Session, select
+from app.services.case_access import CaseAccess
 
 
 class TaskService:
     def __init__(self, db: Session):
         self.db = db
+        self.access = CaseAccess(db)
+
+    def _get_task(self, task_id: int) -> models.Task:
+        task = self.db.get(models.Task, task_id)
+        if not task:
+            raise ResourceNotFoundException("Task not found")
+        return task
 
     async def get_templates(
         self, include_inactive: bool = False, *, current_user: models.User
@@ -41,6 +49,7 @@ class TaskService:
         self, template_data: dict, *, current_user: models.User
     ) -> models.TaskTemplate:
         """Create a custom task template (Admin only)"""
+        self.access.require_admin(current_user)
         template = models.TaskTemplate(**template_data, created_by_id=current_user.id)
         self.db.add(template)
         self.db.commit()
@@ -60,6 +69,7 @@ class TaskService:
         self, case_id: int, task_data: dict, *, current_user: models.User
     ) -> models.Task:
         """Create a new task for a case"""
+        self.access.lead(current_user, case_id)
         task = models.Task(case_id=case_id, assigned_by_id=current_user.id, **task_data)
 
         self.db.add(task)
@@ -92,10 +102,11 @@ class TaskService:
         query = select(models.Task)
 
         if case_id:
+            self.access.readable(current_user, case_id)
             query = query.where(models.Task.case_id == case_id)
         else:
             # Filter to only show tasks from cases the user has access to for non-admin users
-            if current_user.role != UserRole.ADMIN.value:
+            if not self.access.is_admin(current_user):
                 user_case_ids = self.db.exec(
                     select(models.CaseUserLink.case_id).where(
                         models.CaseUserLink.user_id == current_user.id
@@ -121,17 +132,21 @@ class TaskService:
 
     async def get_task(self, task_id: int, *, current_user: models.User) -> models.Task:
         """Get a specific task by ID"""
-        task = self.db.get(models.Task, task_id)
-        if not task:
-            raise ResourceNotFoundException("Task not found")
-
+        task = self._get_task(task_id)
+        self.access.readable(current_user, task.case_id)
         return task
 
     async def update_task(
         self, task_id: int, updates: dict, *, current_user: models.User
     ) -> models.Task:
         """Update a task"""
-        task = await self.get_task(task_id, current_user=current_user)
+        task = self._get_task(task_id)
+        is_assignee = task.assigned_to_id == current_user.id
+        assignee_fields = {"status", "custom_fields"}
+        if is_assignee and all(field in assignee_fields for field in updates):
+            self.access.readable(current_user, task.case_id)
+        else:
+            self.access.lead(current_user, task.case_id)
 
         updated_fields = []
 
@@ -173,7 +188,8 @@ class TaskService:
 
     async def delete_task(self, task_id: int, *, current_user: models.User) -> bool:
         """Delete a task (Admin only)"""
-        task = await self.get_task(task_id, current_user=current_user)
+        self.access.require_admin(current_user)
+        task = self._get_task(task_id)
 
         self.db.delete(task)
         self.db.commit()
@@ -192,12 +208,14 @@ class TaskService:
         self, task_id: int, user_id: Optional[int], *, current_user: models.User
     ) -> models.Task:
         """Assign or unassign a task to a user"""
-        task = await self.get_task(task_id, current_user=current_user)
+        task = self._get_task(task_id)
+        self.access.lead(current_user, task.case_id)
 
         if user_id:
             user = self.db.get(models.User, user_id)
             if not user:
                 raise ResourceNotFoundException("User not found")
+            self.access.readable(user, task.case_id)
 
         task.assigned_to_id = user_id
         task.updated_at = datetime.utcnow()
@@ -224,7 +242,8 @@ class TaskService:
         if status not in [s.value for s in TaskStatus]:
             raise ValidationException("Invalid status")
 
-        task = await self.get_task(task_id, current_user=current_user)
+        task = self._get_task(task_id)
+        self.access.readable(current_user, task.case_id)
 
         task.status = status
         task.updated_at = datetime.utcnow()
@@ -255,17 +274,10 @@ class TaskService:
         self, task_ids: List[int], user_id: Optional[int], *, current_user: models.User
     ) -> List[models.Task]:
         """Bulk assign tasks to a user"""
-        from app.core.dependencies import is_case_lead
-
         updated_tasks = []
 
         for task_id in task_ids:
             try:
-                task = await self.get_task(task_id, current_user=current_user)
-
-                if not is_case_lead(self.db, task.case_id, current_user):
-                    continue
-
                 task = await self.assign_task(
                     task_id, user_id, current_user=current_user
                 )
@@ -296,6 +308,7 @@ class TaskService:
         self, template_id: int, updates: dict, *, current_user: models.User
     ) -> models.TaskTemplate:
         """Update a task template"""
+        self.access.require_admin(current_user)
         template = (
             self.db.query(models.TaskTemplate)
             .filter(models.TaskTemplate.id == template_id)
@@ -335,6 +348,7 @@ class TaskService:
         self, template_id: int, *, current_user: models.User
     ) -> bool:
         """Delete a task template"""
+        self.access.require_admin(current_user)
         template = (
             self.db.query(models.TaskTemplate)
             .filter(models.TaskTemplate.id == template_id)

@@ -5,8 +5,13 @@ Comprehensive tests for tasks API endpoints
 from datetime import datetime, timedelta
 
 import pytest
-from app.core.dependencies import get_current_user, get_db
+from fastapi import status
+from fastapi.testclient import TestClient
+from sqlmodel import Session
+
+from app.core.dependencies import get_current_user
 from app.core.enums import TaskPriority, TaskStatus
+from app.database.connection import get_db
 from app.database.models import (
     Case,
     CaseUserLink,
@@ -15,9 +20,6 @@ from app.database.models import (
     User,
 )
 from app.main import app
-from fastapi import status
-from fastapi.testclient import TestClient
-from sqlmodel import Session
 
 
 @pytest.fixture

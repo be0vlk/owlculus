@@ -12,7 +12,6 @@ from typing import Dict, List, Optional
 
 from sqlmodel import Session, select
 
-from ..core.dependencies import admin_only
 from ..core.evidence_templates import DEFAULT_TEMPLATES
 from ..core.exceptions import ValidationException
 from ..core.logging import get_security_logger
@@ -20,6 +19,7 @@ from ..core.security import encrypt_api_key
 from ..core.utils import get_utc_now
 from ..database import models
 from .api_key_vault import Provider, StoredApiKey
+from .case_access import CaseAccess
 
 CASE_NUMBER_TEMPLATE_MONTHLY = "YYMM-NN"
 CASE_NUMBER_TEMPLATE_PREFIX = "PREFIX-YYMM-NN"
@@ -87,6 +87,7 @@ class SystemConfigService:
     ) -> None:
         self.db = db
         self._clock = clock
+        self.access = CaseAccess(db)
 
     def _persist_configuration(
         self, config: models.SystemConfiguration
@@ -117,20 +118,20 @@ class SystemConfigService:
 
         return config
 
-    @admin_only()
     async def get_configuration_admin(
         self, current_user: models.User
     ) -> models.SystemConfiguration:
         """Admin-only method to get configuration."""
+        self.access.require_admin(current_user)
         return await self.get_configuration()
 
-    @admin_only()
     async def update_configuration(
         self,
         case_number_template: str,
         current_user: models.User,
         case_number_prefix: Optional[str] = None,
     ) -> models.SystemConfiguration:
+        self.access.require_admin(current_user)
         config_logger = get_security_logger(
             admin_user_id=current_user.id,
             action="update_system_config",
@@ -196,7 +197,6 @@ class SystemConfigService:
             return f"{prefix}-{year}{month}-01"
         return f"{year}{month}-01"
 
-    @admin_only()
     async def set_api_key(
         self,
         provider: Provider,
@@ -204,6 +204,7 @@ class SystemConfigService:
         name: str,
         current_user: models.User,
     ) -> models.SystemConfiguration:
+        self.access.require_admin(current_user)
         config = await self.get_configuration()
         current_keys = config.api_keys.copy() if config.api_keys else {}
         provider_name = provider.value
@@ -274,10 +275,10 @@ class SystemConfigService:
             ).error(f"API key {operation_type} error for {provider}: {str(e)}")
             raise
 
-    @admin_only()
     async def remove_api_key(
         self, provider: Provider, current_user: models.User
     ) -> models.SystemConfiguration:
+        self.access.require_admin(current_user)
         config = await self.get_configuration()
 
         existing_key_data = None
@@ -325,9 +326,9 @@ class SystemConfigService:
             ).error(f"API key remove error for {provider}: {str(e)}")
             raise
 
-    @admin_only()
     async def list_api_keys(self, current_user: models.User) -> Dict[str, dict]:
         """List all configured API keys (admin only)"""
+        self.access.require_admin(current_user)
         try:
             config = await self.get_configuration()
 
@@ -354,6 +355,17 @@ class SystemConfigService:
         api_keys = await self.list_api_keys(current_user=current_user)
         return list(api_keys.keys())
 
+    def preview_case_number_template(
+        self, template: str, prefix: Optional[str], current_user: models.User
+    ) -> tuple[str, str]:
+        """Authorize and render an administrative case-number preview."""
+        self.access.require_admin(current_user)
+        SystemConfigValidator.validate_case_number_template(template)
+        return (
+            self.generate_example_case_number(template, prefix),
+            self.get_template_display_name(template),
+        )
+
     async def get_evidence_folder_templates(self) -> dict:
         config = await self.get_configuration()
         if not config.evidence_folder_templates:
@@ -361,10 +373,10 @@ class SystemConfigService:
             config = self._persist_configuration(config)
         return config.evidence_folder_templates
 
-    @admin_only()
     async def update_evidence_folder_templates(
         self, templates: dict, current_user: models.User
     ) -> models.SystemConfiguration:
+        self.access.require_admin(current_user)
         config_logger = get_security_logger(
             admin_user_id=current_user.id,
             action="update_evidence_templates",

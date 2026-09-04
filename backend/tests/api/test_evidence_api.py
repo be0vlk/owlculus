@@ -9,8 +9,9 @@ from fastapi import status
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.core.dependencies import get_current_user, get_db
+from app.core.dependencies import get_current_user
 from app.core.exceptions import ValidationException
+from app.database.connection import get_db
 from app.database.models import Case, CaseUserLink, Client, Evidence, User
 from app.main import app
 

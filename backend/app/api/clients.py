@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, status
 from sqlmodel import Session
 
 from app import schemas
-from app.core.dependencies import admin_only, get_current_user, no_analyst
+from app.core.dependencies import get_current_user
 from app.database import models
 from app.database.connection import get_db
 from app.services.client_service import ClientService
@@ -18,7 +18,6 @@ router = APIRouter()
 
 
 @router.get("/", response_model=list[schemas.Client])
-@no_analyst()
 async def read_clients(
     skip: int = 0,
     limit: int = 100,
@@ -32,7 +31,6 @@ async def read_clients(
 
 
 @router.post("/", response_model=schemas.Client, status_code=status.HTTP_201_CREATED)
-@admin_only()
 async def create_client(
     client: schemas.ClientCreate,
     db: Session = Depends(get_db),
@@ -43,7 +41,6 @@ async def create_client(
 
 
 @router.get("/{client_id}", response_model=schemas.Client)
-@no_analyst()
 async def read_client(
     client_id: int,
     db: Session = Depends(get_db),
@@ -56,7 +53,6 @@ async def read_client(
 
 
 @router.put("/{client_id}", response_model=schemas.Client)
-@admin_only()
 async def update_client(
     client_id: int,
     client: schemas.ClientUpdate,
@@ -70,7 +66,6 @@ async def update_client(
 
 
 @router.delete("/{client_id}", status_code=status.HTTP_204_NO_CONTENT)
-@admin_only()
 async def delete_client(
     client_id: int,
     db: Session = Depends(get_db),

@@ -53,7 +53,7 @@ class CaseAccess:
         return user.role == UserRole.ADMIN.value
 
     def require_non_analyst(self, user: User | None) -> User:
-        """Preserve the legacy role-only decorator for untouched callers."""
+        """Authorize global write-like operations that investigators may perform."""
         if user is None:
             raise AuthenticationException("Not authorized")
         if user.role == UserRole.ANALYST.value:

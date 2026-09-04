@@ -7,14 +7,15 @@ API endpoints.
 """
 
 import pytest
-from app.core.config import settings
-from app.core.dependencies import get_current_user, get_db
-from app.database.models import Case, CaseUserLink, Client, Entity, User
-from app.main import app
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
+from app.core.config import settings
+from app.core.dependencies import get_current_user
+from app.database.connection import get_db
+from app.database.models import Case, CaseUserLink, Client, Entity, User
+from app.main import app
 
 
 @pytest.fixture
@@ -148,7 +149,9 @@ def test_read_cases(override_dependencies, test_case: Case, client: TestClient):
     assert data[0]["title"] == test_case.title
 
 
-def test_read_cases_filter_by_status(override_dependencies, test_case: Case, client: TestClient):
+def test_read_cases_filter_by_status(
+    override_dependencies, test_case: Case, client: TestClient
+):
     response = client.get(f"{settings.API_V1_STR}/cases/?status=Open")
     assert response.status_code == 200
     data = response.json()
@@ -188,8 +191,10 @@ def test_update_case_nonexistent(override_dependencies, client: TestClient):
 
 
 def test_update_case_duplicate_case_number(
-    override_dependencies, test_case: Case, session: Session,
-client: TestClient,
+    override_dependencies,
+    test_case: Case,
+    session: Session,
+    client: TestClient,
 ):
     # Create a second case with a different case number
     second_case = Case(
@@ -207,26 +212,35 @@ client: TestClient,
     assert response.status_code == 400  # Bad Request
 
 
-def test_add_user_to_case(override_dependencies, test_case: Case, test_user: User, client: TestClient):
+def test_add_user_to_case(
+    override_dependencies, test_case: Case, test_user: User, client: TestClient
+):
     response = client.post(
         f"{settings.API_V1_STR}/cases/{test_case.id}/users/{test_user.id}"
     )
     assert response.status_code == 200
 
 
-def test_add_user_to_nonexistent_case(override_dependencies, test_user: User, client: TestClient):
+def test_add_user_to_nonexistent_case(
+    override_dependencies, test_user: User, client: TestClient
+):
     response = client.post(f"{settings.API_V1_STR}/cases/999/users/{test_user.id}")
     assert response.status_code == 404
 
 
-def test_add_nonexistent_user_to_case(override_dependencies, test_case: Case, client: TestClient):
+def test_add_nonexistent_user_to_case(
+    override_dependencies, test_case: Case, client: TestClient
+):
     response = client.post(f"{settings.API_V1_STR}/cases/{test_case.id}/users/999")
     assert response.status_code == 404
 
 
 def test_remove_user_from_case(
-    override_dependencies, test_case: Case, test_user: User, session: Session,
-client: TestClient,
+    override_dependencies,
+    test_case: Case,
+    test_user: User,
+    session: Session,
+    client: TestClient,
 ):
     # First add the user to the case
     link = CaseUserLink(case_id=test_case.id, user_id=test_user.id)
@@ -239,17 +253,23 @@ client: TestClient,
     assert response.status_code == 200
 
 
-def test_remove_user_from_nonexistent_case(override_dependencies, test_user: User, client: TestClient):
+def test_remove_user_from_nonexistent_case(
+    override_dependencies, test_user: User, client: TestClient
+):
     response = client.delete(f"{settings.API_V1_STR}/cases/999/users/{test_user.id}")
     assert response.status_code == 404
 
 
-def test_remove_nonexistent_user_from_case(override_dependencies, test_case: Case, client: TestClient):
+def test_remove_nonexistent_user_from_case(
+    override_dependencies, test_case: Case, client: TestClient
+):
     response = client.delete(f"{settings.API_V1_STR}/cases/{test_case.id}/users/999")
     assert response.status_code == 404
 
 
-def test_get_case_entities(override_dependencies, test_case: Case, test_entity: Entity, client: TestClient):
+def test_get_case_entities(
+    override_dependencies, test_case: Case, test_entity: Entity, client: TestClient
+):
     response = client.get(f"{settings.API_V1_STR}/cases/{test_case.id}/entities")
     assert response.status_code == 200
     data = response.json()
@@ -259,8 +279,10 @@ def test_get_case_entities(override_dependencies, test_case: Case, test_entity: 
 
 
 def test_get_case_entities_filter_by_type(
-    override_dependencies, test_case: Case, test_entity: Entity,
-client: TestClient,
+    override_dependencies,
+    test_case: Case,
+    test_entity: Entity,
+    client: TestClient,
 ):
     response = client.get(
         f"{settings.API_V1_STR}/cases/{test_case.id}/entities?entity_type=person"
@@ -289,7 +311,9 @@ def test_create_entity(override_dependencies, test_case: Case, client: TestClien
     assert data["data"]["first_name"] == payload["data"]["first_name"]
 
 
-def test_create_entity_missing_fields(override_dependencies, test_case: Case, client: TestClient):
+def test_create_entity_missing_fields(
+    override_dependencies, test_case: Case, client: TestClient
+):
     # Missing data field
     payload = {"entity_type": "person"}
     response = client.post(
@@ -307,7 +331,9 @@ def test_create_entity_for_nonexistent_case(override_dependencies, client: TestC
     assert response.status_code == 404
 
 
-def test_update_entity(override_dependencies, test_case: Case, test_entity: Entity, client: TestClient):
+def test_update_entity(
+    override_dependencies, test_case: Case, test_entity: Entity, client: TestClient
+):
     payload = {
         "data": {
             "first_name": "John",
@@ -324,7 +350,9 @@ def test_update_entity(override_dependencies, test_case: Case, test_entity: Enti
     assert data["data"]["first_name"] == payload["data"]["first_name"]
 
 
-def test_update_nonexistent_entity(override_dependencies, test_case: Case, client: TestClient):
+def test_update_nonexistent_entity(
+    override_dependencies, test_case: Case, client: TestClient
+):
     payload = {"data": {"first_name": "John", "last_name": "Smith"}}
     response = client.put(
         f"{settings.API_V1_STR}/cases/{test_case.id}/entities/999", json=payload
@@ -351,21 +379,28 @@ def test_entity_id_must_belong_to_case_in_url(
     assert response.status_code == 404
 
 
-def test_delete_entity(override_dependencies, test_case: Case, test_entity: Entity, client: TestClient):
+def test_delete_entity(
+    override_dependencies, test_case: Case, test_entity: Entity, client: TestClient
+):
     response = client.delete(
         f"{settings.API_V1_STR}/cases/{test_case.id}/entities/{test_entity.id}"
     )
     assert response.status_code == 204
 
 
-def test_delete_nonexistent_entity(override_dependencies, test_case: Case, client: TestClient):
+def test_delete_nonexistent_entity(
+    override_dependencies, test_case: Case, client: TestClient
+):
     response = client.delete(f"{settings.API_V1_STR}/cases/{test_case.id}/entities/999")
     assert response.status_code == 404
 
 
 def test_read_cases_as_investigator(
-    override_dependencies, test_case: Case, test_user: User, session: Session,
-client: TestClient,
+    override_dependencies,
+    test_case: Case,
+    test_user: User,
+    session: Session,
+    client: TestClient,
 ):
     # Remove the default admin user from the override
     app.dependency_overrides[get_current_user] = (
@@ -401,8 +436,11 @@ client: TestClient,
 
 
 def test_update_case_as_investigator(
-    override_dependencies, test_case: Case, test_user: User, session: Session,
-client: TestClient,
+    override_dependencies,
+    test_case: Case,
+    test_user: User,
+    session: Session,
+    client: TestClient,
 ):
     app.dependency_overrides[get_current_user] = lambda: test_user  # Return test user
 
@@ -433,8 +471,11 @@ client: TestClient,
 
 
 def test_update_case_as_analyst(
-    override_dependencies, test_case: Case, test_analyst: User, session: Session,
-client: TestClient,
+    override_dependencies,
+    test_case: Case,
+    test_analyst: User,
+    session: Session,
+    client: TestClient,
 ):
     app.dependency_overrides[get_current_user] = (
         lambda: test_analyst
@@ -456,7 +497,9 @@ client: TestClient,
 # ========================================
 
 
-def test_invalid_json_payload(override_dependencies, test_case: Case, client: TestClient):
+def test_invalid_json_payload(
+    override_dependencies, test_case: Case, client: TestClient
+):
     """Test handling of invalid JSON payloads"""
     # Send invalid JSON
     response = client.put(
@@ -467,7 +510,9 @@ def test_invalid_json_payload(override_dependencies, test_case: Case, client: Te
     assert response.status_code == 422  # Unprocessable Entity
 
 
-def test_missing_content_type_header(override_dependencies, test_case: Case, client: TestClient):
+def test_missing_content_type_header(
+    override_dependencies, test_case: Case, client: TestClient
+):
     """Test handling of missing content-type header"""
     payload = {"status": "Closed"}
     response = client.put(
@@ -479,7 +524,9 @@ def test_missing_content_type_header(override_dependencies, test_case: Case, cli
     assert response.status_code == 200
 
 
-def test_malformed_request_body(override_dependencies, test_case: Case, client: TestClient):
+def test_malformed_request_body(
+    override_dependencies, test_case: Case, client: TestClient
+):
     """Test handling of malformed request bodies"""
     # Empty body
     response = client.post(f"{settings.API_V1_STR}/cases/", json={})
@@ -493,8 +540,10 @@ def test_malformed_request_body(override_dependencies, test_case: Case, client: 
 
 
 def test_response_pagination_headers(
-    override_dependencies, test_case: Case, session: Session,
-client: TestClient,
+    override_dependencies,
+    test_case: Case,
+    session: Session,
+    client: TestClient,
 ):
     """Test pagination headers in list responses"""
     # Create multiple cases
@@ -542,7 +591,9 @@ def test_cors_headers(override_dependencies, client: TestClient):
     )
 
 
-def test_bulk_operations(override_dependencies, test_client: Client, client: TestClient):
+def test_bulk_operations(
+    override_dependencies, test_client: Client, client: TestClient
+):
     """Test bulk creation/update operations"""
     # Create multiple cases at once
     cases_data = [
@@ -564,7 +615,9 @@ def test_bulk_operations(override_dependencies, test_client: Client, client: Tes
     assert len(created_ids) == 5
 
 
-def test_partial_update_vs_full_update(override_dependencies, test_case: Case, client: TestClient):
+def test_partial_update_vs_full_update(
+    override_dependencies, test_case: Case, client: TestClient
+):
     """Test PATCH vs PUT behavior"""
     # Full update with PUT
     full_update = {
@@ -587,8 +640,11 @@ def test_partial_update_vs_full_update(override_dependencies, test_case: Case, c
 
 
 def test_field_level_permissions(
-    override_dependencies, test_case: Case, test_user: User, session: Session,
-client: TestClient,
+    override_dependencies,
+    test_case: Case,
+    test_user: User,
+    session: Session,
+    client: TestClient,
 ):
     """Test field-level access control"""
     app.dependency_overrides[get_current_user] = lambda: test_user
@@ -655,7 +711,9 @@ def test_error_response_format(override_dependencies, client: TestClient):
         assert response.text is not None
 
 
-def test_concurrent_api_calls(session: Session, test_client: Client, client: TestClient):
+def test_concurrent_api_calls(
+    session: Session, test_client: Client, client: TestClient
+):
     """Test handling of concurrent API calls"""
     # Note: Instead of using actual threading which causes SQLAlchemy session issues,
     # we'll simulate concurrent calls by making multiple sequential calls rapidly
@@ -704,7 +762,9 @@ def test_concurrent_api_calls(session: Session, test_client: Client, client: Tes
         app.dependency_overrides = {}
 
 
-def test_entity_validation_errors(override_dependencies, test_case: Case, client: TestClient):
+def test_entity_validation_errors(
+    override_dependencies, test_case: Case, client: TestClient
+):
     """Test entity creation with various validation errors"""
     # Invalid entity type
     payload = {"entity_type": "invalid_type", "data": {"some": "data"}}
@@ -735,7 +795,9 @@ def test_entity_validation_errors(override_dependencies, test_case: Case, client
     assert response.status_code == 422
 
 
-def test_duplicate_entity_creation(override_dependencies, test_case: Case, client: TestClient):
+def test_duplicate_entity_creation(
+    override_dependencies, test_case: Case, client: TestClient
+):
     """Test creating duplicate entities"""
     # Create first person
     payload = {
@@ -790,7 +852,9 @@ def test_xss_prevention(override_dependencies, test_client: Client, client: Test
             assert data["notes"] == payload  # But rendered safely
 
 
-def test_path_traversal_prevention(override_dependencies, test_case: Case, client: TestClient):
+def test_path_traversal_prevention(
+    override_dependencies, test_case: Case, client: TestClient
+):
     """Test path traversal attack prevention"""
     malicious_ids = [
         "../../../etc/passwd",
@@ -804,7 +868,9 @@ def test_path_traversal_prevention(override_dependencies, test_case: Case, clien
         assert response.status_code in [400, 404, 422]
 
 
-def test_large_payload_handling(override_dependencies, test_client: Client, client: TestClient):
+def test_large_payload_handling(
+    override_dependencies, test_client: Client, client: TestClient
+):
     """Test handling of very large payloads"""
     # Create case with very large notes
     large_notes = "A" * 1000000  # 1MB of text
@@ -819,7 +885,9 @@ def test_large_payload_handling(override_dependencies, test_client: Client, clie
     assert response.status_code in [201, 413, 422]
 
 
-def test_unicode_handling(override_dependencies, test_client: Client, client: TestClient):
+def test_unicode_handling(
+    override_dependencies, test_client: Client, client: TestClient
+):
     """Test proper Unicode character handling"""
     unicode_strings = [
         "测试案例",  # Chinese
@@ -880,7 +948,9 @@ def test_authentication_edge_cases(session: Session, client: TestClient):
     assert response.status_code in [401, 422]
 
 
-def test_case_number_format_validation(override_dependencies, test_client: Client, client: TestClient):
+def test_case_number_format_validation(
+    override_dependencies, test_client: Client, client: TestClient
+):
     """Test case number format validation"""
     invalid_case_numbers = ["invalid", "12345", "TEST_001", "2023-01-01", ""]
 

@@ -11,7 +11,7 @@ from typing import Any, AsyncGenerator, Dict, List, Optional
 import vt
 from sqlmodel import Session
 
-from app.core.dependencies import get_db
+from app.database.connection import get_db
 from app.services.api_key_vault import ConfigurationApiKeyVault, Provider
 
 from .base_plugin import BasePlugin
