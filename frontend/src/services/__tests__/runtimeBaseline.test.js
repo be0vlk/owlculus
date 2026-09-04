@@ -10,6 +10,18 @@ async function readFrontendFile(path) {
   return readFile(new URL(path, `file://${frontendRoot}/`), 'utf8')
 }
 
+async function readPackageMetadata() {
+  const [packageJsonText, packageLockText] = await Promise.all([
+    readFrontendFile('package.json'),
+    readFrontendFile('package-lock.json'),
+  ])
+
+  return {
+    packageJson: JSON.parse(packageJsonText),
+    packageLock: JSON.parse(packageLockText),
+  }
+}
+
 describe('frontend runtime baseline', () => {
   it('declares Node 24 consistently for local, install, development, and production use', async () => {
     const [packageJsonText, npmConfig, nodeVersion, productionDockerfile, developmentDockerfile] =
@@ -30,12 +42,7 @@ describe('frontend runtime baseline', () => {
   })
 
   it('locks Vue and its runtime/compiler packages to the stable 3.5.42 release', async () => {
-    const [packageJsonText, packageLockText] = await Promise.all([
-      readFrontendFile('package.json'),
-      readFrontendFile('package-lock.json'),
-    ])
-    const packageJson = JSON.parse(packageJsonText)
-    const packageLock = JSON.parse(packageLockText)
+    const { packageJson, packageLock } = await readPackageMetadata()
     const vuePackages = [
       'vue',
       '@vue/compiler-core',
@@ -57,12 +64,7 @@ describe('frontend runtime baseline', () => {
   })
 
   it('locks the stable Vuetify 4 runtime and its migration tooling', async () => {
-    const [packageJsonText, packageLockText] = await Promise.all([
-      readFrontendFile('package.json'),
-      readFrontendFile('package-lock.json'),
-    ])
-    const packageJson = JSON.parse(packageJsonText)
-    const packageLock = JSON.parse(packageLockText)
+    const { packageJson, packageLock } = await readPackageMetadata()
 
     expect(packageJson.dependencies.vuetify).toBe('4.2.0')
     expect(packageJson.devDependencies['vite-plugin-vuetify']).toBe('2.1.3')
