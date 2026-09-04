@@ -34,7 +34,7 @@ class HuntService:
         executor_factory: Callable[[Session], HuntExecutor] | None = None,
     ):
         self.db = db
-        self.access = CaseAccess(db)
+        self.case_access = CaseAccess(db)
         self.registry = registry
         self._executor_factory = executor_factory or (
             lambda session: HuntExecutor(session, websocket_manager)
@@ -62,7 +62,7 @@ class HuntService:
         *,
         current_user: User,
     ) -> HuntExecution:
-        case = self.access.writable(current_user, case_id)
+        case = self.case_access.writable(current_user, case_id)
         hunt = self.db.get(Hunt, hunt_id)
         if not hunt or not hunt.is_active:
             raise ResourceNotFoundException("Hunt not found or inactive")
@@ -135,14 +135,14 @@ class HuntService:
         execution = self.db.get(HuntExecution, execution_id)
         if execution is None:
             raise ResourceNotFoundException("Hunt execution not found")
-        case = self.access.readable(current_user, execution.case_id)
+        case = self.case_access.readable(current_user, execution.case_id)
         execution.case = case
         return execution
 
     async def list_case_executions(
         self, case_id: int, *, current_user: User
     ) -> list[HuntExecution]:
-        case = self.access.readable(current_user, case_id)
+        case = self.case_access.readable(current_user, case_id)
 
         executions = self.db.exec(
             select(HuntExecution)
@@ -159,7 +159,7 @@ class HuntService:
         if not execution:
             raise ResourceNotFoundException("Hunt execution not found")
 
-        case = self.access.writable(current_user, execution.case_id)
+        case = self.case_access.writable(current_user, execution.case_id)
         execution.case = case
 
         # Only running executions can be cancelled
@@ -178,7 +178,7 @@ class HuntService:
         execution = self.db.get(HuntExecution, execution_id)
         if execution is None:
             raise ResourceNotFoundException("Hunt execution not found")
-        case = self.access.readable(current_user, execution.case_id)
+        case = self.case_access.readable(current_user, execution.case_id)
         execution.case = case
         steps = self.db.exec(
             select(HuntStep)

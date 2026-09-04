@@ -159,12 +159,12 @@ class InviteService:
         self.user_repo = user_repo or crud
         self.validator = InviteValidator()
         self.user_validator = UserValidator(self.user_repo)
-        self.access = CaseAccess(db)
+        self.case_access = CaseAccess(db)
 
     async def create_invite(
         self, invite: schemas.InviteCreate, *, current_user: models.User
     ) -> models.Invite:
-        self.access.require_admin(current_user)
+        self.case_access.require_admin(current_user)
         logger = SecurityLogger(
             {
                 "admin_user_id": current_user.id,
@@ -202,7 +202,7 @@ class InviteService:
     async def get_invites(
         self, skip: int = 0, limit: int = 100, *, current_user: models.User
     ) -> list[schemas.InviteListResponse]:
-        self.access.require_admin(current_user)
+        self.case_access.require_admin(current_user)
         invites = await self.invite_repo.get_all_invites(
             self.db, skip=skip, limit=limit
         )
@@ -266,7 +266,7 @@ class InviteService:
             raise BaseException("Internal server error") from e
 
     async def delete_invite(self, invite_id: int, *, current_user: models.User) -> bool:
-        self.access.require_admin(current_user)
+        self.case_access.require_admin(current_user)
         logger = SecurityLogger(
             {
                 "admin_user_id": current_user.id,
@@ -297,7 +297,7 @@ class InviteService:
             raise BaseException("Internal server error") from e
 
     async def cleanup_expired_invites(self, *, current_user: models.User) -> int:
-        self.access.require_admin(current_user)
+        self.case_access.require_admin(current_user)
         return await self.invite_repo.delete_expired_invites(self.db)
 
     def _generate_secure_token(self) -> str:

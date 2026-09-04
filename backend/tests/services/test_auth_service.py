@@ -364,7 +364,7 @@ class TestDatabaseImplementations:
         checker = DatabaseCaseAccessChecker(mock_db)
         mock_user = Mock()
 
-        with patch.object(checker.access, "readable") as mock_check:
+        with patch.object(checker.case_access, "readable") as mock_check:
             result = checker.has_access(10, mock_user)
 
         assert result is True
@@ -375,7 +375,7 @@ class TestDatabaseImplementations:
         checker = DatabaseCaseAccessChecker(mock_db)
         mock_user = Mock()
 
-        with patch.object(checker.access, "readable") as mock_check:
+        with patch.object(checker.case_access, "readable") as mock_check:
             mock_check.side_effect = Exception("Access denied")
             result = checker.has_access(10, mock_user)
 

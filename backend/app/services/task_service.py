@@ -26,7 +26,7 @@ from app.services.case_access import CaseAccess
 class TaskService:
     def __init__(self, db: Session):
         self.db = db
-        self.access = CaseAccess(db)
+        self.case_access = CaseAccess(db)
 
     def _get_task(self, task_id: int) -> models.Task:
         task = self.db.get(models.Task, task_id)
@@ -49,7 +49,7 @@ class TaskService:
         self, template_data: dict, *, current_user: models.User
     ) -> models.TaskTemplate:
         """Create a custom task template (Admin only)"""
-        self.access.require_admin(current_user)
+        self.case_access.require_admin(current_user)
         template = models.TaskTemplate(**template_data, created_by_id=current_user.id)
         self.db.add(template)
         self.db.commit()
@@ -69,7 +69,7 @@ class TaskService:
         self, case_id: int, task_data: dict, *, current_user: models.User
     ) -> models.Task:
         """Create a new task for a case"""
-        self.access.lead(current_user, case_id)
+        self.case_access.lead(current_user, case_id)
         task = models.Task(case_id=case_id, assigned_by_id=current_user.id, **task_data)
 
         self.db.add(task)
@@ -102,11 +102,11 @@ class TaskService:
         query = select(models.Task)
 
         if case_id:
-            self.access.readable(current_user, case_id)
+            self.case_access.readable(current_user, case_id)
             query = query.where(models.Task.case_id == case_id)
         else:
             # Filter to only show tasks from cases the user has access to for non-admin users
-            if not self.access.is_admin(current_user):
+            if not self.case_access.is_admin(current_user):
                 user_case_ids = self.db.exec(
                     select(models.CaseUserLink.case_id).where(
                         models.CaseUserLink.user_id == current_user.id
@@ -133,7 +133,7 @@ class TaskService:
     async def get_task(self, task_id: int, *, current_user: models.User) -> models.Task:
         """Get a specific task by ID"""
         task = self._get_task(task_id)
-        self.access.readable(current_user, task.case_id)
+        self.case_access.readable(current_user, task.case_id)
         return task
 
     async def update_task(
@@ -144,9 +144,9 @@ class TaskService:
         is_assignee = task.assigned_to_id == current_user.id
         assignee_fields = {"status", "custom_fields"}
         if is_assignee and all(field in assignee_fields for field in updates):
-            self.access.readable(current_user, task.case_id)
+            self.case_access.writable(current_user, task.case_id)
         else:
-            self.access.lead(current_user, task.case_id)
+            self.case_access.lead(current_user, task.case_id)
 
         updated_fields = []
 
@@ -188,7 +188,7 @@ class TaskService:
 
     async def delete_task(self, task_id: int, *, current_user: models.User) -> bool:
         """Delete a task (Admin only)"""
-        self.access.require_admin(current_user)
+        self.case_access.require_admin(current_user)
         task = self._get_task(task_id)
 
         self.db.delete(task)
@@ -209,13 +209,13 @@ class TaskService:
     ) -> models.Task:
         """Assign or unassign a task to a user"""
         task = self._get_task(task_id)
-        self.access.lead(current_user, task.case_id)
+        self.case_access.lead(current_user, task.case_id)
 
         if user_id:
             user = self.db.get(models.User, user_id)
             if not user:
                 raise ResourceNotFoundException("User not found")
-            self.access.readable(user, task.case_id)
+            self.case_access.readable(user, task.case_id)
 
         task.assigned_to_id = user_id
         task.updated_at = datetime.utcnow()
@@ -243,7 +243,7 @@ class TaskService:
             raise ValidationException("Invalid status")
 
         task = self._get_task(task_id)
-        self.access.readable(current_user, task.case_id)
+        self.case_access.writable(current_user, task.case_id)
 
         task.status = status
         task.updated_at = datetime.utcnow()
@@ -308,7 +308,7 @@ class TaskService:
         self, template_id: int, updates: dict, *, current_user: models.User
     ) -> models.TaskTemplate:
         """Update a task template"""
-        self.access.require_admin(current_user)
+        self.case_access.require_admin(current_user)
         template = (
             self.db.query(models.TaskTemplate)
             .filter(models.TaskTemplate.id == template_id)
@@ -348,7 +348,7 @@ class TaskService:
         self, template_id: int, *, current_user: models.User
     ) -> bool:
         """Delete a task template"""
-        self.access.require_admin(current_user)
+        self.case_access.require_admin(current_user)
         template = (
             self.db.query(models.TaskTemplate)
             .filter(models.TaskTemplate.id == template_id)

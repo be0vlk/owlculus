@@ -81,7 +81,7 @@ class ExportService:
 
     def __init__(self, db: Session):
         self.db = db
-        self.access = CaseAccess(db)
+        self.case_access = CaseAccess(db)
 
     def export_entities(
         self,
@@ -92,7 +92,7 @@ class ExportService:
         search: str | None = None,
     ) -> ExportArtifact:
         """Return every entity matching the supplied case-table filters."""
-        case = self.access.readable(current_user, case_id)
+        case = self.case_access.readable(current_user, case_id)
         entities = self._get_entities(case.id, entity_types, search)
         safe_case_number = filesystem_safe_name(case.case_number)
         export_date = get_utc_now().date().isoformat()
@@ -123,7 +123,7 @@ class ExportService:
         self, case_id: int, current_user: models.User
     ) -> CaseBundleArtifact:
         """Assemble a complete case snapshot in a temporary ZIP archive."""
-        case = self.access.readable(current_user, case_id)
+        case = self.case_access.readable(current_user, case_id)
         exported_at = get_utc_now()
         safe_case_number = filesystem_safe_name(case.case_number)
         root = f"{safe_case_number}/"
@@ -472,7 +472,7 @@ class ExportService:
         if execution is None:
             raise ResourceNotFoundException("Hunt execution not found")
 
-        case = self.access.readable(current_user, execution.case_id)
+        case = self.case_access.readable(current_user, execution.case_id)
         snapshot = self._hunt_execution_snapshot(execution, case)
         hunt_name = filesystem_safe_name(snapshot.hunt.name)
         exported_at = get_utc_now()

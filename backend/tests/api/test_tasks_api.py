@@ -817,6 +817,12 @@ class TestTaskAccessControl:
             )
             assert response.status_code == status.HTTP_403_FORBIDDEN
 
+            response = client.put(
+                f"/api/tasks/{test_task.id}/status",
+                params={"status": TaskStatus.IN_PROGRESS.value},
+            )
+            assert response.status_code == status.HTTP_403_FORBIDDEN
+
             # Cannot delete task (admin only)
             response = client.delete(f"/api/tasks/{test_task.id}")
             assert response.status_code == status.HTTP_403_FORBIDDEN

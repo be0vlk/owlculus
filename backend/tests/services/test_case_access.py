@@ -25,6 +25,7 @@ from app.services.user_service import UserService
 
 ROUTE_AUTHORIZATION_NAMES = {
     "CaseAccess",
+    "UserRole",
     "admin_only",
     "authorize",
     "case_must_be_open",
@@ -32,6 +33,23 @@ ROUTE_AUTHORIZATION_NAMES = {
     "is_case_lead",
     "no_analyst",
 }
+CASE_ACCESS_METHODS = {
+    "is_admin",
+    "lead",
+    "readable",
+    "require_admin",
+    "require_non_analyst",
+    "writable",
+}
+
+
+def _is_route_decorator(node: ast.expr) -> bool:
+    return (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "router"
+    )
 
 
 def test_routes_do_not_perform_authorization() -> None:
@@ -44,6 +62,27 @@ def test_routes_do_not_perform_authorization() -> None:
         for node in ast.walk(tree):
             if isinstance(node, ast.Name) and node.id in ROUTE_AUTHORIZATION_NAMES:
                 violations.append(f"{route_path.name}:{node.lineno}:{node.id}")
+            elif isinstance(node, ast.ImportFrom) and any(
+                alias.name in ROUTE_AUTHORIZATION_NAMES for alias in node.names
+            ):
+                violations.append(
+                    f"{route_path.name}:{node.lineno}:authorization import"
+                )
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and any(
+                not _is_route_decorator(decorator) for decorator in node.decorator_list
+            ):
+                violations.append(
+                    f"{route_path.name}:{node.lineno}:non-router decorator"
+                )
+            elif (
+                isinstance(node, ast.Attribute)
+                and isinstance(node.value, ast.Name)
+                and node.value.id == "current_user"
+                and node.attr in {"is_superadmin", "role"}
+            ):
+                violations.append(f"{route_path.name}:{node.lineno}:inline user policy")
+            elif isinstance(node, ast.Attribute) and node.attr in CASE_ACCESS_METHODS:
+                violations.append(f"{route_path.name}:{node.lineno}:case access method")
 
     assert violations == []
 
@@ -57,6 +96,13 @@ def test_dependencies_exposes_only_request_and_token_dependencies() -> None:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
         and not node.name.startswith("_")
     }
+    public_imports = {
+        alias.asname or alias.name
+        for node in tree.body
+        if isinstance(node, (ast.Import, ast.ImportFrom))
+        for alias in node.names
+        if not (alias.asname or alias.name).startswith("_")
+    }
 
     assert public_functions == {
         "get_client_ip",
@@ -64,6 +110,7 @@ def test_dependencies_exposes_only_request_and_token_dependencies() -> None:
         "get_optional_current_user",
         "get_user_agent",
     }
+    assert "get_db" not in public_imports
 
 
 def _case_access_calls(service: type, method_name: str) -> list[str]:
@@ -76,7 +123,7 @@ def _case_access_calls(service: type, method_name: str) -> list[str]:
         and isinstance(node.func.value, ast.Attribute)
         and isinstance(node.func.value.value, ast.Name)
         and node.func.value.value.id == "self"
-        and node.func.value.attr == "access"
+        and node.func.value.attr == "case_access"
     ]
 
 
@@ -109,10 +156,10 @@ def test_evidence_service_declares_case_access_policy(
         ("create_task", ["lead"]),
         ("get_tasks", ["readable", "is_admin"]),
         ("get_task", ["readable"]),
-        ("update_task", ["readable", "lead"]),
+        ("update_task", ["writable", "lead"]),
         ("delete_task", ["require_admin"]),
         ("assign_task", ["lead", "readable"]),
-        ("update_status", ["readable"]),
+        ("update_status", ["writable"]),
         ("update_template", ["require_admin"]),
         ("delete_template", ["require_admin"]),
     ],
@@ -150,6 +197,10 @@ def test_system_configuration_service_declares_admin_policy(method_name: str) ->
 )
 def test_user_service_declares_admin_policy(method_name: str) -> None:
     assert _case_access_calls(UserService, method_name) == ["require_admin"]
+
+
+def test_user_service_declares_mixed_self_or_admin_policy() -> None:
+    assert _case_access_calls(UserService, "update_user") == ["is_admin"]
 
 
 @contextmanager
@@ -366,7 +417,7 @@ def test_service_operation_uses_one_declared_case_access_policy(
         and isinstance(node.func.value, ast.Attribute)
         and isinstance(node.func.value.value, ast.Name)
         and node.func.value.value.id == "self"
-        and node.func.value.attr == "access"
+        and node.func.value.attr == "case_access"
         and node.func.attr
         in {"readable", "writable", "lead", "require_admin", "is_admin"}
     ]

@@ -25,7 +25,7 @@ from app.services.case_access import CaseAccess
 class EntityService:
     def __init__(self, db: Session):
         self.db = db
-        self.access = CaseAccess(db)
+        self.case_access = CaseAccess(db)
 
     async def get_case_entities(
         self,
@@ -35,7 +35,7 @@ class EntityService:
         skip: int = 0,
         limit: int = 100,
     ) -> list[models.Entity]:
-        case = self.access.readable(current_user, case_id)
+        case = self.case_access.readable(current_user, case_id)
 
         query = select(models.Entity).where(models.Entity.case_id == case.id)
 
@@ -52,7 +52,7 @@ class EntityService:
         entity_id: int,
         current_user: models.User,
     ) -> models.Entity:
-        case = self.access.readable(current_user, case_id)
+        case = self.case_access.readable(current_user, case_id)
         db_entity = self.db.get(models.Entity, entity_id)
         if not db_entity or db_entity.case_id != case.id:
             raise ResourceNotFoundException("Entity not found")
@@ -65,7 +65,7 @@ class EntityService:
         entity: schemas.EntityCreate,
         current_user: models.User,
     ) -> models.Entity:
-        case = self.access.writable(current_user, case_id)
+        case = self.case_access.writable(current_user, case_id)
 
         await crud.check_entity_duplicates(self.db, case.id, entity)
         with transaction(self.db):
@@ -90,7 +90,7 @@ class EntityService:
         entity_update: schemas.EntityUpdate,
         current_user: models.User,
     ) -> models.Entity:
-        case = self.access.writable(current_user, case_id)
+        case = self.case_access.writable(current_user, case_id)
         db_entity = self.db.get(models.Entity, entity_id)
         if not db_entity or db_entity.case_id != case.id:
             raise ResourceNotFoundException("Entity not found")
@@ -123,7 +123,7 @@ class EntityService:
         entity_id: int,
         current_user: models.User,
     ) -> None:
-        case = self.access.writable(current_user, case_id)
+        case = self.case_access.writable(current_user, case_id)
         db_entity = self.db.get(models.Entity, entity_id)
         if not db_entity or db_entity.case_id != case.id:
             raise ResourceNotFoundException("Entity not found")
@@ -134,7 +134,7 @@ class EntityService:
         self, case_id: int, ip_address: str, current_user: models.User
     ) -> Optional[models.Entity]:
         """Find an existing IP address entity in the given case"""
-        case = self.access.readable(current_user, case_id)
+        case = self.case_access.readable(current_user, case_id)
 
         query = select(models.Entity).where(
             models.Entity.case_id == case.id,
@@ -148,7 +148,7 @@ class EntityService:
         self, case_id: int, domain: str, current_user: models.User
     ) -> Optional[models.Entity]:
         """Find an existing domain entity in the given case (case-insensitive)"""
-        case = self.access.readable(current_user, case_id)
+        case = self.case_access.readable(current_user, case_id)
 
         query = select(models.Entity).where(
             models.Entity.case_id == case.id,
@@ -166,7 +166,7 @@ class EntityService:
         current_user: models.User,
     ) -> models.Entity:
         """Enrich an existing entity's description with additional information"""
-        case = self.access.writable(current_user, case_id)
+        case = self.case_access.writable(current_user, case_id)
         db_entity = self.db.get(models.Entity, entity_id)
         if not db_entity or db_entity.case_id != case.id:
             raise ResourceNotFoundException("Entity not found")

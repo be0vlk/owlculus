@@ -134,11 +134,11 @@ class DatabaseCaseAccessChecker(CaseAccessChecker):
     """Database implementation of case access checker"""
 
     def __init__(self, db: Session):
-        self.access = CaseAccess(db)
+        self.case_access = CaseAccess(db)
 
     def has_access(self, case_id: int, user: User) -> bool:
         try:
-            self.access.readable(user, case_id)
+            self.case_access.readable(user, case_id)
             return True
         except Exception:
             return False

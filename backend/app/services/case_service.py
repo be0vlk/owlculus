@@ -32,7 +32,7 @@ from app.services.system_config_service import SystemConfigService
 class CaseService:
     def __init__(self, db: Session):
         self.db = db
-        self.access = CaseAccess(db)
+        self.case_access = CaseAccess(db)
         self.config_service = SystemConfigService(db)
 
     async def _generate_case_number(self, current_time: datetime) -> str:
@@ -64,7 +64,7 @@ class CaseService:
     async def create_case(
         self, case: schemas.CaseCreate, current_user: models.User
     ) -> models.Case:
-        self.access.require_admin(current_user)
+        self.case_access.require_admin(current_user)
         case_logger = get_security_logger(
             admin_user_id=current_user.id,
             action="create_case",
@@ -111,7 +111,7 @@ class CaseService:
         limit: int = 100,
         status: str | None = None,
     ) -> list[schemas.Case]:
-        if self.access.is_admin(current_user):
+        if self.case_access.is_admin(current_user):
             stmt = select(models.Case)
             if status:
                 stmt = stmt.where(models.Case.status == status)
@@ -133,13 +133,13 @@ class CaseService:
         return self.load_cases_with_users(list(cases))
 
     async def get_case(self, case_id: int, current_user: models.User) -> schemas.Case:
-        case = self.access.readable(current_user, case_id)
+        case = self.case_access.readable(current_user, case_id)
         return self.load_cases_with_users([case])[0]
 
     async def update_case(
         self, case_id: int, case_update: schemas.CaseUpdate, current_user: models.User
     ) -> models.Case:
-        db_case = self.access.writable(current_user, case_id)
+        db_case = self.case_access.writable(current_user, case_id)
 
         case_logger = get_security_logger(
             user_id=current_user.id,
@@ -199,7 +199,7 @@ class CaseService:
         current_user: models.User,
         is_lead: bool = False,
     ) -> models.Case:
-        self.access.require_admin(current_user)
+        self.case_access.require_admin(current_user)
 
         case_logger = get_security_logger(
             admin_user_id=current_user.id,
@@ -225,7 +225,7 @@ class CaseService:
                 raise ResourceNotFoundException("User not found")
 
             try:
-                self.access.validate_lead_assignment(db_user, is_lead=is_lead)
+                self.case_access.validate_lead_assignment(db_user, is_lead=is_lead)
             except ValidationException:
                 case_logger.bind(
                     event_type="case_user_add_failed",
@@ -265,7 +265,7 @@ class CaseService:
     async def remove_user_from_case(
         self, case_id: int, user_id: int, current_user: models.User
     ) -> models.Case:
-        self.access.require_admin(current_user)
+        self.case_access.require_admin(current_user)
 
         case_logger = get_security_logger(
             admin_user_id=current_user.id,
@@ -315,7 +315,7 @@ class CaseService:
     async def update_case_user_lead_status(
         self, case_id: int, user_id: int, is_lead: bool, current_user: models.User
     ) -> models.Case:
-        self.access.require_admin(current_user)
+        self.case_access.require_admin(current_user)
 
         case_logger = get_security_logger(
             admin_user_id=current_user.id,
@@ -352,7 +352,7 @@ class CaseService:
                 raise ValidationException("User is not assigned to this case")
 
             try:
-                self.access.validate_lead_assignment(db_user, is_lead=is_lead)
+                self.case_access.validate_lead_assignment(db_user, is_lead=is_lead)
             except ValidationException:
                 case_logger.bind(
                     event_type="case_user_lead_update_failed",
