@@ -149,7 +149,7 @@ class DomainHunt(BaseHunt):
             ),
             HuntStepDefinition(
                 step_id="dns_records",
-                plugin_name="DnsLookup", 
+                plugin_name="DnsLookup",
                 display_name="DNS records lookup",
                 description="Retrieve all DNS records for the domain",
                 parameter_mapping={"domain": "initial.domain"}
@@ -185,7 +185,7 @@ class DomainHunt(BaseHunt):
 
 Currently available plugins include:
 - **WhoisPlugin** - Domain registration information
-- **DnsLookup** - DNS record retrieval  
+- **DnsLookup** - DNS record retrieval
 - **SubdomainEnumPlugin** - Subdomain discovery and enumeration
 - **ShodanPlugin** - IP address and service analysis
 - **HolehePlugin** - Email account discovery across platforms
