@@ -36,9 +36,7 @@ class HuntStepState:
         return all(dependency in self.completed for dependency in step.depends_on)
 
     def has_failed_required_dependency(self, step: HuntStepDefinition) -> bool:
-        return any(
-            dependency in self.failed_required for dependency in step.depends_on
-        )
+        return any(dependency in self.failed_required for dependency in step.depends_on)
 
 
 class HuntExecutor:
@@ -121,6 +119,16 @@ class HuntExecutor:
                             step_state.completed,
                             len(steps),
                         )
+                        if step_record.status == "failed":
+                            step_state.record_failure(step_def)
+                            context.mark_step_failed(step_def.step_id)
+                            progress = len(step_state.completed) / len(steps)
+                            await self.notifier.broadcast(
+                                HuntEvent.step_failed(
+                                    execution_id, step_def.step_id, progress
+                                )
+                            )
+                            continue
                         step_state.completed.add(step_def.step_id)
 
                         # Send step completion notification
@@ -158,9 +166,7 @@ class HuntExecutor:
 
             # Mark skipped steps
             for step_def in steps:
-                if (
-                    not step_state.is_terminal(step_def.step_id)
-                ):
+                if not step_state.is_terminal(step_def.step_id):
                     context.mark_step_skipped(step_def.step_id)
                     step_record = step_records[step_def.step_id]
                     step_record.status = "skipped"
@@ -245,13 +251,18 @@ class HuntExecutor:
 
         # Execute plugin
         plugin = self.plugin_service.get_plugin(step_def.plugin_name)
-        plugin._current_user = current_user
 
         # Collect results
         results = []
-        async for result in plugin.execute_with_evidence_collection(parameters):
-            if result.get("type") == "data":
-                results.append(result.get("data", {}))
+        errors = []
+        with self.plugin_service.open_run(parameters, current_user=current_user) as run:
+            async for result in plugin.execute_with_evidence_collection(
+                parameters, run
+            ):
+                if result.kind == "data":
+                    results.append(result.payload)
+                elif result.kind == "error":
+                    errors.append(result.payload)
 
         # Store output in context
         output = {
@@ -259,10 +270,14 @@ class HuntExecutor:
             "result_count": len(results),
             "plugin": step_def.plugin_name,
         }
+        if errors:
+            step_record.error_details = "; ".join(
+                error.get("message", "Plugin error") for error in errors
+            )
         context.set_step_output(step_def.step_id, output)
 
         # Update step record
-        step_record.status = "completed"
+        step_record.status = "completed" if results or not errors else "failed"
         step_record.output = output
         step_record.completed_at = get_utc_now()
         self.db.commit()

@@ -11,7 +11,8 @@ import importlib
 import inspect
 import json
 import os
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
+from contextlib import AbstractContextManager, nullcontext
 from typing import Any
 
 from sqlmodel import Session
@@ -19,16 +20,32 @@ from sqlmodel import Session
 from app.core.exceptions import ResourceNotFoundException, ValidationException
 
 from ..database.models import User
-from ..plugins.base_plugin import BasePlugin
-from .api_key_vault import Provider
+from ..plugins.base_plugin import BasePlugin, ResultEvent
+from ..plugins.plugin_context import ProductionPluginRunAdapter
+from .api_key_vault import ApiKeyVault, ConfigurationApiKeyVault, Provider
 from .case_access import CaseAccess
 
 
 class PluginService:
-    def __init__(self, db: Session):
+    def __init__(
+        self,
+        db: Session,
+        api_keys: ApiKeyVault | None = None,
+        session_factory: Callable[[], AbstractContextManager[Session]] | None = None,
+    ):
         self._plugins: dict[str, type[BasePlugin]] = {}
         self._parameter_catalogue: dict[str, set[str]] = {}
         self.db = db
+        self.api_keys = api_keys or ConfigurationApiKeyVault(db)
+        run_vault_factory = (
+            (lambda session: ConfigurationApiKeyVault(session))
+            if api_keys is None or isinstance(api_keys, ConfigurationApiKeyVault)
+            else (lambda _: api_keys)
+        )
+        self._run_adapter = ProductionPluginRunAdapter(
+            session_factory or (lambda: nullcontext(self.db)),
+            run_vault_factory,
+        )
         self.case_access = CaseAccess(db)
         self._load_plugins()
 
@@ -47,7 +64,7 @@ class PluginService:
                         and issubclass(obj, BasePlugin)
                         and obj != BasePlugin
                     ):
-                        plugin = obj(db_session=self.db)
+                        plugin = obj()
                         if any(
                             not isinstance(provider, Provider)
                             for provider in plugin.api_key_requirements
@@ -61,7 +78,16 @@ class PluginService:
     def get_plugin(self, name: str) -> BasePlugin:
         if name not in self._plugins:
             raise ResourceNotFoundException(f"Plugin {name} not found")
-        return self._plugins[name](db_session=self.db)
+        return self._plugins[name]()
+
+    def open_run(self, params: dict[str, Any], *, current_user: User):
+        """Open the production context for one plugin invocation."""
+        case_id = params.get("case_id")
+        return self._run_adapter.open(
+            user=current_user,
+            case_id=case_id if isinstance(case_id, int) else None,
+            save_to_case=params.get("save_to_case") is True,
+        )
 
     def parameter_catalogue(self) -> dict[str, set[str]]:
         """Return the declared input names for every discovered plugin."""
@@ -74,18 +100,26 @@ class PluginService:
         self.case_access.require_non_analyst(current_user)
         plugins_metadata = {}
         for name, plugin_class in self._plugins.items():
-            plugin_instance = plugin_class(db_session=self.db)
-            metadata = plugin_instance.get_metadata()
+            plugin_instance = plugin_class()
+            metadata = plugin_instance.get_metadata(self.api_keys)
             plugins_metadata[name] = metadata
         return plugins_metadata
 
     async def execute_plugin(
         self, name: str, params: dict[str, Any] | None = None, *, current_user: User
-    ) -> AsyncGenerator[dict[str, Any], None]:
+    ) -> AsyncGenerator[ResultEvent, None]:
         self.case_access.require_non_analyst(current_user)
         plugin = self.get_plugin(name)
-        plugin._current_user = current_user
-        return plugin.execute_with_evidence_collection(params or {})
+        run_params = params or {}
+
+        async def execute() -> AsyncGenerator[ResultEvent, None]:
+            with self.open_run(run_params, current_user=current_user) as run:
+                async for event in plugin.execute_with_evidence_collection(
+                    run_params, run
+                ):
+                    yield event
+
+        return execute()
 
     async def stream_plugin_execution(
         self,
@@ -103,7 +137,10 @@ class PluginService:
                     name, params, current_user=current_user
                 )
                 async for line in result:
-                    yield json.dumps(line) + "\n"
+                    wire_event = (
+                        line.to_wire() if isinstance(line, ResultEvent) else line
+                    )
+                    yield json.dumps(wire_event) + "\n"
             except ResourceNotFoundException as error:
                 yield (
                     json.dumps({"type": "error", "data": {"message": str(error)}})
@@ -113,7 +150,7 @@ class PluginService:
                 yield json.dumps(
                     {
                         "type": "error",
-                        "data": {"message": f"Plugin execution error: {str(error)}"},
+                        "data": {"message": f"Plugin execution error: {error!s}"},
                     }
                 ) + "\n"
 

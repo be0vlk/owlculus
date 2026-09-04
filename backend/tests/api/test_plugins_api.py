@@ -3,6 +3,7 @@ Comprehensive tests for plugins API endpoints
 """
 
 import json
+from contextlib import nullcontext
 from unittest.mock import patch
 
 import pytest
@@ -10,11 +11,13 @@ from fastapi import status
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
+from app.api.plugins import get_plugin_api_keys, get_plugin_session_factory
 from app.core.dependencies import get_current_user
 from app.core.exceptions import ResourceNotFoundException
 from app.database.connection import get_db
 from app.database.models import User
 from app.main import app
+from app.services.api_key_vault import Provider, StaticApiKeyVault
 
 
 @pytest.fixture
@@ -216,6 +219,56 @@ class TestPluginsAPI:
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     # POST /api/plugins/{plugin_name}/execute tests
+
+    def test_people_data_labs_runs_with_static_vault(
+        self, session: Session, test_user: User, client: TestClient, monkeypatch
+    ):
+        """The HTTP adapter passes vault keys through the run context."""
+
+        class Response:
+            ok = True
+            text = "ok"
+            status_code = 200
+
+            def json(self):
+                return {
+                    "status": 200,
+                    "data": {"full_name": "Ada Lovelace", "likelihood": 10},
+                    "credits_used": 1,
+                }
+
+        class Client:
+            def __init__(self, api_key):
+                assert api_key == "pdl-test-key"
+                self.person = self
+
+            def enrichment(self, **params):
+                assert params["email"] == "ada@example.com"
+                return Response()
+
+        monkeypatch.setattr("peopledatalabs.PDLPY", Client)
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_user
+        )
+        app.dependency_overrides[get_db] = override_get_db_factory(session)
+        app.dependency_overrides[get_plugin_api_keys] = lambda: StaticApiKeyVault(
+            {Provider.PEOPLE_DATA_LABS: "pdl-test-key"}
+        )
+        app.dependency_overrides[get_plugin_session_factory] = lambda: (
+            lambda: nullcontext(session)
+        )
+
+        response = client.post(
+            "/api/plugins/PeopledatalabsPlugin/execute",
+            json={"search_type": "person", "email": "ada@example.com"},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.text == (
+            '{"type": "data", "data": {"search_type": "person", '
+            '"person": {"full_name": "Ada Lovelace", "likelihood": 10}, '
+            '"api_credits_used": 1, "confidence": 10}}\n'
+        )
 
     def test_execute_plugin_success(
         self, session: Session, test_user: User, client: TestClient

@@ -2,32 +2,29 @@
 Analyze files, URLs, domains, and IPs using VirusTotal threat intelligence
 """
 
-import asyncio
 import ipaddress
 import re
 import time
-from typing import Any, AsyncGenerator, Dict, List, Optional
+from collections.abc import AsyncGenerator
+from typing import Any
 
 import vt
-from sqlmodel import Session
 
-from app.database.connection import get_db
-from app.services.api_key_vault import ConfigurationApiKeyVault, Provider
+from app.services.api_key_vault import Provider
 
-from .base_plugin import BasePlugin
+from .base_plugin import BasePlugin, PluginRun, ResultEvent
 
 
 class VirustotalPlugin(BasePlugin):
     """Analyze files, URLs, domains, and IPs using VirusTotal threat intelligence"""
 
-    def __init__(self, db_session: Session = None):
-        super().__init__(display_name="VirusTotal", db_session=db_session)
+    def __init__(self):
+        super().__init__(display_name="VirusTotal")
         self.description = (
             "Analyze files, URLs, domains, and IPs using VirusTotal threat intelligence"
         )
-        self.category = "Other"  # Person, Network, Company, Other
-        self.evidence_category = "Other"  # Social Media, Associates, Network Assets, Communications, Documents, Other
-        self.save_to_case = False  # Whether to auto-save results as evidence
+        self.category = "Other"
+        self.evidence_category = "Other"
         self.api_key_requirements = [Provider.VIRUSTOTAL]
         self.parameters = {
             "target": {
@@ -53,49 +50,31 @@ class VirustotalPlugin(BasePlugin):
                 "default": 30.0,
                 "required": False,
             },
-            # Note: save_to_case parameter is automatically added by BasePlugin
         }
-
-    def parse_output(self, line: str) -> Optional[Dict[str, Any]]:
-        """Parse command output - only needed for subprocess-based plugins"""
-        # For direct API/library calls, return None
-        return None
 
     def _detect_target_type(self, target: str) -> str:
         """Auto-detect the type of target (file hash, URL, domain, or IP)"""
-        # Remove whitespace
         target = target.strip()
-
-        # Check if it's a hash (MD5: 32 chars, SHA1: 40 chars, SHA256: 64 chars)
-        if re.match(r"^[a-fA-F0-9]{32}$", target):
-            return "file"  # MD5
-        elif re.match(r"^[a-fA-F0-9]{40}$", target):
-            return "file"  # SHA1
-        elif re.match(r"^[a-fA-F0-9]{64}$", target):
-            return "file"  # SHA256
-
-        # Check if it's a URL
+        if (
+            re.match("^[a-fA-F0-9]{32}$", target)
+            or re.match("^[a-fA-F0-9]{40}$", target)
+            or re.match("^[a-fA-F0-9]{64}$", target)
+        ):
+            return "file"
         if target.startswith(("http://", "https://", "ftp://")):
             return "url"
-
-        # Check if it's an IP address
         try:
             ipaddress.ip_address(target)
             return "ip"
         except ValueError:
             pass
-
-        # Check if it looks like a domain (contains dots but no slashes)
-        if "." in target and "/" not in target and " " not in target:
-            # Basic domain validation
-            domain_pattern = r"^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"
+        if "." in target and "/" not in target and (" " not in target):
+            domain_pattern = "^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"
             if re.match(domain_pattern, target):
                 return "domain"
-
-        # Default to unknown
         return "unknown"
 
-    def _format_detection_ratio(self, stats: Dict[str, int]) -> str:
+    def _format_detection_ratio(self, stats: dict[str, int]) -> str:
         """Format detection statistics into a readable ratio"""
         malicious = stats.get("malicious", 0)
         total = sum(stats.values()) - stats.get("unsupported", 0)
@@ -119,17 +98,14 @@ class VirustotalPlugin(BasePlugin):
         else:
             return str(dt_obj)
 
-    def _calculate_verdict(self, stats: Dict[str, int]) -> str:
+    def _calculate_verdict(self, stats: dict[str, int]) -> str:
         """Calculate overall verdict based on detection stats"""
         malicious = stats.get("malicious", 0)
         suspicious = stats.get("suspicious", 0)
         total = sum(stats.values()) - stats.get("unsupported", 0)
-
         if total == 0:
             return "Unknown"
-
         threat_score = (malicious * 2 + suspicious) / (total * 2)
-
         if threat_score == 0:
             return "Clean"
         elif threat_score < 0.1:
@@ -142,8 +118,8 @@ class VirustotalPlugin(BasePlugin):
             return "Malicious"
 
     async def run(
-        self, params: Optional[Dict[str, Any]] = None
-    ) -> AsyncGenerator[Dict[str, Any], None]:
+        self, params: dict[str, Any], ctx: PluginRun
+    ) -> AsyncGenerator[ResultEvent, None]:
         """
         Main plugin execution method
 
@@ -154,66 +130,28 @@ class VirustotalPlugin(BasePlugin):
             Structured data results
         """
         if not params or "target" not in params:
-            yield {"type": "error", "data": {"message": "Target parameter is required"}}
+            yield self.error("Target parameter is required")
             return
-
-        # Extract parameters
         target = params["target"].strip()
         analysis_type = params.get("analysis_type", "auto")
         include_details = params.get("include_details", True)
         timeout = params.get("timeout", 30.0)
-
-        # Get database session
-        db = next(get_db())
-
-        # Check API key requirements
-        if hasattr(self, "api_key_requirements") and self.api_key_requirements:
-            missing_keys = self.get_missing_api_keys(db)
-            if missing_keys:
-                yield {
-                    "type": "error",
-                    "data": {
-                        "message": f"API key{'s' if len(missing_keys) > 1 else ''} required for: {', '.join(missing_keys)}. "
-                        "Please add them in Admin → Configuration → API Keys"
-                    },
-                }
-                db.close()
-                return
-
+        api_key = ctx.key(Provider.VIRUSTOTAL)
+        if not api_key:
+            yield ctx.missing_key(Provider.VIRUSTOTAL)
+            return
         try:
-            # Retrieve API key
-            vault = self._api_key_vault or ConfigurationApiKeyVault(db)
-            api_key = vault.get_key(Provider.VIRUSTOTAL)
-
-            if not api_key:
-                yield {
-                    "type": "error",
-                    "data": {
-                        "message": "VirusTotal API key not configured. Please add it in Admin → Configuration → API Keys"
-                    },
-                }
-                return
-
-            # Auto-detect target type if needed
             if analysis_type == "auto":
                 detected_type = self._detect_target_type(target)
                 if detected_type == "unknown":
-                    yield {
-                        "type": "error",
-                        "data": {
-                            "message": f"Could not auto-detect target type for '{target}'. Please specify analysis_type parameter."
-                        },
-                    }
+                    yield self.error(
+                        f"Could not auto-detect target type for '{target}'. Please specify analysis_type parameter."
+                    )
                     return
                 analysis_type = detected_type
-
-            # Initialize VirusTotal client
             async with vt.Client(api_key) as client:
                 try:
-                    # Set timeout
                     client.timeout = timeout
-
-                    # Perform analysis based on type
                     if analysis_type == "file":
                         async for result in self._analyze_file(
                             client, target, include_details
@@ -235,43 +173,23 @@ class VirustotalPlugin(BasePlugin):
                         ):
                             yield result
                     else:
-                        yield {
-                            "type": "error",
-                            "data": {
-                                "message": f"Invalid analysis type: {analysis_type}"
-                            },
-                        }
+                        yield self.error(f"Invalid analysis type: {analysis_type}")
                         return
-
                 except vt.error.APIError as e:
-                    yield {
-                        "type": "error",
-                        "data": {"message": f"VirusTotal API error: {str(e)}"},
-                    }
-                except asyncio.TimeoutError:
-                    yield {
-                        "type": "error",
-                        "data": {
-                            "message": f"Request timed out after {timeout} seconds"
-                        },
-                    }
+                    yield self.error(f"VirusTotal API error: {e!s}")
+                except TimeoutError:
+                    yield self.error(f"Request timed out after {timeout} seconds")
                 except Exception as e:
-                    yield {
-                        "type": "error",
-                        "data": {"message": f"Unexpected error: {str(e)}"},
-                    }
-
-        finally:
-            db.close()
+                    yield self.error(f"Unexpected error: {e!s}")
+        except Exception as error:
+            yield self.error(f"Unexpected error: {error!s}")
 
     async def _analyze_file(
         self, client: vt.Client, file_hash: str, include_details: bool
-    ) -> AsyncGenerator[Dict[str, Any], None]:
+    ) -> AsyncGenerator[ResultEvent, None]:
         """Analyze a file hash"""
         file_obj = await client.get_object_async(f"/files/{file_hash}")
-
-        # Basic results
-        result = {
+        result: dict[str, Any] = {
             "target": file_hash,
             "target_type": "file",
             "detection_ratio": self._format_detection_ratio(
@@ -288,10 +206,8 @@ class VirustotalPlugin(BasePlugin):
                 "names": list(file_obj.names) if hasattr(file_obj, "names") else [],
             },
         }
-
         if include_details:
-            # Add vendor detections
-            detections = []
+            detections: list[dict[str, Any]] = []
             for vendor, analysis in file_obj.last_analysis_results.items():
                 if analysis["result"]:
                     detections.append(
@@ -302,23 +218,17 @@ class VirustotalPlugin(BasePlugin):
                         }
                     )
             result["detections"] = sorted(detections, key=lambda x: x["vendor"])
-
-            # Add tags if available
             if hasattr(file_obj, "tags"):
                 result["tags"] = list(file_obj.tags)
-
-        yield {"type": "data", "data": result}
+        yield self.data(result)
 
     async def _analyze_url(
         self, client: vt.Client, url: str, include_details: bool
-    ) -> AsyncGenerator[Dict[str, Any], None]:
+    ) -> AsyncGenerator[ResultEvent, None]:
         """Analyze a URL"""
-        # Generate URL ID
         url_id = vt.url_id(url)
         url_obj = await client.get_object_async(f"/urls/{url_id}")
-
-        # Basic results
-        result = {
+        result: dict[str, Any] = {
             "target": url,
             "target_type": "url",
             "detection_ratio": self._format_detection_ratio(
@@ -335,10 +245,8 @@ class VirustotalPlugin(BasePlugin):
                 "title": url_obj.title if hasattr(url_obj, "title") else None,
             },
         }
-
         if include_details:
-            # Add vendor detections
-            detections = []
+            detections: list[dict[str, Any]] = []
             for vendor, analysis in url_obj.last_analysis_results.items():
                 if analysis["result"] != "clean":
                     detections.append(
@@ -349,21 +257,16 @@ class VirustotalPlugin(BasePlugin):
                         }
                     )
             result["detections"] = sorted(detections, key=lambda x: x["vendor"])
-
-            # Add categories if available
             if hasattr(url_obj, "categories"):
                 result["categories"] = dict(url_obj.categories)
-
-        yield {"type": "data", "data": result}
+        yield self.data(result)
 
     async def _analyze_domain(
         self, client: vt.Client, domain: str, include_details: bool
-    ) -> AsyncGenerator[Dict[str, Any], None]:
+    ) -> AsyncGenerator[ResultEvent, None]:
         """Analyze a domain"""
         domain_obj = await client.get_object_async(f"/domains/{domain}")
-
-        # Basic results
-        result = {
+        result: dict[str, Any] = {
             "target": domain,
             "target_type": "domain",
             "detection_ratio": self._format_detection_ratio(
@@ -385,10 +288,8 @@ class VirustotalPlugin(BasePlugin):
                 ),
             },
         }
-
         if include_details:
-            # Add vendor detections
-            detections = []
+            detections: list[dict[str, Any]] = []
             for vendor, analysis in domain_obj.last_analysis_results.items():
                 if analysis["result"] != "clean":
                     detections.append(
@@ -399,21 +300,16 @@ class VirustotalPlugin(BasePlugin):
                         }
                     )
             result["detections"] = sorted(detections, key=lambda x: x["vendor"])
-
-            # Add categories if available
             if hasattr(domain_obj, "categories"):
                 result["categories"] = dict(domain_obj.categories)
-
-        yield {"type": "data", "data": result}
+        yield self.data(result)
 
     async def _analyze_ip(
         self, client: vt.Client, ip: str, include_details: bool
-    ) -> AsyncGenerator[Dict[str, Any], None]:
+    ) -> AsyncGenerator[ResultEvent, None]:
         """Analyze an IP address"""
         ip_obj = await client.get_object_async(f"/ip_addresses/{ip}")
-
-        # Basic results
-        result = {
+        result: dict[str, Any] = {
             "target": ip,
             "target_type": "ip_address",
             "detection_ratio": self._format_detection_ratio(ip_obj.last_analysis_stats),
@@ -426,10 +322,8 @@ class VirustotalPlugin(BasePlugin):
                 "reputation": ip_obj.reputation if hasattr(ip_obj, "reputation") else 0,
             },
         }
-
         if include_details:
-            # Add vendor detections
-            detections = []
+            detections: list[dict[str, Any]] = []
             for vendor, analysis in ip_obj.last_analysis_results.items():
                 if analysis["result"] != "clean":
                     detections.append(
@@ -440,11 +334,10 @@ class VirustotalPlugin(BasePlugin):
                         }
                     )
             result["detections"] = sorted(detections, key=lambda x: x["vendor"])
+        yield self.data(result)
 
-        yield {"type": "data", "data": result}
-
-    def _format_evidence_content(
-        self, results: List[Dict[str, Any]], params: Dict[str, Any]
+    def format_evidence(
+        self, results: list[dict[str, Any]], params: dict[str, Any]
     ) -> str:
         """Custom formatting for evidence content"""
         content_lines = [
@@ -456,11 +349,7 @@ class VirustotalPlugin(BasePlugin):
             f"Analysis Type: {params.get('analysis_type', 'auto-detected')}",
             "",
         ]
-
-        for result in results:
-            data = result.get("data", {})
-
-            # Add verdict summary
+        for data in results:
             content_lines.extend(
                 [
                     f"Verdict: {data.get('verdict', 'Unknown')}",
@@ -469,10 +358,7 @@ class VirustotalPlugin(BasePlugin):
                     "",
                 ]
             )
-
-            # Add target-specific information
             target_type = data.get("target_type", "")
-
             if target_type == "file":
                 file_info = data.get("file_info", {})
                 content_lines.extend(
@@ -486,7 +372,6 @@ class VirustotalPlugin(BasePlugin):
                         "",
                     ]
                 )
-
                 if file_info.get("names"):
                     content_lines.extend(
                         [
@@ -495,7 +380,6 @@ class VirustotalPlugin(BasePlugin):
                             "",
                         ]
                     )
-
             elif target_type == "url":
                 url_info = data.get("url_info", {})
                 content_lines.extend(
@@ -506,7 +390,6 @@ class VirustotalPlugin(BasePlugin):
                         "",
                     ]
                 )
-
             elif target_type == "domain":
                 domain_info = data.get("domain_info", {})
                 content_lines.extend(
@@ -518,7 +401,6 @@ class VirustotalPlugin(BasePlugin):
                         "",
                     ]
                 )
-
             elif target_type == "ip_address":
                 ip_info = data.get("ip_info", {})
                 content_lines.extend(
@@ -531,17 +413,10 @@ class VirustotalPlugin(BasePlugin):
                         "",
                     ]
                 )
-
-            # Add detections if available
             detections = data.get("detections", [])
             if detections:
-                content_lines.extend(
-                    [
-                        "Vendor Detections:",
-                        "-" * 50,
-                    ]
-                )
-                for detection in detections[:20]:  # Limit to first 20
+                content_lines.extend(["Vendor Detections:", "-" * 50])
+                for detection in detections[:20]:
                     content_lines.append(
                         f"  {detection['vendor']:<20} | {detection['result']:<30} | {detection.get('category', 'Unknown')}"
                     )
@@ -550,8 +425,6 @@ class VirustotalPlugin(BasePlugin):
                         f"  ... and {len(detections) - 20} more detections"
                     )
                 content_lines.append("")
-
-            # Add categories if available
             categories = data.get("categories", {})
             if categories:
                 content_lines.extend(
@@ -564,16 +437,7 @@ class VirustotalPlugin(BasePlugin):
                         "",
                     ]
                 )
-
-            # Add tags if available
             tags = data.get("tags", [])
             if tags:
-                content_lines.extend(
-                    [
-                        "Tags:",
-                        f"  {', '.join(tags[:20])}",
-                        "",
-                    ]
-                )
-
+                content_lines.extend(["Tags:", f"  {', '.join(tags[:20])}", ""])
         return "\n".join(content_lines)

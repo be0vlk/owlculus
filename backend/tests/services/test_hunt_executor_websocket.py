@@ -1,6 +1,7 @@
 """Hunt executor event and input-flow tests."""
 
 import asyncio
+from contextlib import contextmanager
 from unittest.mock import MagicMock
 
 import pytest
@@ -9,6 +10,7 @@ from app.database.models import HuntExecution, User
 from app.hunts.definitions.domain_hunt import DomainHunt
 from app.hunts.hunt_event import HuntEvent
 from app.hunts.hunt_executor import HuntExecutor
+from app.plugins.base_plugin import ResultEvent
 
 
 class EventRecorder:
@@ -25,11 +27,15 @@ class RecordingPlugin:
         self._calls = calls
         self._current_user = None
 
-    async def execute_with_evidence_collection(self, parameters):
+    async def execute_with_evidence_collection(self, parameters, ctx):
         self._calls.append(parameters.copy())
         if isinstance(self._result, Exception):
             raise self._result
-        yield {"type": "data", "data": self._result}
+        if isinstance(self._result, list):
+            for event in self._result:
+                yield event
+        else:
+            yield ResultEvent.data(self._result)
 
 
 class PluginCatalogueStub:
@@ -40,6 +46,10 @@ class PluginCatalogueStub:
     def get_plugin(self, name):
         calls = self.calls.setdefault(name, [])
         return RecordingPlugin(self.results.get(name, {}), calls)
+
+    @contextmanager
+    def open_run(self, parameters, *, current_user):
+        yield object()
 
 
 def execution():
@@ -128,6 +138,33 @@ async def test_executor_records_required_step_failure(db_session):
         HuntEvent.progress(1, 0.0),
         HuntEvent.complete(1),
     ]
+    assert run.status == "partial"
+
+
+@pytest.mark.asyncio
+async def test_executor_records_plugin_errors_and_fails_an_error_only_step(db_session):
+    recorder = EventRecorder()
+    plugins = PluginCatalogueStub(
+        {"failing_plugin": [ResultEvent.error("provider rejected the request")]}
+    )
+    executor = HuntExecutor(db_session, recorder, plugin_service=plugins)
+    db_session.add = MagicMock()
+    db_session.commit = MagicMock()
+    run = execution()
+
+    await executor.execute_hunt(
+        run,
+        hunt_definition(step("step1", plugin_name="failing_plugin")),
+        user(),
+    )
+
+    step_record = next(
+        call.args[0]
+        for call in db_session.add.call_args_list
+        if getattr(call.args[0], "step_id", None) == "step1"
+    )
+    assert step_record.error_details == "provider rejected the request"
+    assert recorder.events[-2:] == [HuntEvent.progress(1, 0.0), HuntEvent.complete(1)]
     assert run.status == "partial"
 
 

@@ -18,7 +18,7 @@ import argparse
 import re
 import sys
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 
 # ANSI color codes for terminal output
@@ -53,7 +53,7 @@ def print_status(level: str, message: str) -> None:
     )
 
 
-def get_plugin_file_paths(config: Dict[str, Any]) -> Dict[str, Path]:
+def get_plugin_file_paths(config: dict[str, Any]) -> dict[str, Path]:
     """Generate all file paths for the plugin"""
     project_root = Path(__file__).parent.parent
     return {
@@ -82,7 +82,7 @@ def get_plugin_file_paths(config: Dict[str, Any]) -> Dict[str, Path]:
     }
 
 
-def validate_file_conflicts(file_paths: Dict[str, Path], args) -> None:
+def validate_file_conflicts(file_paths: dict[str, Path], args) -> None:
     """Check for existing files and handle conflicts"""
     if args.force:
         return
@@ -111,7 +111,7 @@ def validate_file_conflicts(file_paths: Dict[str, Path], args) -> None:
         sys.exit(1)
 
 
-def write_files_safely(file_contents_map: Dict[Path, str]) -> None:
+def write_files_safely(file_contents_map: dict[Path, str]) -> None:
     """Write multiple files safely with error handling"""
     written_files = []
     try:
@@ -170,47 +170,25 @@ def pascal_to_title(name: str) -> str:
     return result
 
 
-def generate_backend_plugin(config: Dict[str, Any]) -> str:
+def generate_backend_plugin(config: dict[str, Any]) -> str:
     """Generate the backend plugin Python file content"""
-
-    # Add API key requirements if specified
-    api_key_line = ""
-    if config.get("api_keys"):
-        api_key_list = ", ".join(f'"{key}"' for key in config["api_keys"])
-        api_key_line = f"\n        self.api_key_requirements = [{api_key_list}]  # Required API key providers"
-
-    # Simplified API key checking template
-    api_key_check = """        # Check API key requirements if any are defined
-        if hasattr(self, 'api_key_requirements') and self.api_key_requirements:
-            missing_keys = self.check_api_key_requirements()
-            if missing_keys:
-                yield {
-                    "type": "error",
-                    "data": {
-                        "message": f"API key{'s' if len(missing_keys) > 1 else ''} required for: {', '.join(missing_keys)}. "
-                                  "Please add them in Admin → Configuration → API Keys"
-                    }
-                }
-                return"""
-
     template = f'''"""
 {config['description']}
 """
 
 import asyncio
-from typing import AsyncGenerator, Dict, Any, Optional
-from sqlmodel import Session
-from .base_plugin import BasePlugin
+from typing import Any, AsyncGenerator
+
+from .base_plugin import BasePlugin, PluginRun, ResultEvent
 
 class {config['class_name']}Plugin(BasePlugin):
     """{config['description']}"""
 
-    def __init__(self, db_session: Session = None):
-        super().__init__(display_name="{config['display_name']}", db_session=db_session)
+    def __init__(self):
+        super().__init__(display_name="{config['display_name']}")
         self.description = "{config['description']}"
         self.category = "{config['category']}"  # {', '.join(UI_CATEGORIES)}
         self.evidence_category = "{config['evidence_category']}"  # {', '.join(EVIDENCE_CATEGORIES)}
-        self.save_to_case = False  # Whether to auto-save results as evidence{api_key_line}
         self.parameters = {{
             # TODO: Define your plugin parameters here
             "target": {{
@@ -227,32 +205,17 @@ class {config['class_name']}Plugin(BasePlugin):
             # Note: save_to_case parameter is automatically added by BasePlugin
         }}
 
-    def parse_output(self, line: str) -> Optional[Dict[str, Any]]:
-        """Parse command output - only needed for subprocess-based plugins"""
-        # For direct API/library calls, return None
-        return None
-
     async def run(
-        self, params: Optional[Dict[str, Any]] = None
-    ) -> AsyncGenerator[Dict[str, Any], None]:
-        """
-        Main plugin execution method
-        
-        Args:
-            params: User-provided parameters
-            
-        Yields:
-            Structured data results
-        """
-        if not params or "target" not in params:
-            yield {{"type": "error", "data": {{"message": "Target parameter is required"}}}}
+        self, params: dict[str, Any], ctx: PluginRun
+    ) -> AsyncGenerator[ResultEvent, None]:
+        """Run the plugin with application capabilities supplied by ``ctx``."""
+        if "target" not in params:
+            yield self.error("Target parameter is required")
             return
 
         # Extract parameters
         target = params["target"]
         timeout = params.get("timeout", 30.0)
-
-{api_key_check}
 
         # TODO: Implement your plugin logic here
         # Example: API calls, tool execution, data processing
@@ -261,9 +224,8 @@ class {config['class_name']}Plugin(BasePlugin):
         await asyncio.sleep(0.5)
         
         # Yield results as they become available
-        yield {{
-            "type": "data",
-            "data": {{
+        yield self.data(
+            {{
                 "target": target,
                 "status": "analyzed",
                 "findings": [
@@ -271,25 +233,25 @@ class {config['class_name']}Plugin(BasePlugin):
                     {{"type": "info", "description": "Example finding"}},
                 ],
                 "timestamp": asyncio.get_event_loop().time(),
-            }},
-        }}
+            }}
+        )
 
         # Evidence saving is handled automatically by BasePlugin
         # No manual implementation needed - just yield data results
 
     # Optional: Override this method for custom evidence formatting
-    # def _format_evidence_content(self, results: List[Dict[str, Any]], params: Dict[str, Any]) -> str:
+    # def format_evidence(self, payloads: list[dict[str, Any]], params: dict[str, Any]) -> str:
     #     """Custom formatting for evidence content"""
     #     content_lines = [
     #         f"{{self.display_name}} Investigation Results",
     #         "=" * 50,
     #         "",
     #         f"Target: {{params.get('target', 'Unknown')}}",
-    #         f"Total findings: {{len(results)}}",
+    #         f"Total findings: {{len(payloads)}}",
     #         "",
     #     ]
     #     
-    #     for i, result in enumerate(results, 1):
+    #     for i, result in enumerate(payloads, 1):
     #         content_lines.extend([
     #             f"Finding #{{i}}:",
     #             f"  Description: {{result.get('description', 'N/A')}}",
@@ -303,7 +265,7 @@ class {config['class_name']}Plugin(BasePlugin):
     return template
 
 
-def generate_params_component(config: Dict[str, Any]) -> str:
+def generate_params_component(config: dict[str, Any]) -> str:
     """Generate a minimal parameter component that just uses GenericPluginParams"""
 
     template = f"""<template>
@@ -350,7 +312,7 @@ defineEmits(['update:modelValue'])
     return template
 
 
-def generate_result_component(config: Dict[str, Any]) -> str:
+def generate_result_component(config: dict[str, Any]) -> str:
     """Generate a basic result component (most plugins should use the automatic fallback)"""
 
     icon = "mdi-magnify"
@@ -438,7 +400,7 @@ const parsedResults = computed(() => {{
     return template
 
 
-def prepare_plugin_config(args) -> Dict[str, Any]:
+def prepare_plugin_config(args) -> dict[str, Any]:
     """Prepare the plugin configuration from arguments"""
     return {
         "name": args.name.lower().replace("-", "_"),
@@ -451,7 +413,7 @@ def prepare_plugin_config(args) -> Dict[str, Any]:
     }
 
 
-def generate_all_content(config: Dict[str, Any], args) -> Dict[str, str]:
+def generate_all_content(config: dict[str, Any], args) -> dict[str, str]:
     """Generate all file contents based on configuration"""
     content = {
         "backend": generate_backend_plugin(config),
@@ -468,7 +430,7 @@ def generate_all_content(config: Dict[str, Any], args) -> Dict[str, str]:
 
 
 def display_completion_info(
-    config: Dict[str, Any], args, file_paths: Dict[str, Path]
+    config: dict[str, Any], args, file_paths: dict[str, Path]
 ) -> None:
     """Display completion information and next steps"""
     print_status("header", f"Plugin '{config['display_name']}' created successfully!")
@@ -536,9 +498,8 @@ def display_completion_info(
     print_status(
         "warning", "To require API keys, add to your plugin's __init__ method:"
     )
-    print(
-        '   self.api_key_requirements = ["provider_name"]  # e.g., ["openai", "shodan"]'
-    )
+    print("   from app.services.api_key_vault import Provider")
+    print("   self.api_key_requirements = [Provider.SHODAN]")
 
 
 def create_plugin(args):
@@ -615,125 +576,32 @@ def add_dependencies_to_requirements(dependencies):
         print(f"{Colors.RED}ERROR:{Colors.END} Failed to update requirements.txt: {e}")
 
 
-def generate_test_file(config: Dict[str, Any]) -> str:
-    """Generate a basic test file for the plugin"""
-
-    template = f'''"""
-Tests for {config['display_name']} plugin
-"""
+def generate_test_file(config: dict[str, Any]) -> str:
+    """Generate a runnable contract test for the plugin."""
+    return f'''"""Tests for {config["display_name"]} plugin."""
 
 import pytest
-from unittest.mock import AsyncMock, patch
-from app.plugins.{config['name']}_plugin import {config['class_name']}Plugin
 
-class Test{config['class_name']}Plugin:
-    """Test cases for {config['class_name']}Plugin"""
+from app.plugins.base_plugin import PluginRun, ResultEvent
+from app.plugins.{config["name"]}_plugin import {config["class_name"]}Plugin
 
-    @pytest.fixture
-    def plugin(self):
-        """Create plugin instance for testing"""
-        return {config['class_name']}Plugin()
 
-    def test_plugin_initialization(self, plugin):
-        """Test plugin initializes correctly"""
-        assert plugin.display_name == "{config['display_name']}"
-        assert plugin.description == "{config['description']}"
-        assert plugin.category == "{config['category']}"
-        assert plugin.evidence_category == "{config['evidence_category']}"
-        assert "save_to_case" in plugin.parameters
+@pytest.mark.asyncio
+async def test_plugin_loads_and_runs(session, test_admin):
+    plugin = {config["class_name"]}Plugin()
+    ctx = PluginRun.for_test(
+        session=session,
+        user=test_admin,
+        api_keys={{}},
+        evidence=[],
+        entities=[],
+    )
 
-    def test_plugin_parameters(self, plugin):
-        """Test plugin parameters are defined correctly"""
-        # TODO: Add specific parameter validation tests
-        assert isinstance(plugin.parameters, dict)
-        # Example: assert "domain" in plugin.parameters
-        # Example: assert plugin.parameters["domain"]["required"] is True
+    events = [event async for event in plugin.run({{"target": "example"}}, ctx)]
 
-    @pytest.mark.asyncio
-    async def test_plugin_run_missing_params(self, plugin):
-        """Test plugin handles missing parameters correctly"""
-        results = []
-        async for result in plugin.run(None):
-            results.append(result)
-        
-        assert len(results) == 1
-        assert results[0]["type"] == "error"
-        assert "required" in results[0]["data"]["message"].lower()
-
-    @pytest.mark.asyncio
-    async def test_plugin_run_empty_params(self, plugin):
-        """Test plugin handles empty parameters correctly"""
-        results = []
-        async for result in plugin.run({{}}):
-            results.append(result)
-        
-        assert len(results) == 1
-        assert results[0]["type"] == "error"
-
-    @pytest.mark.asyncio
-    async def test_plugin_run_valid_params(self, plugin):
-        """Test plugin with valid parameters"""
-        # TODO: Implement test with valid parameters
-        # Example:
-        # params = {{"domain": "example.com", "timeout": 10}}
-        # results = []
-        # async for result in plugin.run(params):
-        #     results.append(result)
-        # 
-        # assert len(results) >= 1
-        # Check for successful results or expected behavior
-        pass
-
-    @pytest.mark.asyncio 
-    async def test_plugin_run_timeout(self, plugin):
-        """Test plugin handles timeout correctly"""
-        # TODO: Implement timeout test if applicable
-        # This might involve mocking the underlying service/API
-        pass
-
-    @pytest.mark.asyncio
-    async def test_plugin_run_service_error(self, plugin):
-        """Test plugin handles service errors gracefully"""
-        # TODO: Mock service errors and test error handling
-        # Example:
-        # with patch('whois.whois', side_effect=Exception("Service error")):
-        #     params = {{"domain": "example.com"}}
-        #     results = []
-        #     async for result in plugin.run(params):
-        #         results.append(result)
-        #     
-        #     assert any(r["type"] == "error" for r in results)
-        pass
-
-    def test_format_evidence_content(self, plugin):
-        """Test evidence formatting"""
-        # TODO: Test evidence content formatting
-        # Example results and parameters
-        results = [
-            # Add sample result data based on your plugin's output format
-        ]
-        params = {{
-            # Add sample parameters
-        }}
-        
-        # Test that formatting doesn't crash
-        if hasattr(plugin, '_format_evidence_content'):
-            content = plugin._format_evidence_content(results, params)
-            assert isinstance(content, str)
-            assert len(content) > 0
-
-    def test_plugin_metadata(self, plugin):
-        """Test plugin metadata is properly set"""
-        assert plugin.display_name
-        assert plugin.description  
-        assert plugin.category in ["Person", "Network", "Company", "Other"]
-        assert plugin.evidence_category in [
-            "Social Media", "Associates", "Network Assets", 
-            "Communications", "Documents", "Other"
-        ]
+    assert events
+    assert all(isinstance(event, ResultEvent) for event in events)
 '''
-
-    return template
 
 
 def interactive_mode():
