@@ -332,6 +332,25 @@ def test_update_nonexistent_entity(override_dependencies, test_case: Case, clien
     assert response.status_code == 404
 
 
+def test_entity_id_must_belong_to_case_in_url(
+    override_dependencies,
+    test_case: Case,
+    test_entity: Entity,
+    session: Session,
+    client: TestClient,
+):
+    other_case = Case(case_number="OTHER-001", title="Other case", status="Open")
+    session.add(other_case)
+    session.commit()
+    session.refresh(other_case)
+
+    response = client.get(
+        f"{settings.API_V1_STR}/cases/{other_case.id}/entities/{test_entity.id}"
+    )
+
+    assert response.status_code == 404
+
+
 def test_delete_entity(override_dependencies, test_case: Case, test_entity: Entity, client: TestClient):
     response = client.delete(
         f"{settings.API_V1_STR}/cases/{test_case.id}/entities/{test_entity.id}"

@@ -26,17 +26,17 @@ class CaseAccess:
         self.db = db
 
     def readable(self, user: User, case_id: int) -> Case:
-        case, _ = self._case_membership(user, case_id)
+        case, _ = self._case_membership(user, case_id, operation="read")
         return case
 
     def writable(self, user: User, case_id: int) -> Case:
-        case, _ = self._case_membership(user, case_id)
+        case, _ = self._case_membership(user, case_id, operation="write")
         if user.role == UserRole.ANALYST.value:
             self._deny(user, case_id, "write", "analyst_read_only")
         return case
 
     def lead(self, user: User, case_id: int) -> Case:
-        case, is_lead = self._case_membership(user, case_id)
+        case, is_lead = self._case_membership(user, case_id, operation="lead")
         if user.role != UserRole.ADMIN.value and not is_lead:
             self._deny(user, case_id, "lead", "not_case_lead")
         return case
@@ -73,7 +73,9 @@ class CaseAccess:
             raise ValidationException("Analysts cannot be set as case leads")
         return user
 
-    def _case_membership(self, user: User, case_id: int) -> tuple[Case, bool]:
+    def _case_membership(
+        self, user: User, case_id: int, *, operation: str
+    ) -> tuple[Case, bool]:
         if self.db is None:
             raise RuntimeError("A database session is required for case authorization")
 
@@ -93,7 +95,7 @@ class CaseAccess:
 
         case, is_lead = row
         if user.role != UserRole.ADMIN.value and is_lead is None:
-            self._deny(user, case_id, "read", "not_case_member")
+            self._deny(user, case_id, operation, "not_case_member")
         return case, bool(is_lead)
 
     @staticmethod

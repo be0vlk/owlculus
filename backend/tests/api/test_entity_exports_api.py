@@ -388,6 +388,25 @@ def test_entity_export_enforces_case_access_while_allowing_admins(
     assert missing_response.status_code == 404
 
 
+def test_analyst_may_export_entities_from_an_assigned_case(
+    client: TestClient,
+    session: Session,
+    export_case: Case,
+    export_user_factory,
+    authenticate_as,
+):
+    analyst = export_user_factory("export-analyst", "Analyst")
+    session.add(CaseUserLink(case_id=export_case.id, user_id=analyst.id))
+    session.commit()
+    authenticate_as(analyst)
+
+    response = client.get(
+        f"{settings.API_V1_STR}/cases/{export_case.id}/entities/export"
+    )
+
+    assert response.status_code == 200
+
+
 def test_entity_export_rejects_an_unknown_format(
     client: TestClient,
     export_admin: User,

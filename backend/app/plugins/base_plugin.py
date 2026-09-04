@@ -467,6 +467,7 @@ class BasePlugin(ABC):
                     if existing_entity:
                         # Enrich existing entity with new data
                         await entity_service.enrich_entity_description(
+                            case_id,
                             existing_entity.id,
                             description,
                             current_user=self._current_user,

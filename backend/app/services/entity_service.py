@@ -48,14 +48,14 @@ class EntityService:
 
     async def get_entity(
         self,
+        case_id: int,
         entity_id: int,
         current_user: models.User,
     ) -> models.Entity:
+        case = self.access.readable(current_user, case_id)
         db_entity = self.db.get(models.Entity, entity_id)
-        if not db_entity:
+        if not db_entity or db_entity.case_id != case.id:
             raise ResourceNotFoundException("Entity not found")
-
-        self.access.readable(current_user, db_entity.case_id)
 
         return db_entity
 
@@ -85,15 +85,15 @@ class EntityService:
 
     async def update_entity(
         self,
+        case_id: int,
         entity_id: int,
         entity_update: schemas.EntityUpdate,
         current_user: models.User,
     ) -> models.Entity:
+        case = self.access.writable(current_user, case_id)
         db_entity = self.db.get(models.Entity, entity_id)
-        if not db_entity:
+        if not db_entity or db_entity.case_id != case.id:
             raise ResourceNotFoundException("Entity not found")
-
-        self.access.writable(current_user, db_entity.case_id)
 
         # Add entity type to update data for validation
         entity_update_dict = entity_update.model_dump()
@@ -119,14 +119,14 @@ class EntityService:
 
     async def delete_entity(
         self,
+        case_id: int,
         entity_id: int,
         current_user: models.User,
     ) -> None:
+        case = self.access.writable(current_user, case_id)
         db_entity = self.db.get(models.Entity, entity_id)
-        if not db_entity:
+        if not db_entity or db_entity.case_id != case.id:
             raise ResourceNotFoundException("Entity not found")
-
-        self.access.writable(current_user, db_entity.case_id)
         with transaction(self.db):
             self.db.delete(db_entity)
 
@@ -160,16 +160,16 @@ class EntityService:
 
     async def enrich_entity_description(
         self,
+        case_id: int,
         entity_id: int,
         additional_description: str,
         current_user: models.User,
     ) -> models.Entity:
         """Enrich an existing entity's description with additional information"""
+        case = self.access.writable(current_user, case_id)
         db_entity = self.db.get(models.Entity, entity_id)
-        if not db_entity:
+        if not db_entity or db_entity.case_id != case.id:
             raise ResourceNotFoundException("Entity not found")
-
-        self.access.writable(current_user, db_entity.case_id)
 
         current_description = db_entity.data.get("description", "")
 

@@ -421,6 +421,7 @@ class SubdomainEnumPlugin(BasePlugin):
 
                 entity_update = EntityUpdate(data=current_data)
                 await entity_service.update_entity(
+                    case_id,
                     existing_entity.id,
                     entity_update,
                     current_user=self._current_user,
