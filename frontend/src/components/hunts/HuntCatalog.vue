@@ -28,8 +28,8 @@
           </v-col>
           <v-col cols="12" md="2">
             <v-btn-toggle v-model="viewMode" density="comfortable" mandatory variant="outlined">
-              <v-btn value="grid" icon="mdi-view-grid" />
-              <v-btn value="list" icon="mdi-view-list" />
+              <v-btn value="grid" aria-label="Grid view" icon="mdi-view-grid" />
+              <v-btn value="list" aria-label="List view" icon="mdi-view-list" />
             </v-btn-toggle>
           </v-col>
         </v-row>

@@ -1,14 +1,16 @@
 <template>
-  <v-form ref="form" @submit.prevent>
+  <v-form ref="form" @submit.prevent="emit('submit')">
     <div v-for="(paramDef, paramName) in parameters" :key="paramName" class="mb-4">
       <!-- String/Text Parameters -->
       <v-text-field
-        v-if="paramDef.type === 'string'"
+        v-if="paramDef.type === 'string' && !paramDef.multiline"
         v-model="localValues[paramName]"
         :label="getParameterLabel(paramName, paramDef)"
         :placeholder="paramDef.description"
         :rules="getValidationRules(paramName, paramDef)"
         :required="paramDef.required"
+        :error-messages="errors[paramName]"
+        :aria-invalid="!!(errors[paramName] || validationErrors[paramName])"
         variant="outlined"
         density="comfortable"
         @update:model-value="handleValueChange(paramName, $event)"
@@ -21,12 +23,14 @@
 
       <!-- Number Parameters -->
       <v-text-field
-        v-else-if="paramDef.type === 'number'"
+        v-else-if="paramDef.type === 'number' || paramDef.type === 'float'"
         v-model.number="localValues[paramName]"
         :label="getParameterLabel(paramName, paramDef)"
         :placeholder="paramDef.description"
         :rules="getValidationRules(paramName, paramDef)"
         :required="paramDef.required"
+        :error-messages="errors[paramName]"
+        :aria-invalid="!!(errors[paramName] || validationErrors[paramName])"
         type="number"
         variant="outlined"
         density="comfortable"
@@ -44,6 +48,8 @@
         v-model="localValues[paramName]"
         :label="getParameterLabel(paramName, paramDef)"
         :required="paramDef.required"
+        :error-messages="errors[paramName]"
+        :aria-invalid="!!(errors[paramName] || validationErrors[paramName])"
         color="primary"
         density="comfortable"
         @update:model-value="handleValueChange(paramName, $event)"
@@ -62,6 +68,8 @@
         :placeholder="paramDef.description"
         :rules="getValidationRules(paramName, paramDef)"
         :required="paramDef.required"
+        :error-messages="errors[paramName]"
+        :aria-invalid="!!(errors[paramName] || validationErrors[paramName])"
         variant="outlined"
         density="comfortable"
         @update:model-value="handleValueChange(paramName, $event)"
@@ -79,6 +87,8 @@
         :placeholder="paramDef.description"
         :rules="getValidationRules(paramName, paramDef)"
         :required="paramDef.required"
+        :error-messages="errors[paramName]"
+        :aria-invalid="!!(errors[paramName] || validationErrors[paramName])"
         :rows="3"
         variant="outlined"
         density="comfortable"
@@ -98,6 +108,8 @@
         :placeholder="paramDef.description"
         :rules="getValidationRules(paramName, paramDef)"
         :required="paramDef.required"
+        :error-messages="errors[paramName]"
+        :aria-invalid="!!(errors[paramName] || validationErrors[paramName])"
         variant="outlined"
         density="comfortable"
         @update:model-value="handleValueChange(paramName, $event)"
@@ -134,7 +146,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['update:modelValue', 'validate'])
+const emit = defineEmits(['update:modelValue', 'validate', 'submit'])
 
 // Local state
 const form = ref()
@@ -157,6 +169,7 @@ const initializeValues = () => {
           values[paramName] = false
           break
         case 'number':
+        case 'float':
           values[paramName] = null
           break
         default:
@@ -193,11 +206,13 @@ const getParameterIcon = (paramName, paramDef) => {
   if (name.includes('company') || name.includes('organization')) return 'mdi-office-building'
   if (name.includes('file') || name.includes('path')) return 'mdi-file'
   if (name.includes('date') || name.includes('time')) return 'mdi-calendar'
-  if (paramDef.type === 'number') return 'mdi-numeric'
+  if (paramDef.type === 'number' || paramDef.type === 'float') return 'mdi-numeric'
   if (paramDef.type === 'boolean') return 'mdi-toggle-switch'
 
   return 'mdi-form-textbox'
 }
+
+const isEmptyValue = (value) => value === null || value === undefined || value === ''
 
 const getValidationRules = (paramName, paramDef) => {
   const rules = []
@@ -206,14 +221,17 @@ const getValidationRules = (paramName, paramDef) => {
   if (paramDef.required) {
     rules.push((value) => {
       if (paramDef.type === 'boolean') return true
-      return !!value || `${getParameterLabel(paramName, paramDef).replace(' *', '')} is required`
+      return (
+        (value !== null && value !== undefined && String(value).trim() !== '') ||
+        `${getParameterLabel(paramName, paramDef).replace(' *', '')} is required`
+      )
     })
   }
 
   // Type-specific validation
   if (paramDef.type === 'email' || paramName.toLowerCase().includes('email')) {
     rules.push((value) => {
-      if (!value && !paramDef.required) return true
+      if (isEmptyValue(value) && !paramDef.required) return true
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
       return emailRegex.test(value) || 'Please enter a valid email address'
     })
@@ -221,7 +239,7 @@ const getValidationRules = (paramName, paramDef) => {
 
   if (paramDef.type === 'url' || paramName.toLowerCase().includes('url')) {
     rules.push((value) => {
-      if (!value && !paramDef.required) return true
+      if (isEmptyValue(value) && !paramDef.required) return true
       try {
         new URL(value)
         return true
@@ -231,9 +249,9 @@ const getValidationRules = (paramName, paramDef) => {
     })
   }
 
-  if (paramDef.type === 'number') {
+  if (paramDef.type === 'number' || paramDef.type === 'float') {
     rules.push((value) => {
-      if (!value && !paramDef.required) return true
+      if (isEmptyValue(value) && !paramDef.required) return true
       const num = Number(value)
       if (isNaN(num)) return 'Please enter a valid number'
       if (paramDef.min !== undefined && num < paramDef.min) {
@@ -249,7 +267,7 @@ const getValidationRules = (paramName, paramDef) => {
   // Length validation
   if (paramDef.minLength) {
     rules.push((value) => {
-      if (!value && !paramDef.required) return true
+      if (isEmptyValue(value) && !paramDef.required) return true
       return (
         value.length >= paramDef.minLength || `Minimum length is ${paramDef.minLength} characters`
       )
@@ -268,7 +286,7 @@ const getValidationRules = (paramName, paramDef) => {
   // Pattern validation
   if (paramDef.pattern) {
     rules.push((value) => {
-      if (!value && !paramDef.required) return true
+      if (isEmptyValue(value) && !paramDef.required) return true
       const regex = new RegExp(paramDef.pattern)
       return regex.test(value) || paramDef.patternMessage || 'Please enter a valid value'
     })
@@ -288,57 +306,36 @@ const handleValueChange = (paramName, value) => {
   }
 }
 
-const validateField = async (paramName) => {
-  if (!form.value) return
-
-  // Use Vuetify form validation
-  const { valid } = await form.value.validate()
-
-  if (!valid) {
-    // Extract specific field errors (this is a simplified approach)
-    const paramDef = props.parameters[paramName]
-    const value = localValues.value[paramName]
-    const rules = getValidationRules(paramName, paramDef)
-
-    for (const rule of rules) {
-      const result = rule(value)
-      if (result !== true) {
-        validationErrors.value[paramName] = result
-        break
-      }
-    }
-  } else {
-    delete validationErrors.value[paramName]
+const getValidationError = (name) => {
+  for (const rule of getValidationRules(name, props.parameters[name])) {
+    const result = rule(localValues.value[name])
+    if (result !== true) return result
   }
+  return null
+}
 
+const validateField = (name) => {
+  const error = getValidationError(name)
+  if (error) validationErrors.value[name] = error
+  else delete validationErrors.value[name]
+  emitValidationState()
+}
+
+const collectValidationErrors = () => {
+  const errors = {}
+  for (const name of Object.keys(props.parameters)) {
+    const error = getValidationError(name)
+    if (error) errors[name] = error
+  }
+  validationErrors.value = errors
   emitValidationState()
 }
 
 const validateAll = async () => {
   if (!form.value) return false
-
   const { valid } = await form.value.validate()
-
-  if (!valid) {
-    // Populate validation errors for all fields
-    Object.keys(props.parameters).forEach((paramName) => {
-      const paramDef = props.parameters[paramName]
-      const value = localValues.value[paramName]
-      const rules = getValidationRules(paramName, paramDef)
-
-      for (const rule of rules) {
-        const result = rule(value)
-        if (result !== true) {
-          validationErrors.value[paramName] = result
-          break
-        }
-      }
-    })
-  } else {
-    validationErrors.value = {}
-  }
-
-  emitValidationState()
+  collectValidationErrors()
+  if (valid) emit('update:modelValue', { ...localValues.value })
   return valid
 }
 
@@ -357,10 +354,8 @@ watch(
 
 watch(
   () => props.modelValue,
-  (newValue) => {
-    if (newValue && Object.keys(newValue).length > 0) {
-      localValues.value = { ...newValue }
-    }
+  () => {
+    initializeValues()
   },
   { immediate: true },
 )

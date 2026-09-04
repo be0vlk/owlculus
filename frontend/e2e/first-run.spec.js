@@ -342,6 +342,10 @@ async function exerciseCaseAndEntityWorkflow(page) {
   await entityDialog.getByRole('button', { name: 'Save Changes', exact: true }).click()
   const updatedEntityDialog = page.getByRole('dialog', { name: 'Grace Lovelace', exact: true })
   await expect(updatedEntityDialog).toBeVisible()
+  // Saving also refreshes the table; wait for the replacement focus target.
+  await expect(
+    page.getByRole('button', { name: 'View Grace Lovelace', exact: true, includeHidden: true }),
+  ).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(updatedEntityDialog).toBeHidden()
   await expect(page.getByRole('button', { name: 'View Grace Lovelace', exact: true })).toBeFocused()
@@ -412,7 +416,11 @@ function observeBrowserRuntime(page, { expectedConsoleErrors = [] } = {}) {
       message.type() === 'error' ||
       (message.type() === 'warning' && /Vue warn|Vuetify|deprecated/i.test(message.text()))
     ) {
-      browserErrors.push({ message: message.text(), sourceUrl: message.location().url })
+      browserErrors.push({
+        message: message.text(),
+        sourceUrl: message.location().url,
+        pageUrl: page.url(),
+      })
     }
   })
 
@@ -759,6 +767,21 @@ test.describe('first-run browser journey', () => {
           await historyTab.click()
           await expect(historyTab).toHaveAttribute('aria-selected', 'true')
           await page.getByRole('tab', { name: /^Available Hunts/ }).click()
+          await exerciseTextInput(page.getByLabel('Search hunts...', { exact: true }))
+          await page.getByRole('button', { name: 'List view', exact: true }).click()
+          await page.getByRole('button', { name: 'Grid view', exact: true }).click()
+          await page.getByRole('button', { name: 'Execute Hunt', exact: true }).first().click()
+          const huntDialog = page.getByRole('dialog', { name: 'Execute Hunt', exact: true })
+          await expect(huntDialog.getByLabel('Select Case', { exact: true })).toBeVisible()
+          await expect(
+            huntDialog.getByRole('button', { name: 'Execute Hunt', exact: true }),
+          ).toBeDisabled()
+          await huntDialog.getByLabel('Select Case', { exact: true }).press('Enter')
+          await page.getByRole('option').filter({ hasText: 'Migration' }).first().click()
+          await huntDialog.getByLabel('Domain *', { exact: true }).press('Enter')
+          await expect(huntDialog.getByText('Domain is required', { exact: true })).toBeVisible()
+          await huntDialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+          await captureOperations(page, 'hunts')
         },
       },
       {
@@ -777,6 +800,31 @@ test.describe('first-run browser journey', () => {
       await expect(landmark).toBeVisible({ timeout: 15_000 })
       await verifyOperable()
     }
+
+    await page.goto('/plugins')
+    await expect(page.getByText('Plugin Management', { exact: true })).toBeVisible()
+    await expect(
+      page.getByRole('button', { name: 'Refresh plugins', exact: true }),
+    ).toBeInViewport()
+    await page.getByRole('button', { name: 'Configure Correlation Scan', exact: true }).click()
+    const caseToScan = page.getByLabel('Case to Scan', { exact: true })
+    await expect(caseToScan).toBeEnabled()
+    await caseToScan.press('Enter')
+    await page.getByRole('option').filter({ hasText: 'Migration' }).first().click()
+    await page.getByRole('button', { name: 'Execute Plugin', exact: true }).click()
+    const pluginDialog = page.getByRole('dialog', { name: 'Plugin results', exact: true })
+    await expect(pluginDialog).toBeVisible()
+    await expect(pluginDialog.getByText('Execution Parameters', { exact: true })).toBeVisible()
+    await expect(pluginDialog.getByRole('button', { name: 'Export', exact: true })).toBeEnabled()
+    await expect(
+      pluginDialog.getByText('Correlation scan complete. No correlations found.', { exact: true }),
+    ).toBeVisible()
+    await page.screenshot({
+      animations: 'disabled',
+      path: `test-results/plugin-results-${process.env.OWLCULUS_SERVER_KIND}-${process.env.OWLCULUS_VIEWPORT}.png`,
+    })
+    await pluginDialog.getByRole('button', { name: 'Close plugin results', exact: true }).click()
+    await captureOperations(page, 'plugins')
 
     await page.goto('/settings')
     await expect(page).toHaveURL(/\/settings$/, { timeout: 15_000 })

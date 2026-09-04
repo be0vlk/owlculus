@@ -155,6 +155,8 @@
       v-model="showExecutionModal"
       :hunt="selectedHunt"
       :cases="cases"
+      :executing="submittingHunt"
+      :error="huntSubmissionError"
       @execute="handleExecuteHuntSubmit"
       @cancel="handleExecutionModalCancel"
     />
@@ -197,6 +199,8 @@ const error = ref(null)
 const activeTab = ref('catalog')
 const selectedHunt = ref(null)
 const showExecutionModal = ref(false)
+const submittingHunt = ref(false)
+const huntSubmissionError = ref(null)
 const showDetailsModal = ref(false)
 const cases = ref([])
 const cancellingExecutions = ref(new Set())
@@ -272,11 +276,15 @@ const stopPolling = () => {
 }
 
 const handleExecuteHunt = (hunt) => {
+  huntSubmissionError.value = null
   selectedHunt.value = hunt
   showExecutionModal.value = true
 }
 
 const handleExecuteHuntSubmit = async (executionData) => {
+  if (submittingHunt.value) return
+  submittingHunt.value = true
+  huntSubmissionError.value = null
   try {
     const execution = await huntStore.executeHunt(
       executionData.huntId,
@@ -296,7 +304,9 @@ const handleExecuteHuntSubmit = async (executionData) => {
     return execution
   } catch (err) {
     showNotification(err.message || 'Failed to execute hunt', 'error')
-    throw err
+    huntSubmissionError.value = err.message || 'Failed to execute hunt'
+  } finally {
+    submittingHunt.value = false
   }
 }
 

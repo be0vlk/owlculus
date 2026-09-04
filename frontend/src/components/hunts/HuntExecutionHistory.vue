@@ -73,7 +73,7 @@
         :items-per-page="itemsPerPage"
         :items-per-page-options="[10, 25, 50, 100]"
         :sort-by="[{ key: 'created_at', order: 'desc' }]"
-        class="execution-history-table"
+        density="comfortable"
         item-value="id"
       >
         <!-- Hunt Name Column -->
@@ -139,6 +139,7 @@
         <template #[`item.actions`]="{ item }">
           <v-btn
             icon="mdi-eye"
+            :aria-label="`View ${item.hunt_display_name} execution`"
             size="small"
             variant="text"
             @click="$emit('view-details', item.id)"
@@ -363,14 +364,3 @@ const getTargetDisplay = (execution) => {
   return 'N/A'
 }
 </script>
-
-<style scoped>
-.execution-history-table :deep(.v-data-table__td) {
-  padding: 8px 16px;
-}
-
-.execution-history-table :deep(.v-data-table__th) {
-  padding: 8px 16px;
-  font-weight: 600;
-}
-</style>

@@ -62,7 +62,7 @@
     <!-- Context Metadata -->
     <div v-if="contextMetadata && Object.keys(contextMetadata).length > 0" class="mb-4">
       <div class="text-title-large mb-3">Hunt Metadata</div>
-      <v-table density="compact">
+      <v-table class="hunt-table" density="compact">
         <tbody>
           <tr v-for="(value, key) in contextMetadata" :key="key">
             <td class="font-weight-medium">{{ formatMetadataKey(key) }}</td>
@@ -151,7 +151,7 @@ const viewEvidence = (evidenceRef) => {
 </script>
 
 <style scoped>
-.v-table tbody td {
+.hunt-table tbody td {
   padding: 8px 12px;
 }
 </style>

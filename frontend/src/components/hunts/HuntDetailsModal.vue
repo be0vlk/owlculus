@@ -7,7 +7,12 @@
         <div class="flex-grow-1">
           <div class="text-headline-small font-weight-bold">{{ hunt?.display_name }}</div>
         </div>
-        <v-btn icon="mdi-close" variant="text" @click="handleClose" />
+        <v-btn
+          icon="mdi-close"
+          aria-label="Close hunt details"
+          variant="text"
+          @click="handleClose"
+        />
       </v-card-title>
 
       <v-divider />
@@ -59,7 +64,7 @@
           class="mb-4"
         >
           <div class="text-title-large mb-3">Required Parameters</div>
-          <v-table density="compact">
+          <v-table class="hunt-table" density="compact">
             <thead>
               <tr>
                 <th>Parameter</th>
@@ -216,7 +221,7 @@ const handleClose = () => {
 </script>
 
 <style scoped>
-.v-table th {
+.hunt-table th {
   font-weight: 600;
 }
 </style>

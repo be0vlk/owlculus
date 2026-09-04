@@ -3,14 +3,16 @@
     v-model="isOpen"
     :fullscreen="mdAndDown"
     :max-width="!mdAndDown ? '90vw' : undefined"
+    aria-label="Plugin results"
+    @keydown.esc="closeModal"
     persistent
     scrollable
   >
-    <v-card height="90vh" class="d-flex flex-column">
+    <v-card :height="mdAndDown ? '100dvh' : '90vh'" class="d-flex flex-column">
       <!-- Header -->
-      <v-card-title class="d-flex align-center ga-3 px-6 py-4">
+      <v-card-title class="d-flex flex-wrap align-center ga-3 px-6 py-4">
         <v-icon :icon="getPluginIcon(pluginName)" size="24" />
-        <div class="flex-grow-1">
+        <div class="flex-grow-1 text-wrap">
           <h2 class="text-headline-small font-weight-medium">
             {{ getPluginDisplayName(pluginName) }} Results
           </h2>
@@ -22,7 +24,7 @@
         <!-- Action buttons -->
         <div class="d-flex ga-2">
           <v-btn
-            v-if="results"
+            v-if="hasResults"
             variant="tonal"
             color="primary"
             prepend-icon="mdi-download"
@@ -30,7 +32,12 @@
           >
             Export
           </v-btn>
-          <v-btn icon="mdi-close" variant="text" @click="closeModal" />
+          <v-btn
+            icon="mdi-close"
+            aria-label="Close plugin results"
+            variant="text"
+            @click="closeModal"
+          />
         </div>
       </v-card-title>
 
@@ -67,7 +74,7 @@
           </v-card>
 
           <!-- Results Display -->
-          <div v-if="results" class="results-container">
+          <div v-if="hasResults" class="results-container">
             <PluginResult :plugin-name="pluginName" :result="results" class="modal-plugin-result" />
           </div>
 
@@ -127,6 +134,13 @@ const props = defineProps({
     type: Date,
     default: () => new Date(),
   },
+})
+
+const hasResults = computed(() => {
+  if (props.results === null || props.results === undefined || props.results === '') return false
+  if (Array.isArray(props.results)) return props.results.length > 0
+  if (typeof props.results === 'object') return Object.keys(props.results).length > 0
+  return true
 })
 
 const emit = defineEmits(['update:modelValue', 'export'])
@@ -205,16 +219,6 @@ const exportResults = () => {
   /* Remove any width restrictions from the modal context */
   width: 100%;
   max-width: none;
-}
-
-/* Better spacing for cards in modal */
-:deep(.modal-plugin-result .v-card) {
-  margin-bottom: 1rem;
-}
-
-/* Improved table layouts for DNS and other data */
-:deep(.modal-plugin-result .v-card-text) {
-  padding: 1rem;
 }
 
 /* Better pre/code formatting in wide layout */

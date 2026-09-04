@@ -13,7 +13,7 @@
       <v-row>
         <v-col v-for="(dnsData, index) in dnsResults" :key="`dns-${index}`" cols="12" lg="6">
           <v-card elevation="1" rounded="lg" class="h-100 target-card">
-            <v-card-title class="d-flex align-center bg-primary-lighten-5">
+            <v-card-title class="d-flex align-center result-heading">
               <v-icon
                 :icon="dnsData.target_type === 'ip_address' ? 'mdi-ip-network' : 'mdi-web'"
                 class="mr-3"
@@ -47,7 +47,7 @@
                         >
                       </div>
 
-                      <v-card elevation="1" rounded="lg" color="success-lighten-5">
+                      <v-card elevation="1" rounded="lg" color="success" variant="tonal">
                         <v-card-text class="pa-3">
                           <div class="d-flex justify-space-between align-start">
                             <pre class="text-body-medium font-mono flex-grow-1 records-display">{{
@@ -233,13 +233,7 @@ pre {
   margin: 0;
 }
 
-/* Enhanced visual hierarchy for record types */
-.v-chip[color='success'] {
-  background: rgb(var(--v-theme-success), 0.12);
-  border: 1px solid rgb(var(--v-theme-success), 0.3);
-}
-
-.bg-primary-lighten-5 {
+.result-heading {
   background: linear-gradient(
     45deg,
     rgb(var(--v-theme-primary), 0.08),

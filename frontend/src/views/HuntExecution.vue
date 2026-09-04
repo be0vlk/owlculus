@@ -160,7 +160,7 @@
           >
             <v-divider class="my-4" />
             <div class="text-body-large font-weight-medium mb-3">Hunt Parameters</div>
-            <v-table density="compact">
+            <v-table class="hunt-table" density="compact">
               <tbody>
                 <tr v-for="(value, key) in execution.initial_parameters" :key="key">
                   <td class="text-title-small font-weight-medium" style="width: 40%">
@@ -609,7 +609,7 @@ watch(
   max-height: 400px;
 }
 
-.v-table tbody td {
+.hunt-table tbody td {
   padding: 8px 16px;
 }
 

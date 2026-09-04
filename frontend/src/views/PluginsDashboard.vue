@@ -2,7 +2,7 @@
   <BaseDashboard :error="error" :loading="loading" title="Plugins">
     <template #loading>
       <v-card variant="outlined">
-        <v-card-title class="d-flex align-center pa-4 bg-surface">
+        <v-card-title class="d-flex flex-wrap ga-2 align-center pa-4 bg-surface text-wrap">
           <v-skeleton-loader type="text" width="200" />
           <v-spacer />
           <v-skeleton-loader type="button" width="120" />
@@ -19,7 +19,7 @@
     <!-- Plugin Management Card -->
     <v-card variant="outlined">
       <!-- Header -->
-      <v-card-title class="d-flex align-center pa-4 bg-surface">
+      <v-card-title class="d-flex flex-wrap ga-2 align-center pa-4 bg-surface text-wrap">
         <v-icon class="me-3" color="primary" icon="mdi-tools" size="large" />
         <div class="flex-grow-1">
           <div class="text-title-large font-weight-bold">Plugin Management</div>
@@ -33,6 +33,7 @@
               <v-btn
                 :loading="loading"
                 icon="mdi-refresh"
+                aria-label="Refresh plugins"
                 v-bind="props"
                 variant="outlined"
                 @click="loadPlugins"
@@ -60,16 +61,9 @@
       <v-card-text class="pa-4">
         <v-row v-if="Object.keys(filteredPlugins).length">
           <v-col v-for="(plugin, name) in filteredPlugins" :key="name" cols="12" lg="4" md="6">
-            <v-card
-              :class="{ 'h-100': expandedCards[name] }"
-              :ripple="false"
-              hover
-              style="cursor: pointer"
-              variant="outlined"
-              @click="toggleCard(name)"
-            >
+            <v-card :class="{ 'h-100': expandedCards[name] }" :ripple="false" variant="outlined">
               <v-card-text class="pa-4">
-                <div class="d-flex justify-space-between align-start mb-3">
+                <div class="d-flex flex-wrap ga-2 justify-space-between align-start mb-3">
                   <div class="d-flex align-center">
                     <v-icon class="me-2" color="primary" icon="mdi-puzzle-outline" />
                     <div class="text-title-large font-weight-bold">
@@ -117,6 +111,8 @@
                       {{ plugin.enabled ? 'Enabled' : 'Disabled' }}
                     </v-chip>
                     <v-btn
+                      :aria-label="`${expandedCards[name] ? 'Collapse' : 'Configure'} ${plugin.display_name || name}`"
+                      :aria-expanded="!!expandedCards[name]"
                       :icon="expandedCards[name] ? 'mdi-chevron-up' : 'mdi-chevron-down'"
                       size="small"
                       variant="text"
@@ -135,7 +131,13 @@
                 </div>
 
                 <v-expand-transition>
-                  <div v-if="expandedCards[name]" class="mt-4">
+                  <v-form
+                    v-if="expandedCards[name]"
+                    :ref="(form) => (pluginForms[name] = form)"
+                    class="mt-4"
+                    :disabled="executing[name] || !plugin.enabled"
+                    @submit.prevent="executePlugin(name)"
+                  >
                     <!-- Parameters Section -->
                     <div
                       v-if="plugin.parameters && Object.keys(plugin.parameters).length"
@@ -151,56 +153,12 @@
                         />
 
                         <!-- Default Parameter Rendering -->
-                        <template v-else>
-                          <div
-                            v-for="(param, paramName) in plugin.parameters"
-                            :key="paramName"
-                            class="mb-3"
-                          >
-                            <!-- Boolean type - Switch -->
-                            <div v-if="param.type === 'boolean'">
-                              <v-switch
-                                v-model="pluginParams[name][paramName]"
-                                :hint="param.description"
-                                :label="paramName"
-                                color="primary"
-                                density="comfortable"
-                                persistent-hint
-                              />
-                            </div>
-
-                            <!-- List type -->
-                            <div v-else-if="param.type === 'list'">
-                              <v-combobox
-                                v-model="pluginParams[name][paramName]"
-                                :label="paramName"
-                                :placeholder="param.description"
-                                chips
-                                density="comfortable"
-                                multiple
-                                variant="outlined"
-                                @keydown.enter="handleEnterKey($event, name)"
-                              />
-                            </div>
-
-                            <!-- Default text/number field -->
-                            <div v-else>
-                              <v-text-field
-                                v-model="pluginParams[name][paramName]"
-                                :label="paramName"
-                                :placeholder="param.description"
-                                :type="
-                                  param.type === 'number' || param.type === 'float'
-                                    ? 'number'
-                                    : 'text'
-                                "
-                                density="comfortable"
-                                variant="outlined"
-                                @keydown.enter="handleEnterKey($event, name)"
-                              />
-                            </div>
-                          </div>
-                        </template>
+                        <GenericPluginParams
+                          v-else
+                          v-model="pluginParams[name]"
+                          :parameters="plugin.parameters"
+                          :plugin-name="name"
+                        />
                       </div>
                     </div>
 
@@ -220,7 +178,7 @@
                       color="primary"
                       prepend-icon="mdi-play"
                       variant="flat"
-                      @click.stop="executePlugin(name)"
+                      type="submit"
                     >
                       <template
                         v-if="
@@ -258,7 +216,7 @@
                         View Results
                       </v-btn>
                     </div>
-                  </div>
+                  </v-form>
                 </v-expand-transition>
               </v-card-text>
             </v-card>
@@ -293,6 +251,7 @@
 </template>
 
 <script setup>
+import GenericPluginParams from '@/components/plugins/GenericPluginParams.vue'
 import { ref, onMounted, reactive, computed, markRaw } from 'vue'
 import { pluginService } from '@/services/plugin'
 import { usePluginApiKeys } from '@/composables/usePluginApiKeys'
@@ -418,7 +377,7 @@ const loadPlugins = async () => {
           if (param.type === 'boolean') {
             pluginParams[name][paramName] = param.default !== undefined ? param.default : true
           } else {
-            pluginParams[name][paramName] = param.default || ''
+            pluginParams[name][paramName] = param.default ?? (param.type === 'list' ? [] : '')
           }
         })
       }
@@ -432,7 +391,11 @@ const loadPlugins = async () => {
   }
 }
 
+const pluginForms = {}
+
 const executePlugin = async (name) => {
+  if (!plugins.value[name].enabled || executing[name]) return
+  if (pluginForms[name] && !(await pluginForms[name].validate()).valid) return
   // Check API key requirements first
   const plugin = plugins.value[name]
   if (plugin.api_key_requirements && plugin.api_key_requirements.length > 0) {
@@ -499,13 +462,6 @@ const handleExportResults = (exportData) => {
   link.click()
 
   URL.revokeObjectURL(url)
-}
-
-const handleEnterKey = (event, pluginName) => {
-  if (plugins.value[pluginName].enabled && !executing[pluginName]) {
-    event.preventDefault()
-    executePlugin(pluginName)
-  }
 }
 
 onMounted(() => {

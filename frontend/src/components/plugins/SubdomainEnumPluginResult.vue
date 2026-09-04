@@ -74,7 +74,7 @@
           lg="4"
         >
           <v-card elevation="1" rounded="lg" class="h-100 subdomain-card">
-            <v-card-title class="d-flex align-center pa-3 bg-primary-lighten-5">
+            <v-card-title class="d-flex align-center pa-3 result-heading">
               <v-icon
                 :icon="subdomain.resolved ? 'mdi-check-circle' : 'mdi-subdirectory-arrow-right'"
                 :color="subdomain.resolved ? 'success' : 'grey'"
@@ -300,7 +300,7 @@ const copyAsHostsFile = () => {
   );
 }
 
-.bg-primary-lighten-5 {
+.result-heading {
   background: linear-gradient(
     45deg,
     rgb(var(--v-theme-primary), 0.08),

@@ -81,8 +81,9 @@
           <v-card
             elevation="1"
             rounded="lg"
-            :color="platformData.exists ? 'success-lighten-5' : 'grey-lighten-4'"
-            class="h-100"
+            :color="platformData.exists ? 'success' : 'surface-variant'"
+            class="platform-card h-100"
+            variant="tonal"
           >
             <v-card-title class="d-flex align-center">
               <v-icon
@@ -298,23 +299,14 @@ const copyToClipboard = async (text) => {
 }
 
 /* Enhanced hover effects for platform cards */
-.platform-results-grid .v-card {
+.platform-card {
   transition:
     transform 0.2s ease,
     box-shadow 0.2s ease;
 }
 
-.platform-results-grid .v-card:hover {
+.platform-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgb(0 0 0 / 15%);
-}
-
-/* Better visual hierarchy for found vs not found */
-.v-card[style*='success-lighten-5'] {
-  border-left: 4px solid rgb(var(--v-theme-success));
-}
-
-.v-card[style*='grey-lighten-4'] {
-  border-left: 4px solid rgb(var(--v-theme-surface-variant));
 }
 </style>
