@@ -161,7 +161,7 @@ export const huntService = {
       if (ws._pingInterval) {
         clearInterval(ws._pingInterval)
       }
-      if (ws.readyState === WebSocket.OPEN) {
+      if (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN) {
         ws.close()
       }
     }

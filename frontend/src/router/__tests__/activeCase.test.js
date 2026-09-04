@@ -5,11 +5,13 @@ import { flushPromises } from '@vue/test-utils'
 import { createAppRouter, routes } from '../index'
 import { useAuthStore } from '../../stores/auth'
 import { useActiveCaseStore, ACTIVE_CASE_STORAGE_KEY } from '../../stores/activeCase'
+import { huntService } from '../../services/hunt'
 import taskService from '../../services/task'
 import { caseService } from '../../services/case'
 
 vi.mock('../../services/case', () => ({ caseService: { getCases: vi.fn() } }))
 vi.mock('../../services/task', () => ({ default: { getTask: vi.fn() } }))
+vi.mock('../../services/hunt', () => ({ huntService: { getExecution: vi.fn() } }))
 const cases = [
   { id: 1, case_number: 'ONE', status: 'Closed', created_at: '2025-01-01' },
   { id: 2, case_number: 'TWO', status: 'Open', created_at: '2026-01-01' },
@@ -153,4 +155,34 @@ it('does not request a legacy task when there are no accessible cases', async ()
   await router.push('/tasks/8')
   expect(router.currentRoute.value.path).toBe('/cases')
   expect(taskService.getTask).not.toHaveBeenCalled()
+})
+
+it('redirects legacy hunts and preserves the dashboard when switching cases', async () => {
+  await router.push('/hunts?tab=history')
+  expect(router.currentRoute.value.fullPath).toBe('/case/2/hunts?tab=history')
+  await useActiveCaseStore().select(1)
+  expect(router.currentRoute.value.fullPath).toBe('/case/1/hunts?tab=history')
+})
+
+for (const path of ['/hunts/execution/8', '/case/2/hunts/execution/8']) {
+  it(`reconciles authorized execution ownership for ${path}`, async () => {
+    huntService.getExecution.mockResolvedValue({ id: 8, case_id: 1 })
+    await router.push(path)
+    expect(router.currentRoute.value.path).toBe('/case/1/hunts/execution/8')
+    expect(useActiveCaseStore().activeCaseId).toBe(1)
+  })
+}
+
+it('rejects inaccessible execution links', async () => {
+  huntService.getExecution.mockRejectedValue({ response: { status: 403 } })
+  await router.push('/hunts/execution/8')
+  expect(router.currentRoute.value.path).toBe('/cases')
+})
+
+it('does not request executions without an accessible case', async () => {
+  huntService.getExecution.mockClear()
+  caseService.getCases.mockResolvedValue([])
+  await router.push('/hunts/execution/8')
+  expect(router.currentRoute.value.path).toBe('/cases')
+  expect(huntService.getExecution).not.toHaveBeenCalled()
 })

@@ -9,6 +9,7 @@
           prepend-icon="mdi-refresh"
           @click="refreshData"
           :loading="loading"
+          :disabled="!caseId"
         >
           Refresh
         </v-btn>
@@ -23,7 +24,8 @@
     </template>
 
     <!-- Main Content -->
-    <v-card variant="outlined">
+    <v-alert v-if="!caseId" type="info">Resolve an accessible case to use Hunts.</v-alert>
+    <v-card v-else variant="outlined">
       <!-- Tabs -->
       <v-tabs v-model="activeTab" bg-color="surface" class="px-4">
         <v-tab value="catalog" prepend-icon="mdi-view-grid">
@@ -154,7 +156,7 @@
     <HuntExecutionModal
       v-model="showExecutionModal"
       :hunt="selectedHunt"
-      :cases="cases"
+      :case-id="caseId"
       :executing="submittingHunt"
       :error="huntSubmissionError"
       @execute="handleExecuteHuntSubmit"
@@ -173,7 +175,7 @@
 
 <script setup>
 // Watch for tab changes to manage polling
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useHuntStore } from '@/stores/huntStore.js'
@@ -184,12 +186,14 @@ import HuntProgressCard from '@/components/hunts/HuntProgressCard.vue'
 import HuntExecutionModal from '@/components/hunts/HuntExecutionModal.vue'
 import HuntDetailsModal from '@/components/hunts/HuntDetailsModal.vue'
 import HuntExecutionHistory from '@/components/hunts/HuntExecutionHistory.vue'
-import { caseService } from '@/services/case'
+import { useActiveCaseStore } from '@/stores/activeCase'
 
 // Store and router
 const router = useRouter()
 const authStore = useAuthStore()
 const huntStore = useHuntStore()
+const activeCase = useActiveCaseStore()
+const caseId = computed(() => activeCase.activeCaseId)
 const { showNotification } = useNotifications()
 
 // Local state
@@ -202,9 +206,9 @@ const showExecutionModal = ref(false)
 const submittingHunt = ref(false)
 const huntSubmissionError = ref(null)
 const showDetailsModal = ref(false)
-const cases = ref([])
 const cancellingExecutions = ref(new Set())
 let pollingInterval = null
+let loadGeneration = 0
 
 // Computed properties
 const userRole = computed(() => authStore.user?.role)
@@ -221,30 +225,21 @@ const checkAccess = () => {
 
 // Methods
 const loadData = async () => {
+  const request = ++loadGeneration
+  const id = caseId.value
+  if (!id || !checkAccess()) {
+    huntStore.resetCaseExecutions()
+    loading.value = false
+    return
+  }
   try {
     loading.value = true
     error.value = null
-
-    // Load hunts and cases first
-    await Promise.all([huntStore.fetchHunts(), loadCases()])
-
-    // Then load active executions from all accessible cases
-    await huntStore.loadAllActiveExecutions(cases.value)
+    await Promise.all([huntStore.fetchHunts(), huntStore.getCaseExecutions(id)])
   } catch (err) {
-    error.value = err.message || 'Failed to load hunt data'
-    console.error('Failed to load hunt data:', err)
+    if (request === loadGeneration) error.value = err.message || 'Failed to load hunt data'
   } finally {
-    loading.value = false
-  }
-}
-
-const loadCases = async () => {
-  try {
-    const response = await caseService.getCases()
-    cases.value = response || []
-  } catch (err) {
-    console.error('Failed to load cases:', err)
-    // Don't set error here as it's not critical for hunt management
+    if (request === loadGeneration) loading.value = false
   }
 }
 
@@ -276,23 +271,27 @@ const stopPolling = () => {
 }
 
 const handleExecuteHunt = (hunt) => {
+  if (!caseId.value) return
   huntSubmissionError.value = null
   selectedHunt.value = hunt
   showExecutionModal.value = true
 }
 
 const handleExecuteHuntSubmit = async (executionData) => {
-  if (submittingHunt.value) return
+  if (submittingHunt.value || !caseId.value) return
+  const submittedCaseId = caseId.value
+  const huntName = selectedHunt.value?.display_name
   submittingHunt.value = true
   huntSubmissionError.value = null
   try {
     const execution = await huntStore.executeHunt(
       executionData.huntId,
-      executionData.caseId,
+      submittedCaseId,
       executionData.parameters,
     )
 
-    showNotification(`Hunt "${selectedHunt.value.display_name}" started successfully`, 'success')
+    if (caseId.value !== submittedCaseId) return execution
+    showNotification(`Hunt "${huntName}" started successfully`, 'success')
 
     // Switch to active executions tab
     activeTab.value = 'active'
@@ -303,6 +302,7 @@ const handleExecuteHuntSubmit = async (executionData) => {
 
     return execution
   } catch (err) {
+    if (caseId.value !== submittedCaseId) return
     showNotification(err.message || 'Failed to execute hunt', 'error')
     huntSubmissionError.value = err.message || 'Failed to execute hunt'
   } finally {
@@ -342,7 +342,8 @@ const handleCancelExecution = async (executionId) => {
 }
 
 const handleViewExecutionDetails = (executionId) => {
-  router.push(`/hunts/execution/${executionId}`)
+  const execution = huntStore.activeExecutions[executionId]
+  if (execution) router.push(`/case/${execution.case_id}/hunts/execution/${executionId}`)
 }
 
 watch(activeTab, (newTab) => {
@@ -365,22 +366,23 @@ watch(
   },
 )
 
-// Lifecycle
-onMounted(async () => {
-  if (!checkAccess()) return
+watch(
+  caseId,
+  () => {
+    stopPolling()
+    showExecutionModal.value = false
+    showDetailsModal.value = false
+    selectedHunt.value = null
+    huntSubmissionError.value = null
+    loadData()
+  },
+  { immediate: true },
+)
 
-  await loadData()
-
-  // Start polling if we're on the active tab and have running executions
-  if (activeTab.value === 'active' && huntStore.runningExecutions.length > 0) {
-    startPolling()
-  }
-})
-
-onUnmounted(() => {
-  // Cleanup
+onBeforeUnmount(() => {
+  loadGeneration++
   stopPolling()
-  huntStore.cleanup()
+  huntStore.resetCaseExecutions()
 })
 </script>
 

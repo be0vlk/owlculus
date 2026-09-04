@@ -1,3 +1,4 @@
+import { huntService } from '../services/hunt'
 import taskService from '../services/task'
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
@@ -83,15 +84,38 @@ export const routes = [
   },
   {
     path: '/hunts',
-    name: 'Hunts',
+    name: 'LegacyHunts',
     component: () => import('../views/HuntsDashboard.vue'),
     meta: { requiresAuth: true, requiresActiveCase: true, requiresNotAnalyst: true },
   },
   {
     path: '/hunts/execution/:id',
-    name: 'HuntExecution',
+    name: 'LegacyHuntExecution',
     component: () => import('../views/HuntExecution.vue'),
     meta: { requiresAuth: true, requiresActiveCase: true, requiresNotAnalyst: true },
+  },
+  {
+    path: '/case/:caseId/hunts',
+    name: 'Hunts',
+    component: () => import('../views/HuntsDashboard.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresActiveCase: true,
+      requiresNotAnalyst: true,
+      caseScoped: true,
+      caseSwitchable: true,
+    },
+  },
+  {
+    path: '/case/:caseId/hunts/execution/:id',
+    name: 'HuntExecution',
+    component: () => import('../views/HuntExecution.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresActiveCase: true,
+      requiresNotAnalyst: true,
+      caseScoped: true,
+    },
   },
   {
     path: '/case/:caseId/tasks',
@@ -168,18 +192,32 @@ export function createAppRouter(history = createWebHistory(), appRoutes = routes
       if (!activeCase.initialized) await activeCase.initialize(urlCaseId)
       else if (activeCase.ready) activeCase.resolve(urlCaseId)
 
-      if (['TaskDetail', 'LegacyTaskDetail'].includes(to.name) && activeCase.activeCaseId) {
+      const recordRoute = {
+        TaskDetail: { load: taskService.getTask, name: 'TaskDetail', label: 'task' },
+        LegacyTaskDetail: { load: taskService.getTask, name: 'TaskDetail', label: 'task' },
+        HuntExecution: {
+          load: huntService.getExecution,
+          name: 'HuntExecution',
+          label: 'execution',
+        },
+        LegacyHuntExecution: {
+          load: huntService.getExecution,
+          name: 'HuntExecution',
+          label: 'execution',
+        },
+      }[to.name]
+      if (recordRoute && activeCase.activeCaseId) {
         try {
-          const task = await taskService.getTask(to.params.id)
-          if (!activeCase.accessibleCases.some((item) => item.id === task.case_id)) {
-            activeCase.notification = 'This task’s case is unavailable.'
+          const record = await recordRoute.load(to.params.id)
+          if (!activeCase.accessibleCases.some((item) => item.id === record.case_id)) {
+            activeCase.notification = `This ${recordRoute.label}’s case is unavailable.`
             next('/cases')
             return
           }
-          if (String(urlCaseId) !== String(task.case_id)) {
+          if (String(urlCaseId) !== String(record.case_id)) {
             next({
-              name: 'TaskDetail',
-              params: { caseId: task.case_id, id: task.id },
+              name: recordRoute.name,
+              params: { caseId: record.case_id, id: record.id },
               query: to.query,
               hash: to.hash,
               replace: true,
@@ -187,8 +225,7 @@ export function createAppRouter(history = createWebHistory(), appRoutes = routes
             return
           }
         } catch {
-          activeCase.notification =
-            'Unable to open this task. It may be unavailable or you may not have access.'
+          activeCase.notification = `Unable to open this ${recordRoute.label}. It may be unavailable or you may not have access.`
           next('/cases')
           return
         }
@@ -201,9 +238,9 @@ export function createAppRouter(history = createWebHistory(), appRoutes = routes
         next({ ...caseLocation(activeCase.activeCaseId, to), replace: true })
         return
       }
-      if (to.name === 'LegacyTasks' && activeCase.activeCaseId) {
+      if (['LegacyTasks', 'LegacyHunts'].includes(to.name) && activeCase.activeCaseId) {
         next({
-          name: 'Tasks',
+          name: to.name === 'LegacyTasks' ? 'Tasks' : 'Hunts',
           params: { caseId: activeCase.activeCaseId },
           query: to.query,
           hash: to.hash,

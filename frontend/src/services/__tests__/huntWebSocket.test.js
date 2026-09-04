@@ -9,7 +9,9 @@ vi.mock('../api', () => ({
 }))
 
 class WebSocketStub {
+  static CONNECTING = 0
   static OPEN = 1
+  close = vi.fn()
 
   constructor(url) {
     this.url = url
@@ -63,4 +65,13 @@ describe('hunt execution streaming', () => {
       'wss://socket.dev.example/api/hunts/executions/7/stream?token=stream%20token',
     )
   })
+})
+
+it('closes a connecting stream when its case context is discarded', async () => {
+  vi.stubGlobal('WebSocket', WebSocketStub)
+  const { huntService } = await import('../hunt')
+  const stream = new WebSocketStub('ws://localhost')
+  huntService.closeExecutionStream(stream)
+  expect(stream.close).toHaveBeenCalledOnce()
+  vi.unstubAllGlobals()
 })

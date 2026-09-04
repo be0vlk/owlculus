@@ -147,7 +147,11 @@
                     View and manage automated investigation workflows for this case
                   </div>
                 </div>
-                <v-btn color="primary" prepend-icon="mdi-target" @click="$router.push('/hunts')">
+                <v-btn
+                  color="primary"
+                  prepend-icon="mdi-target"
+                  @click="$router.push(`/case/${caseId}/hunts`)"
+                >
                   Browse Hunts
                 </v-btn>
               </div>
@@ -219,7 +223,7 @@
                 <div class="text-body-medium text-medium-emphasis mb-4">
                   Start automated investigation workflows to gather evidence for this case
                 </div>
-                <v-btn color="primary" @click="$router.push('/hunts')">
+                <v-btn color="primary" @click="$router.push(`/case/${caseId}/hunts`)">
                   Browse Available Hunts
                 </v-btn>
               </div>
@@ -847,7 +851,7 @@ const formatDateTime = (dateString) => {
 }
 
 const viewHuntExecution = (executionId) => {
-  router.push(`/hunts/execution/${executionId}`)
+  router.push(`/case/${caseId.value}/hunts/execution/${executionId}`)
 }
 
 const getEntityDisplayName = (entity) => {

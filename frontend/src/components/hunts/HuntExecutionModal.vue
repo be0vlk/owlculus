@@ -40,38 +40,6 @@
           </div>
         </div>
 
-        <!-- Case Selection -->
-        <div v-if="!caseId" class="mb-4">
-          <v-select
-            v-model="selectedCaseId"
-            :disabled="executing"
-            :items="caseOptions"
-            item-title="title"
-            item-value="id"
-            label="Select Case"
-            variant="outlined"
-            density="comfortable"
-            :rules="[rules.required]"
-            prepend-icon="mdi-folder"
-          >
-            <template #item="{ props, item }">
-              <v-list-item v-bind="props">
-                <template #title>
-                  <div class="d-flex align-center">
-                    <span>{{ item.case_number }}</span>
-                    <span v-if="item.title" class="text-medium-emphasis ml-2">
-                      - {{ item.title }}
-                    </span>
-                  </div>
-                </template>
-                <template #subtitle>
-                  {{ item.client?.name || 'No client' }}
-                </template>
-              </v-list-item>
-            </template>
-          </v-select>
-        </div>
-
         <!-- Parameters Form -->
         <div v-if="hunt" class="mb-4">
           <div class="text-title-large mb-3">Hunt Parameters</div>
@@ -131,10 +99,6 @@ const props = defineProps({
   },
   executing: Boolean,
   error: { type: String, default: null },
-  cases: {
-    type: Array,
-    default: () => [],
-  },
 })
 
 const emit = defineEmits(['update:modelValue', 'execute', 'cancel'])
@@ -142,7 +106,6 @@ const emit = defineEmits(['update:modelValue', 'execute', 'cancel'])
 // Local state
 const parameterForm = ref(null)
 const parameterFormId = useId()
-const selectedCaseId = ref(props.caseId)
 const parameterValues = ref({})
 
 // Computed properties
@@ -164,23 +127,7 @@ const categoryIcon = computed(() => {
   return iconMap[props.hunt?.category] || iconMap.general
 })
 
-const caseOptions = computed(() => {
-  return props.cases.map((case_) => ({
-    id: case_.id,
-    title: case_.title || `Case ${case_.case_number}`,
-    case_number: case_.case_number,
-    client: case_.client,
-  }))
-})
-
-const isFormValid = computed(() => {
-  const hasValidCase = props.caseId || selectedCaseId.value
-  return !!hasValidCase
-})
-
-const rules = {
-  required: (value) => !!value || 'This field is required',
-}
+const isFormValid = computed(() => !!props.caseId)
 
 // Methods
 const handleExecute = async () => {
@@ -188,7 +135,7 @@ const handleExecute = async () => {
   if (parameterForm.value && !(await parameterForm.value.validate())) return
   emit('execute', {
     huntId: props.hunt.id,
-    caseId: props.caseId || selectedCaseId.value,
+    caseId: props.caseId,
     parameters: { ...parameterValues.value },
   })
 }
@@ -204,17 +151,9 @@ watch(
   [() => props.modelValue, () => props.hunt],
   () => {
     if (props.modelValue) {
-      selectedCaseId.value = props.caseId
       parameterValues.value = {}
     }
   },
   { immediate: true },
-)
-
-watch(
-  () => props.caseId,
-  (newCaseId) => {
-    selectedCaseId.value = newCaseId
-  },
 )
 </script>

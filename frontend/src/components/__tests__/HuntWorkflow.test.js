@@ -65,31 +65,18 @@ it('validates before execution, submits defaults, and retains failure feedback w
   expect(dialog.get('input[type="text"]').element.value).toBe('example.org')
 })
 
-it('renders case option names and client details through the public select slot', async () => {
+it('has no case selector and blocks execution without resolved context', async () => {
   const { default: HuntExecutionModal } = await import('../hunts/HuntExecutionModal.vue')
   const { DOMWrapper } = await import('@vue/test-utils')
   const wrapper = mountWithVuetify(HuntExecutionModal, {
-    props: {
-      modelValue: false,
-      hunt: { id: 7 },
-      cases: [
-        {
-          id: 4,
-          case_number: 'CASE-4',
-          title: 'Migration Case',
-          client: { name: 'Example Client' },
-        },
-      ],
-    },
+    props: { modelValue: false, hunt: { id: 7 } },
     attachTo: document.body,
   })
   await wrapper.setProps({ modelValue: true })
   await flushPromises()
   const dialog = new DOMWrapper(document.querySelector('[role="dialog"]'))
-  await dialog.get('input[role="combobox"]').trigger('keydown', { key: 'Enter' })
-  await flushPromises()
-  const option = new DOMWrapper(document.querySelector('[role="option"]'))
-  expect(option.text()).toContain('CASE-4')
-  expect(option.text()).toContain('Migration Case')
-  expect(option.text()).toContain('Example Client')
+  expect(dialog.find('input[role="combobox"]').exists()).toBe(false)
+  expect(dialog.get('button[type="submit"]').element.disabled).toBe(true)
+  await dialog.get('form').trigger('submit')
+  expect(wrapper.emitted('execute')).toBeUndefined()
 })

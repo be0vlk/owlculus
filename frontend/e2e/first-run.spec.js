@@ -793,12 +793,10 @@ test.describe('first-run browser journey', () => {
           await page.getByRole('button', { name: 'Grid view', exact: true }).click()
           await page.getByRole('button', { name: 'Execute Hunt', exact: true }).first().click()
           const huntDialog = page.getByRole('dialog', { name: 'Execute Hunt', exact: true })
-          await expect(huntDialog.getByLabel('Select Case', { exact: true })).toBeVisible()
+          await expect(huntDialog.getByLabel('Select Case', { exact: true })).toHaveCount(0)
           await expect(
             huntDialog.getByRole('button', { name: 'Execute Hunt', exact: true }),
-          ).toBeDisabled()
-          await huntDialog.getByLabel('Select Case', { exact: true }).press('Enter')
-          await page.getByRole('option').filter({ hasText: 'Migration' }).first().click()
+          ).toBeEnabled()
           await huntDialog.getByLabel('Domain *', { exact: true }).press('Enter')
           await expect(huntDialog.getByText('Domain is required', { exact: true })).toBeVisible()
           await huntDialog.getByRole('button', { name: 'Cancel', exact: true }).click()

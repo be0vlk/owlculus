@@ -42,7 +42,7 @@
           color="white"
           variant="text"
           prepend-icon="mdi-arrow-left"
-          @click="$router.push('/hunts')"
+          @click="$router.push(`/case/${route.params.caseId}/hunts`)"
         >
           Back to Hunts
         </v-btn>
@@ -334,7 +334,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useHuntStore } from '@/stores/huntStore.js'
 import { huntService } from '@/services/hunt'
@@ -373,6 +373,7 @@ const executionLog = ref([])
 const elapsedTime = ref('')
 const exportingPDF = ref(false)
 let elapsedInterval = null
+let disposed = false
 
 // Computed properties
 const executionId = computed(() => parseInt(route.params.id))
@@ -434,11 +435,19 @@ const displayCategory = computed(() => {
 
 // Methods
 const loadExecution = async () => {
+  if (disposed) return
   try {
     loading.value = true
     error.value = null
 
-    execution.value = await huntStore.getExecution(executionId.value, true)
+    const result = await huntStore.getExecution(executionId.value, true)
+    if (disposed) return
+    if (String(result.case_id) !== String(route.params.caseId)) {
+      execution.value = null
+      await router.replace(`/case/${result.case_id}/hunts/execution/${result.id}`)
+      return
+    }
+    execution.value = result
 
     // Subscribe to real-time updates if running
     if (execution.value.status === 'running') {
@@ -461,6 +470,7 @@ const handleCancelExecution = async () => {
   try {
     cancelling.value = true
     await huntStore.cancelExecution(executionId.value)
+    if (disposed) return
     showNotification('Hunt execution cancelled', 'info')
     await loadExecution()
   } catch (err) {
@@ -528,6 +538,7 @@ const updateElapsedTime = () => {
 }
 
 const startElapsedTimer = () => {
+  stopElapsedTimer()
   updateElapsedTime()
   elapsedInterval = setInterval(updateElapsedTime, 1000)
 }
@@ -544,7 +555,9 @@ onMounted(async () => {
   await loadExecution()
 })
 
-onUnmounted(() => {
+onBeforeUnmount(() => {
+  disposed = true
+  huntStore.resetCaseExecutions()
   stopElapsedTimer()
   huntStore.unsubscribeFromExecution(executionId.value)
 })
@@ -553,7 +566,11 @@ onUnmounted(() => {
 watch(
   () => huntStore.activeExecutions[executionId.value],
   (updatedExecution) => {
-    if (updatedExecution) {
+    if (
+      !disposed &&
+      updatedExecution &&
+      String(updatedExecution.case_id) === String(route.params.caseId)
+    ) {
       execution.value = updatedExecution
 
       // Stop timer if execution is no longer running

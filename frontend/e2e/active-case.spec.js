@@ -284,3 +284,75 @@ test('tasks remain scoped through creation, switching and legacy detail links', 
   await expect(switcher).toHaveValue('CASE-NEW — Newer investigation (Open)')
   await expect(page.getByRole('heading', { name: 'Task: Newer task', exact: true })).toBeVisible()
 })
+
+test('hunts execute in the active case and legacy execution links restore their owner', async ({
+  page,
+}) => {
+  await setup(page)
+  const hunt = {
+    id: 7,
+    display_name: 'Context Hunt',
+    is_active: true,
+    description: 'Investigate a domain',
+    category: 'domain',
+    step_count: 0,
+    initial_parameters: {},
+  }
+  const executions = []
+  const requestedCases = []
+  await page.route('**/api/hunts/**', async (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (path === '/api/hunts/') return route.fulfill({ json: [hunt] })
+    if (route.request().method() === 'POST') {
+      const data = route.request().postDataJSON()
+      const execution = {
+        id: 8,
+        ...data,
+        initial_parameters: data.parameters,
+        hunt,
+        hunt_display_name: hunt.display_name,
+        status: 'completed',
+        progress: 1,
+        created_at: '2026-09-04T00:00:00Z',
+        steps: [],
+      }
+      executions.push(execution)
+      return route.fulfill({ json: execution })
+    }
+    if (path.includes('/cases/')) {
+      const id = Number(path.split('/')[4])
+      requestedCases.push(id)
+      return route.fulfill({ json: executions.filter((execution) => execution.case_id === id) })
+    }
+    return route.fulfill({ json: executions[0] })
+  })
+  await page.goto('/hunts')
+  await expect(page).toHaveURL(/\/case\/2\/hunts$/)
+  await page.getByRole('button', { name: 'Execute Hunt', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Execute Hunt', exact: true })
+  await expect(dialog.getByRole('combobox')).toHaveCount(0)
+  await dialog.getByRole('button', { name: 'Execute Hunt', exact: true }).click()
+  await expect(dialog).toBeHidden()
+  expect(executions).toEqual([expect.objectContaining({ case_id: 2, parameters: {} })])
+  await page.getByRole('tab', { name: 'Execution History', exact: true }).click()
+  await expect(page.getByRole('cell', { name: 'Context Hunt', exact: true })).toBeVisible()
+  const switcher = page.getByRole('combobox', { name: 'Active case', exact: true })
+  await switcher.fill('CASE-OLD')
+  await page
+    .getByRole('option', { name: 'CASE-OLD — Older investigation (Closed)', exact: true })
+    .click()
+  await expect(page).toHaveURL(/\/case\/1\/hunts$/)
+  await page.getByRole('tab', { name: 'Execution History', exact: true }).click()
+  await expect(page.getByText('No executions found', { exact: true })).toBeVisible()
+  expect(requestedCases).toContain(1)
+  expect(requestedCases).toContain(2)
+  await page.goto('/hunts/execution/8')
+  await expect(page).toHaveURL(/\/case\/2\/hunts\/execution\/8$/)
+  await expect(switcher).toHaveValue('CASE-NEW — Newer investigation (Open)')
+  await page.reload()
+  await expect(switcher).toHaveValue('CASE-NEW — Newer investigation (Open)')
+  await page.getByRole('button', { name: 'Back to Hunts', exact: true }).click()
+  await expect(page).toHaveURL(/\/case\/2\/hunts$/)
+  await page.getByRole('tab', { name: 'Execution History', exact: true }).click()
+  await expect(page.getByRole('cell', { name: 'Context Hunt', exact: true })).toBeVisible()
+})
