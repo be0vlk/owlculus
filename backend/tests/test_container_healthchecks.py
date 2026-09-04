@@ -16,6 +16,27 @@ def test_backend_image_excludes_runtime_setup_data():
     assert "data/setup/" in dockerignore
 
 
+def test_backend_image_excludes_local_python_runtime_state():
+    """Host environments and caches cannot leak into backend image layers."""
+    dockerignore = (REPOSITORY_ROOT / "backend/.dockerignore").read_text().splitlines()
+
+    assert {".venv/", "__pycache__/", ".pytest_cache/"} <= set(dockerignore)
+
+
+def test_backend_image_installs_locked_production_dependencies():
+    """The backend image and local development use one resolved dependency graph."""
+    contents = (REPOSITORY_ROOT / "backend/Dockerfile").read_text()
+
+    assert "COPY pyproject.toml uv.lock ./" in contents
+    assert "uv sync --frozen --no-dev" in contents
+    assert "requirements.txt" not in contents
+
+
+def test_backend_source_root_does_not_shadow_the_app_package():
+    """Copying the backend context must not create a competing /app package."""
+    assert not (REPOSITORY_ROOT / "backend/__init__.py").exists()
+
+
 def test_backend_image_exposes_production_and_development_targets():
     """One backend image definition supplies both supported runtime adapters."""
     contents = (REPOSITORY_ROOT / "backend/Dockerfile").read_text()

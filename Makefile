@@ -78,7 +78,7 @@ clean:
 # Testing
 test:
 	@echo "🧪 Running backend tests..."
-	$(COMPOSE) exec backend python3 -m pytest tests/ -v
+	cd backend && uv run --locked pytest tests/ -v
 
 test-browser:
 	@echo "🧪 Running first-install browser journey..."
