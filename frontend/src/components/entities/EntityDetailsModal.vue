@@ -108,9 +108,13 @@ const props = defineProps({
   entity: { type: Object, required: true },
   caseId: { type: Number, required: true },
   existingEntities: { type: Array, required: true },
+  restoreFocusTo: { type: Function, default: null },
 })
 
-useDialogFocusRestore(() => props.show)
+useDialogFocusRestore(
+  () => props.show,
+  () => props.restoreFocusTo?.(),
+)
 
 const emit = defineEmits(['close', 'edit', 'viewEntity'])
 

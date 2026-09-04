@@ -111,6 +111,7 @@ async function exerciseCaseAndEntityWorkflow(page) {
   })
   await expect(createdDialog).toContainText('Ada Lovelace')
   await createdDialog.getByRole('button', { name: 'No, thanks', exact: true }).click()
+  await expect(openNewEntityButton).toBeFocused()
 
   let entityRow = page.getByRole('row').filter({ hasText: 'Ada Lovelace' })
   await expect(entityRow).toBeVisible()
@@ -129,6 +130,7 @@ async function exerciseCaseAndEntityWorkflow(page) {
   await expect(updatedEntityDialog).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(updatedEntityDialog).toBeHidden()
+  await expect(page.getByRole('button', { name: 'View Grace Lovelace', exact: true })).toBeFocused()
 
   entityRow = page.getByRole('row').filter({ hasText: 'Grace Lovelace' })
   await expect(entityRow).toBeVisible()
