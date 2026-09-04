@@ -15,7 +15,7 @@ from fastapi import (
 )
 from sqlmodel import Session
 
-from app.core.dependencies import get_current_user, get_db, no_analyst
+from app.core.dependencies import get_current_user, get_db
 from app.core.websocket_manager import websocket_manager
 from app.database import models
 from app.hunts.hunt_event import HuntEvent
@@ -92,7 +92,6 @@ async def get_hunt(
 
 
 @router.post("/{hunt_id}/execute", response_model=schemas.HuntExecutionResponse)
-@no_analyst()
 async def execute_hunt(
     hunt_id: int,
     request: schemas.HuntExecuteRequest,
@@ -216,7 +215,6 @@ async def list_case_executions(
 
 
 @router.delete("/executions/{execution_id}")
-@no_analyst()
 async def cancel_execution(
     execution_id: int,
     current_user: models.User = Depends(get_current_user),

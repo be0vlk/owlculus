@@ -11,7 +11,7 @@ from ipaddress import ip_address, ip_network
 
 from fastapi import Depends, Request
 from fastapi.security import OAuth2PasswordBearer
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from app.core import security
 from app.core.config import settings
@@ -20,7 +20,6 @@ from app.core.exceptions import (
     AuthorizationException,
     ResourceNotFoundException,
 )
-from app.core.roles import UserRole
 from app.database import crud
 from app.database.connection import get_db
 from app.database.models import Case, User
@@ -152,14 +151,16 @@ def admin_only():
     """Decorator to check if user has Admin role."""
 
     def decorator(func):
+        import inspect
+
+        signature = inspect.signature(func)
+
         @wraps(func)
         async def wrapper(*args, **kwargs):
-            current_user = kwargs.get("current_user")
-            if not current_user:
-                raise AuthenticationException("Not authorized")
+            from app.services.case_access import CaseAccess
 
-            if current_user.role != UserRole.ADMIN.value:
-                raise AuthorizationException("Not authorized")
+            current_user = signature.bind(*args, **kwargs).arguments.get("current_user")
+            CaseAccess().require_admin(current_user)
             return await func(*args, **kwargs)
 
         return wrapper
@@ -176,10 +177,9 @@ def no_analyst():
         signature = inspect.signature(func)
 
         def _check_analyst_permission(current_user):
-            if not current_user:
-                raise AuthenticationException("Not authorized")
-            if current_user.role == UserRole.ANALYST.value:
-                raise AuthorizationException("Not authorized")
+            from app.services.case_access import CaseAccess
+
+            CaseAccess().require_non_analyst(current_user)
 
         def _get_bound_current_user(args, kwargs):
             return signature.bind(*args, **kwargs).arguments.get("current_user")
@@ -235,60 +235,27 @@ def case_must_be_open():
 
 def check_case_access(db: Session, case_id: int, current_user: User) -> Case:
     """Utility function to check if user has access to a case."""
-    case = db.exec(select(Case).where(Case.id == case_id)).first()
-    if not case:
-        raise ResourceNotFoundException("Case not found")
-    if current_user.role != UserRole.ADMIN.value and current_user not in case.users:
-        raise AuthorizationException("Not authorized to access this case")
+    from app.services.case_access import CaseAccess
 
-    return case
+    return CaseAccess(db).readable(current_user, case_id)
 
 
 def is_case_lead(db: Session, case_id: int, current_user: User) -> bool:
     """Check if user is a lead for a specific case."""
-    # Admins are always considered leads
-    if current_user.role == UserRole.ADMIN.value:
-        return True
+    from app.services.case_access import CaseAccess
 
-    # Check the CaseUserLink table for is_lead flag
-    from app.database.models import CaseUserLink
-
-    link = db.exec(
-        select(CaseUserLink).where(
-            CaseUserLink.case_id == case_id, CaseUserLink.user_id == current_user.id
-        )
-    ).first()
-
-    return link and link.is_lead
+    try:
+        CaseAccess(db).lead(current_user, case_id)
+    except (AuthorizationException, ResourceNotFoundException):
+        return False
+    return True
 
 
 def load_case_with_users(db: Session, case_id: int):
     """Load a case with users including is_lead information."""
-    from app.database.models import CaseUserLink
-    from app.schemas.case_schema import Case as CaseSchema
-    from app.schemas.case_schema import CaseUser
+    from app.services.case_service import CaseService
 
-    # Load the case
-    case = db.exec(select(Case).where(Case.id == case_id)).first()
+    case = db.get(Case, case_id)
     if not case:
         return None
-
-    # Load case users with is_lead information
-    case_users = []
-    for user in case.users:
-        # Get the is_lead flag from CaseUserLink
-        link = db.exec(
-            select(CaseUserLink).where(
-                CaseUserLink.case_id == case_id, CaseUserLink.user_id == user.id
-            )
-        ).first()
-
-        # Create CaseUser with is_lead information
-        case_user_data = user.model_dump()
-        case_user_data["is_lead"] = link.is_lead if link else False
-        case_users.append(CaseUser(**case_user_data))
-
-    # Create a CaseSchema object with the enriched users
-    case_data = case.model_dump()
-    case_data["users"] = case_users
-    return CaseSchema(**case_data)
+    return CaseService(db)._cases_with_users([case])[0]
