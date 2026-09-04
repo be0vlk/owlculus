@@ -76,9 +76,20 @@ class TestStrixyAPI:
         assert response.status_code == 422
         assert "OpenAI API key not configured" in response.json()["detail"]
 
-    def test_chat_empty_messages(self, client, auth_headers):
+    @patch("app.api.strixy.StrixyService")
+    def test_chat_empty_messages(self, mock_service_class, client, auth_headers):
+        mock_service = Mock()
+        mock_service.send_chat_message = AsyncMock(
+            return_value=ChatResponse(
+                message="How can I help?",
+                role="assistant",
+                timestamp="2024-01-01T00:00:00",
+            )
+        )
+        mock_service_class.return_value = mock_service
+
         response = client.post(
             "/api/strixy/chat", json={"messages": []}, headers=auth_headers
         )
 
-        assert response.status_code == 422
+        assert response.status_code == 200

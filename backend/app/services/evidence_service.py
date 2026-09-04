@@ -56,7 +56,7 @@ class EvidenceService:
         )
         raise DomainException(public_message) from error
 
-    @no_analyst(domain_exceptions=True)
+    @no_analyst()
     async def create_evidence(
         self,
         evidence: schemas.EvidenceCreate,
@@ -195,7 +195,7 @@ class EvidenceService:
 
         return evidence
 
-    @no_analyst(domain_exceptions=True)
+    @no_analyst()
     def update_evidence(
         self,
         evidence_id: int,
@@ -267,7 +267,7 @@ class EvidenceService:
                 rollback=True,
             )
 
-    @no_analyst(domain_exceptions=True)
+    @no_analyst()
     async def delete_evidence(
         self, evidence_id: int, current_user: models.User
     ) -> models.Evidence:
@@ -631,7 +631,7 @@ class EvidenceService:
                 public_message="Evidence image view failed",
             )
 
-    @no_analyst(domain_exceptions=True)
+    @no_analyst()
     async def create_folder(
         self,
         folder_data: schemas.FolderCreate,
@@ -732,7 +732,7 @@ class EvidenceService:
         query = select(models.Evidence).where(models.Evidence.case_id == case_id)
         return list(self.db.exec(query))
 
-    @no_analyst(domain_exceptions=True)
+    @no_analyst()
     async def update_folder(
         self,
         folder_id: int,
@@ -790,7 +790,7 @@ class EvidenceService:
                 rollback=True,
             )
 
-    @no_analyst(domain_exceptions=True)
+    @no_analyst()
     async def delete_folder(
         self, folder_id: int, current_user: models.User
     ) -> models.Evidence:

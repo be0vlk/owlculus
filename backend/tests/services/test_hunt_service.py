@@ -8,6 +8,11 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from sqlmodel import Session, select
 
+from app.core.exceptions import (
+    AuthorizationException,
+    ResourceNotFoundException,
+    ValidationException,
+)
 from app.database.models import Case, Client, Hunt, HuntExecution, HuntStep, User
 from app.services.hunt_service import HuntService
 
@@ -172,8 +177,8 @@ class TestHuntService:
     @pytest.mark.asyncio
     async def test_get_hunt_not_found(self, hunt_service: HuntService, test_user: User):
         """Test getting a non-existent hunt."""
-        hunt = await hunt_service.get_hunt(9999, current_user=test_user)
-        assert hunt is None
+        with pytest.raises(ResourceNotFoundException, match="Hunt not found"):
+            await hunt_service.get_hunt(9999, current_user=test_user)
 
     @pytest.mark.asyncio
     @patch("app.services.hunt_service.HuntService._run_hunt_async")
@@ -333,7 +338,9 @@ class TestHuntService:
         self, hunt_service: HuntService, test_case: Case, test_user: User
     ):
         """Test creating an execution for a non-existent hunt."""
-        with pytest.raises(ValueError, match="Hunt not found or inactive"):
+        with pytest.raises(
+            ResourceNotFoundException, match="Hunt not found or inactive"
+        ):
             await hunt_service.create_execution(
                 hunt_id=9999,
                 case_id=test_case.id,
@@ -346,7 +353,7 @@ class TestHuntService:
         self, hunt_service: HuntService, test_user: User
     ):
         """Test canceling a non-existent execution."""
-        with pytest.raises(ValueError, match="Hunt execution not found"):
+        with pytest.raises(ResourceNotFoundException, match="Hunt execution not found"):
             await hunt_service.cancel_execution(9999, current_user=test_user)
 
     @pytest.mark.asyncio
@@ -362,7 +369,7 @@ class TestHuntService:
         hunt_service.db.commit()
 
         with pytest.raises(
-            ValueError, match="Only running executions can be cancelled"
+            ValidationException, match="Only running executions can be cancelled"
         ):
             await hunt_service.cancel_execution(
                 test_hunt_execution.id, current_user=test_user
@@ -385,17 +392,13 @@ class TestHuntService:
         session.add(case_user_link)
         session.commit()
 
-        # The @no_analyst decorator raises HTTPException, not PermissionError
-        from fastapi import HTTPException
-
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(AuthorizationException, match="Not authorized"):
             await hunt_service.create_execution(
                 hunt_id=test_hunt.id,
                 case_id=test_case.id,
                 initial_parameters={},
                 current_user=test_analyst,
             )
-        assert exc_info.value.status_code == 403
 
     @pytest.mark.asyncio
     async def test_run_hunt_async_error_handling(self, hunt_service: HuntService):

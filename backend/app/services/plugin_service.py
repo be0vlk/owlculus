@@ -9,6 +9,7 @@ and real-time streaming execution for investigation workflows.
 
 import importlib
 import inspect
+import json
 import os
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -81,3 +82,25 @@ class PluginService:
         plugin = self.get_plugin(name)
         plugin._current_user = current_user
         return plugin.execute_with_evidence_collection(params or {})
+
+    async def stream_plugin_execution(
+        self,
+        name: str,
+        params: dict[str, Any] | None = None,
+        *,
+        current_user: User,
+    ) -> AsyncGenerator[str, None]:
+        """Execute a plugin while preserving the NDJSON streaming contract."""
+        try:
+            result = await self.execute_plugin(name, params, current_user=current_user)
+            async for line in result:
+                yield json.dumps(line) + "\n"
+        except ResourceNotFoundException as error:
+            yield json.dumps({"type": "error", "data": {"message": str(error)}}) + "\n"
+        except Exception as error:
+            yield json.dumps(
+                {
+                    "type": "error",
+                    "data": {"message": f"Plugin execution error: {str(error)}"},
+                }
+            ) + "\n"

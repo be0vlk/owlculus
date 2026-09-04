@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 import pytest
 from sqlmodel import Session
 
-from app.core.exceptions import ResourceNotFoundException
+from app.core.exceptions import ResourceNotFoundException, ValidationException
 from app.database import models
 from app.plugins.base_plugin import BasePlugin
 from app.services.plugin_service import PluginService
@@ -94,7 +94,7 @@ class TestPluginService:
         )
 
         with pytest.raises(
-            ValueError,
+            ValidationException,
             match="UnknownProviderPlugin declares unknown API key provider",
         ):
             PluginService(session)

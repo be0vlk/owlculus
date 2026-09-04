@@ -167,7 +167,7 @@ def admin_only():
     return decorator
 
 
-def no_analyst(*, domain_exceptions: bool = True):
+def no_analyst():
     """Decorator to check if user is not an analyst"""
 
     def decorator(func):
