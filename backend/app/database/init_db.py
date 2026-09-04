@@ -4,6 +4,7 @@ from sqlalchemy.engine import Engine
 from sqlmodel import Session, select
 
 from app.database.connection import create_db_and_tables, engine
+from app.database.db_utils import transaction
 from app.database.models import Client
 
 
@@ -16,8 +17,8 @@ def initialize_database(database_engine: Engine = engine) -> None:
             select(Client).where(Client.name == "Personal")
         ).first()
         if personal_client is None:
-            session.add(Client(name="Personal"))
-            session.commit()
+            with transaction(session):
+                session.add(Client(name="Personal"))
 
 
 if __name__ == "__main__":

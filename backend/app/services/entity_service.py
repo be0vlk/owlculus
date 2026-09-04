@@ -7,6 +7,7 @@ entity operations with case access control, data enrichment capabilities,
 and specialized search functions for OSINT investigation workflows.
 """
 
+from dataclasses import dataclass
 from typing import cast
 
 from sqlmodel import Session, col, or_, select
@@ -21,6 +22,47 @@ from app.core.utils import get_utc_now
 from app.database import models
 from app.database.db_utils import transaction
 from app.services.case_access import CaseAccess
+
+
+@dataclass(frozen=True)
+class DuplicatePolicy:
+    """Describe one database-backed entity identity rule."""
+
+    entity_type: str
+    fields: tuple[str, ...]
+    error_template: str
+    case_sensitive: bool = False
+
+
+_DUPLICATE_POLICIES = (
+    DuplicatePolicy(
+        "company",
+        ("name",),
+        "A company with the name '{name}' already exists in this case",
+    ),
+    DuplicatePolicy(
+        "person",
+        ("first_name", "last_name"),
+        "A person with the name '{first_name} {last_name}' already exists in this case",
+    ),
+    DuplicatePolicy(
+        "ip_address",
+        ("ip_address",),
+        "An IP address '{ip_address}' already exists in this case",
+        case_sensitive=True,
+    ),
+    DuplicatePolicy(
+        "domain", ("domain",), "A domain '{domain}' already exists in this case"
+    ),
+    DuplicatePolicy(
+        "vehicle", ("vin",), "A vehicle with VIN '{vin}' already exists in this case"
+    ),
+    DuplicatePolicy(
+        "vehicle",
+        ("license_plate",),
+        "A vehicle with license plate '{license_plate}' already exists in this case",
+    ),
+)
 
 
 class EntityService:
@@ -42,62 +84,34 @@ class EntityService:
             or entity_data.get("__entity_type"),
         )
 
-        if entity_type == "person":
-            first_name = entity.data.get("first_name")
-            last_name = entity.data.get("last_name")
-            if not first_name or not last_name:
-                return
+        if entity_type is None:
+            return
+
+        for policy in _DUPLICATE_POLICIES:
+            if policy.entity_type != entity_type or not all(
+                entity.data.get(field) for field in policy.fields
+            ):
+                continue
+            comparisons = []
+            for field in policy.fields:
+                value = entity.data[field]
+                expression = models.Entity.data[field].as_string()
+                comparisons.append(
+                    expression == value
+                    if policy.case_sensitive
+                    else expression.ilike(value)
+                )
             query = select(models.Entity).where(
                 models.Entity.case_id == case_id,
-                models.Entity.entity_type == "person",
-                models.Entity.data["first_name"].as_string().ilike(first_name),
-                models.Entity.data["last_name"].as_string().ilike(last_name),
+                models.Entity.entity_type == policy.entity_type,
+                *comparisons,
             )
             if entity_id is not None:
                 query = query.where(models.Entity.id != entity_id)
             if self.db.exec(query).first():
                 raise DuplicateResourceException(
-                    f"A person with the name '{first_name} {last_name}' already exists in this case"
+                    policy.error_template.format(**entity.data)
                 )
-            return
-
-        if entity_type is None:
-            return
-
-        duplicate_fields = {
-            "company": [("name", "name")],
-            "ip_address": [("ip_address", "ip_address")],
-            "domain": [("domain", "domain")],
-            "vehicle": [("vin", "vin"), ("license_plate", "license plate")],
-        }
-        fields = duplicate_fields.get(entity_type)
-        if fields:
-            present_fields = [
-                (field, label) for field, label in fields if entity.data.get(field)
-            ]
-            for field, label in present_fields:
-                value = entity.data[field]
-                expression = models.Entity.data[field].as_string()
-                comparison = (
-                    expression == value
-                    if entity_type == "ip_address"
-                    else expression.ilike(value)
-                )
-                query = select(models.Entity).where(
-                    models.Entity.case_id == case_id,
-                    models.Entity.entity_type == entity_type,
-                    comparison,
-                )
-                if entity_id is not None:
-                    query = query.where(models.Entity.id != entity_id)
-                if self.db.exec(query).first():
-                    messages = {
-                        "company": f"A company with the name '{value}' already exists in this case",
-                        "ip_address": f"An IP address '{value}' already exists in this case",
-                        "domain": f"A domain '{value}' already exists in this case",
-                        "vehicle": f"A vehicle with {label} '{value}' already exists in this case",
-                    }
-                    raise DuplicateResourceException(messages[entity_type])
 
         if entity_type == "network_assets":
             conditions = []

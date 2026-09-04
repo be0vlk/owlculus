@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from sqlmodel import Session
 
 from app.core.utils import get_utc_now
+from app.database.db_utils import transaction
 from app.database.models import HuntExecution, HuntStep, User
 from app.plugins.plugin_context import ProductionPluginRunAdapter
 from app.plugins.plugin_registry import get_shipped_plugin_registry
@@ -84,21 +85,22 @@ class HuntExecutor:
             # Update execution status
             execution.status = "running"
             execution.started_at = get_utc_now()
-            self.db.commit()
+            with transaction(self.db):
+                self.db.add(execution)
 
             # Create HuntStep records for all steps
             step_records = {}
-            for step_def in steps:
-                step_record = HuntStep(
-                    execution_id=execution.id,
-                    step_id=step_def.step_id,
-                    plugin_name=step_def.plugin_name,
-                    status="pending",
-                    parameters={},
-                )
-                self.db.add(step_record)
-                step_records[step_def.step_id] = step_record
-            self.db.commit()
+            with transaction(self.db):
+                for step_def in steps:
+                    step_record = HuntStep(
+                        execution_id=execution.id,
+                        step_id=step_def.step_id,
+                        plugin_name=step_def.plugin_name,
+                        status="pending",
+                        parameters={},
+                    )
+                    self.db.add(step_record)
+                    step_records[step_def.step_id] = step_record
 
             # Execute steps with dependency management
             step_state = HuntStepState()
@@ -155,7 +157,8 @@ class HuntExecutor:
                         step_record.status = "failed"
                         step_record.error_details = str(e)
                         step_record.completed_at = get_utc_now()
-                        self.db.commit()
+                        with transaction(self.db):
+                            self.db.add(step_record)
 
                         # Send step failure notification
                         progress = len(step_state.completed) / len(steps)
@@ -167,7 +170,8 @@ class HuntExecutor:
 
                 # Update progress
                 execution.progress = len(step_state.completed) / len(steps)
-                self.db.commit()
+                with transaction(self.db):
+                    self.db.add(execution)
 
                 # Send WebSocket notification
                 await self.notifier.broadcast(
@@ -188,7 +192,8 @@ class HuntExecutor:
             )
             execution.completed_at = get_utc_now()
             execution.context_data = context.to_dict()
-            self.db.commit()
+            with transaction(self.db):
+                self.db.add(execution)
 
             # Send completion notification
             await self.notifier.broadcast(HuntEvent.complete(execution_id))
@@ -197,7 +202,8 @@ class HuntExecutor:
             # Handle catastrophic failure
             execution.status = "failed"
             execution.completed_at = get_utc_now()
-            self.db.commit()
+            with transaction(self.db):
+                self.db.add(execution)
 
             # Send error notification
             await self.notifier.broadcast(HuntEvent.error(execution_id, str(e)))
@@ -248,7 +254,8 @@ class HuntExecutor:
         parameters["save_to_case"] = step_def.save_to_case
 
         step_record.parameters = parameters
-        self.db.commit()
+        with transaction(self.db):
+            self.db.add(step_record)
 
         # Send notification that step is starting
         # Include step_id so frontend knows which step is running
@@ -292,7 +299,8 @@ class HuntExecutor:
         step_record.status = "failed" if errors else "completed"
         step_record.output = dict(output)
         step_record.completed_at = get_utc_now()
-        self.db.commit()
+        with transaction(self.db):
+            self.db.add(step_record)
 
     async def cancel_execution(self, execution_id: int):
         """Cancel a running hunt execution"""
@@ -307,4 +315,5 @@ class HuntExecutor:
                     step.status = "cancelled"
                     step.completed_at = get_utc_now()
 
-            self.db.commit()
+            with transaction(self.db):
+                self.db.add(execution)

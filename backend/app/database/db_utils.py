@@ -26,9 +26,8 @@ def get_session() -> Generator[Session, None, None]:
 
     Usage:
         with get_session() as session:
-            # perform database operations
-            session.add(model)
-            session.commit()
+            with transaction(session):
+                session.add(model)
     """
     session = Session(engine)
     try:

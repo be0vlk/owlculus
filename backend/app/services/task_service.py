@@ -20,6 +20,7 @@ from app.core.exceptions import (
 )
 from app.core.logging import get_security_logger
 from app.database import models
+from app.database.db_utils import transaction
 from app.services.case_access import CaseAccess
 
 
@@ -51,8 +52,8 @@ class TaskService:
         """Create a custom task template (Admin only)"""
         self.case_access.require_admin(current_user)
         template = models.TaskTemplate(**template_data, created_by_id=current_user.id)
-        self.db.add(template)
-        self.db.commit()
+        with transaction(self.db):
+            self.db.add(template)
         self.db.refresh(template)
 
         logger = get_security_logger(
@@ -72,8 +73,8 @@ class TaskService:
         self.case_access.lead(current_user, case_id)
         task = models.Task(case_id=case_id, assigned_by_id=current_user.id, **task_data)
 
-        self.db.add(task)
-        self.db.commit()
+        with transaction(self.db):
+            self.db.add(task)
         self.db.refresh(task)
 
         logger = get_security_logger(
@@ -170,8 +171,8 @@ class TaskService:
 
         task.updated_at = datetime.utcnow()
 
-        self.db.add(task)
-        self.db.commit()
+        with transaction(self.db):
+            self.db.add(task)
         self.db.refresh(task)
 
         logger = get_security_logger(
@@ -191,8 +192,8 @@ class TaskService:
         self.case_access.require_admin(current_user)
         task = self._get_task(task_id)
 
-        self.db.delete(task)
-        self.db.commit()
+        with transaction(self.db):
+            self.db.delete(task)
 
         logger = get_security_logger(
             admin_user_id=current_user.id,
@@ -220,8 +221,8 @@ class TaskService:
         task.assigned_to_id = user_id
         task.updated_at = datetime.utcnow()
 
-        self.db.add(task)
-        self.db.commit()
+        with transaction(self.db):
+            self.db.add(task)
         self.db.refresh(task)
 
         logger = get_security_logger(
@@ -255,8 +256,8 @@ class TaskService:
             task.completed_at = None
             task.completed_by_id = None
 
-        self.db.add(task)
-        self.db.commit()
+        with transaction(self.db):
+            self.db.add(task)
         self.db.refresh(task)
 
         logger = get_security_logger(
@@ -330,8 +331,8 @@ class TaskService:
 
         template.updated_at = datetime.utcnow()
 
-        self.db.add(template)
-        self.db.commit()
+        with transaction(self.db):
+            self.db.add(template)
         self.db.refresh(template)
 
         logger = get_security_logger(
@@ -369,8 +370,8 @@ class TaskService:
                 f"Cannot delete template. It is used by {tasks_using_template} task(s)"
             )
 
-        self.db.delete(template)
-        self.db.commit()
+        with transaction(self.db):
+            self.db.delete(template)
 
         logger = get_security_logger(
             user_id=current_user.id,

@@ -30,6 +30,7 @@ from app.core.file_storage import (
 from app.core.logging import get_security_logger
 from app.core.utils import get_utc_now
 from app.database import models
+from app.database.db_utils import transaction
 from app.schemas import evidence_schema as schemas
 from app.services.case_access import CaseAccess
 
@@ -136,8 +137,8 @@ class EvidenceService:
                 updated_at=get_utc_now(),
             )
 
-            self.db.add(db_evidence)
-            self.db.commit()
+            with transaction(self.db):
+                self.db.add(db_evidence)
             self.db.refresh(db_evidence)
 
             evidence_logger.bind(
@@ -241,8 +242,8 @@ class EvidenceService:
 
             db_evidence.updated_at = get_utc_now()
 
-            self.db.add(db_evidence)
-            self.db.commit()
+            with transaction(self.db):
+                self.db.add(db_evidence)
             self.db.refresh(db_evidence)
 
             evidence_logger.bind(
@@ -298,8 +299,8 @@ class EvidenceService:
                     )
                     raise DomainException("Error deleting file") from e
 
-            self.db.delete(evidence)
-            self.db.commit()
+            with transaction(self.db):
+                self.db.delete(evidence)
 
             evidence_logger.bind(
                 case_id=evidence.case_id,
@@ -690,8 +691,8 @@ class EvidenceService:
                 updated_at=get_utc_now(),
             )
 
-            self.db.add(db_folder)
-            self.db.commit()
+            with transaction(self.db):
+                self.db.add(db_folder)
             self.db.refresh(db_folder)
 
             folder_logger.bind(
@@ -760,8 +761,8 @@ class EvidenceService:
 
             db_folder.updated_at = get_utc_now()
 
-            self.db.add(db_folder)
-            self.db.commit()
+            with transaction(self.db):
+                self.db.add(db_folder)
             self.db.refresh(db_folder)
 
             folder_logger.bind(
@@ -833,11 +834,11 @@ class EvidenceService:
                 )
             ).all()
 
-            for evidence in subfolder_evidence:
-                self.db.delete(evidence)
+            with transaction(self.db):
+                for evidence in subfolder_evidence:
+                    self.db.delete(evidence)
 
-            self.db.delete(db_folder)
-            self.db.commit()
+                self.db.delete(db_folder)
 
             folder_logger.bind(
                 case_id=db_folder.case_id,
@@ -945,7 +946,8 @@ class EvidenceService:
             template_folders = template.get("folders", [])
             create_folder_hierarchy(template_folders)
 
-            self.db.commit()
+            with transaction(self.db):
+                self.db.flush()
 
             for folder in created_folders:
                 self.db.refresh(folder)
