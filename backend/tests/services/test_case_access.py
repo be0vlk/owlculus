@@ -37,6 +37,7 @@ CASE_ACCESS_METHODS = {
     "is_admin",
     "lead",
     "readable",
+    "readable_case_ids",
     "require_admin",
     "require_non_analyst",
     "writable",

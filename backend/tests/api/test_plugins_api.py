@@ -117,6 +117,12 @@ def test_correlation_catalogue_and_result_wire_contract(
                 data={"first_name": "Ada", "last_name": "Lovelace"},
                 created_by_id=test_user.id,
             ),
+            Entity(
+                case_id=source_case.id,
+                entity_type="person",
+                data={"first_name": "Ada", "last_name": "Lovelace"},
+                created_by_id=test_user.id,
+            ),
         ]
     )
     session.commit()

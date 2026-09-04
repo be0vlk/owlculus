@@ -1,6 +1,7 @@
 """Behavioral tests for cross-case entity correlation."""
 
 import pytest
+from sqlalchemy import event
 from sqlmodel import Session
 
 from app.core.exceptions import AuthorizationException
@@ -65,7 +66,7 @@ def test_correlate_returns_one_typed_name_match_for_two_seeded_cases(
     match = matches[0]
     assert match.kind is CorrelationKind.NAME
     assert match.value == "Ada Lovelace"
-    assert match.entity.id == source.id
+    assert match.source_entity.id == source.id
     assert match.other_entity.id == other.id
     assert match.other_case.id == other_case.id
 
@@ -79,6 +80,9 @@ def test_correlate_uses_case_access_for_source_and_other_cases(
     hidden_case = _case(
         session, number="CORR-ACCESS-2", title="Hidden", user=test_analyst
     )
+    visible_case = _case(
+        session, number="CORR-ACCESS-3", title="Also readable", user=test_user
+    )
     for case, user in ((source_case, test_user), (hidden_case, test_analyst)):
         _entity(
             session,
@@ -87,9 +91,29 @@ def test_correlate_uses_case_access_for_source_and_other_cases(
             entity_type="person",
             data={"first_name": "Grace", "last_name": "Hopper"},
         )
+    _entity(
+        session,
+        case=visible_case,
+        user=test_user,
+        entity_type="person",
+        data={"first_name": "Katherine", "last_name": "Johnson"},
+    )
     session.commit()
+    session.refresh(source_case)
+    session.refresh(test_user)
 
+    statements = 0
+
+    def count_statement(*_args) -> None:
+        nonlocal statements
+        statements += 1
+
+    connection = session.get_bind()
+    event.listen(connection, "before_cursor_execute", count_statement)
     assert EntityCorrelation(session).correlate(source_case, test_user) == []
+    event.remove(connection, "before_cursor_execute", count_statement)
+
+    assert statements == 4
     with pytest.raises(AuthorizationException):
         EntityCorrelation(session).correlate(hidden_case, test_user)
 
@@ -141,6 +165,26 @@ def test_correlate_returns_employer_and_domain_matches(
     assert matches[1].found_in == "website: https://example.test/about"
 
 
+def test_correlate_preserves_legacy_eligibility_for_unnamed_entities(
+    session: Session, test_user: User
+) -> None:
+    source_case = _case(
+        session, number="CORR-NAMELESS-1", title="Source", user=test_user
+    )
+    other_case = _case(session, number="CORR-NAMELESS-2", title="Other", user=test_user)
+    for case in (source_case, other_case):
+        _entity(
+            session,
+            case=case,
+            user=test_user,
+            entity_type="person",
+            data={"employer": "Analytical Engines"},
+        )
+    session.commit()
+
+    assert EntityCorrelation(session).correlate(source_case, test_user) == []
+
+
 def test_correlate_normalizes_vehicle_identifiers(
     session: Session, test_user: User
 ) -> None:
@@ -180,4 +224,4 @@ def test_correlate_normalizes_vehicle_identifiers(
         (CorrelationKind.VIN, "ABC123"),
         (CorrelationKind.LICENSE_PLATE, "OWL-123"),
     ]
-    assert all(match.entity.id == source.id for match in matches)
+    assert all(match.source_entity.id == source.id for match in matches)
