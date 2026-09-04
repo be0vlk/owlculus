@@ -8,6 +8,7 @@ from pathlib import Path
 from pydantic import ValidationError
 from sqlmodel import Session, select
 
+from app.database.db_utils import transaction
 from app.database.models import Hunt
 
 from .base_hunt import BaseHunt
@@ -61,26 +62,26 @@ class HuntRegistry:
 
     def sync(self, session: Session) -> None:
         """Upsert all checked definitions in one startup transaction."""
-        for name, hunt in self._definitions():
-            stored = session.exec(select(Hunt).where(Hunt.name == name)).first()
-            if stored is None:
-                stored = Hunt(
-                    name=name,
-                    display_name=hunt.display_name,
-                    description=hunt.description,
-                    category=hunt.category,
-                    version=hunt.version,
-                    definition_json=hunt.to_definition(),
-                    is_active=True,
-                )
-                session.add(stored)
-            else:
-                stored.display_name = hunt.display_name
-                stored.description = hunt.description
-                stored.category = hunt.category
-                stored.version = hunt.version
-                stored.definition_json = hunt.to_definition()
-        session.commit()
+        with transaction(session):
+            for name, hunt in self._definitions():
+                stored = session.exec(select(Hunt).where(Hunt.name == name)).first()
+                if stored is None:
+                    stored = Hunt(
+                        name=name,
+                        display_name=hunt.display_name,
+                        description=hunt.description,
+                        category=hunt.category,
+                        version=hunt.version,
+                        definition_json=hunt.to_definition(),
+                        is_active=True,
+                    )
+                    session.add(stored)
+                else:
+                    stored.display_name = hunt.display_name
+                    stored.description = hunt.description
+                    stored.category = hunt.category
+                    stored.version = hunt.version
+                    stored.definition_json = hunt.to_definition()
 
 
 SHIPPED_HUNT_DIRECTORY = Path(__file__).parent / "definitions"

@@ -18,6 +18,7 @@ from app.core.logging import get_security_logger
 from app.core.utils import get_utc_now
 from app.core.websocket_manager import websocket_manager
 from app.database.models import Hunt, HuntExecution, HuntStep, User
+from app.database.db_utils import transaction
 from app.hunts.hunt_executor import HuntExecutor
 from app.hunts.hunt_registry import HuntRegistry, shipped_hunt_registry
 from app.services.case_access import CaseAccess
@@ -80,8 +81,8 @@ class HuntService:
             status="pending",
             created_by_id=current_user.id,
         )
-        self.db.add(execution)
-        self.db.commit()
+        with transaction(self.db):
+            self.db.add(execution)
         self.db.refresh(execution)
 
         asyncio.create_task(self._run_hunt_async(execution.id, current_user.id))
@@ -124,7 +125,8 @@ class HuntService:
             if execution and db:
                 execution.status = "failed"
                 execution.completed_at = get_utc_now()
-                db.commit()
+                with transaction(db):
+                    db.add(execution)
         finally:
             if db:
                 db.close()

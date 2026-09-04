@@ -2,6 +2,7 @@
 
 import secrets
 from datetime import UTC, timedelta
+from enum import StrEnum
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
@@ -23,6 +24,11 @@ from app.services.case_access import CaseAccess
 
 TOKEN_LENGTH = 32
 INVITE_EXPIRATION_HOURS = 48
+
+
+class RegistrationConflict(StrEnum):
+    USERNAME = "username"
+    EMAIL = "email"
 
 
 def _is_expired(invite: models.Invite) -> bool:
@@ -54,6 +60,29 @@ class InviteService:
         return self.db.exec(
             select(models.Invite).where(models.Invite.token == token)
         ).first()
+
+    def _registration_conflict(
+        self, registration: schemas.UserRegistration
+    ) -> RegistrationConflict | None:
+        username_owner = self.db.exec(
+            select(models.User).where(models.User.username == registration.username)
+        ).first()
+        if username_owner is not None:
+            return RegistrationConflict.USERNAME
+        email_owner = self.db.exec(
+            select(models.User).where(models.User.email == registration.email)
+        ).first()
+        return RegistrationConflict.EMAIL if email_owner is not None else None
+
+    @staticmethod
+    def _duplicate_registration(
+        conflict: RegistrationConflict,
+    ) -> DuplicateResourceException:
+        messages = {
+            RegistrationConflict.USERNAME: "Username already taken",
+            RegistrationConflict.EMAIL: "Email already registered",
+        }
+        return DuplicateResourceException(messages[conflict], field=conflict.value)
 
     async def create_invite(
         self, invite: schemas.InviteCreate, *, current_user: models.User
@@ -139,16 +168,9 @@ class InviteService:
         if invite is None:
             raise ResourceNotFoundException("Invalid invite token")
 
-        username_owner = self.db.exec(
-            select(models.User).where(models.User.username == registration.username)
-        ).first()
-        if username_owner is not None:
-            raise DuplicateResourceException("Username already taken", field="username")
-        email_owner = self.db.exec(
-            select(models.User).where(models.User.email == registration.email)
-        ).first()
-        if email_owner is not None:
-            raise DuplicateResourceException("Email already registered", field="email")
+        conflict = self._registration_conflict(registration)
+        if conflict is not None:
+            raise self._duplicate_registration(conflict)
 
         user = models.User(
             username=registration.username,
@@ -164,16 +186,10 @@ class InviteService:
                 self.db.add(invite)
                 self.db.flush()
         except IntegrityError as error:
-            username_owner = self.db.exec(
-                select(models.User).where(models.User.username == registration.username)
-            ).first()
-            field = "username" if username_owner is not None else "email"
-            message = (
-                "Username already taken"
-                if field == "username"
-                else "Email already registered"
-            )
-            raise DuplicateResourceException(message, field=field) from error
+            conflict = self._registration_conflict(registration)
+            if conflict is not None:
+                raise self._duplicate_registration(conflict) from error
+            raise ValidationException("Invalid user registration") from error
         except BaseException:
             raise
         except Exception as error:
