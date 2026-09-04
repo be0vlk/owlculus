@@ -59,7 +59,7 @@ export default defineConfig({
       'vuetify/components/VTooltip',
       'vuetify/components/VWindow',
       'vuetify/components/transitions',
-      'vuetify/labs/VTreeview',
+      'vuetify/components/VTreeview',
     ],
   },
   server: {

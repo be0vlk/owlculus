@@ -9,7 +9,7 @@
     />
 
     <!-- Summary Card -->
-    <v-card v-if="summaryData" elevation="3" rounded="lg" class="summary-card">
+    <v-card v-if="summaryData" elevation="1" rounded="lg" class="summary-card">
       <v-card-title class="bg-gradient-primary">
         <v-icon icon="mdi-chart-donut" class="mr-3" />
         Subdomain Enumeration Summary
@@ -18,29 +18,29 @@
         <v-row>
           <v-col cols="12" md="4">
             <div class="text-center">
-              <div class="text-h2 font-weight-bold text-primary">
+              <div class="text-display-large font-weight-bold text-primary">
                 {{ summaryData.total_discovered }}
               </div>
-              <div class="text-subtitle-2 text-medium-emphasis">Subdomains Discovered</div>
+              <div class="text-title-small text-medium-emphasis">Subdomains Discovered</div>
             </div>
           </v-col>
           <v-col cols="12" md="4">
             <div class="text-center">
-              <div class="text-h2 font-weight-bold text-success">
+              <div class="text-display-large font-weight-bold text-success">
                 {{ summaryData.total_resolved }}
               </div>
-              <div class="text-subtitle-2 text-medium-emphasis">Successfully Resolved</div>
+              <div class="text-title-small text-medium-emphasis">Successfully Resolved</div>
             </div>
           </v-col>
           <v-col cols="12" md="4">
             <div class="text-center">
-              <div class="text-h2 font-weight-bold text-warning">
+              <div class="text-display-large font-weight-bold text-warning">
                 {{
                   Math.round((summaryData.total_resolved / summaryData.total_discovered) * 100) ||
                   0
                 }}%
               </div>
-              <div class="text-subtitle-2 text-medium-emphasis">Resolution Rate</div>
+              <div class="text-title-small text-medium-emphasis">Resolution Rate</div>
             </div>
           </v-col>
         </v-row>
@@ -48,7 +48,7 @@
         <v-divider class="my-4" />
 
         <div class="d-flex align-center justify-center flex-wrap ga-2">
-          <div class="text-subtitle-2 text-medium-emphasis mr-2">Sources Used:</div>
+          <div class="text-title-small text-medium-emphasis mr-2">Sources Used:</div>
           <v-chip
             v-for="source in summaryData.sources_used"
             :key="source"
@@ -73,7 +73,7 @@
           md="6"
           lg="4"
         >
-          <v-card elevation="2" rounded="lg" class="h-100 subdomain-card">
+          <v-card elevation="1" rounded="lg" class="h-100 subdomain-card">
             <v-card-title class="d-flex align-center pa-3 bg-primary-lighten-5">
               <v-icon
                 :icon="subdomain.resolved ? 'mdi-check-circle' : 'mdi-subdirectory-arrow-right'"
@@ -82,7 +82,7 @@
                 size="small"
               />
               <div class="flex-grow-1 text-truncate">
-                <div class="text-body-1 font-weight-medium text-truncate">
+                <div class="text-body-large font-weight-medium text-truncate">
                   {{ subdomain.subdomain }}
                 </div>
               </div>
@@ -100,7 +100,7 @@
               <!-- IP Address -->
               <div v-if="subdomain.ip" class="d-flex align-center mb-2">
                 <v-icon icon="mdi-ip-network" size="small" class="mr-2" color="success" />
-                <code class="text-body-2 flex-grow-1">{{ subdomain.ip }}</code>
+                <code class="text-body-medium flex-grow-1">{{ subdomain.ip }}</code>
                 <v-btn
                   icon="mdi-content-copy"
                   size="x-small"
@@ -269,6 +269,8 @@ const copyAsHostsFile = () => {
 <style scoped>
 .subdomain-results-grid {
   margin-top: 1.5rem;
+  max-height: 600px;
+  overflow-y: auto;
 }
 
 .subdomain-card {
@@ -318,11 +320,6 @@ code {
 }
 
 /* Custom scrollbar for better UX */
-.subdomain-results-grid {
-  max-height: 600px;
-  overflow-y: auto;
-}
-
 .subdomain-results-grid::-webkit-scrollbar {
   width: 8px;
 }

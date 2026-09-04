@@ -7,7 +7,7 @@
       </v-card-title>
 
       <v-card-text>
-        <v-form ref="form" v-model="valid" lazy-validation>
+        <v-form ref="form" v-model="valid" validate-on="lazy">
           <v-text-field
             v-model="newName"
             label="Name"

@@ -4,8 +4,8 @@
       <v-card-title class="d-flex align-center pa-4 bg-primary">
         <v-icon start color="white" size="large">mdi-email-plus</v-icon>
         <div class="text-white">
-          <div class="text-h5 font-weight-bold">Generate Invite</div>
-          <div class="text-subtitle-2 text-blue-lighten-2">Create a new user invitation link</div>
+          <div class="text-headline-small font-weight-bold">Generate Invite</div>
+          <div class="text-title-small text-blue-lighten-2">Create a new user invitation link</div>
         </div>
       </v-card-title>
 
@@ -41,10 +41,10 @@
                   <template #item="{ props, item }">
                     <v-list-item v-bind="props">
                       <template #prepend>
-                        <v-icon :icon="item.raw.icon" :color="item.raw.color" />
+                        <v-icon :icon="item.icon" :color="item.color" />
                       </template>
-                      <v-list-item-title>{{ item.raw.title }}</v-list-item-title>
-                      <v-list-item-subtitle>{{ item.raw.description }}</v-list-item-subtitle>
+                      <v-list-item-title>{{ item.title }}</v-list-item-title>
+                      <v-list-item-subtitle>{{ item.description }}</v-list-item-subtitle>
                     </v-list-item>
                   </template>
                 </v-select>

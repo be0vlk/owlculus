@@ -7,8 +7,8 @@
       <v-card-title class="d-flex align-center pa-4 bg-surface">
         <v-icon class="me-3" color="primary" icon="mdi-account-group" size="large" />
         <div class="flex-grow-1">
-          <div class="text-h6 font-weight-bold">User Management</div>
-          <div class="text-body-2 text-medium-emphasis">
+          <div class="text-title-large font-weight-bold">User Management</div>
+          <div class="text-body-medium text-medium-emphasis">
             Manage system users and their permissions
           </div>
         </div>
@@ -141,5 +141,5 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-@import '@/styles/admin-dashboard-table.css';
+@import url('@/styles/admin-dashboard-table.css');
 </style>

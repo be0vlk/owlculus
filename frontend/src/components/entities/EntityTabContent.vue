@@ -103,5 +103,5 @@ function updateFieldValue(section, field, value) {
 </script>
 
 <style scoped>
-@import '../../styles/entity-editor.css';
+@import url('../../styles/entity-editor.css');
 </style>

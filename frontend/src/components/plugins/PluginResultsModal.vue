@@ -11,8 +11,10 @@
       <v-card-title class="d-flex align-center ga-3 px-6 py-4">
         <v-icon :icon="getPluginIcon(pluginName)" size="24" />
         <div class="flex-grow-1">
-          <h2 class="text-h5 font-weight-medium">{{ getPluginDisplayName(pluginName) }} Results</h2>
-          <div class="text-body-2 text-medium-emphasis">
+          <h2 class="text-headline-small font-weight-medium">
+            {{ getPluginDisplayName(pluginName) }} Results
+          </h2>
+          <div class="text-body-medium text-medium-emphasis">
             Executed {{ formatExecutionTime(executionTime) }}
           </div>
         </div>
@@ -43,7 +45,7 @@
             variant="outlined"
             class="mb-6"
           >
-            <v-card-title class="text-subtitle-1 py-3">
+            <v-card-title class="text-body-large py-3">
               <v-icon icon="mdi-cog" class="mr-2" size="20" />
               Execution Parameters
             </v-card-title>
@@ -77,14 +79,14 @@
                 Plugin Execution Failed
               </div>
             </template>
-            <div class="text-body-1">{{ error }}</div>
+            <div class="text-body-large">{{ error }}</div>
           </v-alert>
 
           <!-- No Results State -->
           <v-card v-else variant="outlined" class="text-center pa-8">
             <v-icon class="mb-4" color="grey-darken-1" icon="mdi-file-search-outline" size="64" />
-            <h3 class="text-h6 mb-2">No Results Available</h3>
-            <p class="text-body-2 text-medium-emphasis">
+            <h3 class="text-title-large mb-2">No Results Available</h3>
+            <p class="text-body-medium text-medium-emphasis">
               Plugin execution did not produce any results.
             </p>
           </v-card>

@@ -3,8 +3,8 @@
     <!-- Header -->
     <div class="d-flex align-center justify-space-between mb-4">
       <div>
-        <div class="text-h6">Tasks</div>
-        <div class="text-body-2 text-medium-emphasis">Manage tasks for this case</div>
+        <div class="text-title-large">Tasks</div>
+        <div class="text-body-medium text-medium-emphasis">Manage tasks for this case</div>
       </div>
       <v-btn v-if="canCreateTasks" color="primary" @click="showCreateDialog = true">
         <v-icon start>mdi-plus</v-icon>

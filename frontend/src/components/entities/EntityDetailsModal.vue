@@ -3,7 +3,7 @@
     <v-card>
       <v-card-title class="d-flex align-center">
         <v-icon start :icon="getEntityIcon" color="primary" />
-        <span class="text-h5">{{ getEntityTitle }}</span>
+        <span class="text-headline-small">{{ getEntityTitle }}</span>
         <v-spacer />
         <v-chip :color="isEditing ? 'warning' : 'primary'" size="small" variant="tonal">
           {{ isEditing ? 'Editing' : 'View Mode' }}
@@ -151,12 +151,12 @@ function handleFieldUpdate(fieldPath, value) {
     const parts = fieldPath.split('.')
     const parentField = parts[0]
     const childField = parts[1]
-    
+
     // Ensure parent object exists
     if (!formData.value.data[parentField]) {
       formData.value.data[parentField] = {}
     }
-    
+
     formData.value.data[parentField][childField] = value
   } else {
     formData.value.data[fieldPath] = value

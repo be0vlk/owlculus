@@ -7,9 +7,9 @@
       <v-container class="pa-6">
         <!-- Page Header -->
         <div class="mb-6">
-          <v-row align="center" justify="space-between">
+          <v-row class="align-center justify-space-between">
             <v-col>
-              <h1 class="text-h4 font-weight-bold">Settings</h1>
+              <h1 class="text-headline-large font-weight-bold">Settings</h1>
             </v-col>
           </v-row>
         </div>
@@ -17,10 +17,10 @@
         <!-- Password Reset Section -->
         <v-card>
           <v-card-title>
-            <span class="text-h5">Change Password</span>
+            <span class="text-headline-small">Change Password</span>
           </v-card-title>
           <v-card-text>
-            <p class="text-body-2 mb-6">
+            <p class="text-body-medium mb-6">
               Update your password by entering your current password and a new password.
             </p>
 

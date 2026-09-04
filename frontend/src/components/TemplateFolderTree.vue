@@ -4,7 +4,7 @@
       <div class="folder-item">
         <v-icon :icon="getFolderIcon()" size="small" class="mr-2" :color="getFolderColor()" />
         <span>{{ folder.name }}</span>
-        <span v-if="folder.description" class="text-caption text-medium-emphasis ml-2">
+        <span v-if="folder.description" class="text-body-small text-medium-emphasis ml-2">
           ({{ folder.description }})
         </span>
       </div>
@@ -41,7 +41,7 @@ defineProps({
 
 .subfolder-container {
   margin-left: 20px;
-  border-left: 1px solid rgba(var(--v-theme-outline), 0.2);
+  border-left: 1px solid rgb(var(--v-theme-outline), 0.2);
   padding-left: 12px;
   margin-bottom: 8px;
 }

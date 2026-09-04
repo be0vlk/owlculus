@@ -3,12 +3,12 @@
     <v-card prepend-icon="mdi-account-group" title="Manage Case Users">
       <v-card-text>
         <!-- Loading State -->
-        <v-row v-if="loading" justify="center">
+        <v-row class="justify-center" v-if="loading">
           <v-col class="text-center" cols="12">
             <v-card class="pa-8" variant="outlined">
               <v-progress-circular class="mb-4" color="primary" indeterminate size="64" width="4" />
-              <div class="text-h6">Loading Users...</div>
-              <div class="text-body-2 text-medium-emphasis">
+              <div class="text-title-large">Loading Users...</div>
+              <div class="text-body-medium text-medium-emphasis">
                 Please wait while we fetch user data
               </div>
             </v-card>
@@ -31,7 +31,7 @@
         <div v-else>
           <!-- Current Users Section -->
           <v-card class="mb-6" variant="outlined">
-            <v-card-title class="text-subtitle-1 pb-2">
+            <v-card-title class="text-body-large pb-2">
               <v-icon start>mdi-account-check</v-icon>
               Current Case Users
             </v-card-title>
@@ -105,14 +105,14 @@
 
           <!-- Add New User Section -->
           <v-card variant="outlined">
-            <v-card-title class="text-subtitle-1 pb-2">
+            <v-card-title class="text-body-large pb-2">
               <v-icon start>mdi-account-plus</v-icon>
               Add New User
             </v-card-title>
 
             <v-card-text>
               <v-form ref="formRef" v-model="isFormValid">
-                <v-row align="center">
+                <v-row class="align-center">
                   <v-col cols="12" md="6">
                     <v-select
                       v-model="selectedUserId"

@@ -6,10 +6,10 @@
           {{ user ? 'mdi-account-edit' : 'mdi-account-plus' }}
         </v-icon>
         <div class="text-white">
-          <div class="text-h5 font-weight-bold">
+          <div class="text-headline-small font-weight-bold">
             {{ user ? 'Edit User' : 'Add New User' }}
           </div>
-          <div class="text-subtitle-2 text-blue-lighten-2">
+          <div class="text-title-small text-blue-lighten-2">
             {{ user ? 'Update user information and permissions' : 'Create a new user account' }}
           </div>
         </div>
@@ -95,10 +95,10 @@
                   <template #item="{ props, item }">
                     <v-list-item v-bind="props">
                       <template #prepend>
-                        <v-icon :icon="item.raw.icon" :color="item.raw.color" />
+                        <v-icon :icon="item.icon" :color="item.color" />
                       </template>
-                      <v-list-item-title>{{ item.raw.title }}</v-list-item-title>
-                      <v-list-item-subtitle>{{ item.raw.description }}</v-list-item-subtitle>
+                      <v-list-item-title>{{ item.title }}</v-list-item-title>
+                      <v-list-item-subtitle>{{ item.description }}</v-list-item-subtitle>
                     </v-list-item>
                   </template>
                 </v-select>

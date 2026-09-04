@@ -30,32 +30,34 @@
       <v-col cols="12" md="3" sm="6">
         <v-card variant="outlined">
           <v-card-text class="text-center pa-4">
-            <div class="text-h4 font-weight-bold">{{ stats.total }}</div>
-            <div class="text-body-2 text-medium-emphasis">Total Tasks</div>
+            <div class="text-headline-large font-weight-bold">{{ stats.total }}</div>
+            <div class="text-body-medium text-medium-emphasis">Total Tasks</div>
           </v-card-text>
         </v-card>
       </v-col>
       <v-col cols="12" md="3" sm="6">
         <v-card variant="outlined">
           <v-card-text class="text-center pa-4">
-            <div class="text-h4 font-weight-bold text-primary">{{ stats.myTasks }}</div>
-            <div class="text-body-2 text-medium-emphasis">My Tasks</div>
+            <div class="text-headline-large font-weight-bold text-primary">{{ stats.myTasks }}</div>
+            <div class="text-body-medium text-medium-emphasis">My Tasks</div>
           </v-card-text>
         </v-card>
       </v-col>
       <v-col cols="12" md="3" sm="6">
         <v-card variant="outlined">
           <v-card-text class="text-center pa-4">
-            <div class="text-h4 font-weight-bold text-warning">{{ stats.overdue }}</div>
-            <div class="text-body-2 text-medium-emphasis">Overdue</div>
+            <div class="text-headline-large font-weight-bold text-warning">{{ stats.overdue }}</div>
+            <div class="text-body-medium text-medium-emphasis">Overdue</div>
           </v-card-text>
         </v-card>
       </v-col>
       <v-col cols="12" md="3" sm="6">
         <v-card variant="outlined">
           <v-card-text class="text-center pa-4">
-            <div class="text-h4 font-weight-bold text-success">{{ stats.completed }}</div>
-            <div class="text-body-2 text-medium-emphasis">Completed</div>
+            <div class="text-headline-large font-weight-bold text-success">
+              {{ stats.completed }}
+            </div>
+            <div class="text-body-medium text-medium-emphasis">Completed</div>
           </v-card-text>
         </v-card>
       </v-col>
@@ -67,8 +69,8 @@
       <v-card-title class="d-flex align-center pa-4 bg-surface">
         <v-icon class="me-3" color="primary" icon="mdi-format-list-checks" size="large" />
         <div class="flex-grow-1">
-          <div class="text-h6 font-weight-bold">Task Management</div>
-          <div class="text-body-2 text-medium-emphasis">
+          <div class="text-title-large font-weight-bold">Task Management</div>
+          <div class="text-body-medium text-medium-emphasis">
             Track and manage tasks across all cases
           </div>
         </div>
@@ -78,11 +80,11 @@
 
       <!-- Filters and Search Toolbar -->
       <v-card-text class="pa-4">
-        <v-row align="center" class="mb-0">
+        <v-row class="mb-0 align-center">
           <!-- Quick Filter Chips -->
           <v-col cols="12" md="8">
             <div class="d-flex align-center ga-2 flex-wrap">
-              <span class="text-body-2 font-weight-medium me-2">Filter:</span>
+              <span class="text-body-medium font-weight-medium me-2">Filter:</span>
               <v-chip-group
                 v-model="activeQuickFilter"
                 color="primary"

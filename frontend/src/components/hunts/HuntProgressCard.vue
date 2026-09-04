@@ -1,13 +1,13 @@
 <template>
-  <v-card class="hunt-progress-card" elevation="2" rounded="lg">
+  <v-card class="hunt-progress-card" elevation="1" rounded="lg">
     <!-- Header -->
     <v-card-title class="d-flex align-center pa-4 text-no-wrap">
       <v-avatar :color="statusColor" size="40" class="me-3">
         <v-icon :icon="statusIcon" color="white" />
       </v-avatar>
       <div class="flex-grow-1 text-truncate">
-        <div class="text-h6 font-weight-bold text-truncate">{{ huntDisplayTitle }}</div>
-        <div class="text-caption text-medium-emphasis text-truncate">
+        <div class="text-title-large font-weight-bold text-truncate">{{ huntDisplayTitle }}</div>
+        <div class="text-body-small text-medium-emphasis text-truncate">
           Execution #{{ execution.id }}
           <span v-if="execution.hunt">• {{ execution.hunt.category }}</span>
         </div>
@@ -26,22 +26,22 @@
         <div class="d-flex align-center flex-wrap">
           <div class="d-flex align-center me-4 mb-1">
             <v-icon icon="mdi-clock-start" size="small" class="me-1" />
-            <span class="text-caption">Started: {{ formatDate(execution.started_at) }}</span>
+            <span class="text-body-small">Started: {{ formatDate(execution.started_at) }}</span>
           </div>
           <div v-if="execution.completed_at" class="d-flex align-center mb-1">
             <v-icon icon="mdi-clock-end" size="small" class="me-1" />
-            <span class="text-caption">Completed: {{ formatDate(execution.completed_at) }}</span>
+            <span class="text-body-small">Completed: {{ formatDate(execution.completed_at) }}</span>
           </div>
           <div v-else-if="execution.status === 'running'" class="d-flex align-center mb-1">
             <v-icon icon="mdi-clock" size="small" class="me-1" />
-            <span class="text-caption">{{ elapsedTime }}</span>
+            <span class="text-body-small">{{ elapsedTime }}</span>
           </div>
         </div>
       </div>
 
       <!-- Step Progress -->
       <div v-if="execution.steps && execution.steps.length > 0" class="mb-4">
-        <div class="text-body-2 font-weight-medium mb-3">Hunt Steps</div>
+        <div class="text-body-medium font-weight-medium mb-3">Hunt Steps</div>
         <div class="step-list">
           <div
             v-for="(step, index) in execution.steps"
@@ -55,8 +55,10 @@
 
             <!-- Step Info -->
             <div class="flex-grow-1 text-truncate">
-              <div class="text-body-2 text-truncate">{{ step.step_id || `Step ${index + 1}` }}</div>
-              <div class="text-caption text-medium-emphasis text-truncate">
+              <div class="text-body-medium text-truncate">
+                {{ step.step_id || `Step ${index + 1}` }}
+              </div>
+              <div class="text-body-small text-medium-emphasis text-truncate">
                 {{ step.plugin_name }}
               </div>
             </div>
@@ -76,25 +78,25 @@
         variant="tonal"
         class="mb-4"
       >
-        <div class="text-body-2 font-weight-medium mb-1">
+        <div class="text-body-medium font-weight-medium mb-1">
           {{ execution.status === 'failed' ? 'Hunt Failed' : 'Some Steps Failed' }}
         </div>
-        <div v-if="failedSteps.length > 0" class="text-caption">
+        <div v-if="failedSteps.length > 0" class="text-body-small">
           Failed steps: {{ failedSteps.map((s) => s.step_id).join(', ') }}
         </div>
       </v-alert>
 
       <!-- Results Summary -->
       <div v-if="execution.status === 'completed' || execution.status === 'partial'" class="mb-4">
-        <div class="text-body-2 font-weight-medium mb-2">Results Summary</div>
+        <div class="text-body-medium font-weight-medium mb-2">Results Summary</div>
         <div class="d-flex align-center flex-wrap">
           <div class="d-flex align-center me-4 mb-1">
             <v-icon icon="mdi-check-circle" color="success" size="small" class="me-1" />
-            <span class="text-caption">{{ completedSteps.length }} steps completed</span>
+            <span class="text-body-small">{{ completedSteps.length }} steps completed</span>
           </div>
           <div v-if="failedSteps.length > 0" class="d-flex align-center mb-1">
             <v-icon icon="mdi-alert-circle" color="error" size="small" class="me-1" />
-            <span class="text-caption">{{ failedSteps.length }} steps failed</span>
+            <span class="text-body-small">{{ failedSteps.length }} steps failed</span>
           </div>
         </div>
       </div>
@@ -366,8 +368,7 @@ watch(
 
 .step-list {
   max-height: 200px;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden auto;
 }
 
 .step-item {
@@ -378,7 +379,7 @@ watch(
 }
 
 .step-item:hover {
-  background-color: rgba(var(--v-theme-surface-variant), 0.1);
+  background-color: rgb(var(--v-theme-surface-variant), 0.1);
 }
 
 /* Ensure proper text truncation */
@@ -389,22 +390,22 @@ watch(
 }
 
 /* Responsive adjustments */
-@media (max-width: 600px) {
+@media (width <= 600px) {
   .hunt-progress-card {
     min-height: 280px;
   }
 
   .hunt-progress-card .v-card-title {
-    padding: 12px !important;
+    padding: 12px;
   }
 
   .hunt-progress-card .v-card-text {
-    padding: 12px !important;
+    padding: 12px;
   }
 
   .hunt-progress-card .v-card-actions {
-    padding: 12px !important;
-    padding-top: 0 !important;
+    padding: 12px;
+    padding-top: 0;
   }
 }
 

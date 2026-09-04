@@ -60,7 +60,7 @@ describe('Vite development server', () => {
         'vuetify/components/VTimeline',
         'vuetify/components/VToolbar',
         'vuetify/components/VWindow',
-        'vuetify/labs/VTreeview',
+        'vuetify/components/VTreeview',
       ]),
     )
   })

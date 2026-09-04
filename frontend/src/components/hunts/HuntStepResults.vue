@@ -4,18 +4,18 @@
     <div class="mb-4">
       <v-row>
         <v-col cols="12" md="6">
-          <div class="text-caption font-weight-medium">Plugin</div>
-          <div class="text-body-2">{{ step.plugin_name }}</div>
+          <div class="text-body-small font-weight-medium">Plugin</div>
+          <div class="text-body-medium">{{ step.plugin_name }}</div>
         </v-col>
         <v-col cols="12" md="6">
-          <div class="text-caption font-weight-medium">Step ID</div>
-          <div class="text-body-2">{{ step.step_id }}</div>
+          <div class="text-body-small font-weight-medium">Step ID</div>
+          <div class="text-body-medium">{{ step.step_id }}</div>
         </v-col>
       </v-row>
 
       <!-- Parameters -->
       <div v-if="step.parameters && Object.keys(step.parameters).length > 0" class="mt-3">
-        <div class="text-caption font-weight-medium mb-2">Parameters</div>
+        <div class="text-body-small font-weight-medium mb-2">Parameters</div>
         <v-chip
           v-for="(value, key) in step.parameters"
           :key="key"
@@ -45,12 +45,12 @@
             <!-- Generic result display -->
             <div v-if="typeof result === 'object'">
               <div v-for="(value, key) in result" :key="key" class="mb-1">
-                <span class="text-caption font-weight-medium">{{ formatKey(key) }}:</span>
-                <span class="text-caption ml-2">{{ formatValue(value) }}</span>
+                <span class="text-body-small font-weight-medium">{{ formatKey(key) }}:</span>
+                <span class="text-body-small ml-2">{{ formatValue(value) }}</span>
               </div>
             </div>
             <!-- Simple value display -->
-            <div v-else class="text-body-2">
+            <div v-else class="text-body-medium">
               {{ result }}
             </div>
           </v-card-text>
@@ -61,25 +61,25 @@
     <!-- Empty state for completed steps -->
     <div v-else-if="step.status === 'completed'" class="text-center pa-4">
       <v-icon icon="mdi-information-outline" color="grey" class="mb-2" />
-      <div class="text-caption text-medium-emphasis">No results to display</div>
+      <div class="text-body-small text-medium-emphasis">No results to display</div>
     </div>
 
     <!-- Pending state -->
     <div v-else-if="step.status === 'pending'" class="text-center pa-4">
       <v-icon icon="mdi-clock-outline" color="grey" class="mb-2" />
-      <div class="text-caption text-medium-emphasis">Step not yet executed</div>
+      <div class="text-body-small text-medium-emphasis">Step not yet executed</div>
     </div>
 
     <!-- Running state -->
     <div v-else-if="step.status === 'running'" class="text-center pa-4">
       <v-progress-circular indeterminate size="32" color="primary" />
-      <div class="text-caption text-medium-emphasis mt-2">Step is currently running...</div>
+      <div class="text-body-small text-medium-emphasis mt-2">Step is currently running...</div>
     </div>
 
     <!-- Skipped state -->
     <div v-else-if="step.status === 'skipped'" class="text-center pa-4">
       <v-icon icon="mdi-skip-next" color="warning" class="mb-2" />
-      <div class="text-caption text-medium-emphasis">Step was skipped</div>
+      <div class="text-body-small text-medium-emphasis">Step was skipped</div>
     </div>
   </div>
 </template>

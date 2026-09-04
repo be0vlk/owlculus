@@ -40,8 +40,8 @@
           indeterminate
           class="mb-4 d-block mx-auto"
         />
-        <div class="text-h6 text-center">Loading task...</div>
-        <div class="text-body-2 text-medium-emphasis text-center">
+        <div class="text-title-large text-center">Loading task...</div>
+        <div class="text-body-medium text-medium-emphasis text-center">
           Please wait while we load the task details
         </div>
       </v-card>
@@ -55,8 +55,10 @@
         <v-card-title class="d-flex align-center pa-4 bg-surface">
           <v-icon icon="mdi-checkbox-marked-circle" color="primary" size="large" class="me-3" />
           <div class="flex-grow-1">
-            <div class="text-h6 font-weight-bold">Task Information</div>
-            <div class="text-body-2 text-medium-emphasis">Details and metadata for this task</div>
+            <div class="text-title-large font-weight-bold">Task Information</div>
+            <div class="text-body-medium text-medium-emphasis">
+              Details and metadata for this task
+            </div>
           </div>
           <v-chip
             :color="isEditing ? 'warning' : 'primary'"
@@ -74,8 +76,10 @@
           <v-row>
             <v-col cols="12" lg="8">
               <div class="mb-6">
-                <div class="text-subtitle-1 font-weight-medium mb-2">Description</div>
-                <div class="text-body-1">{{ task.description || 'No description provided' }}</div>
+                <div class="text-body-large font-weight-medium mb-2">Description</div>
+                <div class="text-body-large">
+                  {{ task.description || 'No description provided' }}
+                </div>
               </div>
 
               <!-- Additional Details -->
@@ -84,29 +88,29 @@
                   <v-col cols="12" sm="6">
                     <div class="d-flex align-center mb-3">
                       <v-icon icon="mdi-calendar" size="small" class="me-2 text-medium-emphasis" />
-                      <span class="text-body-2 text-medium-emphasis me-2">Created:</span>
-                      <span class="text-body-2">
+                      <span class="text-body-medium text-medium-emphasis me-2">Created:</span>
+                      <span class="text-body-medium">
                         {{ formatDate(task.created_at) }}
                       </span>
                     </div>
                     <div class="d-flex align-center mb-3">
                       <v-icon icon="mdi-account" size="small" class="me-2 text-medium-emphasis" />
-                      <span class="text-body-2 text-medium-emphasis me-2">Created by:</span>
-                      <span class="text-body-2">{{ task.assigned_by.username }}</span>
+                      <span class="text-body-medium text-medium-emphasis me-2">Created by:</span>
+                      <span class="text-body-medium">{{ task.assigned_by.username }}</span>
                     </div>
                   </v-col>
                   <v-col cols="12" sm="6">
                     <div v-if="task.completed_at" class="d-flex align-center mb-3">
                       <v-icon icon="mdi-check-circle" size="small" class="me-2 text-success" />
-                      <span class="text-body-2 text-medium-emphasis me-2">Completed:</span>
-                      <span class="text-body-2">
+                      <span class="text-body-medium text-medium-emphasis me-2">Completed:</span>
+                      <span class="text-body-medium">
                         {{ formatDate(task.completed_at) }}
                       </span>
                     </div>
                     <div v-if="task.completed_by" class="d-flex align-center mb-3">
                       <v-icon icon="mdi-account-check" size="small" class="me-2 text-success" />
-                      <span class="text-body-2 text-medium-emphasis me-2">Completed by:</span>
-                      <span class="text-body-2">{{ task.completed_by.username }}</span>
+                      <span class="text-body-medium text-medium-emphasis me-2">Completed by:</span>
+                      <span class="text-body-medium">{{ task.completed_by.username }}</span>
                     </div>
                   </v-col>
                 </v-row>
@@ -115,12 +119,12 @@
               <!-- Custom Fields -->
               <div v-if="customFields.length > 0" class="mt-6">
                 <v-divider class="mb-4" />
-                <div class="text-subtitle-1 font-weight-medium mb-3">Additional Information</div>
+                <div class="text-body-large font-weight-medium mb-3">Additional Information</div>
                 <v-row>
                   <v-col v-for="field in customFields" :key="field.name" cols="12" sm="6" md="4">
                     <div class="mb-3">
                       <div class="d-flex align-center mb-1">
-                        <span class="text-body-2 text-medium-emphasis">{{ field.label }}</span>
+                        <span class="text-body-medium text-medium-emphasis">{{ field.label }}</span>
                         <v-btn
                           v-if="canEditTask && editingCustomField !== field.name"
                           icon="mdi-pencil"
@@ -151,7 +155,7 @@
                           </v-btn>
                         </div>
                       </div>
-                      <div v-else class="text-body-2">
+                      <div v-else class="text-body-medium">
                         <span v-if="field.type === 'boolean'">
                           <v-icon
                             :icon="
@@ -172,7 +176,10 @@
                           {{ task.custom_fields[field.name] || 'Not provided' }}
                         </span>
                       </div>
-                      <div v-if="field.description" class="text-caption text-medium-emphasis mt-1">
+                      <div
+                        v-if="field.description"
+                        class="text-body-small text-medium-emphasis mt-1"
+                      >
                         {{ field.description }}
                       </div>
                     </div>
@@ -186,7 +193,7 @@
                 <v-card-text class="pa-4">
                   <!-- Status -->
                   <div class="mb-4">
-                    <div class="text-body-2 text-medium-emphasis mb-1">Status</div>
+                    <div class="text-body-medium text-medium-emphasis mb-1">Status</div>
                     <v-chip
                       :color="TASK_STATUS_COLORS[task.status]"
                       size="small"
@@ -199,7 +206,7 @@
 
                   <!-- Priority -->
                   <div class="mb-4">
-                    <div class="text-body-2 text-medium-emphasis mb-1">Priority</div>
+                    <div class="text-body-medium text-medium-emphasis mb-1">Priority</div>
                     <v-chip :color="TASK_PRIORITY_COLORS[task.priority]" size="small">
                       <v-icon size="small" start>{{ TASK_PRIORITY_ICONS[task.priority] }}</v-icon>
                       {{ TASK_PRIORITY_LABELS[task.priority] }}
@@ -208,12 +215,12 @@
 
                   <!-- Assignee -->
                   <div class="mb-4">
-                    <div class="text-body-2 text-medium-emphasis mb-1">Assigned To</div>
+                    <div class="text-body-medium text-medium-emphasis mb-1">Assigned To</div>
                     <div class="d-flex align-center">
-                      <span v-if="task.assigned_to" class="text-body-2">
+                      <span v-if="task.assigned_to" class="text-body-medium">
                         {{ task.assigned_to.username }}
                       </span>
-                      <span v-else class="text-body-2 text-medium-emphasis">Unassigned</span>
+                      <span v-else class="text-body-medium text-medium-emphasis">Unassigned</span>
                       <v-btn
                         v-if="canAssignTask"
                         class="ml-2"
@@ -229,7 +236,7 @@
 
                   <!-- Case -->
                   <div class="mb-4">
-                    <div class="text-body-2 text-medium-emphasis mb-1">Case</div>
+                    <div class="text-body-medium text-medium-emphasis mb-1">Case</div>
                     <v-btn
                       variant="text"
                       size="small"
@@ -242,8 +249,8 @@
 
                   <!-- Due Date -->
                   <div v-if="task.due_date" class="mb-4">
-                    <div class="text-body-2 text-medium-emphasis mb-1">Due Date</div>
-                    <div :class="{ 'text-error': isOverdue }" class="text-body-2">
+                    <div class="text-body-medium text-medium-emphasis mb-1">Due Date</div>
+                    <div :class="{ 'text-error': isOverdue }" class="text-body-medium">
                       <v-icon
                         v-if="isOverdue"
                         icon="mdi-alert"

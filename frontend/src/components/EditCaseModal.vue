@@ -10,7 +10,7 @@
         <v-form ref="formRef" v-model="isFormValid" @submit.prevent="handleSubmit">
           <!-- Case Details Section -->
           <v-card variant="outlined" class="mb-6">
-            <v-card-title class="text-subtitle-1 pb-2">
+            <v-card-title class="text-body-large pb-2">
               <v-icon start>mdi-information</v-icon>
               Case Information
             </v-card-title>
@@ -44,7 +44,7 @@
 
           <!-- Case Metadata (Read-only info) -->
           <v-card variant="outlined" v-if="caseData.created_at">
-            <v-card-title class="text-subtitle-1 pb-2">
+            <v-card-title class="text-body-large pb-2">
               <v-icon start>mdi-clock</v-icon>
               Case Timeline
             </v-card-title>
@@ -53,7 +53,7 @@
               <v-row>
                 <v-col cols="12" md="6">
                   <div class="mb-4">
-                    <div class="text-caption text-medium-emphasis mb-1">
+                    <div class="text-body-small text-medium-emphasis mb-1">
                       <v-icon size="16" class="me-1">mdi-calendar-plus</v-icon>
                       Created
                     </div>
@@ -65,7 +65,7 @@
 
                 <v-col cols="12" md="6">
                   <div class="mb-4">
-                    <div class="text-caption text-medium-emphasis mb-1">
+                    <div class="text-body-small text-medium-emphasis mb-1">
                       <v-icon size="16" class="me-1">mdi-calendar-edit</v-icon>
                       Last Updated
                     </div>

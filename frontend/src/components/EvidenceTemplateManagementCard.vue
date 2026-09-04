@@ -6,8 +6,8 @@
           <div class="d-flex align-center w-100">
             <v-icon icon="mdi-folder-multiple" color="primary" size="large" class="me-3" />
             <div class="flex-grow-1">
-              <div class="text-h6 font-weight-bold">Evidence Folder Templates</div>
-              <div class="text-body-2 text-medium-emphasis">
+              <div class="text-title-large font-weight-bold">Evidence Folder Templates</div>
+              <div class="text-body-medium text-medium-emphasis">
                 Configure folder structures for different types of investigations
               </div>
             </div>
@@ -71,7 +71,7 @@
                 >
                   <div class="template-editor">
                     <div class="d-flex align-center justify-space-between mb-4">
-                      <div class="text-h6 font-weight-bold">Folder Structure</div>
+                      <div class="text-title-large font-weight-bold">Folder Structure</div>
                       <v-btn
                         color="primary"
                         prepend-icon="mdi-folder-plus"
@@ -105,8 +105,10 @@
                         icon="mdi-folder-outline"
                         size="48"
                       />
-                      <div class="text-h6 font-weight-medium mb-2">No Folder Structure</div>
-                      <p class="text-body-2 text-medium-emphasis mb-4">
+                      <div class="text-title-large font-weight-medium mb-2">
+                        No Folder Structure
+                      </div>
+                      <p class="text-body-medium text-medium-emphasis mb-4">
                         No folders configured for this template. Click "Add Folder" to get started.
                       </p>
                     </div>

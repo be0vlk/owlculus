@@ -3,7 +3,7 @@
     <!-- Search and Filter Bar -->
     <v-card variant="outlined" class="mb-4">
       <v-card-text>
-        <v-row align="center">
+        <v-row class="align-center">
           <v-col cols="12" md="4">
             <v-text-field
               v-model="searchQuery"
@@ -49,14 +49,14 @@
     <!-- Loading State -->
     <div v-if="loading" class="text-center pa-8">
       <v-progress-circular indeterminate size="64" />
-      <div class="text-h6 mt-4">Loading execution history...</div>
+      <div class="text-title-large mt-4">Loading execution history...</div>
     </div>
 
     <!-- Empty State -->
     <v-card v-else-if="filteredExecutions.length === 0" variant="outlined" class="text-center pa-8">
       <v-icon icon="mdi-history" size="64" color="grey" class="mb-4" />
-      <div class="text-h6 mb-2">No executions found</div>
-      <div class="text-body-2 text-medium-emphasis">
+      <div class="text-title-large mb-2">No executions found</div>
+      <div class="text-body-medium text-medium-emphasis">
         {{
           hasActiveFilters
             ? 'Try adjusting your search or filter criteria'
@@ -87,13 +87,13 @@
             >
               <v-icon :icon="getCategoryIcon(item.hunt_category)" size="small" />
             </v-avatar>
-            <div class="text-body-2 font-weight-medium">{{ item.hunt_display_name }}</div>
+            <div class="text-body-medium font-weight-medium">{{ item.hunt_display_name }}</div>
           </div>
         </template>
 
         <!-- Target Column -->
         <template #[`item.target`]="{ item }">
-          <div class="text-body-2">
+          <div class="text-body-medium">
             {{ getTargetDisplay(item) }}
           </div>
         </template>
@@ -121,18 +121,18 @@
               class="flex-grow-1 me-2"
               style="max-width: 100px"
             />
-            <span class="text-caption">{{ Math.round(item.progress * 100) }}%</span>
+            <span class="text-body-small">{{ Math.round(item.progress * 100) }}%</span>
           </div>
         </template>
 
         <!-- Created At Column -->
         <template #[`item.created_at`]="{ item }">
-          <div class="text-body-2">{{ formatDate(item.created_at) }}</div>
+          <div class="text-body-medium">{{ formatDate(item.created_at) }}</div>
         </template>
 
         <!-- Duration Column -->
         <template #[`item.duration`]="{ item }">
-          <span class="text-body-2">{{ calculateDuration(item) }}</span>
+          <span class="text-body-medium">{{ calculateDuration(item) }}</span>
         </template>
 
         <!-- Actions Column -->

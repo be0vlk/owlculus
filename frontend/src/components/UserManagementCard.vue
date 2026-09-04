@@ -4,8 +4,8 @@
     <v-card-title class="d-flex align-center pa-4 bg-surface">
       <v-icon icon="mdi-account-cog" color="primary" size="large" class="me-3" />
       <div class="flex-grow-1">
-        <div class="text-h6 font-weight-bold">User Management</div>
-        <div class="text-body-2 text-medium-emphasis">
+        <div class="text-title-large font-weight-bold">User Management</div>
+        <div class="text-body-medium text-medium-emphasis">
           Manage system users and their permissions
         </div>
       </div>
@@ -36,7 +36,7 @@
 
     <!-- Search Toolbar -->
     <v-card-text class="pa-4">
-      <v-row align="center" class="mb-0">
+      <v-row class="mb-0 align-center">
         <v-col cols="12" md="8">
           <!-- Could add user role filters here in the future -->
         </v-col>
@@ -85,7 +85,7 @@
 
       <!-- Created date -->
       <template #[`item.created_at`]="{ item }">
-        <span class="text-body-2">
+        <span class="text-body-medium">
           {{ formatDate(item.created_at) }}
         </span>
       </template>
@@ -135,10 +135,10 @@
       <template #no-data>
         <div class="text-center pa-12">
           <v-icon class="mb-4" color="grey-lighten-1" icon="mdi-account-group-outline" size="64" />
-          <h3 class="text-h6 font-weight-medium mb-2">
+          <h3 class="text-title-large font-weight-medium mb-2">
             {{ getEmptyStateTitle() }}
           </h3>
-          <p class="text-body-2 text-medium-emphasis mb-4">
+          <p class="text-body-medium text-medium-emphasis mb-4">
             {{ getEmptyStateMessage() }}
           </p>
           <v-btn
@@ -254,5 +254,5 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-@import '@/styles/admin-dashboard-table.css';
+@import url('@/styles/admin-dashboard-table.css');
 </style>

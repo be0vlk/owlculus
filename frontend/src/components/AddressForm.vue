@@ -1,6 +1,6 @@
 <template>
   <div>
-    <v-card-subtitle class="text-h6 pa-0 mb-4">
+    <v-card-subtitle class="text-title-large pa-0 mb-4">
       <v-icon start>mdi-map-marker-outline</v-icon>
       Address
     </v-card-subtitle>

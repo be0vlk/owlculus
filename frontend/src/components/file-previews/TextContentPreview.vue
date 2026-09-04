@@ -2,26 +2,26 @@
   <div class="d-flex flex-column h-100">
     <v-card v-if="fileInfo" class="ma-4 mb-2 flex-shrink-0" variant="outlined">
       <v-card-text class="py-3">
-        <v-row dense align="center">
+        <v-row class="align-center" density="compact">
           <v-col cols="12" sm="6" md="3">
-            <div class="text-caption text-medium-emphasis">File</div>
-            <div class="text-body-2 font-weight-medium">{{ fileInfo.filename }}</div>
+            <div class="text-body-small text-medium-emphasis">File</div>
+            <div class="text-body-medium font-weight-medium">{{ fileInfo.filename }}</div>
           </v-col>
           <v-col cols="12" sm="6" md="2">
-            <div class="text-caption text-medium-emphasis">Size</div>
-            <div class="text-body-2 font-weight-medium">
+            <div class="text-body-small text-medium-emphasis">Size</div>
+            <div class="text-body-medium font-weight-medium">
               {{ formatFileSize(fileInfo.file_size) }}
             </div>
           </v-col>
           <v-col cols="12" sm="6" md="2">
-            <div class="text-caption text-medium-emphasis">Lines</div>
-            <div class="text-body-2 font-weight-medium">
+            <div class="text-body-small text-medium-emphasis">Lines</div>
+            <div class="text-body-medium font-weight-medium">
               {{ fileInfo.line_count?.toLocaleString() }}
             </div>
           </v-col>
           <v-col cols="12" sm="6" md="2">
-            <div class="text-caption text-medium-emphasis">Characters</div>
-            <div class="text-body-2 font-weight-medium">
+            <div class="text-body-small text-medium-emphasis">Characters</div>
+            <div class="text-body-medium font-weight-medium">
               {{ fileInfo.char_count?.toLocaleString() }}
             </div>
           </v-col>
@@ -57,7 +57,6 @@
         prepend-inner-icon="mdi-magnify"
         clearable
         hide-details
-        @input="highlightSearch"
       />
     </div>
 
@@ -157,21 +156,22 @@ watch(searchTerm, () => {
 })
 
 const reset = () => {
-  searchTerm.value = '';
-  wordWrap.value = false;
-};
+  searchTerm.value = ''
+  wordWrap.value = false
+}
 
-defineExpose({ reset });
+defineExpose({ reset })
 </script>
 
 <style scoped>
 .h-100 {
   height: 100%;
 }
+
 .content-container {
   max-height: 60vh;
   overflow: auto;
-  border: 1px solid rgba(var(--v-theme-outline), 0.2);
+  border: 1px solid rgb(var(--v-theme-outline), 0.2);
   margin: 0 16px 16px;
   border-radius: 8px;
 }
@@ -184,13 +184,13 @@ defineExpose({ reset });
   line-height: 1.4;
   white-space: pre;
   overflow-x: auto;
-  background-color: rgba(var(--v-theme-surface-variant), 0.05);
+  background-color: rgb(var(--v-theme-surface-variant), 0.05);
   min-height: 100%;
 }
 
 .content-display.word-wrap {
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 :deep(mark) {
@@ -201,7 +201,7 @@ defineExpose({ reset });
   font-weight: bold;
 }
 
-@media (max-width: 599px) {
+@media (width <= 599px) {
   .content-container {
     max-height: 50vh;
     margin: 0 8px 8px;
@@ -213,7 +213,7 @@ defineExpose({ reset });
   }
 }
 
-@media (min-width: 1280px) {
+@media (width >= 1280px) {
   .content-container {
     max-height: 70vh;
   }
@@ -225,16 +225,16 @@ defineExpose({ reset });
 }
 
 .content-container::-webkit-scrollbar-track {
-  background: rgba(var(--v-theme-surface-variant), 0.1);
+  background: rgb(var(--v-theme-surface-variant), 0.1);
   border-radius: 4px;
 }
 
 .content-container::-webkit-scrollbar-thumb {
-  background: rgba(var(--v-theme-outline), 0.3);
+  background: rgb(var(--v-theme-outline), 0.3);
   border-radius: 4px;
 }
 
 .content-container::-webkit-scrollbar-thumb:hover {
-  background: rgba(var(--v-theme-outline), 0.5);
+  background: rgb(var(--v-theme-outline), 0.5);
 }
 </style>

@@ -115,7 +115,7 @@
         <div class="d-flex align-center">
           <div>
             <div class="font-weight-medium">{{ getEntityName(item) }}</div>
-            <div v-if="getEntitySubtitle(item)" class="text-caption text-medium-emphasis">
+            <div v-if="getEntitySubtitle(item)" class="text-body-small text-medium-emphasis">
               {{ getEntitySubtitle(item) }}
             </div>
           </div>
@@ -124,14 +124,14 @@
 
       <!-- Description Column -->
       <template #[`item.description`]="{ item }">
-        <span class="text-body-2">
+        <span class="text-body-medium">
           {{ item.data.description || '' }}
         </span>
       </template>
 
       <!-- Created Date Column -->
       <template #[`item.created_at`]="{ item }">
-        <span class="text-body-2">
+        <span class="text-body-medium">
           {{ formatDate(item.created_at) }}
         </span>
       </template>
@@ -152,8 +152,8 @@
       <template v-slot:no-data>
         <v-container class="text-center pa-8">
           <v-icon class="mb-4" color="grey-lighten-1" size="64"> mdi-account-group-outline </v-icon>
-          <h3 class="text-h6 font-weight-medium mb-2">No Entities Found</h3>
-          <p class="text-body-2 text-medium-emphasis">
+          <h3 class="text-title-large font-weight-medium mb-2">No Entities Found</h3>
+          <p class="text-body-medium text-medium-emphasis">
             {{ getNoDataMessage() }}
           </p>
           <v-btn class="mt-4" color="primary" prepend-icon="mdi-plus" @click="$emit('create')">

@@ -69,8 +69,8 @@
           <div class="pa-4">
             <!-- Active Executions -->
             <div v-if="huntStore.runningExecutions.length > 0">
-              <div class="text-h6 mb-4">Running Executions</div>
-              <v-row dense>
+              <div class="text-title-large mb-4">Running Executions</div>
+              <v-row density="compact">
                 <v-col
                   v-for="execution in huntStore.runningExecutions"
                   :key="`running-${execution.id}`"
@@ -94,8 +94,8 @@
 
             <!-- Recently Completed -->
             <div v-if="huntStore.completedExecutions.length > 0" class="mt-6">
-              <div class="text-h6 mb-4">Recently Completed</div>
-              <v-row dense>
+              <div class="text-title-large mb-4">Recently Completed</div>
+              <v-row density="compact">
                 <v-col
                   v-for="execution in huntStore.completedExecutions.slice(0, 6)"
                   :key="`completed-${execution.id}`"
@@ -124,8 +124,8 @@
               class="text-center pa-8"
             >
               <v-icon icon="mdi-play-circle-outline" size="64" color="grey" class="mb-4" />
-              <div class="text-h6 mb-2">No Active Executions</div>
-              <div class="text-body-2 text-medium-emphasis mb-4">
+              <div class="text-title-large mb-2">No Active Executions</div>
+              <div class="text-body-medium text-medium-emphasis mb-4">
                 Start a hunt from the Available Hunts tab to begin investigating
               </div>
               <v-btn color="primary" @click="activeTab = 'catalog'"> Browse Hunts </v-btn>

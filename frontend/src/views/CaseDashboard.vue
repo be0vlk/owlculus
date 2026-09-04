@@ -39,8 +39,8 @@
           indeterminate
           class="mb-4 d-block mx-auto"
         />
-        <div class="text-h6 text-center">Loading case...</div>
-        <div class="text-body-2 text-medium-emphasis text-center">
+        <div class="text-title-large text-center">Loading case...</div>
+        <div class="text-body-medium text-medium-emphasis text-center">
           Please wait while we load your case data
         </div>
       </v-card>
@@ -54,8 +54,8 @@
         <v-card-title class="d-flex align-center pa-4 bg-surface">
           <v-icon icon="mdi-information" color="primary" size="large" class="me-3" />
           <div class="flex-grow-1">
-            <div class="text-h6 font-weight-bold">Case Information</div>
-            <div class="text-body-2 text-medium-emphasis">
+            <div class="text-title-large font-weight-bold">Case Information</div>
+            <div class="text-body-medium text-medium-emphasis">
               Details and metadata for this investigation
             </div>
           </div>
@@ -78,8 +78,10 @@
         <v-card-title class="d-flex align-center pa-4 bg-surface">
           <v-icon icon="mdi-tab" color="primary" size="large" class="me-3" />
           <div class="flex-grow-1">
-            <div class="text-h6 font-weight-bold">Case Management</div>
-            <div class="text-body-2 text-medium-emphasis">Manage entities, evidence, and notes</div>
+            <div class="text-title-large font-weight-bold">Case Management</div>
+            <div class="text-body-medium text-medium-emphasis">
+              Manage entities, evidence, and notes
+            </div>
           </div>
         </v-card-title>
 
@@ -146,8 +148,8 @@
             <div v-else-if="activeTab === 'hunts'" class="pa-4">
               <div class="d-flex align-center justify-space-between mb-4">
                 <div>
-                  <div class="text-h6">Hunt Executions</div>
-                  <div class="text-body-2 text-medium-emphasis">
+                  <div class="text-title-large">Hunt Executions</div>
+                  <div class="text-body-medium text-medium-emphasis">
                     View and manage automated investigation workflows for this case
                   </div>
                 </div>
@@ -169,7 +171,9 @@
                   <template #[`item.title`]="{ item }">
                     <div>
                       <div class="font-weight-medium">{{ getFormattedHuntTitle(item) }}</div>
-                      <div class="text-caption text-medium-emphasis">{{ item.hunt_category }}</div>
+                      <div class="text-body-small text-medium-emphasis">
+                        {{ item.hunt_category }}
+                      </div>
                     </div>
                   </template>
 
@@ -194,7 +198,7 @@
                         rounded
                         style="min-width: 60px"
                       />
-                      <span class="text-caption">{{ Math.round(item.progress * 100) }}%</span>
+                      <span class="text-body-small">{{ Math.round(item.progress * 100) }}%</span>
                     </div>
                   </template>
 
@@ -216,8 +220,8 @@
               <!-- Empty State -->
               <div v-else class="text-center pa-8">
                 <v-icon class="mb-4" color="grey" icon="mdi-target" size="64" />
-                <div class="text-h6 mb-2">No Hunt Executions</div>
-                <div class="text-body-2 text-medium-emphasis mb-4">
+                <div class="text-title-large mb-2">No Hunt Executions</div>
+                <div class="text-body-medium text-medium-emphasis mb-4">
                   Start automated investigation workflows to gather evidence for this case
                 </div>
                 <v-btn color="primary" @click="$router.push('/hunts')">
@@ -376,12 +380,12 @@
       </v-card-title>
 
       <v-card-text>
-        <p class="text-body-1 mb-4">
+        <p class="text-body-large mb-4">
           Your entity <strong>{{ getEntityDisplayName(createdEntity) }}</strong> has been created
           successfully.
         </p>
 
-        <p class="text-body-2 text-medium-emphasis">
+        <p class="text-body-medium text-medium-emphasis">
           Would you like to open the entity details to add more information and edit its properties?
         </p>
       </v-card-text>
@@ -695,15 +699,15 @@ const handleExtractMetadata = async (evidenceItem) => {
 }
 
 const handleViewFileContent = async (evidenceItem) => {
-  selectedEvidenceForContent.value = evidenceItem;
+  selectedEvidenceForContent.value = evidenceItem
 
-  fileContent.value = null;
-  fileContentInfo.value = null;
-  fileContentError.value = '';
-  loadingFileContent.value = false;
+  fileContent.value = null
+  fileContentInfo.value = null
+  fileContentError.value = ''
+  loadingFileContent.value = false
 
-  showFileContentModal.value = true;
-};
+  showFileContentModal.value = true
+}
 
 // Hunt-related methods
 const loadCaseHuntExecutions = async () => {

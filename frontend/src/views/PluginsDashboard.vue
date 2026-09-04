@@ -10,7 +10,7 @@
         <v-divider />
         <v-card-text class="text-center pa-16">
           <v-progress-circular color="primary" indeterminate size="64" width="4" />
-          <div class="text-h6 mt-4">Loading plugins...</div>
+          <div class="text-title-large mt-4">Loading plugins...</div>
         </v-card-text>
       </v-card>
     </template>
@@ -22,8 +22,8 @@
       <v-card-title class="d-flex align-center pa-4 bg-surface">
         <v-icon class="me-3" color="primary" icon="mdi-tools" size="large" />
         <div class="flex-grow-1">
-          <div class="text-h6 font-weight-bold">Plugin Management</div>
-          <div class="text-body-2 text-medium-emphasis">
+          <div class="text-title-large font-weight-bold">Plugin Management</div>
+          <div class="text-body-medium text-medium-emphasis">
             Execute OSINT plugins and analyze results
           </div>
         </div>
@@ -72,7 +72,7 @@
                 <div class="d-flex justify-space-between align-start mb-3">
                   <div class="d-flex align-center">
                     <v-icon class="me-2" color="primary" icon="mdi-puzzle-outline" />
-                    <div class="text-h6 font-weight-bold">
+                    <div class="text-title-large font-weight-bold">
                       {{ plugin.display_name || name }}
                     </div>
                   </div>
@@ -128,7 +128,7 @@
                 <!-- Plugin description preview -->
                 <div
                   v-if="plugin.description && !expandedCards[name]"
-                  class="text-body-2 text-medium-emphasis mb-3"
+                  class="text-body-medium text-medium-emphasis mb-3"
                 >
                   {{ plugin.description.substring(0, 100)
                   }}{{ plugin.description.length > 100 ? '...' : '' }}
@@ -268,8 +268,8 @@
         <!-- Empty state -->
         <div v-else class="text-center pa-12">
           <v-icon class="mb-4" color="grey-lighten-1" icon="mdi-puzzle-outline" size="64" />
-          <h3 class="text-h6 font-weight-medium mb-2">No plugins available</h3>
-          <p class="text-body-2 text-medium-emphasis mb-4">
+          <h3 class="text-title-large font-weight-medium mb-2">No plugins available</h3>
+          <p class="text-body-medium text-medium-emphasis mb-4">
             Try selecting a different category or check your plugin configuration.
           </p>
           <v-btn color="primary" prepend-icon="mdi-refresh" @click="loadPlugins">
@@ -512,5 +512,3 @@ onMounted(() => {
   loadPlugins()
 })
 </script>
-
-<style scoped></style>

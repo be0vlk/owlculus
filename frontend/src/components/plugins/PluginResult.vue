@@ -12,24 +12,24 @@
           rounded="lg"
         >
           <v-card-text>
-            <pre class="text-body-2 font-mono">{{ formatValue(item) }}</pre>
+            <pre class="text-body-medium font-mono">{{ formatValue(item) }}</pre>
           </v-card-text>
         </v-card>
       </template>
       <template v-else-if="typeof result === 'object' && result !== null">
         <v-card v-for="(value, key) in result" :key="key" elevation="1" rounded="lg" class="mb-2">
           <v-card-text>
-            <div class="text-body-2 font-weight-medium text-medium-emphasis mb-1">
+            <div class="text-body-medium font-weight-medium text-medium-emphasis mb-1">
               {{ formatKey(key) }}
             </div>
-            <pre class="text-body-2 font-mono">{{ formatValue(value) }}</pre>
+            <pre class="text-body-medium font-mono">{{ formatValue(value) }}</pre>
           </v-card-text>
         </v-card>
       </template>
       <template v-else>
         <v-card elevation="1" rounded="lg">
           <v-card-text>
-            <pre class="text-body-2 font-mono">{{ formatValue(result) }}</pre>
+            <pre class="text-body-medium font-mono">{{ formatValue(result) }}</pre>
           </v-card-text>
         </v-card>
       </template>
@@ -38,7 +38,7 @@
 </template>
 
 <script setup>
-import { defineProps, shallowRef, watch, markRaw } from 'vue'
+import { shallowRef, watch, markRaw } from 'vue'
 
 const props = defineProps({
   result: {

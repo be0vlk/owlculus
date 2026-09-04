@@ -109,7 +109,7 @@
       </v-text-field>
 
       <!-- Parameter Description -->
-      <div v-if="paramDef.description" class="text-caption text-medium-emphasis ml-4 mt-1">
+      <div v-if="paramDef.description" class="text-body-small text-medium-emphasis ml-4 mt-1">
         {{ paramDef.description }}
       </div>
     </div>

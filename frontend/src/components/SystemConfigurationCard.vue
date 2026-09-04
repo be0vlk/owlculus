@@ -3,8 +3,10 @@
     <v-card-title class="d-flex align-center pa-4 bg-surface">
       <v-icon icon="mdi-format-list-numbered" color="primary" size="large" class="me-3" />
       <div>
-        <div class="text-h6 font-weight-bold">Case Number Configuration</div>
-        <div class="text-body-2 text-medium-emphasis">Configure how case numbers are generated</div>
+        <div class="text-title-large font-weight-bold">Case Number Configuration</div>
+        <div class="text-body-medium text-medium-emphasis">
+          Configure how case numbers are generated
+        </div>
       </div>
     </v-card-title>
 
@@ -35,7 +37,7 @@
               density="comfortable"
               prepend-inner-icon="mdi-alphabetical-variant"
               :rules="[validatePrefix]"
-              @input="onPrefixChange"
+              @update:model-value="onPrefixChange"
               hint="Enter 2-8 alphanumeric characters"
               persistent-hint
             />
@@ -48,8 +50,8 @@
               <div class="d-flex align-center">
                 <v-icon icon="mdi-eye" color="info" class="me-3" />
                 <div>
-                  <div class="text-subtitle-2 font-weight-bold text-info">Preview</div>
-                  <div class="text-body-2">
+                  <div class="text-title-small font-weight-bold text-info">Preview</div>
+                  <div class="text-body-medium">
                     Next case will be numbered in the format:
                     <v-chip color="primary" variant="elevated" class="ml-2">
                       {{ exampleCaseNumber }}

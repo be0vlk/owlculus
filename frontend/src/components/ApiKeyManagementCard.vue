@@ -3,8 +3,8 @@
     <v-card-title class="d-flex align-center pa-4 bg-surface">
       <v-icon icon="mdi-key" color="primary" size="large" class="me-3" />
       <div class="flex-grow-1">
-        <div class="text-h6 font-weight-bold">API Key Management</div>
-        <div class="text-body-2 text-medium-emphasis">
+        <div class="text-title-large font-weight-bold">API Key Management</div>
+        <div class="text-body-medium text-medium-emphasis">
           Manage API keys for external services and plugins
         </div>
       </div>
@@ -33,8 +33,8 @@
       <!-- Empty state -->
       <div v-else-if="!sortedApiKeys.length" class="pa-8 text-center">
         <v-icon icon="mdi-key-off" size="64" color="grey-darken-1" class="mb-4" />
-        <div class="text-h6 text-medium-emphasis mb-2">No API Keys Configured</div>
-        <div class="text-body-2 text-medium-emphasis mb-4">
+        <div class="text-title-large text-medium-emphasis mb-2">No API Keys Configured</div>
+        <div class="text-body-medium text-medium-emphasis mb-4">
           Add API keys to enable external service integrations and plugins
         </div>
         <v-btn color="primary" prepend-icon="mdi-plus" variant="flat" @click="openAddDialog">
@@ -81,10 +81,10 @@
               </v-chip>
             </td>
             <td>
-              <span v-if="apiKey.created_at" class="text-body-2">
+              <span v-if="apiKey.created_at" class="text-body-medium">
                 {{ formatDate(apiKey.created_at) }}
               </span>
-              <span v-else class="text-caption text-medium-emphasis">Unknown</span>
+              <span v-else class="text-body-small text-medium-emphasis">Unknown</span>
             </td>
             <td>
               <div class="d-flex align-center" style="gap: 8px">
@@ -151,7 +151,7 @@
                   <template #item="{ props, item }">
                     <v-list-item v-bind="props">
                       <template #prepend>
-                        <v-icon :icon="item.raw.icon" />
+                        <v-icon :icon="item.icon" />
                       </template>
                     </v-list-item>
                   </template>
@@ -408,18 +408,18 @@ onMounted(async () => {
 }
 
 .admin-dashboard-table :deep(.v-data-table__tr:hover) {
-  background-color: rgb(var(--v-theme-primary), 0.04) !important;
+  background-color: rgb(var(--v-theme-primary), 0.04);
 }
 
 .admin-dashboard-table :deep(.v-data-table__td) {
-  padding: 12px 16px !important;
-  border-bottom: 1px solid rgb(var(--v-theme-on-surface), 0.08) !important;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgb(var(--v-theme-on-surface), 0.08);
 }
 
 .admin-dashboard-table :deep(.v-data-table__th) {
-  padding: 16px !important;
-  font-weight: 600 !important;
-  color: rgb(var(--v-theme-on-surface), 0.87) !important;
-  border-bottom: 2px solid rgb(var(--v-theme-on-surface), 0.12) !important;
+  padding: 16px;
+  font-weight: 600;
+  color: rgb(var(--v-theme-on-surface), 0.87);
+  border-bottom: 2px solid rgb(var(--v-theme-on-surface), 0.12);
 }
 </style>

@@ -55,5 +55,5 @@ const { getFieldIcon } = useEntityIcons(props.entity)
 </script>
 
 <style scoped>
-@import '../../styles/entity-editor.css';
+@import url('../../styles/entity-editor.css');
 </style>

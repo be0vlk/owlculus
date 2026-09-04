@@ -12,12 +12,12 @@
     <div v-if="virusTotalResults.length" class="vt-results-grid">
       <v-row>
         <v-col v-for="(result, index) in virusTotalResults" :key="`vt-${index}`" cols="12">
-          <v-card elevation="2" rounded="lg" class="result-card">
+          <v-card elevation="1" rounded="lg" class="result-card">
             <!-- Result Header -->
             <v-card-title class="d-flex align-center bg-primary-lighten-5 pa-4">
               <v-icon :icon="getTargetIcon(result.target_type)" size="large" class="mr-3" />
               <div class="flex-grow-1">
-                <div class="text-h6 d-flex align-center ga-2">
+                <div class="text-title-large d-flex align-center ga-2">
                   <span class="text-truncate" style="max-width: 400px">{{ result.target }}</span>
                   <v-btn
                     icon="mdi-content-copy"
@@ -28,7 +28,7 @@
                     <v-tooltip activator="parent" location="top">Copy target</v-tooltip>
                   </v-btn>
                 </div>
-                <div class="text-caption text-medium-emphasis">
+                <div class="text-body-small text-medium-emphasis">
                   {{ formatTargetType(result.target_type) }}
                 </div>
               </div>
@@ -53,7 +53,7 @@
                     <span class="text-subtitle1 font-weight-medium">Detection Ratio</span>
                     <span
                       :class="getDetectionColor(result.detection_ratio)"
-                      class="text-h5 font-weight-bold"
+                      class="text-headline-small font-weight-bold"
                     >
                       {{ result.detection_ratio }}
                     </span>
@@ -65,7 +65,7 @@
                     rounded
                     class="detection-progress"
                   />
-                  <div class="text-caption text-medium-emphasis mt-2">
+                  <div class="text-body-small text-medium-emphasis mt-2">
                     <v-icon icon="mdi-clock-outline" size="x-small" />
                     Last analysis: {{ result.last_analysis_date }}
                   </div>
@@ -77,9 +77,11 @@
                   <v-list density="compact" class="pa-0">
                     <v-list-item v-if="result.file_info.sha256" class="px-0">
                       <template #prepend>
-                        <span class="text-body-2 font-weight-medium mr-2">SHA256:</span>
+                        <span class="text-body-medium font-weight-medium mr-2">SHA256:</span>
                       </template>
-                      <v-list-item-title class="text-body-2 font-mono d-flex align-center ga-2">
+                      <v-list-item-title
+                        class="text-body-medium font-mono d-flex align-center ga-2"
+                      >
                         <span class="text-truncate">{{ result.file_info.sha256 }}</span>
                         <v-btn
                           icon="mdi-content-copy"
@@ -93,17 +95,17 @@
                     </v-list-item>
                     <v-list-item v-if="result.file_info.size" class="px-0">
                       <template #prepend>
-                        <span class="text-body-2 font-weight-medium mr-2">Size:</span>
+                        <span class="text-body-medium font-weight-medium mr-2">Size:</span>
                       </template>
-                      <v-list-item-title class="text-body-2">
+                      <v-list-item-title class="text-body-medium">
                         {{ formatFileSize(result.file_info.size) }}
                       </v-list-item-title>
                     </v-list-item>
                     <v-list-item v-if="result.file_info.type" class="px-0">
                       <template #prepend>
-                        <span class="text-body-2 font-weight-medium mr-2">Type:</span>
+                        <span class="text-body-medium font-weight-medium mr-2">Type:</span>
                       </template>
-                      <v-list-item-title class="text-body-2">
+                      <v-list-item-title class="text-body-medium">
                         {{ result.file_info.type }}
                       </v-list-item-title>
                     </v-list-item>
@@ -111,7 +113,7 @@
 
                   <!-- File Names -->
                   <div v-if="result.file_info.names && result.file_info.names.length" class="mt-3">
-                    <div class="text-body-2 font-weight-medium mb-1">Known Filenames:</div>
+                    <div class="text-body-medium font-weight-medium mb-1">Known Filenames:</div>
                     <div class="d-flex flex-wrap ga-1">
                       <v-chip
                         v-for="(name, nIndex) in result.file_info.names.slice(0, 5)"
@@ -140,17 +142,17 @@
                   <v-list density="compact" class="pa-0">
                     <v-list-item v-if="result.url_info.final_url" class="px-0">
                       <template #prepend>
-                        <span class="text-body-2 font-weight-medium mr-2">Final URL:</span>
+                        <span class="text-body-medium font-weight-medium mr-2">Final URL:</span>
                       </template>
-                      <v-list-item-title class="text-body-2 text-truncate">
+                      <v-list-item-title class="text-body-medium text-truncate">
                         {{ result.url_info.final_url }}
                       </v-list-item-title>
                     </v-list-item>
                     <v-list-item v-if="result.url_info.title" class="px-0">
                       <template #prepend>
-                        <span class="text-body-2 font-weight-medium mr-2">Title:</span>
+                        <span class="text-body-medium font-weight-medium mr-2">Title:</span>
                       </template>
-                      <v-list-item-title class="text-body-2">
+                      <v-list-item-title class="text-body-medium">
                         {{ result.url_info.title }}
                       </v-list-item-title>
                     </v-list-item>
@@ -163,25 +165,25 @@
                   <v-list density="compact" class="pa-0">
                     <v-list-item v-if="result.domain_info.registrar" class="px-0">
                       <template #prepend>
-                        <span class="text-body-2 font-weight-medium mr-2">Registrar:</span>
+                        <span class="text-body-medium font-weight-medium mr-2">Registrar:</span>
                       </template>
-                      <v-list-item-title class="text-body-2">
+                      <v-list-item-title class="text-body-medium">
                         {{ result.domain_info.registrar }}
                       </v-list-item-title>
                     </v-list-item>
                     <v-list-item v-if="result.domain_info.creation_date" class="px-0">
                       <template #prepend>
-                        <span class="text-body-2 font-weight-medium mr-2">Created:</span>
+                        <span class="text-body-medium font-weight-medium mr-2">Created:</span>
                       </template>
-                      <v-list-item-title class="text-body-2">
+                      <v-list-item-title class="text-body-medium">
                         {{ result.domain_info.creation_date }}
                       </v-list-item-title>
                     </v-list-item>
                     <v-list-item v-if="result.domain_info.reputation !== null" class="px-0">
                       <template #prepend>
-                        <span class="text-body-2 font-weight-medium mr-2">Reputation:</span>
+                        <span class="text-body-medium font-weight-medium mr-2">Reputation:</span>
                       </template>
-                      <v-list-item-title class="text-body-2">
+                      <v-list-item-title class="text-body-medium">
                         {{ result.domain_info.reputation }}
                       </v-list-item-title>
                     </v-list-item>
@@ -194,25 +196,25 @@
                   <v-list density="compact" class="pa-0">
                     <v-list-item v-if="result.ip_info.asn" class="px-0">
                       <template #prepend>
-                        <span class="text-body-2 font-weight-medium mr-2">ASN:</span>
+                        <span class="text-body-medium font-weight-medium mr-2">ASN:</span>
                       </template>
-                      <v-list-item-title class="text-body-2">
+                      <v-list-item-title class="text-body-medium">
                         {{ result.ip_info.asn }}
                       </v-list-item-title>
                     </v-list-item>
                     <v-list-item v-if="result.ip_info.as_owner" class="px-0">
                       <template #prepend>
-                        <span class="text-body-2 font-weight-medium mr-2">AS Owner:</span>
+                        <span class="text-body-medium font-weight-medium mr-2">AS Owner:</span>
                       </template>
-                      <v-list-item-title class="text-body-2">
+                      <v-list-item-title class="text-body-medium">
                         {{ result.ip_info.as_owner }}
                       </v-list-item-title>
                     </v-list-item>
                     <v-list-item v-if="result.ip_info.country" class="px-0">
                       <template #prepend>
-                        <span class="text-body-2 font-weight-medium mr-2">Country:</span>
+                        <span class="text-body-medium font-weight-medium mr-2">Country:</span>
                       </template>
-                      <v-list-item-title class="text-body-2">
+                      <v-list-item-title class="text-body-medium">
                         {{ result.ip_info.country }}
                       </v-list-item-title>
                     </v-list-item>
@@ -230,7 +232,7 @@
                       variant="tonal"
                       color="primary"
                     >
-                      <span class="text-caption font-weight-medium">{{ vendor }}:</span>
+                      <span class="text-body-small font-weight-medium">{{ vendor }}:</span>
                       <span class="ml-1">{{ category }}</span>
                     </v-chip>
                   </div>
@@ -280,7 +282,7 @@
                                 {{ detection.category }}
                               </v-chip>
                             </template>
-                            <v-list-item-title class="text-body-2">
+                            <v-list-item-title class="text-body-medium">
                               <span class="font-weight-medium">{{ detection.vendor }}:</span>
                               <span class="ml-2 text-error">{{ detection.result }}</span>
                             </v-list-item-title>
@@ -506,7 +508,7 @@ const copyToClipboard = async (text) => {
 }
 
 .detection-progress {
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 10%);
 }
 
 .detection-progress .v-progress-linear__determinate {

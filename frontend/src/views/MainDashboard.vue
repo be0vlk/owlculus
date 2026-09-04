@@ -24,8 +24,10 @@
       <v-card-title class="d-flex align-center pa-4 bg-surface">
         <v-icon class="me-3" color="primary" icon="mdi-briefcase" size="large" />
         <div class="flex-grow-1">
-          <div class="text-h6 font-weight-bold">Case Management</div>
-          <div class="text-body-2 text-medium-emphasis">Manage investigations and assignments</div>
+          <div class="text-title-large font-weight-bold">Case Management</div>
+          <div class="text-body-medium text-medium-emphasis">
+            Manage investigations and assignments
+          </div>
         </div>
         <div class="d-flex align-center ga-2">
           <v-btn
@@ -55,11 +57,11 @@
 
       <!-- Filters and Search Toolbar -->
       <v-card-text class="pa-4">
-        <v-row align="center" class="mb-0">
+        <v-row class="mb-0 align-center">
           <!-- Quick Filter Chips -->
           <v-col cols="12" md="8">
             <div class="d-flex align-center ga-2 flex-wrap">
-              <span class="text-body-2 font-weight-medium me-2">Filter:</span>
+              <span class="text-body-medium font-weight-medium me-2">Filter:</span>
               <v-chip-group
                 v-model="activeQuickFilter"
                 color="primary"
@@ -85,7 +87,7 @@
                   density="comfortable"
                   hide-details
                 />
-                <span class="text-body-2 text-no-wrap">Show Closed</span>
+                <span class="text-body-medium text-no-wrap">Show Closed</span>
               </div>
 
               <!-- Search Field -->
@@ -151,7 +153,7 @@
 
         <!-- Created date -->
         <template #[`item.created_at`]="{ item }">
-          <span class="text-body-2">
+          <span class="text-body-medium">
             {{ formatDate(item.created_at) }}
           </span>
         </template>
@@ -160,10 +162,10 @@
         <template #no-data>
           <div class="text-center pa-12">
             <v-icon class="mb-4" color="grey-lighten-1" icon="mdi-folder-open-outline" size="64" />
-            <h3 class="text-h6 font-weight-medium mb-2">
+            <h3 class="text-title-large font-weight-medium mb-2">
               {{ getEmptyStateTitle() }}
             </h3>
-            <p class="text-body-2 text-medium-emphasis mb-4">
+            <p class="text-body-medium text-medium-emphasis mb-4">
               {{ getEmptyStateMessage() }}
             </p>
             <v-btn
@@ -318,23 +320,23 @@ onMounted(loadData)
 
 <style scoped>
 .case-dashboard-table :deep(.v-data-table__tr:hover) {
-  background-color: rgb(var(--v-theme-primary), 0.04) !important;
+  background-color: rgb(var(--v-theme-primary), 0.04);
   cursor: pointer;
 }
 
 .case-dashboard-table :deep(.v-data-table__td) {
-  padding: 12px 16px !important;
-  border-bottom: 1px solid rgb(var(--v-theme-on-surface), 0.08) !important;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgb(var(--v-theme-on-surface), 0.08);
 }
 
 .case-dashboard-table :deep(.v-data-table__th) {
-  padding: 16px !important;
-  font-weight: 600 !important;
-  color: rgb(var(--v-theme-on-surface), 0.87) !important;
-  border-bottom: 2px solid rgb(var(--v-theme-on-surface), 0.12) !important;
+  padding: 16px;
+  font-weight: 600;
+  color: rgb(var(--v-theme-on-surface), 0.87);
+  border-bottom: 2px solid rgb(var(--v-theme-on-surface), 0.12);
 }
 
 .case-dashboard-table :deep(.v-data-table-rows-no-data) {
-  padding: 48px 16px !important;
+  padding: 48px 16px;
 }
 </style>
