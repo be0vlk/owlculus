@@ -146,7 +146,7 @@ async def get_execution_status(
     execution = await service.get_execution(execution_id, current_user=current_user)
 
     hunt = db.get(models.Hunt, execution.hunt_id)
-    case = db.get(models.Case, execution.case_id)
+    case = execution.case
     created_by = db.get(models.User, execution.created_by_id)
     steps = None
 

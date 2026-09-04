@@ -35,9 +35,9 @@ class EntityService:
         skip: int = 0,
         limit: int = 100,
     ) -> list[models.Entity]:
-        self.access.readable(current_user, case_id)
+        case = self.access.readable(current_user, case_id)
 
-        query = select(models.Entity).where(models.Entity.case_id == case_id)
+        query = select(models.Entity).where(models.Entity.case_id == case.id)
 
         if entity_type:
             query = query.where(models.Entity.entity_type == entity_type)
@@ -65,12 +65,12 @@ class EntityService:
         entity: schemas.EntityCreate,
         current_user: models.User,
     ) -> models.Entity:
-        self.access.writable(current_user, case_id)
+        case = self.access.writable(current_user, case_id)
 
-        await crud.check_entity_duplicates(self.db, case_id, entity)
+        await crud.check_entity_duplicates(self.db, case.id, entity)
         with transaction(self.db):
             db_entity = models.Entity(
-                case_id=case_id,
+                case_id=case.id,
                 entity_type=entity.entity_type,
                 data=entity.data,
                 created_by_id=current_user.id,
@@ -134,10 +134,10 @@ class EntityService:
         self, case_id: int, ip_address: str, current_user: models.User
     ) -> Optional[models.Entity]:
         """Find an existing IP address entity in the given case"""
-        self.access.readable(current_user, case_id)
+        case = self.access.readable(current_user, case_id)
 
         query = select(models.Entity).where(
-            models.Entity.case_id == case_id,
+            models.Entity.case_id == case.id,
             models.Entity.entity_type == "ip_address",
             models.Entity.data["ip_address"].as_string() == ip_address,
         )
@@ -148,10 +148,10 @@ class EntityService:
         self, case_id: int, domain: str, current_user: models.User
     ) -> Optional[models.Entity]:
         """Find an existing domain entity in the given case (case-insensitive)"""
-        self.access.readable(current_user, case_id)
+        case = self.access.readable(current_user, case_id)
 
         query = select(models.Entity).where(
-            models.Entity.case_id == case_id,
+            models.Entity.case_id == case.id,
             models.Entity.entity_type == "domain",
             models.Entity.data["domain"].as_string().ilike(domain),
         )

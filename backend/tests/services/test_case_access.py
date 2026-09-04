@@ -1,7 +1,10 @@
 """Behavioral contract for centralized case authorization."""
 
+import ast
+import inspect
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from textwrap import dedent
 
 import pytest
 from sqlalchemy import event
@@ -12,6 +15,9 @@ from app.core.exceptions import AuthorizationException
 from app.database import models
 from app.services.case_access import CaseAccess
 from app.services.case_service import CaseService
+from app.services.entity_service import EntityService
+from app.services.export_service import ExportService
+from app.services.hunt_service import HuntService
 
 
 @contextmanager
@@ -183,6 +189,54 @@ OPERATION_POLICIES = [
     ("hunt.list_case_executions", "readable"),
     ("hunt.read_execution_steps", "readable"),
 ]
+
+SERVICE_ACCESS_POLICIES = [
+    (CaseService, "create_case", "require_admin"),
+    (CaseService, "get_cases", "is_admin"),
+    (CaseService, "get_case", "readable"),
+    (CaseService, "update_case", "writable"),
+    (CaseService, "add_user_to_case", "require_admin"),
+    (CaseService, "remove_user_from_case", "require_admin"),
+    (CaseService, "update_case_user_lead_status", "require_admin"),
+    (EntityService, "get_case_entities", "readable"),
+    (EntityService, "get_entity", "readable"),
+    (EntityService, "create_entity", "writable"),
+    (EntityService, "update_entity", "writable"),
+    (EntityService, "delete_entity", "writable"),
+    (EntityService, "find_entity_by_ip_address", "readable"),
+    (EntityService, "find_entity_by_domain", "readable"),
+    (EntityService, "enrich_entity_description", "writable"),
+    (ExportService, "export_entities", "readable"),
+    (ExportService, "export_case_bundle", "readable"),
+    (ExportService, "export_hunt_execution", "readable"),
+    (HuntService, "create_execution", "writable"),
+    (HuntService, "get_execution", "readable"),
+    (HuntService, "list_case_executions", "readable"),
+    (HuntService, "cancel_execution", "writable"),
+    (HuntService, "get_execution_steps", "readable"),
+]
+
+
+@pytest.mark.parametrize(("service", "method_name", "policy"), SERVICE_ACCESS_POLICIES)
+def test_service_operation_uses_one_declared_case_access_policy(
+    service: type, method_name: str, policy: str
+):
+    """Guard the ticket's one-policy-call-per-operation architecture."""
+    tree = ast.parse(dedent(inspect.getsource(getattr(service, method_name))))
+    policy_calls = [
+        node.func.attr
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Attribute)
+        and isinstance(node.func.value.value, ast.Name)
+        and node.func.value.value.id == "self"
+        and node.func.value.attr == "access"
+        and node.func.attr
+        in {"readable", "writable", "lead", "require_admin", "is_admin"}
+    ]
+
+    assert policy_calls == [policy]
 
 
 @pytest.mark.parametrize(("operation", "policy"), OPERATION_POLICIES)

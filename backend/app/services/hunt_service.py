@@ -135,7 +135,8 @@ class HuntService:
         execution = self.db.get(HuntExecution, execution_id)
         if execution is None:
             raise ResourceNotFoundException("Hunt execution not found")
-        self.access.readable(current_user, execution.case_id)
+        case = self.access.readable(current_user, execution.case_id)
+        execution.case = case
         return execution
 
     async def list_case_executions(
@@ -158,7 +159,8 @@ class HuntService:
         if not execution:
             raise ResourceNotFoundException("Hunt execution not found")
 
-        self.access.writable(current_user, execution.case_id)
+        case = self.access.writable(current_user, execution.case_id)
+        execution.case = case
 
         # Only running executions can be cancelled
         if execution.status != "running":
@@ -173,7 +175,10 @@ class HuntService:
     async def get_execution_steps(
         self, execution_id: int, *, current_user: User
     ) -> list[HuntStep]:
-        await self.get_execution(execution_id, current_user=current_user)
+        execution = self.db.get(HuntExecution, execution_id)
+        if execution is None:
+            raise ResourceNotFoundException("Hunt execution not found")
+        self.access.readable(current_user, execution.case_id)
         steps = self.db.exec(
             select(HuntStep)
             .where(HuntStep.execution_id == execution_id)
