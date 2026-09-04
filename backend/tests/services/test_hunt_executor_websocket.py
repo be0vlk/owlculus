@@ -1,16 +1,17 @@
-"""Hunt executor event and input-flow tests."""
+"""Hunt executor contracts at the runner, database, and event seams."""
 
-import asyncio
-from contextlib import contextmanager
-from unittest.mock import MagicMock
+from collections.abc import AsyncGenerator
+from typing import Any, ClassVar
 
 import pytest
+from sqlmodel import Session, select
 
-from app.database.models import HuntExecution, User
-from app.hunts.definitions.domain_hunt import DomainHunt
+from app.database.models import Case, Hunt, HuntExecution, HuntStep, User
 from app.hunts.hunt_event import HuntEvent
 from app.hunts.hunt_executor import HuntExecutor
-from app.plugins.base_plugin import ResultEvent
+from app.plugins.base_plugin import BasePlugin, PluginRun, ResultEvent
+from app.plugins.plugin_registry import PluginRegistry
+from app.plugins.plugin_runner import PluginRunner
 
 
 class EventRecorder:
@@ -21,192 +22,189 @@ class EventRecorder:
         self.events.append(event)
 
 
-class RecordingPlugin:
-    def __init__(self, result, calls):
-        self._result = result
-        self._calls = calls
-        self._current_user = None
-
-    async def execute_with_evidence_collection(self, parameters, ctx):
-        self._calls.append(parameters.copy())
-        if isinstance(self._result, Exception):
-            raise self._result
-        if isinstance(self._result, list):
-            for event in self._result:
-                yield event
-        else:
-            yield ResultEvent.data(self._result)
+class TrivialPlugin(BasePlugin):
+    async def run(
+        self, params: dict[str, Any], ctx: PluginRun
+    ) -> AsyncGenerator[ResultEvent, None]:
+        yield self.data({"result": "ok"})
 
 
-class PluginCatalogueStub:
-    def __init__(self, results):
-        self.results = results
-        self.calls: dict[str, list[dict]] = {}
-
-    def get_plugin(self, name):
-        calls = self.calls.setdefault(name, [])
-        return RecordingPlugin(self.results.get(name, {}), calls)
-
-    @contextmanager
-    def open_run(self, parameters, *, current_user):
-        yield object()
+class FailingPlugin(BasePlugin):
+    async def run(
+        self, params: dict[str, Any], ctx: PluginRun
+    ) -> AsyncGenerator[ResultEvent, None]:
+        raise RuntimeError("provider exploded")
+        yield  # pragma: no cover
 
 
-def execution():
-    return HuntExecution(
-        id=1,
-        hunt_id=1,
-        case_id=1,
-        status="running",
-        progress=0.0,
-        initial_parameters={},
-        created_by_id=1,
-    )
+class FirstPlugin(BasePlugin):
+    async def run(
+        self, params: dict[str, Any], ctx: PluginRun
+    ) -> AsyncGenerator[ResultEvent, None]:
+        yield self.data({"address": "192.0.2.44"})
 
 
-def user():
-    return User(
-        id=1,
-        username="test",
-        email="test@test.com",
-        password_hash="hash",
-        role="Admin",
-    )
+class SecondPlugin(BasePlugin):
+    calls: ClassVar[list[dict[str, Any]]] = []
+
+    async def run(
+        self, params: dict[str, Any], ctx: PluginRun
+    ) -> AsyncGenerator[ResultEvent, None]:
+        self.calls.append(params.copy())
+        yield self.data({"received": params["query"]})
 
 
-def hunt_definition(*steps):
-    return {"steps": list(steps)}
-
-
-def step(step_id, *, depends_on=None, plugin_name="test_plugin", optional=False):
+def step(
+    step_id: str,
+    *,
+    plugin_name: str = "TrivialPlugin",
+    depends_on: list[str] | None = None,
+    parameter_mapping: dict[str, str] | None = None,
+    optional: bool = False,
+) -> dict[str, Any]:
     return {
         "step_id": step_id,
         "plugin_name": plugin_name,
         "display_name": step_id,
         "description": f"Run {step_id}",
         "depends_on": depends_on or [],
-        "parameter_mapping": {},
+        "parameter_mapping": parameter_mapping or {},
         "static_parameters": {},
         "save_to_case": False,
         "optional": optional,
     }
 
 
-@pytest.mark.asyncio
-async def test_executor_records_progress_and_completion_events(db_session):
-    recorder = EventRecorder()
-    plugins = PluginCatalogueStub({"test_plugin": {"result": "ok"}})
-    executor = HuntExecutor(db_session, recorder, plugin_service=plugins)
-    db_session.add = MagicMock()
-    db_session.commit = MagicMock()
-
-    await executor.execute_hunt(
-        execution(),
-        hunt_definition(step("step1"), step("step2", depends_on=["step1"])),
-        user(),
+def stored_execution(session: Session, user: User) -> HuntExecution:
+    case = Case(case_number="CASE-HUNT", title="Runner contract")
+    hunt = Hunt(
+        name="runner-contract",
+        display_name="Runner contract",
+        description="Exercise the plugin runner.",
+        category="test",
+        definition_json={"steps": []},
     )
-
-    assert recorder.events == [
-        HuntEvent.progress(1, 0.0, "step1"),
-        HuntEvent.step_complete(1, "step1", 0.5),
-        HuntEvent.progress(1, 0.5),
-        HuntEvent.progress(1, 0.5, "step2"),
-        HuntEvent.step_complete(1, "step2", 1.0),
-        HuntEvent.progress(1, 1.0),
-        HuntEvent.complete(1),
-    ]
-
-
-@pytest.mark.asyncio
-async def test_executor_records_required_step_failure(db_session):
-    recorder = EventRecorder()
-    plugins = PluginCatalogueStub({"failing_plugin": RuntimeError("plugin failed")})
-    executor = HuntExecutor(db_session, recorder, plugin_service=plugins)
-    db_session.add = MagicMock()
-    db_session.commit = MagicMock()
-    run = execution()
-
-    await executor.execute_hunt(
-        run,
-        hunt_definition(step("step1", plugin_name="failing_plugin")),
-        user(),
+    session.add_all([case, hunt])
+    session.commit()
+    execution = HuntExecution(
+        hunt_id=hunt.id,
+        case_id=case.id,
+        initial_parameters={},
+        created_by_id=user.id,
     )
+    session.add(execution)
+    session.commit()
+    session.refresh(execution)
+    return execution
 
-    assert recorder.events == [
-        HuntEvent.progress(1, 0.0, "step1"),
-        HuntEvent.step_failed(1, "step1", 0.0),
-        HuntEvent.progress(1, 0.0),
-        HuntEvent.complete(1),
-    ]
-    assert run.status == "partial"
+
+def executor(
+    session: Session,
+    recorder: EventRecorder,
+    plugin_classes: list[type[BasePlugin]],
+) -> HuntExecutor:
+    runner = PluginRunner(PluginRegistry.from_classes(plugin_classes))
+    return HuntExecutor(session, recorder, plugin_runner=runner)
 
 
 @pytest.mark.asyncio
-async def test_executor_records_plugin_errors_and_fails_an_error_only_step(db_session):
+async def test_executor_persists_declared_step_output_and_progress_events(
+    session: Session, test_user: User
+):
     recorder = EventRecorder()
-    plugins = PluginCatalogueStub(
-        {"failing_plugin": [ResultEvent.error("provider rejected the request")]}
-    )
-    executor = HuntExecutor(db_session, recorder, plugin_service=plugins)
-    db_session.add = MagicMock()
-    db_session.commit = MagicMock()
-    run = execution()
+    execution = stored_execution(session, test_user)
 
-    await executor.execute_hunt(
-        run,
-        hunt_definition(step("step1", plugin_name="failing_plugin")),
-        user(),
+    await executor(session, recorder, [TrivialPlugin]).execute_hunt(
+        execution, {"steps": [step("lookup")]}, test_user
     )
 
-    step_record = next(
-        call.args[0]
-        for call in db_session.add.call_args_list
-        if getattr(call.args[0], "step_id", None) == "step1"
-    )
-    assert step_record.error_details == "provider rejected the request"
-    assert recorder.events[-2:] == [HuntEvent.progress(1, 0.0), HuntEvent.complete(1)]
-    assert run.status == "partial"
-
-
-@pytest.mark.asyncio
-async def test_executor_treats_an_optional_failure_as_terminal(db_session):
-    recorder = EventRecorder()
-    plugins = PluginCatalogueStub({"failing_plugin": RuntimeError("plugin failed")})
-    executor = HuntExecutor(db_session, recorder, plugin_service=plugins)
-    db_session.add = MagicMock()
-    db_session.commit = MagicMock()
-    run = execution()
-
-    await asyncio.wait_for(
-        executor.execute_hunt(
-            run,
-            hunt_definition(step("step1", plugin_name="failing_plugin", optional=True)),
-            user(),
-        ),
-        timeout=0.1,
-    )
-
-    assert plugins.calls["failing_plugin"] == [{"case_id": 1, "save_to_case": False}]
-    assert recorder.events[-1] == HuntEvent.complete(1)
-    assert run.status == "completed"
-
-
-@pytest.mark.asyncio
-async def test_domain_hunt_passes_dns_address_to_shodan(db_session):
-    recorder = EventRecorder()
-    plugins = PluginCatalogueStub(
-        {"DnsLookup": {"results": [{"records": ["192.0.2.44"]}]}}
-    )
-    executor = HuntExecutor(db_session, recorder, plugin_service=plugins)
-    db_session.add = MagicMock()
-    db_session.commit = MagicMock()
-    run = execution()
-    run.initial_parameters = {
-        "domain": "example.com",
-        "subdomain_concurrency": 10.0,
-        "use_securitytrails": False,
+    persisted = session.exec(
+        select(HuntStep).where(HuntStep.execution_id == execution.id)
+    ).one()
+    assert persisted.status == "completed"
+    assert persisted.output == {
+        "results": [{"result": "ok"}],
+        "result_count": 1,
+        "plugin": "TrivialPlugin",
+        "errors": [],
     }
+    assert recorder.events == [
+        HuntEvent.progress(execution.id, 0.0, "lookup"),
+        HuntEvent.step_complete(execution.id, "lookup", 1.0),
+        HuntEvent.progress(execution.id, 1.0),
+        HuntEvent.complete(execution.id),
+    ]
 
-    await executor.execute_hunt(run, DomainHunt().to_definition(), user())
 
-    assert plugins.calls["ShodanPlugin"][0]["query"] == "192.0.2.44"
+@pytest.mark.asyncio
+async def test_throwing_plugin_is_a_persisted_failed_step(
+    session: Session, test_user: User
+):
+    recorder = EventRecorder()
+    execution = stored_execution(session, test_user)
+
+    await executor(session, recorder, [FailingPlugin]).execute_hunt(
+        execution,
+        {"steps": [step("lookup", plugin_name="FailingPlugin")]},
+        test_user,
+    )
+
+    persisted = session.exec(
+        select(HuntStep).where(HuntStep.execution_id == execution.id)
+    ).one()
+    assert persisted.status == "failed"
+    assert persisted.error_details == "Plugin execution error: provider exploded"
+    assert persisted.output == {
+        "results": [],
+        "result_count": 0,
+        "plugin": "FailingPlugin",
+        "errors": [{"message": "Plugin execution error: provider exploded"}],
+    }
+    assert execution.status == "partial"
+    assert HuntEvent.step_failed(execution.id, "lookup", 0.0) in recorder.events
+
+
+@pytest.mark.asyncio
+async def test_optional_plugin_failure_is_terminal_and_hunt_completes(
+    session: Session, test_user: User
+):
+    recorder = EventRecorder()
+    execution = stored_execution(session, test_user)
+
+    await executor(session, recorder, [FailingPlugin]).execute_hunt(
+        execution,
+        {"steps": [step("lookup", plugin_name="FailingPlugin", optional=True)]},
+        test_user,
+    )
+
+    assert execution.status == "completed"
+    assert recorder.events[-1] == HuntEvent.complete(execution.id)
+
+
+@pytest.mark.asyncio
+async def test_executor_resolves_a_prior_step_result_for_the_next_plugin(
+    session: Session, test_user: User
+):
+    SecondPlugin.calls = []
+    recorder = EventRecorder()
+    execution = stored_execution(session, test_user)
+
+    await executor(session, recorder, [FirstPlugin, SecondPlugin]).execute_hunt(
+        execution,
+        {
+            "steps": [
+                step("first", plugin_name="FirstPlugin"),
+                step(
+                    "second",
+                    plugin_name="SecondPlugin",
+                    depends_on=["first"],
+                    parameter_mapping={"query": "first.results[0].address"},
+                ),
+            ]
+        },
+        test_user,
+    )
+
+    assert SecondPlugin.calls == [
+        {"query": "192.0.2.44", "case_id": execution.case_id, "save_to_case": False}
+    ]

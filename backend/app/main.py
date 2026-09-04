@@ -28,7 +28,7 @@ from app.core.setup import check_and_generate_setup_token
 from app.database.connection import engine
 from app.hunts.hunt_definition_check import HuntDefinitionCheck
 from app.hunts.hunt_registry import shipped_hunt_registry
-from app.services.plugin_service import PluginService
+from app.plugins.plugin_registry import shipped_plugin_registry
 
 HUNT_SYNC_RETRY_SECONDS = 1.0
 
@@ -53,11 +53,10 @@ def _complete_setup_token_check(application: FastAPI) -> bool:
 
 def _check_hunt_definitions() -> None:
     """Fail startup if a shipped hunt cannot be executed by the plugin catalogue."""
-    with Session(engine) as session:
-        definition_check = HuntDefinitionCheck(
-            PluginService(session).parameter_catalogue()
-        )
-        shipped_hunt_registry.check(definition_check)
+    definition_check = HuntDefinitionCheck(
+        shipped_plugin_registry.parameter_catalogue()
+    )
+    shipped_hunt_registry.check(definition_check)
 
 
 def _complete_hunt_sync(application: FastAPI) -> bool:

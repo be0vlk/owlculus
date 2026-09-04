@@ -1,744 +1,141 @@
-"""
-Comprehensive tests for plugins API endpoints
-"""
+"""HTTP contracts for plugin listing and NDJSON execution."""
 
-import json
+from collections.abc import AsyncGenerator
 from contextlib import nullcontext
-from unittest.mock import patch
+from typing import Any
 
-import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
-from app.api.plugins import get_plugin_api_keys, get_plugin_session_factory
+from app.api.plugins import (
+    get_plugin_api_keys,
+    get_plugin_registry,
+    get_plugin_session_factory,
+)
 from app.core.dependencies import get_current_user
-from app.core.exceptions import ResourceNotFoundException
-from app.database.connection import get_db
 from app.database.models import User
 from app.main import app
-from app.services.api_key_vault import Provider, StaticApiKeyVault
+from app.plugins.base_plugin import BasePlugin, PluginRun, ResultEvent
+from app.plugins.plugin_registry import PluginRegistry
+from app.services.api_key_vault import StaticApiKeyVault
 
 
-@pytest.fixture
-def test_admin(session: Session) -> User:
-    admin = User(
-        username="admin",
-        email="admin@example.com",
-        password_hash="dummy_hash",
-        is_active=True,
-        role="Admin",
+class EchoPlugin(BasePlugin):
+    def __init__(self):
+        super().__init__(display_name="Echo")
+        self.description = "Echo a query."
+        self.category = "Test"
+        self.parameters = {"query": {"type": "string", "required": True}}
+
+    async def run(
+        self, params: dict[str, Any], ctx: PluginRun
+    ) -> AsyncGenerator[ResultEvent, None]:
+        yield self.status("Starting")
+        yield self.data({"query": params["query"]})
+
+
+class ThrowingPlugin(BasePlugin):
+    async def run(
+        self, params: dict[str, Any], ctx: PluginRun
+    ) -> AsyncGenerator[ResultEvent, None]:
+        raise RuntimeError("provider exploded")
+        yield  # pragma: no cover
+
+
+def configure_plugins(
+    session: Session, user: User, plugin_classes: list[type[BasePlugin]]
+) -> None:
+    registry = PluginRegistry.from_classes(plugin_classes)
+    app.dependency_overrides[get_current_user] = lambda: user
+    app.dependency_overrides[get_plugin_registry] = lambda: registry
+    app.dependency_overrides[get_plugin_api_keys] = lambda: StaticApiKeyVault({})
+    app.dependency_overrides[get_plugin_session_factory] = lambda: (
+        lambda: nullcontext(session)
     )
-    session.add(admin)
-    session.commit()
-    session.refresh(admin)
-    return admin
 
 
-@pytest.fixture
-def test_user(session: Session) -> User:
-    user = User(
-        username="testuser",
-        email="testuser@example.com",
-        password_hash="dummy_hash",
-        is_active=True,
-        role="Investigator",
-    )
-    session.add(user)
-    session.commit()
-    session.refresh(user)
-    return user
+def test_list_plugins_uses_class_list_registry(
+    client: TestClient, session: Session, test_admin: User
+):
+    configure_plugins(session, test_admin, [EchoPlugin])
 
+    response = client.get("/api/plugins/")
 
-@pytest.fixture
-def test_analyst(session: Session) -> User:
-    analyst = User(
-        username="analyst",
-        email="analyst@example.com",
-        password_hash="dummy_hash",
-        is_active=True,
-        role="Analyst",
-    )
-    session.add(analyst)
-    session.commit()
-    session.refresh(analyst)
-    return analyst
-
-
-def override_get_db_factory(session: Session):
-    def override_get_db():
-        return session
-
-    return override_get_db
-
-
-def override_get_current_user_factory(user: User):
-    def override_get_current_user():
-        return user
-
-    return override_get_current_user
-
-
-class TestPluginsAPI:
-    """Test cases for plugins API endpoints"""
-
-    # GET /api/plugins/ tests
-
-    def test_list_plugins_success_admin(
-        self, session: Session, test_admin: User, client: TestClient
-    ):
-        """Test successful plugins listing by admin"""
-        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
-            test_admin
-        )
-        app.dependency_overrides[get_db] = override_get_db_factory(session)
-
-        mock_plugins = {
-            "DnsLookupPlugin": {
-                "name": "DnsLookupPlugin",
-                "display_name": "DNS Lookup",
-                "description": "Perform DNS lookups for domains",
-                "enabled": True,
-                "category": "Network",
-                "parameters": {
-                    "domain": {
-                        "type": "str",
-                        "description": "Domain to lookup",
-                        "required": True,
-                    }
-                },
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["EchoPlugin"] == {
+        "name": "EchoPlugin",
+        "display_name": "Echo",
+        "description": "Echo a query.",
+        "enabled": True,
+        "category": "Test",
+        "parameters": {
+            "query": {"type": "string", "required": True},
+            "save_to_case": {
+                "type": "boolean",
+                "description": "Save Echo results as evidence to the case",
+                "default": False,
+                "required": False,
             },
-            "HolehePlugin": {
-                "name": "HolehePlugin",
-                "display_name": "Holehe Email Check",
-                "description": "Check email existence across platforms",
-                "enabled": True,
-                "category": "OSINT",
-                "parameters": {
-                    "email": {
-                        "type": "str",
-                        "description": "Email to check",
-                        "required": True,
-                    }
-                },
-            },
-        }
+        },
+        "api_key_requirements": [],
+        "api_key_status": {},
+    }
 
-        try:
-            with patch(
-                "app.services.plugin_service.PluginService.list_plugins"
-            ) as mock_list:
-                mock_list.return_value = mock_plugins
 
-                response = client.get("/api/plugins/")
-                assert response.status_code == status.HTTP_200_OK
-                data = response.json()
-                assert len(data) == 2
-                assert "DnsLookupPlugin" in data
-                assert "HolehePlugin" in data
-                assert data["DnsLookupPlugin"]["display_name"] == "DNS Lookup"
-                assert data["HolehePlugin"]["display_name"] == "Holehe Email Check"
-        finally:
-            app.dependency_overrides.clear()
+def test_execute_real_plugin_ends_with_complete(
+    client: TestClient, session: Session, test_user: User
+):
+    configure_plugins(session, test_user, [EchoPlugin])
 
-    def test_list_plugins_success_investigator(
-        self, session: Session, test_user: User, client: TestClient
-    ):
-        """Test successful plugins listing by investigator"""
-        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
-            test_user
-        )
-        app.dependency_overrides[get_db] = override_get_db_factory(session)
+    response = client.post("/api/plugins/EchoPlugin/execute", json={"query": "owl"})
 
-        mock_plugins = {
-            "DnsLookupPlugin": {
-                "name": "DnsLookupPlugin",
-                "display_name": "DNS Lookup",
-                "description": "Perform DNS lookups for domains",
-                "enabled": True,
-                "category": "Network",
-                "parameters": {},
-            }
-        }
+    assert response.status_code == status.HTTP_200_OK
+    assert response.headers["content-type"] == "application/json"
+    assert response.text.splitlines() == [
+        '{"type": "status", "data": {"message": "Starting"}}',
+        '{"type": "data", "data": {"query": "owl"}}',
+        '{"type": "complete", "data": {}}',
+    ]
 
-        try:
-            with patch(
-                "app.services.plugin_service.PluginService.list_plugins"
-            ) as mock_list:
-                mock_list.return_value = mock_plugins
 
-                response = client.get("/api/plugins/")
-                assert response.status_code == status.HTTP_200_OK
-                data = response.json()
-                assert len(data) == 1
-                assert "DnsLookupPlugin" in data
-        finally:
-            app.dependency_overrides.clear()
+def test_throwing_plugin_is_error_then_complete(
+    client: TestClient, session: Session, test_user: User
+):
+    configure_plugins(session, test_user, [ThrowingPlugin])
 
-    def test_list_plugins_forbidden_analyst(
-        self, session: Session, test_analyst: User, client: TestClient
-    ):
-        """Test plugins listing forbidden for analyst"""
-        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
-            test_analyst
-        )
-        app.dependency_overrides[get_db] = override_get_db_factory(session)
+    response = client.post("/api/plugins/ThrowingPlugin/execute", json={})
 
-        try:
-            response = client.get("/api/plugins/")
-            # The @no_analyst decorator at API level should return 403
-            assert response.status_code == status.HTTP_403_FORBIDDEN
-        finally:
-            app.dependency_overrides.clear()
+    assert response.text.splitlines() == [
+        '{"type": "error", "data": {"message": "Plugin execution error: provider exploded"}}',
+        '{"type": "complete", "data": {}}',
+    ]
 
-    def test_list_plugins_empty_result(
-        self, session: Session, test_admin: User, client: TestClient
-    ):
-        """Test plugins listing with no plugins available"""
-        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
-            test_admin
-        )
-        app.dependency_overrides[get_db] = override_get_db_factory(session)
 
-        try:
-            with patch(
-                "app.services.plugin_service.PluginService.list_plugins"
-            ) as mock_list:
-                mock_list.return_value = {}
+def test_unknown_plugin_is_error_then_complete(
+    client: TestClient, session: Session, test_user: User
+):
+    configure_plugins(session, test_user, [])
 
-                response = client.get("/api/plugins/")
-                assert response.status_code == status.HTTP_200_OK
-                data = response.json()
-                assert len(data) == 0
-        finally:
-            app.dependency_overrides.clear()
+    response = client.post("/api/plugins/Unknown/execute", json={})
 
-    def test_list_plugins_unauthorized(self, client: TestClient):
-        """Test plugins listing without authentication"""
-        response = client.get("/api/plugins/")
-        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert response.text.splitlines() == [
+        '{"type": "error", "data": {"message": "Plugin Unknown not found"}}',
+        '{"type": "complete", "data": {}}',
+    ]
 
-    # POST /api/plugins/{plugin_name}/execute tests
 
-    def test_people_data_labs_runs_with_static_vault(
-        self, session: Session, test_user: User, client: TestClient, monkeypatch
-    ):
-        """The HTTP adapter passes vault keys through the run context."""
+def test_analyst_cannot_execute_plugins(
+    client: TestClient, session: Session, test_analyst: User
+):
+    configure_plugins(session, test_analyst, [EchoPlugin])
 
-        class Response:
-            ok = True
-            text = "ok"
-            status_code = 200
+    response = client.post("/api/plugins/EchoPlugin/execute", json={"query": "owl"})
 
-            def json(self):
-                return {
-                    "status": 200,
-                    "data": {"full_name": "Ada Lovelace", "likelihood": 10},
-                    "credits_used": 1,
-                }
+    assert response.status_code == status.HTTP_403_FORBIDDEN
 
-        class Client:
-            def __init__(self, api_key):
-                assert api_key == "pdl-test-key"
-                self.person = self
 
-            def enrichment(self, **params):
-                assert params["email"] == "ada@example.com"
-                return Response()
+def test_execute_plugin_requires_authentication(client: TestClient):
+    response = client.post("/api/plugins/EchoPlugin/execute", json={"query": "owl"})
 
-        monkeypatch.setattr("peopledatalabs.PDLPY", Client)
-        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
-            test_user
-        )
-        app.dependency_overrides[get_db] = override_get_db_factory(session)
-        app.dependency_overrides[get_plugin_api_keys] = lambda: StaticApiKeyVault(
-            {Provider.PEOPLE_DATA_LABS: "pdl-test-key"}
-        )
-        app.dependency_overrides[get_plugin_session_factory] = lambda: (
-            lambda: nullcontext(session)
-        )
-
-        response = client.post(
-            "/api/plugins/PeopledatalabsPlugin/execute",
-            json={"search_type": "person", "email": "ada@example.com"},
-        )
-
-        assert response.status_code == status.HTTP_200_OK
-        assert response.text == (
-            '{"type": "data", "data": {"search_type": "person", '
-            '"person": {"full_name": "Ada Lovelace", "likelihood": 10}, '
-            '"api_credits_used": 1, "confidence": 10}}\n'
-        )
-
-    def test_execute_plugin_success(
-        self, session: Session, test_user: User, client: TestClient
-    ):
-        """Test successful plugin execution"""
-        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
-            test_user
-        )
-        app.dependency_overrides[get_db] = override_get_db_factory(session)
-
-        plugin_params = {"domain": "example.com"}
-
-        async def mock_execution_result():
-            """Mock async generator for plugin execution"""
-            yield {"type": "status", "data": {"message": "Starting DNS lookup"}}
-            yield {
-                "type": "data",
-                "data": {"domain": "example.com", "ip": "93.184.216.34"},
-            }
-            yield {"type": "status", "data": {"message": "Lookup completed"}}
-
-        try:
-            with patch(
-                "app.services.plugin_service.PluginService.execute_plugin"
-            ) as mock_execute:
-                mock_execute.return_value = mock_execution_result()
-
-                response = client.post(
-                    "/api/plugins/DnsLookupPlugin/execute", json=plugin_params
-                )
-                assert response.status_code == status.HTTP_200_OK
-                assert response.headers["content-type"] == "application/json"
-
-                # Check streaming response content
-                content = response.content.decode()
-                lines = [line for line in content.split("\n") if line.strip()]
-                assert len(lines) >= 1
-
-                # Parse first line as JSON
-                first_result = json.loads(lines[0])
-                assert first_result["type"] in ["status", "data"]
-        finally:
-            app.dependency_overrides.clear()
-
-    def test_execute_plugin_with_no_params(
-        self, session: Session, test_user: User, client: TestClient
-    ):
-        """Test plugin execution without parameters"""
-        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
-            test_user
-        )
-        app.dependency_overrides[get_db] = override_get_db_factory(session)
-
-        async def mock_execution_result():
-            """Mock async generator for plugin execution"""
-            yield {
-                "type": "data",
-                "data": {"message": "Plugin executed without params"},
-            }
-
-        try:
-            with patch(
-                "app.services.plugin_service.PluginService.execute_plugin"
-            ) as mock_execute:
-                mock_execute.return_value = mock_execution_result()
-
-                response = client.post("/api/plugins/TestPlugin/execute")
-                assert response.status_code == status.HTTP_200_OK
-        finally:
-            app.dependency_overrides.clear()
-
-    def test_execute_plugin_not_found(
-        self, session: Session, test_user: User, client: TestClient
-    ):
-        """Test execution of non-existent plugin"""
-        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
-            test_user
-        )
-        app.dependency_overrides[get_db] = override_get_db_factory(session)
-
-        plugin_params = {"test": "value"}
-
-        try:
-            with patch(
-                "app.services.plugin_service.PluginService.execute_plugin"
-            ) as mock_execute:
-                mock_execute.side_effect = ResourceNotFoundException(
-                    "Plugin 'NonExistentPlugin' not found"
-                )
-
-                response = client.post(
-                    "/api/plugins/NonExistentPlugin/execute", json=plugin_params
-                )
-                assert (
-                    response.status_code == status.HTTP_200_OK
-                )  # Streaming response always returns 200
-
-                # Check error in response content
-                content = response.content.decode()
-                lines = [line for line in content.split("\n") if line.strip()]
-                assert len(lines) >= 1
-
-                error_result = json.loads(lines[0])
-                assert error_result["type"] == "error"
-                assert "not found" in error_result["data"]["message"]
-        finally:
-            app.dependency_overrides.clear()
-
-    def test_execute_plugin_execution_error(
-        self, session: Session, test_user: User, client: TestClient
-    ):
-        """Test plugin execution with runtime error"""
-        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
-            test_user
-        )
-        app.dependency_overrides[get_db] = override_get_db_factory(session)
-
-        plugin_params = {"invalid": "param"}
-
-        try:
-            with patch(
-                "app.services.plugin_service.PluginService.execute_plugin"
-            ) as mock_execute:
-                mock_execute.side_effect = Exception("Runtime error during execution")
-
-                response = client.post(
-                    "/api/plugins/TestPlugin/execute", json=plugin_params
-                )
-                assert (
-                    response.status_code == status.HTTP_200_OK
-                )  # Streaming response always returns 200
-
-                # Check error in response content
-                content = response.content.decode()
-                lines = [line for line in content.split("\n") if line.strip()]
-                assert len(lines) >= 1
-
-                error_result = json.loads(lines[0])
-                assert error_result["type"] == "error"
-                assert "Plugin execution error" in error_result["data"]["message"]
-        finally:
-            app.dependency_overrides.clear()
-
-    def test_execute_plugin_forbidden_analyst(
-        self,
-        session: Session,
-        test_analyst: User,
-        client: TestClient,
-    ):
-        """Test plugin execution forbidden for analyst"""
-        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
-            test_analyst
-        )
-        app.dependency_overrides[get_db] = override_get_db_factory(session)
-
-        plugin_params = {"test": "value"}
-
-        try:
-            response = client.post(
-                "/api/plugins/TestPlugin/execute", json=plugin_params
-            )
-            # The @no_analyst decorator at API level should return 403
-            assert response.status_code == status.HTTP_403_FORBIDDEN
-        finally:
-            app.dependency_overrides.clear()
-
-    def test_execute_plugin_unauthorized(self, client: TestClient):
-        """Test plugin execution without authentication"""
-        plugin_params = {"test": "value"}
-
-        response = client.post("/api/plugins/TestPlugin/execute", json=plugin_params)
-        assert response.status_code == status.HTTP_401_UNAUTHORIZED
-
-    def test_execute_plugin_complex_params(
-        self, session: Session, test_user: User, client: TestClient
-    ):
-        """Test plugin execution with complex parameters"""
-        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
-            test_user
-        )
-        app.dependency_overrides[get_db] = override_get_db_factory(session)
-
-        complex_params = {
-            "email": "test@example.com",
-            "options": {
-                "deep_search": True,
-                "platforms": ["twitter", "instagram", "facebook"],
-                "timeout": 30,
-            },
-            "filters": ["active", "verified"],
-        }
-
-        async def mock_execution_result():
-            """Mock async generator for plugin execution"""
-            yield {
-                "type": "status",
-                "data": {"message": "Processing complex parameters"},
-            }
-            yield {"type": "data", "data": {"results": complex_params}}
-
-        try:
-            with patch(
-                "app.services.plugin_service.PluginService.execute_plugin"
-            ) as mock_execute:
-                mock_execute.return_value = mock_execution_result()
-
-                response = client.post(
-                    "/api/plugins/HolehePlugin/execute", json=complex_params
-                )
-                assert response.status_code == status.HTTP_200_OK
-
-                # Verify complex params were processed
-                content = response.content.decode()
-                lines = [line for line in content.split("\n") if line.strip()]
-                assert len(lines) >= 1
-        finally:
-            app.dependency_overrides.clear()
-
-    def test_execute_plugin_streaming_multiple_results(
-        self,
-        session: Session,
-        test_user: User,
-        client: TestClient,
-    ):
-        """Test plugin execution with multiple streaming results"""
-        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
-            test_user
-        )
-        app.dependency_overrides[get_db] = override_get_db_factory(session)
-
-        async def mock_execution_result():
-            """Mock async generator with multiple results"""
-            yield {"type": "status", "data": {"message": "Starting scan"}}
-            yield {"type": "data", "data": {"platform": "twitter", "found": True}}
-            yield {"type": "data", "data": {"platform": "instagram", "found": False}}
-            yield {"type": "data", "data": {"platform": "facebook", "found": True}}
-            yield {"type": "status", "data": {"message": "Scan completed"}}
-
-        try:
-            with patch(
-                "app.services.plugin_service.PluginService.execute_plugin"
-            ) as mock_execute:
-                mock_execute.return_value = mock_execution_result()
-
-                response = client.post(
-                    "/api/plugins/HolehePlugin/execute",
-                    json={"email": "test@example.com"},
-                )
-                assert response.status_code == status.HTTP_200_OK
-
-                # Check multiple results in streaming response
-                content = response.content.decode()
-                lines = [line for line in content.split("\n") if line.strip()]
-                assert len(lines) == 5  # 5 results from mock generator
-
-                # Verify all results are valid JSON
-                for line in lines:
-                    result = json.loads(line)
-                    assert result["type"] in ["status", "data"]
-        finally:
-            app.dependency_overrides.clear()
-
-    # Edge cases and validation tests
-
-    def test_execute_plugin_invalid_json_params(
-        self,
-        session: Session,
-        test_user: User,
-        client: TestClient,
-    ):
-        """Test plugin execution with invalid JSON parameters"""
-        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
-            test_user
-        )
-        app.dependency_overrides[get_db] = override_get_db_factory(session)
-
-        try:
-            # Send malformed JSON
-            response = client.post(
-                "/api/plugins/TestPlugin/execute",
-                data="invalid json",
-                headers={"Content-Type": "application/json"},
-            )
-            assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
-        finally:
-            app.dependency_overrides.clear()
-
-    def test_execute_plugin_special_characters_in_name(
-        self,
-        session: Session,
-        test_user: User,
-        client: TestClient,
-    ):
-        """Test plugin execution with special characters in plugin name"""
-        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
-            test_user
-        )
-        app.dependency_overrides[get_db] = override_get_db_factory(session)
-
-        try:
-            with patch(
-                "app.services.plugin_service.PluginService.execute_plugin"
-            ) as mock_execute:
-                mock_execute.side_effect = ResourceNotFoundException(
-                    "Plugin 'TestPlugin123' not found"
-                )
-
-                response = client.post("/api/plugins/TestPlugin123/execute", json={})
-                assert response.status_code == status.HTTP_200_OK
-
-                content = response.content.decode()
-                lines = [line for line in content.split("\n") if line.strip()]
-                error_result = json.loads(lines[0])
-                assert error_result["type"] == "error"
-        finally:
-            app.dependency_overrides.clear()
-
-    def test_execute_plugin_empty_plugin_name(
-        self, session: Session, test_user: User, client: TestClient
-    ):
-        """Test plugin execution with empty plugin name"""
-        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
-            test_user
-        )
-        app.dependency_overrides[get_db] = override_get_db_factory(session)
-
-        try:
-            response = client.post("/api/plugins//execute", json={})
-            # This should result in a 404 due to route mismatch
-            assert response.status_code == status.HTTP_404_NOT_FOUND
-        finally:
-            app.dependency_overrides.clear()
-
-    def test_list_plugins_service_error(
-        self, session: Session, test_admin: User, client: TestClient
-    ):
-        """Test plugins listing when service throws unexpected error"""
-        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
-            test_admin
-        )
-        app.dependency_overrides[get_db] = override_get_db_factory(session)
-
-        try:
-            with patch(
-                "app.services.plugin_service.PluginService.list_plugins"
-            ) as mock_list:
-                from fastapi import HTTPException
-
-                mock_list.side_effect = HTTPException(
-                    status_code=500, detail="Unexpected service error"
-                )
-
-                response = client.get("/api/plugins/")
-                assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-        finally:
-            app.dependency_overrides.clear()
-
-    def test_plugins_api_response_format_consistency(
-        self,
-        session: Session,
-        test_admin: User,
-        client: TestClient,
-    ):
-        """Test consistent response format across plugins endpoints"""
-        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
-            test_admin
-        )
-        app.dependency_overrides[get_db] = override_get_db_factory(session)
-
-        mock_plugins = {
-            "TestPlugin": {
-                "name": "TestPlugin",
-                "display_name": "Test Plugin",
-                "description": "A test plugin",
-                "enabled": True,
-                "category": "Test",
-                "parameters": {},
-            }
-        }
-
-        try:
-            with patch(
-                "app.services.plugin_service.PluginService.list_plugins"
-            ) as mock_list:
-                mock_list.return_value = mock_plugins
-
-                response = client.get("/api/plugins/")
-                assert response.status_code == status.HTTP_200_OK
-                data = response.json()
-
-                # Verify response structure
-                assert isinstance(data, dict)
-                for plugin_name, plugin_data in data.items():
-                    assert "name" in plugin_data
-                    assert "display_name" in plugin_data
-                    assert "description" in plugin_data
-                    assert "enabled" in plugin_data
-                    assert "category" in plugin_data
-                    assert "parameters" in plugin_data
-        finally:
-            app.dependency_overrides.clear()
-
-    def test_plugins_api_response_time(
-        self, session: Session, test_admin: User, client: TestClient
-    ):
-        """Test API response time performance"""
-        import time
-
-        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
-            test_admin
-        )
-        app.dependency_overrides[get_db] = override_get_db_factory(session)
-
-        try:
-            with patch(
-                "app.services.plugin_service.PluginService.list_plugins"
-            ) as mock_list:
-                mock_list.return_value = {}
-
-                start_time = time.time()
-                response = client.get("/api/plugins/")
-                end_time = time.time()
-
-                response_time = end_time - start_time
-
-                assert response.status_code == status.HTTP_200_OK
-                # Response should be reasonably fast (under 1 second for simple operations)
-                assert response_time < 1.0
-        finally:
-            app.dependency_overrides.clear()
-
-    def test_execute_plugin_large_parameters(
-        self, session: Session, test_user: User, client: TestClient
-    ):
-        """Test plugin execution with large parameter payload"""
-        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
-            test_user
-        )
-        app.dependency_overrides[get_db] = override_get_db_factory(session)
-
-        # Create a large parameter set
-        large_params = {
-            "data": ["item" + str(i) for i in range(1000)],  # 1000 items
-            "config": {
-                f"option_{i}": f"value_{i}" for i in range(100)
-            },  # 100 config options
-        }
-
-        async def mock_execution_result():
-            yield {
-                "type": "data",
-                "data": {"processed_items": len(large_params["data"])},
-            }
-
-        try:
-            with patch(
-                "app.services.plugin_service.PluginService.execute_plugin"
-            ) as mock_execute:
-                mock_execute.return_value = mock_execution_result()
-
-                response = client.post(
-                    "/api/plugins/TestPlugin/execute", json=large_params
-                )
-                assert response.status_code == status.HTTP_200_OK
-
-                content = response.content.decode()
-                lines = [line for line in content.split("\n") if line.strip()]
-                assert len(lines) >= 1
-
-                result = json.loads(lines[0])
-                assert result["type"] == "data"
-        finally:
-            app.dependency_overrides.clear()
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
