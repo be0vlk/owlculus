@@ -89,6 +89,7 @@ describe('useEntityNoteEditor', () => {
     useEntityNoteEditor(entity, caseId, isEditing, formData, emit)
 
     expect(mockUseBaseNoteEditor).toHaveBeenCalledWith({
+      label: 'Entity notes',
       initialContent: '<p>Initial entity notes</p>',
       placeholder: 'Write your entity notes here... Use / for commands.',
       editable: true,
@@ -213,7 +214,6 @@ describe('useEntityNoteEditor', () => {
   })
 
   it('should handle save errors', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     const error = new Error('Save failed')
     entityService.updateEntity.mockRejectedValue(error)
 
@@ -223,10 +223,8 @@ describe('useEntityNoteEditor', () => {
     const { saveNotes } = result
     await saveNotes()
 
-    expect(consoleError).toHaveBeenCalledWith('Failed to save entity notes:', error)
+    expect(result.saveError.value).toContain('Failed to save notes')
     expect(mockBaseReturn.saving.value).toBe(false)
-
-    consoleError.mockRestore()
   })
 
   it('should update editor content when entity notes change', async () => {

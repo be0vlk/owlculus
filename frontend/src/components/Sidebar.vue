@@ -1,9 +1,19 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <template>
-  <v-navigation-drawer v-model="drawer" :width="256" class="owlculus-sidebar border-e" permanent>
+  <v-navigation-drawer
+    v-model="drawer"
+    :width="256"
+    :rail="smAndDown"
+    :rail-width="56"
+    class="owlculus-sidebar border-e"
+    permanent
+  >
     <!-- Logo Section -->
-    <v-container class="pa-4">
-      <div class="d-flex justify-center align-center" style="height: 120px">
+    <v-container :class="smAndDown ? 'pa-1' : 'pa-4'">
+      <div
+        class="d-flex justify-center align-center"
+        :style="{ height: smAndDown ? '48px' : '120px' }"
+      >
         <v-img
           :src="isDark ? '/owl_logo_white.png' : '/owl_logo.png'"
           alt="Owlculus Logo"
@@ -23,6 +33,7 @@
         :to="item.href"
         :prepend-icon="item.icon"
         :title="item.name"
+        :aria-label="item.name"
         color="primary"
         rounded="xl"
         class="ma-1"
@@ -36,22 +47,32 @@
       <v-container class="pa-2">
         <v-btn
           :prepend-icon="isDark ? 'mdi-white-balance-sunny' : 'mdi-moon-waning-crescent'"
-          :text="isDark ? 'Light Mode' : 'Dark Mode'"
+          :text="smAndDown ? undefined : isDark ? 'Light Mode' : 'Dark Mode'"
+          :aria-label="isDark ? 'Light Mode' : 'Dark Mode'"
+          :icon="
+            smAndDown
+              ? isDark
+                ? 'mdi-white-balance-sunny'
+                : 'mdi-moon-waning-crescent'
+              : undefined
+          "
           variant="text"
-          block
+          :block="!smAndDown"
           size="default"
-          class="mb-2 justify-start"
+          :class="smAndDown ? 'mb-2' : 'mb-2 justify-start'"
           @click="toggleDark"
         />
 
         <v-btn
           prepend-icon="mdi-logout"
-          text="Logout"
+          :text="smAndDown ? undefined : 'Logout'"
+          aria-label="Logout"
+          :icon="smAndDown ? 'mdi-logout' : undefined"
           color="error"
           variant="text"
-          block
+          :block="!smAndDown"
           size="default"
-          class="justify-start"
+          :class="smAndDown ? undefined : 'justify-start'"
           @click="handleLogout"
         />
       </v-container>
@@ -60,11 +81,13 @@
 </template>
 
 <script setup>
+import { useDisplay } from 'vuetify'
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useDarkMode } from '@/composables/useDarkMode'
 
+const { smAndDown } = useDisplay()
 const drawer = ref(true)
 const router = useRouter()
 const authStore = useAuthStore()

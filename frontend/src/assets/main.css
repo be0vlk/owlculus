@@ -19,6 +19,11 @@
     }
 }
 
+.tiptap-editor:focus-visible {
+    outline: 2px solid rgb(var(--v-theme-primary));
+    outline-offset: 2px;
+}
+
 /* Rich text editor styles */
 .ProseMirror {
     outline: none;

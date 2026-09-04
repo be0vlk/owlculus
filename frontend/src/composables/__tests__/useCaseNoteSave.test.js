@@ -64,6 +64,7 @@ describe('useCaseNoteSave', () => {
       useCaseNoteSave(props, emit, { saveMode: 'auto' })
 
       expect(mockUseBaseNoteEditor).toHaveBeenCalledWith({
+        label: 'Case notes',
         initialContent: props.modelValue,
         placeholder: 'Write your case notes here... Use / for commands.',
         editable: true,
@@ -134,6 +135,7 @@ describe('useCaseNoteSave', () => {
       useCaseNoteSave(props, emit, { saveMode: 'manual' })
 
       expect(mockUseBaseNoteEditor).toHaveBeenCalledWith({
+        label: 'Case notes',
         initialContent: props.modelValue,
         placeholder: 'Notes (read-only)',
         editable: false,

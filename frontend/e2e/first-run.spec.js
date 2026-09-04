@@ -1,4 +1,5 @@
 import process from 'node:process'
+import { Buffer } from 'node:buffer'
 import { readFile, writeFile } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { expect, test } from '@playwright/test'
@@ -30,6 +31,105 @@ async function exerciseTextInput(input) {
   await input.fill('migration smoke')
   await expect(input).toHaveValue('migration smoke')
   await input.clear()
+}
+
+async function exerciseEvidenceAndNotes(page) {
+  const createFolder = page.getByRole('button', { name: 'Create Folder', exact: true })
+  await createFolder.click()
+  const folderDialog = page.getByRole('dialog', { name: 'Create New Folder', exact: true })
+  await expect(folderDialog.getByLabel('Folder Name', { exact: true })).toBeFocused()
+  await page.keyboard.press('Shift+Tab')
+  await expect(folderDialog.locator(':focus')).toHaveCount(1)
+  await page.keyboard.press('Escape')
+  await expect(folderDialog).toBeHidden()
+  await expect(createFolder).toBeFocused()
+  await createFolder.click()
+  await folderDialog.getByLabel('Folder Name', { exact: true }).fill('Documents')
+  await folderDialog.getByRole('button', { name: 'Create Folder', exact: true }).click()
+  await expect(folderDialog).toBeHidden()
+  await page.getByRole('button', { name: 'Actions for Documents', exact: true }).click()
+  await page.getByText('Upload Files', { exact: true }).click()
+  const uploadDialog = page.getByRole('dialog', { name: 'Upload Evidence', exact: true })
+  await uploadDialog.locator('input[type="file"]').setInputFiles({
+    name: 'statement.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('Witness statement for migration verification'),
+  })
+  await uploadDialog.getByRole('button', { name: 'Upload', exact: true }).click()
+  await expect(uploadDialog).toBeHidden()
+  await page.getByText('Documents', { exact: true }).click()
+  const previewButton = page.getByRole('button', { name: 'Preview statement.txt', exact: true })
+  await expect(previewButton).toBeVisible()
+  await previewButton.click()
+  const preview = page.getByRole('dialog', {
+    name: 'Text File Content: statement.txt',
+    exact: true,
+  })
+  await expect(preview).toContainText('Witness statement for migration verification')
+  await page.keyboard.press('Escape')
+  await expect(preview).toBeHidden()
+  await expect(previewButton).toBeFocused()
+  await page.getByRole('checkbox', { name: 'Select statement.txt', exact: true }).check()
+  await expect(page.getByText('1 selected', { exact: true })).toBeVisible()
+  await createFolder.click()
+  await folderDialog.getByLabel('Folder Name', { exact: true }).fill('Archive')
+  await folderDialog.getByRole('button', { name: 'Create Folder', exact: true }).click()
+  await expect(folderDialog).toBeHidden()
+  await expect(previewButton).toBeVisible()
+  await page
+    .getByText('statement.txt', { exact: true })
+    .dragTo(page.getByText('Archive', { exact: true }))
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Evidence moved to Archive' }),
+  ).toBeVisible()
+  await page.getByText('Archive', { exact: true }).click()
+  await expect(previewButton).toBeVisible()
+  await page
+    .getByRole('button', { name: 'Delete statement.txt', exact: true })
+    .click({ trial: true })
+  await page.screenshot({
+    path: `test-results/evidence-${process.env.OWLCULUS_VIEWPORT}-light.png`,
+    fullPage: true,
+    animations: 'disabled',
+  })
+  await page.getByRole('button', { name: 'Delete statement.txt', exact: true }).click()
+  const deleteDialog = page.getByRole('dialog', { name: 'Confirm Delete', exact: true })
+  await expect(deleteDialog).toContainText('statement.txt')
+  await page.keyboard.press('Escape')
+  await expect(deleteDialog).toBeHidden()
+
+  await page.getByRole('tab', { name: 'Notes', exact: true }).click()
+  await page.getByRole('button', { name: 'Edit Notes', exact: true }).click()
+  const notes = page.getByRole('textbox', { name: 'Case notes', exact: true })
+  await notes.fill('Investigation notes')
+  await notes.press('ControlOrMeta+a')
+  const bold = page.getByRole('button', { name: 'Bold (Ctrl+B)', exact: true })
+  await bold.click()
+  await expect(bold).toHaveAttribute('aria-pressed', 'true')
+  const expand = page.getByRole('button', { name: 'Expand to fullscreen', exact: true })
+  await expand.click()
+  const fullscreen = page.getByRole('dialog', { name: 'Case Notes Editor', exact: true })
+  await expect(fullscreen.getByRole('textbox', { name: 'Case notes', exact: true })).toContainText(
+    'Investigation notes',
+  )
+  await fullscreen
+    .getByRole('textbox', { name: 'Case notes', exact: true })
+    .fill('Expanded investigation notes')
+  await page.keyboard.press('Escape')
+  await expect(fullscreen).toBeHidden()
+  await expect(expand).toBeFocused()
+  await expect(notes).toContainText('Expanded investigation notes')
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(page.getByRole('status').filter({ hasText: 'Notes saved' })).toBeVisible()
+  await page.getByRole('button', { name: 'Dark Mode', exact: true }).click()
+  await expect(notes).toBeVisible()
+  await expect(bold).toBeDisabled()
+  await page.screenshot({
+    path: `test-results/evidence-notes-${process.env.OWLCULUS_VIEWPORT}-dark.png`,
+    fullPage: true,
+    animations: 'disabled',
+  })
+  await page.getByRole('button', { name: 'Light Mode', exact: true }).click()
 }
 
 async function exerciseCaseAndEntityWorkflow(page) {
@@ -75,6 +175,8 @@ async function exerciseCaseAndEntityWorkflow(page) {
   await evidenceTab.click()
   await expect(evidenceTab).toHaveAttribute('aria-selected', 'true')
   await expect(page).toHaveURL(/[?&]tab=evidence(?:&|$)/)
+
+  await exerciseEvidenceAndNotes(page)
 
   const entitiesTab = page.getByRole('tab', { name: 'Entities', exact: true })
   await entitiesTab.click()

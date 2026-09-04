@@ -13,6 +13,7 @@ export function useBaseNoteEditor({
   initialContent = '',
   placeholder = 'Write your notes here... Use / for commands.',
   editable = true,
+  label = 'Notes',
   onUpdate = null,
   saveDelay = 1000,
 }) {
@@ -65,7 +66,7 @@ export function useBaseNoteEditor({
         },
       }),
     ],
-    shouldRerenderOnTransaction: false,
+    shouldRerenderOnTransaction: true,
     onUpdate: ({ editor }) => {
       if (onUpdate) {
         onUpdate(editor)
@@ -73,7 +74,10 @@ export function useBaseNoteEditor({
     },
     editorProps: {
       attributes: {
-        class: 'tiptap-editor focus:outline-none',
+        class: 'tiptap-editor',
+        role: 'textbox',
+        'aria-label': label,
+        'aria-multiline': 'true',
         style: 'min-height: 150px;',
       },
     },

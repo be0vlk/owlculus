@@ -28,7 +28,7 @@ export const evidenceService = {
       formData.append('parent_folder_id', parentFolderId)
     }
 
-    const response = await api.post(`/api/evidence?${queryParams}`, formData, {
+    const response = await api.post(`/api/evidence/?${queryParams}`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },

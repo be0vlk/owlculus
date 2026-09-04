@@ -1,8 +1,9 @@
-import { watch } from 'vue'
+import { ref, watch } from 'vue'
 import { entityService } from '../services/entity'
 import { useBaseNoteEditor } from './useBaseNoteEditor'
 
 export function useEntityNoteEditor(entity, caseId, isEditing, formData, emit) {
+  const saveError = ref('')
   const saveNotes = async () => {
     if (!editor.value || !entity.value || !isEditing.value) return
 
@@ -11,6 +12,7 @@ export function useEntityNoteEditor(entity, caseId, isEditing, formData, emit) {
 
     try {
       saving.value = true
+      saveError.value = ''
 
       const updatedEntity = await entityService.updateEntity(caseId.value, entity.value.id, {
         entity_type: entity.value.entity_type,
@@ -26,8 +28,8 @@ export function useEntityNoteEditor(entity, caseId, isEditing, formData, emit) {
       if (emit) {
         emit('edit', updatedEntity)
       }
-    } catch (error) {
-      console.error('Failed to save entity notes:', error)
+    } catch {
+      saveError.value = 'Failed to save notes. Your changes are still in the editor.'
     } finally {
       saving.value = false
     }
@@ -44,6 +46,7 @@ export function useEntityNoteEditor(entity, caseId, isEditing, formData, emit) {
     cleanup,
     triggerSave,
   } = useBaseNoteEditor({
+    label: 'Entity notes',
     initialContent: entity.value?.data?.notes || '',
     placeholder: isEditing.value
       ? 'Write your entity notes here... Use / for commands.'
@@ -100,6 +103,7 @@ export function useEntityNoteEditor(entity, caseId, isEditing, formData, emit) {
     editor,
     editorActions,
     saving,
+    saveError,
     lastSavedTime,
     formatLastSaved,
     updateContent,

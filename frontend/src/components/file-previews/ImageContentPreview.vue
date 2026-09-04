@@ -45,10 +45,11 @@
       </v-card-text>
     </v-card>
 
-    <div class="mx-4 mb-2 flex-shrink-0 d-flex align-center ga-2">
+    <div class="mx-4 mb-2 flex-shrink-0 d-flex flex-wrap align-center ga-2">
       <v-btn
         size="small"
         icon="mdi-magnify-minus"
+        aria-label="Zoom out"
         variant="outlined"
         @click="zoomOut"
         :disabled="zoomLevel <= 0.25"
@@ -57,6 +58,7 @@
       <v-btn
         size="small"
         icon="mdi-magnify-plus"
+        aria-label="Zoom in"
         variant="outlined"
         @click="zoomIn"
         :disabled="zoomLevel >= 3"
@@ -64,11 +66,11 @@
       <v-btn size="small" variant="outlined" @click="resetZoom"> Reset </v-btn>
       <v-spacer />
       <v-btn-toggle v-model="fitMode" density="compact" mandatory variant="outlined">
-        <v-btn value="contain" size="small">
+        <v-btn aria-label="Fit to screen" value="contain" size="small">
           <v-icon>mdi-fit-to-screen-outline</v-icon>
           <v-tooltip activator="parent" location="top">Fit to screen</v-tooltip>
         </v-btn>
-        <v-btn value="actual" size="small">
+        <v-btn aria-label="Actual size" value="actual" size="small">
           <v-icon>mdi-image-size-select-actual</v-icon>
           <v-tooltip activator="parent" location="top">Actual size</v-tooltip>
         </v-btn>

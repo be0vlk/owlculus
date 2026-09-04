@@ -1,5 +1,10 @@
 <template>
-  <v-dialog v-model="dialogVisible" max-width="600px" persistent>
+  <v-dialog
+    v-model="dialogVisible"
+    max-width="600px"
+    aria-label="Upload Evidence"
+    :persistent="uploading"
+  >
     <v-card prepend-icon="mdi-cloud-upload" title="Upload Evidence">
       <v-card-text>
         <v-form ref="formRef" @submit.prevent="handleSubmit">
@@ -115,6 +120,7 @@
                     variant="text"
                     color="error"
                     icon="mdi-close"
+                    :aria-label="`Remove ${file.name}`"
                     @click="removeFile(file)"
                   />
                 </template>
@@ -149,6 +155,7 @@
 </template>
 
 <script setup>
+import { useDialogFocusRestore } from '@/composables/useDialogFocusRestore'
 import { ref, computed, watch, onMounted } from 'vue'
 import { evidenceService } from '../services/evidence'
 import { FileExtensionGroups, getIconByExtension, MimeGroups } from '@/utils/fileExtension.js'
@@ -243,31 +250,30 @@ const loadFolders = async () => {
   }
 }
 
-function handleFileSelect(event) {
-  const files = Array.from(event.target.files)
+function addFiles(files) {
   const invalidFiles = files.filter((file) => file.size > 50000000)
-
   if (invalidFiles.length > 0) {
     fileError.value = `${invalidFiles.length} file(s) exceed 50MB size limit`
     return
   }
 
-  selectedFiles.value = [...selectedFiles.value, ...files]
+  const combinedFiles = [...selectedFiles.value, ...files]
+  if (new Set(combinedFiles.map((file) => file.name)).size !== combinedFiles.length) {
+    fileError.value = 'Files must have unique names. Rename duplicate files before uploading.'
+    return
+  }
+
+  selectedFiles.value = combinedFiles
   fileError.value = null
+}
+
+function handleFileSelect(event) {
+  addFiles(Array.from(event.target.files))
 }
 
 function handleFileDrop(event) {
   isDragOver.value = false
-  const files = Array.from(event.dataTransfer.files)
-  const invalidFiles = files.filter((file) => file.size > 50000000)
-
-  if (invalidFiles.length > 0) {
-    fileError.value = `${invalidFiles.length} file(s) exceed 50MB size limit`
-    return
-  }
-
-  selectedFiles.value = [...selectedFiles.value, ...files]
-  fileError.value = null
+  addFiles(Array.from(event.dataTransfer.files))
 }
 
 function removeFile(file) {
@@ -280,6 +286,7 @@ function clearFiles() {
 }
 
 async function handleSubmit() {
+  if (uploading.value) return
   if (selectedFiles.value.length === 0) {
     fileError.value = 'Please select at least one file'
     return
@@ -291,7 +298,7 @@ async function handleSubmit() {
     // Determine target folder - either from prop (context menu) or user selection
     const targetFolderData = props.targetFolder || selectedFolder.value
 
-    const evidence = await evidenceService.createEvidence({
+    const { created, failed } = await evidenceService.createEvidence({
       description: form.value.description,
       category: form.value.category || 'Other',
       caseId: props.caseId,
@@ -299,8 +306,14 @@ async function handleSubmit() {
       folderPath: targetFolderData?.folder_path,
       parentFolderId: targetFolderData?.id,
     })
-    emit('uploaded', evidence)
-    emit('close')
+    if (created.length) emit('uploaded', created)
+    if (failed.length) {
+      fileError.value = failed.map((failure) => `${failure.filename}: ${failure.error}`).join('; ')
+      const failedNames = new Set(failed.map((failure) => failure.filename))
+      selectedFiles.value = selectedFiles.value.filter((file) => failedNames.has(file.name))
+    } else {
+      emit('close')
+    }
   } catch {
     fileError.value = 'Failed to upload files. Please try again.'
   } finally {
@@ -339,6 +352,7 @@ const acceptedExtensions = Object.values(FileExtensionGroups)
 const acceptedMimes = Object.values(MimeGroups).flat()
 
 const acceptString = [...acceptedMimes, ...acceptedExtensions].join(',')
+useDialogFocusRestore(() => dialogVisible.value)
 </script>
 
 <style scoped>
