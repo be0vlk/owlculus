@@ -6,11 +6,18 @@ export const pluginService = {
     return response.data
   },
 
-  async executePlugin(name, params = {}) {
-    const response = await api.post(`/api/plugins/${name}/execute`, params, {
-      responseType: 'text',
-      transformResponse: [(data) => data], // Prevent automatic JSON parsing
-    })
+  async executePlugin(name, params = {}, caseId) {
+    if (!Number.isInteger(caseId) || caseId <= 0) {
+      throw new Error('An active case is required to execute a plugin')
+    }
+    const response = await api.post(
+      `/api/plugins/${name}/execute`,
+      { ...params, case_id: caseId },
+      {
+        responseType: 'text',
+        transformResponse: [(data) => data], // Prevent automatic JSON parsing
+      },
+    )
 
     // Try parsing as a single JSON object first
     try {

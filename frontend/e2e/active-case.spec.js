@@ -356,3 +356,70 @@ test('hunts execute in the active case and legacy execution links restore their 
   await page.getByRole('tab', { name: 'Execution History', exact: true }).click()
   await expect(page.getByRole('cell', { name: 'Context Hunt', exact: true })).toBeVisible()
 })
+
+test('plugins use active context for transient runs, optional saving, and correlation', async ({
+  page,
+}) => {
+  await setup(page)
+  const requests = []
+  await page.route('**/api/plugins/**', async (route) => {
+    if (route.request().method() === 'POST') {
+      requests.push(route.request().postDataJSON())
+      return route.fulfill({
+        body: '{"type":"complete","data":{}}\n',
+        contentType: 'application/json',
+      })
+    }
+    return route.fulfill({
+      json: {
+        ExamplePlugin: {
+          name: 'ExamplePlugin',
+          display_name: 'Example',
+          enabled: true,
+          parameters: {
+            case_id: { type: 'integer', default: 999 },
+            save_to_case: { type: 'boolean', default: false },
+          },
+        },
+        CorrelationScan: {
+          name: 'CorrelationScan',
+          display_name: 'Correlation Scan',
+          enabled: true,
+          parameters: {
+            case_id: { type: 'integer', required: true },
+            save_to_case: { type: 'boolean', default: false },
+          },
+        },
+      },
+    })
+  })
+  await page.goto('/plugins')
+  await expect(page).toHaveURL(/\/case\/2\/plugins$/)
+  await expect(page.getByRole('link', { name: 'Plugins', exact: true })).toHaveAttribute(
+    'href',
+    '/case/2/plugins',
+  )
+  await page.getByRole('button', { name: 'Configure Example', exact: true }).click()
+  await expect(page.locator('form').getByRole('combobox')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Execute Plugin', exact: true }).click()
+  await page.getByRole('button', { name: 'Close plugin results', exact: true }).click()
+  expect(requests).toEqual([{ case_id: 2, save_to_case: false }])
+  await page.getByLabel('Save to case evidence', { exact: true }).check()
+  await page.getByRole('button', { name: 'Execute Plugin', exact: true }).click()
+  await page.getByRole('button', { name: 'Close plugin results', exact: true }).click()
+  expect(requests[1]).toEqual({ case_id: 2, save_to_case: true })
+  const switcher = page.getByRole('combobox', { name: 'Active case', exact: true })
+  await switcher.fill('CASE-OLD')
+  await page
+    .getByRole('option', { name: 'CASE-OLD — Older investigation (Closed)', exact: true })
+    .click()
+  await expect(page).toHaveURL(/\/case\/1\/plugins$/)
+  await expect(page.getByRole('button', { name: 'View Results', exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Configure Correlation Scan', exact: true }).click()
+  await expect(page.locator('form').getByRole('combobox')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Execute Plugin', exact: true }).click()
+  await page.getByRole('button', { name: 'Close plugin results', exact: true }).click()
+  expect(requests[2]).toEqual({ case_id: 1, save_to_case: false })
+  await page.reload()
+  await expect(switcher).toHaveValue('CASE-OLD — Older investigation (Closed)')
+})

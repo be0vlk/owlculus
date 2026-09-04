@@ -5,6 +5,7 @@ from collections.abc import AsyncGenerator
 from contextlib import nullcontext
 from typing import Any
 
+import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 from sqlmodel import Session
@@ -79,11 +80,14 @@ def test_list_plugins_uses_class_list_registry(
 
 
 def test_execute_real_plugin_ends_with_complete(
-    client: TestClient, session: Session, test_user: User
+    client: TestClient, session: Session, test_user: User, test_case_with_users
 ):
     configure_plugins(session, test_user, [EchoPlugin])
 
-    response = client.post("/api/plugins/EchoPlugin/execute", json={"query": "owl"})
+    response = client.post(
+        "/api/plugins/EchoPlugin/execute",
+        json={"query": "owl", "case_id": test_case_with_users.id},
+    )
 
     assert response.status_code == status.HTTP_200_OK
     assert response.headers["content-type"] == "application/json"
@@ -95,7 +99,7 @@ def test_execute_real_plugin_ends_with_complete(
 
 
 def test_correlation_catalogue_and_result_wire_contract(
-    client: TestClient, session: Session, test_user: User
+    client: TestClient, session: Session, test_user: User, test_case_with_users
 ):
     source_case = Case(case_number="CORR-HTTP-1", title="Source investigation")
     other_case = Case(case_number="CORR-HTTP-2", title="Other investigation")
@@ -164,7 +168,11 @@ def test_correlation_catalogue_and_result_wire_contract(
 
 
 def test_people_data_labs_runs_with_static_vault(
-    client: TestClient, session: Session, test_user: User, monkeypatch
+    client: TestClient,
+    session: Session,
+    test_user: User,
+    test_case_with_users,
+    monkeypatch,
 ):
     class Response:
         ok = True
@@ -195,7 +203,11 @@ def test_people_data_labs_runs_with_static_vault(
 
     response = client.post(
         "/api/plugins/PeopledatalabsPlugin/execute",
-        json={"search_type": "person", "email": "ada@example.com"},
+        json={
+            "search_type": "person",
+            "email": "ada@example.com",
+            "case_id": test_case_with_users.id,
+        },
     )
 
     assert response.status_code == status.HTTP_200_OK
@@ -210,11 +222,17 @@ def test_people_data_labs_runs_with_static_vault(
 
 
 def test_throwing_plugin_is_error_then_complete(
-    client: TestClient, session: Session, test_user: User, throwing_plugin_class
+    client: TestClient,
+    session: Session,
+    test_user: User,
+    test_case_with_users,
+    throwing_plugin_class,
 ):
     configure_plugins(session, test_user, [throwing_plugin_class])
 
-    response = client.post("/api/plugins/ThrowingPlugin/execute", json={})
+    response = client.post(
+        "/api/plugins/ThrowingPlugin/execute", json={"case_id": test_case_with_users.id}
+    )
 
     assert response.text.splitlines() == [
         '{"type": "data", "data": {"partial": true}}',
@@ -224,11 +242,13 @@ def test_throwing_plugin_is_error_then_complete(
 
 
 def test_unknown_plugin_is_error_then_complete(
-    client: TestClient, session: Session, test_user: User
+    client: TestClient, session: Session, test_user: User, test_case_with_users
 ):
     configure_plugins(session, test_user, [])
 
-    response = client.post("/api/plugins/Unknown/execute", json={})
+    response = client.post(
+        "/api/plugins/Unknown/execute", json={"case_id": test_case_with_users.id}
+    )
 
     assert response.text.splitlines() == [
         '{"type": "error", "data": {"message": "Plugin Unknown not found"}}',
@@ -250,3 +270,118 @@ def test_execute_plugin_requires_authentication(client: TestClient):
     response = client.post("/api/plugins/EchoPlugin/execute", json={"query": "owl"})
 
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+def test_execution_receives_case_context_without_saving(
+    client, session, test_user, test_case_with_users
+):
+    class ContextPlugin(EchoPlugin):
+        async def run(self, params, ctx):
+            yield self.data(
+                {
+                    "case_id": ctx.case_id,
+                    "save_to_case": ctx.save_to_case,
+                    "params": params,
+                }
+            )
+
+    configure_plugins(session, test_user, [ContextPlugin])
+    response = client.post(
+        "/api/plugins/ContextPlugin/execute",
+        json={
+            "case_id": test_case_with_users.id,
+            "query": "owl",
+            "save_to_case": False,
+        },
+    )
+    assert response.status_code == 200
+    assert json.loads(response.text.splitlines()[0])["data"] == {
+        "case_id": test_case_with_users.id,
+        "save_to_case": False,
+        "params": {"query": "owl"},
+    }
+
+
+@pytest.mark.parametrize("save", [False, True])
+def test_execution_rejects_unassigned_case_before_plugin_work(
+    client, session, test_user, test_case, save
+):
+    configure_plugins(session, test_user, [EchoPlugin])
+    response = client.post(
+        "/api/plugins/EchoPlugin/execute",
+        json={
+            "case_id": test_case.id,
+            "query": "owl",
+            "save_to_case": save,
+        },
+    )
+    assert response.status_code == 403
+
+
+@pytest.mark.parametrize("case_id", [None, True, "1", 0, -1, 1.5])
+def test_execution_requires_valid_case_context(client, session, test_user, case_id):
+    configure_plugins(session, test_user, [EchoPlugin])
+    response = client.post(
+        "/api/plugins/EchoPlugin/execute",
+        json={
+            "case_id": case_id,
+            "query": "owl",
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_execution_rejects_missing_case(client, session, test_user):
+    configure_plugins(session, test_user, [EchoPlugin])
+    response = client.post(
+        "/api/plugins/EchoPlugin/execute",
+        json={
+            "case_id": 99999,
+            "query": "owl",
+        },
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.parametrize("save", [False, True])
+def test_optional_saving_writes_only_execution_case(
+    client,
+    session,
+    test_admin,
+    test_case,
+    test_closed_case,
+    tmp_path,
+    monkeypatch,
+    save,
+):
+    from app.core import file_storage
+    from app.plugins.plugin_types import IpAddressWrite
+
+    monkeypatch.setattr(file_storage, "UPLOAD_DIR", tmp_path / "uploads")
+
+    class SavingPlugin(EchoPlugin):
+        def entity_writes(self, payloads, params):
+            return [IpAddressWrite("192.0.2.10", "Test discovery")]
+
+    configure_plugins(session, test_admin, [SavingPlugin])
+    response = client.post(
+        "/api/plugins/SavingPlugin/execute",
+        json={
+            "query": "owl",
+            "case_id": test_case.id,
+            "save_to_case": save,
+        },
+    )
+    assert response.status_code == 200
+    assert all(
+        json.loads(line)["type"] != "error" for line in response.text.splitlines()
+    )
+    evidence = client.get(f"/api/evidence/case/{test_case.id}").json()
+    entities = client.get(f"/api/cases/{test_case.id}/entities").json()
+    assert bool(evidence) is save
+    assert bool(entities) is save
+    if save:
+        assert all(item["case_id"] == test_case.id for item in evidence)
+        assert entities[0]["data"]["ip_address"] == "192.0.2.10"
+    assert client.get(f"/api/evidence/case/{test_closed_case.id}").json() == []
+    assert client.get(f"/api/cases/{test_closed_case.id}/entities").json() == []

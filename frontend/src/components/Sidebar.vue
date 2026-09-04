@@ -136,7 +136,11 @@ const navigationItems = computed(() => {
       href: activeCase.activeCaseId ? `/case/${activeCase.activeCaseId}/tasks` : '/tasks',
       icon: 'mdi-checkbox-marked-circle-outline',
     },
-    { name: 'Plugins', href: '/plugins', icon: 'mdi-wrench-outline' },
+    {
+      name: 'Plugins',
+      href: activeCase.activeCaseId ? `/case/${activeCase.activeCaseId}/plugins` : '/plugins',
+      icon: 'mdi-wrench-outline',
+    },
   )
 
   // Add Hunts for non-analyst users

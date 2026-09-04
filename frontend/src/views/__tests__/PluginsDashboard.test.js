@@ -4,6 +4,9 @@ import { mountWithVuetify } from '@/components/__tests__/helpers/vuetify'
 import PluginsDashboard from '../PluginsDashboard.vue'
 import { pluginService } from '@/services/plugin'
 
+const activeCase = vi.hoisted(() => ({ activeCaseId: 7, ready: true }))
+vi.mock('@/stores/activeCase', () => ({ useActiveCaseStore: () => activeCase }))
+
 vi.mock('@/services/plugin', () => ({
   pluginService: { listPlugins: vi.fn(), executePlugin: vi.fn() },
 }))
@@ -44,9 +47,13 @@ it('validates keyboard submissions, disables pending requests, and permits retry
   vi.spyOn(console, 'error').mockImplementation(() => {})
   await wrapper.get('form').trigger('submit')
   await flushPromises()
-  expect(pluginService.executePlugin).toHaveBeenCalledWith('ExamplePlugin', {
-    query: 'example.org',
-  })
+  expect(pluginService.executePlugin).toHaveBeenCalledWith(
+    'ExamplePlugin',
+    {
+      query: 'example.org',
+    },
+    7,
+  )
   expect(wrapper.get('button[type="submit"]').element.disabled).toBe(true)
   expect(wrapper.get('input').element.disabled).toBe(true)
   rejectRequest(new Error('Service unavailable'))
