@@ -141,7 +141,11 @@ const navigationItems = computed(() => {
 
   // Add Hunts for non-analyst users
   if (authStore.user?.role !== 'Analyst') {
-    items.push({ name: 'Hunts', href: '/hunts', icon: 'mdi-target' })
+    items.push({
+      name: 'Hunts',
+      href: activeCase.activeCaseId ? `/case/${activeCase.activeCaseId}/hunts` : '/hunts',
+      icon: 'mdi-target',
+    })
   }
 
   items.push({ name: 'Strixy (WIP)', href: '/strixy', icon: 'mdi-robot' })

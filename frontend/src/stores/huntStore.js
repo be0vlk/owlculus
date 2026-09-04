@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { huntService } from '../services/hunt'
 
 export const useHuntStore = defineStore('hunt', () => {
+  let generation = 0
   // State
   const availableHunts = ref([])
   const activeExecutions = ref({})
@@ -25,7 +26,7 @@ export const useHuntStore = defineStore('hunt', () => {
 
   const runningExecutions = computed(() => {
     return Object.values(activeExecutions.value).filter(
-      (execution) => execution.status === 'running',
+      (execution) => execution.status === 'running' || execution.status === 'pending',
     )
   })
 
@@ -69,6 +70,7 @@ export const useHuntStore = defineStore('hunt', () => {
   }
 
   async function executeHunt(huntId, caseId, parameters) {
+    const request = generation
     try {
       error.value = null
       const execution = await huntService.executeHunt(huntId, caseId, parameters)
@@ -81,6 +83,8 @@ export const useHuntStore = defineStore('hunt', () => {
         console.error('Failed to fetch full execution details:', err)
       }
 
+      if (request !== generation) return fullExecution
+
       // Add to active executions with full data - ensure reactivity
       activeExecutions.value = {
         ...activeExecutions.value,
@@ -92,120 +96,73 @@ export const useHuntStore = defineStore('hunt', () => {
       executionHistory.value.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
 
       // Start WebSocket monitoring
-      subscribeToExecution(fullExecution.id)
+      if (['pending', 'running'].includes(fullExecution.status)) {
+        subscribeToExecution(fullExecution.id)
+      }
 
       return fullExecution
     } catch (err) {
-      error.value = err.response?.data?.detail || 'Failed to execute hunt'
+      if (request === generation)
+        error.value = err.response?.data?.detail || 'Failed to execute hunt'
       console.error('Failed to execute hunt:', err)
       throw err
     }
   }
 
   async function getExecution(executionId, includeSteps = false) {
+    const request = generation
     try {
       const execution = await huntService.getExecution(executionId, includeSteps)
 
       // Update active executions
-      activeExecutions.value[execution.id] = execution
+      if (request === generation) activeExecutions.value[execution.id] = execution
 
       return execution
     } catch (err) {
-      error.value = err.response?.data?.detail || 'Failed to fetch execution'
+      if (request === generation)
+        error.value = err.response?.data?.detail || 'Failed to fetch execution'
       console.error('Failed to fetch execution:', err)
       throw err
     }
   }
 
   async function getCaseExecutions(caseId) {
+    resetCaseExecutions()
+    const request = generation
+    if (!caseId) return []
     try {
       const executions = await huntService.getCaseExecutions(caseId)
-
-      // Update execution history
+      if (request !== generation) return []
       executionHistory.value = executions
-
-      // Add running/recent executions to active executions
-      executions.forEach((execution) => {
-        if (execution.status === 'running' || execution.status === 'pending') {
-          activeExecutions.value[execution.id] = execution
-        }
-      })
-
-      return executions
-    } catch (err) {
-      error.value = err.response?.data?.detail || 'Failed to fetch case executions'
-      console.error('Failed to fetch case executions:', err)
-      throw err
-    }
-  }
-
-  async function loadAllActiveExecutions(cases) {
-    try {
-      error.value = null
-
-      // Clear existing active executions
-      activeExecutions.value = {}
-
-      // Load executions from all accessible cases
-      const loadPromises = cases.map(async (caseItem) => {
-        try {
-          const executions = await huntService.getCaseExecutions(caseItem.id)
-
-          // Add active executions to the store with full details
-          const activeExecPromises = executions
-            .filter((execution) => execution.status === 'running' || execution.status === 'pending')
-            .map(async (execution) => {
-              try {
-                // Fetch full execution details including steps
-                const fullExecution = await huntService.getExecution(execution.id, true)
-                activeExecutions.value[fullExecution.id] = fullExecution
-
-                // Subscribe to real-time updates for running executions
-                if (fullExecution.status === 'running') {
-                  subscribeToExecution(fullExecution.id)
-                }
-
-                return fullExecution
-              } catch (err) {
-                console.error(`Failed to load execution details for ${execution.id}:`, err)
-                // Fallback to basic execution data
-                activeExecutions.value[execution.id] = execution
-                if (execution.status === 'running') {
-                  subscribeToExecution(execution.id)
-                }
-                return execution
-              }
-            })
-
-          await Promise.all(activeExecPromises)
-
-          return executions
-        } catch (err) {
-          console.error(`Failed to load executions for case ${caseItem.id}:`, err)
-          return []
-        }
-      })
-
-      const allExecutions = await Promise.all(loadPromises)
-      const flatExecutions = allExecutions.flat()
-
-      // Update execution history with recent executions
-      executionHistory.value = flatExecutions.sort(
-        (a, b) => new Date(b.created_at) - new Date(a.created_at),
+      activeExecutions.value = Object.fromEntries(
+        executions.map((execution) => [execution.id, execution]),
       )
-
-      return flatExecutions
+      await Promise.all(
+        executions
+          .filter((execution) => ['running', 'pending'].includes(execution.status))
+          .map(async (execution) => {
+            try {
+              await getExecution(execution.id, true)
+            } catch {
+              // The list response still provides usable progress if details fail.
+            }
+            if (request === generation) subscribeToExecution(execution.id)
+          }),
+      )
+      return request === generation ? executions : []
     } catch (err) {
-      error.value = err.response?.data?.detail || 'Failed to load active executions'
-      console.error('Failed to load active executions:', err)
+      if (request !== generation) return []
+      error.value = err.response?.data?.detail || 'Failed to fetch case executions'
       throw err
     }
   }
 
   async function cancelExecution(executionId) {
+    const request = generation
     try {
       error.value = null
       const result = await huntService.cancelExecution(executionId)
+      if (request !== generation) return result
 
       // Update execution status
       const execution = activeExecutions.value[executionId]
@@ -219,19 +176,22 @@ export const useHuntStore = defineStore('hunt', () => {
 
       return result
     } catch (err) {
-      error.value = err.response?.data?.detail || 'Failed to cancel execution'
+      if (request === generation)
+        error.value = err.response?.data?.detail || 'Failed to cancel execution'
       console.error('Failed to cancel execution:', err)
       throw err
     }
   }
 
   function subscribeToExecution(executionId) {
+    const request = generation
     // Don't create duplicate connections
     if (websocketConnections.value.has(executionId)) {
       return
     }
 
     const onMessage = async (data) => {
+      if (request !== generation) return
       // Handle initial connection message
       if (data.event_type === 'connected') {
         // Ensure we have the execution data
@@ -304,6 +264,8 @@ export const useHuntStore = defineStore('hunt', () => {
               console.error('Failed to fetch completed execution details:', err)
             }
 
+            if (request !== generation) return
+
             // Update execution history to include the completed execution
             const historyIndex = executionHistory.value.findIndex((e) => e.id === executionId)
             if (historyIndex !== -1) {
@@ -348,11 +310,15 @@ export const useHuntStore = defineStore('hunt', () => {
     huntService
       .createExecutionStream(executionId, onMessage, onError)
       .then((ws) => {
+        if (request !== generation) {
+          huntService.closeExecutionStream(ws)
+          return
+        }
         websocketConnections.value.set(executionId, ws)
       })
       .catch((err) => {
         console.error('Failed to create WebSocket connection:', err)
-        error.value = 'Failed to connect to execution stream'
+        if (request === generation) error.value = 'Failed to connect to execution stream'
       })
   }
 
@@ -375,6 +341,7 @@ export const useHuntStore = defineStore('hunt', () => {
 
   // Refresh all running executions with latest data
   async function refreshRunningExecutions() {
+    const request = generation
     const runningExecs = runningExecutions.value
     if (runningExecs.length === 0) return
 
@@ -382,6 +349,8 @@ export const useHuntStore = defineStore('hunt', () => {
       const refreshPromises = runningExecs.map(async (execution) => {
         try {
           const updated = await huntService.getExecution(execution.id, true)
+
+          if (request !== generation) return
 
           // Update in activeExecutions
           activeExecutions.value = {
@@ -415,8 +384,12 @@ export const useHuntStore = defineStore('hunt', () => {
     }
   }
 
-  // Cleanup all WebSocket connections
-  function cleanup() {
+  // Invalidate the previous case’s requests, streams, and execution data.
+  function resetCaseExecutions() {
+    generation++
+    activeExecutions.value = {}
+    executionHistory.value = []
+    error.value = null
     websocketConnections.value.forEach((ws) => {
       huntService.closeExecutionStream(ws)
     })
@@ -443,13 +416,12 @@ export const useHuntStore = defineStore('hunt', () => {
     executeHunt,
     getExecution,
     getCaseExecutions,
-    loadAllActiveExecutions,
     cancelExecution,
     subscribeToExecution,
     unsubscribeFromExecution,
     clearError,
     removeExecution,
     refreshRunningExecutions,
-    cleanup,
+    resetCaseExecutions,
   }
 })

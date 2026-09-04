@@ -118,7 +118,7 @@ async def execute_hunt(
     hunt = db.get(models.Hunt, execution.hunt_id)
 
     return schemas.HuntExecutionResponse(
-        **execution.__dict__,
+        **execution.model_dump(),
         hunt=(
             schemas.HuntResponse(
                 **hunt.__dict__,
@@ -157,7 +157,7 @@ async def get_execution_status(
         )
 
     response = schemas.HuntExecutionResponse(
-        **execution.__dict__,
+        **execution.model_dump(),
         hunt=(
             schemas.HuntResponse(
                 **hunt.__dict__,

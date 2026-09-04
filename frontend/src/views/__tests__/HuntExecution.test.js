@@ -6,24 +6,27 @@ import HuntExecution from '../HuntExecution.vue'
 
 const mocks = vi.hoisted(() => ({
   execution: null,
+  replace: vi.fn(),
   exportExecution: vi.fn(),
   downloadBlob: vi.fn(),
   showNotification: vi.fn(),
   getExecution: vi.fn(),
+  cancelExecution: vi.fn(),
 }))
 
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: { id: '7' } }),
-  useRouter: () => ({ push: vi.fn() }),
+  useRoute: () => ({ params: { id: '7', caseId: '42' } }),
+  useRouter: () => ({ push: vi.fn(), replace: mocks.replace }),
 }))
 
 vi.mock('@/stores/huntStore.js', () => ({
   useHuntStore: () => ({
     activeExecutions: {},
+    resetCaseExecutions: vi.fn(),
     getExecution: mocks.getExecution,
     subscribeToExecution: vi.fn(),
     unsubscribeFromExecution: vi.fn(),
-    cancelExecution: vi.fn(),
+    cancelExecution: mocks.cancelExecution,
   }),
 }))
 
@@ -54,10 +57,10 @@ const ListItemStub = defineComponent({
     '<button :data-testid="`export-${title.split(\' \').at(-1).toLowerCase()}`" :disabled="disabled" @click="$emit(\'click\')">{{ title }}</button>',
 })
 
-const mountExecution = async (status) => {
+const mountExecution = async (status, caseId = 42) => {
   mocks.execution = {
     id: 7,
-    case_id: 42,
+    case_id: caseId,
     status,
     progress: 1,
     initial_parameters: {},
@@ -83,11 +86,11 @@ const mountExecution = async (status) => {
   return wrapper
 }
 
-describe('HuntExecution exports', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
+beforeEach(() => {
+  vi.clearAllMocks()
+})
 
+describe('HuntExecution exports', () => {
   it.each(['completed', 'partial', 'failed', 'cancelled'])(
     'shows the export menu for a %s execution',
     async (status) => {
@@ -118,4 +121,26 @@ describe('HuntExecution exports', () => {
     expect(mocks.downloadBlob).toHaveBeenCalledWith(artifact, `hunt-execution-7.${format}`)
     expect(mocks.showNotification).toHaveBeenCalledWith('Results exported successfully', 'success')
   })
+})
+
+it('reconciles an unexpected owner before rendering execution actions', async () => {
+  const wrapper = await mountExecution('completed', 99)
+  expect(mocks.replace).toHaveBeenCalledWith('/case/99/hunts/execution/7')
+  expect(wrapper.find('[data-testid="export-menu"]').exists()).toBe(false)
+})
+
+it('does not reload an execution after cancellation completes on an unmounted page', async () => {
+  let finishCancel
+  mocks.cancelExecution.mockReturnValueOnce(
+    new Promise((resolve) => {
+      finishCancel = resolve
+    }),
+  )
+  const wrapper = await mountExecution('running')
+  const cancel = wrapper.findAll('button').find((button) => button.text().includes('Cancel'))
+  await cancel.trigger('click')
+  wrapper.unmount()
+  finishCancel()
+  await flushPromises()
+  expect(mocks.getExecution).toHaveBeenCalledTimes(1)
 })
