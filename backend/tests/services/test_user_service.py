@@ -1,5 +1,9 @@
 """Behaviour tests for the session-backed user module."""
 
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
+
 import pytest
 from sqlmodel import Session, select
 
@@ -50,6 +54,57 @@ async def test_create_user_names_duplicate_field(
     with pytest.raises(DuplicateResourceException) as caught:
         await UserService(session).create_user(payload, test_admin)
     assert caught.value.field == field
+
+
+def test_concurrent_creates_translate_integrity_error_with_real_transactions(engine):
+    with Session(engine) as setup_session:
+        admin = User(
+            username="race-admin",
+            email="race-admin@example.com",
+            password_hash="hash",
+            role="Admin",
+            is_superadmin=True,
+        )
+        setup_session.add(admin)
+        setup_session.commit()
+
+    contenders_ready = Barrier(2)
+
+    def create_contender():
+        with Session(engine) as contender_session:
+            contender_admin = contender_session.exec(
+                select(User).where(User.username == "race-admin")
+            ).one()
+            contenders_ready.wait(timeout=5)
+            try:
+                return asyncio.run(
+                    UserService(contender_session).create_user(
+                        user_payload(username="raced-user", email="raced@example.com"),
+                        contender_admin,
+                    )
+                )
+            except DuplicateResourceException as error:
+                return error
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        outcomes = list(executor.map(lambda _: create_contender(), range(2)))
+
+    duplicates = [
+        outcome
+        for outcome in outcomes
+        if isinstance(outcome, DuplicateResourceException)
+    ]
+    assert len(duplicates) == 1
+    assert duplicates[0].field == "username"
+    with Session(engine) as verification_session:
+        assert (
+            len(
+                verification_session.exec(
+                    select(User).where(User.username == "raced-user")
+                ).all()
+            )
+            == 1
+        )
 
 
 @pytest.mark.asyncio
@@ -105,17 +160,13 @@ async def test_non_admin_cannot_list_users(session: Session, test_user: User):
 
 
 @pytest.mark.asyncio
-async def test_user_can_update_own_profile_but_not_privileges(
-    session: Session, test_user: User
-):
-    result = await UserService(session).update_user(
-        test_user.id,
-        UserUpdate(username="renamed", role="Admin", is_superadmin=True),
-        test_user,
-    )
-    assert result.username == "renamed"
-    assert result.role == "Investigator"
-    assert result.is_superadmin is False
+async def test_user_cannot_promote_self(session: Session, test_user: User):
+    with pytest.raises(AuthorizationException):
+        await UserService(session).update_user(
+            test_user.id,
+            UserUpdate(username="renamed", role="Admin", is_superadmin=True),
+            test_user,
+        )
 
 
 @pytest.mark.asyncio
@@ -145,6 +196,20 @@ async def test_update_names_duplicate_field(
             test_user.id, UserUpdate(email=test_admin.email), test_admin
         )
     assert caught.value.field == "email"
+
+
+@pytest.mark.asyncio
+async def test_update_advances_updated_at(
+    session: Session, test_admin: User, test_user: User
+):
+    test_user.updated_at = test_user.updated_at.replace(year=2000)
+    session.add(test_user)
+    session.commit()
+    previous_updated_at = test_user.updated_at
+    result = await UserService(session).update_user(
+        test_user.id, UserUpdate(username="updated-name"), test_admin
+    )
+    assert result.updated_at > previous_updated_at
 
 
 @pytest.mark.asyncio
