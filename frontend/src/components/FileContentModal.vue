@@ -1,25 +1,38 @@
 <template>
   <v-dialog
     v-model="show"
+    :aria-label="`${titleText}: ${evidenceItem?.title || 'Evidence'}`"
     max-width="1200px"
     scrollable
     @update:model-value="handleModelValueUpdate"
   >
     <v-card class="d-flex flex-column h-100-dialog">
       <v-card-title class="d-flex align-center justify-space-between flex-shrink-0">
-        <div class="d-flex align-center ga-2">
+        <div class="preview-title d-flex align-center flex-wrap ga-2">
           <v-icon :icon="titleIcon" />
           <span>{{ titleText }}</span>
           <span v-if="evidenceItem?.title" class="text-body-small text-medium-emphasis ml-2">
             ({{ evidenceItem.title }})
           </span>
         </div>
-        <v-btn icon="mdi-close" size="small" variant="text" @click="show = false" />
+        <v-btn
+          aria-label="Close file preview"
+          icon="mdi-close"
+          size="small"
+          variant="text"
+          @click="show = false"
+        />
       </v-card-title>
 
       <v-card-text class="pa-0 flex-grow-1 d-flex flex-column">
         <div v-if="loading" class="d-flex justify-center pa-8">
-          <v-progress-circular :size="50" :width="6" color="primary" indeterminate />
+          <v-progress-circular
+            aria-label="Loading file preview"
+            :size="50"
+            :width="6"
+            color="primary"
+            indeterminate
+          />
         </div>
 
         <v-alert v-else-if="error" class="ma-4" type="error" variant="outlined">
@@ -55,6 +68,7 @@
 </template>
 
 <script setup>
+import { useDialogFocusRestore } from '@/composables/useDialogFocusRestore'
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { evidenceService } from '@/services/evidence'
 import {
@@ -232,6 +246,7 @@ const handleModelValueUpdate = (value) => {
 onUnmounted(() => {
   cleanupBlobUrl()
 })
+useDialogFocusRestore(() => props.modelValue)
 </script>
 
 <style scoped>
@@ -241,9 +256,9 @@ onUnmounted(() => {
   flex-direction: column;
 }
 
-.v-card-text {
-  flex-grow: 1;
-  display: flex;
-  flex-direction: column;
+.preview-title {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 </style>

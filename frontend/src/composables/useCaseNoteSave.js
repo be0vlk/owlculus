@@ -1,8 +1,9 @@
-import { watch } from 'vue'
+import { ref, watch } from 'vue'
 import { caseService } from '../services/case'
 import { useBaseNoteEditor } from './useBaseNoteEditor'
 
 export function useCaseNoteSave(props, emit, options = {}) {
+  const saveError = ref('')
   const { saveMode = 'auto', saveDelay = 1000 } = options
 
   const saveNotes = async () => {
@@ -13,11 +14,12 @@ export function useCaseNoteSave(props, emit, options = {}) {
 
     try {
       saving.value = true
+      saveError.value = ''
       await caseService.updateCase(props.caseId, { notes: content })
       lastSaved.value = content
       lastSavedTime.value = new Date()
-    } catch (error) {
-      console.error('Failed to save notes:', error)
+    } catch {
+      saveError.value = 'Failed to save notes. Your changes are still in the editor.'
     } finally {
       saving.value = false
     }
@@ -34,6 +36,7 @@ export function useCaseNoteSave(props, emit, options = {}) {
     cleanup,
     triggerSave,
   } = useBaseNoteEditor({
+    label: 'Case notes',
     initialContent: props.modelValue || '',
     placeholder:
       props.isEditing !== false
@@ -85,6 +88,7 @@ export function useCaseNoteSave(props, emit, options = {}) {
     editor,
     editorActions,
     saving,
+    saveError,
     lastSavedTime,
     formatLastSaved,
     updateContent,

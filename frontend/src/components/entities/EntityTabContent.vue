@@ -6,12 +6,14 @@
         <EditorToolbar
           v-if="noteEditor"
           :actions="noteEditorActions"
+          :disabled="!isEditing"
           :saving="noteSaving"
           :last-saved-time="noteLastSavedTime"
           :format-last-saved="noteFormatLastSaved"
           :expanded="notesExpanded"
           @toggle-expand="$emit('toggleExpand')"
         />
+        <v-alert v-if="noteSaveError" type="error">{{ noteSaveError }}</v-alert>
         <v-card :class="{ 'read-only-notes': !isEditing }" class="pa-4 mt-3" variant="outlined">
           <editor-content v-if="noteEditor" :editor="noteEditor" class="tiptap-content" />
           <div v-else class="text-center pa-4 text-grey">
@@ -74,6 +76,7 @@ const props = defineProps({
   notesExpanded: { type: Boolean, required: true },
   noteEditor: { type: Object, default: null },
   noteEditorActions: { type: Array, default: () => [] },
+  noteSaveError: { type: String, default: '' },
   noteSaving: { type: Boolean, default: false },
   noteLastSavedTime: { type: [Date, null], default: null },
   noteFormatLastSaved: { type: String, default: '' },

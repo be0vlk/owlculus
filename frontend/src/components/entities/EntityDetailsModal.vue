@@ -50,6 +50,7 @@
           :note-editor="noteEditor"
           :note-editor-actions="noteEditorActions"
           :note-saving="noteSaving"
+          :note-save-error="noteSaveError"
           :note-last-saved-time="noteLastSavedTime"
           :note-format-last-saved="noteFormatLastSaved"
           :get-source-value="getSourceValue"
@@ -83,6 +84,7 @@
     :editor="noteEditor"
     :editor-actions="noteEditorActions"
     :saving="noteSaving"
+    :save-error="noteSaveError"
     :last-saved-time="noteLastSavedTime"
     :format-last-saved="noteFormatLastSaved"
     :is-editing="isEditing"
@@ -155,6 +157,7 @@ const {
   editor: noteEditor,
   editorActions: noteEditorActions,
   saving: noteSaving,
+  saveError: noteSaveError,
   lastSavedTime: noteLastSavedTime,
   formatLastSaved: noteFormatLastSaved,
 } = useEntityNoteEditor(entity, caseId, isEditing, formData, emit)

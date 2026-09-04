@@ -105,7 +105,7 @@
             </div>
 
             <!-- Evidence Tab -->
-            <div v-else-if="activeTab === 'evidence'" class="pa-4">
+            <div v-else-if="activeTab === 'evidence'" class="pa-2 pa-sm-4">
               <v-row class="mb-4" no-gutters>
                 <v-col cols="auto">
                   <v-btn
@@ -231,11 +231,10 @@
             </div>
 
             <!-- Notes Tab -->
-            <div v-else-if="activeTab === 'notes'" class="pa-6">
+            <div v-else-if="activeTab === 'notes'" class="pa-2 pa-sm-6">
               <v-card variant="outlined">
-                <v-card-title class="d-flex align-center">
-                  <v-icon start>mdi-note-text</v-icon>
-                  Case Notes
+                <v-card-title class="d-flex flex-wrap ga-2 align-center text-wrap">
+                  <span><v-icon start>mdi-note-text</v-icon>Case Notes</span>
                   <v-spacer />
                   <v-chip
                     :color="isEditingNotes ? 'warning' : 'primary'"
@@ -248,6 +247,10 @@
                 </v-card-title>
                 <v-divider />
                 <v-card-text class="pa-0">
+                  <v-alert v-if="notesSaveError" type="error" class="mb-3">{{
+                    notesSaveError
+                  }}</v-alert>
+                  <p v-if="notesSaveStatus" role="status">{{ notesSaveStatus }}</p>
                   <NoteEditor
                     v-model="caseData.notes"
                     :case-id="Number(route.params.id)"
@@ -476,6 +479,8 @@ const fileContentError = ref('')
 
 const isEditingNotes = ref(false)
 const savingNotes = ref(false)
+const notesSaveError = ref('')
+const notesSaveStatus = ref('')
 const originalNotes = ref('')
 const entityServiceRef = entityService
 const exportingCase = ref(false)
@@ -569,11 +574,14 @@ const handleNotesUpdate = (notes) => {
 }
 
 const startEditingNotes = () => {
+  notesSaveError.value = ''
+  notesSaveStatus.value = ''
   originalNotes.value = caseData.value?.notes || ''
   isEditingNotes.value = true
 }
 
 const cancelEditingNotes = () => {
+  notesSaveError.value = ''
   if (caseData.value) {
     caseData.value.notes = originalNotes.value
   }
@@ -585,11 +593,14 @@ const saveNotes = async () => {
 
   try {
     savingNotes.value = true
+    notesSaveError.value = ''
+    notesSaveStatus.value = ''
     await caseService.updateCase(route.params.id, { notes: caseData.value.notes })
+    notesSaveStatus.value = 'Notes saved'
     originalNotes.value = caseData.value.notes
     isEditingNotes.value = false
-  } catch (error) {
-    console.error('Failed to save notes:', error)
+  } catch {
+    notesSaveError.value = 'Failed to save notes. Your changes are still in the editor.'
   } finally {
     savingNotes.value = false
   }

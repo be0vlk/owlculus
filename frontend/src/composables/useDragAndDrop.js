@@ -99,12 +99,10 @@ export function useDragAndDrop() {
   const handleDragEnter = (event, item, userRole) => {
     event.preventDefault()
 
-    if (!draggedItem.value || !canDropOnTarget(draggedItem.value, item, userRole)) {
-      return
-    }
-
+    if (!draggedItem.value) return
     dragOverItem.value = item
-    isValidDropTarget.value = true
+    isValidDropTarget.value = canDropOnTarget(draggedItem.value, item, userRole)
+    activeDropZones.value.clear()
     activeDropZones.value.add(item.id)
   }
 
@@ -184,16 +182,17 @@ export function useDragAndDrop() {
         <svg width="16" height="16" viewBox="0 0 24 24">
           <path fill="#666" d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
         </svg>
-        ${item.title}
+        <span></span>
       </div>
     `
+    dragImage.querySelector('span').textContent = item.title
     dragImage.style.position = 'absolute'
     dragImage.style.top = '-1000px'
     dragImage.style.left = '-1000px'
     dragImage.style.pointerEvents = 'none'
 
     document.body.appendChild(dragImage)
-    return dragImage.firstElementChild
+    return dragImage
   }
 
   const resetDragState = () => {

@@ -6,8 +6,8 @@
       <v-container fluid class="pa-6">
         <!-- Page Header Card -->
         <v-card class="mb-6 header-gradient">
-          <v-card-title class="d-flex align-center pa-6 text-white">
-            <div class="text-headline-large font-weight-bold">{{ title }}</div>
+          <v-card-title class="d-flex flex-wrap ga-3 align-center pa-6 text-white">
+            <div class="text-headline-large font-weight-bold text-wrap">{{ title }}</div>
             <v-spacer />
             <slot name="header-actions" />
           </v-card-title>

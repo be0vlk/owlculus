@@ -1,15 +1,25 @@
 <template>
-  <v-dialog v-model="dialogOpen" max-width="600px" persistent>
+  <v-dialog
+    v-model="dialogOpen"
+    max-width="600px"
+    aria-label="Select Evidence Folder Template"
+    :persistent="applying"
+  >
     <v-card>
       <v-card-title class="d-flex align-center pa-4 bg-surface">
         <v-icon icon="mdi-folder-multiple" color="primary" size="large" class="me-3" />
-        <div class="flex-grow-1">
+        <div class="flex-grow-1 text-wrap">
           <div class="text-title-large font-weight-bold">Select Evidence Folder Template</div>
           <div class="text-body-medium text-medium-emphasis">
             Choose a predefined folder structure to organize your evidence
           </div>
         </div>
-        <v-btn icon="mdi-close" variant="text" @click="closeDialog" />
+        <v-btn
+          aria-label="Close template selection"
+          icon="mdi-close"
+          variant="text"
+          @click="closeDialog"
+        />
       </v-card-title>
 
       <v-divider />
@@ -43,15 +53,11 @@
             class="mb-4"
             placeholder="Choose a folder template..."
           >
-            <template v-slot:item="{ props, internalItem: item }">
-              <v-list-item :key="item.value" :value="item.value" @click="props.onClick">
+            <template v-slot:item="{ props: itemProps, item }">
+              <v-list-item v-bind="itemProps" :subtitle="item.description">
                 <template v-slot:prepend>
                   <v-icon icon="mdi-folder-multiple" :color="getFolderColor()" class="me-3" />
                 </template>
-                <v-list-item-title>{{ item.raw.name }}</v-list-item-title>
-                <v-list-item-subtitle v-if="item.raw.description">
-                  {{ item.raw.description }}
-                </v-list-item-subtitle>
               </v-list-item>
             </template>
           </v-select>
@@ -105,6 +111,7 @@
 </template>
 
 <script setup>
+import { useDialogFocusRestore } from '@/composables/useDialogFocusRestore'
 import { ref, computed, watch } from 'vue'
 import { systemService } from '@/services/system'
 import { evidenceService } from '@/services/evidence'
@@ -194,6 +201,7 @@ watch(dialogOpen, (newValue) => {
     loadTemplates()
   }
 })
+useDialogFocusRestore(() => dialogOpen.value)
 </script>
 
 <style scoped>
