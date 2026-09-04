@@ -8,6 +8,7 @@
     <v-card-text>
       <v-text-field
         :model-value="modelValue.domain"
+        autofocus
         @update:model-value="updateField('domain', $event)"
         label="Domain Name"
         variant="outlined"

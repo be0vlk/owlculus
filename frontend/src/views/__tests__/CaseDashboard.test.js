@@ -179,6 +179,14 @@ describe('CaseDashboard export', () => {
     })
   })
 
+  it('falls back to the first available tab when the URL requests an unavailable tab', async () => {
+    mocks.route.query = { tab: 'admin-only' }
+
+    const wrapper = await mountDashboard()
+
+    expect(wrapper.get('[data-testid="case-tabs"]').attributes('data-model-value')).toBe('entities')
+  })
+
   it('applies successful edits emitted by the edit-case dialog', async () => {
     const wrapper = await mountDashboard()
 

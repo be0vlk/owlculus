@@ -1,5 +1,11 @@
 <template>
-  <v-dialog v-model="dialogVisible" aria-label="Add User to Case" max-width="600px" persistent>
+  <v-dialog
+    v-model="dialogVisible"
+    aria-label="Add User to Case"
+    max-width="600px"
+    persistent
+    @keydown.esc="!loading && $emit('close')"
+  >
     <v-card prepend-icon="mdi-account-plus">
       <v-card-title id="add-user-to-case-dialog-title">Add User to Case</v-card-title>
       <v-card-text>
@@ -91,6 +97,7 @@
 import { computed, ref, watch } from 'vue'
 import { userService } from '@/services/user'
 import { caseService } from '@/services/case'
+import { getErrorMessage } from '@/utils/errorMessage'
 import ModalActions from './ModalActions.vue'
 
 const props = defineProps({
@@ -143,7 +150,7 @@ const loadUsers = async () => {
     error.value = null
     availableUsers.value = await userService.getUsers()
   } catch (err) {
-    error.value = err.response?.data?.message || err.message || 'Failed to load users'
+    error.value = getErrorMessage(err, 'Failed to load users')
   } finally {
     loading.value = false
   }
@@ -163,7 +170,7 @@ const handleAddUser = async () => {
     emit('userAdded')
     emit('close')
   } catch (err) {
-    error.value = err.response?.data?.message || err.message || 'Failed to add user to case'
+    error.value = getErrorMessage(err, 'Failed to add user to case')
   } finally {
     loading.value = false
   }

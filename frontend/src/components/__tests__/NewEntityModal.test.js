@@ -12,7 +12,9 @@ vi.mock('@/services/entity', () => ({
 const DialogStub = defineComponent({
   inheritAttrs: false,
   props: { modelValue: Boolean },
-  template: '<section v-if="modelValue" role="dialog" v-bind="$attrs"><slot /></section>',
+  emits: ['update:modelValue'],
+  template:
+    '<section v-if="modelValue" role="dialog" v-bind="$attrs" @keydown.esc="$emit(\'update:modelValue\', false)"><slot /></section>',
 })
 const CardStub = defineComponent({
   props: { title: String },
@@ -80,6 +82,10 @@ describe('NewEntityModal', () => {
     expect(wrapper.get('[role="dialog"]').attributes('aria-label')).toBe('Add New Entity')
     expect(addEntityButton(wrapper).attributes('disabled')).toBeDefined()
 
+    await wrapper.get('[role="dialog"]').trigger('keydown', { key: 'Escape' })
+
+    expect(wrapper.emitted('close')).toHaveLength(1)
+
     await wrapper.get('form').trigger('submit')
     await flushPromises()
 
@@ -113,7 +119,7 @@ describe('NewEntityModal', () => {
 
   it('keeps the dialog open and presents the API error when creation fails', async () => {
     entityService.createEntity.mockRejectedValue({
-      response: { data: { detail: 'An entity with that identity already exists' } },
+      response: { data: { message: 'An entity with that identity already exists' } },
     })
     const wrapper = mount(NewEntityModal, {
       props: { show: true, caseId: '42' },

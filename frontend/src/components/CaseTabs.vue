@@ -38,10 +38,7 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue'])
 
 const activeTab = computed({
-  get: () =>
-    props.tabs.some((tab) => tab.name === props.modelValue)
-      ? props.modelValue
-      : props.tabs[0]?.name,
+  get: () => props.modelValue || props.tabs[0]?.name,
   set: (tabName) => emit('update:modelValue', tabName),
 })
 </script>

@@ -8,6 +8,7 @@
     <v-card-text>
       <v-text-field
         :model-value="modelValue.ip_address"
+        autofocus
         @update:model-value="updateField('ip_address', $event)"
         label="IP Address"
         variant="outlined"

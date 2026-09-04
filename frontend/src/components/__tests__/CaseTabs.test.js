@@ -42,9 +42,9 @@ describe('CaseTabs navigation', () => {
     expect(wrapper.emitted('update:modelValue')).toEqual([['evidence']])
   })
 
-  it('falls back to the first available tab when the requested tab is unavailable', () => {
+  it('defaults to the first available tab when no tab is requested', () => {
     const wrapper = mount(CaseTabs, {
-      props: { tabs, modelValue: 'admin-only' },
+      props: { tabs },
       global: {
         stubs: {
           VTabs: TabsStub,

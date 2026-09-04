@@ -249,6 +249,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { formatDate } from '@/composables/dateUtils'
 import { downloadBlob } from '@/utils/download'
+import { getErrorMessage } from '@/utils/errorMessage'
 
 const props = defineProps({
   caseId: {
@@ -387,8 +388,7 @@ const loadItems = async () => {
     console.error('Error loading entities:', error)
     entities.value = []
     totalItems.value = 0
-    loadErrorMessage.value =
-      error.response?.data?.detail || error.message || 'Failed to load entities'
+    loadErrorMessage.value = getErrorMessage(error, 'Failed to load entities')
   } finally {
     loading.value = false
   }
@@ -501,8 +501,7 @@ const performDelete = async () => {
     await loadItems()
   } catch (error) {
     console.error('Error deleting entities:', error)
-    deleteErrorMessage.value =
-      error.response?.data?.detail || error.message || 'Failed to delete entities'
+    deleteErrorMessage.value = getErrorMessage(error, 'Failed to delete entities')
     showDeleteError.value = true
   } finally {
     deleting.value = false
@@ -523,7 +522,7 @@ const exportEntities = async (format) => {
     downloadBlob(download, `case-${props.caseId}-entities-${date}.${format}`)
   } catch (error) {
     console.error('Error exporting entities:', error)
-    exportErrorMessage.value = error.response?.data?.detail || 'Failed to export entities'
+    exportErrorMessage.value = getErrorMessage(error, 'Failed to export entities')
     showExportError.value = true
   } finally {
     exporting.value = false

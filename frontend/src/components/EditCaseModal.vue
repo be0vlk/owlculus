@@ -1,5 +1,11 @@
 <template>
-  <v-dialog v-model="dialogVisible" aria-label="Edit Case" max-width="600px" persistent>
+  <v-dialog
+    v-model="dialogVisible"
+    aria-label="Edit Case"
+    max-width="600px"
+    persistent
+    @keydown.esc="!updating && $emit('close')"
+  >
     <v-card prepend-icon="mdi-briefcase-edit">
       <v-card-title id="edit-case-dialog-title">Edit Case</v-card-title>
       <v-card-text>
@@ -99,6 +105,7 @@
 import { ref, watch, computed } from 'vue'
 import api from '../services/api'
 import { formatDate } from '../composables/dateUtils'
+import { getErrorMessage } from '../utils/errorMessage'
 import ModalActions from './ModalActions.vue'
 
 const props = defineProps({
@@ -213,8 +220,7 @@ const handleSubmit = async () => {
     emit('update', response.data)
     emit('close')
   } catch (err) {
-    error.value =
-      err.response?.data?.detail || err.response?.data?.message || 'Failed to update case'
+    error.value = getErrorMessage(err, 'Failed to update case')
   } finally {
     updating.value = false
   }

@@ -1,5 +1,10 @@
 <template>
-  <v-dialog v-model="dialogVisible" aria-label="Add New Entity" max-width="700px" persistent>
+  <v-dialog
+    v-model="dialogVisible"
+    aria-label="Add New Entity"
+    max-width="700px"
+    :persistent="entityForm.state.loading"
+  >
     <v-card prepend-icon="mdi-account-plus">
       <v-card-title id="new-entity-dialog-title">Add New Entity</v-card-title>
       <v-card-text>
@@ -72,6 +77,10 @@
               />
             </v-tabs-window-item>
           </v-tabs-window>
+
+          <button aria-hidden="true" class="d-none" tabindex="-1" type="submit">
+            Submit entity
+          </button>
         </v-form>
       </v-card-text>
 
@@ -79,7 +88,7 @@
 
       <v-card-actions>
         <v-spacer />
-        <v-btn :disabled="entityForm.state.loading" variant="text" @click="$emit('close')">
+        <v-btn :disabled="entityForm.state.loading" variant="text" @click="cancelDialog">
           Cancel
         </v-btn>
         <v-btn
@@ -142,6 +151,10 @@ const dialogVisible = computed({
 
 // Computed validation
 const formValid = computed(() => isFormValid(entityForm.state.entityType, entityForm.state.data))
+
+function cancelDialog() {
+  if (!entityForm.state.loading) emit('close')
+}
 
 // Handle tab change
 function handleTabChange(newTab) {

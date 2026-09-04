@@ -35,7 +35,7 @@
             color="primary"
             prepend-icon="mdi-plus"
             variant="flat"
-            @click="isNewCaseModalOpen = true"
+            @click="openNewCaseModal"
           >
             New Case
           </v-btn>
@@ -173,7 +173,7 @@
               v-if="shouldShowCreateButton()"
               color="primary"
               prepend-icon="mdi-plus"
-              @click="isNewCaseModalOpen = true"
+              @click="openNewCaseModal"
             >
               Create First Case
             </v-btn>
@@ -185,7 +185,7 @@
 
   <NewCaseModal
     :is-open="isNewCaseModalOpen"
-    @close="isNewCaseModalOpen = false"
+    @close="closeNewCaseModal"
     @created="handleCaseCreated"
   />
 
@@ -205,7 +205,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref, computed } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import BaseDashboard from '../components/BaseDashboard.vue'
 import NewCaseModal from '../components/NewCaseModal.vue'
 import { useDashboard } from '../composables/useDashboard'
@@ -228,6 +228,7 @@ const {
 } = useDashboard()
 
 const isNewCaseModalOpen = ref(false)
+let newCaseModalActivator = null
 const activeQuickFilter = ref('all')
 
 const snackbar = ref({
@@ -261,11 +262,28 @@ const enhancedFilteredCases = computed(() => {
   return filteredCases
 })
 
-const handleCaseCreated = (newCase) => {
+const openNewCaseModal = (event) => {
+  newCaseModalActivator = event?.currentTarget || document.activeElement
+  isNewCaseModalOpen.value = true
+}
+
+const closeNewCaseModal = () => {
+  isNewCaseModalOpen.value = false
+  nextTick(() => newCaseModalActivator?.focus())
+}
+
+const handleCaseCreated = (newCase, { assignmentWarning } = {}) => {
   // Refresh the cases list
   loadData()
-  isNewCaseModalOpen.value = false
-  showNotification(`Case "${newCase?.case_number || 'New case'}" created successfully`, 'success')
+  closeNewCaseModal()
+  if (assignmentWarning) {
+    showNotification(
+      `Case "${newCase?.case_number || 'New case'}" was created, but ${assignmentWarning}. Manage the case users to retry.`,
+      'warning',
+    )
+  } else {
+    showNotification(`Case "${newCase?.case_number || 'New case'}" created successfully`, 'success')
+  }
 }
 
 const handleRowClick = (event, { item }) => {

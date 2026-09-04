@@ -33,10 +33,22 @@ async function exerciseTextInput(input) {
 }
 
 async function exerciseCaseAndEntityWorkflow(page) {
-  await page.getByRole('button', { name: 'New Case', exact: true }).click()
-  const newCaseDialog = page.getByRole('dialog', { name: 'New Case', exact: true })
+  const openNewCaseButton = page.getByRole('button', { name: 'New Case', exact: true })
+  await openNewCaseButton.click()
+  let newCaseDialog = page.getByRole('dialog', { name: 'New Case', exact: true })
   await expect(newCaseDialog).toBeVisible()
-  await newCaseDialog.getByLabel('Title', { exact: true }).fill('Migration Safety Case')
+  await expect(newCaseDialog.getByLabel('Title', { exact: true })).toBeFocused()
+  await page.keyboard.press('Shift+Tab')
+  await expect(newCaseDialog.locator(':focus')).toHaveCount(1)
+  await page.keyboard.press('Escape')
+  await expect(newCaseDialog).toBeHidden()
+  await expect(openNewCaseButton).toBeFocused()
+
+  await openNewCaseButton.click()
+  newCaseDialog = page.getByRole('dialog', { name: 'New Case', exact: true })
+  const caseTitle = newCaseDialog.getByLabel('Title', { exact: true })
+  await expect(caseTitle).toBeFocused()
+  await caseTitle.fill('Migration Safety Case')
   const clientSelect = newCaseDialog.getByLabel('Client', { exact: true })
   await clientSelect.focus()
   await clientSelect.press('ArrowDown')
@@ -77,10 +89,13 @@ async function exerciseCaseAndEntityWorkflow(page) {
     exact: true,
   })
   await expect(addEntityButton).toBeDisabled()
-  await newEntityDialog.getByLabel('First Name', { exact: true }).fill('Ada')
-  await newEntityDialog.getByLabel('Last Name', { exact: true }).fill('Lovelace')
+  const firstName = newEntityDialog.getByLabel('First Name', { exact: true })
+  const lastName = newEntityDialog.getByLabel('Last Name', { exact: true })
+  await expect(firstName).toBeFocused()
+  await firstName.fill('Ada')
+  await lastName.fill('Lovelace')
   await expect(addEntityButton).toBeEnabled()
-  await addEntityButton.click()
+  await lastName.press('Enter')
 
   const createdDialog = page.getByRole('dialog', {
     name: 'Entity Created Successfully',
@@ -104,7 +119,8 @@ async function exerciseCaseAndEntityWorkflow(page) {
   await entityDialog.getByRole('button', { name: 'Save Changes', exact: true }).click()
   const updatedEntityDialog = page.getByRole('dialog', { name: 'Grace Lovelace', exact: true })
   await expect(updatedEntityDialog).toBeVisible()
-  await updatedEntityDialog.getByRole('button', { name: 'Close', exact: true }).click()
+  await page.keyboard.press('Escape')
+  await expect(updatedEntityDialog).toBeHidden()
 
   entityRow = page.getByRole('row').filter({ hasText: 'Grace Lovelace' })
   await expect(entityRow).toBeVisible()

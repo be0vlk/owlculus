@@ -2,6 +2,7 @@ import { ref, computed, watch } from 'vue'
 import { entityService } from '../services/entity'
 import { entitySchemas } from './entitySchemas'
 import { cleanFormData } from '../utils/cleanFormData'
+import { getErrorMessage } from '../utils/errorMessage'
 
 export function useEntityDetails(entity, caseId) {
   const error = ref('')
@@ -118,7 +119,7 @@ export function useEntityDetails(entity, caseId) {
       isEditing.value = false
       return { updatedEntity, createdAssociates }
     } catch (err) {
-      error.value = err.response?.data?.message || err.message || 'Failed to update entity'
+      error.value = getErrorMessage(err, 'Failed to update entity')
       throw err
     } finally {
       updating.value = false

@@ -5,6 +5,7 @@
     max-width="1200px"
     persistent
     scrollable
+    @keydown.esc="handleEscape"
   >
     <v-card>
       <v-card-title class="d-flex align-center">
@@ -168,6 +169,15 @@ function handleFieldUpdate(fieldPath, value) {
     formData.value.data[parentField][childField] = value
   } else {
     formData.value.data[fieldPath] = value
+  }
+}
+
+function handleEscape() {
+  if (updating.value) return
+  if (isEditing.value) {
+    cancelEdit()
+  } else {
+    emit('close')
   }
 }
 
