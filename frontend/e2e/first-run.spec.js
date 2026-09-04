@@ -275,6 +275,9 @@ async function exerciseCaseAndEntityWorkflow(page) {
   await newCaseDialog.getByRole('button', { name: 'Create Case', exact: true }).click()
   await expect(newCaseDialog).toBeHidden()
 
+  await expect(page).toHaveURL(/\/case\/\d+$/)
+  await page.getByRole('button', { name: 'Dismiss', exact: true }).click()
+  await page.getByRole('link', { name: 'Cases', exact: true }).click()
   const caseRow = page.getByRole('row').filter({ hasText: 'Migration Safety Case' })
   await expect(caseRow).toContainText('Migration Safety Client')
   await caseRow.getByRole('cell', { name: 'Migration Safety Case', exact: true }).click()

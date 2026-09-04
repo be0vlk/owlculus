@@ -1,5 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { useActiveCaseStore } from '../stores/activeCase'
+import { caseLocation, routeCaseId } from '../utils/caseNavigation'
 
 export const routes = [
   {
@@ -40,13 +42,13 @@ export const routes = [
     path: '/plugins',
     name: 'Plugins',
     component: () => import('../views/PluginsDashboard.vue'),
-    meta: { requiresAuth: true },
+    meta: { requiresAuth: true, requiresActiveCase: true },
   },
   {
     path: '/case/:id',
     name: 'CaseDetails',
     component: () => import('../views/CaseDashboard.vue'),
-    meta: { requiresAuth: true },
+    meta: { requiresAuth: true, requiresActiveCase: true, caseScoped: true, caseSwitchable: true },
   },
   {
     path: '/settings',
@@ -58,7 +60,7 @@ export const routes = [
     path: '/strixy',
     name: 'StrixyChat',
     component: () => import('../views/StrixyChat.vue'),
-    meta: { requiresAuth: true },
+    meta: { requiresAuth: true, requiresActiveCase: true },
   },
   {
     path: '/admin',
@@ -70,25 +72,25 @@ export const routes = [
     path: '/hunts',
     name: 'Hunts',
     component: () => import('../views/HuntsDashboard.vue'),
-    meta: { requiresAuth: true, requiresNotAnalyst: true },
+    meta: { requiresAuth: true, requiresActiveCase: true, requiresNotAnalyst: true },
   },
   {
     path: '/hunts/execution/:id',
     name: 'HuntExecution',
     component: () => import('../views/HuntExecution.vue'),
-    meta: { requiresAuth: true, requiresNotAnalyst: true },
+    meta: { requiresAuth: true, requiresActiveCase: true, requiresNotAnalyst: true },
   },
   {
     path: '/tasks',
     name: 'Tasks',
     component: () => import('../views/tasks/TaskDashboard.vue'),
-    meta: { requiresAuth: true },
+    meta: { requiresAuth: true, requiresActiveCase: true },
   },
   {
     path: '/tasks/:id',
     name: 'TaskDetail',
     component: () => import('../views/tasks/TaskDetail.vue'),
-    meta: { requiresAuth: true },
+    meta: { requiresAuth: true, requiresActiveCase: true },
   },
 ]
 
@@ -141,6 +143,29 @@ export function createAppRouter(history = createWebHistory(), appRoutes = routes
         next('/cases')
         return
       }
+
+      const activeCase = useActiveCaseStore()
+      activeCase.bindRouter(router)
+      const urlCaseId = routeCaseId(to)
+      await activeCase.waitForResolution()
+      if (!authStore.isAuthenticated) {
+        next('/login')
+        return
+      }
+      if (!activeCase.initialized) await activeCase.initialize(urlCaseId)
+      else if (activeCase.ready) activeCase.resolve(urlCaseId)
+
+      if (
+        urlCaseId &&
+        (!activeCase.ready || String(activeCase.activeCaseId) !== String(urlCaseId))
+      ) {
+        next({ ...caseLocation(activeCase.activeCaseId, to), replace: true })
+        return
+      }
+      if (to.meta.requiresActiveCase && !activeCase.activeCaseId) {
+        next('/cases')
+        return
+      }
     }
 
     if (isLoginRoute && authStore.isAuthenticated) {
@@ -162,6 +187,7 @@ let isHandlingUnauthorized = false
 window.addEventListener('api:unauthorized', () => {
   if (!isHandlingUnauthorized) {
     isHandlingUnauthorized = true
+    useAuthStore().logout()
     router.push('/login').finally(() => {
       setTimeout(() => {
         isHandlingUnauthorized = false

@@ -1,7 +1,25 @@
 <template>
   <v-app>
     <FullPageLoading v-if="!authStore.isInitialized" />
-    <router-view v-else />
+    <BaseDashboard
+      v-else-if="caseContextBlocked"
+      :title="routeCaseId(route) ? 'Case Details' : 'Cases'"
+      :loading="!activeCase.error"
+      :error="activeCase.error"
+    />
+    <router-view v-else :key="workspaceKey" />
+
+    <v-snackbar
+      :model-value="!!activeCase.notification"
+      :timeout="-1"
+      role="status"
+      location="top center"
+    >
+      {{ activeCase.notification }}
+      <template #actions>
+        <v-btn variant="text" @click="activeCase.notification = ''">Dismiss</v-btn>
+      </template>
+    </v-snackbar>
 
     <!-- Global session expiration notification -->
     <v-snackbar
@@ -19,7 +37,11 @@
 </template>
 
 <script setup>
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
+import BaseDashboard from '@/components/BaseDashboard.vue'
+import { useActiveCaseStore } from '@/stores/activeCase'
+import { routeCaseId } from '@/utils/caseNavigation'
 import { useDarkMode } from '@/composables/useDarkMode'
 import FullPageLoading from '@/components/FullPageLoading.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -27,6 +49,15 @@ import { useAuthStore } from '@/stores/auth'
 // Initialize dark mode
 useDarkMode()
 const authStore = useAuthStore()
+const activeCase = useActiveCaseStore()
+const route = useRoute()
+const workspaceKey = computed(() => (routeCaseId(route) ? `case-${routeCaseId(route)}` : undefined))
+const caseContextBlocked = computed(
+  () =>
+    (authStore.isAuthenticated && !activeCase.initialized) ||
+    (routeCaseId(route) &&
+      (!activeCase.ready || String(activeCase.activeCaseId) !== String(routeCaseId(route)))),
+)
 authStore.init()
 
 // Global session expiration notification

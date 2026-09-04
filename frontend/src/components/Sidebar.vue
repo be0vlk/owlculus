@@ -23,6 +23,7 @@
       </div>
     </v-container>
 
+    <ActiveCaseSwitcher v-if="!smAndDown" />
     <v-divider />
 
     <!-- Navigation Items -->
@@ -30,9 +31,11 @@
       <v-list-item
         v-for="item in navigationItems"
         :key="item.name"
-        :to="item.href"
+        :to="item.disabled ? undefined : item.href"
+        :disabled="item.disabled"
+        :aria-disabled="item.disabled || undefined"
         :prepend-icon="item.icon"
-        :aria-label="item.name"
+        :aria-label="item.disabled ? `${item.name}: ${caseNavigationExplanation}` : item.name"
         color="primary"
         rounded="xl"
         class="ma-1"
@@ -81,10 +84,15 @@
       </v-container>
     </template>
   </v-navigation-drawer>
+  <v-app-bar v-if="smAndDown" height="112">
+    <ActiveCaseSwitcher />
+  </v-app-bar>
 </template>
 
 <script setup>
 import { useDisplay } from 'vuetify'
+import ActiveCaseSwitcher from './ActiveCaseSwitcher.vue'
+import { useActiveCaseStore } from '@/stores/activeCase'
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
@@ -94,6 +102,12 @@ const { smAndDown } = useDisplay()
 const drawer = ref(true)
 const router = useRouter()
 const authStore = useAuthStore()
+const activeCase = useActiveCaseStore()
+const caseNavigationExplanation = computed(() =>
+  activeCase.loading || !activeCase.ready
+    ? 'Cases are still being resolved.'
+    : 'No accessible case. Create a case or contact an administrator.',
+)
 const { isDark, toggleDark } = useDarkMode()
 
 const navigationItems = computed(() => {
@@ -102,7 +116,14 @@ const navigationItems = computed(() => {
     return []
   }
 
-  const items = [{ name: 'Cases', href: '/cases', icon: 'mdi-folder-outline' }]
+  const items = [
+    { name: 'Cases', href: '/cases', icon: 'mdi-folder-outline' },
+    {
+      name: 'Case overview',
+      href: `/case/${activeCase.activeCaseId}`,
+      icon: 'mdi-briefcase-outline',
+    },
+  ]
 
   // Add Clients for admin users
   if (authStore.requiresAdmin()) {
@@ -129,7 +150,10 @@ const navigationItems = computed(() => {
     items.push({ name: 'Settings', href: '/settings', icon: 'mdi-cog-outline' })
   }
 
-  return items
+  return items.map((item) => ({
+    ...item,
+    disabled: router.resolve(item.href).meta.requiresActiveCase && !activeCase.activeCaseId,
+  }))
 })
 
 const handleLogout = () => {

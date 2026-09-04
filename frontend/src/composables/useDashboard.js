@@ -1,7 +1,7 @@
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import { caseService } from '../services/case'
+import { useActiveCaseStore } from '../stores/activeCase'
 import { clientService } from '../services/client'
 import { formatDate } from '@/composables/dateUtils'
 
@@ -18,7 +18,8 @@ export function useDashboard() {
   const router = useRouter()
   const authStore = useAuthStore()
 
-  const cases = ref([])
+  const activeCase = useActiveCaseStore()
+  const cases = computed(() => activeCase.accessibleCases)
   const clients = ref({})
   const loading = ref(true)
   const error = ref(null)
@@ -35,13 +36,9 @@ export function useDashboard() {
 
     try {
       loading.value = true
-      // Load cases with status filter
-      const params = {}
-      if (!showClosedCases.value) {
-        params.status = 'Open'
-      }
-      const casesData = await caseService.getCases(params)
-      cases.value = casesData
+      error.value = null
+      await activeCase.refresh()
+      if (activeCase.error) throw new Error(activeCase.error)
 
       // Load clients for all authenticated users since read ops are not sensitive
       try {
@@ -65,13 +62,7 @@ export function useDashboard() {
 
   const toggleClosedCases = () => {
     showClosedCases.value = !showClosedCases.value
-    loadData()
   }
-
-  // Watch for changes to showClosedCases and reload data
-  watch(showClosedCases, () => {
-    loadData()
-  })
 
   const sortBy = (key) => {
     if (sortKey.value === key) {
@@ -92,7 +83,9 @@ export function useDashboard() {
   }
 
   const sortedAndFilteredCases = computed(() => {
-    let filteredCases = cases.value
+    let filteredCases = showClosedCases.value
+      ? cases.value
+      : cases.value.filter((item) => item.status === 'Open')
 
     // Apply search filter
     if (searchQuery.value) {
