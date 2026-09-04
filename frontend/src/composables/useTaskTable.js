@@ -81,7 +81,7 @@ export function useTaskTable() {
   }
 
   function handleRowClick(event, { item }) {
-    router.push(`/tasks/${item.id}`)
+    router.push(`/case/${item.case_id}/tasks/${item.id}`)
   }
 
   function openAssignDialog(task) {

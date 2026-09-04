@@ -1,9 +1,22 @@
+import taskService from '../services/task'
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useActiveCaseStore } from '../stores/activeCase'
 import { caseLocation, routeCaseId } from '../utils/caseNavigation'
 
 export const routes = [
+  {
+    path: '/tasks',
+    name: 'LegacyTasks',
+    component: () => import('../views/tasks/TaskDashboard.vue'),
+    meta: { requiresAuth: true, requiresActiveCase: true },
+  },
+  {
+    path: '/tasks/:id',
+    name: 'LegacyTaskDetail',
+    component: () => import('../views/tasks/TaskDetail.vue'),
+    meta: { requiresAuth: true, requiresActiveCase: true },
+  },
   {
     path: '/',
     redirect: '/cases',
@@ -81,16 +94,16 @@ export const routes = [
     meta: { requiresAuth: true, requiresActiveCase: true, requiresNotAnalyst: true },
   },
   {
-    path: '/tasks',
+    path: '/case/:caseId/tasks',
     name: 'Tasks',
     component: () => import('../views/tasks/TaskDashboard.vue'),
-    meta: { requiresAuth: true, requiresActiveCase: true },
+    meta: { requiresAuth: true, requiresActiveCase: true, caseScoped: true, caseSwitchable: true },
   },
   {
-    path: '/tasks/:id',
+    path: '/case/:caseId/tasks/:id',
     name: 'TaskDetail',
     component: () => import('../views/tasks/TaskDetail.vue'),
-    meta: { requiresAuth: true, requiresActiveCase: true },
+    meta: { requiresAuth: true, requiresActiveCase: true, caseScoped: true },
   },
 ]
 
@@ -155,11 +168,47 @@ export function createAppRouter(history = createWebHistory(), appRoutes = routes
       if (!activeCase.initialized) await activeCase.initialize(urlCaseId)
       else if (activeCase.ready) activeCase.resolve(urlCaseId)
 
+      if (['TaskDetail', 'LegacyTaskDetail'].includes(to.name) && activeCase.activeCaseId) {
+        try {
+          const task = await taskService.getTask(to.params.id)
+          if (!activeCase.accessibleCases.some((item) => item.id === task.case_id)) {
+            activeCase.notification = 'This task’s case is unavailable.'
+            next('/cases')
+            return
+          }
+          if (String(urlCaseId) !== String(task.case_id)) {
+            next({
+              name: 'TaskDetail',
+              params: { caseId: task.case_id, id: task.id },
+              query: to.query,
+              hash: to.hash,
+              replace: true,
+            })
+            return
+          }
+        } catch {
+          activeCase.notification =
+            'Unable to open this task. It may be unavailable or you may not have access.'
+          next('/cases')
+          return
+        }
+      }
+
       if (
         urlCaseId &&
         (!activeCase.ready || String(activeCase.activeCaseId) !== String(urlCaseId))
       ) {
         next({ ...caseLocation(activeCase.activeCaseId, to), replace: true })
+        return
+      }
+      if (to.name === 'LegacyTasks' && activeCase.activeCaseId) {
+        next({
+          name: 'Tasks',
+          params: { caseId: activeCase.activeCaseId },
+          query: to.query,
+          hash: to.hash,
+          replace: true,
+        })
         return
       }
       if (to.meta.requiresActiveCase && !activeCase.activeCaseId) {

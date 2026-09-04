@@ -870,3 +870,32 @@ class TestTaskPagination:
             assert len(data) == 5  # 15 total, so 5 on second page
         finally:
             app.dependency_overrides.clear()
+
+
+def test_task_update_keeps_owner_when_caller_supplies_another_case(
+    session: Session,
+    test_admin: User,
+    test_task: Task,
+    client: TestClient,
+):
+    other_case = Case(case_number="CASE-OTHER", title="Other case", status="Open")
+    session.add(other_case)
+    session.commit()
+    session.refresh(other_case)
+    app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+        test_admin
+    )
+    app.dependency_overrides[get_db] = override_get_db_factory(session)
+    owner_id = test_task.case_id
+    try:
+        response = client.put(
+            f"/api/tasks/{test_task.id}",
+            json={"title": "Updated review", "case_id": other_case.id},
+        )
+        assert response.status_code == status.HTTP_200_OK
+        response = client.get(f"/api/tasks/{test_task.id}")
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json()["case_id"] == owner_id
+        assert response.json()["title"] == "Updated review"
+    finally:
+        app.dependency_overrides.clear()

@@ -73,7 +73,7 @@
         <div class="flex-grow-1">
           <h2 class="text-title-large font-weight-bold">Task Management</h2>
           <div class="text-body-medium text-medium-emphasis">
-            Track and manage tasks across all cases
+            Track and manage tasks for the active case
           </div>
         </div>
       </v-card-title>
@@ -120,7 +120,7 @@
       <v-divider />
       <TaskTable
         v-model="selected"
-        :show-case="true"
+        :show-case="false"
         :loading="loading"
         :show-select="true"
         :tasks="filteredAndSearchedTasks"
@@ -244,7 +244,7 @@ const getEmptyStateMessage = () => {
   } else if (activeQuickFilter.value === 'me') {
     return "You don't have any tasks assigned. Check 'All Tasks' to see unassigned tasks."
   } else {
-    return 'Get started by creating your first task to track work across cases.'
+    return 'Get started by creating your first task to track work in this case.'
   }
 }
 

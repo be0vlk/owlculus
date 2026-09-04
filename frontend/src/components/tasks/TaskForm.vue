@@ -7,19 +7,6 @@
     <v-divider />
     <v-card-text class="pa-4">
       <v-form ref="form" :id="formId" v-model="valid" :disabled="loading" @submit.prevent="save">
-        <v-select
-          v-model="formData.case_id"
-          :disabled="isEdit || !!caseId"
-          :items="cases"
-          :rules="[(v) => !!v || 'Case is required']"
-          item-title="title"
-          item-value="id"
-          label="Case"
-          variant="outlined"
-          density="comfortable"
-          class="mb-4"
-        />
-
         <v-text-field
           v-model="formData.title"
           :rules="[(v) => !!v || 'Title is required']"
@@ -118,7 +105,7 @@
 <script setup>
 import { useId, computed, onMounted, ref, watch } from 'vue'
 import { useTaskStore } from '@/stores/taskStore'
-import { caseService } from '@/services/case'
+import { useActiveCaseStore } from '@/stores/activeCase'
 import { TASK_PRIORITY, TASK_PRIORITY_LABELS } from '@/constants/tasks'
 import CustomFieldInput from './CustomFieldInput.vue'
 
@@ -128,27 +115,29 @@ const props = defineProps({
     type: Object,
     default: null,
   },
-  caseId: {
-    type: Number,
-    default: null,
-  },
 })
 
 const emit = defineEmits(['save', 'cancel'])
 
 const taskStore = useTaskStore()
+const activeCase = useActiveCaseStore()
 
 const formId = useId()
 const form = ref(null)
 const valid = ref(false)
 const validating = ref(false)
-const loading = computed(() => validating.value || props.saving)
-const cases = ref([])
+const loading = computed(
+  () =>
+    validating.value ||
+    props.saving ||
+    !activeCase.activeCaseId ||
+    activeCase.activeCaseId !== formData.value.case_id,
+)
 
 const isEdit = computed(() => !!props.task)
 
 const formData = ref({
-  case_id: props.caseId || props.task?.case_id || null,
+  case_id: props.task?.case_id ?? activeCase.activeCaseId,
   title: props.task?.title || '',
   description: props.task?.description || '',
   template_id: null,
@@ -168,7 +157,7 @@ const priorityOptions = computed(() =>
 const filteredUsers = computed(() => {
   if (!formData.value.case_id) return []
 
-  const selectedCase = cases.value.find((c) => c.id === formData.value.case_id)
+  const selectedCase = activeCase.accessibleCases.find((c) => c.id === formData.value.case_id)
   return selectedCase?.users || []
 })
 
@@ -211,7 +200,7 @@ async function save() {
   validating.value = true
   try {
     const result = await form.value.validate()
-    if (!result.valid || props.saving) return
+    if (!result.valid || props.saving || activeCase.activeCaseId !== formData.value.case_id) return
     // Format date if present
     const data = { ...formData.value }
     if (data.due_date) {
@@ -227,8 +216,7 @@ async function save() {
 onMounted(async () => {
   // Load required data
   try {
-    const [casesData] = await Promise.all([caseService.getCases(), taskStore.loadTemplates()])
-    cases.value = casesData
+    await taskStore.loadTemplates()
     // Templates are already stored in the taskStore
 
     // If editing a task with a template, load custom fields

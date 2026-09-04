@@ -16,7 +16,7 @@
     >
       <!-- Title Column -->
       <template #[`item.title`]="{ item }">
-        <router-link :to="`/tasks/${item.id}`" class="owlculus-link" @click.stop>{{
+        <router-link :to="`/case/${item.case_id}/tasks/${item.id}`" class="owlculus-link" @click.stop>{{
           item.title
         }}</router-link>
       </template>

@@ -5,9 +5,11 @@ import { flushPromises } from '@vue/test-utils'
 import { createAppRouter, routes } from '../index'
 import { useAuthStore } from '../../stores/auth'
 import { useActiveCaseStore, ACTIVE_CASE_STORAGE_KEY } from '../../stores/activeCase'
+import taskService from '../../services/task'
 import { caseService } from '../../services/case'
 
 vi.mock('../../services/case', () => ({ caseService: { getCases: vi.fn() } }))
+vi.mock('../../services/task', () => ({ default: { getTask: vi.fn() } }))
 const cases = [
   { id: 1, case_number: 'ONE', status: 'Closed', created_at: '2025-01-01' },
   { id: 2, case_number: 'TWO', status: 'Open', created_at: '2026-01-01' },
@@ -121,4 +123,34 @@ it('opens the Cases empty state when the last accessible case disappears on a gl
   expect(router.currentRoute.value.path).toBe('/cases')
   expect(useActiveCaseStore().activeCaseId).toBeNull()
   expect(useActiveCaseStore().notification).toContain('No accessible cases remain')
+})
+
+it('redirects legacy tasks and preserves the task dashboard when switching cases', async () => {
+  await router.push('/tasks?filter=me')
+  expect(router.currentRoute.value.fullPath).toBe('/case/2/tasks?filter=me')
+  await useActiveCaseStore().select(1)
+  expect(router.currentRoute.value.fullPath).toBe('/case/1/tasks?filter=me')
+})
+
+for (const path of ['/tasks/8', '/case/2/tasks/8']) {
+  it(`reconciles authorized task ownership for ${path}`, async () => {
+    taskService.getTask.mockResolvedValue({ id: 8, case_id: 1 })
+    await router.push(path)
+    expect(router.currentRoute.value.path).toBe('/case/1/tasks/8')
+    expect(useActiveCaseStore().activeCaseId).toBe(1)
+  })
+}
+
+it('sends inaccessible task links to Cases', async () => {
+  taskService.getTask.mockRejectedValue({ response: { status: 403 } })
+  await router.push('/tasks/8')
+  expect(router.currentRoute.value.path).toBe('/cases')
+})
+
+it('does not request a legacy task when there are no accessible cases', async () => {
+  taskService.getTask.mockClear()
+  caseService.getCases.mockResolvedValue([])
+  await router.push('/tasks/8')
+  expect(router.currentRoute.value.path).toBe('/cases')
+  expect(taskService.getTask).not.toHaveBeenCalled()
 })

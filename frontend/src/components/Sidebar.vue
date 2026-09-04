@@ -131,7 +131,11 @@ const navigationItems = computed(() => {
   }
 
   items.push(
-    { name: 'Tasks', href: '/tasks', icon: 'mdi-checkbox-marked-circle-outline' },
+    {
+      name: 'Tasks',
+      href: activeCase.activeCaseId ? `/case/${activeCase.activeCaseId}/tasks` : '/tasks',
+      icon: 'mdi-checkbox-marked-circle-outline',
+    },
     { name: 'Plugins', href: '/plugins', icon: 'mdi-wrench-outline' },
   )
 
