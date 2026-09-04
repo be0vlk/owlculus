@@ -6,7 +6,11 @@ from sqlmodel import Session, select
 
 from app.core import security
 from app.core.config import settings
-from app.core.exceptions import AuthenticationException, ResourceNotFoundException
+from app.core.exceptions import (
+    AuthenticationException,
+    AuthorizationException,
+    ResourceNotFoundException,
+)
 from app.core.logging import get_security_logger
 from app.database.models import HuntExecution, User
 from app.schemas.auth_schema import Token, WebSocketToken
@@ -31,6 +35,9 @@ class AuthService:
             username=username, action="authenticate", event_type="login_attempt"
         )
         if not username or not password or len(username) > 100 or len(password) > 200:
+            logger.bind(
+                event_type="login_failed", failure_reason="invalid_credentials"
+            ).warning("Authentication failed")
             raise AuthenticationException(INVALID_CREDENTIALS_ERROR)
 
         user = self.db.exec(select(User).where(User.username == username)).first()
@@ -51,16 +58,35 @@ class AuthService:
         self, execution_id: int, current_user: User
     ) -> WebSocketToken:
         """Return a one-use token after resolving its execution and case access."""
+        logger = get_security_logger(
+            action="create_websocket_token",
+            user_id=current_user.id,
+            execution_id=execution_id,
+            event_type="websocket_token_attempt",
+        )
         execution = self.db.get(HuntExecution, execution_id)
         if execution is None:
+            logger.bind(
+                event_type="websocket_token_failed",
+                failure_reason="execution_not_found",
+            ).warning("WebSocket token creation failed")
             raise ResourceNotFoundException(EXECUTION_NOT_FOUND_ERROR)
 
-        self.case_access.readable(current_user, execution.case_id)
+        try:
+            self.case_access.readable(current_user, execution.case_id)
+        except AuthorizationException:
+            logger.bind(
+                event_type="websocket_token_failed", failure_reason="access_denied"
+            ).warning("WebSocket token creation denied")
+            raise
         if current_user.id is None:
             raise AuthenticationException("Could not validate credentials")
         token = security.ephemeral_token_manager.create_token(
             current_user.id, execution_id
         )
+        logger.bind(
+            event_type="websocket_token_success", case_id=execution.case_id
+        ).info("WebSocket token created successfully")
         return WebSocketToken(
             token=token,
             execution_id=execution_id,
