@@ -22,7 +22,7 @@ from app.core.exceptions import (
 from app.core.file_storage import create_case_directory
 from app.core.logging import get_security_logger
 from app.core.utils import get_utc_now
-from app.database import crud, models
+from app.database import models
 from app.database.db_utils import transaction
 from app.schemas.case_schema import CaseUser
 from app.services.case_access import CaseAccess
@@ -51,7 +51,9 @@ class CaseService:
             search_pattern = f"{year}{month}-%"
             base_format = f"{year}{month}"
 
-        stmt = select(models.Case).where(models.Case.case_number.like(search_pattern))
+        stmt = select(models.Case).where(
+            col(models.Case.case_number).like(search_pattern)
+        )
         cases = self.db.exec(stmt).all()
 
         if not cases:
@@ -81,12 +83,17 @@ class CaseService:
                     current_time
                 )
 
-                new_case = await crud.create_case(
-                    self.db,
-                    case=schemas.CaseCreate(**case_data),
-                    current_user=current_user,
+                new_case = models.Case(
+                    **schemas.CaseCreate(**case_data).model_dump(),
+                    created_by_id=current_user.id,
+                    created_at=current_time,
+                    updated_at=current_time,
                 )
+                self.db.add(new_case)
+                self.db.flush()
 
+            if new_case.id is None:
+                raise BaseException("Internal server error")
             create_case_directory(new_case.id)
 
             case_logger.bind(
@@ -101,7 +108,7 @@ class CaseService:
         except Exception as e:
             case_logger.bind(
                 event_type="case_creation_error", error_type="system_error"
-            ).error(f"Case creation error: {str(e)}")
+            ).error(f"Case creation error: {e!s}")
             raise BaseException("Internal server error")
 
     async def get_cases(
@@ -153,9 +160,11 @@ class CaseService:
                 case_update.case_number
                 and case_update.case_number != db_case.case_number
             ):
-                existing_case = await crud.get_case_by_number(
-                    self.db, case_number=case_update.case_number
-                )
+                existing_case = self.db.exec(
+                    select(models.Case).where(
+                        models.Case.case_number == case_update.case_number
+                    )
+                ).first()
                 if existing_case:
                     case_logger.bind(
                         event_type="case_update_failed",
@@ -189,7 +198,7 @@ class CaseService:
         except Exception as e:
             case_logger.bind(
                 event_type="case_update_error", error_type="system_error"
-            ).error(f"Case update error: {str(e)}")
+            ).error(f"Case update error: {e!s}")
             raise BaseException("Internal server error")
 
     async def add_user_to_case(
@@ -210,14 +219,14 @@ class CaseService:
         )
 
         try:
-            db_case = await crud.get_case(self.db, case_id=case_id)
+            db_case = self.db.get(models.Case, case_id)
             if not db_case:
                 case_logger.bind(
                     event_type="case_user_add_failed", failure_reason="case_not_found"
                 ).warning("Add user to case failed: case not found")
                 raise ResourceNotFoundException("Case not found")
 
-            db_user = await crud.get_user(self.db, user_id=user_id)
+            db_user = self.db.get(models.User, user_id)
             if not db_user:
                 case_logger.bind(
                     event_type="case_user_add_failed", failure_reason="user_not_found"
@@ -233,9 +242,28 @@ class CaseService:
                 ).warning("Add user to case failed: analyst cannot be set as lead")
                 raise
 
-            updated_case = await crud.add_user_to_case(
-                self.db, case=db_case, user=db_user, is_lead=is_lead
-            )
+            with transaction(self.db):
+                existing_link = self.db.exec(
+                    select(models.CaseUserLink).where(
+                        models.CaseUserLink.case_id == db_case.id,
+                        models.CaseUserLink.user_id == db_user.id,
+                    )
+                ).first()
+                if existing_link:
+                    existing_link.is_lead = is_lead
+                    self.db.add(existing_link)
+                else:
+                    self.db.add(
+                        models.CaseUserLink(
+                            case_id=db_case.id,
+                            user_id=db_user.id,
+                            is_lead=is_lead,
+                        )
+                    )
+                db_case.updated_at = get_utc_now()
+                self.db.add(db_case)
+            self.db.refresh(db_case)
+            updated_case = db_case
 
             case_logger.bind(
                 case_number=db_case.case_number,
@@ -248,18 +276,9 @@ class CaseService:
         except (AuthorizationException, ResourceNotFoundException, ValidationException):
             raise
         except Exception as e:
-            if "UNIQUE constraint failed" in str(e) and "caseuserlink" in str(e):
-                case_logger.bind(
-                    event_type="case_user_add_failed",
-                    failure_reason="user_already_assigned",
-                ).warning("Add user to case failed: user already assigned to case")
-                raise DuplicateResourceException(
-                    "User is already assigned to this case"
-                )
-
             case_logger.bind(
                 event_type="case_user_add_error", error_type="system_error"
-            ).error(f"Add user to case error: {str(e)}")
+            ).error(f"Add user to case error: {e!s}")
             raise BaseException("Internal server error")
 
     async def remove_user_from_case(
@@ -276,7 +295,7 @@ class CaseService:
         )
 
         try:
-            db_case = await crud.get_case(self.db, case_id=case_id)
+            db_case = self.db.get(models.Case, case_id)
             if not db_case:
                 case_logger.bind(
                     event_type="case_user_remove_failed",
@@ -284,7 +303,7 @@ class CaseService:
                 ).warning("Remove user from case failed: case not found")
                 raise ResourceNotFoundException("Case not found")
 
-            db_user = await crud.get_user(self.db, user_id=user_id)
+            db_user = self.db.get(models.User, user_id)
             if not db_user:
                 case_logger.bind(
                     event_type="case_user_remove_failed",
@@ -292,9 +311,12 @@ class CaseService:
                 ).warning("Remove user from case failed: user not found")
                 raise ResourceNotFoundException("User not found")
 
-            updated_case = await crud.remove_user_from_case(
-                self.db, case=db_case, user=db_user
-            )
+            with transaction(self.db):
+                db_case.users.remove(db_user)
+                db_case.updated_at = get_utc_now()
+                self.db.add(db_case)
+            self.db.refresh(db_case)
+            updated_case = db_case
 
             case_logger.bind(
                 case_number=db_case.case_number,
@@ -309,7 +331,7 @@ class CaseService:
         except Exception as e:
             case_logger.bind(
                 event_type="case_user_remove_error", error_type="system_error"
-            ).error(f"Remove user from case error: {str(e)}")
+            ).error(f"Remove user from case error: {e!s}")
             raise BaseException("Internal server error")
 
     async def update_case_user_lead_status(
@@ -326,7 +348,7 @@ class CaseService:
         )
 
         try:
-            db_case = await crud.get_case(self.db, case_id=case_id)
+            db_case = self.db.get(models.Case, case_id)
             if not db_case:
                 case_logger.bind(
                     event_type="case_user_lead_update_failed",
@@ -334,7 +356,7 @@ class CaseService:
                 ).warning("Update case user lead status failed: case not found")
                 raise ResourceNotFoundException("Case not found")
 
-            db_user = await crud.get_user(self.db, user_id=user_id)
+            db_user = self.db.get(models.User, user_id)
             if not db_user:
                 case_logger.bind(
                     event_type="case_user_lead_update_failed",
@@ -362,9 +384,21 @@ class CaseService:
                 )
                 raise
 
-            updated_case = await crud.update_case_user_lead_status(
-                self.db, case_id=case_id, user_id=user_id, is_lead=is_lead
-            )
+            with transaction(self.db):
+                link = self.db.exec(
+                    select(models.CaseUserLink).where(
+                        models.CaseUserLink.case_id == case_id,
+                        models.CaseUserLink.user_id == user_id,
+                    )
+                ).first()
+                if link is None:
+                    raise ValidationException("User is not assigned to this case")
+                link.is_lead = is_lead
+                db_case.updated_at = get_utc_now()
+                self.db.add(link)
+                self.db.add(db_case)
+            self.db.refresh(db_case)
+            updated_case = db_case
 
             case_logger.bind(
                 case_number=db_case.case_number,
@@ -380,7 +414,7 @@ class CaseService:
         except Exception as e:
             case_logger.bind(
                 event_type="case_user_lead_update_error", error_type="system_error"
-            ).error(f"Update case user lead status error: {str(e)}")
+            ).error(f"Update case user lead status error: {e!s}")
             raise BaseException("Internal server error")
 
     def load_cases_with_users(self, cases: list[models.Case]) -> list[schemas.Case]:
@@ -416,6 +450,8 @@ class CaseService:
         enriched = []
         for case in cases:
             case_data = case.model_dump()
-            case_data["users"] = users_by_case.get(case.id, [])
+            case_data["users"] = (
+                users_by_case.get(case.id, []) if case.id is not None else []
+            )
             enriched.append(schemas.Case(**case_data))
         return enriched

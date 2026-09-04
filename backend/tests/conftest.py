@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel, create_engine, select
 
 # Set test environment variables before importing app
 os.environ.setdefault("SECRET_KEY", "test_secret_key_for_testing_only")
@@ -34,7 +34,7 @@ from app.core.security import (
     get_password_hash,
     verify_access_token,
 )
-from app.database import crud, models
+from app.database import models
 from app.database.connection import get_db
 from app.plugins.base_plugin import BasePlugin, PluginRun, ResultEvent
 
@@ -224,7 +224,9 @@ def override_auth_fixture(session):
             raise HTTPException(status_code=401, detail="Not authenticated")
         try:
             username = verify_access_token(token, HTTPException(status_code=401))
-            user = await crud.get_user_by_username(session, username=username)
+            user = session.exec(
+                select(models.User).where(models.User.username == username)
+            ).first()
             if not user:
                 raise HTTPException(status_code=401)
             return user

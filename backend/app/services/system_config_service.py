@@ -8,7 +8,6 @@ administrative system configuration functionality.
 
 from collections.abc import Callable
 from datetime import datetime
-from typing import Dict, List, Optional
 
 from sqlmodel import Session, select
 
@@ -18,6 +17,7 @@ from ..core.logging import get_security_logger
 from ..core.security import encrypt_api_key
 from ..core.utils import get_utc_now
 from ..database import models
+from ..database.db_utils import transaction
 from .api_key_vault import Provider, StoredApiKey
 from .case_access import CaseAccess
 
@@ -46,7 +46,7 @@ class SystemConfigValidator:
             raise ValidationException(f"Invalid case number template: {template}")
 
     @staticmethod
-    def validate_case_number_prefix(prefix: Optional[str], template: str) -> None:
+    def validate_case_number_prefix(prefix: str | None, template: str) -> None:
         """Validate case number prefix based on template"""
         if template == CASE_NUMBER_TEMPLATE_PREFIX:
             if not prefix:
@@ -94,13 +94,13 @@ class SystemConfigService:
     ) -> models.SystemConfiguration:
         """Persist an administrative configuration change."""
         config.updated_at = self._clock()
-        self.db.add(config)
-        self.db.commit()
+        with transaction(self.db):
+            self.db.add(config)
         self.db.refresh(config)
         return config
 
     async def get_configuration(
-        self, current_user: Optional[models.User] = None
+        self, current_user: models.User | None = None
     ) -> models.SystemConfiguration:
         stmt = select(models.SystemConfiguration)
         config = self.db.exec(stmt).first()
@@ -113,8 +113,7 @@ class SystemConfigService:
                 evidence_folder_templates=DEFAULT_TEMPLATES.copy(),
             )
             self.db.add(config)
-            self.db.commit()
-            self.db.refresh(config)
+            self.db.flush()
 
         return config
 
@@ -129,7 +128,7 @@ class SystemConfigService:
         self,
         case_number_template: str,
         current_user: models.User,
-        case_number_prefix: Optional[str] = None,
+        case_number_prefix: str | None = None,
     ) -> models.SystemConfiguration:
         self.case_access.require_admin(current_user)
         config_logger = get_security_logger(
@@ -171,14 +170,14 @@ class SystemConfigService:
                 event_type="system_config_update_failed",
                 failure_reason="validation_error",
                 error_message=str(e),
-            ).warning(f"System config update failed: {str(e)}")
+            ).warning(f"System config update failed: {e!s}")
             raise
         except Exception as e:
             config_logger.bind(
                 event_type="system_config_update_error",
                 error_type="system_error",
                 error_message=str(e),
-            ).error(f"System config update error: {str(e)}")
+            ).error(f"System config update error: {e!s}")
             raise
 
     def get_template_display_name(self, template: str) -> str:
@@ -186,7 +185,7 @@ class SystemConfigService:
         return TEMPLATE_DISPLAY_NAMES.get(template, template)
 
     def generate_example_case_number(
-        self, template: str, prefix: Optional[str] = None
+        self, template: str, prefix: str | None = None
     ) -> str:
         """Generate an example case number based on template"""
         current_time = self._clock()
@@ -200,7 +199,7 @@ class SystemConfigService:
     async def set_api_key(
         self,
         provider: Provider,
-        api_key: Optional[str],
+        api_key: str | None,
         name: str,
         current_user: models.User,
     ) -> models.SystemConfiguration:
@@ -265,14 +264,14 @@ class SystemConfigService:
                 event_type=f"api_key_{operation_type}_failed",
                 failure_reason="validation_error",
                 error_message=str(e),
-            ).warning(f"API key {operation_type} failed for {provider}: {str(e)}")
+            ).warning(f"API key {operation_type} failed for {provider}: {e!s}")
             raise
         except Exception as e:
             config_logger.bind(
                 event_type=f"api_key_{operation_type}_error",
                 error_type="system_error",
                 error_message=str(e),
-            ).error(f"API key {operation_type} error for {provider}: {str(e)}")
+            ).error(f"API key {operation_type} error for {provider}: {e!s}")
             raise
 
     async def remove_api_key(
@@ -323,10 +322,10 @@ class SystemConfigService:
                 event_type="api_key_remove_error",
                 error_type="system_error",
                 error_message=str(e),
-            ).error(f"API key remove error for {provider}: {str(e)}")
+            ).error(f"API key remove error for {provider}: {e!s}")
             raise
 
-    async def list_api_keys(self, current_user: models.User) -> Dict[str, dict]:
+    async def list_api_keys(self, current_user: models.User) -> dict[str, dict]:
         """List all configured API keys (admin only)"""
         self.case_access.require_admin(current_user)
         try:
@@ -350,13 +349,13 @@ class SystemConfigService:
         except Exception:
             return {}
 
-    async def get_configured_providers(self, current_user: models.User) -> List[str]:
+    async def get_configured_providers(self, current_user: models.User) -> list[str]:
         """Get list of configured providers (requires admin access)"""
         api_keys = await self.list_api_keys(current_user=current_user)
         return list(api_keys.keys())
 
     def preview_case_number_template(
-        self, template: str, prefix: Optional[str], current_user: models.User
+        self, template: str, prefix: str | None, current_user: models.User
     ) -> tuple[str, str]:
         """Authorize and render an administrative case-number preview."""
         self.case_access.require_admin(current_user)
@@ -371,7 +370,7 @@ class SystemConfigService:
         if not config.evidence_folder_templates:
             config.evidence_folder_templates = DEFAULT_TEMPLATES.copy()
             config = self._persist_configuration(config)
-        return config.evidence_folder_templates
+        return config.evidence_folder_templates or {}
 
     async def update_evidence_folder_templates(
         self, templates: dict, current_user: models.User
@@ -407,12 +406,12 @@ class SystemConfigService:
                 event_type="evidence_templates_update_failed",
                 failure_reason="validation_error",
                 error_message=str(e),
-            ).warning(f"Evidence templates update failed: {str(e)}")
+            ).warning(f"Evidence templates update failed: {e!s}")
             raise
         except Exception as e:
             config_logger.bind(
                 event_type="evidence_templates_update_error",
                 error_type="system_error",
                 error_message=str(e),
-            ).error(f"Evidence templates update error: {str(e)}")
+            ).error(f"Evidence templates update error: {e!s}")
             raise
