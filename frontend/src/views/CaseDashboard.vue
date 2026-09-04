@@ -86,7 +86,7 @@
             <div v-if="activeTab === 'entities'" class="pa-4">
               <v-row class="mb-4" no-gutters>
                 <v-col cols="auto">
-                  <v-btn color="primary" prepend-icon="mdi-plus" @click="showNewEntityModal = true">
+                  <v-btn color="primary" prepend-icon="mdi-plus" @click="openNewEntityModal">
                     Add Entity
                   </v-btn>
                 </v-col>
@@ -97,7 +97,7 @@
                 ref="entityTableRef"
                 :case-id="Number(route.params.id)"
                 :entity-service="entityServiceRef"
-                @create="showNewEntityModal = true"
+                @create="openNewEntityModal"
                 @deleted="handleEntityDeleted"
                 @edit="showEntityDetails"
                 @view="showEntityDetails"
@@ -334,8 +334,9 @@
     :case-id="Number(route.params.id)"
     :entity="selectedEntity"
     :existing-entities="entities"
+    :restore-focus-to="resolveEntityDetailsActivator"
     :show="showEntityDetailsModal"
-    @close="showEntityDetailsModal = false"
+    @close="handleCloseEntityDetails"
     @edit="handleEditEntity"
     @viewEntity="showEntityDetails"
   />
@@ -373,6 +374,7 @@
     aria-label="Entity Created Successfully"
     max-width="500px"
     persistent
+    @keydown.esc="handleSkipEditEntity"
   >
     <v-card>
       <v-card-title id="entity-created-dialog-title" class="d-flex align-center">
@@ -407,6 +409,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useNotifications } from '../composables/useNotifications'
+import { useDialogFocusRestore } from '../composables/useDialogFocusRestore'
 import BaseDashboard from '../components/BaseDashboard.vue'
 import CaseDetail from '../components/CaseDetail.vue'
 import EntityDataTable from '../components/entities/EntityDataTable.vue'
@@ -454,6 +457,10 @@ const showUploadEvidenceModal = ref(false)
 const uploadTargetFolder = ref(null)
 const showEntityCreationSuccess = ref(false)
 const createdEntity = ref(null)
+let newEntityModalActivator = null
+let entityDetailsActivator = null
+
+useDialogFocusRestore(showEntityCreationSuccess)
 const showMetadataModal = ref(false)
 const selectedEvidenceForMetadata = ref(null)
 const extractedMetadata = ref(null)
@@ -518,9 +525,25 @@ const hasFolders = computed(() => {
   return evidence.value.some((item) => item.is_folder)
 })
 
-function showEntityDetails(entity) {
+function showEntityDetails(entity, event) {
+  entityDetailsActivator = event?.currentTarget || document.activeElement
   selectedEntity.value = entity
   showEntityDetailsModal.value = true
+}
+
+function resolveEntityDetailsActivator() {
+  if (entityDetailsActivator?.isConnected) return entityDetailsActivator
+  if (!selectedEntity.value?.id) return null
+  return document.querySelector(`[data-entity-view-id="${selectedEntity.value.id}"]`)
+}
+
+function handleCloseEntityDetails() {
+  showEntityDetailsModal.value = false
+}
+
+function openNewEntityModal(event) {
+  newEntityModalActivator = event?.currentTarget || document.activeElement
+  showNewEntityModal.value = true
 }
 
 async function handleEditEntity(updatedEntity) {
@@ -574,8 +597,9 @@ const saveNotes = async () => {
 
 const handleNewEntity = (newEntity) => {
   entities.value = [...entities.value, newEntity]
-  showEntityCreationSuccess.value = true
   createdEntity.value = newEntity
+  newEntityModalActivator?.focus()
+  showEntityCreationSuccess.value = true
 
   if (entityTableRef.value) {
     entityTableRef.value.refresh()
@@ -583,6 +607,8 @@ const handleNewEntity = (newEntity) => {
 }
 
 const handleEditNewEntity = () => {
+  newEntityModalActivator?.focus()
+  entityDetailsActivator = newEntityModalActivator
   selectedEntity.value = createdEntity.value
   showEntityDetailsModal.value = true
   showEntityCreationSuccess.value = false

@@ -1,7 +1,10 @@
 import { nextTick, watch } from 'vue'
 
-export function useDialogFocusRestore(isOpen) {
+export function useDialogFocusRestore(isOpen, restoreFocusTo = null) {
   let activator = null
+
+  const resolveConfiguredTarget = () =>
+    typeof restoreFocusTo === 'function' ? restoreFocusTo() : restoreFocusTo
 
   watch(
     isOpen,
@@ -10,18 +13,25 @@ export function useDialogFocusRestore(isOpen) {
 
       if (open) {
         const activeElement = document.activeElement
-        activator = activeElement !== document.body && activeElement?.focus ? activeElement : null
+        const configuredTarget = resolveConfiguredTarget()
+        activator =
+          configuredTarget ||
+          (activeElement !== document.body && activeElement?.focus ? activeElement : null)
         return
       }
 
       if (wasOpen && activator) {
-        const elementToRestore = activator
+        const capturedActivator = activator
         activator = null
         nextTick(() => {
+          const configuredTarget = resolveConfiguredTarget()
+          const elementToRestore = configuredTarget?.isConnected
+            ? configuredTarget
+            : capturedActivator
           if (elementToRestore.isConnected) elementToRestore.focus()
         })
       }
     },
-    { flush: 'pre' },
+    { flush: 'pre', immediate: true },
   )
 }

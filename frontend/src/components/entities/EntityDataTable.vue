@@ -158,10 +158,11 @@
       <template #[`item.actions`]="{ item }">
         <v-btn
           :aria-label="`View ${getEntityName(item)}`"
+          :data-entity-view-id="item.id"
           icon="mdi-eye"
           size="small"
           variant="text"
-          @click="$emit('view', item)"
+          @click="$emit('view', item, $event)"
         />
         <v-btn
           :aria-label="`Delete ${getEntityName(item)}`"
@@ -181,7 +182,12 @@
           <p class="text-body-medium text-medium-emphasis">
             {{ getNoDataMessage() }}
           </p>
-          <v-btn class="mt-4" color="primary" prepend-icon="mdi-plus" @click="$emit('create')">
+          <v-btn
+            class="mt-4"
+            color="primary"
+            prepend-icon="mdi-plus"
+            @click="$emit('create', $event)"
+          >
             Add First Entity
           </v-btn>
         </v-container>
