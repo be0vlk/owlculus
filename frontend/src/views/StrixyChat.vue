@@ -27,7 +27,7 @@
                 :class="{ 'text-disabled': apiKeyError }"
                 class="text-title-large font-weight-bold"
               >
-                Chat Interface
+                Strixy · {{ activeCase.activeCase?.case_number }}
               </div>
             </div>
 
@@ -112,7 +112,7 @@
                     variant="outlined"
                     density="comfortable"
                     hide-details
-                    :disabled="loading || apiKeyError"
+                    :disabled="!contextReady || loading || apiKeyError"
                     @keydown.enter="sendMessage"
                     aria-label="Message input"
                   />
@@ -122,7 +122,7 @@
                     color="primary"
                     icon="mdi-send"
                     :loading="loading"
-                    :disabled="!currentMessage.trim() || loading || apiKeyError"
+                    :disabled="!contextReady || !currentMessage.trim() || loading || apiKeyError"
                     @click="sendMessage"
                     aria-label="Send message"
                   />
@@ -140,6 +140,7 @@
 </template>
 
 <script setup>
+import { useActiveCaseStore } from '@/stores/activeCase'
 import { onMounted, computed, ref } from 'vue'
 import Sidebar from '@/components/Sidebar.vue'
 import ConfirmationDialog from '@/components/ConfirmationDialog.vue'
@@ -153,8 +154,17 @@ const md = new MarkdownIt({
   breaks: true,
 })
 
-const { messages, loading, currentMessage, apiKeyError, sendMessage, initializeChat, clearChat } =
-  useStrixyChat()
+const activeCase = useActiveCaseStore()
+const {
+  contextReady,
+  messages,
+  loading,
+  currentMessage,
+  apiKeyError,
+  sendMessage,
+  initializeChat,
+  clearChat,
+} = useStrixyChat()
 
 const confirmDialog = ref(null)
 
@@ -193,6 +203,7 @@ const exportChat = () => {
 
   const exportData = {
     title: 'Strixy Chat Export',
+    case_id: activeCase.activeCaseId,
     exportTime: new Date().toISOString(),
     messages: messages.value.map((msg) => ({
       role: msg.role,

@@ -152,7 +152,11 @@ const navigationItems = computed(() => {
     })
   }
 
-  items.push({ name: 'Strixy (WIP)', href: '/strixy', icon: 'mdi-robot' })
+  items.push({
+    name: 'Strixy (WIP)',
+    href: activeCase.activeCaseId ? `/case/${activeCase.activeCaseId}/strixy` : '/strixy',
+    icon: 'mdi-robot',
+  })
 
   // Add Admin settings for admin users
   if (authStore.requiresAdmin()) {

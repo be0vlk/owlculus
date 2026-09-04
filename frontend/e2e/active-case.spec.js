@@ -21,8 +21,8 @@ const cases = [
   },
 ]
 
-// Disposable browser context and authorized API fixtures keep this shell journey
-// independent of the later tool migrations and of any developer database.
+// Disposable browser contexts and authorized API fixtures exercise the application
+// shell and tool workflows without touching a developer database or external model.
 async function setup(page, role = 'Admin', accessible = cases) {
   const caseRecords = accessible.map((item) => ({ ...item, users: [] }))
   await page.addInitScript(() => localStorage.setItem('access_token', 'browser-fixture'))
@@ -423,3 +423,104 @@ test('plugins use active context for transient runs, optional saving, and correl
   await page.reload()
   await expect(switcher).toHaveValue('CASE-OLD — Older investigation (Closed)')
 })
+
+for (const [width, role, keyStatus] of [
+  [1440, 'Admin', 200],
+  [390, 'Investigator', 403],
+]) {
+  test(`complete case workspace journey at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await setup(page, role)
+    const chatRequests = []
+    const pluginRequests = []
+    await page.route('**/api/admin/configuration/api-keys/openai/status', (route) =>
+      route.fulfill({ status: keyStatus, json: { is_configured: true } }),
+    )
+    await page.route('**/api/strixy/chat', (route) => {
+      const payload = route.request().postDataJSON()
+      chatRequests.push(payload)
+      return route.fulfill({ json: { message: `Reply for case ${payload.case_id}` } })
+    })
+    await page.route('**/api/plugins/**', (route) => {
+      if (route.request().method() === 'POST') {
+        pluginRequests.push(route.request().postDataJSON())
+        return route.fulfill({
+          body: '{"type":"complete","data":{}}\n',
+          contentType: 'application/json',
+        })
+      }
+      return route.fulfill({
+        json: {
+          ExamplePlugin: {
+            name: 'ExamplePlugin',
+            display_name: 'Example',
+            enabled: true,
+            parameters: { save_to_case: { type: 'boolean', default: false } },
+          },
+        },
+      })
+    })
+    await page.goto('/cases')
+    const switcher = page.getByRole('combobox', { name: 'Active case', exact: true })
+    await expect(switcher).toHaveValue('CASE-NEW — Newer investigation (Open)')
+    const navigate = async (name, suffix) => {
+      const link = page.getByRole('link', { name, exact: true })
+      await expect(link).toHaveAttribute('href', `/case/2${suffix}`)
+      await link.click()
+      await expect(page).toHaveURL(new RegExp(`/case/2${suffix}$`))
+      await expect(switcher).toBeVisible()
+    }
+    await navigate('Case overview', '')
+    await navigate('Tasks', '/tasks')
+    await navigate('Plugins', '/plugins')
+    await page.getByRole('button', { name: 'Configure Example', exact: true }).click()
+    await expect(page.locator('form').getByRole('combobox')).toHaveCount(0)
+    await page.getByRole('button', { name: 'Execute Plugin', exact: true }).click()
+    await page.getByRole('button', { name: 'Close plugin results', exact: true }).click()
+    expect(pluginRequests).toEqual([{ case_id: 2, save_to_case: false }])
+    await navigate('Hunts', '/hunts')
+    await navigate('Strixy (WIP)', '/strixy')
+    const input = page.getByRole('textbox', { name: 'Message input', exact: true })
+    await input.fill('Private question for the newer investigation')
+    await input.press('Enter')
+    await expect(page.getByText('Reply for case 2', { exact: true })).toBeVisible()
+    expect(chatRequests[0]).toMatchObject({ case_id: 2 })
+    await input.fill('Unsent private draft')
+    await switcher.focus()
+    await expect(switcher).toBeFocused()
+    await switcher.fill('CASE-OLD')
+    await expect(page.getByRole('option', { name: /CASE-OLD/ })).toBeVisible()
+    await switcher.press('ArrowDown')
+    await switcher.press('Enter')
+    await expect(page).toHaveURL(/\/case\/1\/strixy$/)
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Active case: CASE-OLD' }),
+    ).toBeVisible()
+    await expect(page.getByText('Strixy · CASE-OLD', { exact: true })).toBeVisible()
+    await expect(page.getByText('Reply for case 2', { exact: true })).toHaveCount(0)
+    await expect(input).toHaveValue('')
+    await input.fill('Question for the older investigation')
+    await input.press('Enter')
+    await expect(page.getByText('Reply for case 1', { exact: true })).toBeVisible()
+    expect(chatRequests[1]).toMatchObject({ case_id: 1 })
+    expect(JSON.stringify(chatRequests[1])).not.toContain('Private question')
+    for (const [name, suffix] of [
+      ['Case overview', ''],
+      ['Tasks', '/tasks'],
+      ['Plugins', '/plugins'],
+      ['Hunts', '/hunts'],
+      ['Strixy (WIP)', '/strixy'],
+    ]) {
+      await expect(page.getByRole('link', { name, exact: true })).toHaveAttribute(
+        'href',
+        `/case/1${suffix}`,
+      )
+    }
+    await page.getByRole('link', { name: 'Cases', exact: true }).click()
+    await page.reload()
+    await expect(switcher).toHaveValue('CASE-OLD — Older investigation (Closed)')
+    await page.goto('/strixy')
+    await expect(page).toHaveURL(/\/case\/1\/strixy$/)
+    await expect(switcher).toBeVisible()
+  })
+}

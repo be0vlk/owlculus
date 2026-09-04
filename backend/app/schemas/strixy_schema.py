@@ -6,9 +6,9 @@ integration, including chat message structures and conversation handling.
 """
 
 from datetime import datetime
-from typing import List, Literal
+from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ChatMessage(BaseModel):
@@ -17,7 +17,8 @@ class ChatMessage(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    messages: List[ChatMessage]
+    case_id: int = Field(gt=0)
+    messages: list[ChatMessage]
 
 
 class ChatResponse(BaseModel):
