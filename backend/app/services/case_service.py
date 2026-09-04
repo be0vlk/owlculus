@@ -130,11 +130,11 @@ class CaseService:
             result = self.db.exec(stmt)
             cases = result.all()
 
-        return self._cases_with_users(list(cases))
+        return self.load_cases_with_users(list(cases))
 
     async def get_case(self, case_id: int, current_user: models.User) -> schemas.Case:
         case = self.access.readable(current_user, case_id)
-        return self._cases_with_users([case])[0]
+        return self.load_cases_with_users([case])[0]
 
     async def update_case(
         self, case_id: int, case_update: schemas.CaseUpdate, current_user: models.User
@@ -383,7 +383,7 @@ class CaseService:
             ).error(f"Update case user lead status error: {str(e)}")
             raise BaseException("Internal server error")
 
-    def _cases_with_users(self, cases: list[models.Case]) -> list[schemas.Case]:
+    def load_cases_with_users(self, cases: list[models.Case]) -> list[schemas.Case]:
         """Enrich cases and lead flags with one joined query for any list size."""
         if not cases:
             return []

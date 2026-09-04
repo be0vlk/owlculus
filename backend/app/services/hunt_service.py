@@ -62,7 +62,7 @@ class HuntService:
         *,
         current_user: User,
     ) -> HuntExecution:
-        self.access.writable(current_user, case_id)
+        case = self.access.writable(current_user, case_id)
         hunt = self.db.get(Hunt, hunt_id)
         if not hunt or not hunt.is_active:
             raise ResourceNotFoundException("Hunt not found or inactive")
@@ -75,7 +75,7 @@ class HuntService:
 
         execution = HuntExecution(
             hunt_id=hunt_id,
-            case_id=case_id,
+            case_id=case.id,
             initial_parameters=validated_params,
             status="pending",
             created_by_id=current_user.id,
@@ -141,11 +141,11 @@ class HuntService:
     async def list_case_executions(
         self, case_id: int, *, current_user: User
     ) -> list[HuntExecution]:
-        self.access.readable(current_user, case_id)
+        case = self.access.readable(current_user, case_id)
 
         executions = self.db.exec(
             select(HuntExecution)
-            .where(HuntExecution.case_id == case_id)
+            .where(HuntExecution.case_id == case.id)
             .order_by(HuntExecution.created_at.desc())
         ).all()
 

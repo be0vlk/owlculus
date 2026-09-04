@@ -287,7 +287,10 @@ class TestEntityService:
 
         with pytest.raises(AuthorizationException):
             await self.service.update_entity(
-                entity.id, update_data, current_user=test_analyst
+                test_case_with_users.id,
+                entity.id,
+                update_data,
+                current_user=test_analyst,
             )
 
     async def test_delete_entity_rejects_analyst_write(
@@ -306,7 +309,9 @@ class TestEntityService:
         entity_id = entity.id
 
         with pytest.raises(AuthorizationException):
-            await self.service.delete_entity(entity_id, current_user=test_analyst)
+            await self.service.delete_entity(
+                test_case_with_users.id, entity_id, current_user=test_analyst
+            )
         assert self.db.get(models.Entity, entity_id) is not None
 
     async def test_delete_entity_multiple_in_case(
@@ -331,7 +336,9 @@ class TestEntityService:
         self.db.commit()
 
         # Delete only entity1
-        await self.service.delete_entity(entity1.id, current_user=test_user)
+        await self.service.delete_entity(
+            test_case_with_users.id, entity1.id, current_user=test_user
+        )
 
         # Verify entity2 still exists
         remaining = self.db.get(models.Entity, entity2.id)
@@ -533,6 +540,7 @@ class TestEntityService:
 
         # Enrich with description
         enriched_entity = await self.service.enrich_entity_description(
+            test_case_with_users.id,
             created_entity.id,
             "Discovered via Shodan: Apache server on port 80",
             current_user=test_user,
@@ -568,6 +576,7 @@ class TestEntityService:
 
         # Enrich with additional description
         enriched_entity = await self.service.enrich_entity_description(
+            test_case_with_users.id,
             created_entity.id,
             "Additional info from Shodan scan",
             current_user=test_user,
@@ -576,11 +585,16 @@ class TestEntityService:
         expected_description = "Original description from manual entry\n\n--- Additional Info ---\nAdditional info from Shodan scan"
         assert enriched_entity.data["description"] == expected_description
 
-    async def test_enrich_entity_description_not_found(self, test_user):
+    async def test_enrich_entity_description_not_found(
+        self, test_case_with_users, test_user
+    ):
         """Test enriching non-existent entity"""
         with pytest.raises(ResourceNotFoundException) as exc_info:
             await self.service.enrich_entity_description(
-                99999, "Some description", current_user=test_user
+                test_case_with_users.id,
+                99999,
+                "Some description",
+                current_user=test_user,
             )
         assert "Entity not found" in str(exc_info.value)
 
@@ -600,5 +614,8 @@ class TestEntityService:
 
         with pytest.raises(AuthorizationException):
             await self.service.enrich_entity_description(
-                entity.id, "Some enrichment", current_user=test_analyst
+                test_case_with_users.id,
+                entity.id,
+                "Some enrichment",
+                current_user=test_analyst,
             )

@@ -258,4 +258,4 @@ def load_case_with_users(db: Session, case_id: int):
     case = db.get(Case, case_id)
     if not case:
         return None
-    return CaseService(db)._cases_with_users([case])[0]
+    return CaseService(db).load_cases_with_users([case])[0]

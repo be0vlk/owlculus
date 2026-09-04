@@ -223,7 +223,10 @@ async def update_entity(
 ):
     entity_service = EntityService(db)
     return await entity_service.update_entity(
-        entity_id=entity_id, entity_update=entity, current_user=current_user
+        case_id=case_id,
+        entity_id=entity_id,
+        entity_update=entity,
+        current_user=current_user,
     )
 
 
@@ -240,7 +243,7 @@ async def get_entity(
 ):
     entity_service = EntityService(db)
     return await entity_service.get_entity(
-        entity_id=entity_id, current_user=current_user
+        case_id=case_id, entity_id=entity_id, current_user=current_user
     )
 
 
@@ -256,4 +259,6 @@ async def delete_entity(
     current_user: models.User = Depends(get_current_user),
 ):
     entity_service = EntityService(db)
-    await entity_service.delete_entity(entity_id=entity_id, current_user=current_user)
+    await entity_service.delete_entity(
+        case_id=case_id, entity_id=entity_id, current_user=current_user
+    )

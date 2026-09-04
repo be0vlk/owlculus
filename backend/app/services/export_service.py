@@ -472,8 +472,8 @@ class ExportService:
         if execution is None:
             raise ResourceNotFoundException("Hunt execution not found")
 
-        self.access.readable(current_user, execution.case_id)
-        snapshot = self._hunt_execution_snapshot(execution)
+        case = self.access.readable(current_user, execution.case_id)
+        snapshot = self._hunt_execution_snapshot(execution, case)
         hunt_name = filesystem_safe_name(snapshot.hunt.name)
         exported_at = get_utc_now()
         export_logger = get_security_logger(
@@ -504,10 +504,10 @@ class ExportService:
         )
 
     def _hunt_execution_snapshot(
-        self, execution: models.HuntExecution
+        self, execution: models.HuntExecution, case: models.Case | None = None
     ) -> HuntExecutionSnapshot:
         hunt = self.db.get(models.Hunt, execution.hunt_id)
-        case = self.db.get(models.Case, execution.case_id)
+        case = case or self.db.get(models.Case, execution.case_id)
         creator = self.db.get(models.User, execution.created_by_id)
         steps = list(
             self.db.exec(
