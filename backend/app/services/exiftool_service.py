@@ -138,7 +138,7 @@ class ExifToolExtractor:
     """ExifTool implementation of metadata extractor"""
 
     def __init__(self):
-        self._exiftool = None
+        self._exiftool: Any = None
         self._ensure_exiftool_available()
 
     def _ensure_exiftool_available(self) -> None:
@@ -230,7 +230,7 @@ class MetadataFieldCategorizer:
     ]
 
     def categorize(self, metadata: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
-        categories = {
+        categories: Dict[str, Dict[str, Any]] = {
             "camera": {},
             "gps": {},
             "timestamps": {},

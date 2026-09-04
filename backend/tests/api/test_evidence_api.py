@@ -7,6 +7,7 @@ from unittest.mock import patch
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 from sqlmodel import Session
 
 from app.core.dependencies import get_current_user
@@ -215,6 +216,38 @@ class TestEvidenceAPI:
             assert response.json()["failed"] == [
                 {"filename": "failed.txt", "error": "unsafe file"}
             ]
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_upload_response_validation_failure_is_not_reported_as_file_failure(
+        self,
+        session: Session,
+        test_admin: User,
+        test_case: Case,
+        client: TestClient,
+    ):
+        invalid_response_model = Evidence(
+            case_id=test_case.id,
+            title="Invalid response",
+            evidence_type="file",
+            category="Other",
+            content="invalid.txt",
+            created_by_id=test_admin.id,
+        )
+        app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+            test_admin
+        )
+        app.dependency_overrides[get_db] = override_get_db_factory(session)
+
+        try:
+            with patch(
+                "app.services.evidence_service.EvidenceService.create_evidence",
+                return_value=invalid_response_model,
+            ), pytest.raises(ValidationError, match="id"):
+                client.post(
+                    f"/api/evidence?title=Invalid&case_id={test_case.id}&category=Other",
+                    files=[("files", ("invalid.txt", b"invalid", "text/plain"))],
+                )
         finally:
             app.dependency_overrides.clear()
 

@@ -9,7 +9,7 @@ It uses Pydantic for settings validation and environment variable handling.
 import os
 
 import dotenv
-from pydantic import AnyHttpUrl, SecretStr
+from pydantic import AnyHttpUrl, Field, SecretStr
 from pydantic_settings import BaseSettings
 
 dotenv.load_dotenv()
@@ -27,13 +27,13 @@ class Settings(BaseSettings):
     DESCRIPTION: str = "An OSINT case management platform and toolkit"
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api"
-    SECRET_KEY: SecretStr = SecretStr(os.environ.get("SECRET_KEY"))
+    SECRET_KEY: SecretStr
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 4  # 4 hours, adjust if you want
-    DB_USER: str = os.environ.get("POSTGRES_USER")
-    DB_PASSWORD: SecretStr = SecretStr(os.environ.get("POSTGRES_PASSWORD"))
-    DB_HOST: str = os.environ.get("POSTGRES_HOST")
-    DB_PORT: str = os.environ.get("POSTGRES_PORT")
-    DB_NAME: str = os.environ.get("POSTGRES_DB")
+    DB_USER: str = Field(validation_alias="POSTGRES_USER")
+    DB_PASSWORD: SecretStr = Field(validation_alias="POSTGRES_PASSWORD")
+    DB_HOST: str = Field(validation_alias="POSTGRES_HOST")
+    DB_PORT: str = Field(validation_alias="POSTGRES_PORT")
+    DB_NAME: str = Field(validation_alias="POSTGRES_DB")
 
     @property
     def DATABASE_URI(self) -> str:

@@ -9,9 +9,9 @@ validation, progress tracking, and real-time status updates.
 
 import asyncio
 from collections.abc import Callable
-from typing import Any
+from typing import Any, cast
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.core.exceptions import ResourceNotFoundException, ValidationException
 from app.core.logging import get_security_logger
@@ -85,7 +85,9 @@ class HuntService:
             self.db.add(execution)
         self.db.refresh(execution)
 
-        asyncio.create_task(self._run_hunt_async(execution.id, current_user.id))
+        asyncio.create_task(
+            self._run_hunt_async(cast(int, execution.id), cast(int, current_user.id))
+        )
 
         return execution
 
@@ -149,7 +151,7 @@ class HuntService:
         executions = self.db.exec(
             select(HuntExecution)
             .where(HuntExecution.case_id == case.id)
-            .order_by(HuntExecution.created_at.desc())
+            .order_by(col(HuntExecution.created_at).desc())
         ).all()
 
         return list(executions)
@@ -185,7 +187,7 @@ class HuntService:
         steps = self.db.exec(
             select(HuntStep)
             .where(HuntStep.execution_id == execution_id)
-            .order_by(HuntStep.id)
+            .order_by(col(HuntStep.id))
         ).all()
 
         return list(steps)

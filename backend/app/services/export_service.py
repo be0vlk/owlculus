@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from types import UnionType
-from typing import Any, Union, get_args, get_origin
+from typing import Any, Union, cast, get_args, get_origin
 
 from bs4 import BeautifulSoup
 from pydantic import BaseModel
@@ -43,14 +43,17 @@ class _NetworkAssetsExportData(NetworkAssets):
     sources: dict[str, str] | None = None
 
 
-ENTITY_EXPORT_SCHEMAS: dict[str, type[BaseModel]] = {
-    "person": ENTITY_TYPE_SCHEMAS["person"],
-    "company": ENTITY_TYPE_SCHEMAS["company"],
-    "domain": ENTITY_TYPE_SCHEMAS["domain"],
-    "ip_address": ENTITY_TYPE_SCHEMAS["ip_address"],
-    "network_assets": _NetworkAssetsExportData,
-    "vehicle": ENTITY_TYPE_SCHEMAS["vehicle"],
-}
+ENTITY_EXPORT_SCHEMAS = cast(
+    dict[str, type[BaseModel]],
+    {
+        "person": ENTITY_TYPE_SCHEMAS["person"],
+        "company": ENTITY_TYPE_SCHEMAS["company"],
+        "domain": ENTITY_TYPE_SCHEMAS["domain"],
+        "ip_address": ENTITY_TYPE_SCHEMAS["ip_address"],
+        "network_assets": _NetworkAssetsExportData,
+        "vehicle": ENTITY_TYPE_SCHEMAS["vehicle"],
+    },
+)
 
 
 @dataclass(frozen=True)
@@ -94,7 +97,8 @@ class ExportService:
     ) -> ExportArtifact:
         """Return every entity matching the supplied case-table filters."""
         case = self.case_access.readable(current_user, case_id)
-        entities = self._get_entities(case.id, entity_types, search)
+        persisted_case_id = cast(int, case.id)
+        entities = self._get_entities(persisted_case_id, entity_types, search)
         safe_case_number = filesystem_safe_name(case.case_number)
         export_date = get_utc_now().date().isoformat()
 
@@ -125,6 +129,7 @@ class ExportService:
     ) -> CaseBundleArtifact:
         """Assemble a complete case snapshot in a temporary ZIP archive."""
         case = self.case_access.readable(current_user, case_id)
+        persisted_case_id = cast(int, case.id)
         exported_at = get_utc_now()
         safe_case_number = filesystem_safe_name(case.case_number)
         root = f"{safe_case_number}/"
@@ -155,7 +160,7 @@ class ExportService:
                         f"{root}notes.html",
                         case.notes.encode("utf-8"),
                     )
-                entities = self._get_entities(case.id, None, None)
+                entities = self._get_entities(persisted_case_id, None, None)
                 _write_zip_bytes(
                     archive,
                     f"{root}entities/entities.json",
@@ -173,7 +178,7 @@ class ExportService:
                             f"{root}entities/{entity_type}.csv",
                             self.write_entity_csv(typed_entities),
                         )
-                self._write_evidence(archive, root, case.id)
+                self._write_evidence(archive, root, persisted_case_id)
                 tasks = list(
                     self.db.exec(
                         select(models.Task)
@@ -397,11 +402,19 @@ class ExportService:
                 "description": task.description,
                 "status": task.status,
                 "priority": task.priority,
-                "assigned_to": usernames.get(task.assigned_to_id),
+                "assigned_to": (
+                    usernames.get(task.assigned_to_id)
+                    if task.assigned_to_id is not None
+                    else None
+                ),
                 "assigned_by": usernames.get(task.assigned_by_id),
                 "due_date": _optional_iso_utc(task.due_date),
                 "completed_at": _optional_iso_utc(task.completed_at),
-                "completed_by": usernames.get(task.completed_by_id),
+                "completed_by": (
+                    usernames.get(task.completed_by_id)
+                    if task.completed_by_id is not None
+                    else None
+                ),
                 "template": templates.get(task.template_id),
                 "custom_fields": task.custom_fields,
                 "created_at": _iso_utc(task.created_at),
@@ -520,7 +533,7 @@ class ExportService:
             raise ResourceNotFoundException("Hunt execution related data not found")
 
         return HuntExecutionSnapshot(
-            id=execution.id,
+            id=cast(int, execution.id),
             hunt_id=execution.hunt_id,
             case_id=execution.case_id,
             status=execution.status,
@@ -532,7 +545,7 @@ class ExportService:
             created_at=execution.created_at,
             created_by_id=execution.created_by_id,
             hunt=HuntDetailsSnapshot(
-                id=hunt.id,
+                id=cast(int, hunt.id),
                 name=hunt.name,
                 display_name=hunt.display_name,
                 description=hunt.description,
@@ -546,7 +559,7 @@ class ExportService:
             ),
             steps=[
                 HuntStepSnapshot(
-                    id=step.id,
+                    id=cast(int, step.id),
                     execution_id=step.execution_id,
                     step_id=step.step_id,
                     plugin_name=step.plugin_name,
@@ -560,12 +573,12 @@ class ExportService:
                 for step in steps
             ],
             case=HuntCaseSnapshot(
-                id=case.id,
+                id=cast(int, case.id),
                 title=case.title,
                 case_number=case.case_number,
             ),
             created_by=HuntCreatorSnapshot(
-                id=creator.id,
+                id=cast(int, creator.id),
                 email=str(creator.email),
                 username=creator.username,
             ),

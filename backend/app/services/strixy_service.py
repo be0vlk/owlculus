@@ -12,9 +12,10 @@ Key features:
 """
 
 from datetime import UTC, datetime
-from typing import List
+from typing import List, cast
 
 from openai import OpenAI
+from openai.types.chat import ChatCompletionMessageParam
 from sqlmodel import Session
 
 from app.core.exceptions import BaseException as DomainException
@@ -76,9 +77,17 @@ You are Strixy, an expert AI assistant specialized in OSINT investigations withi
 Maintain professional objectivity.""",
             }
 
-            openai_messages = [system_message]
+            openai_messages: list[ChatCompletionMessageParam] = [
+                cast(ChatCompletionMessageParam, system_message)
+            ]
             openai_messages.extend(
-                [{"role": msg.role, "content": msg.content} for msg in messages]
+                [
+                    cast(
+                        ChatCompletionMessageParam,
+                        {"role": msg.role, "content": msg.content},
+                    )
+                    for msg in messages
+                ]
             )
 
             completion = client.chat.completions.create(
@@ -88,7 +97,7 @@ Maintain professional objectivity.""",
                 temperature=0.7,
             )
 
-            response_content = completion.choices[0].message.content
+            response_content = cast(str, completion.choices[0].message.content)
 
             return ChatResponse(
                 message=response_content, role="assistant", timestamp=datetime.now(UTC)

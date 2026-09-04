@@ -6,6 +6,8 @@ case membership, analysts may read assigned cases but may not write or lead them
 and every case verb returns the case resolved by its single authorization query.
 """
 
+from typing import NoReturn
+
 from sqlmodel import Session, col, select
 
 from app.core.exceptions import (
@@ -118,7 +120,7 @@ class CaseAccess:
         reason: str,
         *,
         message: str = "Not authorized to access this case",
-    ) -> None:
+    ) -> NoReturn:
         get_security_logger(
             user_id=user.id,
             case_id=case_id,

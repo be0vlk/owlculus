@@ -10,7 +10,7 @@ audit logging for OSINT investigation case management.
 from datetime import datetime
 from typing import List, Optional
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.core.enums import TaskStatus
 from app.core.exceptions import (
@@ -44,7 +44,7 @@ class TaskService:
             query = query.where(models.TaskTemplate.is_active)
 
         templates = self.db.exec(query).all()
-        return templates
+        return list(templates)
 
     async def create_custom_template(
         self, template_data: dict, *, current_user: models.User
@@ -115,7 +115,7 @@ class TaskService:
                 ).all()
 
                 if user_case_ids:
-                    query = query.where(models.Task.case_id.in_(user_case_ids))
+                    query = query.where(col(models.Task.case_id).in_(user_case_ids))
                 else:
                     return []
 
@@ -129,7 +129,7 @@ class TaskService:
         query = query.offset(skip).limit(limit)
 
         tasks = self.db.exec(query).all()
-        return tasks
+        return list(tasks)
 
     async def get_task(self, task_id: int, *, current_user: models.User) -> models.Task:
         """Get a specific task by ID"""
@@ -312,7 +312,7 @@ class TaskService:
         self.case_access.require_admin(current_user)
         template = (
             self.db.query(models.TaskTemplate)
-            .filter(models.TaskTemplate.id == template_id)
+            .filter(col(models.TaskTemplate.id) == template_id)
             .first()
         )
 
@@ -352,7 +352,7 @@ class TaskService:
         self.case_access.require_admin(current_user)
         template = (
             self.db.query(models.TaskTemplate)
-            .filter(models.TaskTemplate.id == template_id)
+            .filter(col(models.TaskTemplate.id) == template_id)
             .first()
         )
 
@@ -361,7 +361,7 @@ class TaskService:
 
         tasks_using_template = (
             self.db.query(models.Task)
-            .filter(models.Task.template_id == template_id)
+            .filter(col(models.Task.template_id) == template_id)
             .count()
         )
 

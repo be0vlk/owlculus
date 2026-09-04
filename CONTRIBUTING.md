@@ -33,6 +33,14 @@ uv sync --locked
 uv run --locked pytest
 ```
 
+Run the backend checks from the repository root:
+
+```bash
+make typecheck
+cd backend && uv run --locked black --check app tests
+cd backend && uv run --locked ruff check app tests
+```
+
 Run the commands outside a restricted sandbox that blocks the worker thread used
 by Starlette's synchronous `TestClient`.
 
