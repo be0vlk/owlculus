@@ -1,5 +1,11 @@
 <template>
-  <v-dialog v-model="dialogVisible" max-width="500px" persistent scrollable>
+  <v-dialog
+    aria-label="Generate Invite"
+    v-model="dialogVisible"
+    max-width="500px"
+    persistent
+    scrollable
+  >
     <v-card>
       <v-card-title class="d-flex align-center pa-4 bg-primary">
         <v-icon start color="white" size="large">mdi-email-plus</v-icon>
@@ -20,7 +26,7 @@
           {{ successMessage }}
         </v-alert>
 
-        <v-form ref="formRef" @submit.prevent="handleSubmit">
+        <v-form :id="formId" :disabled="loading" ref="formRef" @submit.prevent="handleSubmit">
           <v-container fluid class="pa-0">
             <v-row>
               <!-- Role Selection -->
@@ -73,6 +79,7 @@
       <v-divider />
 
       <modal-actions
+        :submit-form="formId"
         :cancel-text="inviteLink ? 'Done' : 'Cancel'"
         submit-text="Generate Invite"
         loading-text="Generating..."
@@ -88,7 +95,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { useId, ref, computed, watch } from 'vue'
 import { inviteService } from '../services/invite'
 import ModalActions from './ModalActions.vue'
 
@@ -114,6 +121,7 @@ const loading = ref(false)
 const error = ref(null)
 const successMessage = ref(null)
 const inviteLink = ref(null)
+const formId = useId()
 const formRef = ref(null)
 
 const formData = ref({
@@ -173,6 +181,7 @@ const copyToClipboard = async () => {
 }
 
 const handleSubmit = async () => {
+  if (loading.value || inviteLink.value || !isFormValid.value) return
   try {
     loading.value = true
     error.value = null

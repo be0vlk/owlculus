@@ -16,8 +16,13 @@
     <TaskTable :loading="loading" :tasks="tasks" />
 
     <!-- Create Task Dialog -->
-    <v-dialog v-model="showCreateDialog" max-width="600">
-      <TaskForm :case-id="caseId" @cancel="showCreateDialog = false" @save="handleCreateTask" />
+    <v-dialog aria-label="Create Task" v-model="showCreateDialog" max-width="600">
+      <TaskForm
+        :saving="loading"
+        :case-id="caseId"
+        @cancel="showCreateDialog = false"
+        @save="handleCreateTask"
+      />
     </v-dialog>
   </div>
 </template>
@@ -52,6 +57,7 @@ async function loadTasks() {
 }
 
 async function handleCreateTask(taskData) {
+  if (loading.value) return
   await taskStore.createTask(taskData)
   showCreateDialog.value = false
   await loadTasks()

@@ -1,5 +1,5 @@
 <template>
-  <v-form ref="form" @submit.prevent="handleSubmit">
+  <v-form :disabled="disabled" ref="form" @submit.prevent="handleSubmit">
     <v-row>
       <!-- Basic Information -->
       <v-col cols="12">
@@ -78,7 +78,7 @@
       <!-- Custom Fields -->
       <v-col cols="12">
         <v-divider class="my-4" />
-        <div class="d-flex align-center justify-space-between mb-4">
+        <div class="d-flex flex-wrap ga-3 align-center justify-space-between mb-4">
           <div>
             <div class="text-title-large">Custom Fields</div>
             <div class="text-body-medium text-medium-emphasis">
@@ -90,6 +90,7 @@
             variant="outlined"
             size="small"
             prepend-icon="mdi-plus"
+            :disabled="disabled"
             @click="addField"
           >
             Add Field
@@ -210,6 +211,7 @@
                     variant="text"
                     size="small"
                     prepend-icon="mdi-delete"
+                    :disabled="disabled"
                     @click="removeField(index)"
                   >
                     Remove Field
@@ -228,6 +230,7 @@
 import { ref, watch } from 'vue'
 
 const props = defineProps({
+  disabled: { type: Boolean, default: false },
   modelValue: {
     type: Object,
     required: true,
@@ -360,15 +363,11 @@ watch(
   { deep: true },
 )
 
-// Emit changes with debouncing to prevent infinite loops
-let emitTimeout = null
+// Keep the parent payload current when Enter or the save button submits immediately.
 watch(
   localForm,
   (newValue) => {
-    clearTimeout(emitTimeout)
-    emitTimeout = setTimeout(() => {
-      emit('update:modelValue', JSON.parse(JSON.stringify(newValue)))
-    }, 100)
+    emit('update:modelValue', JSON.parse(JSON.stringify(newValue)))
   },
   { deep: true },
 )

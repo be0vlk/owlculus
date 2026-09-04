@@ -1,5 +1,5 @@
 <template>
-  <v-dialog v-model="dialogVisible" max-width="500px" persistent>
+  <v-dialog aria-label="Reset Password" v-model="dialogVisible" max-width="500px" persistent>
     <v-card>
       <v-card-title class="d-flex align-center pa-4 bg-warning">
         <v-icon start color="white" size="large">mdi-key-variant</v-icon>
@@ -18,7 +18,12 @@
           {{ error }}
         </v-alert>
 
-        <v-form ref="formRef" @submit.prevent="handlePasswordReset">
+        <v-form
+          :id="formId"
+          :disabled="loading"
+          ref="formRef"
+          @submit.prevent="handlePasswordReset"
+        >
           <v-container fluid class="pa-0">
             <v-row>
               <v-col cols="12">
@@ -95,6 +100,7 @@
       <v-divider />
 
       <modal-actions
+        :submit-form="formId"
         submit-text="Reset Password"
         submit-icon="mdi-key-variant"
         submit-color="warning"
@@ -108,7 +114,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { useId, ref, computed } from 'vue'
 // Vuetify components are auto-imported
 import { userService } from '@/services/user'
 import ModalActions from './ModalActions.vue'
@@ -142,6 +148,7 @@ const showNewPassword = ref(false)
 const showConfirmPassword = ref(false)
 const loading = ref(false)
 const error = ref('')
+const formId = useId()
 const formRef = ref(null)
 
 // Validation rules
@@ -215,7 +222,7 @@ const isPasswordValid = computed(() => {
 })
 
 const handlePasswordReset = async () => {
-  if (!isPasswordValid.value || !props.userId) return
+  if (loading.value || !isPasswordValid.value || !props.userId) return
 
   loading.value = true
   error.value = ''

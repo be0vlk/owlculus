@@ -1,5 +1,11 @@
 <template>
-  <v-dialog v-model="showDialog" max-width="500" persistent>
+  <v-dialog
+    v-model="showDialog"
+    :aria-label="dialogTitle"
+    max-width="500"
+    persistent
+    @keydown.esc="!loading && handleCancel()"
+  >
     <v-card>
       <v-card-title class="d-flex align-center pa-6">
         <v-icon :color="dialogIconColor" :icon="dialogIcon" class="me-3" size="large" />

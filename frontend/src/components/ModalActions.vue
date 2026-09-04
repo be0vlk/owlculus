@@ -15,7 +15,9 @@
       :color="submitColor"
       variant="flat"
       :prepend-icon="submitIcon"
-      @click="$emit('submit')"
+      :type="submitForm ? 'submit' : 'button'"
+      :form="submitForm"
+      @click="!submitForm && $emit('submit')"
       :disabled="submitDisabled"
       :loading="loading"
     >
@@ -26,6 +28,7 @@
 
 <script setup>
 defineProps({
+  submitForm: { type: String, default: undefined },
   cancelText: {
     type: String,
     default: 'Cancel',

@@ -1,9 +1,9 @@
 <template>
   <v-card class="mb-6" variant="outlined">
-    <v-card-title class="d-flex align-center pa-4 bg-surface">
+    <v-card-title class="operations-heading d-flex flex-wrap ga-3 align-center pa-4 bg-surface">
       <v-icon icon="mdi-key" color="primary" size="large" class="me-3" />
       <div class="flex-grow-1">
-        <div class="text-title-large font-weight-bold">API Key Management</div>
+        <h2 class="text-title-large font-weight-bold">API Key Management</h2>
         <div class="text-body-medium text-medium-emphasis">
           Manage API keys for external services and plugins
         </div>
@@ -46,16 +46,16 @@
       <v-table v-else class="admin-dashboard-table">
         <thead>
           <tr>
-            <th>Provider</th>
-            <th>Name</th>
-            <th>API Key</th>
-            <th>Created</th>
-            <th>Actions</th>
+            <th class="operations-column">Provider</th>
+            <th class="operations-column">Name</th>
+            <th class="operations-column">API Key</th>
+            <th class="operations-column">Created</th>
+            <th class="operations-column">Actions</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="apiKey in sortedApiKeys" :key="apiKey.provider">
-            <td>
+            <td class="operations-cell">
               <div class="d-flex align-center">
                 <v-icon
                   :color="apiKey.is_configured ? 'success' : 'grey'"
@@ -67,10 +67,10 @@
                 }}</span>
               </div>
             </td>
-            <td>
+            <td class="operations-cell">
               <span class="font-weight-medium">{{ apiKey.name }}</span>
             </td>
-            <td>
+            <td class="operations-cell">
               <v-chip
                 size="small"
                 variant="tonal"
@@ -80,13 +80,13 @@
                 {{ apiKey.masked_key }}
               </v-chip>
             </td>
-            <td>
+            <td class="operations-cell">
               <span v-if="apiKey.created_at" class="text-body-medium">
                 {{ formatDate(apiKey.created_at) }}
               </span>
               <span v-else class="text-body-small text-medium-emphasis">Unknown</span>
             </td>
-            <td>
+            <td class="operations-cell">
               <div class="d-flex align-center" style="gap: 8px">
                 <v-btn
                   color="primary"
@@ -95,6 +95,7 @@
                   icon
                   @click="openEditDialog(apiKey)"
                   :disabled="saving || deleting"
+                  :aria-label="`Edit ${getProviderDisplayName(apiKey.provider)} API Key`"
                 >
                   <v-icon>mdi-pencil</v-icon>
                   <v-tooltip activator="parent" location="top">
@@ -108,6 +109,7 @@
                   icon
                   @click="handleDeleteApiKey(apiKey)"
                   :disabled="saving || deleting"
+                  :aria-label="`Delete ${getProviderDisplayName(apiKey.provider)} API Key`"
                 >
                   <v-icon>mdi-delete</v-icon>
                   <v-tooltip activator="parent" location="top">
@@ -122,7 +124,7 @@
     </v-card-text>
 
     <!-- Add API Key Dialog -->
-    <v-dialog v-model="showAddDialog" max-width="600">
+    <v-dialog aria-label="Add API Key" v-model="showAddDialog" max-width="600">
       <v-card>
         <v-card-title class="d-flex align-center pa-4">
           <v-icon icon="mdi-plus" class="me-3" />
@@ -132,7 +134,12 @@
         <v-divider />
 
         <v-card-text class="pa-4">
-          <v-form @submit.prevent="handleAddApiKey">
+          <v-form
+            :id="addFormId"
+            ref="addForm"
+            :disabled="saving"
+            @submit.prevent="handleAddApiKey"
+          >
             <v-row>
               <v-col cols="12">
                 <v-select
@@ -208,7 +215,7 @@
 
         <v-divider />
 
-        <v-card-actions class="pa-4">
+        <v-card-actions class="pa-4 flex-wrap">
           <v-spacer />
           <v-btn :disabled="saving" variant="text" @click="closeAddDialog"> Cancel </v-btn>
           <v-btn
@@ -216,7 +223,8 @@
             variant="flat"
             :loading="saving"
             :disabled="!isFormValid"
-            @click="handleAddApiKey"
+            type="submit"
+            :form="addFormId"
           >
             Add API Key
           </v-btn>
@@ -225,7 +233,7 @@
     </v-dialog>
 
     <!-- Edit API Key Dialog -->
-    <v-dialog v-model="showEditDialog" max-width="600">
+    <v-dialog aria-label="Edit API Key" v-model="showEditDialog" max-width="600">
       <v-card>
         <v-card-title class="d-flex align-center pa-4">
           <v-icon icon="mdi-pencil" class="me-3" />
@@ -235,7 +243,12 @@
         <v-divider />
 
         <v-card-text class="pa-4">
-          <v-form @submit.prevent="handleUpdateApiKey">
+          <v-form
+            :id="editFormId"
+            ref="editForm"
+            :disabled="saving"
+            @submit.prevent="handleUpdateApiKey"
+          >
             <v-row>
               <v-col cols="12">
                 <v-text-field
@@ -270,7 +283,7 @@
 
         <v-divider />
 
-        <v-card-actions class="pa-4">
+        <v-card-actions class="pa-4 flex-wrap">
           <v-spacer />
           <v-btn :disabled="saving" variant="text" @click="closeEditDialog"> Cancel </v-btn>
           <v-btn
@@ -278,7 +291,8 @@
             variant="flat"
             :loading="saving"
             :disabled="!editKeyForm.name"
-            @click="handleUpdateApiKey"
+            type="submit"
+            :form="editFormId"
           >
             Update API Key
           </v-btn>
@@ -289,12 +303,16 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, useId } from 'vue'
 import { useApiKeys } from '@/composables/useApiKeys'
 
 const emit = defineEmits(['notification', 'confirmDelete'])
 
 // Password visibility toggles
+const addFormId = useId()
+const editFormId = useId()
+const addForm = ref(null)
+const editForm = ref(null)
 const showNewKeyPassword = ref(false)
 const showEditKeyPassword = ref(false)
 
@@ -339,6 +357,9 @@ const {
 
 // Event handlers
 const handleAddApiKey = async () => {
+  if (saving.value) return
+  const { valid } = await addForm.value.validate()
+  if (!valid || !isFormValid.value || saving.value) return
   try {
     await addApiKey()
     emit('notification', { text: 'API key added successfully!', color: 'success' })
@@ -349,6 +370,9 @@ const handleAddApiKey = async () => {
 }
 
 const handleUpdateApiKey = async () => {
+  if (saving.value) return
+  const { valid } = await editForm.value.validate()
+  if (!valid || !isFormValid.value || saving.value) return
   try {
     await updateApiKey()
     emit('notification', { text: 'API key updated successfully!', color: 'success' })
@@ -366,8 +390,15 @@ const handleDeleteApiKey = async (apiKey) => {
       warning:
         'This action cannot be undone. Any plugins or services using this API key will stop working.',
       onConfirm: async () => {
-        await deleteApiKey(apiKey.provider)
-        emit('notification', { text: 'API key deleted successfully!', color: 'success' })
+        try {
+          await deleteApiKey(apiKey.provider)
+          emit('notification', { text: 'API key deleted successfully!', color: 'success' })
+        } catch (error) {
+          emit('notification', {
+            text: error.message || 'Failed to delete api key',
+            color: 'error',
+          })
+        }
       },
     })
   } catch (error) {
@@ -405,21 +436,5 @@ onMounted(async () => {
 <style scoped>
 .font-mono {
   font-family: 'Roboto Mono', monospace;
-}
-
-.admin-dashboard-table :deep(.v-data-table__tr:hover) {
-  background-color: rgb(var(--v-theme-primary), 0.04);
-}
-
-.admin-dashboard-table :deep(.v-data-table__td) {
-  padding: 12px 16px;
-  border-bottom: 1px solid rgb(var(--v-theme-on-surface), 0.08);
-}
-
-.admin-dashboard-table :deep(.v-data-table__th) {
-  padding: 16px;
-  font-weight: 600;
-  color: rgb(var(--v-theme-on-surface), 0.87);
-  border-bottom: 2px solid rgb(var(--v-theme-on-surface), 0.12);
 }
 </style>

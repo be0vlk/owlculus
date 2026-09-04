@@ -1,5 +1,6 @@
 <template>
-  <BaseDashboard :error="error" :loading="loading" title="Tasks">
+  <BaseDashboard title="Tasks">
+    <v-alert v-if="error" type="error" class="mb-4">{{ error }}</v-alert>
     <template #header-actions>
       <div class="d-flex align-center ga-2">
         <v-btn
@@ -18,6 +19,7 @@
               icon="mdi-refresh"
               v-bind="props"
               variant="outlined"
+              aria-label="Refresh tasks"
               @click="loadTasks"
             />
           </template>
@@ -66,10 +68,10 @@
     <!-- Tasks Table Card -->
     <v-card variant="outlined">
       <!-- Header -->
-      <v-card-title class="d-flex align-center pa-4 bg-surface">
+      <v-card-title class="operations-heading d-flex flex-wrap ga-3 align-center pa-4 bg-surface">
         <v-icon class="me-3" color="primary" icon="mdi-format-list-checks" size="large" />
         <div class="flex-grow-1">
-          <div class="text-title-large font-weight-bold">Task Management</div>
+          <h2 class="text-title-large font-weight-bold">Task Management</h2>
           <div class="text-body-medium text-medium-emphasis">
             Track and manage tasks across all cases
           </div>
@@ -107,7 +109,7 @@
                 hide-details
                 label="Search tasks..."
                 prepend-inner-icon="mdi-magnify"
-                style="min-width: 200px; max-width: 280px"
+                class="operations-search"
                 variant="outlined"
               />
             </div>
@@ -148,8 +150,8 @@
     </v-row>
 
     <!-- Create Task Dialog -->
-    <v-dialog v-model="showCreateDialog" max-width="600">
-      <TaskForm @cancel="showCreateDialog = false" @save="handleCreateTask" />
+    <v-dialog aria-label="Create Task" v-model="showCreateDialog" max-width="600">
+      <TaskForm :saving="loading" @cancel="showCreateDialog = false" @save="handleCreateTask" />
     </v-dialog>
   </BaseDashboard>
 </template>
@@ -204,6 +206,7 @@ async function loadTasks() {
 }
 
 async function handleCreateTask(taskData) {
+  if (loading.value) return
   try {
     await taskStore.createTask(taskData)
     showCreateDialog.value = false

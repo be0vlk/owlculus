@@ -1,10 +1,10 @@
 <template>
   <v-card variant="outlined">
     <!-- Header -->
-    <v-card-title class="d-flex align-center pa-4 bg-surface">
+    <v-card-title class="operations-heading d-flex flex-wrap ga-3 align-center pa-4 bg-surface">
       <v-icon icon="mdi-account-cog" color="primary" size="large" class="me-3" />
       <div class="flex-grow-1">
-        <div class="text-title-large font-weight-bold">User Management</div>
+        <h2 class="text-title-large font-weight-bold">User Management</h2>
         <div class="text-body-medium text-medium-emphasis">
           Manage system users and their permissions
         </div>
@@ -24,6 +24,7 @@
               v-bind="props"
               icon="mdi-refresh"
               variant="outlined"
+              aria-label="Refresh user list"
               @click="loadUsers"
               :loading="loading"
             />
@@ -52,7 +53,7 @@
               variant="outlined"
               density="comfortable"
               hide-details
-              style="min-width: 280px"
+              class="operations-search"
               clearable
             />
           </div>
@@ -63,10 +64,12 @@
     <v-divider />
 
     <v-data-table
+      :cell-props="{ class: 'operations-cell' }"
+      :header-props="{ class: 'operations-column' }"
       :headers="vuetifyHeaders"
       :items="sortedAndFilteredUsers"
       :loading="loading"
-      item-key="id"
+      item-value="id"
       class="elevation-0 admin-dashboard-table"
       hover
     >
@@ -99,6 +102,7 @@
             size="small"
             variant="outlined"
             icon
+            :aria-label="`Edit ${item.username}`"
             @click="editUser(item)"
           >
             <v-icon>mdi-pencil</v-icon>
@@ -111,6 +115,7 @@
             variant="outlined"
             icon
             @click="resetPassword(item)"
+            :aria-label="`Reset password for ${item.username}`"
           >
             <v-icon>mdi-key</v-icon>
             <v-tooltip activator="parent" location="top">
@@ -124,6 +129,7 @@
             variant="outlined"
             icon
             @click="handleDeleteUser(item)"
+            :aria-label="`Delete ${item.username}`"
           >
             <v-icon>mdi-delete</v-icon>
             <v-tooltip activator="parent" location="top"> Delete {{ item.username }} </v-tooltip>
@@ -158,7 +164,7 @@
       :show="showNewUserModal"
       :user="editingUser"
       @close="closeUserModal"
-      @saved="handleUserSaved"
+      @saved="handleUserSavedWithNotification"
     />
 
     <!-- Password Reset Modal -->
@@ -243,6 +249,11 @@ const handleDeleteUser = (user) => {
   })
 }
 
+const handleUserSavedWithNotification = (user) => {
+  handleUserSaved(user)
+  emit('notification', { text: `User '${user.username}' saved successfully`, color: 'success' })
+}
+
 const handlePasswordResetSavedWithNotification = () => {
   handlePasswordResetSaved()
   emit('notification', { text: 'Password has been reset successfully', color: 'success' })
@@ -252,7 +263,3 @@ onMounted(async () => {
   await loadUsers()
 })
 </script>
-
-<style scoped>
-@import url('@/styles/admin-dashboard-table.css');
-</style>

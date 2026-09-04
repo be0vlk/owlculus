@@ -17,7 +17,7 @@ export function useTaskTable() {
   const router = useRouter()
   const taskStore = useTaskStore()
   const authStore = useAuthStore()
-  const { showError, showSuccess } = useNotifications()
+  const { snackbar, showError, showSuccess } = useNotifications()
 
   // Dialog states
   const showAssignDialog = ref(false)
@@ -146,6 +146,7 @@ export function useTaskTable() {
   }
 
   return {
+    snackbar,
     // State
     showAssignDialog,
     showStatusDialog,

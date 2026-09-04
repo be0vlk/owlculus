@@ -2,6 +2,8 @@
   <div>
     <!-- Tasks Table -->
     <v-data-table
+      :cell-props="{ class: 'operations-cell' }"
+      :header-props="{ class: 'operations-column' }"
       v-model="selectedItems"
       :headers="computedHeaders"
       :items="tasks"
@@ -14,7 +16,9 @@
     >
       <!-- Title Column -->
       <template #[`item.title`]="{ item }">
-        {{ item.title }}
+        <router-link :to="`/tasks/${item.id}`" class="owlculus-link" @click.stop>{{
+          item.title
+        }}</router-link>
       </template>
 
       <!-- Case Column (only if showCase is true) -->
@@ -54,16 +58,22 @@
       <template #[`item.actions`]="{ item }">
         <div class="d-flex ga-1">
           <v-btn
-            :disabled="!canAssignTasks"
             icon
             size="small"
             variant="text"
+            :aria-label="`Assign ${item.title}`"
             @click.stop="openAssignDialog(item)"
           >
             <v-icon>mdi-account-plus</v-icon>
             <v-tooltip activator="parent" location="top">Assign Task</v-tooltip>
           </v-btn>
-          <v-btn icon size="small" variant="text" @click.stop="openStatusDialog(item)">
+          <v-btn
+            icon
+            size="small"
+            variant="text"
+            :aria-label="`Update status for ${item.title}`"
+            @click.stop="openStatusDialog(item)"
+          >
             <v-icon>mdi-progress-check</v-icon>
             <v-tooltip activator="parent" location="top">Update Status</v-tooltip>
           </v-btn>
@@ -73,6 +83,7 @@
             icon
             size="small"
             variant="text"
+            :aria-label="`Delete ${item.title}`"
             @click.stop="handleDeleteClick(item)"
           >
             <v-icon>mdi-delete</v-icon>
@@ -97,7 +108,7 @@
     </v-data-table>
 
     <!-- Assign Dialog -->
-    <v-dialog v-model="showAssignDialog" max-width="400">
+    <v-dialog aria-label="Assign Task" v-model="showAssignDialog" max-width="400">
       <TaskAssignDialog
         v-if="selectedTask"
         :task="selectedTask"
@@ -107,7 +118,7 @@
     </v-dialog>
 
     <!-- Status Dialog -->
-    <v-dialog v-model="showStatusDialog" max-width="400">
+    <v-dialog aria-label="Update Status" v-model="showStatusDialog" max-width="400">
       <v-card v-if="selectedTask">
         <v-card-title>Update Status</v-card-title>
         <v-card-text>
@@ -120,6 +131,11 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <v-snackbar v-model="snackbar.show" :color="snackbar.color" :timeout="snackbar.timeout">
+      {{ snackbar.text }}
+      <template #actions><v-btn @click="snackbar.show = false">Close</v-btn></template>
+    </v-snackbar>
 
     <!-- Confirmation Dialog -->
     <ConfirmationDialog ref="confirmDialog" />
@@ -166,11 +182,11 @@ const selectedItems = computed({
 })
 
 const {
+  snackbar,
   showAssignDialog,
   showStatusDialog,
   selectedTask,
   newStatus,
-  canAssignTasks,
   canDeleteTask,
   statusOptions,
   headers,
@@ -207,26 +223,3 @@ async function handleDeleteClick(task) {
   }
 }
 </script>
-
-<style scoped>
-.tasks-table :deep(.v-data-table__tr:hover) {
-  background-color: rgb(var(--v-theme-primary), 0.04);
-  cursor: pointer;
-}
-
-.tasks-table :deep(.v-data-table__td) {
-  padding: 12px 16px;
-  border-bottom: 1px solid rgb(var(--v-theme-on-surface), 0.08);
-}
-
-.tasks-table :deep(.v-data-table__th) {
-  padding: 16px;
-  font-weight: 600;
-  color: rgb(var(--v-theme-on-surface), 0.87);
-  border-bottom: 2px solid rgb(var(--v-theme-on-surface), 0.12);
-}
-
-.tasks-table :deep(.v-data-table-rows-no-data) {
-  padding: 48px 16px;
-}
-</style>
