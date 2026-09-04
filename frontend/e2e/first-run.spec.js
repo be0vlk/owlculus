@@ -1,5 +1,8 @@
 import process from 'node:process'
+import { readFile, writeFile } from 'node:fs/promises'
+import { basename } from 'node:path'
 import { expect, test } from '@playwright/test'
+import { browserViewports } from './viewports'
 
 const administrator = {
   username: 'e2e_admin',
@@ -21,14 +24,16 @@ function visibleAlert(page, message) {
   return page.getByRole('alert').filter({ hasText: message })
 }
 
-function observeSameOriginTraffic(page) {
+function observeBrowserRuntime(page, { expectedConsoleErrors = [] } = {}) {
   const browserOrigin = new URL(process.env.OWLCULUS_BASE_URL).origin
   const preflightRequests = []
   const unsafeRequests = []
   const failedRequests = []
   const browserErrors = []
   const uncaughtErrors = []
-  const hotReloadConnections = []
+  const viteHmrConnections = []
+  const viteHmrUpdates = []
+  let hotReloadVerificationRequested = false
 
   page.on('request', (request) => {
     const requestUrl = new URL(request.url())
@@ -44,14 +49,26 @@ function observeSameOriginTraffic(page) {
 
   page.on('websocket', (websocket) => {
     const websocketUrl = new URL(websocket.url())
-    if (process.env.OWLCULUS_SERVER_KIND === 'vite') {
-      hotReloadConnections.push(websocket.url())
-    }
     if (websocketUrl.port === '8000' || websocketOrigin(websocket.url()) !== browserOrigin) {
       unsafeRequests.push(websocket.url())
     }
     websocket.on('socketerror', (error) => {
       failedRequests.push(`${websocket.url()}: ${error}`)
+    })
+    websocket.on('framereceived', ({ payload }) => {
+      if (process.env.OWLCULUS_SERVER_KIND !== 'vite' || typeof payload !== 'string') return
+
+      try {
+        const message = JSON.parse(payload)
+        if (message.type === 'connected') {
+          viteHmrConnections.push(websocket.url())
+        }
+        if (message.type === 'update') {
+          viteHmrUpdates.push(...message.updates)
+        }
+      } catch {
+        // Non-JSON application WebSocket frames are unrelated to Vite's HMR protocol.
+      }
     })
   })
 
@@ -60,10 +77,7 @@ function observeSameOriginTraffic(page) {
   })
 
   page.on('console', (message) => {
-    if (
-      message.type() === 'error' &&
-      /cors|cross-origin|mixed content|preflight/i.test(message.text())
-    ) {
+    if (message.type() === 'error') {
       browserErrors.push(message.text())
     }
   })
@@ -72,20 +86,65 @@ function observeSameOriginTraffic(page) {
     uncaughtErrors.push(error.message)
   })
 
-  return () => {
-    expect(preflightRequests, 'browser should not make CORS preflight requests').toEqual([])
-    expect(unsafeRequests, 'browser requests should stay on the page origin').toEqual([])
-    expect(failedRequests, 'browser requests should not fail').toEqual([])
-    expect(browserErrors, 'browser console should have no origin or mixed-content errors').toEqual(
-      [],
-    )
-    expect(uncaughtErrors, 'browser should have no uncaught exceptions').toEqual([])
-    if (process.env.OWLCULUS_SERVER_KIND === 'vite') {
+  return {
+    async verifyViteHotReload() {
+      if (process.env.OWLCULUS_SERVER_KIND !== 'vite') return
+
+      const hmrProbeFilePath = process.env.OWLCULUS_HMR_PROBE_PATH
+      if (!hmrProbeFilePath) {
+        throw new Error('OWLCULUS_HMR_PROBE_PATH must be provided for the Vite journey')
+      }
+      const hmrProbeModulePath = `/src/${basename(hmrProbeFilePath)}`
+      hotReloadVerificationRequested = true
+      const baselineSource = await readFile(hmrProbeFilePath, 'utf8')
+      await page.evaluate((modulePath) => import(modulePath), hmrProbeModulePath)
+      await expect(page.locator('html')).toHaveAttribute('data-e2e-hmr-probe', 'baseline')
+
+      const activeSource = baselineSource.replace("marker = 'baseline'", "marker = 'active'")
+      if (activeSource === baselineSource) {
+        throw new Error('Unable to update the HMR probe marker')
+      }
+      await writeFile(hmrProbeFilePath, activeSource)
+      await expect
+        .poll(
+          () =>
+            viteHmrUpdates.some(({ path, acceptedPath }) =>
+              [path, acceptedPath].some((modulePath) => modulePath?.includes(hmrProbeModulePath)),
+            ),
+          {
+            message: 'the browser should receive an update for the HMR probe module',
+            timeout: 15_000,
+          },
+        )
+        .toBe(true)
+      await expect(page.locator('html')).toHaveAttribute('data-e2e-hmr-probe', 'active')
+    },
+    assertSafeTraffic() {
+      const unexpectedBrowserErrors = [...browserErrors]
+      for (const expectedError of expectedConsoleErrors) {
+        const expectedErrorIndex = unexpectedBrowserErrors.findIndex((message) =>
+          expectedError.test(message),
+        )
+        if (expectedErrorIndex !== -1) unexpectedBrowserErrors.splice(expectedErrorIndex, 1)
+      }
+
+      expect(preflightRequests, 'browser should not make CORS preflight requests').toEqual([])
+      expect(unsafeRequests, 'browser requests should stay on the page origin').toEqual([])
+      expect(failedRequests, 'browser requests should not fail').toEqual([])
+      expect(unexpectedBrowserErrors, 'browser console should have no unexpected errors').toEqual(
+        [],
+      )
+      expect(uncaughtErrors, 'browser should have no uncaught exceptions').toEqual([])
+      if (process.env.OWLCULUS_SERVER_KIND !== 'vite') return
+
       expect(
-        hotReloadConnections,
-        'the development server should expose its hot-reload channel',
+        viteHmrConnections,
+        'the development server should complete the Vite HMR handshake',
       ).not.toEqual([])
-    }
+      if (hotReloadVerificationRequested) {
+        expect(viteHmrUpdates, 'the browser should receive a Vite HMR update').not.toEqual([])
+      }
+    },
   }
 }
 
@@ -141,7 +200,7 @@ test.describe('first-run browser journey', () => {
   })
 
   test('shows only neutral loading content before routing login to setup', async ({ page }) => {
-    const assertSafeTraffic = observeSameOriginTraffic(page)
+    const { assertSafeTraffic } = observeBrowserRuntime(page)
     let releaseStatusRequest
     let markStatusRequested
     const statusRequestWasMade = new Promise((resolve) => {
@@ -179,7 +238,11 @@ test.describe('first-run browser journey', () => {
   test('creates the first administrator and verifies the credentials through login', async ({
     page,
   }) => {
-    const assertSafeTraffic = observeSameOriginTraffic(page)
+    const { assertSafeTraffic } = observeBrowserRuntime(page, {
+      expectedConsoleErrors: [
+        /Failed to load resource: the server responded with a status of 403 \(Forbidden\)/,
+      ],
+    })
     let administratorRequests = 0
     page.on('request', (request) => {
       if (requestMatches(request, 'POST', '/api/users/')) {
@@ -286,12 +349,11 @@ test.describe('first-run browser journey', () => {
   })
 
   test('smokes authenticated routes and representative interface behavior', async ({ page }) => {
-    test.setTimeout(60_000)
-    const assertSafeTraffic = observeSameOriginTraffic(page)
-    const viewportWidths = { desktop: 1440, narrow: 390 }
-    const expectedViewportWidth = viewportWidths[process.env.OWLCULUS_VIEWPORT]
-    expect(page.viewportSize()?.width).toBe(expectedViewportWidth)
+    test.setTimeout(90_000)
+    const { assertSafeTraffic, verifyViteHotReload } = observeBrowserRuntime(page)
+    expect(page.viewportSize()).toEqual(browserViewports[process.env.OWLCULUS_VIEWPORT])
     await logIn(page)
+    await verifyViteHotReload()
 
     await page.getByRole('button', { name: 'Dark Mode' }).click()
     await expect(page.getByRole('button', { name: 'Light Mode' })).toBeVisible()
@@ -321,16 +383,57 @@ test.describe('first-run browser journey', () => {
     await expect(clientRow).toContainText('safety-client@example.org')
 
     const routeSmokeChecks = [
-      ['Cases', /\/cases$/, page.getByText('Case Management', { exact: true })],
-      ['Tasks', /\/tasks$/, page.getByText('Task Management', { exact: true })],
-      ['Hunts', /\/hunts$/, page.getByText('Hunt Management', { exact: true })],
-      ['Admin', /\/admin$/, page.getByRole('tab', { name: 'Users', exact: true })],
+      {
+        linkName: 'Cases',
+        expectedUrl: /\/cases$/,
+        landmark: page.getByText('Case Management', { exact: true }),
+        verifyOperable: async () => {
+          const search = page.getByLabel('Search cases...', { exact: true })
+          await search.fill('migration smoke')
+          await expect(search).toHaveValue('migration smoke')
+          await search.clear()
+        },
+      },
+      {
+        linkName: 'Tasks',
+        expectedUrl: /\/tasks$/,
+        landmark: page.getByText('Task Management', { exact: true }),
+        verifyOperable: async () => {
+          const search = page.getByLabel('Search tasks...', { exact: true })
+          await search.fill('migration smoke')
+          await expect(search).toHaveValue('migration smoke')
+          await search.clear()
+        },
+      },
+      {
+        linkName: 'Hunts',
+        expectedUrl: /\/hunts$/,
+        landmark: page.getByText('Hunt Management', { exact: true }),
+        verifyOperable: async () => {
+          const historyTab = page.getByRole('tab', { name: 'Execution History', exact: true })
+          await historyTab.click()
+          await expect(historyTab).toHaveAttribute('aria-selected', 'true')
+          await page.getByRole('tab', { name: /^Available Hunts/ }).click()
+        },
+      },
+      {
+        linkName: 'Admin',
+        expectedUrl: /\/admin$/,
+        landmark: page.getByRole('tab', { name: 'Users', exact: true }),
+        verifyOperable: async () => {
+          const invitesTab = page.getByRole('tab', { name: 'Invites', exact: true })
+          await invitesTab.click()
+          await expect(invitesTab).toHaveAttribute('aria-selected', 'true')
+          await page.getByRole('tab', { name: 'Users', exact: true }).click()
+        },
+      },
     ]
 
-    for (const [linkName, expectedUrl, landmark] of routeSmokeChecks) {
+    for (const { linkName, expectedUrl, landmark, verifyOperable } of routeSmokeChecks) {
       await page.getByRole('link', { name: linkName, exact: true }).click()
       await expect(page).toHaveURL(expectedUrl, { timeout: 15_000 })
       await expect(landmark).toBeVisible({ timeout: 15_000 })
+      await verifyOperable()
     }
 
     await page.goto('/settings')
@@ -338,6 +441,16 @@ test.describe('first-run browser journey', () => {
     await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible({
       timeout: 15_000,
     })
+    const settingsFields = ['Current Password', 'New Password', 'Confirm New Password'].map(
+      (label) => page.getByLabel(label, { exact: true }),
+    )
+    for (const field of settingsFields) {
+      await expect(field).toBeVisible()
+      await expect(field).toBeEnabled()
+    }
+    await settingsFields[0].fill('migration smoke')
+    await expect(settingsFields[0]).toHaveValue('migration smoke')
+    await settingsFields[0].clear()
 
     assertSafeTraffic()
   })
