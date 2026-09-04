@@ -1,1 +1,11 @@
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
 data/setup/
+logs/
+test.db
+uploads/

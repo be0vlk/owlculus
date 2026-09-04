@@ -3,8 +3,21 @@
 import subprocess
 import sys
 import textwrap
+from pathlib import Path
 
 from fastapi.testclient import TestClient
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_make_test_uses_the_locked_local_environment():
+    """The canonical backend suite cannot drift from the checked-in uv lockfile."""
+    makefile = (REPOSITORY_ROOT / "Makefile").read_text()
+
+    test_target = makefile.split("test:", maxsplit=1)[1].split(
+        "test-browser:", maxsplit=1
+    )[0]
+    assert "cd backend && uv run --locked pytest tests/ -v" in test_target
 
 
 def test_minimal_synchronous_testclient_request_has_a_bounded_runtime():
