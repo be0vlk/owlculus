@@ -18,8 +18,28 @@
       </v-col>
     </v-row>
 
+    <v-alert
+      v-if="loadErrorMessage"
+      data-testid="entity-load-error"
+      class="mb-4"
+      type="error"
+      variant="tonal"
+    >
+      {{ loadErrorMessage }}
+      <v-btn
+        data-testid="retry-entity-load"
+        class="ml-2"
+        size="small"
+        variant="text"
+        @click="loadItems"
+      >
+        Retry
+      </v-btn>
+    </v-alert>
+
     <!-- Data Table -->
     <v-data-table-server
+      v-if="!loadErrorMessage"
       v-model:items-per-page="itemsPerPage"
       v-model:page="page"
       v-model:sort-by="sortBy"
@@ -32,6 +52,7 @@
       density="compact"
       item-value="id"
       class="elevation-1"
+      rounded="lg"
       :items-per-page-options="itemsPerPageOptions"
       :hover="true"
       show-select
@@ -40,7 +61,7 @@
     >
       <!-- Toolbar -->
       <template v-slot:top>
-        <v-toolbar flat>
+        <div class="entity-table-toolbar d-flex flex-wrap align-center ga-2 pa-2">
           <v-text-field
             v-model="search"
             data-testid="entity-search"
@@ -50,11 +71,8 @@
             hide-details
             clearable
             density="compact"
-            class="mr-4"
-            style="max-width: 300px"
+            class="entity-search flex-grow-1"
           />
-
-          <v-spacer />
 
           <!-- Bulk Actions -->
           <v-btn
@@ -99,7 +117,7 @@
               />
             </v-list>
           </v-menu>
-        </v-toolbar>
+        </div>
       </template>
 
       <!-- Type Column -->
@@ -138,8 +156,15 @@
 
       <!-- Actions Column -->
       <template #[`item.actions`]="{ item }">
-        <v-btn icon="mdi-eye" size="small" variant="text" @click="$emit('view', item)" />
         <v-btn
+          :aria-label="`View ${getEntityName(item)}`"
+          icon="mdi-eye"
+          size="small"
+          variant="text"
+          @click="$emit('view', item)"
+        />
+        <v-btn
+          :aria-label="`Delete ${getEntityName(item)}`"
           icon="mdi-delete"
           size="small"
           variant="text"
@@ -169,9 +194,9 @@
     </v-data-table-server>
 
     <!-- Delete Confirmation Dialog -->
-    <v-dialog v-model="deleteDialog" max-width="500">
+    <v-dialog v-model="deleteDialog" aria-label="Confirm Delete" max-width="500">
       <v-card>
-        <v-card-title>
+        <v-card-title id="delete-entities-dialog-title">
           <v-icon start color="error">mdi-alert</v-icon>
           Confirm Delete
         </v-card-title>
@@ -193,9 +218,23 @@
     </v-dialog>
 
     <v-snackbar
+      v-model="showDeleteError"
+      data-testid="entity-delete-error"
+      color="error"
+      role="alert"
+      :timeout="6000"
+    >
+      {{ deleteErrorMessage }}
+      <template #actions>
+        <v-btn variant="text" @click="showDeleteError = false">Close</v-btn>
+      </template>
+    </v-snackbar>
+
+    <v-snackbar
       v-model="showExportError"
       data-testid="entity-export-error"
       color="error"
+      role="alert"
       :timeout="6000"
     >
       {{ exportErrorMessage }}
@@ -232,6 +271,7 @@ const page = ref(1)
 const itemsPerPage = ref(25)
 const sortBy = ref([])
 const search = ref('')
+const loadErrorMessage = ref('')
 
 // Filter state
 const selectedTypes = ref([])
@@ -246,6 +286,8 @@ const deleting = ref(false)
 const exporting = ref(false)
 const showExportError = ref(false)
 const exportErrorMessage = ref('')
+const showDeleteError = ref(false)
+const deleteErrorMessage = ref('')
 
 // Configuration
 const itemsPerPageOptions = [
@@ -281,6 +323,7 @@ watch([selectedTypes, search], () => {
 // Methods
 const loadItems = async () => {
   loading.value = true
+  loadErrorMessage.value = ''
 
   try {
     // For now, use the existing API and implement client-side filtering
@@ -344,6 +387,8 @@ const loadItems = async () => {
     console.error('Error loading entities:', error)
     entities.value = []
     totalItems.value = 0
+    loadErrorMessage.value =
+      error.response?.data?.detail || error.message || 'Failed to load entities'
   } finally {
     loading.value = false
   }
@@ -442,6 +487,7 @@ const cancelDelete = () => {
 
 const performDelete = async () => {
   deleting.value = true
+  showDeleteError.value = false
 
   try {
     for (const item of itemsToDelete.value) {
@@ -455,6 +501,9 @@ const performDelete = async () => {
     await loadItems()
   } catch (error) {
     console.error('Error deleting entities:', error)
+    deleteErrorMessage.value =
+      error.response?.data?.detail || error.message || 'Failed to delete entities'
+    showDeleteError.value = true
   } finally {
     deleting.value = false
   }
@@ -493,11 +542,8 @@ onMounted(() => {
 </script>
 
 <style scoped>
-:deep(.v-data-table-footer) {
-  padding: 12px;
-}
-
-:deep(.v-data-table) {
-  border-radius: 8px;
+.entity-search {
+  min-width: min(100%, 16rem);
+  max-width: 18.75rem;
 }
 </style>

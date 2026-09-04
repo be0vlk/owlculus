@@ -1,6 +1,6 @@
 <template>
-  <v-col :cols="field.gridCols === 2 ? 12 : 6">
-    <div :class="field.hasSource ? 'd-flex flex-column gap-2' : ''">
+  <v-col cols="12" :md="field.gridCols === 2 ? 12 : 6">
+    <div :class="field.hasSource ? 'd-flex flex-column ga-2' : ''">
       <v-textarea
         v-if="field.type === 'textarea'"
         :model-value="fieldValue"
@@ -32,6 +32,7 @@
         density="comfortable"
         clearable
         prepend-inner-icon="mdi-source-branch"
+        bg-color="surface-variant"
         placeholder="URL, description, or reference where this was found"
         class="source-field"
       />
@@ -53,7 +54,3 @@ defineEmits(['update:field', 'update:source'])
 
 const { getFieldIcon } = useEntityIcons(props.entity)
 </script>
-
-<style scoped>
-@import url('../../styles/entity-editor.css');
-</style>

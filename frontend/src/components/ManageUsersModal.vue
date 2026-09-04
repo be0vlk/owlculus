@@ -1,6 +1,7 @@
 <template>
-  <v-dialog v-model="dialogVisible" max-width="800px" persistent>
-    <v-card prepend-icon="mdi-account-group" title="Manage Case Users">
+  <v-dialog v-model="dialogVisible" aria-label="Manage Case Users" max-width="800px" persistent>
+    <v-card prepend-icon="mdi-account-group">
+      <v-card-title id="manage-case-users-dialog-title">Manage Case Users</v-card-title>
       <v-card-text>
         <!-- Loading State -->
         <v-row class="justify-center" v-if="loading">

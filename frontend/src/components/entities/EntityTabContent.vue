@@ -101,7 +101,3 @@ function updateFieldValue(section, field, value) {
   emit('updateField', fieldPath, value)
 }
 </script>
-
-<style scoped>
-@import url('../../styles/entity-editor.css');
-</style>

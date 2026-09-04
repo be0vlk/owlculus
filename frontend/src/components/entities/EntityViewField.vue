@@ -1,5 +1,5 @@
 <template>
-  <v-col :cols="field.gridCols === 2 || (field.type === 'array' && field.isArray) ? 12 : 6">
+  <v-col cols="12" :md="field.gridCols === 2 || (field.type === 'array' && field.isArray) ? 12 : 6">
     <v-card variant="outlined" class="pa-3">
       <v-card-subtitle class="pa-0 pb-2">
         <v-icon
@@ -221,14 +221,3 @@ const exportSubdomains = () => {
   }
 }
 </script>
-
-<style scoped>
-.subdomain-table :deep(.v-data-table__td) {
-  padding: 8px 16px;
-}
-
-.subdomain-table :deep(.v-data-table__th) {
-  padding: 8px 16px;
-  font-weight: 600;
-}
-</style>

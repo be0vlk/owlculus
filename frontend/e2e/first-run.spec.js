@@ -32,6 +32,89 @@ async function exerciseTextInput(input) {
   await input.clear()
 }
 
+async function exerciseCaseAndEntityWorkflow(page) {
+  await page.getByRole('button', { name: 'New Case', exact: true }).click()
+  const newCaseDialog = page.getByRole('dialog', { name: 'New Case', exact: true })
+  await expect(newCaseDialog).toBeVisible()
+  await newCaseDialog.getByLabel('Title', { exact: true }).fill('Migration Safety Case')
+  const clientSelect = newCaseDialog.getByLabel('Client', { exact: true })
+  await clientSelect.focus()
+  await clientSelect.press('ArrowDown')
+  await page.getByRole('option', { name: 'Migration Safety Client', exact: true }).click()
+  await newCaseDialog.getByRole('button', { name: 'Create Case', exact: true }).click()
+  await expect(newCaseDialog).toBeHidden()
+
+  const caseRow = page.getByRole('row').filter({ hasText: 'Migration Safety Case' })
+  await expect(caseRow).toContainText('Migration Safety Client')
+  await caseRow.click()
+  await expect(page).toHaveURL(/\/case\/\d+$/)
+  await expect(page.getByText('Case Information', { exact: true })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Edit Case', exact: true }).click()
+  const editCaseDialog = page.getByRole('dialog', { name: 'Edit Case', exact: true })
+  await editCaseDialog
+    .getByLabel('Case Title', { exact: true })
+    .fill('Migration Safety Case Updated')
+  await editCaseDialog.getByRole('button', { name: 'Save Changes', exact: true }).click()
+  await expect(editCaseDialog).toBeHidden()
+  await expect(page.getByText('Migration Safety Case Updated', { exact: true })).toBeVisible()
+
+  const evidenceTab = page.getByRole('tab', { name: 'Evidence', exact: true })
+  await evidenceTab.click()
+  await expect(evidenceTab).toHaveAttribute('aria-selected', 'true')
+  await expect(page).toHaveURL(/[?&]tab=evidence(?:&|$)/)
+
+  const entitiesTab = page.getByRole('tab', { name: 'Entities', exact: true })
+  await entitiesTab.click()
+  await expect(entitiesTab).toHaveAttribute('aria-selected', 'true')
+  await expect(page).not.toHaveURL(/[?&]tab=/)
+
+  await expect(page.getByText('No Entities Found', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Add Entity', exact: true }).click()
+  const newEntityDialog = page.getByRole('dialog', { name: 'Add New Entity', exact: true })
+  const addEntityButton = newEntityDialog.getByRole('button', {
+    name: 'Add Entity',
+    exact: true,
+  })
+  await expect(addEntityButton).toBeDisabled()
+  await newEntityDialog.getByLabel('First Name', { exact: true }).fill('Ada')
+  await newEntityDialog.getByLabel('Last Name', { exact: true }).fill('Lovelace')
+  await expect(addEntityButton).toBeEnabled()
+  await addEntityButton.click()
+
+  const createdDialog = page.getByRole('dialog', {
+    name: 'Entity Created Successfully',
+    exact: true,
+  })
+  await expect(createdDialog).toContainText('Ada Lovelace')
+  await createdDialog.getByRole('button', { name: 'No, thanks', exact: true }).click()
+
+  let entityRow = page.getByRole('row').filter({ hasText: 'Ada Lovelace' })
+  await expect(entityRow).toBeVisible()
+  await page.getByLabel('Search entities', { exact: true }).fill('missing identity')
+  await expect(page.getByText('No entities found matching "missing identity"')).toBeVisible()
+  await page.getByLabel('Search entities', { exact: true }).clear()
+  await expect(entityRow).toBeVisible()
+
+  await page.getByRole('button', { name: 'View Ada Lovelace', exact: true }).click()
+  const entityDialog = page.getByRole('dialog', { name: 'Ada Lovelace', exact: true })
+  await expect(entityDialog).toBeVisible()
+  await entityDialog.getByRole('button', { name: 'Edit Entity', exact: true }).click()
+  await entityDialog.getByLabel('First Name', { exact: true }).fill('Grace')
+  await entityDialog.getByRole('button', { name: 'Save Changes', exact: true }).click()
+  const updatedEntityDialog = page.getByRole('dialog', { name: 'Grace Lovelace', exact: true })
+  await expect(updatedEntityDialog).toBeVisible()
+  await updatedEntityDialog.getByRole('button', { name: 'Close', exact: true }).click()
+
+  entityRow = page.getByRole('row').filter({ hasText: 'Grace Lovelace' })
+  await expect(entityRow).toBeVisible()
+  await page.getByRole('button', { name: 'Delete Grace Lovelace', exact: true }).click()
+  const deleteDialog = page.getByRole('dialog', { name: 'Confirm Delete', exact: true })
+  await expect(deleteDialog).toContainText('This action cannot be undone.')
+  await deleteDialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await expect(entityRow).toBeVisible()
+}
+
 function observeBrowserRuntime(page, { expectedConsoleErrors = [] } = {}) {
   const browserOrigin = new URL(process.env.OWLCULUS_BASE_URL).origin
   const preflightRequests = []
@@ -408,6 +491,7 @@ test.describe('first-run browser journey', () => {
         landmark: page.getByText('Case Management', { exact: true }),
         verifyOperable: async () => {
           await exerciseTextInput(page.getByLabel('Search cases...', { exact: true }))
+          await exerciseCaseAndEntityWorkflow(page)
         },
       },
       {

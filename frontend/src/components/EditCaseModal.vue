@@ -1,6 +1,7 @@
 <template>
-  <v-dialog v-model="dialogVisible" max-width="600px" persistent>
-    <v-card prepend-icon="mdi-briefcase-edit" title="Edit Case">
+  <v-dialog v-model="dialogVisible" aria-label="Edit Case" max-width="600px" persistent>
+    <v-card prepend-icon="mdi-briefcase-edit">
+      <v-card-title id="edit-case-dialog-title">Edit Case</v-card-title>
       <v-card-text>
         <!-- Error Alert -->
         <v-alert v-if="error" type="error" variant="tonal" class="mb-4">
@@ -212,7 +213,8 @@ const handleSubmit = async () => {
     emit('update', response.data)
     emit('close')
   } catch (err) {
-    error.value = err.response?.data?.message || 'Failed to update case'
+    error.value =
+      err.response?.data?.detail || err.response?.data?.message || 'Failed to update case'
   } finally {
     updating.value = false
   }

@@ -11,11 +11,13 @@ const mocks = vi.hoisted(() => ({
   getClient: vi.fn(),
   getFolderTree: vi.fn(),
   getCaseExecutions: vi.fn(),
+  replaceRoute: vi.fn(),
+  route: { params: { id: '42' }, query: {} },
 }))
 
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: { id: '42' }, query: {} }),
-  useRouter: () => ({ push: vi.fn() }),
+  useRoute: () => mocks.route,
+  useRouter: () => ({ push: vi.fn(), replace: mocks.replaceRoute }),
 }))
 
 vi.mock('@/stores/auth', () => ({
@@ -51,6 +53,7 @@ vi.mock('@/utils/download', () => ({ downloadBlob: mocks.downloadBlob }))
 const BaseDashboardStub = defineComponent({
   template: '<div><slot name="header-actions" /><slot /></div>',
 })
+const PassthroughStub = defineComponent({ template: '<div><slot /></div>' })
 const ButtonStub = defineComponent({
   inheritAttrs: false,
   props: { loading: Boolean },
@@ -63,6 +66,24 @@ const SnackbarStub = defineComponent({
   template:
     '<div v-if="modelValue" data-testid="case-export-notification" :data-color="color"><slot /></div>',
 })
+const CaseTabsStub = defineComponent({
+  name: 'CaseTabsStub',
+  props: { modelValue: String },
+  emits: ['update:modelValue'],
+  template:
+    '<div data-testid="case-tabs" :data-model-value="modelValue"><button data-testid="select-notes" @click="$emit(\'update:modelValue\', \'notes\')">Notes</button></div>',
+})
+const CaseDetailStub = defineComponent({
+  name: 'CaseDetailStub',
+  props: { caseData: Object },
+  template: '<div data-testid="case-detail">{{ caseData.title }} {{ caseData.status }}</div>',
+})
+const EditCaseModalStub = defineComponent({
+  name: 'EditCaseModalStub',
+  emits: ['update'],
+  template:
+    "<button data-testid=\"emit-case-update\" @click=\"$emit('update', { title: 'Updated investigation', status: 'Closed' })\">Update</button>",
+})
 
 const mountDashboard = async () => {
   const wrapper = shallowMount(CaseDashboard, {
@@ -71,7 +92,15 @@ const mountDashboard = async () => {
         BaseDashboard: BaseDashboardStub,
         VBtn: ButtonStub,
         VBtnGroup: defineComponent({ template: '<div><slot /></div>' }),
+        VCard: PassthroughStub,
+        VCardText: PassthroughStub,
+        VCardTitle: PassthroughStub,
+        VRow: PassthroughStub,
+        VCol: PassthroughStub,
         VSnackbar: SnackbarStub,
+        CaseTabs: CaseTabsStub,
+        CaseDetail: CaseDetailStub,
+        EditCaseModal: EditCaseModalStub,
       },
     },
   })
@@ -82,6 +111,7 @@ const mountDashboard = async () => {
 describe('CaseDashboard export', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.route.query = {}
     mocks.getCase.mockResolvedValue({
       id: 42,
       case_number: 'CASE-042',
@@ -135,5 +165,25 @@ describe('CaseDashboard export', () => {
     const notification = wrapper.get('[data-testid="case-export-notification"]')
     expect(notification.text()).toContain('Failed to export case')
     expect(notification.attributes('data-color')).toBe('error')
+  })
+
+  it('opens a valid tab from the URL and preserves tab changes in navigation state', async () => {
+    mocks.route.query = { tab: 'evidence', highlight: '9' }
+    const wrapper = await mountDashboard()
+    expect(wrapper.get('[data-testid="case-tabs"]').attributes('data-model-value')).toBe('evidence')
+
+    await wrapper.get('[data-testid="select-notes"]').trigger('click')
+
+    expect(mocks.replaceRoute).toHaveBeenCalledWith({
+      query: { tab: 'notes', highlight: '9' },
+    })
+  })
+
+  it('applies successful edits emitted by the edit-case dialog', async () => {
+    const wrapper = await mountDashboard()
+
+    await wrapper.get('[data-testid="emit-case-update"]').trigger('click')
+
+    expect(wrapper.get('[data-testid="case-detail"]').text()).toBe('Updated investigation Closed')
   })
 })

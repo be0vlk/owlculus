@@ -1,9 +1,17 @@
 <template>
-  <v-dialog v-model="dialogVisible" max-width="1200px" persistent scrollable>
+  <v-dialog
+    v-model="dialogVisible"
+    :aria-label="getEntityTitle"
+    max-width="1200px"
+    persistent
+    scrollable
+  >
     <v-card>
       <v-card-title class="d-flex align-center">
         <v-icon start :icon="getEntityIcon" color="primary" />
-        <span class="text-headline-small">{{ getEntityTitle }}</span>
+        <span id="entity-details-dialog-title" class="text-headline-small">
+          {{ getEntityTitle }}
+        </span>
         <v-spacer />
         <v-chip :color="isEditing ? 'warning' : 'primary'" size="small" variant="tonal">
           {{ isEditing ? 'Editing' : 'View Mode' }}

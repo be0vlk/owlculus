@@ -5,28 +5,22 @@
     :error="error"
   >
     <template #header-actions>
-      <div v-if="caseData" class="d-flex align-center ga-4">
-        <v-btn-group variant="outlined" divided>
-          <v-btn
-            data-testid="case-export-button"
-            color="white"
-            prepend-icon="mdi-download"
-            :loading="exportingCase"
-            @click="handleExportCase"
-          >
-            Export
-          </v-btn>
-          <v-btn color="white" prepend-icon="mdi-pencil" @click="showEditModal = true">
-            Edit Case
-          </v-btn>
-          <v-btn
-            color="white"
-            prepend-icon="mdi-account-group"
-            @click="showManageUsersModal = true"
-          >
-            Manage Users
-          </v-btn>
-        </v-btn-group>
+      <div v-if="caseData" class="d-flex flex-wrap justify-end ga-2">
+        <v-btn
+          data-testid="case-export-button"
+          color="white"
+          prepend-icon="mdi-download"
+          :loading="exportingCase"
+          @click="handleExportCase"
+        >
+          Export
+        </v-btn>
+        <v-btn color="white" prepend-icon="mdi-pencil" @click="showEditModal = true">
+          Edit Case
+        </v-btn>
+        <v-btn color="white" prepend-icon="mdi-account-group" @click="showManageUsersModal = true">
+          Manage Users
+        </v-btn>
       </div>
     </template>
 
@@ -86,7 +80,7 @@
         </v-card-title>
 
         <v-divider />
-        <CaseTabs :tabs="availableTabs">
+        <CaseTabs v-model="activeCaseTab" :tabs="availableTabs">
           <template #default="{ activeTab }">
             <!-- Entities Tab -->
             <div v-if="activeTab === 'entities'" class="pa-4">
@@ -301,6 +295,7 @@
     :color="snackbar.color"
     :timeout="snackbar.timeout"
     location="top center"
+    :role="snackbar.color === 'error' ? 'alert' : 'status'"
   >
     {{ snackbar.text }}
     <template #actions>
@@ -314,7 +309,7 @@
     :case-data="caseData"
     :show="showEditModal"
     @close="showEditModal = false"
-    @case-updated="handleCaseUpdate"
+    @update="handleCaseUpdate"
   />
 
   <ManageUsersModal
@@ -372,9 +367,14 @@
   />
 
   <!-- Entity Creation Success Dialog -->
-  <v-dialog v-model="showEntityCreationSuccess" max-width="500px" persistent>
+  <v-dialog
+    v-model="showEntityCreationSuccess"
+    aria-label="Entity Created Successfully"
+    max-width="500px"
+    persistent
+  >
     <v-card>
-      <v-card-title class="d-flex align-center">
+      <v-card-title id="entity-created-dialog-title" class="d-flex align-center">
         <v-icon color="success" start>mdi-check-circle</v-icon>
         Entity Created Successfully
       </v-card-title>
@@ -492,6 +492,26 @@ const availableTabs = computed(() => {
   tabs.push({ name: 'notes', label: 'Notes' })
 
   return tabs
+})
+
+const activeCaseTab = computed({
+  get: () => {
+    const requestedTab = route.query.tab
+    return availableTabs.value.some((tab) => tab.name === requestedTab)
+      ? requestedTab
+      : availableTabs.value[0]?.name
+  },
+  set: (tabName) => {
+    if (!availableTabs.value.some((tab) => tab.name === tabName)) return
+
+    const query = { ...route.query }
+    if (tabName === availableTabs.value[0]?.name) {
+      delete query.tab
+    } else {
+      query.tab = tabName
+    }
+    router.replace({ query })
+  },
 })
 
 const hasFolders = computed(() => {

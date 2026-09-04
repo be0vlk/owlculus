@@ -1,6 +1,7 @@
 <template>
-  <v-dialog v-model="dialogVisible" max-width="700px" persistent>
-    <v-card prepend-icon="mdi-account-plus" title="Add New Entity">
+  <v-dialog v-model="dialogVisible" aria-label="Add New Entity" max-width="700px" persistent>
+    <v-card prepend-icon="mdi-account-plus">
+      <v-card-title id="new-entity-dialog-title">Add New Entity</v-card-title>
       <v-card-text>
         <!-- Error Alert -->
         <v-alert v-if="entityForm.state.error" type="error" variant="tonal" class="mb-4">
@@ -149,6 +150,8 @@ function handleTabChange(newTab) {
 
 // Handle form submission
 async function handleSubmit() {
+  if (!formValid.value || entityForm.state.loading) return
+
   try {
     const response = await entityForm.submitEntity()
     emit('created', response)
