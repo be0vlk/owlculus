@@ -24,6 +24,14 @@ function visibleAlert(page, message) {
   return page.getByRole('alert').filter({ hasText: message })
 }
 
+async function exerciseTextInput(input) {
+  await expect(input).toBeVisible()
+  await expect(input).toBeEnabled()
+  await input.fill('migration smoke')
+  await expect(input).toHaveValue('migration smoke')
+  await input.clear()
+}
+
 function observeBrowserRuntime(page, { expectedConsoleErrors = [] } = {}) {
   const browserOrigin = new URL(process.env.OWLCULUS_BASE_URL).origin
   const preflightRequests = []
@@ -78,7 +86,7 @@ function observeBrowserRuntime(page, { expectedConsoleErrors = [] } = {}) {
 
   page.on('console', (message) => {
     if (message.type() === 'error') {
-      browserErrors.push(message.text())
+      browserErrors.push({ message: message.text(), sourceUrl: message.location().url })
     }
   })
 
@@ -122,10 +130,17 @@ function observeBrowserRuntime(page, { expectedConsoleErrors = [] } = {}) {
     assertSafeTraffic() {
       const unexpectedBrowserErrors = [...browserErrors]
       for (const expectedError of expectedConsoleErrors) {
-        const expectedErrorIndex = unexpectedBrowserErrors.findIndex((message) =>
-          expectedError.test(message),
+        const expectedErrorIndex = unexpectedBrowserErrors.findIndex(
+          ({ message, sourceUrl }) =>
+            expectedError.message.test(message) &&
+            sourceUrl &&
+            new URL(sourceUrl).pathname === expectedError.pathname,
         )
-        if (expectedErrorIndex !== -1) unexpectedBrowserErrors.splice(expectedErrorIndex, 1)
+        expect(
+          expectedErrorIndex,
+          `expected a console error from ${expectedError.pathname} matching ${expectedError.message}`,
+        ).not.toBe(-1)
+        unexpectedBrowserErrors.splice(expectedErrorIndex, 1)
       }
 
       expect(preflightRequests, 'browser should not make CORS preflight requests').toEqual([])
@@ -240,7 +255,11 @@ test.describe('first-run browser journey', () => {
   }) => {
     const { assertSafeTraffic } = observeBrowserRuntime(page, {
       expectedConsoleErrors: [
-        /Failed to load resource: the server responded with a status of 403 \(Forbidden\)/,
+        {
+          message:
+            /Failed to load resource: the server responded with a status of 403 \(Forbidden\)/,
+          pathname: '/api/users/',
+        },
       ],
     })
     let administratorRequests = 0
@@ -388,10 +407,7 @@ test.describe('first-run browser journey', () => {
         expectedUrl: /\/cases$/,
         landmark: page.getByText('Case Management', { exact: true }),
         verifyOperable: async () => {
-          const search = page.getByLabel('Search cases...', { exact: true })
-          await search.fill('migration smoke')
-          await expect(search).toHaveValue('migration smoke')
-          await search.clear()
+          await exerciseTextInput(page.getByLabel('Search cases...', { exact: true }))
         },
       },
       {
@@ -399,10 +415,7 @@ test.describe('first-run browser journey', () => {
         expectedUrl: /\/tasks$/,
         landmark: page.getByText('Task Management', { exact: true }),
         verifyOperable: async () => {
-          const search = page.getByLabel('Search tasks...', { exact: true })
-          await search.fill('migration smoke')
-          await expect(search).toHaveValue('migration smoke')
-          await search.clear()
+          await exerciseTextInput(page.getByLabel('Search tasks...', { exact: true }))
         },
       },
       {
@@ -448,9 +461,7 @@ test.describe('first-run browser journey', () => {
       await expect(field).toBeVisible()
       await expect(field).toBeEnabled()
     }
-    await settingsFields[0].fill('migration smoke')
-    await expect(settingsFields[0]).toHaveValue('migration smoke')
-    await settingsFields[0].clear()
+    await exerciseTextInput(settingsFields[0])
 
     assertSafeTraffic()
   })
