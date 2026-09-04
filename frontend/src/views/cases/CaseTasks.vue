@@ -19,7 +19,6 @@
     <v-dialog aria-label="Create Task" v-model="showCreateDialog" max-width="600">
       <TaskForm
         :saving="loading"
-        :case-id="caseId"
         @cancel="showCreateDialog = false"
         @save="handleCreateTask"
       />

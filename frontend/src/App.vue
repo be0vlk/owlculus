@@ -51,7 +51,11 @@ useDarkMode()
 const authStore = useAuthStore()
 const activeCase = useActiveCaseStore()
 const route = useRoute()
-const workspaceKey = computed(() => (routeCaseId(route) ? `case-${routeCaseId(route)}` : undefined))
+const workspaceKey = computed(() =>
+  routeCaseId(route)
+    ? `case-${routeCaseId(route)}-${route.name}-${route.params.id ?? ''}`
+    : undefined,
+)
 const caseContextBlocked = computed(
   () =>
     (authStore.isAuthenticated && !activeCase.initialized) ||

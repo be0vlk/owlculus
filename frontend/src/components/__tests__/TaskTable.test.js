@@ -14,7 +14,7 @@ it('preserves keyboard navigation, case-lead assignment availability, status upd
     history: createMemoryHistory(),
     routes: [
       { path: '/', component: { template: '<div />' } },
-      { path: '/tasks/:id', component: { template: '<div />' } },
+      { path: '/case/:caseId/tasks/:id', component: { template: '<div />' } },
     ],
   })
   await router.push('/')
@@ -26,13 +26,20 @@ it('preserves keyboard navigation, case-lead assignment availability, status upd
     attachTo: document.body,
     props: {
       tasks: [
-        { id: 42, title: 'Review evidence', status: 'pending', priority: 'medium', is_lead: false },
+        {
+          id: 42,
+          case_id: 7,
+          title: 'Review evidence',
+          status: 'pending',
+          priority: 'medium',
+          is_lead: false,
+        },
       ],
     },
     global: { plugins: [pinia, router] },
   })
   await flushPromises()
-  expect(wrapper.get('a').attributes('href')).toBe('/tasks/42')
+  expect(wrapper.get('a').attributes('href')).toBe('/case/7/tasks/42')
   // Task responses omit case membership; the server checks assignment permissions.
   expect(
     wrapper.get('button[aria-label="Assign Review evidence"]').attributes('disabled'),

@@ -358,7 +358,12 @@ const isUserCaseLead = ref(false)
 
 // Computed
 const taskId = computed(() => parseInt(route.params.id))
-const task = computed(() => taskStore.currentTask)
+const task = computed(() =>
+  taskStore.currentTask?.id === taskId.value &&
+  String(taskStore.currentTask?.case_id) === String(route.params.caseId)
+    ? taskStore.currentTask
+    : null,
+)
 const loading = computed(() => taskStore.loading)
 const error = computed(() => taskStore.error)
 

@@ -205,3 +205,82 @@ test('shows the authenticated shell loading state before any case is resolved', 
   release()
   await expect(page.getByRole('combobox', { name: 'Active case', exact: true })).toBeEnabled()
 })
+
+test('tasks remain scoped through creation, switching and legacy detail links', async ({
+  page,
+}) => {
+  await setup(page)
+  const tasks = [
+    {
+      id: 11,
+      case_id: 1,
+      title: 'Older task',
+      description: 'Old evidence',
+      status: 'completed',
+      priority: 'medium',
+      assigned_to: { id: 1 },
+      assigned_by: { username: 'investigator' },
+    },
+    {
+      id: 22,
+      case_id: 2,
+      title: 'Newer task',
+      description: 'New evidence',
+      status: 'not_started',
+      priority: 'medium',
+      assigned_to: { id: 1 },
+      assigned_by: { username: 'investigator' },
+    },
+  ]
+  const requestedCases = []
+  const createdTasks = []
+  await page.route('**/api/tasks/**', async (route) => {
+    const url = new URL(route.request().url())
+    if (url.pathname === '/api/tasks/templates') return route.fulfill({ json: [] })
+    if (route.request().method() === 'POST') {
+      const data = route.request().postDataJSON()
+      createdTasks.push(data)
+      const task = { ...data, id: 23, status: 'not_started', assigned_to: { id: 1 } }
+      tasks.push(task)
+      return route.fulfill({ json: task })
+    }
+    if (url.pathname === '/api/tasks/') {
+      const caseId = Number(url.searchParams.get('case_id'))
+      requestedCases.push(caseId)
+      return route.fulfill({ json: tasks.filter((task) => task.case_id === caseId) })
+    }
+    return route.fulfill({
+      json: tasks.find((task) => task.id === Number(url.pathname.split('/').pop())),
+    })
+  })
+  await page.goto('/tasks')
+  await expect(page).toHaveURL(/\/case\/2\/tasks$/)
+  await expect(page.getByRole('link', { name: 'Newer task', exact: true })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Older task', exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: 'New Task', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Create Task', exact: true })
+  await expect(dialog.getByRole('combobox', { name: 'Case', exact: true })).toHaveCount(0)
+  await dialog.getByRole('textbox', { name: 'Title', exact: true }).fill('Review new evidence')
+  await dialog.getByRole('textbox', { name: 'Description', exact: true }).fill('Check source')
+  await dialog.getByRole('button', { name: 'Create', exact: true }).click()
+  await expect(dialog).toBeHidden()
+  await expect(page.getByRole('link', { name: 'Review new evidence', exact: true })).toBeVisible()
+  expect(createdTasks).toEqual([
+    expect.objectContaining({ case_id: 2, title: 'Review new evidence' }),
+  ])
+  const switcher = page.getByRole('combobox', { name: 'Active case', exact: true })
+  await switcher.fill('CASE-OLD')
+  await page
+    .getByRole('option', { name: 'CASE-OLD — Older investigation (Closed)', exact: true })
+    .click()
+  await expect(page).toHaveURL(/\/case\/1\/tasks$/)
+  await expect(page.getByRole('link', { name: 'Older task', exact: true })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Newer task', exact: true })).toHaveCount(0)
+  expect(requestedCases).toContain(1)
+  expect(requestedCases).toContain(2)
+  expect(requestedCases).not.toContain(0)
+  await page.goto('/tasks/22')
+  await expect(page).toHaveURL(/\/case\/2\/tasks\/22$/)
+  await expect(switcher).toHaveValue('CASE-NEW — Newer investigation (Open)')
+  await expect(page.getByRole('heading', { name: 'Task: Newer task', exact: true })).toBeVisible()
+})

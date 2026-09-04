@@ -55,8 +55,7 @@ async function captureOperations(page, surface) {
 async function exerciseTasks(page) {
   await page.getByRole('button', { name: 'New Task', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Create Task', exact: true })
-  await dialog.getByLabel('Case', { exact: true }).press('ArrowDown')
-  await page.getByRole('option', { name: 'Migration Safety Case Updated', exact: true }).click()
+  await expect(dialog.getByLabel('Case', { exact: true })).toHaveCount(0)
   await dialog.getByLabel('Title', { exact: true }).fill('Migration review')
   await dialog.getByLabel('Description', { exact: true }).fill('Review migration behavior')
   await dialog.getByLabel('Title', { exact: true }).press('Enter')
