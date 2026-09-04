@@ -151,6 +151,32 @@ ENTITY_TYPE_SCHEMAS = {
 }
 
 
+def entity_display_name(entity_type: str, data: dict[str, Any]) -> str:
+    """Return the display label owned by an entity's schema vocabulary."""
+    if entity_type == "person":
+        return " ".join(
+            str(part)
+            for part in (data.get("first_name"), data.get("last_name"))
+            if part not in (None, "")
+        )
+    if entity_type == "company":
+        return str(data.get("name") or "")
+    if entity_type == "domain":
+        return str(data.get("domain") or "")
+    if entity_type == "ip_address":
+        return str(data.get("ip_address") or "")
+    if entity_type == "vehicle":
+        return " ".join(
+            str(part)
+            for part in (data.get("year"), data.get("make"), data.get("model"))
+            if part not in (None, "")
+        )
+    if entity_type == "network_assets":
+        assets = data.get("domains") or data.get("subdomains") or []
+        return str(assets[0]) if assets else ""
+    return ""
+
+
 class Entity(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
