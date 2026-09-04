@@ -20,7 +20,7 @@ export const caseService = {
   },
 
   async createCase(caseData) {
-    const response = await api.post('/api/cases', caseData)
+    const response = await api.post('/api/cases/', caseData)
     return response.data
   },
 

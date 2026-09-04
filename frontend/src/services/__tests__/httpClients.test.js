@@ -92,4 +92,40 @@ describe('browser HTTP clients', () => {
     expect(localStorage.getItem('access_token')).toBeNull()
     expect(localStorage.getItem('token_type')).toBeNull()
   })
+
+  it('posts client creation to the canonical collection URL without a redirect', async () => {
+    const { clientService } = await import('../client')
+    const client = { name: 'Example client' }
+
+    await clientService.createClient(client)
+
+    const apiClient = axiosMock.instances.find(({ post }) => post.mock.calls.length > 0)
+    expect(apiClient.post).toHaveBeenCalledWith('/api/clients/', client)
+  })
+
+  it('uses canonical collection URLs for redirect-sensitive API routes', async () => {
+    const [{ userService }, { inviteService }, { pluginService }, { caseService }] =
+      await Promise.all([
+        import('../user'),
+        import('../invite'),
+        import('../plugin'),
+        import('../case'),
+      ])
+
+    await userService.getUsers()
+    await userService.createUser({ username: 'analyst' })
+    await inviteService.getInvites()
+    await inviteService.createInvite({ email: 'analyst@example.com' })
+    await pluginService.listPlugins()
+    await caseService.createCase({ title: 'Example case' })
+
+    const getCalls = axiosMock.instances.flatMap(({ get }) => get.mock.calls)
+    const postCalls = axiosMock.instances.flatMap(({ post }) => post.mock.calls)
+    expect(getCalls).toContainEqual(['/api/users/'])
+    expect(postCalls).toContainEqual(['/api/users/', { username: 'analyst' }])
+    expect(getCalls).toContainEqual(['/api/invites/'])
+    expect(postCalls).toContainEqual(['/api/invites/', { email: 'analyst@example.com' }])
+    expect(getCalls).toContainEqual(['/api/plugins/'])
+    expect(postCalls).toContainEqual(['/api/cases/', { title: 'Example case' }])
+  })
 })

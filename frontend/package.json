@@ -3,6 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=11 <12"
+  },
+  "packageManager": "npm@11.19.0",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -39,7 +44,7 @@
     "date-fns": "^4.1.0",
     "markdown-it": "^14.1.0",
     "pinia": "^2.2.6",
-    "vue": "^3.5.13",
+    "vue": "3.5.42",
     "vue-router": "^4.4.5",
     "vuetify": "^3.7.3"
   },

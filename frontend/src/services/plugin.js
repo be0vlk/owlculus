@@ -2,7 +2,7 @@ import api from './api'
 
 export const pluginService = {
   async listPlugins() {
-    const response = await api.get('/api/plugins')
+    const response = await api.get('/api/plugins/')
     return response.data
   },
 

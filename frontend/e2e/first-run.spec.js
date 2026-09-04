@@ -17,12 +17,18 @@ function websocketOrigin(url) {
   return parsedUrl.origin
 }
 
+function visibleAlert(page, message) {
+  return page.getByRole('alert').filter({ hasText: message })
+}
+
 function observeSameOriginTraffic(page) {
   const browserOrigin = new URL(process.env.OWLCULUS_BASE_URL).origin
   const preflightRequests = []
   const unsafeRequests = []
   const failedRequests = []
   const browserErrors = []
+  const uncaughtErrors = []
+  const hotReloadConnections = []
 
   page.on('request', (request) => {
     const requestUrl = new URL(request.url())
@@ -38,6 +44,9 @@ function observeSameOriginTraffic(page) {
 
   page.on('websocket', (websocket) => {
     const websocketUrl = new URL(websocket.url())
+    if (process.env.OWLCULUS_SERVER_KIND === 'vite') {
+      hotReloadConnections.push(websocket.url())
+    }
     if (websocketUrl.port === '8000' || websocketOrigin(websocket.url()) !== browserOrigin) {
       unsafeRequests.push(websocket.url())
     }
@@ -59,6 +68,10 @@ function observeSameOriginTraffic(page) {
     }
   })
 
+  page.on('pageerror', (error) => {
+    uncaughtErrors.push(error.message)
+  })
+
   return () => {
     expect(preflightRequests, 'browser should not make CORS preflight requests').toEqual([])
     expect(unsafeRequests, 'browser requests should stay on the page origin').toEqual([])
@@ -66,7 +79,23 @@ function observeSameOriginTraffic(page) {
     expect(browserErrors, 'browser console should have no origin or mixed-content errors').toEqual(
       [],
     )
+    expect(uncaughtErrors, 'browser should have no uncaught exceptions').toEqual([])
+    if (process.env.OWLCULUS_SERVER_KIND === 'vite') {
+      expect(
+        hotReloadConnections,
+        'the development server should expose its hot-reload channel',
+      ).not.toEqual([])
+    }
   }
+}
+
+async function logIn(page) {
+  await page.goto('/login')
+  await page.getByLabel('Username', { exact: true }).fill(administrator.username)
+  await page.getByLabel('Password', { exact: true }).fill(administrator.password)
+  await page.getByRole('button', { name: 'Sign in' }).click()
+  await expect(page).toHaveURL(/\/cases$/)
+  await expect(page.getByText('Case Management')).toBeVisible()
 }
 
 async function expectSetupForm(page) {
@@ -99,9 +128,14 @@ test.describe('first-run browser journey', () => {
   test.describe.configure({ mode: 'serial' })
 
   test.beforeAll(() => {
-    if (!process.env.OWLCULUS_BASE_URL || !process.env.OWLCULUS_SETUP_TOKEN) {
+    if (
+      !process.env.OWLCULUS_BASE_URL ||
+      !process.env.OWLCULUS_SETUP_TOKEN ||
+      !process.env.OWLCULUS_SERVER_KIND ||
+      !process.env.OWLCULUS_VIEWPORT
+    ) {
       throw new Error(
-        'OWLCULUS_BASE_URL and OWLCULUS_SETUP_TOKEN must be provided by the ephemeral-stack runner',
+        'OWLCULUS_BASE_URL, OWLCULUS_SETUP_TOKEN, OWLCULUS_SERVER_KIND, and OWLCULUS_VIEWPORT must be provided by the ephemeral-stack runner',
       )
     }
   })
@@ -162,13 +196,13 @@ test.describe('first-run browser journey', () => {
     await password.fill(administrator.password)
     await confirmPassword.fill('different-password')
     await page.getByRole('button', { name: 'Create Administrator Account' }).click()
-    await expect(page.locator('.v-alert[role="alert"]')).toHaveText('Passwords do not match')
+    await expect(visibleAlert(page, 'Passwords do not match')).toHaveText('Passwords do not match')
     expect(administratorRequests).toBe(0)
 
     await password.fill('short')
     await confirmPassword.fill('short')
     await page.getByRole('button', { name: 'Create Administrator Account' }).click()
-    await expect(page.locator('.v-alert[role="alert"]')).toHaveText(
+    await expect(visibleAlert(page, 'Password must be at least 10 characters')).toHaveText(
       'Password must be at least 10 characters',
     )
     expect(administratorRequests).toBe(0)
@@ -207,7 +241,7 @@ test.describe('first-run browser journey', () => {
       releaseAdministratorRequest()
     }
 
-    await expect(page.locator('.v-alert[role="alert"]')).toHaveText('Invalid setup token')
+    await expect(visibleAlert(page, 'Invalid setup token')).toHaveText('Invalid setup token')
     await expect(username).toHaveValue(administrator.username)
     await expect(page.getByRole('button', { name: 'Create Administrator Account' })).toBeEnabled()
 
@@ -248,6 +282,63 @@ test.describe('first-run browser journey', () => {
     await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible()
 
     expect(administratorRequests).toBe(2)
+    assertSafeTraffic()
+  })
+
+  test('smokes authenticated routes and representative interface behavior', async ({ page }) => {
+    test.setTimeout(60_000)
+    const assertSafeTraffic = observeSameOriginTraffic(page)
+    const viewportWidths = { desktop: 1440, narrow: 390 }
+    const expectedViewportWidth = viewportWidths[process.env.OWLCULUS_VIEWPORT]
+    expect(page.viewportSize()?.width).toBe(expectedViewportWidth)
+    await logIn(page)
+
+    await page.getByRole('button', { name: 'Dark Mode' }).click()
+    await expect(page.getByRole('button', { name: 'Light Mode' })).toBeVisible()
+    expect(await page.evaluate(() => localStorage.getItem('color-scheme'))).toBe('dark')
+    await page.getByRole('button', { name: 'Light Mode' }).click()
+    await expect(page.getByRole('button', { name: 'Dark Mode' })).toBeVisible()
+    expect(await page.evaluate(() => localStorage.getItem('color-scheme'))).toBe('light')
+
+    await page.getByRole('link', { name: 'Clients', exact: true }).click()
+    await expect(page).toHaveURL(/\/clients$/, { timeout: 15_000 })
+    await expect(page.getByText('Client Management')).toBeVisible({ timeout: 15_000 })
+
+    await page.getByRole('button', { name: 'Add Client' }).click()
+    const clientDialog = page.getByRole('dialog').filter({ hasText: 'New Client' })
+    await expect(clientDialog).toBeVisible()
+    await expect(clientDialog.getByText('New Client', { exact: true })).toBeVisible()
+    await clientDialog.getByLabel('Name', { exact: true }).fill('Migration Safety Client')
+    await clientDialog.getByLabel('Email', { exact: true }).fill('safety-client@example.org')
+    await clientDialog.getByLabel('Phone', { exact: true }).fill('+1 555 0100')
+    await clientDialog.getByLabel('Address', { exact: true }).fill('1 Regression Way')
+    await clientDialog.getByRole('button', { name: 'Create Client' }).click()
+
+    await expect(
+      page.getByText('Client "Migration Safety Client" created successfully'),
+    ).toBeVisible()
+    const clientRow = page.getByRole('row').filter({ hasText: 'Migration Safety Client' })
+    await expect(clientRow).toContainText('safety-client@example.org')
+
+    const routeSmokeChecks = [
+      ['Cases', /\/cases$/, page.getByText('Case Management', { exact: true })],
+      ['Tasks', /\/tasks$/, page.getByText('Task Management', { exact: true })],
+      ['Hunts', /\/hunts$/, page.getByText('Hunt Management', { exact: true })],
+      ['Admin', /\/admin$/, page.getByRole('tab', { name: 'Users', exact: true })],
+    ]
+
+    for (const [linkName, expectedUrl, landmark] of routeSmokeChecks) {
+      await page.getByRole('link', { name: linkName, exact: true }).click()
+      await expect(page).toHaveURL(expectedUrl, { timeout: 15_000 })
+      await expect(landmark).toBeVisible({ timeout: 15_000 })
+    }
+
+    await page.goto('/settings')
+    await expect(page).toHaveURL(/\/settings$/, { timeout: 15_000 })
+    await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible({
+      timeout: 15_000,
+    })
+
     assertSafeTraffic()
   })
 })
