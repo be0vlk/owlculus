@@ -18,8 +18,6 @@ from app.core.exceptions import (
     BaseException as DomainException,
 )
 from app.main import app
-from app.services.invite_service import InviteException
-from app.services.system_config_service import SystemConfigError
 
 
 @pytest.mark.parametrize(
@@ -32,8 +30,6 @@ from app.services.system_config_service import SystemConfigError
         (ValidationException("invalid"), 422, "invalid"),
         (RelatedResourceException("conflict"), 409, "conflict"),
         (DomainException("secret detail"), 500, "Internal server error"),
-        (InviteException("secret invite detail"), 500, "Internal server error"),
-        (SystemConfigError("secret config detail"), 500, "Internal server error"),
     ],
 )
 def test_domain_exception_family_is_translated_by_one_application_handler(

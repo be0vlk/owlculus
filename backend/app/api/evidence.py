@@ -7,7 +7,7 @@ ensuring proper chain of custody and forensic integrity of collected data.
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlmodel import Session
 
@@ -46,9 +46,7 @@ async def create_evidence(
     current_user: models.User = Depends(get_current_user),
 ):
     if not files:
-        raise HTTPException(
-            status_code=400, detail="At least one file must be provided"
-        )
+        raise ValidationException("At least one file must be provided")
 
     evidence_service = EvidenceService(db)
     created = []
@@ -267,12 +265,11 @@ async def extract_evidence_metadata(
     )
 
     if not evidence:
-        raise HTTPException(status_code=404, detail="Evidence not found")
+        raise ResourceNotFoundException("Evidence not found")
 
     if not evidence.content or evidence.is_folder:
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot extract metadata from folders or evidence without files",
+        raise ValidationException(
+            "Cannot extract metadata from folders or evidence without files"
         )
 
     from app.core.file_storage import UPLOAD_DIR

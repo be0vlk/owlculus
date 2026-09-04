@@ -3,18 +3,13 @@
 from datetime import UTC, datetime
 
 import pytest
-from fastapi import HTTPException
 from sqlmodel import select
 
+from app.core.exceptions import AuthorizationException, ValidationException
 from app.core.security import decrypt_api_key
 from app.database.models import SystemConfiguration
 from app.services.api_key_vault import Provider
-from app.services.system_config_service import (
-    ApiKeyError,
-    CaseNumberTemplateError,
-    EvidenceTemplateError,
-    SystemConfigService,
-)
+from app.services.system_config_service import SystemConfigService
 
 FIXED_TIME = datetime(2026, 9, 3, 12, 30, tzinfo=UTC)
 
@@ -36,10 +31,10 @@ async def test_get_configuration_creates_and_reuses_defaults(service, session):
 
 
 async def test_admin_configuration_rejects_non_admin(service, test_user):
-    with pytest.raises(HTTPException) as error:
+    with pytest.raises(AuthorizationException) as error:
         await service.get_configuration_admin(current_user=test_user)
 
-    assert error.value.status_code == 403
+    assert str(error.value) == "Not authorized"
 
 
 async def test_update_configuration_validates_and_persists(service, test_admin):
@@ -50,7 +45,7 @@ async def test_update_configuration_validates_and_persists(service, test_admin):
     assert updated.case_number_prefix == "OWL"
     assert updated.updated_at == FIXED_TIME.replace(tzinfo=None)
 
-    with pytest.raises(CaseNumberTemplateError):
+    with pytest.raises(ValidationException):
         await service.update_configuration("invalid", current_user=test_admin)
 
 
@@ -90,7 +85,7 @@ async def test_key_editing_encrypts_and_preserves_creation_time(service, test_ad
 
 
 async def test_new_key_requires_a_value(service, test_admin):
-    with pytest.raises(ApiKeyError):
+    with pytest.raises(ValidationException):
         await service.set_api_key(
             Provider.SHODAN, None, "Shodan", current_user=test_admin
         )
@@ -126,7 +121,7 @@ async def test_evidence_template_update_is_validated(service, test_admin):
     await service.update_evidence_folder_templates(templates, current_user=test_admin)
     assert await service.get_evidence_folder_templates() == templates
 
-    with pytest.raises(EvidenceTemplateError):
+    with pytest.raises(ValidationException):
         await service.update_evidence_folder_templates(
             {"broken": {"name": "Broken"}}, current_user=test_admin
         )

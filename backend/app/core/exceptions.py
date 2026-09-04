@@ -43,3 +43,9 @@ class AuthorizationException(BaseException):
     """Raised when user lacks authorization for an operation"""
 
     pass
+
+
+class RateLimitException(BaseException):
+    """Raised when an application-level request limit is exceeded."""
+
+    pass

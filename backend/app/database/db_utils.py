@@ -5,11 +5,12 @@ Database utilities for session management and transactions
 from contextlib import contextmanager
 from typing import Any, Callable, Generator, TypeVar
 
-from app.core.logging import get_logger_with_context
-from app.database.connection import engine
-from fastapi import HTTPException
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session
+
+from app.core.exceptions import BaseException as DomainException
+from app.core.logging import get_logger_with_context
+from app.database.connection import engine
 
 logger = get_logger_with_context(module="db_utils")
 
@@ -72,23 +73,23 @@ def execute_in_transaction(
     Args:
         session: Database session
         operation: Function that performs database operations
-        error_message: Custom error message for HTTP exceptions
+        error_message: Custom domain error message
 
     Returns:
         Result of the operation
 
     Raises:
-        HTTPException: If the operation fails
+        DomainException: If the operation fails
     """
     try:
         with transaction(session):
             return operation(session)
     except SQLAlchemyError as e:
         logger.error(f"{error_message}: {str(e)}")
-        raise HTTPException(status_code=500, detail=error_message)
+        raise DomainException(error_message) from e
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
-        raise HTTPException(status_code=500, detail=error_message)
+        raise DomainException(error_message) from e
 
 
 def bulk_save(session: Session, models: list[Any]) -> None:

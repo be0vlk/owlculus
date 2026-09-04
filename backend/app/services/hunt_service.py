@@ -14,6 +14,7 @@ from typing import Any
 from sqlmodel import Session, select
 
 from app.core.dependencies import check_case_access, no_analyst
+from app.core.exceptions import ResourceNotFoundException, ValidationException
 from app.core.logging import get_security_logger
 from app.core.utils import get_utc_now
 from app.core.websocket_manager import websocket_manager
@@ -25,7 +26,6 @@ security_logger = get_security_logger
 
 
 class HuntService:
-
     def __init__(
         self,
         db: Session,
@@ -47,8 +47,11 @@ class HuntService:
         ).all()
         return list(hunts)
 
-    async def get_hunt(self, hunt_id: int, *, current_user: User) -> Hunt | None:
-        return self.db.get(Hunt, hunt_id)
+    async def get_hunt(self, hunt_id: int, *, current_user: User) -> Hunt:
+        hunt = self.db.get(Hunt, hunt_id)
+        if hunt is None:
+            raise ResourceNotFoundException("Hunt not found")
+        return hunt
 
     @no_analyst()
     async def create_execution(
@@ -61,7 +64,7 @@ class HuntService:
     ) -> HuntExecution:
         hunt = self.db.get(Hunt, hunt_id)
         if not hunt or not hunt.is_active:
-            raise ValueError("Hunt not found or inactive")
+            raise ResourceNotFoundException("Hunt not found or inactive")
 
         check_case_access(self.db, case_id, current_user)
 
@@ -129,10 +132,11 @@ class HuntService:
 
     async def get_execution(
         self, execution_id: int, *, current_user: User
-    ) -> HuntExecution | None:
+    ) -> HuntExecution:
         execution = self.db.get(HuntExecution, execution_id)
-        if execution:
-            check_case_access(self.db, execution.case_id, current_user)
+        if execution is None:
+            raise ResourceNotFoundException("Hunt execution not found")
+        check_case_access(self.db, execution.case_id, current_user)
         return execution
 
     async def list_case_executions(
@@ -154,13 +158,13 @@ class HuntService:
     ) -> HuntExecution:
         execution = self.db.get(HuntExecution, execution_id)
         if not execution:
-            raise ValueError("Hunt execution not found")
+            raise ResourceNotFoundException("Hunt execution not found")
 
         check_case_access(self.db, execution.case_id, current_user)
 
         # Only running executions can be cancelled
         if execution.status != "running":
-            raise ValueError("Only running executions can be cancelled")
+            raise ValidationException("Only running executions can be cancelled")
 
         executor = self._executor_factory(self.db)
         await executor.cancel_execution(execution_id)
@@ -171,10 +175,7 @@ class HuntService:
     async def get_execution_steps(
         self, execution_id: int, *, current_user: User
     ) -> list[HuntStep]:
-        execution = await self.get_execution(execution_id, current_user=current_user)
-        if not execution:
-            raise ValueError("Hunt execution not found")
-
+        await self.get_execution(execution_id, current_user=current_user)
         steps = self.db.exec(
             select(HuntStep)
             .where(HuntStep.execution_id == execution_id)

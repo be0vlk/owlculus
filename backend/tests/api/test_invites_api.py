@@ -211,6 +211,7 @@ class TestInvitesAPI:
             assert response.status_code in [
                 status.HTTP_201_CREATED,
                 status.HTTP_400_BAD_REQUEST,
+                status.HTTP_422_UNPROCESSABLE_ENTITY,
                 status.HTTP_500_INTERNAL_SERVER_ERROR,
             ]
         finally:

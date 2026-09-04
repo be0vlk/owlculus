@@ -7,6 +7,7 @@ from app.core.exceptions import (
     AuthenticationException,
     AuthorizationException,
     DuplicateResourceException,
+    RateLimitException,
     RelatedResourceException,
     ResourceNotFoundException,
     ValidationException,
@@ -23,6 +24,7 @@ _STATUS_BY_EXCEPTION: tuple[tuple[type[DomainException], int], ...] = (
     (DuplicateResourceException, status.HTTP_400_BAD_REQUEST),
     (ValidationException, status.HTTP_422_UNPROCESSABLE_ENTITY),
     (RelatedResourceException, status.HTTP_409_CONFLICT),
+    (RateLimitException, status.HTTP_429_TOO_MANY_REQUESTS),
 )
 
 

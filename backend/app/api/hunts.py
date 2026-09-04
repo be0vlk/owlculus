@@ -8,7 +8,6 @@ enabling complex multi-step investigations with real-time monitoring and results
 from fastapi import (
     APIRouter,
     Depends,
-    HTTPException,
     Response,
     WebSocket,
     WebSocketDisconnect,
@@ -17,7 +16,6 @@ from fastapi import (
 from sqlmodel import Session
 
 from app.core.dependencies import get_current_user, get_db, no_analyst
-from app.core.exceptions import AuthorizationException, ResourceNotFoundException
 from app.core.websocket_manager import websocket_manager
 from app.database import models
 from app.hunts.hunt_event import HuntEvent
@@ -60,16 +58,11 @@ async def export_execution(
 ):
     """Download a backend-generated hunt execution export."""
     service = ExportService(db)
-    try:
-        artifact = service.export_hunt_execution(
-            execution_id=execution_id,
-            current_user=current_user,
-            export_format=format,
-        )
-    except ResourceNotFoundException as error:
-        raise HTTPException(status_code=404, detail=str(error)) from error
-    except AuthorizationException as error:
-        raise HTTPException(status_code=403, detail=str(error)) from error
+    artifact = service.export_hunt_execution(
+        execution_id=execution_id,
+        current_user=current_user,
+        export_format=format,
+    )
 
     return Response(
         content=artifact.content,
@@ -87,9 +80,6 @@ async def get_hunt(
     """Get details of a specific hunt"""
     service = HuntService(db)
     hunt = await service.get_hunt(hunt_id, current_user=current_user)
-
-    if not hunt:
-        raise HTTPException(status_code=404, detail="Hunt not found")
 
     hunt_dict = hunt.__dict__.copy()
     if "definition_json" in hunt_dict and "steps" in hunt_dict["definition_json"]:
@@ -118,34 +108,26 @@ async def execute_hunt(
     """
     service = HuntService(db)
 
-    try:
-        execution = await service.create_execution(
-            hunt_id=hunt_id,
-            case_id=request.case_id,
-            initial_parameters=request.parameters,
-            current_user=current_user,
-        )
+    execution = await service.create_execution(
+        hunt_id=hunt_id,
+        case_id=request.case_id,
+        initial_parameters=request.parameters,
+        current_user=current_user,
+    )
 
-        hunt = db.get(models.Hunt, execution.hunt_id)
+    hunt = db.get(models.Hunt, execution.hunt_id)
 
-        response = schemas.HuntExecutionResponse(
-            **execution.__dict__,
-            hunt=(
-                schemas.HuntResponse(
-                    **hunt.__dict__,
-                    initial_parameters=hunt.definition_json.get(
-                        "initial_parameters", {}
-                    ),
-                )
-                if hunt
-                else None
-            ),
-        )
-
-        return response
-
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    return schemas.HuntExecutionResponse(
+        **execution.__dict__,
+        hunt=(
+            schemas.HuntResponse(
+                **hunt.__dict__,
+                initial_parameters=hunt.definition_json.get("initial_parameters", {}),
+            )
+            if hunt
+            else None
+        ),
+    )
 
 
 @router.get("/executions/{execution_id}", response_model=schemas.HuntExecutionResponse)
@@ -163,9 +145,6 @@ async def get_execution_status(
     """
     service = HuntService(db)
     execution = await service.get_execution(execution_id, current_user=current_user)
-
-    if not execution:
-        raise HTTPException(status_code=404, detail="Hunt execution not found")
 
     hunt = db.get(models.Hunt, execution.hunt_id)
     case = db.get(models.Case, execution.case_id)
@@ -246,13 +225,8 @@ async def cancel_execution(
     """Cancel a running hunt execution"""
     service = HuntService(db)
 
-    try:
-        execution = await service.cancel_execution(
-            execution_id, current_user=current_user
-        )
-        return {"message": "Hunt execution cancelled", "execution_id": execution.id}
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    execution = await service.cancel_execution(execution_id, current_user=current_user)
+    return {"message": "Hunt execution cancelled", "execution_id": execution.id}
 
 
 @router.websocket("/executions/{execution_id}/stream")

@@ -5,18 +5,14 @@ This module provides client organization management for the Owlculus platform,
 enabling structured relationship management for OSINT service delivery.
 """
 
+from fastapi import APIRouter, Depends, status
+from sqlmodel import Session
+
 from app import schemas
 from app.core.dependencies import admin_only, get_current_user, no_analyst
-from app.core.exceptions import (
-    BaseException,
-    DuplicateResourceException,
-    ResourceNotFoundException,
-)
 from app.database import models
 from app.database.connection import get_db
 from app.services.client_service import ClientService
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlmodel import Session
 
 router = APIRouter()
 
@@ -43,16 +39,7 @@ async def create_client(
     current_user: models.User = Depends(get_current_user),
 ):
     client_service = ClientService(db)
-    try:
-        return await client_service.create_client(
-            client=client, current_user=current_user
-        )
-    except DuplicateResourceException as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except BaseException as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
+    return await client_service.create_client(client=client, current_user=current_user)
 
 
 @router.get("/{client_id}", response_model=schemas.Client)
@@ -63,16 +50,9 @@ async def read_client(
     current_user: models.User = Depends(get_current_user),
 ):
     client_service = ClientService(db)
-    try:
-        return await client_service.get_client(
-            client_id=client_id, current_user=current_user
-        )
-    except ResourceNotFoundException as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except BaseException as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
+    return await client_service.get_client(
+        client_id=client_id, current_user=current_user
+    )
 
 
 @router.put("/{client_id}", response_model=schemas.Client)
@@ -84,18 +64,9 @@ async def update_client(
     current_user: models.User = Depends(get_current_user),
 ):
     client_service = ClientService(db)
-    try:
-        return await client_service.update_client(
-            client_id=client_id, client_update=client, current_user=current_user
-        )
-    except ResourceNotFoundException as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except DuplicateResourceException as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except BaseException as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
+    return await client_service.update_client(
+        client_id=client_id, client_update=client, current_user=current_user
+    )
 
 
 @router.delete("/{client_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -106,12 +77,5 @@ async def delete_client(
     current_user: models.User = Depends(get_current_user),
 ):
     client_service = ClientService(db)
-    try:
-        await client_service.delete_client(
-            client_id=client_id, current_user=current_user
-        )
-        return {"message": "Client deleted successfully"}
-    except ResourceNotFoundException as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except BaseException as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    await client_service.delete_client(client_id=client_id, current_user=current_user)
+    return {"message": "Client deleted successfully"}

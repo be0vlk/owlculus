@@ -9,7 +9,7 @@ FastAPI application. It handles JWT token validation and user permissions.
 from functools import wraps
 from ipaddress import ip_address, ip_network
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlmodel import Session, select
 
@@ -33,18 +33,14 @@ optional_oauth2_scheme = OAuth2PasswordBearer(
 
 async def _resolve_current_user(db: Session, token: str) -> User:
     """Resolve and validate a bearer token into an active user."""
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"Authorization": "Bearer"},
-    )
+    credentials_exception = AuthenticationException("Could not validate credentials")
     username = security.verify_access_token(token, credentials_exception)
     user = await crud.get_user_by_username(db, username=username)
     if user is None:
         raise credentials_exception
 
     if not user.is_active:
-        raise HTTPException(status_code=400, detail="Inactive user")
+        raise AuthenticationException("Inactive user")
 
     return user
 
@@ -160,14 +156,10 @@ def admin_only():
         async def wrapper(*args, **kwargs):
             current_user = kwargs.get("current_user")
             if not current_user:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authorized"
-                )
+                raise AuthenticationException("Not authorized")
 
             if current_user.role != UserRole.ADMIN.value:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized"
-                )
+                raise AuthorizationException("Not authorized")
             return await func(*args, **kwargs)
 
         return wrapper
@@ -175,7 +167,7 @@ def admin_only():
     return decorator
 
 
-def no_analyst(*, domain_exceptions: bool = False):
+def no_analyst(*, domain_exceptions: bool = True):
     """Decorator to check if user is not an analyst"""
 
     def decorator(func):
@@ -185,17 +177,9 @@ def no_analyst(*, domain_exceptions: bool = False):
 
         def _check_analyst_permission(current_user):
             if not current_user:
-                if domain_exceptions:
-                    raise AuthenticationException("Not authorized")
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authorized"
-                )
+                raise AuthenticationException("Not authorized")
             if current_user.role == UserRole.ANALYST.value:
-                if domain_exceptions:
-                    raise AuthorizationException("Not authorized")
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized"
-                )
+                raise AuthorizationException("Not authorized")
 
         def _get_bound_current_user(args, kwargs):
             return signature.bind(*args, **kwargs).arguments.get("current_user")
@@ -231,22 +215,15 @@ def case_must_be_open():
             self, case_id: int, *args, current_user: User = None, **kwargs
         ):
             if not current_user:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Authentication required",
-                )
+                raise AuthenticationException("Authentication required")
 
             case = await crud.get_case(self.db, case_id=case_id)
             if not case:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Case not found",
-                )
+                raise ResourceNotFoundException("Case not found")
 
             if case.status != "Open":
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Only cases with 'Open' status can be modified",
+                raise AuthorizationException(
+                    "Only cases with 'Open' status can be modified"
                 )
 
             return await func(self, case_id, *args, current_user=current_user, **kwargs)

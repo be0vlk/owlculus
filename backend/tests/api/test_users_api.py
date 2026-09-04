@@ -17,6 +17,8 @@ from app.core.dependencies import (
     get_db,
     get_optional_current_user,
 )
+from app.core.exception_handler import handle_domain_exception
+from app.core.exceptions import BaseException as DomainException
 from app.core.security import get_password_hash
 from app.database.models import User
 from app.main import app
@@ -94,6 +96,7 @@ def bootstrap_test_app(session: Session) -> FastAPI:
         return session
 
     test_app = FastAPI()
+    test_app.add_exception_handler(DomainException, handle_domain_exception)
     test_app.state.bootstrap_rate_limiter = rate_limiting.InMemoryClientRateLimiter(
         max_attempts=3, window_seconds=60 * 60
     )
@@ -469,10 +472,10 @@ class TestUsersAPI:
     @pytest.mark.parametrize(
         ("field", "value", "expected_status"),
         [
-            ("username", "ab", status.HTTP_400_BAD_REQUEST),
-            ("username", "invalid-name", status.HTTP_400_BAD_REQUEST),
-            ("username", "a" * 51, status.HTTP_400_BAD_REQUEST),
-            ("password", "short", status.HTTP_400_BAD_REQUEST),
+            ("username", "ab", status.HTTP_422_UNPROCESSABLE_ENTITY),
+            ("username", "invalid-name", status.HTTP_422_UNPROCESSABLE_ENTITY),
+            ("username", "a" * 51, status.HTTP_422_UNPROCESSABLE_ENTITY),
+            ("password", "short", status.HTTP_422_UNPROCESSABLE_ENTITY),
             ("email", "admin@owlculus.local", status.HTTP_422_UNPROCESSABLE_ENTITY),
         ],
     )
@@ -1249,17 +1252,6 @@ class TestUsersAPI:
     def test_users_api_unauthorized(self, client: TestClient):
         """Test users API endpoints without authentication"""
         endpoints = [
-            (
-                "POST",
-                "/api/users/",
-                {
-                    "username": "test",
-                    "email": "test@example.com",
-                    "password": "pass",
-                    "role": "Analyst",
-                    "is_active": True,
-                },
-            ),
             ("GET", "/api/users/"),
             ("PUT", "/api/users/1", {"username": "updated"}),
             (
@@ -1378,6 +1370,10 @@ class TestUsersAPI:
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_admin
         )
+        if method == "post":
+            app.dependency_overrides[get_optional_current_user] = (
+                override_get_current_user_factory(test_admin)
+            )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
         try:

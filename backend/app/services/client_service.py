@@ -7,15 +7,17 @@ email uniqueness enforcement, comprehensive error handling, and audit logging
 for OSINT investigation client management.
 """
 
+from sqlmodel import Session
+
 from app import schemas
 from app.core.exceptions import (
     BaseException,
     DuplicateResourceException,
     ResourceNotFoundException,
+    ValidationException,
 )
 from app.core.logging import get_security_logger
 from app.database import crud, models
-from sqlmodel import Session
 
 
 class ClientService:
@@ -26,7 +28,7 @@ class ClientService:
         self, skip: int = 0, limit: int = 100, *, current_user: models.User
     ) -> list[models.Client]:
         if skip < 0 or limit < 0:
-            raise ValueError("Skip and limit must be non-negative")
+            raise ValidationException("Skip and limit must be non-negative")
         return await crud.get_clients(self.db, skip=skip, limit=limit)
 
     async def create_client(

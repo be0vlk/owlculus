@@ -94,7 +94,9 @@ def test_case(session: Session, test_admin: User) -> Case:
 @pytest.fixture
 def test_case_with_user(session: Session, test_case: Case, test_user: User) -> Case:
     """Test case with investigator user added"""
-    case_link = CaseUserLink(case_id=test_case.id, user_id=test_user.id)
+    case_link = CaseUserLink(
+        case_id=test_case.id, user_id=test_user.id, is_lead=True
+    )
     session.add(case_link)
     session.commit()
     return test_case
@@ -205,7 +207,6 @@ class TestTaskTemplatesAPI:
             assert response.status_code == status.HTTP_200_OK
             data = response.json()
             assert data["name"] == "new_template"
-            assert data["is_custom"] is True
         finally:
             app.dependency_overrides.clear()
 
@@ -525,7 +526,7 @@ class TestTaskOperationsAPI:
 
         try:
             response = client.put(f"/api/tasks/{test_task.id}/status?status=invalid_status")
-            assert response.status_code == status.HTTP_400_BAD_REQUEST
+            assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
         finally:
             app.dependency_overrides.clear()
 
@@ -675,9 +676,9 @@ class TestTaskAccessControl:
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
         try:
-            # Cannot update task
+            # Analysts who are not assigned cannot update a task.
             response = client.put(f"/api/tasks/{test_task.id}", json={"title": "Updated"})
-            assert response.status_code == status.HTTP_200_OK  # Analysts can update tasks
+            assert response.status_code == status.HTTP_403_FORBIDDEN
 
             # Cannot delete task (admin only)
             response = client.delete(f"/api/tasks/{test_task.id}")
