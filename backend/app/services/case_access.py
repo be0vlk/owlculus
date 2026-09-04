@@ -29,6 +29,18 @@ class CaseAccess:
         case, _ = self._case_membership(user, case_id, operation="read")
         return case
 
+    def readable_case_ids(self, user: User) -> list[int]:
+        """Return the complete case scope the user may read."""
+        if self.db is None:
+            raise RuntimeError("A database session is required for case authorization")
+        if self.is_admin(user):
+            statement = select(Case.id)
+        else:
+            statement = select(CaseUserLink.case_id).where(
+                CaseUserLink.user_id == user.id
+            )
+        return [case_id for case_id in self.db.exec(statement).all() if case_id]
+
     def writable(self, user: User, case_id: int) -> Case:
         case, _ = self._case_membership(user, case_id, operation="write")
         if user.role == UserRole.ANALYST.value:

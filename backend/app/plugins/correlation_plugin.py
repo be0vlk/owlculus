@@ -88,19 +88,32 @@ class CorrelationScan(BasePlugin):
 def _result_payloads(
     matches: list[CorrelationMatch], case_id: int
 ) -> list[dict[str, Any]]:
-    groups: dict[tuple[int | None, CorrelationKind, str], dict[str, Any]] = {}
+    groups: dict[tuple[CorrelationKind, str, str | None], dict[str, Any]] = {}
+    related_entities: dict[tuple[CorrelationKind, str, str | None], set[int | None]] = (
+        {}
+    )
     for match in matches:
-        key = (match.entity.id, match.kind, match.value.casefold())
+        entity_type = (
+            match.source_entity.entity_type
+            if match.kind is CorrelationKind.NAME
+            else None
+        )
+        key = (match.kind, match.value.casefold(), entity_type)
         payload = groups.setdefault(key, _group_payload(match, case_id))
-        payload["matches"].append(_other_entity_payload(match))
+        seen = related_entities.setdefault(key, set())
+        if match.other_entity.id not in seen:
+            payload["matches"].append(_other_entity_payload(match))
+            seen.add(match.other_entity.id)
     return list(groups.values())
 
 
 def _group_payload(match: CorrelationMatch, case_id: int) -> dict[str, Any]:
     payload: dict[str, Any] = {
-        "entity_id": match.entity.id,
-        "entity_name": entity_display_name(match.entity.entity_type, match.entity.data),
-        "entity_type": match.entity.entity_type,
+        "entity_id": match.source_entity.id,
+        "entity_name": entity_display_name(
+            match.source_entity.entity_type, match.source_entity.data
+        ),
+        "entity_type": match.source_entity.entity_type,
         "match_type": match.kind.value,
         "case_id": case_id,
         "matches": [],

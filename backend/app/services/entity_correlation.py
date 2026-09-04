@@ -1,12 +1,13 @@
 """Cross-case correlation query for persisted entities."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Any
 from urllib.parse import urlsplit
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
-from app.core.exceptions import AuthorizationException
 from app.database.models import Case, Entity, User
 from app.schemas.entity_schema import entity_display_name
 from app.services.case_access import CaseAccess
@@ -28,7 +29,7 @@ class CorrelationMatch:
 
     kind: CorrelationKind
     value: str
-    entity: Entity
+    source_entity: Entity
     other_entity: Entity
     other_case: Case
     found_in: str | None = None
@@ -49,27 +50,22 @@ class EntityCorrelation:
         sources = self.db.exec(
             select(Entity).where(Entity.case_id == source_case.id)
         ).all()
+        readable_case_ids = self.case_access.readable_case_ids(user)
         candidates = self.db.exec(
-            select(Entity, Case).join(Case).where(Entity.case_id != source_case.id)
+            select(Entity, Case)
+            .join(Case)
+            .where(
+                Entity.case_id != source_case.id,
+                col(Entity.case_id).in_(readable_case_ids),
+            )
         ).all()
 
-        readable_cases: dict[int, bool] = {}
         matches: list[CorrelationMatch] = []
         for source in sources:
             source_name = entity_display_name(source.entity_type, source.data)
+            if not source_name:
+                continue
             for candidate, other_case in candidates:
-                other_case_id = other_case.id
-                if other_case_id is None:
-                    continue
-                if other_case_id not in readable_cases:
-                    try:
-                        self.case_access.readable(user, other_case_id)
-                    except AuthorizationException:
-                        readable_cases[other_case_id] = False
-                    else:
-                        readable_cases[other_case_id] = True
-                if not readable_cases[other_case_id]:
-                    continue
                 other_name = entity_display_name(candidate.entity_type, candidate.data)
                 if (
                     source.entity_type != "vehicle"
@@ -103,20 +99,24 @@ class EntityCorrelation:
                             other_case,
                         )
                     )
-                candidate_domains = _domains(candidate)
+                candidate_domains = {
+                    reference.value: reference
+                    for reference in _domain_references(candidate)
+                }
                 source_domains = (
-                    set() if source.entity_type == "domain" else _domains(source)
+                    [] if source.entity_type == "domain" else _domain_references(source)
                 )
-                for domain in sorted(source_domains):
-                    if domain in candidate_domains:
+                for reference in source_domains:
+                    candidate_reference = candidate_domains.get(reference.value)
+                    if candidate_reference:
                         matches.append(
                             CorrelationMatch(
                                 CorrelationKind.DOMAIN,
-                                domain,
+                                reference.value,
                                 source,
                                 candidate,
                                 other_case,
-                                _domain_location(candidate, domain),
+                                candidate_reference.location,
                             )
                         )
                 if source.entity_type == candidate.entity_type == "vehicle":
@@ -151,34 +151,48 @@ def _domain(value: object) -> str | None:
     return None
 
 
-def _domains(entity: Entity) -> set[str]:
-    if entity.entity_type == "domain":
-        value = str(entity.data.get("domain") or "").casefold()
-        return {value} if value else set()
-    if entity.entity_type == "person":
-        values = [entity.data.get("email"), *(entity.data.get("usernames") or [])]
-    elif entity.entity_type == "company":
-        values = [entity.data.get("website")]
-    else:
-        values = []
-    return {domain for value in values if (domain := _domain(value))}
+@dataclass(frozen=True)
+class _DomainReference:
+    value: str
+    location: str
 
 
-def _domain_location(entity: Entity, domain: str) -> str:
-    if entity.entity_type == "domain":
-        return "domain field"
-    if entity.entity_type == "company":
-        return f"website: {entity.data.get('website', '')}"
-    locations = []
-    email = entity.data.get("email")
-    if _domain(email) == domain:
-        locations.append(f"email: {email}")
-    locations.extend(
-        f"username: {username}"
-        for username in entity.data.get("usernames") or []
-        if _domain(username) == domain
-    )
-    return ", ".join(locations)
+def _domain_entity_references(data: dict[str, Any]) -> list[_DomainReference]:
+    value = str(data.get("domain") or "").casefold()
+    return [_DomainReference(value, "domain field")] if value else []
+
+
+def _person_domain_references(data: dict[str, Any]) -> list[_DomainReference]:
+    references: dict[str, list[str]] = {}
+    values = [("email", data.get("email"))]
+    values.extend(("username", username) for username in data.get("usernames") or [])
+    for field, raw_value in values:
+        if domain := _domain(raw_value):
+            references.setdefault(domain, []).append(f"{field}: {raw_value}")
+    return [
+        _DomainReference(domain, ", ".join(locations))
+        for domain, locations in references.items()
+    ]
+
+
+def _company_domain_references(data: dict[str, Any]) -> list[_DomainReference]:
+    website = data.get("website")
+    domain = _domain(website)
+    return [_DomainReference(domain, f"website: {website}")] if domain else []
+
+
+_DOMAIN_REFERENCES_BY_ENTITY_TYPE: dict[
+    str, Callable[[dict[str, Any]], list[_DomainReference]]
+] = {
+    "domain": _domain_entity_references,
+    "person": _person_domain_references,
+    "company": _company_domain_references,
+}
+
+
+def _domain_references(entity: Entity) -> list[_DomainReference]:
+    extractor = _DOMAIN_REFERENCES_BY_ENTITY_TYPE.get(entity.entity_type)
+    return extractor(entity.data) if extractor else []
 
 
 def _vehicle_identifiers(entity: Entity) -> dict[CorrelationKind, str]:

@@ -2,6 +2,7 @@
 Pydantic models for entities.
 """
 
+from collections.abc import Callable
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -151,30 +152,35 @@ ENTITY_TYPE_SCHEMAS = {
 }
 
 
+def _joined_display_name(*fields: str) -> Callable[[dict[str, Any]], str]:
+    return lambda data: " ".join(
+        str(data[field]) for field in fields if data.get(field) not in (None, "")
+    )
+
+
+def _field_display_name(field: str) -> Callable[[dict[str, Any]], str]:
+    return lambda data: str(data.get(field) or "")
+
+
+def _network_assets_display_name(data: dict[str, Any]) -> str:
+    assets = data.get("domains") or data.get("subdomains") or []
+    return str(assets[0]) if assets else ""
+
+
+_DISPLAY_NAME_BY_ENTITY_TYPE: dict[str, Callable[[dict[str, Any]], str]] = {
+    "person": _joined_display_name("first_name", "last_name"),
+    "company": _field_display_name("name"),
+    "domain": _field_display_name("domain"),
+    "ip_address": _field_display_name("ip_address"),
+    "vehicle": _joined_display_name("year", "make", "model"),
+    "network_assets": _network_assets_display_name,
+}
+
+
 def entity_display_name(entity_type: str, data: dict[str, Any]) -> str:
     """Return the display label owned by an entity's schema vocabulary."""
-    if entity_type == "person":
-        return " ".join(
-            str(part)
-            for part in (data.get("first_name"), data.get("last_name"))
-            if part not in (None, "")
-        )
-    if entity_type == "company":
-        return str(data.get("name") or "")
-    if entity_type == "domain":
-        return str(data.get("domain") or "")
-    if entity_type == "ip_address":
-        return str(data.get("ip_address") or "")
-    if entity_type == "vehicle":
-        return " ".join(
-            str(part)
-            for part in (data.get("year"), data.get("make"), data.get("model"))
-            if part not in (None, "")
-        )
-    if entity_type == "network_assets":
-        assets = data.get("domains") or data.get("subdomains") or []
-        return str(assets[0]) if assets else ""
-    return ""
+    formatter = _DISPLAY_NAME_BY_ENTITY_TYPE.get(entity_type)
+    return formatter(data) if formatter else ""
 
 
 class Entity(BaseModel):
