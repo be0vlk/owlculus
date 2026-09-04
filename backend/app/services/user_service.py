@@ -1,41 +1,35 @@
-"""
-User management service for Owlculus OSINT platform access control and authentication.
-
-This module handles all user-related business logic including user creation,
-profile management, password operations, and role-based access control.
-Provides comprehensive user lifecycle management with security validation,
-privilege escalation protection, and audit logging for OSINT investigation platforms.
-"""
+"""Session-backed user lifecycle and privilege policy."""
 
 import re
-from typing import TypeVar
 
 from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
-from sqlmodel import Session
+from sqlalchemy.exc import IntegrityError
+from sqlmodel import Session, select
 
 from app import schemas
-from app.core import setup
+from app.core import security, setup
 from app.core.exceptions import (
     AuthenticationException,
     AuthorizationException,
-    BaseException,
     DuplicateResourceException,
     ResourceNotFoundException,
     ValidationException,
 )
+from app.core.exceptions import (
+    BaseException as DomainException,
+)
 from app.core.logging import get_security_logger
 from app.core.roles import UserRole
-from app.database import crud, models
+from app.core.utils import get_utc_now
+from app.database.db_utils import transaction
+from app.database.models import User
 from app.services.case_access import CaseAccess
 
 _BOOTSTRAP_USERNAME_PATTERN = re.compile(r"[A-Za-z0-9_]{3,50}\Z")
-_UserPayload = TypeVar("_UserPayload", bound=BaseModel)
 
 
-def _validate_user_payload(
-    schema: type[_UserPayload], user_data: object
-) -> _UserPayload:
+def _validate_user_payload[T: BaseModel](schema: type[T], user_data: object) -> T:
     """Validate an untrusted user payload without leaking validation details."""
     try:
         return schema.model_validate(user_data)
@@ -44,9 +38,38 @@ def _validate_user_payload(
 
 
 class UserService:
+    """Own user persistence and the rules governing privileged accounts."""
+
     def __init__(self, db: Session):
         self.db = db
         self.case_access = CaseAccess(db)
+
+    def _find_by_username(self, username: str) -> User | None:
+        return self.db.exec(select(User).where(User.username == username)).first()
+
+    def _find_by_email(self, email: str) -> User | None:
+        return self.db.exec(select(User).where(User.email == email)).first()
+
+    def _duplicate_field(
+        self, *, username: str, email: str, exclude_user_id: int | None = None
+    ) -> str | None:
+        username_owner = self._find_by_username(username)
+        if username_owner is not None and username_owner.id != exclude_user_id:
+            return "username"
+        email_owner = self._find_by_email(email)
+        if email_owner is not None and email_owner.id != exclude_user_id:
+            return "email"
+        return None
+
+    @staticmethod
+    def _raise_duplicate(field: str, *, updating: bool = False) -> None:
+        messages = {
+            "username": (
+                "Username already taken" if updating else "Username already registered"
+            ),
+            "email": "Email already registered",
+        }
+        raise DuplicateResourceException(messages[field], field=field)
 
     @staticmethod
     def _validate_bootstrap_credentials(user: schemas.BootstrapUserCreate) -> None:
@@ -57,45 +80,42 @@ class UserService:
         if len(user.password) < 10:
             raise ValidationException("Password must be at least 10 characters")
 
+    def _new_user(self, user: schemas.UserCreate) -> User:
+        if user.is_superadmin and user.role != UserRole.ADMIN.value:
+            raise ValidationException("Only users with Admin role can be superadmin")
+        values = user.model_dump()
+        values["password_hash"] = security.get_password_hash(values.pop("password"))
+        return User(**values)
+
     async def create_bootstrap_user(self, user_data: object) -> schemas.User:
-        """Create the only first user after validating the one-time setup token."""
         raw_username = (
             user_data.get("username") if isinstance(user_data, dict) else None
         )
-        bootstrap_logger = get_security_logger(
+        logger = get_security_logger(
             action="create_user",
             target_username=raw_username if isinstance(raw_username, str) else None,
             event_type="user_creation_attempt",
             is_bootstrap=True,
         )
-
         if not setup.is_setup_required(self.db):
             raise AuthenticationException("Authentication required")
-
         submitted_token = (
             user_data.get("setup_token") if isinstance(user_data, dict) else None
         )
         if not setup.validate_setup_token(
             submitted_token if isinstance(submitted_token, str) else None
         ):
-            bootstrap_logger.bind(
-                event_type="user_creation_failed",
-                failure_reason="invalid_setup_token",
+            logger.bind(
+                event_type="user_creation_failed", failure_reason="invalid_setup_token"
             ).warning("Bootstrap user creation failed: invalid setup token")
             raise AuthorizationException("Invalid setup token")
 
         user = _validate_user_payload(schemas.BootstrapUserCreate, user_data)
         self._validate_bootstrap_credentials(user)
-
         try:
             with setup.serialize_first_user_creation(self.db):
                 if not setup.is_setup_required(self.db):
-                    bootstrap_logger.bind(
-                        event_type="user_creation_failed",
-                        failure_reason="setup_already_completed",
-                    ).warning("Bootstrap user creation failed: setup already completed")
                     raise AuthorizationException("Setup already completed")
-
                 forced_user = schemas.UserCreate(
                     username=user.username,
                     email=user.email,
@@ -104,10 +124,12 @@ class UserService:
                     is_active=True,
                     is_superadmin=True,
                 )
-                new_user = await crud.create_user(self.db, user=forced_user)
-
+                new_user = self._new_user(forced_user)
+                with transaction(self.db):
+                    self.db.add(new_user)
+                    self.db.flush()
             setup.clear_setup_token()
-            bootstrap_logger.bind(
+            logger.bind(
                 user_id=new_user.id,
                 role=new_user.role,
                 event_type="user_creation_success",
@@ -115,421 +137,141 @@ class UserService:
             return schemas.User.model_validate(new_user)
         except (AuthorizationException, ValidationException):
             raise
-        except Exception as e:
-            bootstrap_logger.bind(
-                event_type="user_creation_error",
-                error_type="system_error",
-            ).error(f"Bootstrap user creation error: {str(e)}")
-            raise BaseException("Internal server error")
+        except Exception as error:
+            logger.bind(
+                event_type="user_creation_error", error_type="system_error"
+            ).error(f"Bootstrap user creation error: {error}")
+            raise DomainException("Internal server error") from error
 
     async def create_user_from_payload(
-        self, user_data: object, current_user: models.User
+        self, user_data: object, current_user: User
     ) -> schemas.User:
-        """Validate an authenticated creation payload before creating its user."""
-        self.case_access.require_admin(current_user)
         user = _validate_user_payload(schemas.UserCreate, user_data)
-        return await self.create_user(user=user, current_user=current_user)
+        return await self.create_user(user, current_user)
 
     async def create_user(
-        self, user: schemas.UserCreate, current_user: models.User
+        self, user: schemas.UserCreate, current_user: User
     ) -> schemas.User:
-        user_logger = get_security_logger(
-            admin_user_id=current_user.id,
-            action="create_user",
-            target_username=user.username,
-            event_type="user_creation_attempt",
+        self.case_access.require_admin(current_user)
+        if user.is_superadmin and not current_user.is_superadmin:
+            raise AuthorizationException("Only superadmin can create superadmin users")
+        duplicate_field = self._duplicate_field(
+            username=user.username, email=str(user.email)
         )
+        if duplicate_field:
+            self._raise_duplicate(duplicate_field)
 
+        new_user = self._new_user(user)
         try:
-            if await crud.get_user_by_username(self.db, username=user.username):
-                user_logger.bind(
-                    event_type="user_creation_failed", failure_reason="username_exists"
-                ).warning("User creation failed: username already registered")
-                raise DuplicateResourceException("Username already registered")
-
-            if await crud.get_user_by_email(self.db, email=user.email):
-                user_logger.bind(
-                    event_type="user_creation_failed", failure_reason="email_exists"
-                ).warning("User creation failed: email already registered")
-                raise DuplicateResourceException("Email already registered")
-
-            if user.is_superadmin and not current_user.is_superadmin:
-                user_logger.bind(
-                    event_type="user_creation_failed",
-                    failure_reason="cannot_create_superadmin",
-                    target_username=user.username,
-                ).warning(
-                    "User creation failed: only superadmin can create superadmin users"
-                )
-                raise AuthorizationException(
-                    "Only superadmin can create superadmin users"
-                )
-
-            try:
-                new_user = await crud.create_user(self.db, user=user)
-            except ValueError as e:
-                error_msg = str(e).lower()
-                if "username already exists" in error_msg:
-                    user_logger.bind(
-                        event_type="user_creation_failed",
-                        failure_reason="username_exists_race",
-                    ).warning("User creation failed: username race condition")
-                    raise DuplicateResourceException("Username already registered")
-                elif "email already exists" in error_msg:
-                    user_logger.bind(
-                        event_type="user_creation_failed",
-                        failure_reason="email_exists_race",
-                    ).warning("User creation failed: email race condition")
-                    raise DuplicateResourceException("Email already registered")
-                else:
-                    user_logger.bind(
-                        event_type="user_creation_failed",
-                        failure_reason="constraint_violation",
-                    ).warning(f"User creation failed: {str(e)}")
-                    raise ValidationException("Invalid user data")
-
-            user_logger.bind(
-                user_id=new_user.id,
-                role=new_user.role,
-                event_type="user_creation_success",
-            ).info("User created successfully")
-
-            return schemas.User.model_validate(new_user)
-
-        except (
-            DuplicateResourceException,
-            AuthorizationException,
-            ValidationException,
-        ):
-            raise
-        except Exception as e:
-            user_logger.bind(
-                event_type="user_creation_error", error_type="system_error"
-            ).error(f"User creation error: {str(e)}")
-            raise BaseException("Internal server error")
+            with transaction(self.db):
+                self.db.add(new_user)
+                self.db.flush()
+        except IntegrityError as error:
+            duplicate_field = self._duplicate_field(
+                username=user.username, email=str(user.email)
+            )
+            if duplicate_field:
+                self._raise_duplicate(duplicate_field)
+            raise ValidationException("Invalid user data") from error
+        return schemas.User.model_validate(new_user)
 
     async def get_users(
-        self, current_user: models.User, skip: int = 0, limit: int = 100
+        self, current_user: User, skip: int = 0, limit: int = 100
     ) -> list[schemas.User]:
         self.case_access.require_admin(current_user)
-        MAX_LIMIT = 200
-        if limit > MAX_LIMIT:
-            limit = MAX_LIMIT
-
-        db_users = await crud.get_users(self.db, skip=skip, limit=limit)
-        return [schemas.User.model_validate(user) for user in db_users]
+        users = self.db.exec(select(User).offset(skip).limit(min(limit, 200))).all()
+        return [schemas.User.model_validate(user) for user in users]
 
     async def update_user(
-        self, user_id: int, user_update: schemas.UserUpdate, current_user: models.User
+        self, user_id: int, user_update: schemas.UserUpdate, current_user: User
     ) -> schemas.User:
-        is_admin = self.case_access.is_admin(current_user) or current_user.is_superadmin
-        user_logger = get_security_logger(
-            user_id=current_user.id,
-            target_user_id=user_id,
-            action="update_user",
-            event_type="user_update_attempt",
+        is_admin = self.case_access.is_admin(current_user)
+        if not is_admin and current_user.id != user_id:
+            raise AuthorizationException("Not authorized")
+        user = self.db.get(User, user_id)
+        if user is None:
+            raise ResourceNotFoundException("User not found")
+        if user.is_superadmin and not current_user.is_superadmin:
+            raise AuthorizationException("Only superadmin can edit superadmin users")
+        updates = user_update.model_dump(exclude_unset=True)
+        if current_user.id == user_id and not is_admin:
+            updates.pop("role", None)
+            updates.pop("is_superadmin", None)
+        if updates.get("is_superadmin") and not current_user.is_superadmin:
+            raise AuthorizationException(
+                "Only superadmin can promote users to superadmin"
+            )
+        final_role = updates.get("role", user.role)
+        final_superadmin = updates.get("is_superadmin", user.is_superadmin)
+        if final_superadmin and final_role != UserRole.ADMIN.value:
+            raise ValidationException("Only users with Admin role can be superadmin")
+        username = updates.get("username", user.username)
+        email = str(updates.get("email", user.email))
+        duplicate_field = self._duplicate_field(
+            username=username, email=email, exclude_user_id=user_id
         )
-
+        if duplicate_field:
+            self._raise_duplicate(duplicate_field, updating=True)
+        for field, value in updates.items():
+            setattr(user, field, value)
         try:
-            if not is_admin and current_user.id != user_id:
-                user_logger.bind(
-                    event_type="user_update_failed", failure_reason="not_authorized"
-                ).warning("User update failed: not authorized")
-                raise AuthorizationException("Not authorized")
-
-            db_user = await crud.get_user(self.db, user_id=user_id)
-            if not db_user:
-                user_logger.bind(
-                    event_type="user_update_failed", failure_reason="user_not_found"
-                ).warning("User update failed: user not found")
-                raise ResourceNotFoundException("User not found")
-
-            if db_user.is_superadmin and not current_user.is_superadmin:
-                user_logger.bind(
-                    event_type="user_update_failed",
-                    failure_reason="cannot_edit_superadmin",
-                    target_username=db_user.username,
-                ).warning(
-                    "User update failed: only superadmin can edit superadmin users"
-                )
-                raise AuthorizationException(
-                    "Only superadmin can edit superadmin users"
-                )
-
-            if user_update.is_superadmin and not current_user.is_superadmin:
-                user_logger.bind(
-                    event_type="user_update_failed",
-                    failure_reason="cannot_promote_to_superadmin",
-                    target_username=db_user.username,
-                ).warning(
-                    "User update failed: only superadmin can promote users to superadmin"
-                )
-                raise AuthorizationException(
-                    "Only superadmin can promote users to superadmin"
-                )
-
-            if user_update.username and user_update.username != db_user.username:
-                existing_user = await crud.get_user_by_username(
-                    self.db, username=user_update.username
-                )
-                if existing_user:
-                    user_logger.bind(
-                        event_type="user_update_failed",
-                        failure_reason="username_taken",
-                        requested_username=user_update.username,
-                    ).warning("User update failed: username already taken")
-                    raise DuplicateResourceException("Username already taken")
-
-            if user_update.email and user_update.email != db_user.email:
-                existing_user = await crud.get_user_by_email(
-                    self.db, email=user_update.email
-                )
-                if existing_user:
-                    user_logger.bind(
-                        event_type="user_update_failed", failure_reason="email_taken"
-                    ).warning("User update failed: email already registered")
-                    raise DuplicateResourceException("Email already registered")
-
-            update_data = user_update.model_dump(exclude_unset=True)
-
-            is_self_update = current_user.id == user_id
-            if is_self_update and not is_admin:
-                if "role" in update_data:
-                    user_logger.bind(
-                        event_type="privilege_escalation_attempt",
-                        attempted_role=update_data["role"],
-                    ).warning("User attempted to change their own role")
-                    del update_data["role"]
-
-                if "is_superadmin" in update_data:
-                    user_logger.bind(
-                        event_type="privilege_escalation_attempt",
-                        attempted_superadmin=update_data["is_superadmin"],
-                    ).warning("User attempted to change their own superadmin status")
-                    del update_data["is_superadmin"]
-
-            sanitized_update = schemas.UserUpdate(**update_data)
-
-            try:
-                updated_user = await crud.update_user(
-                    self.db, user_id=user_id, user=sanitized_update
-                )
-            except ValueError as e:
-                error_msg = str(e).lower()
-                if "username already exists" in error_msg:
-                    user_logger.bind(
-                        event_type="user_update_failed",
-                        failure_reason="username_exists_race",
-                    ).warning("User update failed: username race condition")
-                    raise DuplicateResourceException("Username already taken")
-                elif "email already exists" in error_msg:
-                    user_logger.bind(
-                        event_type="user_update_failed",
-                        failure_reason="email_exists_race",
-                    ).warning("User update failed: email race condition")
-                    raise DuplicateResourceException("Email already registered")
-                else:
-                    user_logger.bind(
-                        event_type="user_update_failed",
-                        failure_reason="constraint_violation",
-                    ).warning(f"User update failed: {str(e)}")
-                    raise ValidationException("Invalid update data")
-
-            user_logger.bind(
-                target_user_id=updated_user.id, event_type="user_update_success"
-            ).info("User updated successfully")
-
-            return schemas.User.model_validate(updated_user)
-
-        except (
-            DuplicateResourceException,
-            AuthorizationException,
-            ResourceNotFoundException,
-            ValidationException,
-        ):
-            raise
-        except Exception as e:
-            user_logger.bind(
-                event_type="user_update_error", error_type="system_error"
-            ).error(f"User update error: {str(e)}")
-            raise BaseException("Internal server error")
+            with transaction(self.db):
+                self.db.add(user)
+                self.db.flush()
+        except IntegrityError as error:
+            duplicate_field = self._duplicate_field(
+                username=username, email=email, exclude_user_id=user_id
+            )
+            if duplicate_field:
+                self._raise_duplicate(duplicate_field, updating=True)
+            raise ValidationException("Invalid update data") from error
+        return schemas.User.model_validate(user)
 
     async def change_password(
-        self,
-        user_id: int,
-        current_password: str,
-        new_password: str,
-        current_user: models.User,
+        self, user_id: int, current_password: str, new_password: str, current_user: User
     ) -> schemas.User:
-        user_logger = get_security_logger(
-            user_id=current_user.id,
-            target_user_id=user_id,
-            action="change_password",
-            event_type="password_change_attempt",
-        )
-
-        try:
-            db_user = await crud.get_user(self.db, user_id=user_id)
-            if not db_user:
-                user_logger.bind(
-                    event_type="password_change_failed", failure_reason="user_not_found"
-                ).warning("Password change failed: user not found")
-                raise ResourceNotFoundException("User not found")
-
-            if current_user.id != user_id:
-                user_logger.bind(
-                    event_type="password_change_failed", failure_reason="not_authorized"
-                ).warning("Password change failed: not authorized")
-                raise AuthorizationException("Not authorized")
-
-            updated_user = await crud.change_user_password(
-                self.db,
-                user=db_user,
-                current_password=current_password,
-                new_password=new_password,
-            )
-
-            user_logger.bind(event_type="password_change_success").info(
-                "Password changed successfully"
-            )
-
-            return schemas.User.model_validate(updated_user)
-
-        except ValueError as e:
-            user_logger.bind(
-                event_type="password_change_failed",
-                failure_reason="invalid_current_password",
-            ).warning(f"Password change failed: {str(e)}")
+        user = self.db.get(User, user_id)
+        if user is None:
+            raise ResourceNotFoundException("User not found")
+        if current_user.id != user_id:
+            raise AuthorizationException("Not authorized")
+        if not security.verify_password(current_password, user.password_hash):
             raise ValidationException("Invalid current password")
-        except (
-            DuplicateResourceException,
-            AuthorizationException,
-            ResourceNotFoundException,
-            ValidationException,
-        ):
-            raise
-        except Exception as e:
-            user_logger.bind(
-                event_type="password_change_error", error_type="system_error"
-            ).error(f"Password change error: {str(e)}")
-            raise BaseException("Internal server error")
+        with transaction(self.db):
+            user.password_hash = security.get_password_hash(new_password)
+            user.updated_at = get_utc_now()
+            self.db.add(user)
+        return schemas.User.model_validate(user)
 
     async def admin_reset_password(
-        self, user_id: int, new_password: str, current_user: models.User
+        self, user_id: int, new_password: str, current_user: User
     ) -> schemas.User:
         self.case_access.require_admin(current_user)
-        user_logger = get_security_logger(
-            admin_user_id=current_user.id,
-            target_user_id=user_id,
-            action="admin_reset_password",
-            event_type="admin_password_reset_attempt",
-        )
-
-        try:
-            db_user = await crud.get_user(self.db, user_id=user_id)
-            if not db_user:
-                user_logger.bind(
-                    event_type="admin_password_reset_failed",
-                    failure_reason="user_not_found",
-                ).warning("Admin password reset failed: user not found")
-                raise ResourceNotFoundException("User not found")
-
-            if db_user.is_superadmin and not current_user.is_superadmin:
-                user_logger.bind(
-                    event_type="admin_password_reset_failed",
-                    failure_reason="cannot_reset_superadmin_password",
-                    target_username=db_user.username,
-                ).warning(
-                    "Admin password reset failed: only superadmin can reset superadmin passwords"
-                )
-                raise AuthorizationException(
-                    "Only superadmin can reset superadmin passwords"
-                )
-
-            updated_user = await crud.admin_reset_password(
-                self.db, user=db_user, new_password=new_password
+        user = self.db.get(User, user_id)
+        if user is None:
+            raise ResourceNotFoundException("User not found")
+        if user.is_superadmin and not current_user.is_superadmin:
+            raise AuthorizationException(
+                "Only superadmin can reset superadmin passwords"
             )
+        with transaction(self.db):
+            user.password_hash = security.get_password_hash(new_password)
+            user.updated_at = get_utc_now()
+            self.db.add(user)
+        return schemas.User.model_validate(user)
 
-            user_logger.bind(
-                target_username=db_user.username,
-                event_type="admin_password_reset_success",
-            ).info("Admin password reset completed successfully")
-
-            return schemas.User.model_validate(updated_user)
-
-        except (
-            DuplicateResourceException,
-            AuthorizationException,
-            ResourceNotFoundException,
-            ValidationException,
-        ):
-            raise
-        except Exception as e:
-            user_logger.bind(
-                event_type="admin_password_reset_error", error_type="system_error"
-            ).error(f"Admin password reset error: {str(e)}")
-            raise BaseException("Internal server error")
-
-    async def delete_user(self, user_id: int, current_user: models.User) -> dict:
+    async def delete_user(self, user_id: int, current_user: User) -> dict:
         self.case_access.require_admin(current_user)
-        user_logger = get_security_logger(
-            user_id=current_user.id,
-            target_user_id=user_id,
-            action="delete_user",
-            event_type="user_deletion_attempt",
-        )
-
-        try:
-            db_user = await crud.get_user(self.db, user_id=user_id)
-            if not db_user:
-                user_logger.bind(
-                    event_type="user_deletion_failed", failure_reason="user_not_found"
-                ).warning("User deletion failed: user not found")
-                raise ResourceNotFoundException("User not found")
-
-            if db_user.is_superadmin:
-                user_logger.bind(
-                    event_type="user_deletion_failed",
-                    failure_reason="cannot_delete_superadmin",
-                    target_username=db_user.username,
-                ).warning("User deletion failed: cannot delete superadmin user")
-                raise AuthorizationException("Cannot delete superadmin user")
-
-            if current_user.id == user_id:
-                user_logger.bind(
-                    event_type="user_deletion_failed",
-                    failure_reason="self_deletion_attempted",
-                ).warning("User deletion failed: cannot delete self")
-                raise AuthorizationException("Cannot delete your own account")
-
-            if db_user.role == UserRole.ADMIN.value and not current_user.is_superadmin:
-                user_logger.bind(
-                    event_type="user_deletion_failed",
-                    failure_reason="only_superadmin_can_delete_admin",
-                    target_username=db_user.username,
-                ).warning(
-                    "User deletion failed: only superadmin can delete admin users"
-                )
-                raise AuthorizationException("Only superadmin can delete admin users")
-
-            username_to_delete = db_user.username
-            await crud.delete_user(self.db, user_id=user_id)
-
-            user_logger.bind(
-                target_username=username_to_delete, event_type="user_deletion_success"
-            ).info("User deleted successfully")
-
-            return {"message": f"User '{username_to_delete}' deleted successfully"}
-
-        except (
-            DuplicateResourceException,
-            AuthorizationException,
-            ResourceNotFoundException,
-            ValidationException,
-        ):
-            raise
-        except Exception as e:
-            user_logger.bind(
-                event_type="user_deletion_error", error_type="system_error"
-            ).error(f"User deletion error: {str(e)}")
-            raise BaseException("Internal server error")
+        user = self.db.get(User, user_id)
+        if user is None:
+            raise ResourceNotFoundException("User not found")
+        if user.is_superadmin:
+            raise AuthorizationException("Cannot delete superadmin user")
+        if current_user.id == user_id:
+            raise AuthorizationException("Cannot delete your own account")
+        if user.role == UserRole.ADMIN.value and not current_user.is_superadmin:
+            raise AuthorizationException("Only superadmin can delete admin users")
+        username = user.username
+        with transaction(self.db):
+            self.db.delete(user)
+        return {"message": f"User '{username}' deleted successfully"}

@@ -16,7 +16,7 @@ from app.core.dependencies import get_current_user
 from app.core.setup import is_setup_required
 from app.database import models
 from app.database.connection import get_db
-from app.schemas.auth_schema import SetupStatus, Token
+from app.schemas.auth_schema import SetupStatus, Token, WebSocketToken
 from app.services.auth_service import AuthService
 
 router = APIRouter()
@@ -31,7 +31,7 @@ def get_setup_status(db: Annotated[Session, Depends(get_db)]) -> SetupStatus:
 @router.post("/login", response_model=Token)
 async def login_for_access_token(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
-    db: Session = Depends(get_db),
+    db: Annotated[Session, Depends(get_db)],
 ):
     auth_service = AuthService(db)
     return await auth_service.authenticate_user(
@@ -43,12 +43,12 @@ class WebSocketTokenRequest(BaseModel):
     execution_id: int
 
 
-@router.post("/websocket-token")
+@router.post("/websocket-token", response_model=WebSocketToken)
 async def create_websocket_token(
     request: WebSocketTokenRequest,
-    current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
+    current_user: Annotated[models.User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> WebSocketToken:
     """
     Create a single-use ephemeral token for WebSocket authentication
 
