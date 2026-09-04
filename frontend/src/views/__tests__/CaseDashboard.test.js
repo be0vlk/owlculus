@@ -6,6 +6,8 @@ import CaseDashboard from '../CaseDashboard.vue'
 
 const mocks = vi.hoisted(() => ({
   exportCase: vi.fn(),
+  refreshCases: vi.fn(),
+  recoverUnavailable: vi.fn(),
   downloadBlob: vi.fn(),
   getCase: vi.fn(),
   getClient: vi.fn(),
@@ -22,6 +24,14 @@ vi.mock('vue-router', () => ({
 
 vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({ user: { role: 'Investigator' } }),
+}))
+
+vi.mock('@/stores/activeCase', () => ({
+  useActiveCaseStore: () => ({
+    activeCaseId: 42,
+    refresh: mocks.refreshCases,
+    recoverUnavailable: mocks.recoverUnavailable,
+  }),
 }))
 
 vi.mock('@/stores/huntStore.js', () => ({

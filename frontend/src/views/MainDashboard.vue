@@ -205,14 +205,17 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import BaseDashboard from '../components/BaseDashboard.vue'
 import NewCaseModal from '../components/NewCaseModal.vue'
 import { useDashboard } from '../composables/useDashboard'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { useActiveCaseStore } from '../stores/activeCase'
 import { useAuthStore } from '../stores/auth'
 
+const route = useRoute()
 const router = useRouter()
+const activeCase = useActiveCaseStore()
 const authStore = useAuthStore()
 
 const {
@@ -228,6 +231,17 @@ const {
 } = useDashboard()
 
 const isNewCaseModalOpen = ref(false)
+watch(
+  () => route.query.create,
+  (create) => {
+    if (create !== '1' || !authStore.requiresAdmin()) return
+    isNewCaseModalOpen.value = true
+    const query = { ...route.query }
+    delete query.create
+    router.replace({ query })
+  },
+  { immediate: true },
+)
 const activeQuickFilter = ref('all')
 
 const snackbar = ref({
@@ -261,9 +275,9 @@ const enhancedFilteredCases = computed(() => {
   return filteredCases
 })
 
-const handleCaseCreated = (newCase, { assignmentWarning } = {}) => {
+const handleCaseCreated = async (newCase, { assignmentWarning } = {}) => {
   // Refresh the cases list
-  loadData()
+  await loadData()
   isNewCaseModalOpen.value = false
   if (assignmentWarning) {
     showNotification(
@@ -273,10 +287,12 @@ const handleCaseCreated = (newCase, { assignmentWarning } = {}) => {
   } else {
     showNotification(`Case "${newCase?.case_number || 'New case'}" created successfully`, 'success')
   }
+  activeCase.notification = snackbar.value.text
+  await activeCase.select(newCase.id, { overview: true })
 }
 
 const handleRowClick = (event, { item }) => {
-  router.push(`/case/${item.id}`)
+  activeCase.select(item.id, { overview: true })
 }
 
 // Snackbar helper function
@@ -309,7 +325,9 @@ const getEmptyStateMessage = () => {
   } else if (activeQuickFilter.value === 'unassigned') {
     return 'All cases have been assigned to team members.'
   } else if ((cases.value || []).length === 0) {
-    return 'Get started by creating your first investigation case.'
+    return authStore.requiresAdmin()
+      ? 'Get started by creating your first investigation case.'
+      : 'Contact an administrator to be assigned to a case.'
   } else {
     return 'Try adjusting your filters to see more cases.'
   }

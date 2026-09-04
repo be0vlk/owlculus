@@ -95,7 +95,7 @@
               <!-- Entity Data Table -->
               <EntityDataTable
                 ref="entityTableRef"
-                :case-id="Number(route.params.id)"
+                :case-id="caseId"
                 :entity-service="entityServiceRef"
                 @create="openNewEntityModal"
                 @deleted="handleEntityDeleted"
@@ -123,7 +123,7 @@
               </v-row>
               <EvidenceList
                 ref="evidenceListRef"
-                :case-id="Number(route.params.id)"
+                :case-id="caseId"
                 :error="evidenceError"
                 :evidence-list="evidence"
                 :loading="loadingEvidence"
@@ -227,7 +227,7 @@
 
             <!-- Tasks Tab -->
             <div v-else-if="activeTab === 'tasks'" class="pa-4">
-              <CaseTasks :case-id="Number(route.params.id)" />
+              <CaseTasks :case-id="caseId" />
             </div>
 
             <!-- Notes Tab -->
@@ -253,7 +253,7 @@
                   <p v-if="notesSaveStatus" role="status">{{ notesSaveStatus }}</p>
                   <NoteEditor
                     v-model="caseData.notes"
-                    :case-id="Number(route.params.id)"
+                    :case-id="caseId"
                     :is-editing="isEditingNotes"
                     :save-mode="'manual'"
                     :variant="'plain'"
@@ -318,15 +318,15 @@
 
   <ManageUsersModal
     v-if="caseData"
-    :case-id="Number(route.params.id)"
+    :case-id="caseId"
     :case-data="caseData"
     :show="showManageUsersModal"
     @close="showManageUsersModal = false"
-    @updated="loadCaseData"
+    @updated="handleMembershipUpdate"
   />
 
   <NewEntityModal
-    :case-id="route.params.id"
+    :case-id="String(caseId)"
     :show="showNewEntityModal"
     @close="showNewEntityModal = false"
     @created="handleNewEntity"
@@ -334,7 +334,7 @@
 
   <EntityDetailsModal
     v-if="selectedEntity"
-    :case-id="Number(route.params.id)"
+    :case-id="caseId"
     :entity="selectedEntity"
     :existing-entities="entities"
     :restore-focus-to="resolveEntityDetailsActivator"
@@ -346,7 +346,7 @@
 
   <UploadEvidenceModal
     v-if="showUploadEvidenceModal"
-    :case-id="Number(route.params.id)"
+    :case-id="caseId"
     :show="showUploadEvidenceModal"
     :target-folder="uploadTargetFolder"
     @close="handleCloseUploadModal"
@@ -408,9 +408,10 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { useActiveCaseStore } from '../stores/activeCase'
 import { useNotifications } from '../composables/useNotifications'
 import { useDialogFocusRestore } from '../composables/useDialogFocusRestore'
 import BaseDashboard from '../components/BaseDashboard.vue'
@@ -439,6 +440,8 @@ import { formatHuntExecutionTitle } from '../utils/huntDisplayUtils'
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const activeCase = useActiveCaseStore()
+const caseId = computed(() => activeCase.activeCaseId)
 const huntStore = useHuntStore()
 const { snackbar, showNotification, closeNotification } = useNotifications()
 const loading = ref(false)
@@ -563,8 +566,14 @@ async function handleEditEntity(updatedEntity) {
   }
 }
 
-const handleCaseUpdate = (updatedCase) => {
+const handleCaseUpdate = async (updatedCase) => {
   Object.assign(caseData.value, updatedCase)
+  await activeCase.refresh()
+}
+
+const handleMembershipUpdate = async () => {
+  await activeCase.refresh()
+  if (caseId.value) await loadCaseData()
 }
 
 const handleNotesUpdate = (notes) => {
@@ -595,7 +604,7 @@ const saveNotes = async () => {
     savingNotes.value = true
     notesSaveError.value = ''
     notesSaveStatus.value = ''
-    await caseService.updateCase(route.params.id, { notes: caseData.value.notes })
+    await caseService.updateCase(caseId.value, { notes: caseData.value.notes })
     notesSaveStatus.value = 'Notes saved'
     originalNotes.value = caseData.value.notes
     isEditingNotes.value = false
@@ -643,15 +652,22 @@ const loadClientData = async (clientId) => {
 }
 
 const loadCaseData = async () => {
+  if (!caseId.value) return
+  const requestedCaseId = caseId.value
   try {
     loading.value = true
     error.value = null
-    const data = await caseService.getCase(route.params.id)
+    const data = await caseService.getCase(requestedCaseId)
+    if (caseId.value !== requestedCaseId) return
     caseData.value = data
     if (data.client_id) {
       await loadClientData(data.client_id)
     }
   } catch (err) {
+    if ([403, 404].includes(err.response?.status)) {
+      await activeCase.recoverUnavailable(requestedCaseId)
+      return
+    }
     error.value = `Error loading case: ${err.message}`
     console.error('Error loading case:', err)
   } finally {
@@ -662,13 +678,13 @@ const loadCaseData = async () => {
 // Entities are now handled by EntityDataTable component
 
 const loadEvidence = async () => {
-  if (!route.params.id) return
+  if (!caseId.value) return
 
   loadingEvidence.value = true
   evidenceError.value = ''
 
   try {
-    evidence.value = await evidenceService.getFolderTree(Number(route.params.id))
+    evidence.value = await evidenceService.getFolderTree(caseId.value)
   } catch (error) {
     evidenceError.value = getErrorMessage(error, 'Failed to load evidence')
   } finally {
@@ -690,7 +706,7 @@ const handleExportCase = async () => {
 
   try {
     exportingCase.value = true
-    const artifact = await caseService.exportCase(Number(route.params.id))
+    const artifact = await caseService.exportCase(caseId.value)
     const safeCaseNumber = caseData.value.case_number.replace(/[\\/]/g, '-')
     downloadBlob(artifact, `${safeCaseNumber}-export.zip`)
     showNotification('Case exported successfully', 'success')
@@ -767,11 +783,11 @@ const handleViewFileContent = async (evidenceItem) => {
 
 // Hunt-related methods
 const loadCaseHuntExecutions = async () => {
-  if (!route.params.id) return
+  if (!caseId.value) return
 
   try {
     loadingHuntExecutions.value = true
-    const executions = await huntStore.getCaseExecutions(Number(route.params.id))
+    const executions = await huntStore.getCaseExecutions(caseId.value)
     caseHuntExecutions.value = executions
   } catch (error) {
     console.error('Failed to load hunt executions:', error)
@@ -865,7 +881,7 @@ watch(
     if (newEntityId && caseData.value) {
       try {
         const entityId = Number(newEntityId)
-        const entity = await entityService.getEntity(route.params.id, entityId)
+        const entity = await entityService.getEntity(caseId.value, entityId)
         showEntityDetails(entity)
       } catch (error) {
         console.error('Failed to load entity:', error)
@@ -874,24 +890,26 @@ watch(
   },
 )
 
+let disposed = false
+onUnmounted(() => {
+  disposed = true
+})
+
 onMounted(async () => {
   await loadCaseData()
+  if (disposed || !caseId.value) return
   loadEvidence()
   loadCaseHuntExecutions()
 
   // Check if entity ID is provided in query params
   if (route.query.entity) {
-    // Wait a bit to ensure entity table is loaded
-    setTimeout(async () => {
-      try {
-        // Load the specific entity
-        const entityId = Number(route.query.entity)
-        const entity = await entityService.getEntity(route.params.id, entityId)
-        showEntityDetails(entity)
-      } catch (error) {
-        console.error('Failed to load entity:', error)
-      }
-    }, 1000)
+    try {
+      const entityId = Number(route.query.entity)
+      const entity = await entityService.getEntity(caseId.value, entityId)
+      if (!disposed) showEntityDetails(entity)
+    } catch (error) {
+      console.error('Failed to load entity:', error)
+    }
   }
 })
 </script>

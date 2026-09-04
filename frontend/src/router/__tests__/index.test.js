@@ -7,6 +7,7 @@ import { useAuthStore } from '../../stores/auth'
 import { createAppRouter, routes } from '../index'
 
 vi.mock('../../services/auth')
+vi.mock('../../services/case', () => ({ caseService: { getCases: vi.fn().mockResolvedValue([]) } }))
 
 describe('setup-aware routing', () => {
   const testRoutes = routes.map((route) => ({

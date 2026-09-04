@@ -4,9 +4,13 @@ import { describe, expect, it, vi } from 'vitest'
 
 import MainDashboard from '../MainDashboard.vue'
 
-const mocks = vi.hoisted(() => ({ loadData: vi.fn() }))
+const mocks = vi.hoisted(() => ({ loadData: vi.fn(), selectCase: vi.fn() }))
 
-vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ query: {} }),
+  useRouter: () => ({ replace: vi.fn() }),
+}))
+vi.mock('@/stores/activeCase', () => ({ useActiveCaseStore: () => ({ select: mocks.selectCase }) }))
 vi.mock('@/stores/auth', () => ({
   useAuthStore: () => ({ requiresAdmin: () => true, user: { id: 1 } }),
 }))
@@ -58,7 +62,9 @@ describe('MainDashboard case creation', () => {
 
     await wrapper.get('[data-testid="partial-case-created"]').trigger('click')
 
+    await flushPromises()
     expect(mocks.loadData).toHaveBeenCalledOnce()
+    expect(mocks.selectCase).toHaveBeenCalledWith(42, { overview: true })
     const notification = wrapper.get('[data-testid="notification"]')
     expect(notification.attributes('data-color')).toBe('warning')
     expect(notification.text()).toContain(

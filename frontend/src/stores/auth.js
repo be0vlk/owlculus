@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import api from '../services/api'
 import { authService } from '../services/auth'
+import { useActiveCaseStore } from './activeCase'
 
 // Development-only state persistence to handle HMR reloads
 const DEV_STATE_KEY = '__owlculus_dev_auth_state__'
@@ -110,6 +111,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       error.value = null
       const data = await authService.login(username, password)
+      useActiveCaseStore().reset()
       isAuthenticated.value = true
       user.value = data.user
 
@@ -123,6 +125,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function logout() {
+    useActiveCaseStore().reset()
     authService.logout()
     user.value = null
     isAuthenticated.value = false
