@@ -1,12 +1,16 @@
 <template>
-  <v-dialog v-model="dialogVisible" max-width="800px" persistent>
+  <v-dialog v-model="dialogVisible" aria-label="New Case" max-width="800px" persistent>
     <v-card>
-      <v-card-title class="d-flex align-center">
+      <v-card-title id="new-case-dialog-title" class="d-flex align-center">
         <v-icon start>mdi-folder-plus</v-icon>
         New Case
       </v-card-title>
 
       <v-card-text>
+        <v-alert v-if="submissionError" class="mb-4" type="error" variant="tonal">
+          {{ submissionError }}
+        </v-alert>
+
         <v-form ref="form" v-model="isFormValid" @submit.prevent="handleSubmit">
           <v-text-field
             v-model="formData.title"
@@ -197,6 +201,7 @@ const selectedUsers = ref([])
 const userToAdd = ref(null)
 const isLeadToAdd = ref(false)
 const isSubmitting = ref(false)
+const submissionError = ref('')
 const isFormValid = ref(false)
 const form = ref(null)
 const formData = reactive({
@@ -305,6 +310,7 @@ const closeModal = () => {
   selectedUsers.value = []
   userToAdd.value = null
   isLeadToAdd.value = false
+  submissionError.value = ''
   if (form.value) {
     form.value.reset()
   }
@@ -312,11 +318,14 @@ const closeModal = () => {
 }
 
 const handleSubmit = async () => {
+  if (!form.value || isSubmitting.value) return
+
   const { valid } = await form.value.validate()
   if (!valid) return
 
   try {
     isSubmitting.value = true
+    submissionError.value = ''
     const newCase = await caseService.createCase(formData)
 
     // Add users to the case
@@ -328,7 +337,7 @@ const handleSubmit = async () => {
     closeModal()
   } catch (error) {
     console.error('Error creating case:', error)
-    // TODO: Add proper error handling UI
+    submissionError.value = error.response?.data?.detail || error.message || 'Failed to create case'
   } finally {
     isSubmitting.value = false
   }

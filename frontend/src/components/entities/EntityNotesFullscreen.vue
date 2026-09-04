@@ -1,6 +1,7 @@
 <template>
   <v-dialog
     :model-value="show"
+    :aria-label="`${title} notes`"
     @update:model-value="$emit('update:show', $event)"
     fullscreen
     transition="dialog-bottom-transition"
@@ -13,7 +14,7 @@
           {{ title }} - Notes
         </v-toolbar-title>
         <v-spacer />
-        <v-btn icon="mdi-close" @click="$emit('close')" />
+        <v-btn aria-label="Close notes" icon="mdi-close" @click="$emit('close')" />
       </v-toolbar>
 
       <div class="flex-grow-1 d-flex flex-column overflow-hidden">
@@ -68,8 +69,6 @@ defineEmits(['update:show', 'close'])
 </script>
 
 <style scoped>
-@import url('../../styles/entity-editor.css');
-
 /* Read-only styling for fullscreen notes */
 .read-only-notes .tiptap-content .ProseMirror {
   cursor: default;

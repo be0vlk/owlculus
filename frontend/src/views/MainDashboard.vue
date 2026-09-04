@@ -21,7 +21,7 @@
     <!-- Cases data table -->
     <v-card variant="outlined">
       <!-- Header -->
-      <v-card-title class="d-flex align-center pa-4 bg-surface">
+      <v-card-title class="d-flex flex-wrap align-center ga-3 pa-4 bg-surface">
         <v-icon class="me-3" color="primary" icon="mdi-briefcase" size="large" />
         <div class="flex-grow-1">
           <div class="text-title-large font-weight-bold">Case Management</div>
@@ -42,6 +42,7 @@
           <v-tooltip location="bottom" text="Refresh case list">
             <template #activator="{ props }">
               <v-btn
+                aria-label="Refresh case list"
                 :loading="loading"
                 icon="mdi-refresh"
                 v-bind="props"
@@ -194,6 +195,7 @@
     :color="snackbar.color"
     :timeout="snackbar.timeout"
     location="top right"
+    :role="snackbar.color === 'error' ? 'alert' : 'status'"
   >
     {{ snackbar.text }}
     <template #actions>
@@ -317,26 +319,3 @@ const shouldShowCreateButton = () => {
 
 onMounted(loadData)
 </script>
-
-<style scoped>
-.case-dashboard-table :deep(.v-data-table__tr:hover) {
-  background-color: rgb(var(--v-theme-primary), 0.04);
-  cursor: pointer;
-}
-
-.case-dashboard-table :deep(.v-data-table__td) {
-  padding: 12px 16px;
-  border-bottom: 1px solid rgb(var(--v-theme-on-surface), 0.08);
-}
-
-.case-dashboard-table :deep(.v-data-table__th) {
-  padding: 16px;
-  font-weight: 600;
-  color: rgb(var(--v-theme-on-surface), 0.87);
-  border-bottom: 2px solid rgb(var(--v-theme-on-surface), 0.12);
-}
-
-.case-dashboard-table :deep(.v-data-table-rows-no-data) {
-  padding: 48px 16px;
-}
-</style>

@@ -1,6 +1,7 @@
 <template>
-  <v-dialog v-model="dialogVisible" max-width="600px" persistent>
-    <v-card prepend-icon="mdi-account-plus" title="Add User to Case">
+  <v-dialog v-model="dialogVisible" aria-label="Add User to Case" max-width="600px" persistent>
+    <v-card prepend-icon="mdi-account-plus">
+      <v-card-title id="add-user-to-case-dialog-title">Add User to Case</v-card-title>
       <v-card-text>
         <!-- Loading State -->
         <v-row class="justify-center" v-if="loading">

@@ -4,7 +4,7 @@
       <v-tab v-for="tab in tabs" :key="tab.name" :text="tab.label" :value="tab.name" />
     </v-tabs>
 
-    <v-window v-model="activeTab" :touch="false" :transition="false">
+    <v-window v-model="activeTab" class="case-tab-window" :touch="false" :transition="false">
       <v-window-item
         v-for="tab in tabs"
         :key="tab.name"
@@ -21,7 +21,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed } from 'vue'
 
 const props = defineProps({
   tabs: {
@@ -29,14 +29,25 @@ const props = defineProps({
     required: true,
     default: () => [],
   },
+  modelValue: {
+    type: String,
+    default: null,
+  },
 })
 
-const activeTab = ref(props.tabs[0]?.name)
+const emit = defineEmits(['update:modelValue'])
+
+const activeTab = computed({
+  get: () =>
+    props.tabs.some((tab) => tab.name === props.modelValue)
+      ? props.modelValue
+      : props.tabs[0]?.name,
+  set: (tabName) => emit('update:modelValue', tabName),
+})
 </script>
 
 <style scoped>
-/* Workaround for Vuetify 3 scroll-to-top bug */
-.v-window {
-  min-height: 200px; /* Prevents height collapse during transitions */
+.case-tab-window {
+  min-height: 200px;
 }
 </style>

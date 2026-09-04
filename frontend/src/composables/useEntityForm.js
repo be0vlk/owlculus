@@ -94,7 +94,7 @@ export function useEntityForm(caseId) {
       const response = await entityService.createEntity(caseId, submitData)
       return response
     } catch (error) {
-      state.error = error.message || 'Failed to create entity'
+      state.error = error.response?.data?.detail || error.message || 'Failed to create entity'
       throw error
     } finally {
       state.loading = false
