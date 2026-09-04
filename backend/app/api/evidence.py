@@ -49,8 +49,8 @@ async def create_evidence(
         raise ValidationException("At least one file must be provided")
 
     evidence_service = EvidenceService(db)
-    created = []
-    failed = []
+    created: list[models.Evidence] = []
+    failed: list[schemas.EvidenceUploadFailure] = []
 
     for file in files:
         evidence_data = schemas.EvidenceCreate(
@@ -93,7 +93,10 @@ async def create_evidence(
                 )
             )
 
-    return schemas.EvidenceUploadResponse(created=created, failed=failed)
+    created_responses = [
+        schemas.Evidence.model_validate(evidence) for evidence in created
+    ]
+    return schemas.EvidenceUploadResponse(created=created_responses, failed=failed)
 
 
 @router.get("/case/{case_id}", response_model=list[schemas.Evidence])

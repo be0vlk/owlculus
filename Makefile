@@ -1,5 +1,5 @@
 # Owlculus Docker Management
-.PHONY: help setup setup-dev start start-dev stop restart logs clean build rebuild test test-browser
+.PHONY: help setup setup-dev start start-dev stop restart logs clean build rebuild test test-browser typecheck
 
 COMPOSE = ./scripts/compose.sh direct
 DEV_COMPOSE = ./scripts/compose.sh development
@@ -20,6 +20,7 @@ help:
 	@echo "  rebuild     - Rebuild Docker images (no cache)"
 	@echo "  clean       - Stop and remove all containers, networks, and volumes"
 	@echo "  test        - Run backend tests"
+	@echo "  typecheck   - Typecheck the backend in the locked uv environment"
 	@echo "  test-browser - Run the first-install browser journey against ephemeral stacks"
 	@echo ""
 
@@ -79,6 +80,10 @@ clean:
 test:
 	@echo "🧪 Running backend tests..."
 	cd backend && uv run --locked pytest tests/ -v
+
+typecheck:
+	@echo "Checking backend types..."
+	cd backend && uv run --locked mypy app
 
 test-browser:
 	@echo "🧪 Running first-install browser journey..."

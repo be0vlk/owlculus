@@ -3,6 +3,7 @@ Domain investigation hunt definition
 """
 
 from ..base_hunt import BaseHunt, HuntStepDefinition
+from ..step_input_resolver import HuntInputExpression, parse_input_expression
 
 
 class DomainHunt(BaseHunt):
@@ -35,10 +36,10 @@ class DomainHunt(BaseHunt):
         }
 
     def get_steps(self) -> list[HuntStepDefinition]:
-        subdomain_param_mapping = {
-            "domain": "initial.domain",
-            "concurrency": "initial.subdomain_concurrency",
-            "use_securitytrails": "initial.use_securitytrails",
+        subdomain_param_mapping: dict[str, HuntInputExpression] = {
+            "domain": parse_input_expression("initial.domain"),
+            "concurrency": parse_input_expression("initial.subdomain_concurrency"),
+            "use_securitytrails": parse_input_expression("initial.use_securitytrails"),
         }
 
         return [
@@ -47,7 +48,7 @@ class DomainHunt(BaseHunt):
                 plugin_name="WhoisPlugin",
                 display_name="WHOIS lookup",
                 description="Get domain registration information",
-                parameter_mapping={"domain": "initial.domain"},
+                parameter_mapping={"domain": parse_input_expression("initial.domain")},
                 optional=True,
             ),
             HuntStepDefinition(
@@ -55,7 +56,7 @@ class DomainHunt(BaseHunt):
                 plugin_name="DnsLookup",
                 display_name="DNS records lookup",
                 description="Retrieve all DNS records for the domain",
-                parameter_mapping={"domain": "initial.domain"},
+                parameter_mapping={"domain": parse_input_expression("initial.domain")},
             ),
             HuntStepDefinition(
                 step_id="subdomain_enum",
@@ -73,7 +74,9 @@ class DomainHunt(BaseHunt):
                 description="Analyze the IP address of the main domain using Shodan",
                 parameter_mapping={
                     # Extract first A record IP from DNS lookup results
-                    "query": "dns_records.results[0].results[0].records[0]"
+                    "query": parse_input_expression(
+                        "dns_records.results[0].results[0].records[0]"
+                    )
                 },
                 static_parameters={"search_type": "ip", "limit": 10.0},
                 depends_on=["dns_records"],

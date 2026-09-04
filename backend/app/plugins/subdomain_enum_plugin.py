@@ -13,6 +13,9 @@ import dns.asyncresolver
 from app.services.api_key_vault import Provider
 
 from .base_plugin import BasePlugin, PluginRun, ResultEvent
+from .plugin_types import EntityWrite
+
+_REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30)
 
 
 class SubdomainEnumPlugin(BasePlugin):
@@ -49,7 +52,7 @@ class SubdomainEnumPlugin(BasePlugin):
         url = f"https://crt.sh/?q={query}&output=json"
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=30) as resp:
+                async with session.get(url, timeout=_REQUEST_TIMEOUT) as resp:
                     text = await resp.text()
             entries = json.loads(text)
             subdomains = set()
@@ -67,7 +70,7 @@ class SubdomainEnumPlugin(BasePlugin):
         url = f"https://api.hackertarget.com/hostsearch/?q={domain}"
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=30) as resp:
+                async with session.get(url, timeout=_REQUEST_TIMEOUT) as resp:
                     text = await resp.text()
             subdomains = set()
             for line in text.splitlines():
@@ -86,7 +89,7 @@ class SubdomainEnumPlugin(BasePlugin):
         headers = {"APIKEY": api_key}
         try:
             async with aiohttp.ClientSession(headers=headers) as session:
-                async with session.get(url, timeout=30) as resp:
+                async with session.get(url, timeout=_REQUEST_TIMEOUT) as resp:
                     if resp.status != 200:
                         return set()
                     data = await resp.json()
@@ -261,7 +264,7 @@ class SubdomainEnumPlugin(BasePlugin):
                             {"ip_address": result.get("source", "Unknown")},
                         )
                     )
-        writes = list(unique_ip_writes(ip_candidates))
+        writes: list[EntityWrite] = list(unique_ip_writes(ip_candidates))
         if base_domain and subdomain_list:
             writes.append(DomainSubdomainsWrite(base_domain, subdomain_list))
         return writes

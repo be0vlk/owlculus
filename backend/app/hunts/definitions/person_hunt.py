@@ -3,6 +3,7 @@ Person investigation hunt definition
 """
 
 from ..base_hunt import BaseHunt, HuntStepDefinition
+from ..step_input_resolver import parse_input_expression
 
 
 class PersonHunt(BaseHunt):
@@ -33,7 +34,7 @@ class PersonHunt(BaseHunt):
                 plugin_name="HolehePlugin",
                 display_name="Check email usage",
                 description="Find online accounts associated with the email address",
-                parameter_mapping={"email": "initial.email"},
+                parameter_mapping={"email": parse_input_expression("initial.email")},
             ),
             # Additional steps would be added here as plugins become available
             # For example:

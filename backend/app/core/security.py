@@ -12,7 +12,7 @@ import secrets
 import time
 from datetime import timedelta
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, cast
 
 import bcrypt
 import filetype
@@ -58,7 +58,7 @@ def verify_access_token(token: str, credentials_exception) -> str:
         payload = jwt.decode(
             token, settings.SECRET_KEY.get_secret_value(), algorithms=[ALGORITHM]
         )
-        username: str = payload.get("sub")
+        username = cast(str | None, payload.get("sub"))
         if username is None:
             raise credentials_exception
         return username

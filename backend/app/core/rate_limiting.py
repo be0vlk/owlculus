@@ -4,7 +4,7 @@ from collections import deque
 from secrets import token_hex
 from threading import Lock
 from time import monotonic
-from typing import Protocol
+from typing import Any, Awaitable, Protocol, cast
 
 from app.core.config import settings
 from fastapi import Request
@@ -85,13 +85,16 @@ return 1
 
     async def allow(self, client_address: str) -> bool:
         """Atomically record one attempt in a Redis-backed sliding window."""
-        result = await self.redis_client.eval(
-            self._ALLOW_ATTEMPT_SCRIPT,
-            1,
-            f"owlculus:bootstrap-rate-limit:{client_address}",
-            self.window_milliseconds,
-            self.max_attempts,
-            token_hex(16),
+        result = await cast(
+            Awaitable[Any],
+            self.redis_client.eval(
+                self._ALLOW_ATTEMPT_SCRIPT,
+                1,
+                f"owlculus:bootstrap-rate-limit:{client_address}",
+                str(self.window_milliseconds),
+                str(self.max_attempts),
+                token_hex(16),
+            ),
         )
         return bool(result)
 

@@ -8,9 +8,9 @@ template-based folder structures, and role-based access control for OSINT invest
 """
 
 from pathlib import Path
-from typing import Any, List, NoReturn, Optional
+from typing import Any, List, NoReturn, Optional, cast
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.core.exceptions import (
     BaseException as DomainException,
@@ -268,7 +268,7 @@ class EvidenceService:
 
     async def delete_evidence(
         self, evidence_id: int, current_user: models.User
-    ) -> models.Evidence:
+    ) -> models.Evidence | None:
         evidence_logger = get_security_logger(
             user_id=current_user.id,
             evidence_id=evidence_id,
@@ -480,7 +480,7 @@ class EvidenceService:
                     raw_content = f.read()
 
                 encoding_result = chardet.detect(raw_content)
-                encoding = encoding_result.get("encoding", "utf-8")
+                encoding = encoding_result.get("encoding") or "utf-8"
                 confidence = encoding_result.get("confidence", 0)
 
                 # Decode with detected encoding, fallback to utf-8 with error replacement
@@ -787,7 +787,7 @@ class EvidenceService:
 
     async def delete_folder(
         self, folder_id: int, current_user: models.User
-    ) -> models.Evidence:
+    ) -> models.Evidence | None:
         """Delete a folder and all its contents."""
         folder_logger = get_security_logger(
             user_id=current_user.id,
@@ -830,7 +830,7 @@ class EvidenceService:
             subfolder_evidence = self.db.exec(
                 select(models.Evidence).where(
                     models.Evidence.case_id == db_folder.case_id,
-                    models.Evidence.folder_path.like(f"{db_folder.folder_path}%"),
+                    col(models.Evidence.folder_path).like(f"{db_folder.folder_path}%"),
                 )
             ).all()
 
@@ -915,6 +915,7 @@ class EvidenceService:
                         folder_path=folder_path,
                         parent_folder_id=parent_id,
                     )
+                    normalized_folder_path = normalize_folder_path(folder_path)
 
                     new_folder = models.Evidence(
                         case_id=folder_data.case_id,
@@ -924,7 +925,7 @@ class EvidenceService:
                         category="Other",
                         content="",
                         is_folder=True,
-                        folder_path=normalize_folder_path(folder_data.folder_path),
+                        folder_path=normalized_folder_path,
                         parent_folder_id=folder_data.parent_folder_id,
                         created_by_id=current_user.id,
                         created_at=get_utc_now(),
@@ -933,14 +934,16 @@ class EvidenceService:
                     self.db.add(new_folder)
                     self.db.flush()
 
-                    create_folder(case_id, new_folder.folder_path)
+                    create_folder(case_id, normalized_folder_path)
 
                     created_folders.append(new_folder)
 
                     subfolders = folder_info.get("subfolders", [])
                     if subfolders:
                         create_folder_hierarchy(
-                            subfolders, new_folder.folder_path, new_folder.id
+                            subfolders,
+                            normalized_folder_path,
+                            cast(int, new_folder.id),
                         )
 
             template_folders = template.get("folders", [])

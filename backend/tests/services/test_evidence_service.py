@@ -886,3 +886,38 @@ async def test_bulk_evidence_operations(
 
     assert len(case_evidence) == 50
     assert all(e.case_id == sample_case.id for e in case_evidence)
+
+
+@pytest.mark.asyncio
+async def test_folder_template_uses_normalized_paths_for_storage_and_filesystem(
+    evidence_service_instance: evidence_service.EvidenceService,
+    sample_case: models.Case,
+    test_admin: models.User,
+):
+    templates = {
+        "Normalized": {
+            "folders": [
+                {
+                    "name": " Root ",
+                    "subfolders": [{"name": " Child "}],
+                }
+            ]
+        }
+    }
+
+    with (
+        patch(
+            "app.services.system_config_service.SystemConfigService.get_evidence_folder_templates",
+            new=AsyncMock(return_value=templates),
+        ),
+        patch("app.services.evidence_service.create_folder") as create_folder_mock,
+    ):
+        folders = await evidence_service_instance.create_folders_from_template(
+            sample_case.id, "Normalized", test_admin
+        )
+
+    assert [folder.folder_path for folder in folders] == ["Root", "Root/Child"]
+    assert [call.args[1] for call in create_folder_mock.call_args_list] == [
+        "Root",
+        "Root/Child",
+    ]

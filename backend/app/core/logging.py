@@ -15,8 +15,8 @@ from loguru import logger
 from .config import logging_settings
 
 # Context variables to store request info across async calls
-client_ip_context: ContextVar[str] = ContextVar("client_ip", default=None)
-user_agent_context: ContextVar[str] = ContextVar("user_agent", default=None)
+client_ip_context: ContextVar[str | None] = ContextVar("client_ip", default=None)
+user_agent_context: ContextVar[str | None] = ContextVar("user_agent", default=None)
 
 
 def setup_logging():

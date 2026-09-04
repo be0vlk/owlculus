@@ -4,7 +4,7 @@ from collections.abc import Callable, Iterator, Mapping
 from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass
 from tempfile import SpooledTemporaryFile
-from typing import Any, Protocol
+from typing import Any, BinaryIO, Protocol, cast
 
 from fastapi import UploadFile
 from sqlmodel import Session, select
@@ -92,7 +92,10 @@ class ServiceEvidenceSink:
                     parent_folder_id=folder.id,
                 ),
                 current_user=user,
-                file=UploadFile(filename=request.filename, file=temporary_file),
+                file=UploadFile(
+                    filename=request.filename,
+                    file=cast(BinaryIO, temporary_file),
+                ),
             )
 
 
@@ -116,7 +119,10 @@ class ServiceEntitySink:
         )
         if existing:
             await self._service.enrich_entity_description(
-                case_id, existing.id, request.description, current_user=user
+                case_id,
+                cast(int, existing.id),
+                request.description,
+                current_user=user,
             )
             return
         data: dict[str, Any] = {
@@ -155,8 +161,8 @@ class ServiceEntitySink:
             )
             await self._service.update_entity(
                 case_id,
-                existing.id,
-                EntityUpdate(data=current_data),
+                cast(int, existing.id),
+                EntityUpdate.model_validate({"data": current_data}),
                 current_user=user,
             )
             return
