@@ -26,7 +26,6 @@ class HuntResponse(BaseModel):
     class Config:
         orm_mode = True
 
-
 class HuntExecuteRequest(BaseModel):
     """Request model for starting a hunt"""
 
@@ -99,4 +98,3 @@ class HuntExecutionListResponse(BaseModel):
 
     class Config:
         orm_mode = True
-
