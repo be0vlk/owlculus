@@ -18,7 +18,7 @@ import bcrypt
 import filetype
 import jwt
 from cryptography.fernet import Fernet
-from fastapi import HTTPException, UploadFile
+from fastapi import UploadFile
 from werkzeug.utils import secure_filename
 
 from .config import settings
@@ -155,7 +155,7 @@ def secure_filename_with_path(filename: str, base_path: Path) -> str:
     # Create full path and verify it's within base_path
     full_path = (abs_base / final_name).resolve()
     if not str(full_path).startswith(str(abs_base)):
-        raise HTTPException(status_code=400, detail="Invalid file path")
+        raise ValidationException("Invalid file path")
 
     return final_name
 

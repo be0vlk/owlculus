@@ -14,7 +14,6 @@ Key features:
 from datetime import UTC, datetime
 from typing import List
 
-from fastapi import HTTPException, status
 from openai import OpenAI
 from sqlmodel import Session
 
@@ -32,14 +31,17 @@ class StrixyService:
         if self._client is None:
             api_key = self.api_key_vault.get_key(Provider.OPENAI)
             if not api_key:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="OpenAI API key not configured. Please contact administrator to configure the OpenAI API key.",
+                raise ValidationException(
+                    "OpenAI API key not configured. Please contact administrator to "
+                    "configure the OpenAI API key."
                 )
             self._client = OpenAI(api_key=api_key)
         return self._client
 
     async def send_chat_message(self, messages: List[ChatMessage]) -> ChatResponse:
+        if not messages:
+            raise ValidationException("At least one chat message is required")
+
         try:
             client = self._get_openai_client()
 
@@ -93,10 +95,11 @@ Maintain professional objectivity.""",
                 message=response_content, role="assistant", timestamp=datetime.now(UTC)
             )
 
+        except ValidationException:
+            raise
         except Exception as e:
-            if isinstance(e, HTTPException):
-                raise e
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error communicating with OpenAI: {str(e)}",
-            )
+            raise DomainException(f"Error communicating with OpenAI: {str(e)}") from e
+
+
+from app.core.exceptions import BaseException as DomainException
+from app.core.exceptions import ValidationException

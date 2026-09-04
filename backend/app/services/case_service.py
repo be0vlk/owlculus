@@ -9,14 +9,16 @@ and security logging for OSINT investigation workflows.
 
 from datetime import datetime
 
+from sqlmodel import Session, select
+
 from app import schemas
 from app.core.dependencies import check_case_access
 from app.core.exceptions import (
-	AuthorizationException,
-	BaseException,
-	DuplicateResourceException,
-	ResourceNotFoundException,
-	ValidationException,
+    AuthorizationException,
+    BaseException,
+    DuplicateResourceException,
+    ResourceNotFoundException,
+    ValidationException,
 )
 from app.core.file_storage import create_case_directory
 from app.core.logging import get_security_logger
@@ -25,7 +27,6 @@ from app.core.utils import get_utc_now
 from app.database import crud, models
 from app.database.db_utils import transaction
 from app.services.system_config_service import SystemConfigService
-from sqlmodel import Session, select
 
 
 class CaseService:
@@ -184,7 +185,7 @@ class CaseService:
                         failure_reason="case_number_exists",
                         requested_case_number=case_update.case_number,
                     ).warning("Case update failed: case number already exists")
-                    raise ValidationException("Case number already exists")
+                    raise DuplicateResourceException("Case number already exists")
 
             updated_case = await crud.update_case(
                 self.db, case_id=case_id, case=case_update, current_user=current_user
@@ -196,7 +197,12 @@ class CaseService:
 
             return updated_case
 
-        except (AuthorizationException, ResourceNotFoundException, ValidationException):
+        except (
+            AuthorizationException,
+            DuplicateResourceException,
+            ResourceNotFoundException,
+            ValidationException,
+        ):
             raise
         except Exception as e:
             case_logger.bind(

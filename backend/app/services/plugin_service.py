@@ -15,7 +15,7 @@ from typing import Any
 
 from sqlmodel import Session
 
-from app.core.exceptions import ResourceNotFoundException
+from app.core.exceptions import ResourceNotFoundException, ValidationException
 
 from ..database.models import User
 from ..plugins.base_plugin import BasePlugin
@@ -49,7 +49,7 @@ class PluginService:
                             not isinstance(provider, Provider)
                             for provider in plugin.api_key_requirements
                         ):
-                            raise ValueError(
+                            raise ValidationException(
                                 f"{obj.__name__} declares unknown API key provider"
                             )
                         self._plugins[obj.__name__] = obj

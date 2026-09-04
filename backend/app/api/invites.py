@@ -6,18 +6,14 @@ Provides endpoints for user registration through invitation tokens and administr
 invite management functionality.
 """
 
+from fastapi import APIRouter, Depends, status
+from sqlmodel import Session
+
 from app import schemas
 from app.core.dependencies import admin_only, get_current_user
-from app.core.exceptions import (
-    BaseException,
-    DuplicateResourceException,
-    ResourceNotFoundException,
-)
 from app.database import models
 from app.database.connection import get_db
 from app.services.invite_service import InviteService
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlmodel import Session
 
 router = APIRouter()
 
@@ -32,12 +28,7 @@ async def create_invite(
     current_user: models.User = Depends(get_current_user),
 ):
     invite_service = InviteService(db)
-    try:
-        return await invite_service.create_invite(invite=invite, current_user=current_user)
-    except BaseException as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
+    return await invite_service.create_invite(invite=invite, current_user=current_user)
 
 
 @router.get("/", response_model=list[schemas.InviteListResponse])
@@ -49,14 +40,9 @@ async def get_invites(
     current_user: models.User = Depends(get_current_user),
 ):
     invite_service = InviteService(db)
-    try:
-        return await invite_service.get_invites(
-            skip=skip, limit=limit, current_user=current_user
-        )
-    except BaseException as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
+    return await invite_service.get_invites(
+        skip=skip, limit=limit, current_user=current_user
+    )
 
 
 @router.post("/validate", response_model=schemas.InviteValidation)
@@ -78,18 +64,9 @@ async def register_user(
     db: Session = Depends(get_db),
 ):
     invite_service = InviteService(db)
-    try:
-        return await invite_service.register_user_with_invite(
-            registration=registration_data
-        )
-    except DuplicateResourceException as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except ResourceNotFoundException as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except BaseException as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
+    return await invite_service.register_user_with_invite(
+        registration=registration_data
+    )
 
 
 @router.delete("/{invite_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -100,13 +77,8 @@ async def delete_invite(
     current_user: models.User = Depends(get_current_user),
 ):
     invite_service = InviteService(db)
-    try:
-        await invite_service.delete_invite(invite_id=invite_id, current_user=current_user)
-        return {"message": "Invite deleted successfully"}
-    except ResourceNotFoundException as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except BaseException as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    await invite_service.delete_invite(invite_id=invite_id, current_user=current_user)
+    return {"message": "Invite deleted successfully"}
 
 
 @router.post("/cleanup")
@@ -116,10 +88,5 @@ async def cleanup_expired_invites(
     current_user: models.User = Depends(get_current_user),
 ):
     invite_service = InviteService(db)
-    try:
-        count = await invite_service.cleanup_expired_invites(current_user=current_user)
-        return {"message": f"Cleaned up {count} expired invites"}
-    except BaseException as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
+    count = await invite_service.cleanup_expired_invites(current_user=current_user)
+    return {"message": f"Cleaned up {count} expired invites"}

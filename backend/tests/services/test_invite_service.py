@@ -10,26 +10,23 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+from sqlmodel import Session
+
 from app import schemas
 from app.core.exceptions import (
     BaseException,
     DuplicateResourceException,
     ResourceNotFoundException,
+    ValidationException,
 )
 from app.database import models
 from app.services.invite_service import (
-    INVITE_EXPIRATION_HOURS,
     TOKEN_LENGTH,
-    InvalidInviteException,
-    InviteException,
-    InviteRegistrationException,
     InviteService,
     InviteValidator,
-    InviteValidationResult,
     SecurityLogger,
     UserValidator,
 )
-from sqlmodel import Session
 
 
 # Fixtures
@@ -273,7 +270,7 @@ class TestInviteService:
         mock_invite_repo.create_invite.side_effect = Exception("Database error")
 
         # Act & Assert
-        with pytest.raises(InviteException) as exc_info:
+        with pytest.raises(BaseException) as exc_info:
             await invite_service.create_invite(invite_create, current_user=current_user)
 
         assert str(exc_info.value) == "Database error"
@@ -386,7 +383,7 @@ class TestInviteService:
         mock_invite_repo.get_invite_by_token.return_value = None
 
         # Act & Assert
-        with pytest.raises(InvalidInviteException) as exc_info:
+        with pytest.raises(ValidationException) as exc_info:
             await invite_service.register_user_with_invite(registration)
 
         assert "Invalid invite token" in str(exc_info.value)
@@ -450,7 +447,7 @@ class TestInviteService:
         mock_db.get.return_value = used_invite
 
         # Act & Assert
-        with pytest.raises(InviteException) as exc_info:
+        with pytest.raises(BaseException) as exc_info:
             await invite_service.delete_invite(3, current_user=current_user)
 
         assert str(exc_info.value) == "Cannot delete used invite"
@@ -593,7 +590,7 @@ class TestEdgeCases:
         )
 
         # Assert - Second registration should fail
-        with pytest.raises(InvalidInviteException) as exc_info:
+        with pytest.raises(ValidationException) as exc_info:
             await invite_service.register_user_with_invite(registration2)
 
         assert "already been used" in str(exc_info.value)

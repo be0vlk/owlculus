@@ -7,6 +7,9 @@ supporting role-based access control and secure user administration for investig
 
 from typing import Any
 
+from fastapi import APIRouter, Body, Depends, Request, status
+from sqlmodel import Session
+
 from app import schemas
 from app.core.dependencies import (
     admin_only,
@@ -14,14 +17,7 @@ from app.core.dependencies import (
     get_current_user,
     get_optional_current_user,
 )
-from app.core.exceptions import (
-    AuthenticationException,
-    AuthorizationException,
-    BaseException,
-    DuplicateResourceException,
-    ResourceNotFoundException,
-    ValidationException,
-)
+from app.core.exceptions import AuthorizationException, RateLimitException
 from app.core.logging import get_security_logger
 from app.core.rate_limiting import get_bootstrap_rate_limiter
 from app.core.roles import UserRole
@@ -29,10 +25,6 @@ from app.core.setup import is_setup_required
 from app.database import models
 from app.database.connection import get_db
 from app.services.user_service import UserService
-from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
-from fastapi.exceptions import RequestValidationError
-from pydantic import ValidationError as PydanticValidationError
-from sqlmodel import Session
 
 router = APIRouter()
 
@@ -45,52 +37,23 @@ async def create_user(
     current_user: models.User | None = Depends(get_optional_current_user),
 ):
     user_service = UserService(db)
-    try:
-        if current_user is None:
-            if is_setup_required(db):
-                client_address = get_client_ip(request)
-                if not await get_bootstrap_rate_limiter(request).allow(client_address):
-                    get_security_logger(
-                        action="create_user",
-                        event_type="rate_limit_exceeded",
-                        is_bootstrap=True,
-                        client_ip=client_address,
-                    ).warning("Bootstrap user creation rate limit exceeded")
-                    raise HTTPException(
-                        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                        detail="Too many setup attempts. Please try again later.",
-                    )
-            return await user_service.create_bootstrap_user(user_data=user_data)
-        user = schemas.UserCreate.model_validate(user_data)
-        if current_user.role != UserRole.ADMIN.value:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized"
-            )
-        return await user_service.create_user(user=user, current_user=current_user)
-    except PydanticValidationError as e:
-        errors = []
-        for error in e.errors():
-            body_error = dict(error)
-            body_error["loc"] = ("body", *error["loc"])
-            body_error.pop("input", None)
-            errors.append(body_error)
-        raise RequestValidationError(errors) from e
-    except DuplicateResourceException as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except AuthenticationException as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=str(e),
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    except AuthorizationException as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
-    except ValidationException as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except BaseException as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
+    if current_user is None:
+        if is_setup_required(db):
+            client_address = get_client_ip(request)
+            if not await get_bootstrap_rate_limiter(request).allow(client_address):
+                get_security_logger(
+                    action="create_user",
+                    event_type="rate_limit_exceeded",
+                    is_bootstrap=True,
+                    client_ip=client_address,
+                ).warning("Bootstrap user creation rate limit exceeded")
+                raise RateLimitException(
+                    "Too many setup attempts. Please try again later."
+                )
+        return await user_service.create_bootstrap_user(user_data=user_data)
+    if current_user.role != UserRole.ADMIN.value:
+        raise AuthorizationException("Not authorized")
+    return await user_service.create_user_from_payload(user_data, current_user)
 
 
 @router.get("/me", response_model=schemas.User)
@@ -107,14 +70,9 @@ async def read_users(
     current_user: models.User = Depends(get_current_user),
 ):
     user_service = UserService(db)
-    try:
-        return await user_service.get_users(
-            current_user=current_user, skip=skip, limit=limit
-        )
-    except BaseException as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
+    return await user_service.get_users(
+        current_user=current_user, skip=skip, limit=limit
+    )
 
 
 @router.put("/{user_id}", response_model=schemas.User)
@@ -125,22 +83,9 @@ async def update_user(
     current_user: models.User = Depends(get_current_user),
 ):
     user_service = UserService(db)
-    try:
-        return await user_service.update_user(
-            user_id=user_id, user_update=user, current_user=current_user
-        )
-    except ResourceNotFoundException as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except DuplicateResourceException as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except AuthorizationException as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
-    except ValidationException as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except BaseException as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
+    return await user_service.update_user(
+        user_id=user_id, user_update=user, current_user=current_user
+    )
 
 
 @router.put("/me/password", response_model=schemas.User)
@@ -150,23 +95,12 @@ async def change_password(
     current_user: models.User = Depends(get_current_user),
 ):
     user_service = UserService(db)
-    try:
-        return await user_service.change_password(
-            user_id=current_user.id,
-            current_password=password_change.current_password,
-            new_password=password_change.new_password,
-            current_user=current_user,
-        )
-    except ResourceNotFoundException as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except AuthorizationException as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
-    except ValidationException as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except BaseException as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
+    return await user_service.change_password(
+        user_id=current_user.id,
+        current_password=password_change.current_password,
+        new_password=password_change.new_password,
+        current_user=current_user,
+    )
 
 
 @router.put("/{user_id}/password", response_model=schemas.User)
@@ -178,20 +112,11 @@ async def admin_reset_password(
     current_user: models.User = Depends(get_current_user),
 ):
     user_service = UserService(db)
-    try:
-        return await user_service.admin_reset_password(
-            user_id=user_id,
-            new_password=password_reset.new_password,
-            current_user=current_user,
-        )
-    except ResourceNotFoundException as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except AuthorizationException as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
-    except BaseException as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
+    return await user_service.admin_reset_password(
+        user_id=user_id,
+        new_password=password_reset.new_password,
+        current_user=current_user,
+    )
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -202,16 +127,7 @@ async def delete_user(
     current_user: models.User = Depends(get_current_user),
 ):
     user_service = UserService(db)
-    try:
-        return await user_service.delete_user(
-            user_id=user_id,
-            current_user=current_user,
-        )
-    except ResourceNotFoundException as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except AuthorizationException as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
-    except BaseException as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
+    return await user_service.delete_user(
+        user_id=user_id,
+        current_user=current_user,
+    )

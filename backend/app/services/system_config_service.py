@@ -14,7 +14,7 @@ from sqlmodel import Session, select
 
 from ..core.dependencies import admin_only
 from ..core.evidence_templates import DEFAULT_TEMPLATES
-from ..core.exceptions import BaseException as DomainException
+from ..core.exceptions import ValidationException
 from ..core.logging import get_security_logger
 from ..core.security import encrypt_api_key
 from ..core.utils import get_utc_now
@@ -36,30 +36,6 @@ TEMPLATE_DISPLAY_NAMES = {
 }
 
 
-class SystemConfigError(DomainException):
-    """Base exception for system configuration errors"""
-
-    pass
-
-
-class CaseNumberTemplateError(SystemConfigError):
-    """Raised when case number template is invalid"""
-
-    pass
-
-
-class ApiKeyError(SystemConfigError):
-    """Raised when API key operations fail"""
-
-    pass
-
-
-class EvidenceTemplateError(SystemConfigError):
-    """Raised when evidence template operations fail"""
-
-    pass
-
-
 class SystemConfigValidator:
     """Handles validation logic for system configuration"""
 
@@ -67,24 +43,24 @@ class SystemConfigValidator:
     def validate_case_number_template(template: str) -> None:
         """Validate case number template format"""
         if template not in VALID_CASE_NUMBER_TEMPLATES:
-            raise CaseNumberTemplateError(f"Invalid case number template: {template}")
+            raise ValidationException(f"Invalid case number template: {template}")
 
     @staticmethod
     def validate_case_number_prefix(prefix: Optional[str], template: str) -> None:
         """Validate case number prefix based on template"""
         if template == CASE_NUMBER_TEMPLATE_PREFIX:
             if not prefix:
-                raise CaseNumberTemplateError(
+                raise ValidationException(
                     "Prefix is required for PREFIX-YYMM-NN template"
                 )
 
             if not prefix.isalnum():
-                raise CaseNumberTemplateError(
+                raise ValidationException(
                     "Prefix must contain only alphanumeric characters"
                 )
 
             if len(prefix) < PREFIX_MIN_LENGTH or len(prefix) > PREFIX_MAX_LENGTH:
-                raise CaseNumberTemplateError(
+                raise ValidationException(
                     f"Prefix must be {PREFIX_MIN_LENGTH}-{PREFIX_MAX_LENGTH} characters"
                 )
 
@@ -92,19 +68,15 @@ class SystemConfigValidator:
     def validate_evidence_template(template_data: dict, template_key: str) -> None:
         """Validate evidence folder template structure"""
         if not isinstance(template_data, dict):
-            raise EvidenceTemplateError(
-                f"Invalid template structure for {template_key}"
-            )
+            raise ValidationException(f"Invalid template structure for {template_key}")
 
         required_fields = ["name", "description", "folders"]
         for field in required_fields:
             if field not in template_data:
-                raise EvidenceTemplateError(
-                    f"Template {template_key} must have {field}"
-                )
+                raise ValidationException(f"Template {template_key} must have {field}")
 
         if not isinstance(template_data["folders"], list):
-            raise EvidenceTemplateError(
+            raise ValidationException(
                 f"Template {template_key} must have folders array"
             )
 
@@ -193,7 +165,7 @@ class SystemConfigService:
 
             return config
 
-        except CaseNumberTemplateError as e:
+        except ValidationException as e:
             config_logger.bind(
                 event_type="system_config_update_failed",
                 failure_reason="validation_error",
@@ -250,7 +222,7 @@ class SystemConfigService:
         try:
             if is_new_key:
                 if not api_key:
-                    raise ApiKeyError("API key is required for new providers")
+                    raise ValidationException("API key is required for new providers")
                 current_keys[provider_name] = StoredApiKey(
                     encrypted_key=encrypt_api_key(api_key),
                     name=name,
@@ -287,7 +259,7 @@ class SystemConfigService:
 
             return config
 
-        except ApiKeyError as e:
+        except ValidationException as e:
             config_logger.bind(
                 event_type=f"api_key_{operation_type}_failed",
                 failure_reason="validation_error",
@@ -418,7 +390,7 @@ class SystemConfigService:
 
             return config
 
-        except EvidenceTemplateError as e:
+        except ValidationException as e:
             config_logger.bind(
                 event_type="evidence_templates_update_failed",
                 failure_reason="validation_error",

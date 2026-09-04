@@ -6,11 +6,12 @@ chat functionality, and error handling for the OSINT AI assistant
 integration endpoints.
 """
 
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+
+from app.core.exceptions import ValidationException
 from app.schemas.strixy_schema import ChatResponse
-from fastapi import HTTPException
 
 
 class TestStrixyAPI:
@@ -26,7 +27,7 @@ class TestStrixyAPI:
             role="assistant",
             timestamp="2024-01-01T00:00:00",
         )
-        mock_service.send_chat_message.return_value = mock_response
+        mock_service.send_chat_message = AsyncMock(return_value=mock_response)
         mock_service_class.return_value = mock_service
 
         response = client.post(
@@ -61,8 +62,8 @@ class TestStrixyAPI:
     @patch("app.api.strixy.StrixyService")
     def test_chat_service_error(self, mock_service_class, client, auth_headers):
         mock_service = Mock()
-        mock_service.send_chat_message.side_effect = HTTPException(
-            status_code=400, detail="OpenAI API key not configured"
+        mock_service.send_chat_message.side_effect = ValidationException(
+            "OpenAI API key not configured"
         )
         mock_service_class.return_value = mock_service
 
@@ -72,7 +73,7 @@ class TestStrixyAPI:
             headers=auth_headers,
         )
 
-        assert response.status_code == 400
+        assert response.status_code == 422
         assert "OpenAI API key not configured" in response.json()["detail"]
 
     def test_chat_empty_messages(self, client, auth_headers):
@@ -80,4 +81,4 @@ class TestStrixyAPI:
             "/api/strixy/chat", json={"messages": []}, headers=auth_headers
         )
 
-        assert response.status_code == 200
+        assert response.status_code == 422

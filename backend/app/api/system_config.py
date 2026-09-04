@@ -6,10 +6,11 @@ API key management, case number templates, and evidence folder templates.
 Provides administrative endpoints for system configuration.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
 from ..core.dependencies import get_current_user
+from ..core.exceptions import ValidationException
 from ..database import models
 from ..database.connection import get_db
 from ..schemas import system_config_schema
@@ -40,17 +41,12 @@ async def update_configuration(
     db: Session = Depends(get_db),
 ):
     config_service = SystemConfigService(db)
-    try:
-        config = await config_service.update_configuration(
-            case_number_template=config_data.case_number_template,
-            case_number_prefix=config_data.case_number_prefix,
-            current_user=current_user,
-        )
-        return system_config_schema.SystemConfigurationResponse.from_model(config)
-    except HTTPException:
-        raise
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    config = await config_service.update_configuration(
+        case_number_template=config_data.case_number_template,
+        case_number_prefix=config_data.case_number_prefix,
+        current_user=current_user,
+    )
+    return system_config_schema.SystemConfigurationResponse.from_model(config)
 
 
 @router.put(
@@ -64,25 +60,16 @@ async def set_api_key(
     db: Session = Depends(get_db),
 ):
     config_service = SystemConfigService(db)
-    try:
-        if not api_key_data.api_key and not api_key_data.name:
-            raise HTTPException(
-                status_code=400, detail="Either api_key or name must be provided"
-            )
+    if not api_key_data.api_key and not api_key_data.name:
+        raise ValidationException("Either api_key or name must be provided")
 
-        config = await config_service.set_api_key(
-            provider=provider,
-            api_key=api_key_data.api_key,
-            name=api_key_data.name or f"{provider.value.title()} API",
-            current_user=current_user,
-        )
-        return system_config_schema.SystemConfigurationResponse.from_model(config)
-    except HTTPException:
-        raise
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    config = await config_service.set_api_key(
+        provider=provider,
+        api_key=api_key_data.api_key,
+        name=api_key_data.name or f"{provider.value.title()} API",
+        current_user=current_user,
+    )
+    return system_config_schema.SystemConfigurationResponse.from_model(config)
 
 
 @router.delete(
@@ -95,16 +82,11 @@ async def remove_api_key(
     db: Session = Depends(get_db),
 ):
     config_service = SystemConfigService(db)
-    try:
-        config = await config_service.remove_api_key(
-            provider=provider,
-            current_user=current_user,
-        )
-        return system_config_schema.SystemConfigurationResponse.from_model(config)
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    config = await config_service.remove_api_key(
+        provider=provider,
+        current_user=current_user,
+    )
+    return system_config_schema.SystemConfigurationResponse.from_model(config)
 
 
 @router.get("/configuration/api-keys", response_model=dict)
@@ -142,22 +124,17 @@ async def preview_case_number_template(
     db: Session = Depends(get_db),
 ):
     config_service = SystemConfigService(db)
-    try:
-        if template not in ["YYMM-NN", "PREFIX-YYMM-NN"]:
-            raise HTTPException(status_code=400, detail="Invalid template")
+    if template not in ["YYMM-NN", "PREFIX-YYMM-NN"]:
+        raise ValidationException("Invalid template")
 
-        example = config_service.generate_example_case_number(template, prefix)
-        display_name = config_service.get_template_display_name(template)
-        return system_config_schema.SystemConfigurationPreview(
-            template=template,
-            prefix=prefix,
-            example_case_number=example,
-            display_name=display_name,
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    example = config_service.generate_example_case_number(template, prefix)
+    display_name = config_service.get_template_display_name(template)
+    return system_config_schema.SystemConfigurationPreview(
+        template=template,
+        prefix=prefix,
+        example_case_number=example,
+        display_name=display_name,
+    )
 
 
 @router.get("/configuration/evidence-templates")
@@ -177,18 +154,15 @@ async def update_evidence_folder_templates(
     db: Session = Depends(get_db),
 ):
     config_service = SystemConfigService(db)
-    try:
-        templates_dict = {}
-        for key, template in templates_data.templates.items():
-            templates_dict[key] = template.model_dump()
+    templates_dict = {}
+    for key, template in templates_data.templates.items():
+        templates_dict[key] = template.model_dump()
 
-        await config_service.update_evidence_folder_templates(
-            templates=templates_dict,
-            current_user=current_user,
-        )
-        updated_templates = await config_service.get_evidence_folder_templates()
-        return system_config_schema.EvidenceFolderTemplatesResponse(
-            templates=updated_templates
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    await config_service.update_evidence_folder_templates(
+        templates=templates_dict,
+        current_user=current_user,
+    )
+    updated_templates = await config_service.get_evidence_folder_templates()
+    return system_config_schema.EvidenceFolderTemplatesResponse(
+        templates=updated_templates
+    )

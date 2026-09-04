@@ -11,40 +11,24 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Protocol
 
+from sqlmodel import Session
+
 from app import schemas
 from app.core.exceptions import (
-	BaseException,
-	DuplicateResourceException,
-	ResourceNotFoundException,
+    BaseException,
+    DuplicateResourceException,
+    ResourceNotFoundException,
+    ValidationException,
 )
 from app.core.logging import get_security_logger
 from app.core.utils import get_utc_now
 from app.database import crud, models
-from sqlmodel import Session
 
 TOKEN_LENGTH = 32
 INVITE_EXPIRATION_HOURS = 48
 MIN_USERNAME_LENGTH = 3
 MAX_USERNAME_LENGTH = 50
 MIN_PASSWORD_LENGTH = 8
-
-
-class InviteException(BaseException):
-    """Base exception for invite-related errors"""
-
-    pass
-
-
-class InvalidInviteException(InviteException):
-    """Raised when an invite is invalid, expired, or already used"""
-
-    pass
-
-
-class InviteRegistrationException(InviteException):
-    """Raised when user registration with invite fails"""
-
-    pass
 
 
 class InviteRepository(Protocol):
@@ -210,7 +194,7 @@ class InviteService:
 
         except Exception as e:
             logger.log_error("invite_creation_error", "Invite creation error", e)
-            raise InviteException(str(e))
+            raise BaseException(str(e)) from e
 
     async def get_invites(
         self, skip: int = 0, limit: int = 100, *, current_user: models.User
@@ -272,10 +256,10 @@ class InviteService:
                 "User registration failed",
                 "validation_error",
             )
-            raise InviteRegistrationException(str(e))
+            raise ValidationException(str(e)) from e
         except Exception as e:
             logger.log_error("invite_registration_error", "User registration error", e)
-            raise InviteException("Internal server error")
+            raise BaseException("Internal server error") from e
 
     async def delete_invite(self, invite_id: int, *, current_user: models.User) -> bool:
         logger = SecurityLogger(
@@ -305,7 +289,7 @@ class InviteService:
             raise
         except Exception as e:
             logger.log_error("invite_deletion_error", "Invite deletion error", e)
-            raise InviteException("Internal server error")
+            raise BaseException("Internal server error") from e
 
     async def cleanup_expired_invites(self, *, current_user: models.User) -> int:
         return await self.invite_repo.delete_expired_invites(self.db)
@@ -352,7 +336,7 @@ class InviteService:
                 "invalid_invite",
                 validation_error=validation.error,
             )
-            raise InvalidInviteException(validation.error)
+            raise ValidationException(validation.error)
 
         invite = await self.invite_repo.get_invite_by_token(self.db, token=token)
         if not invite:
@@ -416,4 +400,4 @@ class InviteService:
                 "invite_already_used",
                 used_at=invite.used_at.isoformat(),
             )
-            raise InviteException("Cannot delete used invite")
+            raise ValidationException("Cannot delete used invite")

@@ -8,7 +8,7 @@ enabling extensible investigation capabilities through a standardized plugin arc
 import json
 from typing import Any, Dict
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -27,12 +27,7 @@ async def list_plugins(
     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     plugin_svc = PluginService(db)
-    try:
-        return await plugin_svc.list_plugins(current_user=current_user)
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
+    return await plugin_svc.list_plugins(current_user=current_user)
 
 
 async def stream_generator(
@@ -51,9 +46,15 @@ async def stream_generator(
     except ResourceNotFoundException as e:
         yield json.dumps({"type": "error", "data": {"message": str(e)}}) + "\n"
     except Exception as e:
-        yield json.dumps(
-            {"type": "error", "data": {"message": f"Plugin execution error: {str(e)}"}}
-        ) + "\n"
+        yield (
+            json.dumps(
+                {
+                    "type": "error",
+                    "data": {"message": f"Plugin execution error: {str(e)}"},
+                }
+            )
+            + "\n"
+        )
 
 
 @router.post("/{plugin_name}/execute")
