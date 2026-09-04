@@ -10,7 +10,7 @@ from app.hunts.hunt_definition_check import (
     HuntDefinitionError,
 )
 from app.hunts.hunt_registry import HuntRegistry
-from app.plugins.plugin_registry import shipped_plugin_registry
+from app.plugins.plugin_registry import get_shipped_plugin_registry
 
 PLUGIN_CATALOGUE = {
     "DnsLookup": {"domain", "lookup_mode", "record_types", "timeout", "nameservers"},
@@ -128,6 +128,6 @@ def test_definition_serializes_validated_input_expressions_as_strings():
 
 @pytest.mark.parametrize("hunt", [DomainHunt(), PersonHunt()])
 def test_shipped_hunts_match_the_discovered_plugin_catalogue(hunt):
-    catalogue = shipped_plugin_registry.parameter_catalogue()
+    catalogue = get_shipped_plugin_registry().parameter_catalogue()
 
     HuntDefinitionCheck(catalogue).check(hunt)

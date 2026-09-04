@@ -28,7 +28,7 @@ from app.core.setup import check_and_generate_setup_token
 from app.database.connection import engine
 from app.hunts.hunt_definition_check import HuntDefinitionCheck
 from app.hunts.hunt_registry import shipped_hunt_registry
-from app.plugins.plugin_registry import shipped_plugin_registry
+from app.plugins.plugin_registry import PluginRegistry, get_shipped_plugin_registry
 
 HUNT_SYNC_RETRY_SECONDS = 1.0
 
@@ -51,11 +51,9 @@ def _complete_setup_token_check(application: FastAPI) -> bool:
     return True
 
 
-def _check_hunt_definitions() -> None:
+def _check_hunt_definitions(plugin_registry: PluginRegistry) -> None:
     """Fail startup if a shipped hunt cannot be executed by the plugin catalogue."""
-    definition_check = HuntDefinitionCheck(
-        shipped_plugin_registry.parameter_catalogue()
-    )
+    definition_check = HuntDefinitionCheck(plugin_registry.parameter_catalogue())
     shipped_hunt_registry.check(definition_check)
 
 
@@ -90,7 +88,8 @@ async def lifespan(app: FastAPI):
     logger.info("Owlculus backend starting up")
     app.state.setup_token_check_complete = False
     app.state.hunt_sync_complete = False
-    _check_hunt_definitions()
+    app.state.plugin_registry = get_shipped_plugin_registry()
+    _check_hunt_definitions(app.state.plugin_registry)
     _complete_setup_token_check(app)
     hunt_sync_task = None
     if not _complete_hunt_sync(app):

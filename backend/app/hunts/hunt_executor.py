@@ -10,7 +10,7 @@ from sqlmodel import Session
 from app.core.utils import get_utc_now
 from app.database.models import HuntExecution, HuntStep, User
 from app.plugins.plugin_context import ProductionPluginRunAdapter
-from app.plugins.plugin_registry import shipped_plugin_registry
+from app.plugins.plugin_registry import get_shipped_plugin_registry
 from app.plugins.plugin_runner import PluginRunner
 from app.services.api_key_vault import ConfigurationApiKeyVault
 
@@ -56,7 +56,9 @@ class HuntExecutor:
     ):
         self.db = db
         self.notifier = notifier
-        self.plugin_runner = plugin_runner or PluginRunner(shipped_plugin_registry)
+        self.plugin_runner = plugin_runner or PluginRunner(
+            get_shipped_plugin_registry()
+        )
         self.run_adapter = run_adapter or ProductionPluginRunAdapter(
             lambda: nullcontext(self.db), ConfigurationApiKeyVault
         )
@@ -287,7 +289,7 @@ class HuntExecutor:
         context.set_step_output(step_def.step_id, output)
 
         # Update step record
-        step_record.status = "completed" if results or not errors else "failed"
+        step_record.status = "failed" if errors else "completed"
         step_record.output = dict(output)
         step_record.completed_at = get_utc_now()
         self.db.commit()
