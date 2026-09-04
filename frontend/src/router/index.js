@@ -77,8 +77,14 @@ export const routes = [
     meta: { requiresAuth: true },
   },
   {
-    path: '/strixy',
+    path: '/case/:caseId/strixy',
     name: 'StrixyChat',
+    component: () => import('../views/StrixyChat.vue'),
+    meta: { requiresAuth: true, requiresActiveCase: true, caseScoped: true, caseSwitchable: true },
+  },
+  {
+    path: '/strixy',
+    name: 'LegacyStrixyChat',
     component: () => import('../views/StrixyChat.vue'),
     meta: { requiresAuth: true, requiresActiveCase: true },
   },
@@ -245,7 +251,7 @@ export function createAppRouter(history = createWebHistory(), appRoutes = routes
         return
       }
       if (
-        ['LegacyTasks', 'LegacyHunts', 'LegacyPlugins'].includes(to.name) &&
+        ['LegacyTasks', 'LegacyHunts', 'LegacyPlugins', 'LegacyStrixyChat'].includes(to.name) &&
         activeCase.activeCaseId
       ) {
         next({

@@ -194,3 +194,14 @@ it('redirects legacy plugins and keeps the plugin workspace when switching cases
   expect(router.currentRoute.value.fullPath).toBe('/case/1/plugins?category=network#tools')
   expect(useActiveCaseStore().activeCaseId).toBe(1)
 })
+
+it('redirects legacy Strixy and preserves the chat workspace when switching cases', async () => {
+  await router.push('/strixy?source=bookmark')
+  expect(router.currentRoute.value.fullPath).toBe('/case/2/strixy?source=bookmark')
+  await useActiveCaseStore().select(1)
+  expect(router.currentRoute.value.fullPath).toBe('/case/1/strixy?source=bookmark')
+  caseService.getCases.mockResolvedValue([])
+  await useActiveCaseStore().refresh()
+  await router.push('/strixy')
+  expect(router.currentRoute.value.path).toBe('/cases')
+})
