@@ -110,6 +110,11 @@ const formatValue = (value) => {
   width: 100%;
 }
 
+.fallback-result pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .fallback-result {
   width: 100%;
 }

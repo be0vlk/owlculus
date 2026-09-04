@@ -20,7 +20,7 @@
         >
           <v-card elevation="1" rounded="lg" class="h-100 host-card">
             <!-- Host Header -->
-            <v-card-title class="d-flex align-center bg-primary-lighten-5">
+            <v-card-title class="d-flex align-center result-heading">
               <v-icon icon="mdi-server-network" class="mr-3" />
               <div class="flex-grow-1">
                 <div class="text-title-large d-flex align-center">
@@ -201,7 +201,7 @@
                     <v-icon icon="mdi-code-braces" size="small" class="mr-2" />
                     <span class="text-subtitle2">Service Banner</span>
                   </div>
-                  <v-card elevation="1" rounded="lg" color="grey-lighten-5">
+                  <v-card elevation="1" rounded="lg" color="surface-variant">
                     <v-card-text class="pa-3">
                       <div class="d-flex justify-space-between align-start">
                         <pre class="text-body-medium font-mono flex-grow-1 service-banner">{{
@@ -319,7 +319,7 @@ const copyToClipboard = async (text) => {
   margin-top: 1.5rem;
 }
 
-.bg-primary-lighten-5 {
+.result-heading {
   background: linear-gradient(
     45deg,
     rgb(var(--v-theme-primary), 0.08),
@@ -329,21 +329,5 @@ const copyToClipboard = async (text) => {
 
 .cursor-pointer {
   cursor: pointer;
-}
-
-/* Enhanced chip styles */
-.v-chip[color='success'] {
-  background: rgb(var(--v-theme-success), 0.12);
-  border: 1px solid rgb(var(--v-theme-success), 0.3);
-}
-
-.v-chip[color='error'] {
-  background: rgb(var(--v-theme-error), 0.12);
-  border: 1px solid rgb(var(--v-theme-error), 0.3);
-}
-
-.v-chip[color='info'] {
-  background: rgb(var(--v-theme-info), 0.12);
-  border: 1px solid rgb(var(--v-theme-info), 0.3);
 }
 </style>

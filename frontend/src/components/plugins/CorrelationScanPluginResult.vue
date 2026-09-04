@@ -101,12 +101,17 @@
 
       <!-- Completion Message -->
       <v-alert
-        v-else-if="resultItem.type === 'complete'"
+        v-else-if="resultItem.type === 'complete' && !hasErrors"
         type="success"
         density="comfortable"
         variant="tonal"
       >
-        {{ resultItem.data.message }}
+        {{
+          resultItem.data.message ||
+          (hasCorrelations
+            ? 'Correlation scan complete'
+            : 'Correlation scan complete. No correlations found.')
+        }}
       </v-alert>
     </template>
 
@@ -137,6 +142,10 @@ const normalizedResult = computed(() => {
   if (!props.result) return []
   return Array.isArray(props.result) ? props.result : [props.result]
 })
+
+const hasErrors = computed(() => normalizedResult.value.some((item) => item.type === 'error'))
+
+const hasCorrelations = computed(() => normalizedResult.value.some((item) => item.type === 'data'))
 
 const getMatchTypeLabel = (matchType) => {
   const labels = {

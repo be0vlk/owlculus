@@ -1,7 +1,7 @@
 <template>
   <v-card class="hunt-progress-card" elevation="1" rounded="lg">
     <!-- Header -->
-    <v-card-title class="d-flex align-center pa-4 text-no-wrap">
+    <v-card-title class="d-flex align-center pa-3 pa-sm-4 text-no-wrap">
       <v-avatar :color="statusColor" size="40" class="me-3">
         <v-icon :icon="statusIcon" color="white" />
       </v-avatar>
@@ -20,7 +20,7 @@
     <v-divider />
 
     <!-- Progress Section -->
-    <v-card-text class="pa-4">
+    <v-card-text class="pa-3 pa-sm-4">
       <!-- Timing Information -->
       <div class="timing-info mb-4">
         <div class="d-flex align-center flex-wrap">
@@ -103,7 +103,7 @@
     </v-card-text>
 
     <!-- Actions -->
-    <v-card-actions class="pa-4 pt-0 flex-wrap">
+    <v-card-actions class="pa-3 pa-sm-4 pt-0 flex-wrap">
       <v-btn
         v-if="execution.status === 'running'"
         color="error"
@@ -393,19 +393,6 @@ watch(
 @media (width <= 600px) {
   .hunt-progress-card {
     min-height: 280px;
-  }
-
-  .hunt-progress-card .v-card-title {
-    padding: 12px;
-  }
-
-  .hunt-progress-card .v-card-text {
-    padding: 12px;
-  }
-
-  .hunt-progress-card .v-card-actions {
-    padding: 12px;
-    padding-top: 0;
   }
 }
 

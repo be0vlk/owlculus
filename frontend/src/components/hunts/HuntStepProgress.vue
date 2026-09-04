@@ -54,7 +54,7 @@
                 Step Parameters
               </v-expansion-panel-title>
               <v-expansion-panel-text>
-                <v-table density="compact">
+                <v-table density="compact" class="bg-transparent">
                   <tbody>
                     <tr v-for="(value, key) in step.parameters" :key="key">
                       <td class="text-body-small font-weight-medium">{{ key }}</td>
@@ -311,23 +311,5 @@ const getOutputSummary = (output) => {
 
 .step-parameters {
   max-width: 500px;
-}
-
-.step-parameters :deep(.v-expansion-panel-title) {
-  min-height: 36px;
-  padding: 8px 16px;
-}
-
-.step-parameters :deep(.v-expansion-panel-text__wrapper) {
-  padding: 8px 16px;
-}
-
-.step-parameters .v-table {
-  background-color: transparent;
-}
-
-.step-parameters .v-table td {
-  padding: 4px 8px;
-  border-bottom: 1px solid rgb(var(--v-theme-outline), 0.1);
 }
 </style>

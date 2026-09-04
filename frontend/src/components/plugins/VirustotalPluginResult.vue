@@ -14,7 +14,7 @@
         <v-col v-for="(result, index) in virusTotalResults" :key="`vt-${index}`" cols="12">
           <v-card elevation="1" rounded="lg" class="result-card">
             <!-- Result Header -->
-            <v-card-title class="d-flex align-center bg-primary-lighten-5 pa-4">
+            <v-card-title class="d-flex align-center result-heading pa-4">
               <v-icon :icon="getTargetIcon(result.target_type)" size="large" class="mr-3" />
               <div class="flex-grow-1">
                 <div class="text-title-large d-flex align-center ga-2">
@@ -467,7 +467,7 @@ const copyToClipboard = async (text) => {
   margin-top: 1.5rem;
 }
 
-.bg-primary-lighten-5 {
+.result-heading {
   background: linear-gradient(
     45deg,
     rgb(var(--v-theme-primary), 0.08),
@@ -486,32 +486,7 @@ const copyToClipboard = async (text) => {
   white-space: nowrap;
 }
 
-/* Enhanced visual hierarchy */
-.v-chip[color='success'] {
-  background: rgb(var(--v-theme-success), 0.12);
-  border: 1px solid rgb(var(--v-theme-success), 0.3);
-}
-
-.v-chip[color='warning'] {
-  background: rgb(var(--v-theme-warning), 0.12);
-  border: 1px solid rgb(var(--v-theme-warning), 0.3);
-}
-
-.v-chip[color='error'] {
-  background: rgb(var(--v-theme-error), 0.12);
-  border: 1px solid rgb(var(--v-theme-error), 0.3);
-}
-
-/* Progress bar styling */
-.v-progress-linear {
-  background: rgb(var(--v-theme-surface-variant), 0.3);
-}
-
 .detection-progress {
   box-shadow: inset 0 1px 2px rgb(0 0 0 / 10%);
-}
-
-.detection-progress .v-progress-linear__determinate {
-  transition: width 0.6s ease;
 }
 </style>
