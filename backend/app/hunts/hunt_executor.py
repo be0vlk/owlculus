@@ -2,18 +2,22 @@
 Hunt executor for orchestrating hunt workflows
 """
 
+from contextlib import nullcontext
 from dataclasses import dataclass, field
-from typing import Any
 
 from sqlmodel import Session
 
 from app.core.utils import get_utc_now
 from app.database.models import HuntExecution, HuntStep, User
-from app.services.plugin_service import PluginService
+from app.plugins.plugin_context import ProductionPluginRunAdapter
+from app.plugins.plugin_registry import shipped_plugin_registry
+from app.plugins.plugin_runner import PluginRunner
+from app.services.api_key_vault import ConfigurationApiKeyVault
 
 from .base_hunt import HuntStepDefinition
 from .hunt_context import HuntContext
 from .hunt_event import HuntEvent, HuntNotifier
+from .step_output import StepOutput
 
 
 @dataclass
@@ -47,11 +51,15 @@ class HuntExecutor:
         db: Session,
         notifier: HuntNotifier,
         *,
-        plugin_service: Any | None = None,
+        plugin_runner: PluginRunner | None = None,
+        run_adapter: ProductionPluginRunAdapter | None = None,
     ):
         self.db = db
         self.notifier = notifier
-        self.plugin_service = plugin_service or PluginService(db)
+        self.plugin_runner = plugin_runner or PluginRunner(shipped_plugin_registry)
+        self.run_adapter = run_adapter or ProductionPluginRunAdapter(
+            lambda: nullcontext(self.db), ConfigurationApiKeyVault
+        )
 
     async def execute_hunt(
         self, execution: HuntExecution, hunt_definition: dict, current_user: User
@@ -249,15 +257,16 @@ class HuntExecutor:
             HuntEvent.progress(execution.id, progress, step_def.step_id)
         )
 
-        # Execute plugin
-        plugin = self.plugin_service.get_plugin(step_def.plugin_name)
-
         # Collect results
         results = []
         errors = []
-        with self.plugin_service.open_run(parameters, current_user=current_user) as run:
-            async for result in plugin.execute_with_evidence_collection(
-                parameters, run
+        with self.run_adapter.open(
+            user=current_user,
+            case_id=execution.case_id,
+            save_to_case=step_def.save_to_case,
+        ) as run:
+            async for result in self.plugin_runner.run(
+                step_def.plugin_name, parameters, run
             ):
                 if result.kind == "data":
                     results.append(result.payload)
@@ -265,10 +274,11 @@ class HuntExecutor:
                     errors.append(result.payload)
 
         # Store output in context
-        output = {
+        output: StepOutput = {
             "results": results,
             "result_count": len(results),
             "plugin": step_def.plugin_name,
+            "errors": errors,
         }
         if errors:
             step_record.error_details = "; ".join(
@@ -278,7 +288,7 @@ class HuntExecutor:
 
         # Update step record
         step_record.status = "completed" if results or not errors else "failed"
-        step_record.output = output
+        step_record.output = dict(output)
         step_record.completed_at = get_utc_now()
         self.db.commit()
 

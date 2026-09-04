@@ -65,7 +65,12 @@ def hunt_export_execution(session: Session, hunt_export_user: User) -> HuntExecu
             plugin_name="PeopleData",
             status="failed",
             parameters={"country": "España"},
-            output={"finding": "München Москва"},
+            output={
+                "results": [{"finding": "München Москва"}],
+                "result_count": 1,
+                "plugin": "PeopleData",
+                "errors": [{"message": "Remote source timed out"}],
+            },
             error_details="Remote source timed out",
             started_at=datetime(2026, 8, 1, 10, 0, tzinfo=UTC),
             completed_at=datetime(2026, 8, 1, 10, 1, tzinfo=UTC),
@@ -103,7 +108,12 @@ def test_hunt_execution_json_export_is_lossless_backend_representation(
         "case_number": "CASE-042",
     }
     assert payload["execution"]["created_by"]["username"] == "hunt-exporter"
-    assert payload["execution"]["steps"][0]["output"] == {"finding": "München Москва"}
+    assert payload["execution"]["steps"][0]["output"] == {
+        "results": [{"finding": "München Москва"}],
+        "result_count": 1,
+        "plugin": "PeopleData",
+        "errors": [{"message": "Remote source timed out"}],
+    }
 
 
 def test_hunt_execution_pdf_is_a_readable_standalone_report(

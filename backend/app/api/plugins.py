@@ -6,7 +6,8 @@ This module provides the core plugin system interface for executing OSINT tools 
 enabling extensible investigation capabilities through a standardized plugin architecture.
 """
 
-from collections.abc import Callable
+import json
+from collections.abc import AsyncGenerator, Callable
 from contextlib import AbstractContextManager
 from typing import Any
 
@@ -18,11 +19,24 @@ from ..core.dependencies import get_current_user
 from ..database.connection import get_db
 from ..database.db_utils import get_session
 from ..database.models import User
+from ..plugins.plugin_registry import PluginRegistry, shipped_plugin_registry
+from ..plugins.plugin_runner import PluginRunner
 from ..schemas.plugin_schema import PluginMetadata
 from ..services.api_key_vault import ApiKeyVault, ConfigurationApiKeyVault
 from ..services.plugin_service import PluginService
 
 router = APIRouter(tags=["plugins"])
+
+
+def get_plugin_registry() -> PluginRegistry:
+    """Return the catalogue constructed once when the application is imported."""
+    return shipped_plugin_registry
+
+
+def get_plugin_runner(
+    registry: PluginRegistry = Depends(get_plugin_registry),
+) -> PluginRunner:
+    return PluginRunner(registry)
 
 
 def get_plugin_api_keys(db: Session = Depends(get_db)) -> ApiKeyVault:
@@ -40,8 +54,9 @@ async def list_plugins(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     api_keys: ApiKeyVault = Depends(get_plugin_api_keys),
+    registry: PluginRegistry = Depends(get_plugin_registry),
 ):
-    plugin_svc = PluginService(db, api_keys)
+    plugin_svc = PluginService(db, api_keys, registry=registry)
     return await plugin_svc.list_plugins(current_user=current_user)
 
 
@@ -55,12 +70,21 @@ async def execute_plugin(
     session_factory: Callable[[], AbstractContextManager[Session]] = Depends(
         get_plugin_session_factory
     ),
+    registry: PluginRegistry = Depends(get_plugin_registry),
+    runner: PluginRunner = Depends(get_plugin_runner),
 ):
-    plugin_svc = PluginService(db, api_keys, session_factory=session_factory)
-    stream = await plugin_svc.stream_plugin_execution(
-        plugin_name, params, current_user=current_user
+    plugin_svc = PluginService(
+        db, api_keys, registry=registry, session_factory=session_factory
     )
+    plugin_svc.require_execution_access(current_user)
+    run_params = params or {}
+
+    async def stream() -> AsyncGenerator[str, None]:
+        with plugin_svc.open_run(run_params, current_user=current_user) as run:
+            async for event in runner.run(plugin_name, run_params, run):
+                yield json.dumps(event.to_wire()) + "\n"
+
     return StreamingResponse(
-        stream,
+        stream(),
         media_type="application/json",
     )

@@ -6,8 +6,9 @@ from typing import Any
 import pytest
 
 from app.plugins.base_plugin import BasePlugin, PluginRun, ResultEvent
+from app.plugins.plugin_registry import PluginRegistry
+from app.plugins.plugin_runner import PluginRunner
 from app.services.api_key_vault import Provider
-from app.services.plugin_service import PluginService
 
 
 class ContractPlugin(BasePlugin):
@@ -114,32 +115,21 @@ def test_base_plugin_has_no_run_scoped_or_subprocess_state():
 
 
 @pytest.mark.asyncio
-async def test_ndjson_boundary_pins_every_event_kind(test_admin):
-    service = PluginService.__new__(PluginService)
-
-    class Access:
-        def require_non_analyst(self, user):
-            return None
-
-    async def execute_plugin(name, params, *, current_user):
-        async def events():
-            yield ResultEvent.data({"value": 1})
-            yield ResultEvent.error("bad")
-            yield ResultEvent.status("working")
-            yield ResultEvent.complete()
-
-        return events()
-
-    service.case_access = Access()
-    service.execute_plugin = execute_plugin
-
-    stream = await service.stream_plugin_execution(
-        "ContractPlugin", {}, current_user=test_admin
+async def test_runner_preserves_plugin_events_and_adds_complete(test_admin, session):
+    ctx = PluginRun.for_test(
+        session=session,
+        user=test_admin,
+        api_keys={},
+        evidence=[],
+        entities=[],
     )
+    runner = PluginRunner(PluginRegistry.from_classes([ContractPlugin]))
 
-    assert [line async for line in stream] == [
-        '{"type": "data", "data": {"value": 1}}\n',
-        '{"type": "error", "data": {"message": "bad"}}\n',
-        '{"type": "status", "data": {"message": "working"}}\n',
-        '{"type": "complete", "data": {}}\n',
+    assert [
+        event async for event in runner.run("ContractPlugin", {"target": "x"}, ctx)
+    ] == [
+        ResultEvent.status("starting"),
+        ResultEvent.data({"target": "x"}),
+        ResultEvent.error("recoverable problem"),
+        ResultEvent.complete(),
     ]

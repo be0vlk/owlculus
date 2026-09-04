@@ -208,7 +208,7 @@ class TestHuntService:
         mock_run_hunt_async.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("app.core.dependencies.get_db")
+    @patch("app.database.connection.get_db")
     async def test_run_hunt_async(
         self,
         mock_get_db,
@@ -407,7 +407,7 @@ class TestHuntService:
         await hunt_service._run_hunt_async(9999, 1)
 
     @pytest.mark.asyncio
-    @patch("app.core.dependencies.get_db")
+    @patch("app.database.connection.get_db")
     async def test_run_hunt_async_execution_error(
         self,
         mock_get_db,
