@@ -12,7 +12,6 @@ backend_port="${E2E_BACKEND_PORT:-18000}"
 active_project=""
 active_topology=""
 active_frontend_port=""
-active_vite_pid=""
 
 run_compose() {
     FRONTEND_PORT="$active_frontend_port" \
@@ -23,14 +22,6 @@ run_compose() {
 }
 
 cleanup_stack() {
-    if [[ -n "$active_vite_pid" ]]; then
-        if kill -0 "$active_vite_pid" 2>/dev/null; then
-            kill "$active_vite_pid"
-            wait "$active_vite_pid" 2>/dev/null || true
-        fi
-        active_vite_pid=""
-    fi
-
     if [[ -z "$active_project" ]]; then
         return
     fi
@@ -38,29 +29,6 @@ cleanup_stack() {
     echo "Removing ephemeral stack $active_project (including volumes)..."
     run_compose down --volumes --remove-orphans
     active_project=""
-}
-
-start_vite_server() {
-    (
-        cd "$repository_root/frontend"
-        API_PROXY_TARGET="http://127.0.0.1:$backend_port" \
-            exec ./node_modules/.bin/vite --host 0.0.0.0 --port "$vite_port" --strictPort
-    ) &
-    active_vite_pid=$!
-
-    for _attempt in {1..30}; do
-        if ! kill -0 "$active_vite_pid" 2>/dev/null; then
-            echo "Vite exited before becoming ready on port $vite_port." >&2
-            return 1
-        fi
-        if curl --fail --silent --output /dev/null "http://127.0.0.1:$vite_port"; then
-            return
-        fi
-        sleep 1
-    done
-
-    echo "Vite did not become ready on port $vite_port." >&2
-    return 1
 }
 
 trap cleanup_stack EXIT INT TERM
@@ -94,13 +62,35 @@ browser_url() {
     fi
 }
 
+wait_for_frontend() {
+    local frontend_url="http://127.0.0.1:$active_frontend_port"
+    local consecutive_successes=0
+
+    for _attempt in {1..60}; do
+        if curl --fail --silent --output /dev/null "$frontend_url"; then
+            ((consecutive_successes += 1))
+            if (( consecutive_successes == 2 )); then
+                return
+            fi
+        else
+            consecutive_successes=0
+        fi
+        sleep 1
+    done
+
+    echo "Frontend did not become stable at $frontend_url." >&2
+    run_compose logs --no-color frontend >&2
+    return 1
+}
+
 run_variant() {
     local server_kind="$1"
     local host="$2"
+    local viewport="$3"
     local setup_token
     local test_status=0
 
-    active_project="owlculus-e2e-${server_kind}-${host//./-}-$$"
+    active_project="owlculus-e2e-${server_kind}-${viewport}-${host//./-}-$$"
     if [[ "$server_kind" == "gateway" ]]; then
         active_topology="direct"
         active_frontend_port="$gateway_port"
@@ -109,13 +99,9 @@ run_variant() {
         active_frontend_port="$vite_port"
     fi
 
-    echo "Starting a fresh $server_kind stack for $host..."
-    if [[ "$server_kind" == "gateway" ]]; then
-        run_compose up --detach --build --wait --wait-timeout 240
-    else
-        run_compose up --detach --build --wait --wait-timeout 240 backend
-        start_vite_server
-    fi
+    echo "Starting a fresh $server_kind stack for $host at the $viewport viewport..."
+    run_compose up --detach --build --wait --wait-timeout 240
+    wait_for_frontend
 
     setup_token="$(read_setup_token_from_logs)"
     if [[ -z "$setup_token" ]]; then
@@ -128,6 +114,8 @@ run_variant() {
         cd "$repository_root/frontend"
         OWLCULUS_BASE_URL="$(browser_url "$host" "$active_frontend_port")" \
             OWLCULUS_SETUP_TOKEN="$setup_token" \
+            OWLCULUS_SERVER_KIND="$server_kind" \
+            OWLCULUS_VIEWPORT="$viewport" \
             npm run test:e2e:playwright -- --project=chromium
     ) || test_status=$?
 
@@ -137,9 +125,12 @@ run_variant() {
 
 read -r -a server_kinds <<< "${E2E_SERVER_KINDS:-gateway vite}"
 read -r -a browser_hosts <<< "${E2E_HOSTS:-localhost 127.0.0.1}"
+read -r -a viewports <<< "${E2E_VIEWPORTS:-desktop narrow}"
 
 for server_kind in "${server_kinds[@]}"; do
     for host in "${browser_hosts[@]}"; do
-        run_variant "$server_kind" "$host"
+        for viewport in "${viewports[@]}"; do
+            run_variant "$server_kind" "$host" "$viewport"
+        done
     done
 done

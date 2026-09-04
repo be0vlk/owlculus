@@ -1,5 +1,5 @@
 # Development Dockerfile for Vue.js frontend with hot reload
-FROM node:18-alpine
+FROM node:24-alpine
 
 # Create a non-root user
 RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001

@@ -12,7 +12,7 @@ export const clientService = {
   },
 
   async createClient(client) {
-    const response = await api.post('/api/clients', client)
+    const response = await api.post('/api/clients/', client)
     return response.data
   },
 

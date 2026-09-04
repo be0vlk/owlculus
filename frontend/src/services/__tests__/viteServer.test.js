@@ -45,4 +45,23 @@ describe('Vite development server', () => {
     expect(composeFile).toContain('FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-172.30.0.254}')
     expect(composeFile).toContain('ipv4_address: 172.30.0.254')
   })
+
+  it('prebundles Vuetify families used by lazy routes so first navigation is not reloaded', async () => {
+    const { default: config } = await import('../../../vite.config')
+
+    expect(config.optimizeDeps.include).toEqual(
+      expect.arrayContaining([
+        'vuetify/components/VExpansionPanel',
+        'vuetify/components/VMenu',
+        'vuetify/components/VProgressLinear',
+        'vuetify/components/VRadioGroup',
+        'vuetify/components/VTabs',
+        'vuetify/components/VTextarea',
+        'vuetify/components/VTimeline',
+        'vuetify/components/VToolbar',
+        'vuetify/components/VWindow',
+        'vuetify/labs/VTreeview',
+      ]),
+    )
+  })
 })

@@ -1,5 +1,5 @@
 # Build the Vue SPA before copying it into the browser-facing Caddy image.
-FROM node:18-alpine AS frontend-builder
+FROM node:24-alpine AS frontend-builder
 
 WORKDIR /build
 

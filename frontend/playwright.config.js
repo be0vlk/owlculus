@@ -2,6 +2,15 @@ import process from 'node:process'
 import { defineConfig, devices } from '@playwright/test'
 
 const externalBaseURL = process.env.OWLCULUS_BASE_URL
+const viewportName = process.env.OWLCULUS_VIEWPORT || 'desktop'
+const viewports = {
+  desktop: { width: 1440, height: 900 },
+  narrow: { width: 390, height: 844 },
+}
+
+if (!viewports[viewportName]) {
+  throw new Error(`Unsupported OWLCULUS_VIEWPORT: ${viewportName}`)
+}
 
 export default defineConfig({
   testDir: './e2e',
@@ -25,6 +34,7 @@ export default defineConfig({
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
+        viewport: viewports[viewportName],
       },
     },
     {
