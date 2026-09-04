@@ -10,12 +10,10 @@ WORKDIR /app
 # Install dependencies first (for layer caching)
 COPY package*.json ./
 RUN npm ci
+RUN chown -R nodejs:nodejs /app/node_modules
 
 # Copy source code (will be overridden by volume in dev)
-COPY . .
-
-# Change ownership to nodejs user
-RUN chown -R nodejs:nodejs /app
+COPY --chown=nodejs:nodejs . .
 
 # Switch to non-root user
 USER nodejs

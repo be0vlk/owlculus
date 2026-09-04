@@ -12,6 +12,7 @@ backend_port="${E2E_BACKEND_PORT:-18000}"
 active_project=""
 active_topology=""
 active_frontend_port=""
+active_hmr_probe_path=""
 
 run_compose() {
     FRONTEND_PORT="$active_frontend_port" \
@@ -22,13 +23,16 @@ run_compose() {
 }
 
 cleanup_stack() {
-    if [[ -z "$active_project" ]]; then
-        return
+    if [[ -n "$active_project" ]]; then
+        echo "Removing ephemeral stack $active_project (including volumes)..."
+        run_compose down --volumes --remove-orphans
+        active_project=""
     fi
 
-    echo "Removing ephemeral stack $active_project (including volumes)..."
-    run_compose down --volumes --remove-orphans
-    active_project=""
+    if [[ -n "$active_hmr_probe_path" ]]; then
+        rm -f -- "$active_hmr_probe_path"
+        active_hmr_probe_path=""
+    fi
 }
 
 trap cleanup_stack EXIT INT TERM
@@ -97,6 +101,8 @@ run_variant() {
     else
         active_topology="development"
         active_frontend_port="$vite_port"
+        active_hmr_probe_path="$(mktemp "$repository_root/frontend/src/e2e-hmr-probe.XXXXXX.js")"
+        cp "$repository_root/frontend/e2e/fixtures/hmr-probe.js" "$active_hmr_probe_path"
     fi
 
     echo "Starting a fresh $server_kind stack for $host at the $viewport viewport..."
@@ -116,6 +122,7 @@ run_variant() {
             OWLCULUS_SETUP_TOKEN="$setup_token" \
             OWLCULUS_SERVER_KIND="$server_kind" \
             OWLCULUS_VIEWPORT="$viewport" \
+            OWLCULUS_HMR_PROBE_PATH="$active_hmr_probe_path" \
             npm run test:e2e:playwright -- --project=chromium
     ) || test_status=$?
 
