@@ -1,524 +1,147 @@
-"""
-Base plugin class that all plugins must inherit from
-"""
+"""Small public interface implemented by investigation plugin authors."""
 
-import asyncio
-import ipaddress
 import json
-import shlex
-import subprocess
 from abc import ABC, abstractmethod
-from concurrent.futures import ThreadPoolExecutor
-from tempfile import SpooledTemporaryFile
-from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple, Union
-
-from fastapi import UploadFile
-from sqlmodel import Session
+from collections.abc import AsyncGenerator, Mapping, Sequence
+from typing import Any
 
 from app.core.utils import get_utc_now
-from app.database import models
-from app.database.connection import get_db
-from app.schemas import evidence_schema as schemas
-from app.schemas.entity_schema import EntityCreate, IpAddressData
-from app.schemas.evidence_schema import EvidenceCreate, FolderCreate
-from app.services.api_key_vault import ApiKeyVault, ConfigurationApiKeyVault, Provider
-from app.services.entity_service import EntityService
-from app.services.evidence_service import EvidenceService
+from app.schemas.evidence_schema import EvidenceCreate
+from app.services.api_key_vault import ApiKeyVault, Provider
+
+from .plugin_context import PluginRun
+from .plugin_types import (
+    EntityWrite,
+    EvidenceWrite,
+    Payload,
+    ResultEvent,
+    unique_ip_writes,
+)
+from .subprocess_plugin import SubprocessPluginMixin
+
+__all__ = [
+    "BasePlugin",
+    "EntityWrite",
+    "EvidenceWrite",
+    "Payload",
+    "PluginRun",
+    "ResultEvent",
+    "SubprocessPluginMixin",
+    "unique_ip_writes",
+]
 
 
 class BasePlugin(ABC):
-    """Base class for all plugins to inherit from"""
+    """Metadata, event constructors, and result collection shared by plugins."""
 
-    def __init__(
-        self, display_name: Optional[str] = None, db_session: Optional[Session] = None
-    ):
-        self.name: str = self.__class__.__name__
-        self.display_name: str = display_name or self.name
-        self.description: str = ""
-        self.enabled: bool = True
-        self.category: str = "Other"  # Default category, change for each plugin
-        self.evidence_category: str = "Other"  # Category for evidence storage
-        self.parameters: Dict[str, Dict[str, Any]] = {}
-        self.save_to_case: bool = False  # Whether to save plugin output as evidence
-        self.api_key_requirements: List[Provider] = []
-        self._executor = ThreadPoolExecutor(
-            max_workers=3, thread_name_prefix=f"{self.name}_executor"
-        )
-        self._current_user: Optional[models.User] = None
-        self._evidence_results: List[Dict[str, Any]] = (
-            []
-        )  # Collect results for evidence saving
-        self._current_params: Optional[Dict[str, Any]] = None
-        self._db_session: Optional[Session] = db_session
-        self._api_key_vault: ApiKeyVault | None = (
-            ConfigurationApiKeyVault(db_session) if db_session else None
-        )
+    def __init__(self, display_name: str | None = None):
+        self.name = self.__class__.__name__
+        self.display_name = display_name or self.name
+        self.description = ""
+        self.enabled = True
+        self.category = "Other"
+        self.evidence_category = "Other"
+        self.parameters: dict[str, dict[str, Any]] = {}
+        self.api_key_requirements: list[Provider] = []
 
-        self._validate_evidence_category()
+    @staticmethod
+    def data(payload: Mapping[str, Any]) -> ResultEvent:
+        return ResultEvent.data(payload)
 
-    def _validate_evidence_category(self) -> None:
-        """Validate that evidence_category is a valid evidence category"""
-        if self.evidence_category not in EvidenceCreate.VALID_CATEGORIES:
-            raise ValueError(
-                f"Invalid evidence_category '{self.evidence_category}' for plugin {self.name}. "
-                f"Must be one of: {', '.join(EvidenceCreate.VALID_CATEGORIES)}"
-            )
+    @staticmethod
+    def error(message: str) -> ResultEvent:
+        return ResultEvent.error(message)
 
-    async def _read_stream(self, stream) -> AsyncGenerator[str, None]:
-        """Read from a stream asynchronously"""
-        loop = asyncio.get_event_loop()
-        while True:
-            line = await loop.run_in_executor(self._executor, stream.readline)
-            if not line:
-                break
-            yield line.strip()
+    @staticmethod
+    def status(message: str) -> ResultEvent:
+        return ResultEvent.status(message)
 
-    async def _run_subprocess(
-        self,
-        command: Union[str, List[str]],
-    ) -> AsyncGenerator[Dict[str, Any], None]:
-        """
-        Execute a subprocess command asynchronously
-
-        Args:
-            command: Command to execute
-
-        Yields:
-            Structured output data
-        """
-
-        sanitized_command = [shlex.quote(arg) for arg in command]
-
-        loop = asyncio.get_event_loop()
-        process = await loop.run_in_executor(
-            self._executor,
-            lambda: subprocess.Popen(
-                sanitized_command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-                bufsize=1,
-            ),
-        )
-
-        # Stream output asynchronously
-        async for line in self._read_stream(process.stdout):
-            try:
-                parsed_data = self.parse_output(line)
-                if parsed_data is not None:  # Skip None results
-                    yield parsed_data
-            except Exception as e:
-                yield {"error": str(e)}
-
-        # Wait for process to complete asynchronously
-        returncode = await loop.run_in_executor(self._executor, process.wait)
-
-        if returncode != 0:
-            error = await loop.run_in_executor(self._executor, process.stderr.read)
-            yield {"error": error}
+    @staticmethod
+    def complete() -> ResultEvent:
+        return ResultEvent.complete()
 
     @abstractmethod
-    def parse_output(self, line: str) -> Optional[Dict[str, Any]]:
-        """
-        Parse a line of output into structured data
+    def run(
+        self, params: dict[str, Any], ctx: PluginRun
+    ) -> AsyncGenerator[ResultEvent, None]: ...
 
-        Args:
-            line: Raw output line from command
+    async def execute_with_evidence_collection(
+        self, params: dict[str, Any], ctx: PluginRun
+    ) -> AsyncGenerator[ResultEvent, None]:
+        payloads: list[Payload] = []
+        async for event in self.run(params, ctx):
+            if event.kind == "data":
+                payloads.append(event.payload)
+            yield event
 
-        Returns:
-            Dictionary containing parsed data, or None to skip this line
-        """
-        pass
-
-    @abstractmethod
-    async def run(
-        self, params: Optional[Dict[str, Any]] = None
-    ) -> AsyncGenerator[Dict[str, Any], None]:
-        """
-        Execute the plugin with the given parameters
-
-        Args:
-            params: Optional dictionary of parameters for the plugin
-
-        Yields:
-            Structured output data
-        """
-        pass
-
-    async def _ensure_evidence_folder_exists(
-        self, db: Session, case_id: int
-    ) -> Optional[Tuple[str, Optional[int]]]:
-        """
-        Ensure that the "Plugin Results" folder exists for storing plugin/hunt results.
-
-        Args:
-            db: Database session
-            case_id: ID of the case to check/create folders for
-
-        Returns:
-            Tuple of (folder_path, parent_folder_id) to use for saving evidence
-        """
-        from sqlmodel import select
-
-        # Check if "Plugin Results" folder exists for this case
-        plugin_results_folder = db.exec(
-            select(models.Evidence).where(
-                models.Evidence.case_id == case_id,
-                models.Evidence.is_folder == True,
-                models.Evidence.title == "Plugin Results",
-            )
-        ).first()
-
-        if plugin_results_folder:
-            return plugin_results_folder.folder_path, plugin_results_folder.id
-
-        # Create "Plugin Results" folder
-        evidence_service = EvidenceService(db)
-
-        folder_data = FolderCreate(
-            case_id=case_id,
-            title="Plugin Results",
-            description="Auto-created folder for all plugin and hunt results",
-            folder_path=None,  # Will be set to title by the service
-            parent_folder_id=None,
-        )
-
-        try:
-            created_folder = await evidence_service.create_folder(
-                folder_data=folder_data,
-                current_user=self._current_user,
-            )
-            if created_folder:
-                return created_folder.folder_path, created_folder.id
-            else:
-                return "Plugin Results", None
-        except Exception:
-            # If folder creation fails, return None to save to root
-            return None, None
-
-    async def _get_best_folder_path(
-        self, db: Session, case_id: int
-    ) -> Optional[Tuple[str, Optional[int]]]:
-        """
-        Find the "Plugin Results" folder for saving plugin evidence.
-        This method is kept for backward compatibility but now just delegates
-        to _ensure_evidence_folder_exists since we always use the same folder.
-
-        Args:
-            db: Database session
-            case_id: ID of the case to find folders for
-
-        Returns:
-            Tuple of (folder_path, parent_folder_id) to use, or (None, None) if no suitable folder found
-        """
-        # Simply delegate to _ensure_evidence_folder_exists which will find or create
-        # the "Plugin Results" folder
-        return await self._ensure_evidence_folder_exists(db, case_id)
-
-    async def _save_evidence_to_case(
-        self,
-        db: Session,
-        case_id: int,
-        content: str,
-        filename: Optional[str] = None,
-        save_to_case: bool = False,
-    ) -> None:
-        """
-        Save plugin output as evidence to the specified case
-
-        Args:
-            db: Database session
-            case_id: ID of the case to save evidence to
-            content: Content to save as evidence
-            filename: Optional custom filename, defaults to plugin name with timestamp
-            save_to_case: Whether to save the evidence (defaults to False)
-        """
-        if not save_to_case or not content:
+        if not ctx.save_to_case or ctx.case_id is None or not payloads:
             return
-
-        # Ensure folder structure exists and get the correct folder path and parent ID
-        folder_info = await self._ensure_evidence_folder_exists(db, case_id)
-        if folder_info:
-            folder_path, parent_folder_id = folder_info
-        else:
-            folder_path, parent_folder_id = None, None
-
-        # Create a temporary file with the content
-        temp_file = SpooledTemporaryFile()
-        temp_file.write(content.encode("utf-8"))
-        temp_file.seek(0)
-
-        # Create an UploadFile with the temp file
-        timestamp = get_utc_now().strftime("%Y%m%d_%H%M%S")
-        file = UploadFile(
-            filename=filename or f"{self.name}_output_{timestamp}.txt",
-            file=temp_file,
-            headers={"content-type": "text/plain"},
-        )
-
-        # Create evidence schema with resolved folder path and parent folder ID
-        evidence_create = schemas.EvidenceCreate(
-            case_id=case_id,
-            title=f"{self.display_name} results.txt",
-            description=f"Output generated by {self.display_name} plugin",
-            evidence_type="file",
-            category=self.evidence_category,
-            folder_path=folder_path,  # Use the resolved folder path
-            parent_folder_id=parent_folder_id,  # Set the parent folder ID for proper tree display
-        )
-
-        # Save evidence using evidence service
-        evidence_service = EvidenceService(db)
-        await evidence_service.create_evidence(
-            evidence=evidence_create,
-            current_user=self._current_user,
-            file=file,
-        )
-
-        temp_file.close()
-
-    def _get_enhanced_parameters(self) -> Dict[str, Dict[str, Any]]:
-        """Get parameters with automatic save_to_case injection"""
-        enhanced_params = self.parameters.copy()
-
-        # Always add save_to_case parameter if not already defined
-        if "save_to_case" not in enhanced_params:
-            enhanced_params["save_to_case"] = {
-                "type": "boolean",
-                "description": f"Save {self.display_name} results as evidence to the case",
-                "default": False,
-                "required": False,
-            }
-
-        return enhanced_params
-
-    def add_evidence_result(self, result: Dict[str, Any]) -> None:
-        """Add a result to be included in evidence saving"""
-        self._evidence_results.append(result)
-
-    async def save_collected_evidence(self) -> None:
-        """Save all collected evidence results to the case"""
-        if not self._current_params or not self._evidence_results:
-            return
-
-        save_to_case = self._current_params.get("save_to_case", False)
-        case_id = self._current_params.get("case_id")
-
-        if not save_to_case or not case_id:
-            return
-
-        # Use injected session if available, otherwise get a new one
-        if self._db_session:
-            db = self._db_session
-            close_session = False
-        else:
-            db = next(get_db())
-            close_session = True
-
-        try:
-            # Format the evidence content
-            content = self._format_evidence_content(
-                self._evidence_results, self._current_params
+        content = self.format_evidence(payloads, params)
+        if content:
+            timestamp = get_utc_now().strftime("%Y%m%d_%H%M%S")
+            await ctx.evidence.write(
+                EvidenceWrite(
+                    self.name,
+                    self.display_name,
+                    self.evidence_category,
+                    ctx.case_id,
+                    content,
+                    f"{self.name}_results_{timestamp}.txt",
+                ),
+                ctx.user,
             )
+        for request in self.entity_writes(payloads, params):
+            await ctx.entities.write(request, ctx.case_id, ctx.user)
 
-            if content:
-                timestamp = get_utc_now().strftime("%Y%m%d_%H%M%S")
-                await self._save_evidence_to_case(
-                    db=db,
-                    case_id=case_id,
-                    content=content,
-                    filename=f"{self.name}_results_{timestamp}.txt",
-                    save_to_case=True,
-                )
-
-            # Auto-create IP entities if plugin supports it
-            await self._create_ip_entities_from_results()
-        finally:
-            # Only close if we created the session
-            if close_session:
-                db.close()
-
-    def _format_evidence_content(
-        self, results: List[Dict[str, Any]], params: Dict[str, Any]
-    ) -> str:
-        """Format evidence content - can be overridden by plugins for custom formatting"""
-        content_lines = [
+    def format_evidence(self, payloads: list[Payload], params: dict[str, Any]) -> str:
+        lines = [
             f"{self.display_name} Results",
             "=" * 50,
             "",
-            f"Total results: {len(results)}",
+            f"Total results: {len(payloads)}",
             f"Execution time: {get_utc_now().strftime('%Y-%m-%d %H:%M:%S UTC')}",
             "",
             "Parameters:",
             "-" * 20,
         ]
-
-        # Add parameters (excluding sensitive ones)
-        for key, value in params.items():
-            if key not in ["save_to_case", "case_id"]:
-                content_lines.append(f"{key}: {value}")
-
-        content_lines.extend(
-            [
-                "",
-                "Results:",
-                "-" * 20,
-                "",
-            ]
+        lines.extend(
+            f"{key}: {value}"
+            for key, value in params.items()
+            if key not in {"save_to_case", "case_id"}
         )
-
-        # Add results in JSON format for readability
-        for i, result in enumerate(results, 1):
-            content_lines.extend(
-                [
-                    f"Result #{i}:",
-                    json.dumps(result, indent=2, default=str),
-                    "",
-                ]
+        lines.extend(["", "Results:", "-" * 20, ""])
+        for index, payload in enumerate(payloads, 1):
+            lines.extend(
+                [f"Result #{index}:", json.dumps(payload, indent=2, default=str), ""]
             )
+        return "\n".join(lines)
 
-        return "\n".join(content_lines)
-
-    async def execute_with_evidence_collection(
-        self, params: Optional[Dict[str, Any]] = None
-    ) -> AsyncGenerator[Dict[str, Any], None]:
-        """Execute plugin with automatic evidence collection"""
-        self._current_params = params or {}
-        self._evidence_results = []
-
-        try:
-            async for result in self.run(params):
-                if result.get("type") == "data":
-                    self.add_evidence_result(result.get("data", {}))
-
-                yield result
-        finally:
-            await self.save_collected_evidence()
-
-    def check_api_key_requirements(self, db: Session) -> Dict[str, bool]:
-        """Check if required API keys are configured."""
-        if not self.api_key_requirements:
-            return {}
-
-        vault = self._api_key_vault or ConfigurationApiKeyVault(db)
-        api_key_status = {}
-
-        for provider in self.api_key_requirements:
-            api_key_status[provider.value] = vault.is_configured(provider)
-
-        return api_key_status
-
-    def get_missing_api_keys(self, db: Session) -> List[str]:
-        """Get list of missing API keys required by this plugin."""
-        if not self.api_key_requirements:
-            return []
-
-        api_key_status = self.check_api_key_requirements(db)
-        return [
-            provider
-            for provider, is_configured in api_key_status.items()
-            if not is_configured
-        ]
-
-    def _is_ip_address(self, value: str) -> bool:
-        """Check if the given value is a valid IP address"""
-        try:
-            ipaddress.ip_address(value)
-            return True
-        except ValueError:
-            return False
-
-    async def _create_ip_entities_from_results(self) -> None:
-        """Extract IP addresses from results and create or enrich entities (to be overridden by plugins)"""
-        case_id = self._current_params.get("case_id")
-        if not case_id:
-            return
-
-        discovered_ips = self._extract_unique_ips_from_results()
-
-        if not discovered_ips:
-            return
-
-        # Use injected session if available, otherwise get a new one
-        if self._db_session:
-            db = self._db_session
-            close_session = False
-        else:
-            db = next(get_db())
-            close_session = True
-
-        try:
-            entity_service = EntityService(db)
-            created_count = 0
-            enriched_count = 0
-            failed_count = 0
-
-            for ip_data in discovered_ips:
-                try:
-                    ip_address = ip_data["ip"]
-                    description = ip_data["description"]
-                    sources = ip_data.get("sources")
-
-                    # Check if IP entity already exists
-                    existing_entity = await entity_service.find_entity_by_ip_address(
-                        case_id, ip_address, current_user=self._current_user
-                    )
-
-                    if existing_entity:
-                        # Enrich existing entity with new data
-                        await entity_service.enrich_entity_description(
-                            case_id,
-                            existing_entity.id,
-                            description,
-                            current_user=self._current_user,
-                        )
-                        enriched_count += 1
-                    else:
-                        # Create new IP address entity
-                        ip_data_kwargs = {
-                            "ip_address": ip_address,
-                            "description": description,
-                        }
-                        if sources:
-                            ip_data_kwargs["sources"] = sources
-
-                        entity_create = EntityCreate(
-                            entity_type="ip_address",
-                            data=IpAddressData(**ip_data_kwargs).model_dump(),
-                        )
-
-                        await entity_service.create_entity(
-                            case_id=case_id,
-                            entity=entity_create,
-                            current_user=self._current_user,
-                        )
-                        created_count += 1
-
-                except Exception:
-                    failed_count += 1
-                    continue
-
-        except Exception:
-            pass
-        finally:
-            if close_session:
-                db.close()
-
-    def _extract_unique_ips_from_results(self) -> list[dict]:
-        """Extract unique IP addresses with metadata from collected results (to be overridden by plugins)"""
-        # Default implementation - plugins should override this method
-        # to extract IPs specific to their result format
+    def entity_writes(
+        self, payloads: list[Payload], params: dict[str, Any]
+    ) -> Sequence[EntityWrite]:
         return []
 
     def _generate_ip_description(self, ip_address: str, context: str = "") -> str:
-        """Generate a descriptive string for the IP address entity (can be overridden by plugins)"""
-        plugin_name = self.display_name
         context_part = f" for '{context}'" if context else ""
-        return f"Discovered via {plugin_name} lookup{context_part}"
+        return f"Discovered via {self.display_name} lookup{context_part}"
 
-    def get_metadata(self) -> Dict[str, Any]:
-        """Return plugin metadata with enhanced parameters"""
-        metadata = {
+    def _get_enhanced_parameters(self) -> dict[str, dict[str, Any]]:
+        parameters = self.parameters.copy()
+        parameters.setdefault(
+            "save_to_case",
+            {
+                "type": "boolean",
+                "description": f"Save {self.display_name} results as evidence to the case",
+                "default": False,
+                "required": False,
+            },
+        )
+        return parameters
+
+    def get_metadata(self, api_keys: ApiKeyVault | None = None) -> dict[str, Any]:
+        if self.evidence_category not in EvidenceCreate.VALID_CATEGORIES:
+            raise ValueError(f"Invalid evidence category: {self.evidence_category}")
+        metadata: dict[str, Any] = {
             "name": self.name,
             "display_name": self.display_name,
             "description": self.description,
@@ -527,15 +150,9 @@ class BasePlugin(ABC):
             "parameters": self._get_enhanced_parameters(),
             "api_key_requirements": self.api_key_requirements,
         }
-
-        # Include API key status if we have a database session
-        if self._db_session:
-            metadata["api_key_status"] = self.check_api_key_requirements(
-                self._db_session
-            )
-
+        if api_keys is not None:
+            metadata["api_key_status"] = {
+                provider.value: api_keys.is_configured(provider)
+                for provider in self.api_key_requirements
+            }
         return metadata
-
-    def __del__(self):
-        """Cleanup thread pool on plugin deletion"""
-        self._executor.shutdown(wait=False)

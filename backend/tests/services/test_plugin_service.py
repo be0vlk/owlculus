@@ -2,8 +2,10 @@
 Tests for PluginService functionality
 """
 
+from collections.abc import AsyncGenerator
+from contextlib import nullcontext
 from types import ModuleType
-from typing import Any, AsyncGenerator, Dict, Optional
+from typing import Any
 from unittest.mock import Mock, patch
 
 import pytest
@@ -15,7 +17,8 @@ from app.core.exceptions import (
     ValidationException,
 )
 from app.database import models
-from app.plugins.base_plugin import BasePlugin
+from app.plugins.base_plugin import BasePlugin, PluginRun, ResultEvent
+from app.services.api_key_vault import ConfigurationApiKeyVault
 from app.services.plugin_service import PluginService
 
 
@@ -23,8 +26,8 @@ from app.services.plugin_service import PluginService
 class MockPlugin(BasePlugin):
     """Mock plugin for testing purposes"""
 
-    def __init__(self, db_session=None):
-        super().__init__(display_name="Mock Plugin", db_session=db_session)
+    def __init__(self):
+        super().__init__(display_name="Mock Plugin")
         self.description = "Test plugin for unit tests"
         self.category = "Test"
         self.evidence_category = "Other"
@@ -36,13 +39,10 @@ class MockPlugin(BasePlugin):
             }
         }
 
-    def parse_output(self, line: str) -> Optional[Dict[str, Any]]:
-        return {"output": line}
-
     async def run(
-        self, params: Optional[Dict[str, Any]] = None
-    ) -> AsyncGenerator[Dict[str, Any], None]:
-        yield {"type": "data", "data": {"test": "result"}}
+        self, params: dict[str, Any], ctx: PluginRun
+    ) -> AsyncGenerator[ResultEvent, None]:
+        yield self.data({"test": "result"})
 
 
 class TestPluginService:
@@ -65,6 +65,19 @@ class TestPluginService:
             assert isinstance(service._plugins, dict)
             mock_load.assert_called_once()
 
+    def test_production_vault_uses_the_run_scoped_session(
+        self, session: Session, test_admin: models.User
+    ):
+        run_session = Mock(spec=Session)
+        with patch.object(PluginService, "_load_plugins"):
+            service = PluginService(
+                session, session_factory=lambda: nullcontext(run_session)
+            )
+
+        with service.open_run({}, current_user=test_admin) as run:
+            assert isinstance(run.api_keys, ConfigurationApiKeyVault)
+            assert run.api_keys._db is run_session
+
     def test_load_plugins_functionality(self, session: Session):
         """Test that plugin loading creates a service with plugins"""
         # Mock the plugin loading to avoid loading real plugins that may have dependencies
@@ -82,8 +95,8 @@ class TestPluginService:
 
     def test_loading_plugin_with_unknown_provider_fails(self, session, monkeypatch):
         class UnknownProviderPlugin(MockPlugin):
-            def __init__(self, db_session=None):
-                super().__init__(db_session=db_session)
+            def __init__(self):
+                super().__init__()
                 self.api_key_requirements = ["misspelled-provider"]
 
         plugin_module = ModuleType("unknown_provider_plugin")
@@ -161,7 +174,7 @@ class TestPluginService:
         ) as mock_execute:
 
             async def mock_generator():
-                yield {"type": "data", "data": {"test": "result"}}
+                yield ResultEvent.data({"test": "result"})
 
             mock_execute.return_value = mock_generator()
 
@@ -175,8 +188,7 @@ class TestPluginService:
                 results.append(result)
 
             assert len(results) == 1
-            assert results[0]["type"] == "data"
-            assert results[0]["data"]["test"] == "result"
+            assert results[0] == ResultEvent.data({"test": "result"})
 
     @pytest.mark.asyncio
     async def test_execute_plugin_not_found(
@@ -204,16 +216,21 @@ class TestPluginService:
         ) as mock_execute:
 
             async def mock_generator():
-                yield {"type": "data", "data": {"test": "result"}}
+                yield ResultEvent.data({"test": "result"})
 
             mock_execute.return_value = mock_generator()
 
-            await plugin_service_instance.execute_plugin(
+            result_generator = await plugin_service_instance.execute_plugin(
                 "MockPlugin", current_user=test_admin
             )
 
+            assert [result async for result in result_generator] == [
+                ResultEvent.data({"test": "result"})
+            ]
+
             # Verify it was called with empty dict
-            mock_execute.assert_called_once_with({})
+            assert mock_execute.call_args.args[0] == {}
+            assert isinstance(mock_execute.call_args.args[1], PluginRun)
 
     @pytest.mark.asyncio
     async def test_execute_plugin_analyst_permission(
@@ -302,16 +319,11 @@ class TestPluginService:
             pass
 
         class AnotherMockPlugin(BasePlugin):
-            def __init__(self, db_session=None):
-                super().__init__(
-                    display_name="Another Mock Plugin", db_session=db_session
-                )
+            def __init__(self):
+                super().__init__(display_name="Another Mock Plugin")
 
-            def parse_output(self, line):
-                return None
-
-            async def run(self, params=None):
-                yield {"type": "data", "data": {}}
+            async def run(self, params, ctx):
+                yield self.data({})
 
         mock_getmembers.return_value = [
             ("NotAPlugin", NotAPlugin),  # Not a BasePlugin subclass
@@ -361,7 +373,7 @@ class TestPluginService:
         ) as mock_execute:
 
             async def mock_generator():
-                yield {"type": "data", "data": {"params_received": True}}
+                yield ResultEvent.data({"params_received": True})
 
             mock_execute.return_value = mock_generator()
 
@@ -369,9 +381,11 @@ class TestPluginService:
                 "MockPlugin", complex_params, current_user=test_admin
             )
 
-            # Verify the parameters were passed correctly
-            mock_execute.assert_called_once_with(complex_params)
-
-            # Consume the generator
+            # The run context is opened lazily for the stream lifetime.
             results = [result async for result in result_generator]
+
+            # Verify the parameters were passed correctly
+            assert mock_execute.call_args.args[0] == complex_params
+            assert isinstance(mock_execute.call_args.args[1], PluginRun)
+
             assert len(results) == 1

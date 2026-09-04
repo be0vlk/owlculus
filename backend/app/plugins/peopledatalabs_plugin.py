@@ -2,24 +2,22 @@
 Enrich person and company data using People Data Labs API
 """
 
-from typing import Any, AsyncGenerator, Dict, List, Optional
-
-from sqlmodel import Session
+from collections.abc import AsyncGenerator
+from typing import Any
 
 from app.services.api_key_vault import Provider
 
-from .base_plugin import BasePlugin
+from .base_plugin import BasePlugin, PluginRun, ResultEvent
 
 
 class PeopledatalabsPlugin(BasePlugin):
     """Enrich person and company data using People Data Labs API"""
 
-    def __init__(self, db_session: Session = None):
-        super().__init__(display_name="People Data Labs", db_session=db_session)
+    def __init__(self):
+        super().__init__(display_name="People Data Labs")
         self.description = "Enrich person and company data using People Data Labs API"
-        self.category = "Person"  # Person, Network, Company, Other
-        self.evidence_category = "Associates"  # Social Media, Associates, Network Assets, Communications, Documents, Other
-        self.save_to_case = False  # Whether to auto-save results as evidence
+        self.category = "Person"
+        self.evidence_category = "Associates"
         self.api_key_requirements = [Provider.PEOPLE_DATA_LABS]
         self.parameters = {
             "search_type": {
@@ -68,17 +66,11 @@ class PeopledatalabsPlugin(BasePlugin):
                 "description": "LinkedIn profile URL",
                 "required": False,
             },
-            # Note: save_to_case parameter is automatically added by BasePlugin
         }
 
-    def parse_output(self, line: str) -> Optional[Dict[str, Any]]:
-        """Parse command output - only needed for subprocess-based plugins"""
-        # For direct API/library calls, return None
-        return None
-
     async def run(
-        self, params: Optional[Dict[str, Any]] = None
-    ) -> AsyncGenerator[Dict[str, Any], None]:
+        self, params: dict[str, Any], ctx: PluginRun
+    ) -> AsyncGenerator[ResultEvent, None]:
         """
         Main plugin execution method
 
@@ -89,55 +81,17 @@ class PeopledatalabsPlugin(BasePlugin):
             Structured data results
         """
         if not params or "search_type" not in params:
-            yield {
-                "type": "error",
-                "data": {"message": "Search type parameter is required"},
-            }
+            yield self.error("Search type parameter is required")
             return
-
-        # Check API key requirements
-        if not self._db_session:
-            yield {
-                "type": "error",
-                "data": {"message": "Database session not available"},
-            }
-            return
-
-        api_key_status = self.check_api_key_requirements(self._db_session)
-        missing_keys = [
-            provider
-            for provider, configured in api_key_status.items()
-            if not configured
-        ]
-        if missing_keys:
-            yield {
-                "type": "error",
-                "data": {
-                    "message": f"API key required for: {', '.join(missing_keys)}. "
-                    "Please add it in Admin → Configuration → API Keys"
-                },
-            }
-            return
-
         search_type = params["search_type"]
-
+        api_key = ctx.key(Provider.PEOPLE_DATA_LABS)
+        if not api_key:
+            yield ctx.missing_key(Provider.PEOPLE_DATA_LABS)
+            return
         try:
-            # Import People Data Labs client
             from peopledatalabs import PDLPY
 
-            assert self._api_key_vault is not None
-            api_key = self._api_key_vault.get_key(Provider.PEOPLE_DATA_LABS)
-
-            if not api_key:
-                yield {
-                    "type": "error",
-                    "data": {"message": "People Data Labs API key not configured"},
-                }
-                return
-
-            # Initialize PDL client
             client = PDLPY(api_key=api_key)
-
             if search_type == "person":
                 async for result in self._search_person(client, params):
                     yield result
@@ -145,35 +99,19 @@ class PeopledatalabsPlugin(BasePlugin):
                 async for result in self._search_company(client, params):
                     yield result
             else:
-                yield {
-                    "type": "error",
-                    "data": {
-                        "message": "Invalid search type. Must be 'person' or 'company'"
-                    },
-                }
-
+                yield self.error("Invalid search type. Must be 'person' or 'company'")
         except ImportError:
-            yield {
-                "type": "error",
-                "data": {
-                    "message": "People Data Labs library not installed. Please install 'peopledatalabs' package."
-                },
-            }
+            yield self.error(
+                "People Data Labs library not installed. Please install 'peopledatalabs' package."
+            )
         except Exception as e:
-            yield {
-                "type": "error",
-                "data": {
-                    "message": f"Error initializing People Data Labs client: {str(e)}"
-                },
-            }
+            yield self.error(f"Error initializing People Data Labs client: {e!s}")
 
     async def _search_person(
-        self, client, params: Dict[str, Any]
-    ) -> AsyncGenerator[Dict[str, Any], None]:
+        self, client, params: dict[str, Any]
+    ) -> AsyncGenerator[ResultEvent, None]:
         """Search for person data using People Data Labs API"""
-        # Build search parameters
         search_params = {}
-
         if params.get("email"):
             search_params["email"] = params["email"]
         if params.get("phone"):
@@ -186,64 +124,42 @@ class PeopledatalabsPlugin(BasePlugin):
             search_params["location"] = params["location"]
         if params.get("linkedin"):
             search_params["profile"] = params["linkedin"]
-
         if not search_params:
-            yield {
-                "type": "error",
-                "data": {
-                    "message": "At least one person identifier is required (email, phone, name, company, location, or LinkedIn)"
-                },
-            }
+            yield self.error(
+                "At least one person identifier is required (email, phone, name, company, location, or LinkedIn)"
+            )
             return
-
         try:
-            # Make API call
             result = client.person.enrichment(**search_params, pretty=True)
-
             if result.ok:
                 person_data = result.json()
                 if person_data.get("status") == 200 and person_data.get("data"):
-                    yield {
-                        "type": "data",
-                        "data": {
+                    yield self.data(
+                        {
                             "search_type": "person",
                             "person": person_data["data"],
                             "api_credits_used": person_data.get("credits_used", 1),
                             "confidence": person_data["data"].get(
                                 "likelihood", "unknown"
                             ),
-                        },
-                    }
+                        }
+                    )
                 else:
-                    yield {
-                        "type": "error",
-                        "data": {
-                            "message": "No person data found for the provided criteria"
-                        },
-                    }
+                    yield self.error("No person data found for the provided criteria")
             else:
                 error_data = result.json() if result.text else {}
                 error_msg = error_data.get("error", {}).get(
                     "message", f"API error: {result.status_code}"
                 )
-                yield {
-                    "type": "error",
-                    "data": {"message": f"People Data Labs API error: {error_msg}"},
-                }
-
+                yield self.error(f"People Data Labs API error: {error_msg}")
         except Exception as e:
-            yield {
-                "type": "error",
-                "data": {"message": f"Error searching person data: {str(e)}"},
-            }
+            yield self.error(f"Error searching person data: {e!s}")
 
     async def _search_company(
-        self, client, params: Dict[str, Any]
-    ) -> AsyncGenerator[Dict[str, Any], None]:
+        self, client, params: dict[str, Any]
+    ) -> AsyncGenerator[ResultEvent, None]:
         """Search for company data using People Data Labs API"""
-        # Build search parameters
         search_params = {}
-
         if params.get("name"):
             search_params["name"] = params["name"]
         if params.get("website"):
@@ -252,59 +168,39 @@ class PeopledatalabsPlugin(BasePlugin):
             search_params["website"] = params["domain"]
         if params.get("linkedin"):
             search_params["profile"] = params["linkedin"]
-
         if not search_params:
-            yield {
-                "type": "error",
-                "data": {
-                    "message": "At least one company identifier is required (name, website, domain, or LinkedIn)"
-                },
-            }
+            yield self.error(
+                "At least one company identifier is required (name, website, domain, or LinkedIn)"
+            )
             return
-
         try:
-            # Make API call
             result = client.company.enrichment(**search_params, pretty=True)
-
             if result.ok:
                 company_data = result.json()
                 if company_data.get("status") == 200 and company_data.get("data"):
-                    yield {
-                        "type": "data",
-                        "data": {
+                    yield self.data(
+                        {
                             "search_type": "company",
                             "company": company_data["data"],
                             "api_credits_used": company_data.get("credits_used", 1),
                             "confidence": company_data["data"].get(
                                 "likelihood", "unknown"
                             ),
-                        },
-                    }
+                        }
+                    )
                 else:
-                    yield {
-                        "type": "error",
-                        "data": {
-                            "message": "No company data found for the provided criteria"
-                        },
-                    }
+                    yield self.error("No company data found for the provided criteria")
             else:
                 error_data = result.json() if result.text else {}
                 error_msg = error_data.get("error", {}).get(
                     "message", f"API error: {result.status_code}"
                 )
-                yield {
-                    "type": "error",
-                    "data": {"message": f"People Data Labs API error: {error_msg}"},
-                }
-
+                yield self.error(f"People Data Labs API error: {error_msg}")
         except Exception as e:
-            yield {
-                "type": "error",
-                "data": {"message": f"Error searching company data: {str(e)}"},
-            }
+            yield self.error(f"Error searching company data: {e!s}")
 
-    def _format_evidence_content(
-        self, results: List[Dict[str, Any]], params: Dict[str, Any]
+    def format_evidence(
+        self, results: list[dict[str, Any]], params: dict[str, Any]
     ) -> str:
         """Custom formatting for evidence content"""
         content_lines = [
@@ -315,7 +211,6 @@ class PeopledatalabsPlugin(BasePlugin):
             f"Total results: {len(results)}",
             "",
         ]
-
         for i, result in enumerate(results, 1):
             if result.get("search_type") == "person" and result.get("person"):
                 person = result["person"]
@@ -337,27 +232,22 @@ class PeopledatalabsPlugin(BasePlugin):
                         "",
                     ]
                 )
-
-                # Add education if available
                 if person.get("education"):
                     content_lines.append("  Education:")
-                    for edu in person["education"][:3]:  # Limit to first 3
+                    for edu in person["education"][:3]:
                         school = edu.get("school", {})
                         content_lines.append(
                             f"    - {school.get('name', 'Unknown')} ({edu.get('start_date', 'N/A')} - {edu.get('end_date', 'N/A')})"
                         )
                     content_lines.append("")
-
-                # Add work experience if available
                 if person.get("experience"):
                     content_lines.append("  Work Experience:")
-                    for exp in person["experience"][:3]:  # Limit to first 3
+                    for exp in person["experience"][:3]:
                         company = exp.get("company", {})
                         content_lines.append(
                             f"    - {exp.get('title', 'Unknown')} at {company.get('name', 'Unknown')} ({exp.get('start_date', 'N/A')} - {exp.get('end_date', 'Present')})"
                         )
                     content_lines.append("")
-
             elif result.get("search_type") == "company" and result.get("company"):
                 company = result["company"]
                 content_lines.extend(
@@ -380,12 +270,9 @@ class PeopledatalabsPlugin(BasePlugin):
                         "",
                     ]
                 )
-
-                # Add technologies if available
                 if company.get("technologies"):
                     content_lines.append("  Technologies:")
-                    for tech in company["technologies"][:10]:  # Limit to first 10
+                    for tech in company["technologies"][:10]:
                         content_lines.append(f"    - {tech.get('name', 'Unknown')}")
                     content_lines.append("")
-
         return "\n".join(content_lines)
