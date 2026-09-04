@@ -178,7 +178,8 @@ class HuntService:
         execution = self.db.get(HuntExecution, execution_id)
         if execution is None:
             raise ResourceNotFoundException("Hunt execution not found")
-        self.access.readable(current_user, execution.case_id)
+        case = self.access.readable(current_user, execution.case_id)
+        execution.case = case
         steps = self.db.exec(
             select(HuntStep)
             .where(HuntStep.execution_id == execution_id)
