@@ -255,15 +255,43 @@ def test_service_operation_uses_one_declared_case_access_policy(
         for index, statement in enumerate(statements)
         if policy_call in ast.walk(statement)
     )
-    parent_lookup_prefixes = {
-        (HuntService, "get_execution"): 2,
-        (HuntService, "cancel_execution"): 2,
-        (HuntService, "get_execution_steps"): 2,
-        (ExportService, "export_hunt_execution"): 2,
+    parent_lookup_methods = {
+        (HuntService, "get_execution"),
+        (HuntService, "cancel_execution"),
+        (HuntService, "get_execution_steps"),
+        (ExportService, "export_hunt_execution"),
     }
-    assert policy_statement_index == parent_lookup_prefixes.get(
-        (service, method_name), 0
-    )
+    if (service, method_name) in parent_lookup_methods:
+        assert policy_statement_index == 2
+        lookup, missing_guard = statements[:2]
+        assert isinstance(lookup, ast.Assign)
+        assert len(lookup.targets) == 1
+        assert isinstance(lookup.targets[0], ast.Name)
+        assert lookup.targets[0].id == "execution"
+        assert isinstance(lookup.value, ast.Call)
+        assert isinstance(lookup.value.func, ast.Attribute)
+        assert ast.unparse(lookup.value.func) == "self.db.get"
+        assert len(lookup.value.args) == 2
+        assert ast.unparse(lookup.value.args[0]) in {
+            "HuntExecution",
+            "models.HuntExecution",
+        }
+        assert ast.unparse(lookup.value.args[1]) == "execution_id"
+
+        assert isinstance(missing_guard, ast.If)
+        assert ast.unparse(missing_guard.test) in {
+            "execution is None",
+            "not execution",
+        }
+        assert not missing_guard.orelse
+        assert len(missing_guard.body) == 1
+        assert isinstance(missing_guard.body[0], ast.Raise)
+        assert isinstance(missing_guard.body[0].exc, ast.Call)
+        assert ast.unparse(missing_guard.body[0].exc.func) == (
+            "ResourceNotFoundException"
+        )
+    else:
+        assert policy_statement_index == 0
 
     if policy in {"readable", "writable", "lead"}:
         assignment = next(
