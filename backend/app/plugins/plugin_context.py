@@ -8,6 +8,7 @@ from typing import Any, BinaryIO, Protocol, cast
 
 from fastapi import UploadFile
 from sqlmodel import Session, select
+from starlette.datastructures import Headers
 
 from app.database import models
 from app.schemas import evidence_schema as schemas
@@ -95,6 +96,7 @@ class ServiceEvidenceSink:
                 file=UploadFile(
                     filename=request.filename,
                     file=cast(BinaryIO, temporary_file),
+                    headers=Headers({"content-type": "text/plain"}),
                 ),
             )
 
