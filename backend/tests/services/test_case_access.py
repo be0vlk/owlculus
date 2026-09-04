@@ -167,6 +167,7 @@ def test_denial_audit_records_attempted_operation(
 
 OPERATION_POLICIES = [
     ("case.create", "require_admin"),
+    ("case.list", "listed"),
     ("case.read", "readable"),
     ("case.update", "writable"),
     ("case.add_user", "require_admin"),
@@ -221,10 +222,12 @@ SERVICE_ACCESS_POLICIES = [
 def test_service_operation_uses_one_declared_case_access_policy(
     service: type, method_name: str, policy: str
 ):
-    """Guard the ticket's one-policy-call-per-operation architecture."""
+    """Guard policy count, authorization order, and resolved-case reuse."""
     tree = ast.parse(dedent(inspect.getsource(getattr(service, method_name))))
+    function = tree.body[0]
+    assert isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef))
     policy_calls = [
-        node.func.attr
+        node
         for node in ast.walk(tree)
         if isinstance(node, ast.Call)
         and isinstance(node.func, ast.Attribute)
@@ -236,12 +239,59 @@ def test_service_operation_uses_one_declared_case_access_policy(
         in {"readable", "writable", "lead", "require_admin", "is_admin"}
     ]
 
-    assert policy_calls == [policy]
+    assert [call.func.attr for call in policy_calls] == [policy]
+    policy_call = policy_calls[0]
+    statements = [
+        statement
+        for statement in function.body
+        if not (
+            isinstance(statement, ast.Expr)
+            and isinstance(statement.value, ast.Constant)
+            and isinstance(statement.value.value, str)
+        )
+    ]
+    policy_statement_index = next(
+        index
+        for index, statement in enumerate(statements)
+        if policy_call in ast.walk(statement)
+    )
+    parent_lookup_prefixes = {
+        (HuntService, "get_execution"): 2,
+        (HuntService, "cancel_execution"): 2,
+        (HuntService, "get_execution_steps"): 2,
+        (ExportService, "export_hunt_execution"): 2,
+    }
+    assert policy_statement_index == parent_lookup_prefixes.get(
+        (service, method_name), 0
+    )
+
+    if policy in {"readable", "writable", "lead"}:
+        assignment = next(
+            (
+                node
+                for node in ast.walk(function)
+                if isinstance(node, ast.Assign)
+                and node.value is policy_call
+                and len(node.targets) == 1
+                and isinstance(node.targets[0], ast.Name)
+            ),
+            None,
+        )
+        assert assignment is not None
+        resolved_case_name = assignment.targets[0].id
+        assert any(
+            isinstance(node, ast.Name)
+            and node.id == resolved_case_name
+            and isinstance(node.ctx, ast.Load)
+            and node.lineno > assignment.lineno
+            for node in ast.walk(function)
+        )
 
 
 @pytest.mark.parametrize(("operation", "policy"), OPERATION_POLICIES)
 @pytest.mark.parametrize("role", ["admin", "investigator", "outsider", "analyst"])
-def test_operation_permission_matrix(
+@pytest.mark.asyncio
+async def test_operation_permission_matrix(
     session: Session,
     test_case: models.Case,
     access_users: dict[str, models.User],
@@ -252,6 +302,15 @@ def test_operation_permission_matrix(
     """Every case-scoped service operation maps to the shared role policy."""
     access = CaseAccess(session)
     user = access_users[role]
+    if policy == "listed":
+        test_case.title = "Permission matrix case"
+        session.add(test_case)
+        session.commit()
+        cases = await CaseService(session).get_cases(user)
+        listed_case_ids = {case.id for case in cases}
+        assert (test_case.id in listed_case_ids) is (role != "outsider"), operation
+        return
+
     allowed = (
         role == "admin"
         or (policy == "readable" and role in {"investigator", "analyst"})

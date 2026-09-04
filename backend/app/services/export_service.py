@@ -93,7 +93,7 @@ class ExportService:
     ) -> ExportArtifact:
         """Return every entity matching the supplied case-table filters."""
         case = self.access.readable(current_user, case_id)
-        entities = self._get_entities(case_id, entity_types, search)
+        entities = self._get_entities(case.id, entity_types, search)
         safe_case_number = filesystem_safe_name(case.case_number)
         export_date = get_utc_now().date().isoformat()
 
@@ -107,7 +107,7 @@ class ExportService:
         get_security_logger(
             user_id=current_user.id,
             requesting_user=current_user.username,
-            case_id=case_id,
+            case_id=case.id,
             export_kind="entities",
             format=export_format.value,
             event_type="export_generated",
@@ -130,7 +130,7 @@ class ExportService:
         export_logger = get_security_logger(
             user_id=current_user.id,
             requesting_user=current_user.username,
-            case_id=case_id,
+            case_id=case.id,
             export_kind="case",
             format="zip",
         )
@@ -154,7 +154,7 @@ class ExportService:
                         f"{root}notes.html",
                         case.notes.encode("utf-8"),
                     )
-                entities = self._get_entities(case_id, None, None)
+                entities = self._get_entities(case.id, None, None)
                 _write_zip_bytes(
                     archive,
                     f"{root}entities/entities.json",
@@ -172,11 +172,11 @@ class ExportService:
                             f"{root}entities/{entity_type}.csv",
                             self.write_entity_csv(typed_entities),
                         )
-                self._write_evidence(archive, root, case_id)
+                self._write_evidence(archive, root, case.id)
                 tasks = list(
                     self.db.exec(
                         select(models.Task)
-                        .where(models.Task.case_id == case_id)
+                        .where(models.Task.case_id == case.id)
                         .order_by(col(models.Task.id))
                     )
                 )
@@ -190,7 +190,7 @@ class ExportService:
                     f"{root}tasks/tasks.csv",
                     self.write_task_csv(tasks),
                 )
-                self._write_hunts(archive, root, case_id, exported_at)
+                self._write_hunts(archive, root, case, exported_at)
         except Exception:
             temporary_path.unlink(missing_ok=True)
             export_logger.bind(event_type="export_generation_failed").exception(
@@ -413,18 +413,18 @@ class ExportService:
         self,
         archive: zipfile.ZipFile,
         root: str,
-        case_id: int,
+        case: models.Case,
         exported_at: datetime,
     ) -> None:
         executions = list(
             self.db.exec(
                 select(models.HuntExecution)
-                .where(models.HuntExecution.case_id == case_id)
+                .where(models.HuntExecution.case_id == case.id)
                 .order_by(col(models.HuntExecution.created_at).desc())
             )
         )
         snapshots = [
-            self._hunt_execution_snapshot(execution) for execution in executions
+            self._hunt_execution_snapshot(execution, case) for execution in executions
         ]
         _write_zip_json(
             archive,
@@ -479,7 +479,7 @@ class ExportService:
         export_logger = get_security_logger(
             user_id=current_user.id,
             requesting_user=current_user.username,
-            case_id=execution.case_id,
+            case_id=case.id,
             export_kind="hunt_execution",
             format=export_format.value,
         )
@@ -504,10 +504,9 @@ class ExportService:
         )
 
     def _hunt_execution_snapshot(
-        self, execution: models.HuntExecution, case: models.Case | None = None
+        self, execution: models.HuntExecution, case: models.Case
     ) -> HuntExecutionSnapshot:
         hunt = self.db.get(models.Hunt, execution.hunt_id)
-        case = case or self.db.get(models.Case, execution.case_id)
         creator = self.db.get(models.User, execution.created_by_id)
         steps = list(
             self.db.exec(
@@ -516,7 +515,7 @@ class ExportService:
                 .order_by(col(models.HuntStep.id))
             )
         )
-        if hunt is None or case is None or creator is None:
+        if hunt is None or creator is None:
             raise ResourceNotFoundException("Hunt execution related data not found")
 
         return HuntExecutionSnapshot(
