@@ -91,12 +91,8 @@ async def test_create_case_non_admin(
     case_data = schemas.CaseCreate(
         client_id=client.id, title="Test Case", status="Open", notes="Test Notes"
     )
-    # Service layer no longer checks for admin role - that's handled at API layer
-    created_case = await case_service_instance.create_case(
-        case_data, current_user=test_user
-    )
-    assert created_case.title == "Test Case"
-    assert created_case.status == "Open"
+    with pytest.raises(AuthorizationException):
+        await case_service_instance.create_case(case_data, current_user=test_user)
 
 
 @pytest.mark.asyncio
@@ -111,12 +107,8 @@ async def test_create_case_analyst(
     case_data = schemas.CaseCreate(
         client_id=client.id, title="Test Case", status="Open", notes="Test Notes"
     )
-    # Service layer no longer checks for admin role - that's handled at API layer
-    created_case = await case_service_instance.create_case(
-        case_data, current_user=test_analyst
-    )
-    assert created_case.title == "Test Case"
-    assert created_case.status == "Open"
+    with pytest.raises(AuthorizationException):
+        await case_service_instance.create_case(case_data, current_user=test_analyst)
 
 
 @pytest.mark.asyncio

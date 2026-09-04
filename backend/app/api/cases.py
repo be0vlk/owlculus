@@ -13,12 +13,7 @@ from sqlmodel import Session
 from starlette.background import BackgroundTask
 
 from app import schemas
-from app.core.dependencies import (
-    admin_only,
-    check_case_access,
-    get_current_user,
-    no_analyst,
-)
+from app.core.dependencies import get_current_user
 from app.database import models
 from app.database.connection import get_db
 from app.services.case_service import CaseService
@@ -29,7 +24,6 @@ router = APIRouter()
 
 
 @router.post("/", response_model=schemas.Case, status_code=status.HTTP_201_CREATED)
-@admin_only()
 async def create_case(
     case: schemas.CaseCreate,
     db: Session = Depends(get_db),
@@ -64,7 +58,6 @@ async def read_case(
 
 
 @router.put("/{case_id}", response_model=schemas.Case)
-@no_analyst()
 async def update_case(
     case_id: int,
     case: schemas.CaseUpdate,
@@ -78,7 +71,6 @@ async def update_case(
 
 
 @router.post("/{case_id}/users/{user_id}", response_model=schemas.Case)
-@admin_only()
 async def add_user_to_case(
     case_id: int,
     user_id: int,
@@ -94,7 +86,6 @@ async def add_user_to_case(
 
 
 @router.patch("/{case_id}/users/{user_id}", response_model=schemas.Case)
-@admin_only()
 async def update_case_user_lead_status(
     case_id: int,
     user_id: int,
@@ -112,7 +103,6 @@ async def update_case_user_lead_status(
 
 
 @router.delete("/{case_id}/users/{user_id}", response_model=schemas.Case)
-@admin_only()
 async def remove_user_from_case(
     case_id: int,
     user_id: int,
@@ -132,7 +122,6 @@ async def get_case_users(
     current_user: models.User = Depends(get_current_user),
 ):
     """Get all users assigned to a case"""
-    check_case_access(db, case_id, current_user)
     case_service = CaseService(db)
     case = await case_service.get_case(case_id=case_id, current_user=current_user)
     return case.users
@@ -208,7 +197,6 @@ async def get_case_entities(
     tags=["entities"],
     status_code=status.HTTP_201_CREATED,
 )
-@no_analyst()
 async def create_entity(
     case_id: int,
     entity: schemas.EntityCreate,
@@ -226,7 +214,6 @@ async def create_entity(
     response_model=schemas.Entity,
     tags=["entities"],
 )
-@no_analyst()
 async def update_entity(
     case_id: int,
     entity_id: int,
@@ -262,7 +249,6 @@ async def get_entity(
     tags=["entities"],
     status_code=status.HTTP_204_NO_CONTENT,
 )
-@no_analyst()
 async def delete_entity(
     case_id: int,
     entity_id: int,

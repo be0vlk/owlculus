@@ -420,7 +420,7 @@ def test_case_bundle_preserves_the_evidence_tree_and_records_missing_files(
     )
 
 
-def test_analyst_case_bundle_omits_hunts(
+def test_analyst_case_bundle_includes_hunts(
     client: TestClient,
     session: Session,
     case_export_case: Case,
@@ -442,9 +442,7 @@ def test_analyst_case_bundle_omits_hunts(
 
     assert response.status_code == 200
     with ZipFile(BytesIO(response.content)) as archive:
-        assert not any(
-            name.startswith("CASE-003/hunts/") for name in archive.namelist()
-        )
+        assert any(name.startswith("CASE-003/hunts/") for name in archive.namelist())
 
 
 def test_case_bundle_enforces_case_access(

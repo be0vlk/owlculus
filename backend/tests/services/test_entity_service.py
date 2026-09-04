@@ -3,14 +3,16 @@ Comprehensive test suite for EntityService
 """
 
 import pytest
+from sqlmodel import Session
+
 from app.core.exceptions import (
+    AuthorizationException,
     DuplicateResourceException,
     ResourceNotFoundException,
 )
 from app.database import models
 from app.schemas.entity_schema import EntityCreate, EntityUpdate
 from app.services.entity_service import EntityService
-from sqlmodel import Session
 
 
 @pytest.mark.asyncio
@@ -254,25 +256,23 @@ class TestEntityService:
             )
         assert "already exists" in str(exc_info.value)
 
-    async def test_create_entity_analyst_can_read_but_api_prevents_write(
+    async def test_create_entity_rejects_analyst_write(
         self, test_case_with_users, test_analyst
     ):
-        """Test that service layer allows analyst to create (API layer will block)"""
+        """Analyst read-only policy is enforced in the service."""
         entity_data = EntityCreate(
             entity_type="person", data={"first_name": "Test", "last_name": "User"}
         )
 
-        # Service layer should not block analysts - that's the API's job
-        entity = await self.service.create_entity(
-            test_case_with_users.id, entity_data, current_user=test_analyst
-        )
-        assert entity.entity_type == "person"
-        assert entity.data["first_name"] == "Test"
+        with pytest.raises(AuthorizationException):
+            await self.service.create_entity(
+                test_case_with_users.id, entity_data, current_user=test_analyst
+            )
 
-    async def test_update_entity_analyst_can_read_but_api_prevents_write(
+    async def test_update_entity_rejects_analyst_write(
         self, test_case_with_users, test_analyst
     ):
-        """Test that service layer allows analyst to update (API layer will block)"""
+        """Analysts cannot update assigned-case entities."""
         # Create entity
         entity = models.Entity(
             case_id=test_case_with_users.id,
@@ -285,16 +285,15 @@ class TestEntityService:
 
         update_data = EntityUpdate(data={"first_name": "Updated", "last_name": "User"})
 
-        # Service layer should not block analysts - that's the API's job
-        updated = await self.service.update_entity(
-            entity.id, update_data, current_user=test_analyst
-        )
-        assert updated.data["first_name"] == "Updated"
+        with pytest.raises(AuthorizationException):
+            await self.service.update_entity(
+                entity.id, update_data, current_user=test_analyst
+            )
 
-    async def test_delete_entity_analyst_can_read_but_api_prevents_write(
+    async def test_delete_entity_rejects_analyst_write(
         self, test_case_with_users, test_analyst
     ):
-        """Test that service layer allows analyst to delete (API layer will block)"""
+        """Analysts cannot delete assigned-case entities."""
         # Create entity
         entity = models.Entity(
             case_id=test_case_with_users.id,
@@ -306,12 +305,9 @@ class TestEntityService:
         self.db.commit()
         entity_id = entity.id
 
-        # Service layer should not block analysts - that's the API's job
-        await self.service.delete_entity(entity_id, current_user=test_analyst)
-
-        # Verify entity was deleted
-        deleted_entity = self.db.get(models.Entity, entity_id)
-        assert deleted_entity is None
+        with pytest.raises(AuthorizationException):
+            await self.service.delete_entity(entity_id, current_user=test_analyst)
+        assert self.db.get(models.Entity, entity_id) is not None
 
     async def test_delete_entity_multiple_in_case(
         self, test_case_with_users, test_user
@@ -588,10 +584,10 @@ class TestEntityService:
             )
         assert "Entity not found" in str(exc_info.value)
 
-    async def test_enrich_entity_description_analyst_can_read_but_api_prevents_write(
+    async def test_enrich_entity_description_rejects_analyst_write(
         self, test_case_with_users, test_analyst
     ):
-        """Test that service layer allows analyst to enrich (API layer will block)"""
+        """Analysts cannot enrich assigned-case entities."""
         # Create entity
         entity = models.Entity(
             case_id=test_case_with_users.id,
@@ -602,8 +598,7 @@ class TestEntityService:
         self.db.add(entity)
         self.db.commit()
 
-        # Service layer should not block analysts - that's the API's job
-        enriched = await self.service.enrich_entity_description(
-            entity.id, "Some enrichment", current_user=test_analyst
-        )
-        assert enriched.data["description"] == "Some enrichment"
+        with pytest.raises(AuthorizationException):
+            await self.service.enrich_entity_description(
+                entity.id, "Some enrichment", current_user=test_analyst
+            )

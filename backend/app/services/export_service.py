@@ -20,13 +20,12 @@ from pydantic import BaseModel
 from sqlmodel import Session, col, select
 
 from app.core import file_storage
-from app.core.dependencies import check_case_access, no_analyst
 from app.core.exceptions import ResourceNotFoundException
 from app.core.logging import get_security_logger
-from app.core.roles import UserRole
 from app.core.utils import get_utc_now
 from app.database import models
 from app.schemas.entity_schema import ENTITY_TYPE_SCHEMAS, NetworkAssets
+from app.services.case_access import CaseAccess
 from app.services.hunt_execution_export import (
     HuntCaseSnapshot,
     HuntCreatorSnapshot,
@@ -82,6 +81,7 @@ class ExportService:
 
     def __init__(self, db: Session):
         self.db = db
+        self.access = CaseAccess(db)
 
     def export_entities(
         self,
@@ -92,7 +92,7 @@ class ExportService:
         search: str | None = None,
     ) -> ExportArtifact:
         """Return every entity matching the supplied case-table filters."""
-        case = check_case_access(self.db, case_id, current_user)
+        case = self.access.readable(current_user, case_id)
         entities = self._get_entities(case_id, entity_types, search)
         safe_case_number = filesystem_safe_name(case.case_number)
         export_date = get_utc_now().date().isoformat()
@@ -123,7 +123,7 @@ class ExportService:
         self, case_id: int, current_user: models.User
     ) -> CaseBundleArtifact:
         """Assemble a complete case snapshot in a temporary ZIP archive."""
-        case = check_case_access(self.db, case_id, current_user)
+        case = self.access.readable(current_user, case_id)
         exported_at = get_utc_now()
         safe_case_number = filesystem_safe_name(case.case_number)
         root = f"{safe_case_number}/"
@@ -190,8 +190,7 @@ class ExportService:
                     f"{root}tasks/tasks.csv",
                     self.write_task_csv(tasks),
                 )
-                if current_user.role != UserRole.ANALYST.value:
-                    self._write_hunts(archive, root, case_id, exported_at)
+                self._write_hunts(archive, root, case_id, exported_at)
         except Exception:
             temporary_path.unlink(missing_ok=True)
             export_logger.bind(event_type="export_generation_failed").exception(
@@ -462,7 +461,6 @@ class ExportService:
                     rendered.content,
                 )
 
-    @no_analyst()
     def export_hunt_execution(
         self,
         execution_id: int,
@@ -474,7 +472,7 @@ class ExportService:
         if execution is None:
             raise ResourceNotFoundException("Hunt execution not found")
 
-        check_case_access(self.db, execution.case_id, current_user)
+        self.access.readable(current_user, execution.case_id)
         snapshot = self._hunt_execution_snapshot(execution)
         hunt_name = filesystem_safe_name(snapshot.hunt.name)
         exported_at = get_utc_now()

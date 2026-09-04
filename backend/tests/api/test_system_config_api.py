@@ -36,6 +36,16 @@ def test_configuration_admin_routes_reject_non_admin(client, test_user):
 
     assert client.get("/api/admin/configuration").status_code == 403
     assert (
+        client.get(
+            "/api/admin/configuration/preview",
+            params={"template": "YYMM-NN"},
+        ).status_code
+        == 403
+    )
+    assert (
+        client.get("/api/admin/configuration/api-keys/openai/status").status_code == 403
+    )
+    assert (
         client.put(
             "/api/admin/configuration/api-keys/openai",
             json={"api_key": "secret", "name": "OpenAI"},

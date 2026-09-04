@@ -280,7 +280,7 @@ def test_hunt_execution_export_enforces_role_and_case_access(
     app.dependency_overrides[get_current_user] = lambda: admin
     admin_response = client.get(url, params={"format": "json"})
 
-    assert analyst_response.status_code == 403
+    assert analyst_response.status_code == 200
     assert outsider_response.status_code == 403
     assert admin_response.status_code == 200
 

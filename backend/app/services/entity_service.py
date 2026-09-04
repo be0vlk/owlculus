@@ -9,21 +9,23 @@ and specialized search functions for OSINT investigation workflows.
 
 from typing import Optional
 
+from sqlmodel import Session, col, select
+
 from app import schemas
-from app.core.dependencies import check_case_access
 from app.core.exceptions import (
-	ResourceNotFoundException,
-	ValidationException,
+    ResourceNotFoundException,
+    ValidationException,
 )
 from app.core.utils import get_utc_now
 from app.database import crud, models
 from app.database.db_utils import transaction
-from sqlmodel import Session, col, select
+from app.services.case_access import CaseAccess
 
 
 class EntityService:
     def __init__(self, db: Session):
         self.db = db
+        self.access = CaseAccess(db)
 
     async def get_case_entities(
         self,
@@ -33,7 +35,7 @@ class EntityService:
         skip: int = 0,
         limit: int = 100,
     ) -> list[models.Entity]:
-        check_case_access(self.db, case_id, current_user)
+        self.access.readable(current_user, case_id)
 
         query = select(models.Entity).where(models.Entity.case_id == case_id)
 
@@ -53,7 +55,7 @@ class EntityService:
         if not db_entity:
             raise ResourceNotFoundException("Entity not found")
 
-        check_case_access(self.db, db_entity.case_id, current_user)
+        self.access.readable(current_user, db_entity.case_id)
 
         return db_entity
 
@@ -63,7 +65,7 @@ class EntityService:
         entity: schemas.EntityCreate,
         current_user: models.User,
     ) -> models.Entity:
-        check_case_access(self.db, case_id, current_user)
+        self.access.writable(current_user, case_id)
 
         await crud.check_entity_duplicates(self.db, case_id, entity)
         with transaction(self.db):
@@ -91,7 +93,7 @@ class EntityService:
         if not db_entity:
             raise ResourceNotFoundException("Entity not found")
 
-        check_case_access(self.db, db_entity.case_id, current_user)
+        self.access.writable(current_user, db_entity.case_id)
 
         # Add entity type to update data for validation
         entity_update_dict = entity_update.model_dump()
@@ -124,7 +126,7 @@ class EntityService:
         if not db_entity:
             raise ResourceNotFoundException("Entity not found")
 
-        check_case_access(self.db, db_entity.case_id, current_user)
+        self.access.writable(current_user, db_entity.case_id)
         with transaction(self.db):
             self.db.delete(db_entity)
 
@@ -132,7 +134,7 @@ class EntityService:
         self, case_id: int, ip_address: str, current_user: models.User
     ) -> Optional[models.Entity]:
         """Find an existing IP address entity in the given case"""
-        check_case_access(self.db, case_id, current_user)
+        self.access.readable(current_user, case_id)
 
         query = select(models.Entity).where(
             models.Entity.case_id == case_id,
@@ -146,7 +148,7 @@ class EntityService:
         self, case_id: int, domain: str, current_user: models.User
     ) -> Optional[models.Entity]:
         """Find an existing domain entity in the given case (case-insensitive)"""
-        check_case_access(self.db, case_id, current_user)
+        self.access.readable(current_user, case_id)
 
         query = select(models.Entity).where(
             models.Entity.case_id == case_id,
@@ -167,7 +169,7 @@ class EntityService:
         if not db_entity:
             raise ResourceNotFoundException("Entity not found")
 
-        check_case_access(self.db, db_entity.case_id, current_user)
+        self.access.writable(current_user, db_entity.case_id)
 
         current_description = db_entity.data.get("description", "")
 
