@@ -13,6 +13,7 @@ active_project=""
 active_topology=""
 active_frontend_port=""
 active_hmr_probe_path=""
+active_artifact_directory=""
 
 run_compose() {
     FRONTEND_PORT="$active_frontend_port" \
@@ -24,6 +25,9 @@ run_compose() {
 
 cleanup_stack() {
     if [[ -n "$active_project" ]]; then
+        if mkdir -p "$active_artifact_directory"; then
+            run_compose logs --no-color frontend > "$active_artifact_directory/frontend.log" 2>&1 || true
+        fi
         echo "Removing ephemeral stack $active_project (including volumes)..."
         run_compose down --volumes --remove-orphans
         active_project=""
@@ -95,6 +99,7 @@ run_variant() {
     local test_status=0
 
     active_project="owlculus-e2e-${server_kind}-${viewport}-${host//./-}-$$"
+    active_artifact_directory="$repository_root/frontend/test-results/${server_kind}-${host}-${viewport}"
     if [[ "$server_kind" == "gateway" ]]; then
         active_topology="direct"
         active_frontend_port="$gateway_port"

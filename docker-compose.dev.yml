@@ -55,7 +55,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512m
+          # Cold Vite transforms under Node 24 can exceed 512 MiB.
+          memory: 1g
           cpus: "1.0"
         reservations:
           memory: 256m

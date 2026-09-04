@@ -1,6 +1,7 @@
 <template>
   <v-dialog
     v-model="show"
+    aria-label="File Metadata"
     max-width="800px"
     scrollable
     @update:model-value="$emit('update:modelValue', $event)"
@@ -11,7 +12,13 @@
           <v-icon icon="mdi-file-image" />
           <span>File Metadata</span>
         </div>
-        <v-btn icon="mdi-close" size="small" variant="text" @click="show = false" />
+        <v-btn
+          icon="mdi-close"
+          aria-label="Close metadata"
+          size="small"
+          variant="text"
+          @click="show = false"
+        />
       </v-card-title>
 
       <v-card-text class="pa-0">
@@ -202,7 +209,7 @@
               :key="categoryName"
               v-show="Object.keys(categoryData).length > 0"
             >
-              <v-expansion-panel-title>
+              <v-expansion-panel-title class="metadata-panel-title">
                 <div class="d-flex align-center ga-2">
                   <v-icon :icon="getCategoryIcon(categoryName)" />
                   <span class="text-capitalize">{{ categoryName }} Metadata</span>
@@ -403,11 +410,7 @@ const openInMaps = (coordinates) => {
   }
 }
 
-:deep(.v-expansion-panel-title) {
+.metadata-panel-title {
   padding: 12px 16px;
-}
-
-:deep(.v-expansion-panel-text) {
-  padding: 0 16px 16px;
 }
 </style>
