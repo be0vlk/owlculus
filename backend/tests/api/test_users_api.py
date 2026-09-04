@@ -8,25 +8,26 @@ from threading import Barrier
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from fastapi import FastAPI, status
+from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
+from loguru import logger
+from sqlmodel import Session, select
+
 from app.api import auth as auth_api
 from app.api import users as users_api
 from app.core import rate_limiting, setup
 from app.core.config import settings
 from app.core.dependencies import (
     get_current_user,
-    get_db,
     get_optional_current_user,
 )
 from app.core.exception_handler import handle_domain_exception
 from app.core.exceptions import BaseException as DomainException
 from app.core.security import get_password_hash
+from app.database.connection import get_db
 from app.database.models import User
 from app.main import app
-from fastapi import FastAPI, status
-from fastapi.testclient import TestClient
-from httpx import ASGITransport, AsyncClient
-from loguru import logger
-from sqlmodel import Session, select
 
 
 @pytest.fixture

@@ -12,7 +12,6 @@ from typing import Any, List, NoReturn, Optional
 
 from sqlmodel import Session, select
 
-from app.core.dependencies import check_case_access, no_analyst
 from app.core.exceptions import (
     BaseException as DomainException,
 )
@@ -32,11 +31,13 @@ from app.core.logging import get_security_logger
 from app.core.utils import get_utc_now
 from app.database import models
 from app.schemas import evidence_schema as schemas
+from app.services.case_access import CaseAccess
 
 
 class EvidenceService:
     def __init__(self, db: Session):
         self.db = db
+        self.access = CaseAccess(db)
 
     def _raise_unexpected_error(
         self,
@@ -56,13 +57,13 @@ class EvidenceService:
         )
         raise DomainException(public_message) from error
 
-    @no_analyst()
     async def create_evidence(
         self,
         evidence: schemas.EvidenceCreate,
         current_user: models.User,
         file: Optional[Any] = None,
     ) -> models.Evidence:
+        self.access.writable(current_user, evidence.case_id)
         evidence_logger = get_security_logger(
             user_id=current_user.id,
             case_id=evidence.case_id,
@@ -72,8 +73,6 @@ class EvidenceService:
         )
 
         try:
-            check_case_access(self.db, evidence.case_id, current_user)
-
             # Prevent file uploads when no folder structure exists for organization
             if evidence.evidence_type == "file" and not evidence.is_folder:
                 existing_folders = self.db.exec(
@@ -174,7 +173,7 @@ class EvidenceService:
         skip: int = 0,
         limit: int = 100,
     ) -> List[models.Evidence]:
-        check_case_access(self.db, case_id, current_user)
+        self.access.readable(current_user, case_id)
 
         query = (
             select(models.Evidence)
@@ -191,11 +190,10 @@ class EvidenceService:
         if not evidence:
             raise ResourceNotFoundException("Evidence not found")
 
-        check_case_access(self.db, evidence.case_id, current_user)
+        self.access.readable(current_user, evidence.case_id)
 
         return evidence
 
-    @no_analyst()
     def update_evidence(
         self,
         evidence_id: int,
@@ -218,7 +216,7 @@ class EvidenceService:
                 ).warning("Evidence update failed: evidence not found")
                 raise ResourceNotFoundException("Evidence not found")
 
-            check_case_access(self.db, db_evidence.case_id, current_user)
+            self.access.writable(current_user, db_evidence.case_id)
 
             if evidence_update.title is not None:
                 db_evidence.title = evidence_update.title
@@ -267,7 +265,6 @@ class EvidenceService:
                 rollback=True,
             )
 
-    @no_analyst()
     async def delete_evidence(
         self, evidence_id: int, current_user: models.User
     ) -> models.Evidence:
@@ -287,7 +284,7 @@ class EvidenceService:
                 ).info("Evidence already deleted or not found")
                 return None
 
-            check_case_access(self.db, evidence.case_id, current_user)
+            self.access.writable(current_user, evidence.case_id)
 
             if evidence.evidence_type == "file" and evidence.content:
                 try:
@@ -348,7 +345,7 @@ class EvidenceService:
                 ).warning("Evidence download failed: evidence not found")
                 raise ResourceNotFoundException("Evidence not found")
 
-            check_case_access(self.db, evidence.case_id, current_user)
+            self.access.readable(current_user, evidence.case_id)
 
             if evidence.evidence_type == "file":
                 file_path = UPLOAD_DIR / evidence.content
@@ -631,13 +628,13 @@ class EvidenceService:
                 public_message="Evidence image view failed",
             )
 
-    @no_analyst()
     async def create_folder(
         self,
         folder_data: schemas.FolderCreate,
         current_user: models.User,
     ) -> models.Evidence:
         """Create a new folder in the case directory."""
+        self.access.writable(current_user, folder_data.case_id)
         folder_logger = get_security_logger(
             user_id=current_user.id,
             case_id=folder_data.case_id,
@@ -647,8 +644,6 @@ class EvidenceService:
         )
 
         try:
-            check_case_access(self.db, folder_data.case_id, current_user)
-
             folder_path = folder_data.folder_path or ""
             if folder_data.parent_folder_id:
                 parent_folder = self.db.get(
@@ -727,12 +722,11 @@ class EvidenceService:
         self, case_id: int, current_user: models.User
     ) -> List[models.Evidence]:
         """Get the folder tree structure for a case."""
-        check_case_access(self.db, case_id, current_user)
+        self.access.readable(current_user, case_id)
 
         query = select(models.Evidence).where(models.Evidence.case_id == case_id)
         return list(self.db.exec(query))
 
-    @no_analyst()
     async def update_folder(
         self,
         folder_id: int,
@@ -755,7 +749,7 @@ class EvidenceService:
                 ).warning("Folder update failed: folder not found")
                 raise ResourceNotFoundException("Folder not found")
 
-            check_case_access(self.db, db_folder.case_id, current_user)
+            self.access.writable(current_user, db_folder.case_id)
 
             if folder_update.title is not None:
                 db_folder.title = folder_update.title
@@ -790,7 +784,6 @@ class EvidenceService:
                 rollback=True,
             )
 
-    @no_analyst()
     async def delete_folder(
         self, folder_id: int, current_user: models.User
     ) -> models.Evidence:
@@ -818,7 +811,7 @@ class EvidenceService:
                 ).warning("Folder deletion failed: not a folder")
                 raise ResourceNotFoundException("Folder not found")
 
-            check_case_access(self.db, db_folder.case_id, current_user)
+            self.access.writable(current_user, db_folder.case_id)
 
             if db_folder.folder_path:
                 try:
@@ -874,6 +867,7 @@ class EvidenceService:
         current_user: models.User,
     ) -> List[models.Evidence]:
         """Create folder structure from a template."""
+        self.access.writable(current_user, case_id)
         template_logger = get_security_logger(
             user_id=current_user.id,
             case_id=case_id,
@@ -883,8 +877,6 @@ class EvidenceService:
         )
 
         try:
-            check_case_access(self.db, case_id, current_user)
-
             from app.services.system_config_service import SystemConfigService
 
             config_service = SystemConfigService(self.db)

@@ -6,12 +6,14 @@ providing chat interface functionality for interacting with the Strixy
 service for intelligence gathering operations.
 """
 
-from app.core.dependencies import get_current_user, get_db
-from app.database import models
-from app.schemas.strixy_schema import ChatRequest, ChatResponse
-from app.services.strixy_service import StrixyService
 from fastapi import APIRouter, Depends
 from sqlmodel import Session
+
+from app.core.dependencies import get_current_user
+from app.database import models
+from app.database.connection import get_db
+from app.schemas.strixy_schema import ChatRequest, ChatResponse
+from app.services.strixy_service import StrixyService
 
 router = APIRouter()
 

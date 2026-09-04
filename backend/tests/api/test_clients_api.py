@@ -3,13 +3,14 @@ Comprehensive tests for clients API endpoints
 """
 
 import pytest
-from app.core.dependencies import get_current_user, get_db
-from app.database.models import Client, User
-from app.main import app
 from fastapi import status
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
+from app.core.dependencies import get_current_user
+from app.database.connection import get_db
+from app.database.models import Client, User
+from app.main import app
 
 
 @pytest.fixture
@@ -84,8 +85,11 @@ class TestClientsAPI:
     """Test cases for clients API endpoints"""
 
     def test_get_clients_success_admin(
-        self, session: Session, test_admin: User, test_client_data: Client,
-    client: TestClient,
+        self,
+        session: Session,
+        test_admin: User,
+        test_client_data: Client,
+        client: TestClient,
     ):
         """Test successful clients listing by admin"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -103,8 +107,11 @@ class TestClientsAPI:
             app.dependency_overrides.clear()
 
     def test_get_clients_success_investigator(
-        self, session: Session, test_user: User, test_client_data: Client,
-    client: TestClient,
+        self,
+        session: Session,
+        test_user: User,
+        test_client_data: Client,
+        client: TestClient,
     ):
         """Test successful clients listing by investigator"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -121,8 +128,10 @@ class TestClientsAPI:
             app.dependency_overrides.clear()
 
     def test_get_clients_serializes_personal_client_legacy_local_email(
-        self, session: Session, test_admin: User,
-    client: TestClient,
+        self,
+        session: Session,
+        test_admin: User,
+        client: TestClient,
     ):
         """Client listings retain a persisted Personal client legacy email."""
         personal_client = Client(name="Personal", email="admin@owlculus.local")
@@ -155,7 +164,9 @@ class TestClientsAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_get_clients_forbidden_analyst(self, session: Session, test_analyst: User, client: TestClient):
+    def test_get_clients_forbidden_analyst(
+        self, session: Session, test_analyst: User, client: TestClient
+    ):
         """Test clients listing forbidden for analyst"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_analyst
@@ -174,7 +185,9 @@ class TestClientsAPI:
         response = client.get("/api/clients/")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
-    def test_create_client_success(self, session: Session, test_admin: User, client: TestClient):
+    def test_create_client_success(
+        self, session: Session, test_admin: User, client: TestClient
+    ):
         """Test successful client creation"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_admin
@@ -197,7 +210,9 @@ class TestClientsAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_create_client_minimal_data(self, session: Session, test_admin: User, client: TestClient):
+    def test_create_client_minimal_data(
+        self, session: Session, test_admin: User, client: TestClient
+    ):
         """Test client creation with minimal required data"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_admin
@@ -214,7 +229,9 @@ class TestClientsAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_create_client_forbidden_non_admin(self, session: Session, test_user: User, client: TestClient):
+    def test_create_client_forbidden_non_admin(
+        self, session: Session, test_user: User, client: TestClient
+    ):
         """Test client creation forbidden for non-admin"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_user
@@ -253,8 +270,11 @@ class TestClientsAPI:
         ]
 
     def test_create_client_duplicate_email(
-        self, session: Session, test_admin: User, test_client_data: Client,
-    client: TestClient,
+        self,
+        session: Session,
+        test_admin: User,
+        test_client_data: Client,
+        client: TestClient,
     ):
         """Test client creation with duplicate email"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -275,8 +295,11 @@ class TestClientsAPI:
             app.dependency_overrides.clear()
 
     def test_get_client_success(
-        self, session: Session, test_admin: User, test_client_data: Client,
-    client: TestClient,
+        self,
+        session: Session,
+        test_admin: User,
+        test_client_data: Client,
+        client: TestClient,
     ):
         """Test successful client retrieval"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -293,7 +316,9 @@ class TestClientsAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_get_client_not_found(self, session: Session, test_admin: User, client: TestClient):
+    def test_get_client_not_found(
+        self, session: Session, test_admin: User, client: TestClient
+    ):
         """Test client retrieval with non-existent ID"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_admin
@@ -308,8 +333,11 @@ class TestClientsAPI:
             app.dependency_overrides.clear()
 
     def test_get_client_forbidden_analyst(
-        self, session: Session, test_analyst: User, test_client_data: Client,
-    client: TestClient,
+        self,
+        session: Session,
+        test_analyst: User,
+        test_client_data: Client,
+        client: TestClient,
     ):
         """Test client retrieval forbidden for analyst"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -324,8 +352,11 @@ class TestClientsAPI:
             app.dependency_overrides.clear()
 
     def test_update_client_success(
-        self, session: Session, test_admin: User, test_client_data: Client,
-    client: TestClient,
+        self,
+        session: Session,
+        test_admin: User,
+        test_client_data: Client,
+        client: TestClient,
     ):
         """Test successful client update"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -346,7 +377,9 @@ class TestClientsAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_update_client_not_found(self, session: Session, test_admin: User, client: TestClient):
+    def test_update_client_not_found(
+        self, session: Session, test_admin: User, client: TestClient
+    ):
         """Test client update with non-existent ID"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_admin
@@ -362,8 +395,11 @@ class TestClientsAPI:
             app.dependency_overrides.clear()
 
     def test_update_client_forbidden_non_admin(
-        self, session: Session, test_user: User, test_client_data: Client,
-    client: TestClient,
+        self,
+        session: Session,
+        test_user: User,
+        test_client_data: Client,
+        client: TestClient,
     ):
         """Test client update forbidden for non-admin"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -404,7 +440,7 @@ class TestClientsAPI:
         method: str,
         path: str,
         payload: dict,
-    client: TestClient,
+        client: TestClient,
     ):
         """Client input validation continues to reject reserved email suffixes."""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -421,7 +457,9 @@ class TestClientsAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_delete_client_success(self, session: Session, test_admin: User, client: TestClient):
+    def test_delete_client_success(
+        self, session: Session, test_admin: User, client: TestClient
+    ):
         """Test successful client deletion"""
         # Create a client to delete
         new_client = Client(name="To Delete", email="delete@example.com")
@@ -441,7 +479,9 @@ class TestClientsAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_delete_client_not_found(self, session: Session, test_admin: User, client: TestClient):
+    def test_delete_client_not_found(
+        self, session: Session, test_admin: User, client: TestClient
+    ):
         """Test client deletion with non-existent ID"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_admin
@@ -455,8 +495,11 @@ class TestClientsAPI:
             app.dependency_overrides.clear()
 
     def test_delete_client_forbidden_non_admin(
-        self, session: Session, test_user: User, test_client_data: Client,
-    client: TestClient,
+        self,
+        session: Session,
+        test_user: User,
+        test_client_data: Client,
+        client: TestClient,
     ):
         """Test client deletion forbidden for non-admin"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -471,8 +514,10 @@ class TestClientsAPI:
             app.dependency_overrides.clear()
 
     def test_clients_api_validation_edge_cases(
-        self, session: Session, test_admin: User,
-    client: TestClient,
+        self,
+        session: Session,
+        test_admin: User,
+        client: TestClient,
     ):
         """Test various validation edge cases"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
@@ -499,7 +544,9 @@ class TestClientsAPI:
         finally:
             app.dependency_overrides.clear()
 
-    def test_clients_api_pagination(self, session: Session, test_admin: User, client: TestClient):
+    def test_clients_api_pagination(
+        self, session: Session, test_admin: User, client: TestClient
+    ):
         """Test pagination parameters"""
         app.dependency_overrides[get_current_user] = override_get_current_user_factory(
             test_admin

@@ -10,7 +10,7 @@ import aiohttp
 import dns.asyncresolver
 from sqlmodel import Session
 
-from app.core.dependencies import get_db
+from app.database.connection import get_db
 from app.schemas.entity_schema import (
     DomainData,
     EntityCreate,

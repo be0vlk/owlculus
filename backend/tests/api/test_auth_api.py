@@ -5,14 +5,14 @@ Tests for authentication API endpoints
 from unittest.mock import patch
 
 import pytest
-from app.core import security
-from app.core.dependencies import get_db
-from app.database.models import User
-from app.main import app
 from fastapi import status
 from fastapi.testclient import TestClient
 from sqlmodel import Session
 
+from app.core import security
+from app.database.connection import get_db
+from app.database.models import User
+from app.main import app
 
 
 @pytest.fixture
@@ -42,7 +42,9 @@ def override_get_db_factory(session: Session):
 class TestAuthAPI:
     """Test cases for authentication API endpoints"""
 
-    def test_setup_status_requires_setup_when_no_users_exist(self, session: Session, client: TestClient):
+    def test_setup_status_requires_setup_when_no_users_exist(
+        self, session: Session, client: TestClient
+    ):
         """An empty installation exposes only that initial setup is required."""
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
@@ -55,8 +57,10 @@ class TestAuthAPI:
             app.dependency_overrides.clear()
 
     def test_setup_status_is_complete_when_a_user_exists(
-        self, session: Session, test_user_with_password: tuple[User, str],
-    client: TestClient,
+        self,
+        session: Session,
+        test_user_with_password: tuple[User, str],
+        client: TestClient,
     ):
         """An existing installation does not re-enter initial setup."""
         app.dependency_overrides[get_db] = override_get_db_factory(session)
@@ -70,8 +74,10 @@ class TestAuthAPI:
             app.dependency_overrides.clear()
 
     def test_login_success(
-        self, session: Session, test_user_with_password: tuple[User, str],
-    client: TestClient,
+        self,
+        session: Session,
+        test_user_with_password: tuple[User, str],
+        client: TestClient,
     ):
         """Test successful login"""
         user, password = test_user_with_password
@@ -125,8 +131,10 @@ class TestAuthAPI:
             app.dependency_overrides.clear()
 
     def test_login_invalid_password(
-        self, session: Session, test_user_with_password: tuple[User, str],
-    client: TestClient,
+        self,
+        session: Session,
+        test_user_with_password: tuple[User, str],
+        client: TestClient,
     ):
         """Test login with invalid password"""
         user, _ = test_user_with_password

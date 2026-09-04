@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, status
 from sqlmodel import Session
 
 from app import schemas
-from app.core.dependencies import admin_only, get_current_user
+from app.core.dependencies import get_current_user
 from app.database import models
 from app.database.connection import get_db
 from app.services.invite_service import InviteService
@@ -21,7 +21,6 @@ router = APIRouter()
 @router.post(
     "/", response_model=schemas.InviteResponse, status_code=status.HTTP_201_CREATED
 )
-@admin_only()
 async def create_invite(
     invite: schemas.InviteCreate,
     db: Session = Depends(get_db),
@@ -32,7 +31,6 @@ async def create_invite(
 
 
 @router.get("/", response_model=list[schemas.InviteListResponse])
-@admin_only()
 async def get_invites(
     skip: int = 0,
     limit: int = 100,
@@ -70,7 +68,6 @@ async def register_user(
 
 
 @router.delete("/{invite_id}", status_code=status.HTTP_204_NO_CONTENT)
-@admin_only()
 async def delete_invite(
     invite_id: int,
     db: Session = Depends(get_db),
@@ -82,7 +79,6 @@ async def delete_invite(
 
 
 @router.post("/cleanup")
-@admin_only()
 async def cleanup_expired_invites(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),

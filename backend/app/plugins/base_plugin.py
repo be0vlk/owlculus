@@ -15,9 +15,9 @@ from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple, Union
 from fastapi import UploadFile
 from sqlmodel import Session
 
-from app.core.dependencies import get_db
 from app.core.utils import get_utc_now
 from app.database import models
+from app.database.connection import get_db
 from app.schemas import evidence_schema as schemas
 from app.schemas.entity_schema import EntityCreate, IpAddressData
 from app.schemas.evidence_schema import EvidenceCreate, FolderCreate

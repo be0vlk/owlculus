@@ -2,14 +2,17 @@
 Comprehensive tests for invites API endpoints
 """
 
-import pytest
-from app.core.dependencies import get_current_user, get_db
 from datetime import datetime, timedelta, timezone
-from app.database.models import Invite, User
-from app.main import app
+
+import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 from sqlmodel import Session
+
+from app.core.dependencies import get_current_user
+from app.database.connection import get_db
+from app.database.models import Invite, User
+from app.main import app
 
 
 @pytest.fixture

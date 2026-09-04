@@ -57,7 +57,7 @@ def current_user():
         id=1,
         username="admin",
         email="admin@test.com",
-        role="admin",
+        role="Admin",
         created_at=datetime.utcnow(),
     )
 

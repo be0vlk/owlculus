@@ -5,11 +5,16 @@ Comprehensive tests for TaskService
 from datetime import datetime, timedelta
 
 import pytest
+from sqlmodel import Session
+
 from app.core.enums import TaskPriority, TaskStatus
-from app.core.exceptions import ResourceNotFoundException, ValidationException
+from app.core.exceptions import (
+    AuthorizationException,
+    ResourceNotFoundException,
+    ValidationException,
+)
 from app.database import models
 from app.services.task_service import TaskService
-from sqlmodel import Session
 
 
 @pytest.fixture(name="task_service")
@@ -261,19 +266,17 @@ class TestTaskCRUDOperations:
         test_case: models.Case,
         test_investigator: models.User,
     ):
-        """Test creating task without case access - service layer accepts all users"""
+        """The task service owns lead authorization."""
         task_data = {
             "title": "Unauthorized Task",
-            "description": "Should succeed at service layer",
+            "description": "Should be rejected at the service boundary",
             "priority": TaskPriority.LOW.value,
         }
 
-        # Service layer should accept the request (authorization happens at API layer)
-        task = await task_service.create_task(
-            test_case.id, task_data, current_user=test_investigator
-        )
-        assert task.title == "Unauthorized Task"
-        assert task.assigned_by_id == test_investigator.id
+        with pytest.raises(AuthorizationException):
+            await task_service.create_task(
+                test_case.id, task_data, current_user=test_investigator
+            )
 
     @pytest.mark.asyncio
     async def test_get_task(
@@ -467,12 +470,11 @@ class TestTaskAssignment:
         test_admin: models.User,
         test_analyst: models.User,
     ):
-        """Test assigning task to user without case access - service layer accepts all users"""
-        # Service layer should accept the request (authorization happens at API layer)
-        task = await task_service.assign_task(
-            sample_task.id, test_analyst.id, current_user=test_admin
-        )
-        assert task.assigned_to_id == test_analyst.id
+        """The task service rejects assignees without case access."""
+        with pytest.raises(AuthorizationException):
+            await task_service.assign_task(
+                sample_task.id, test_analyst.id, current_user=test_admin
+            )
 
     @pytest.mark.asyncio
     async def test_bulk_assign_tasks(
@@ -613,7 +615,7 @@ class TestTaskAccessControl:
         """Test investigator can create and modify tasks"""
         # Give investigator access to the case
         case_link = models.CaseUserLink(
-            case_id=test_case.id, user_id=test_investigator.id
+            case_id=test_case.id, user_id=test_investigator.id, is_lead=True
         )
         task_service.db.add(case_link)
         task_service.db.commit()

@@ -27,6 +27,7 @@ from app.core.exceptions import (
 from app.core.logging import get_security_logger
 from app.core.roles import UserRole
 from app.database import crud, models
+from app.services.case_access import CaseAccess
 
 _BOOTSTRAP_USERNAME_PATTERN = re.compile(r"[A-Za-z0-9_]{3,50}\Z")
 _UserPayload = TypeVar("_UserPayload", bound=BaseModel)
@@ -45,6 +46,7 @@ def _validate_user_payload(
 class UserService:
     def __init__(self, db: Session):
         self.db = db
+        self.access = CaseAccess(db)
 
     @staticmethod
     def _validate_bootstrap_credentials(user: schemas.BootstrapUserCreate) -> None:
@@ -124,6 +126,7 @@ class UserService:
         self, user_data: object, current_user: models.User
     ) -> schemas.User:
         """Validate an authenticated creation payload before creating its user."""
+        self.access.require_admin(current_user)
         user = _validate_user_payload(schemas.UserCreate, user_data)
         return await self.create_user(user=user, current_user=current_user)
 
@@ -208,6 +211,7 @@ class UserService:
     async def get_users(
         self, current_user: models.User, skip: int = 0, limit: int = 100
     ) -> list[schemas.User]:
+        self.access.require_admin(current_user)
         MAX_LIMIT = 200
         if limit > MAX_LIMIT:
             limit = MAX_LIMIT
@@ -288,9 +292,7 @@ class UserService:
             update_data = user_update.model_dump(exclude_unset=True)
 
             is_self_update = current_user.id == user_id
-            is_admin = (
-                current_user.role == UserRole.ADMIN.value or current_user.is_superadmin
-            )
+            is_admin = self.access.is_admin(current_user) or current_user.is_superadmin
 
             if is_self_update and not is_admin:
                 if "role" in update_data:
@@ -416,6 +418,7 @@ class UserService:
     async def admin_reset_password(
         self, user_id: int, new_password: str, current_user: models.User
     ) -> schemas.User:
+        self.access.require_admin(current_user)
         user_logger = get_security_logger(
             admin_user_id=current_user.id,
             target_user_id=user_id,
@@ -469,6 +472,7 @@ class UserService:
             raise BaseException("Internal server error")
 
     async def delete_user(self, user_id: int, current_user: models.User) -> dict:
+        self.access.require_admin(current_user)
         user_logger = get_security_logger(
             user_id=current_user.id,
             target_user_id=user_id,

@@ -6,12 +6,12 @@ from typing import Any, AsyncGenerator, Dict, List, Optional, get_origin
 
 from sqlmodel import Session, select
 
-from .base_plugin import BasePlugin
-from ..core.dependencies import get_db
 from ..core.roles import UserRole
 from ..core.utils import get_utc_now
+from ..database.connection import get_db
 from ..database.models import Case, CaseUserLink, Entity
 from ..schemas.entity_schema import ENTITY_TYPE_SCHEMAS
+from .base_plugin import BasePlugin
 
 
 class CorrelationScan(BasePlugin):

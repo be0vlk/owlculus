@@ -12,15 +12,13 @@ from sqlmodel import Session
 
 from app import schemas
 from app.core.dependencies import (
-    admin_only,
     get_client_ip,
     get_current_user,
     get_optional_current_user,
 )
-from app.core.exceptions import AuthorizationException, RateLimitException
+from app.core.exceptions import RateLimitException
 from app.core.logging import get_security_logger
 from app.core.rate_limiting import get_bootstrap_rate_limiter
-from app.core.roles import UserRole
 from app.core.setup import is_setup_required
 from app.database import models
 from app.database.connection import get_db
@@ -51,8 +49,6 @@ async def create_user(
                     "Too many setup attempts. Please try again later."
                 )
         return await user_service.create_bootstrap_user(user_data=user_data)
-    if current_user.role != UserRole.ADMIN.value:
-        raise AuthorizationException("Not authorized")
     return await user_service.create_user_from_payload(user_data, current_user)
 
 
@@ -62,7 +58,6 @@ async def read_self(current_user: models.User = Depends(get_current_user)):
 
 
 @router.get("/", response_model=list[schemas.User])
-@admin_only()
 async def read_users(
     skip: int = 0,
     limit: int = 100,
@@ -104,7 +99,6 @@ async def change_password(
 
 
 @router.put("/{user_id}/password", response_model=schemas.User)
-@admin_only()
 async def admin_reset_password(
     user_id: int,
     password_reset: schemas.AdminPasswordReset,
@@ -120,7 +114,6 @@ async def admin_reset_password(
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-@admin_only()
 async def delete_user(
     user_id: int,
     db: Session = Depends(get_db),

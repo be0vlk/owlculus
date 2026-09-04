@@ -15,9 +15,10 @@ from fastapi import (
 )
 from sqlmodel import Session
 
-from app.core.dependencies import get_current_user, get_db
+from app.core.dependencies import get_current_user
 from app.core.websocket_manager import websocket_manager
 from app.database import models
+from app.database.connection import get_db
 from app.hunts.hunt_event import HuntEvent
 from app.schemas import hunt_schema as schemas
 from app.services.export_service import ExportService

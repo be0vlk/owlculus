@@ -92,7 +92,7 @@ class HuntService:
         execution = None
         db = None
         try:
-            from app.core.dependencies import get_db
+            from app.database.connection import get_db
 
             db = next(get_db())
 

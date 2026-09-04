@@ -9,7 +9,11 @@ from unittest.mock import Mock, patch
 import pytest
 from sqlmodel import Session
 
-from app.core.exceptions import ResourceNotFoundException, ValidationException
+from app.core.exceptions import (
+    AuthorizationException,
+    ResourceNotFoundException,
+    ValidationException,
+)
 from app.database import models
 from app.plugins.base_plugin import BasePlugin
 from app.services.plugin_service import PluginService
@@ -138,12 +142,9 @@ class TestPluginService:
         plugin_service_instance: PluginService,
         test_analyst: models.User,
     ):
-        """Test that service layer accepts analyst users (authorization at API layer)"""
-        # Service layer should accept all users now
-        plugins = await plugin_service_instance.list_plugins(current_user=test_analyst)
-
-        assert isinstance(plugins, dict)
-        assert "MockPlugin" in plugins
+        """The plugin service owns analyst authorization."""
+        with pytest.raises(AuthorizationException):
+            await plugin_service_instance.list_plugins(current_user=test_analyst)
 
     @pytest.mark.asyncio
     async def test_execute_plugin_success(
@@ -220,7 +221,7 @@ class TestPluginService:
         plugin_service_instance: PluginService,
         test_analyst: models.User,
     ):
-        """Test that service layer accepts analyst users (authorization at API layer)"""
+        """The plugin service rejects analyst execution."""
         # Mock the plugin's execute_with_evidence_collection method
         with patch.object(
             MockPlugin, "execute_with_evidence_collection"
@@ -231,14 +232,10 @@ class TestPluginService:
 
             mock_execute.return_value = mock_generator()
 
-            # Service layer should accept all users now
-            result_generator = await plugin_service_instance.execute_plugin(
-                "MockPlugin", {}, current_user=test_analyst
-            )
-
-            # Verify it works
-            results = [result async for result in result_generator]
-            assert len(results) == 1
+            with pytest.raises(AuthorizationException):
+                await plugin_service_instance.execute_plugin(
+                    "MockPlugin", {}, current_user=test_analyst
+                )
 
     def test_plugin_service_singleton_pattern(self, session: Session):
         """Test that plugin service can be instantiated multiple times"""
