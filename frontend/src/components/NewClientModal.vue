@@ -5,6 +5,7 @@
     @update:model-value="updateForm"
     title="New Client"
     :is-submitting="isSubmitting"
+    :error="error"
     :submit-button-text="isSubmitting ? 'Creating...' : 'Create Client'"
     @close="closeModal"
     @submit="handleSubmit"
@@ -26,6 +27,7 @@ defineProps({
 const emit = defineEmits(['close', 'created'])
 
 const isSubmitting = ref(false)
+const error = ref('')
 const form = reactive({
   name: '',
   email: '',
@@ -38,6 +40,7 @@ const updateForm = (newForm) => {
 }
 
 const closeModal = () => {
+  error.value = ''
   form.name = ''
   form.email = ''
   form.phone = ''
@@ -46,13 +49,16 @@ const closeModal = () => {
 }
 
 const handleSubmit = async () => {
+  if (isSubmitting.value) return
+  error.value = ''
   try {
     isSubmitting.value = true
-    const newClient = await clientService.createClient(form)
+    const newClient = await clientService.createClient({ ...form, email: form.email || null })
     emit('created', newClient)
     closeModal()
-  } catch (error) {
-    console.error('Error creating client:', error)
+  } catch (err) {
+    error.value = 'Failed to create client. Please try again.'
+    console.error('Error creating client:', err)
   } finally {
     isSubmitting.value = false
   }

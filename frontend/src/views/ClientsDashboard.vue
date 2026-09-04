@@ -3,10 +3,10 @@
     <!-- Clients Data Table -->
     <v-card variant="outlined">
       <!-- Header -->
-      <v-card-title class="d-flex align-center pa-4 bg-surface">
+      <v-card-title class="operations-heading d-flex flex-wrap ga-3 align-center pa-4 bg-surface">
         <v-icon class="me-3" color="primary" icon="mdi-account-group" size="large" />
         <div class="flex-grow-1">
-          <div class="text-title-large font-weight-bold">Client Management</div>
+          <h2 class="text-title-large font-weight-bold">Client Management</h2>
           <div class="text-body-medium text-medium-emphasis">
             Manage client accounts and information
           </div>
@@ -22,6 +22,7 @@
                 icon="mdi-refresh"
                 v-bind="props"
                 variant="outlined"
+                aria-label="Refresh client list"
                 @click="loadData"
               />
             </template>
@@ -49,7 +50,7 @@
                 hide-details
                 label="Search clients..."
                 prepend-inner-icon="mdi-magnify"
-                style="min-width: 280px"
+                class="operations-search"
                 variant="outlined"
               />
             </div>
@@ -60,12 +61,14 @@
       <v-divider />
 
       <v-data-table
+        :cell-props="{ class: 'operations-cell' }"
+        :header-props="{ class: 'operations-column' }"
         :headers="vuetifyHeaders"
         :items="sortedAndFilteredClients"
         :loading="loading"
         class="elevation-0 clients-dashboard-table"
         hover
-        item-key="id"
+        item-value="id"
         @dblclick:row="handleRowDoubleClick"
       >
         <!-- Created date -->
@@ -83,12 +86,20 @@
               icon
               size="small"
               variant="outlined"
+              :aria-label="`Edit ${item.name}`"
               @click="openEditClientModal(item)"
             >
               <v-icon>mdi-pencil</v-icon>
               <v-tooltip activator="parent" location="top"> Edit {{ item.name }} </v-tooltip>
             </v-btn>
-            <v-btn color="error" icon size="small" variant="outlined" @click="handleDelete(item)">
+            <v-btn
+              color="error"
+              icon
+              size="small"
+              variant="outlined"
+              @click="handleDelete(item)"
+              :aria-label="`Delete ${item.name}`"
+            >
               <v-icon>mdi-delete</v-icon>
               <v-tooltip activator="parent" location="top"> Delete {{ item.name }} </v-tooltip>
             </v-btn>
@@ -270,26 +281,3 @@ onMounted(() => {
   loadData()
 })
 </script>
-
-<style scoped>
-.clients-dashboard-table :deep(.v-data-table__tr:hover) {
-  background-color: rgb(var(--v-theme-primary), 0.04);
-  cursor: pointer;
-}
-
-.clients-dashboard-table :deep(.v-data-table__td) {
-  padding: 12px 16px;
-  border-bottom: 1px solid rgb(var(--v-theme-on-surface), 0.08);
-}
-
-.clients-dashboard-table :deep(.v-data-table__th) {
-  padding: 16px;
-  font-weight: 600;
-  color: rgb(var(--v-theme-on-surface), 0.87);
-  border-bottom: 2px solid rgb(var(--v-theme-on-surface), 0.12);
-}
-
-.clients-dashboard-table :deep(.v-data-table-rows-no-data) {
-  padding: 48px 16px;
-}
-</style>

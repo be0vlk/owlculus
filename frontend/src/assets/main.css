@@ -1,4 +1,5 @@
 @import url('./base.css');
+@import url('../styles/operations.css');
 
 #app {
     min-height: 100vh;

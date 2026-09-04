@@ -1,9 +1,9 @@
 <template>
   <v-card class="mb-6" variant="outlined">
-    <v-card-title class="d-flex align-center pa-4 bg-surface">
+    <v-card-title class="operations-heading d-flex flex-wrap ga-3 align-center pa-4 bg-surface">
       <v-icon icon="mdi-format-list-numbered" color="primary" size="large" class="me-3" />
       <div>
-        <div class="text-title-large font-weight-bold">Case Number Configuration</div>
+        <h2 class="text-title-large font-weight-bold">Case Number Configuration</h2>
         <div class="text-body-medium text-medium-emphasis">
           Configure how case numbers are generated
         </div>
@@ -13,11 +13,13 @@
     <v-divider />
 
     <v-card-text class="pa-4">
+      <v-progress-linear v-if="configLoading" indeterminate aria-label="Loading configuration" />
       <v-container fluid class="pa-0">
         <v-row>
           <v-col cols="12" lg="6">
             <v-select
               v-model="selectedTemplate"
+              :disabled="configLoading"
               :items="templateOptions"
               item-title="display_name"
               item-value="value"
@@ -32,6 +34,7 @@
           <v-col cols="12" lg="6" v-if="selectedTemplate === 'PREFIX-YYMM-NN'">
             <v-text-field
               v-model="caseNumberPrefix"
+              :disabled="configLoading"
               label="Prefix (2-8 letters/numbers)"
               variant="outlined"
               density="comfortable"
@@ -46,11 +49,11 @@
 
         <v-row v-if="exampleCaseNumber">
           <v-col cols="12">
-            <v-card variant="tonal" color="secondary" class="pa-4">
+            <v-card variant="outlined" class="pa-4">
               <div class="d-flex align-center">
                 <v-icon icon="mdi-eye" color="info" class="me-3" />
                 <div>
-                  <div class="text-title-small font-weight-bold text-info">Preview</div>
+                  <div class="text-title-small font-weight-bold">Preview</div>
                   <div class="text-body-medium">
                     Next case will be numbered in the format:
                     <v-chip color="primary" variant="elevated" class="ml-2">
@@ -67,7 +70,7 @@
 
     <v-divider />
 
-    <v-card-actions class="pa-4">
+    <v-card-actions class="pa-4 flex-wrap">
       <v-spacer />
       <v-btn
         variant="text"

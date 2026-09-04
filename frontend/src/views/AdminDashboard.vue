@@ -4,10 +4,10 @@
     <!-- User and Invite Management -->
     <v-card class="mb-6" variant="outlined">
       <!-- Header -->
-      <v-card-title class="d-flex align-center pa-4 bg-surface">
+      <v-card-title class="operations-heading d-flex flex-wrap ga-3 align-center pa-4 bg-surface">
         <v-icon class="me-3" color="primary" icon="mdi-account-group" size="large" />
         <div class="flex-grow-1">
-          <div class="text-title-large font-weight-bold">User Management</div>
+          <h2 class="text-title-large font-weight-bold">User Management</h2>
           <div class="text-body-medium text-medium-emphasis">
             Manage system users and their permissions
           </div>
@@ -139,7 +139,3 @@ onMounted(async () => {
   loading.value = false
 })
 </script>
-
-<style scoped>
-@import url('@/styles/admin-dashboard-table.css');
-</style>

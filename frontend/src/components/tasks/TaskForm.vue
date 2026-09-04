@@ -6,7 +6,7 @@
     </v-card-title>
     <v-divider />
     <v-card-text class="pa-4">
-      <v-form ref="form" v-model="valid">
+      <v-form ref="form" :id="formId" v-model="valid" :disabled="loading" @submit.prevent="save">
         <v-select
           v-model="formData.case_id"
           :disabled="isEdit || !!caseId"
@@ -100,8 +100,15 @@
     <v-divider />
     <v-card-actions class="pa-4">
       <v-spacer />
-      <v-btn variant="text" @click="$emit('cancel')">Cancel</v-btn>
-      <v-btn :disabled="!valid" :loading="loading" color="primary" variant="flat" @click="save">
+      <v-btn :disabled="loading" variant="text" @click="$emit('cancel')">Cancel</v-btn>
+      <v-btn
+        :disabled="!valid"
+        :loading="loading"
+        color="primary"
+        variant="flat"
+        type="submit"
+        :form="formId"
+      >
         {{ isEdit ? 'Update' : 'Create' }}
       </v-btn>
     </v-card-actions>
@@ -109,13 +116,14 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { useId, computed, onMounted, ref, watch } from 'vue'
 import { useTaskStore } from '@/stores/taskStore'
 import { caseService } from '@/services/case'
 import { TASK_PRIORITY, TASK_PRIORITY_LABELS } from '@/constants/tasks'
 import CustomFieldInput from './CustomFieldInput.vue'
 
 const props = defineProps({
+  saving: { type: Boolean, default: false },
   task: {
     type: Object,
     default: null,
@@ -130,9 +138,11 @@ const emit = defineEmits(['save', 'cancel'])
 
 const taskStore = useTaskStore()
 
+const formId = useId()
 const form = ref(null)
 const valid = ref(false)
-const loading = ref(false)
+const validating = ref(false)
+const loading = computed(() => validating.value || props.saving)
 const cases = ref([])
 
 const isEdit = computed(() => !!props.task)
@@ -197,11 +207,11 @@ watch(
 )
 
 async function save() {
-  // Check if form is valid using v-model binding
-  if (!valid.value) return
-
-  loading.value = true
+  if (loading.value) return
+  validating.value = true
   try {
+    const result = await form.value.validate()
+    if (!result.valid || props.saving) return
     // Format date if present
     const data = { ...formData.value }
     if (data.due_date) {
@@ -210,7 +220,7 @@ async function save() {
 
     emit('save', data)
   } finally {
-    loading.value = false
+    validating.value = false
   }
 }
 

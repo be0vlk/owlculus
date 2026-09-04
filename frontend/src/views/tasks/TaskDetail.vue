@@ -52,7 +52,7 @@
       <!-- Task Information Card -->
       <v-card variant="outlined">
         <!-- Header -->
-        <v-card-title class="d-flex align-center pa-4 bg-surface">
+        <v-card-title class="operations-heading d-flex flex-wrap ga-3 align-center pa-4 bg-surface">
           <v-icon icon="mdi-checkbox-marked-circle" color="primary" size="large" class="me-3" />
           <div class="flex-grow-1">
             <div class="text-title-large font-weight-bold">Task Information</div>
@@ -228,6 +228,7 @@
                         size="x-small"
                         variant="text"
                         @click="openAssignDialog"
+                        aria-label="Change assignee"
                       >
                         <v-tooltip activator="parent" location="top">Change assignee</v-tooltip>
                       </v-btn>
@@ -271,17 +272,17 @@
   </BaseDashboard>
 
   <!-- Edit Dialog -->
-  <v-dialog v-model="editMode" max-width="600" persistent>
-    <TaskForm :task="task" @cancel="editMode = false" @save="handleUpdate" />
+  <v-dialog aria-label="Edit Task" v-model="editMode" max-width="600" persistent>
+    <TaskForm :saving="loading" :task="task" @cancel="editMode = false" @save="handleUpdate" />
   </v-dialog>
 
   <!-- Assign Dialog -->
-  <v-dialog v-model="showAssignDialog" max-width="400">
+  <v-dialog aria-label="Assign Task" v-model="showAssignDialog" max-width="400">
     <TaskAssignDialog :task="task" @assign="handleAssign" @cancel="showAssignDialog = false" />
   </v-dialog>
 
   <!-- Status Dialog -->
-  <v-dialog v-model="showStatusDialog" max-width="400">
+  <v-dialog aria-label="Update Status" v-model="showStatusDialog" max-width="400">
     <v-card>
       <v-card-title class="d-flex align-center">
         <v-icon start icon="mdi-progress-check" />
@@ -298,7 +299,7 @@
         />
       </v-card-text>
       <v-divider />
-      <v-card-actions class="pa-4">
+      <v-card-actions class="pa-4 flex-wrap">
         <v-spacer />
         <v-btn variant="text" @click="showStatusDialog = false">Cancel</v-btn>
         <v-btn color="primary" variant="flat" @click="handleStatusUpdate">Update</v-btn>
@@ -307,8 +308,9 @@
   </v-dialog>
 
   <!-- Quick Edit Dialog -->
-  <v-dialog v-model="showQuickEditDialog" max-width="600" persistent>
+  <v-dialog aria-label="Quick Edit Task" v-model="showQuickEditDialog" max-width="600" persistent>
     <TaskQuickEditDialog
+      :saving="loading"
       :task="task"
       :custom-fields="customFields"
       :is-user-case-lead="isUserCaseLead"
@@ -412,6 +414,7 @@ function openStatusDialog() {
 }
 
 async function handleUpdate(updates) {
+  if (loading.value) return
   await taskStore.updateTask(taskId.value, updates)
   editMode.value = false
 }
@@ -427,6 +430,7 @@ async function handleStatusUpdate() {
 }
 
 async function handleQuickUpdate(updates) {
+  if (loading.value) return
   await taskStore.updateTask(taskId.value, updates)
   showQuickEditDialog.value = false
 }

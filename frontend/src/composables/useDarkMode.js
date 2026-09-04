@@ -27,7 +27,7 @@ const initializeDarkMode = (theme) => {
   const darkMode = initDarkMode()
   isDark.value = darkMode
   localStorage.setItem(LOCAL_STORAGE_KEY, darkMode ? 'dark' : 'light')
-  theme.global.name.value = darkMode ? 'owlculusDark' : 'owlculusLight'
+  theme.change(darkMode ? 'owlculusDark' : 'owlculusLight')
 
   // Watch for system theme changes only if no explicit user choice
   if (window.matchMedia) {
@@ -36,7 +36,7 @@ const initializeDarkMode = (theme) => {
       if (localStorage.getItem(LOCAL_STORAGE_KEY) === null) {
         isDark.value = e.matches
         localStorage.setItem(LOCAL_STORAGE_KEY, e.matches ? 'dark' : 'light')
-        theme.global.name.value = e.matches ? 'owlculusDark' : 'owlculusLight'
+        theme.change(e.matches ? 'owlculusDark' : 'owlculusLight')
       }
     }
 
@@ -59,7 +59,7 @@ export const useDarkMode = () => {
   const setDarkMode = (dark) => {
     isDark.value = dark
     localStorage.setItem(LOCAL_STORAGE_KEY, dark ? 'dark' : 'light')
-    theme.global.name.value = dark ? 'owlculusDark' : 'owlculusLight'
+    theme.change(dark ? 'owlculusDark' : 'owlculusLight')
   }
 
   const toggleDark = () => {

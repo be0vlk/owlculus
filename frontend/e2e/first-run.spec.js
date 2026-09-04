@@ -33,6 +33,109 @@ async function exerciseTextInput(input) {
   await input.clear()
 }
 
+async function captureOperations(page, surface) {
+  for (const theme of ['light', 'dark']) {
+    if (theme === 'dark') await page.getByRole('button', { name: 'Dark Mode', exact: true }).click()
+    await page.screenshot({
+      path: `test-results/${surface}-${process.env.OWLCULUS_SERVER_KIND}-${process.env.OWLCULUS_VIEWPORT}-${theme}.png`,
+      fullPage: true,
+      animations: 'disabled',
+    })
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true)
+  }
+  await page.getByRole('button', { name: 'Light Mode', exact: true }).click()
+}
+
+async function exerciseTasks(page) {
+  await page.getByRole('button', { name: 'New Task', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Create Task', exact: true })
+  await dialog.getByLabel('Case', { exact: true }).press('ArrowDown')
+  await page.getByRole('option', { name: 'Migration Safety Case Updated', exact: true }).click()
+  await dialog.getByLabel('Title', { exact: true }).fill('Migration review')
+  await dialog.getByLabel('Description', { exact: true }).fill('Review migration behavior')
+  await dialog.getByLabel('Title', { exact: true }).press('Enter')
+  await expect(dialog).toBeHidden()
+  await page.getByText('All Tasks', { exact: true }).click()
+  const row = page.getByRole('row').filter({ hasText: 'Migration review' })
+  await expect(row).toBeVisible()
+  await row.getByRole('button', { name: 'Assign Migration review', exact: true }).click()
+  const assign = page.getByRole('dialog', { name: 'Assign Task', exact: true })
+  await assign.getByLabel('Assign To', { exact: true }).press('ArrowDown')
+  await page.getByRole('option', { name: administrator.username, exact: true }).click()
+  await assign.getByRole('button', { name: 'Assign', exact: true }).click()
+  await expect(assign).toBeHidden()
+  await expect(page.getByText('Task assigned successfully', { exact: true })).toBeVisible()
+  await captureOperations(page, 'tasks')
+  await row.getByRole('link', { name: 'Migration review', exact: true }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Task: Migration review', exact: true }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'Edit Task', exact: true }).click()
+  await expect(page.getByRole('dialog', { name: 'Edit Task', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+}
+
+async function exerciseAdministration(page) {
+  await page.getByRole('button', { name: 'Add User', exact: true }).click()
+  const user = page.getByRole('dialog', { name: 'Add New User', exact: true })
+  await user.getByLabel('Username', { exact: true }).fill('migration_user')
+  await user.getByLabel('Email Address', { exact: true }).fill('migration-user@example.org')
+  await user.getByLabel('Password', { exact: true }).fill('MigrationUser123!')
+  await user.getByLabel('Password', { exact: true }).press('Enter')
+  await expect(user).toBeHidden()
+  await expect(page.getByRole('row').filter({ hasText: 'migration_user' })).toBeVisible()
+  await page.getByRole('button', { name: 'Delete migration_user', exact: true }).click()
+  const confirmation = page.getByRole('dialog', { name: 'Confirm Deletion', exact: true })
+  await expect(confirmation).toContainText('This action cannot be undone.')
+  await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click()
+
+  await page.getByRole('tab', { name: 'Invites', exact: true }).click()
+  await page.getByRole('button', { name: 'Generate Invite', exact: true }).first().click()
+  const invite = page.getByRole('dialog', { name: 'Generate Invite', exact: true })
+  await invite.getByRole('button', { name: 'Generate Invite', exact: true }).click()
+  await expect(invite).toBeHidden()
+  await expect(page.getByRole('button', { name: 'Copy invite link', exact: true })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Add API Key', exact: true }).click()
+  const apiKey = page.getByRole('dialog', { name: 'Add API Key', exact: true })
+  await apiKey.getByLabel('Provider', { exact: true }).press('ArrowDown')
+  await page.getByRole('option', { name: 'Shodan', exact: true }).click()
+  await apiKey.getByLabel('API Key', { exact: true }).fill('disposable-migration-key')
+  await apiKey.getByRole('button', { name: 'Add API Key', exact: true }).click()
+  await expect(apiKey).toBeHidden()
+  await expect(page.getByText('API key added successfully!', { exact: true })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Add Template', exact: true }).click()
+  const template = page.getByRole('dialog', { name: 'Add Task Template', exact: true })
+  await template.getByLabel('Template Name', { exact: true }).fill('migration_review')
+  await template.getByLabel('Display Name', { exact: true }).fill('Migration Review')
+  await template.getByLabel('Description', { exact: true }).fill('Review migration checks')
+  await template.getByLabel('Category', { exact: true }).fill('Review')
+  await template.getByLabel('Display Name', { exact: true }).press('Enter')
+  await expect(template).toBeHidden()
+  await expect(page.getByRole('row').filter({ hasText: 'Migration Review' })).toBeVisible()
+  await page.getByRole('button', { name: 'Edit Migration Review', exact: true }).click()
+  const edit = page.getByRole('dialog', { name: 'Edit Task Template', exact: true })
+  await expect(edit.getByLabel('Template Name', { exact: true })).toBeDisabled()
+  await edit.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Case Number Configuration', exact: true }),
+  ).toBeVisible()
+  await page.getByLabel('Case Number Format', { exact: true }).press('ArrowDown')
+  await page
+    .getByRole('option', { name: 'Prefix + Monthly Reset (PREFIX-YYMM-NN)', exact: true })
+    .click()
+  const prefix = page.getByLabel('Prefix (2-8 letters/numbers)', { exact: true })
+  await prefix.fill('X')
+  await expect(page.getByRole('button', { name: 'Save Configuration', exact: true })).toBeDisabled()
+  await prefix.fill('MIG')
+  await page.getByRole('button', { name: 'Save Configuration', exact: true }).click()
+  await expect(page.getByText('Configuration saved successfully!', { exact: true })).toBeVisible()
+  await captureOperations(page, 'administration')
+}
+
 async function exerciseEvidenceAndNotes(page) {
   const createFolder = page.getByRole('button', { name: 'Create Folder', exact: true })
   await createFolder.click()
@@ -161,6 +264,15 @@ async function exerciseCaseAndEntityWorkflow(page) {
   await caseRow.click()
   await expect(page).toHaveURL(/\/case\/\d+$/)
   await expect(page.getByText('Case Information', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Manage Users', exact: true }).click()
+  const members = page.getByRole('dialog', { name: 'Manage Case Users', exact: true })
+  await members.getByLabel('Select User', { exact: true }).press('ArrowDown')
+  await page.getByRole('option', { name: /e2e-admin@example.org/ }).click()
+  await members.getByRole('button', { name: 'Add User', exact: true }).click()
+  await expect(
+    members.getByRole('button', { name: 'Remove e2e-admin@example.org from case', exact: true }),
+  ).toBeVisible()
+  await members.getByRole('button', { name: 'Done', exact: true }).click()
 
   await page.getByRole('button', { name: 'Edit Case', exact: true }).click()
   const editCaseDialog = page.getByRole('dialog', { name: 'Edit Case', exact: true })
@@ -296,7 +408,10 @@ function observeBrowserRuntime(page, { expectedConsoleErrors = [] } = {}) {
   })
 
   page.on('console', (message) => {
-    if (message.type() === 'error') {
+    if (
+      message.type() === 'error' ||
+      (message.type() === 'warning' && /Vue warn|Vuetify|deprecated/i.test(message.text()))
+    ) {
       browserErrors.push({ message: message.text(), sourceUrl: message.location().url })
     }
   })
@@ -579,7 +694,8 @@ test.describe('first-run browser journey', () => {
   })
 
   test('smokes authenticated routes and representative interface behavior', async ({ page }) => {
-    test.setTimeout(90_000)
+    test.setTimeout(150_000)
+    page.setDefaultTimeout(15_000)
     const { assertSafeTraffic, verifyViteHotReload } = observeBrowserRuntime(page)
     expect(page.viewportSize()).toEqual(browserViewports[process.env.OWLCULUS_VIEWPORT])
     await logIn(page)
@@ -597,9 +713,10 @@ test.describe('first-run browser journey', () => {
     await expect(page.getByText('Client Management')).toBeVisible({ timeout: 15_000 })
 
     await page.getByRole('button', { name: 'Add Client' }).click()
-    const clientDialog = page.getByRole('dialog').filter({ hasText: 'New Client' })
+    const clientDialog = page.getByRole('dialog', { name: 'New Client', exact: true })
     await expect(clientDialog).toBeVisible()
     await expect(clientDialog.getByText('New Client', { exact: true })).toBeVisible()
+    await expect(clientDialog.getByLabel('Name', { exact: true })).toBeFocused()
     await clientDialog.getByLabel('Name', { exact: true }).fill('Migration Safety Client')
     await clientDialog.getByLabel('Email', { exact: true }).fill('safety-client@example.org')
     await clientDialog.getByLabel('Phone', { exact: true }).fill('+1 555 0100')
@@ -611,6 +728,8 @@ test.describe('first-run browser journey', () => {
     ).toBeVisible()
     const clientRow = page.getByRole('row').filter({ hasText: 'Migration Safety Client' })
     await expect(clientRow).toContainText('safety-client@example.org')
+
+    await captureOperations(page, 'clients')
 
     const routeSmokeChecks = [
       {
@@ -628,6 +747,7 @@ test.describe('first-run browser journey', () => {
         landmark: page.getByText('Task Management', { exact: true }),
         verifyOperable: async () => {
           await exerciseTextInput(page.getByLabel('Search tasks...', { exact: true }))
+          await exerciseTasks(page)
         },
       },
       {
@@ -646,10 +766,7 @@ test.describe('first-run browser journey', () => {
         expectedUrl: /\/admin$/,
         landmark: page.getByRole('tab', { name: 'Users', exact: true }),
         verifyOperable: async () => {
-          const invitesTab = page.getByRole('tab', { name: 'Invites', exact: true })
-          await invitesTab.click()
-          await expect(invitesTab).toHaveAttribute('aria-selected', 'true')
-          await page.getByRole('tab', { name: 'Users', exact: true }).click()
+          await exerciseAdministration(page)
         },
       },
     ]
@@ -674,6 +791,15 @@ test.describe('first-run browser journey', () => {
       await expect(field).toBeEnabled()
     }
     await exerciseTextInput(settingsFields[0])
+    await settingsFields[0].fill(administrator.password)
+    await settingsFields[1].fill('UpdatedPassword123!')
+    await settingsFields[2].fill('MismatchPassword123!')
+    await page.getByRole('button', { name: 'Update Password', exact: true }).click()
+    await expect(visibleAlert(page, 'New passwords do not match')).toBeVisible()
+    await settingsFields[2].fill('UpdatedPassword123!')
+    await settingsFields[2].press('Enter')
+    await expect(visibleAlert(page, 'Password updated successfully')).toBeVisible()
+    await captureOperations(page, 'settings')
 
     assertSafeTraffic()
   })

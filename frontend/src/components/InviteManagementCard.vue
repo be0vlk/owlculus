@@ -1,10 +1,10 @@
 <template>
   <v-card variant="outlined">
     <!-- Header -->
-    <v-card-title class="d-flex align-center pa-4 bg-surface">
+    <v-card-title class="operations-heading d-flex flex-wrap ga-3 align-center pa-4 bg-surface">
       <v-icon icon="mdi-email" color="primary" size="large" class="me-3" />
       <div class="flex-grow-1">
-        <div class="text-title-large font-weight-bold">Invite Management</div>
+        <h2 class="text-title-large font-weight-bold">Invite Management</h2>
         <div class="text-body-medium text-medium-emphasis">Manage user invitation links</div>
       </div>
       <div class="d-flex align-center ga-2">
@@ -22,6 +22,7 @@
               v-bind="props"
               icon="mdi-refresh"
               variant="outlined"
+              aria-label="Refresh invite list"
               @click="loadInvites"
               :loading="loading"
             />
@@ -61,7 +62,7 @@
               variant="outlined"
               density="comfortable"
               hide-details
-              style="min-width: 280px"
+              class="operations-search"
               clearable
             />
           </div>
@@ -72,10 +73,12 @@
     <v-divider />
 
     <v-data-table
+      :cell-props="{ class: 'operations-cell' }"
+      :header-props="{ class: 'operations-column' }"
       :headers="inviteHeaders"
       :items="sortedAndFilteredInvites"
       :loading="loading"
-      item-key="id"
+      item-value="id"
       class="elevation-0 admin-dashboard-table"
       hover
     >
@@ -117,6 +120,7 @@
             variant="outlined"
             icon
             @click="handleCopyInviteLink(item)"
+            aria-label="Copy invite link"
           >
             <v-icon>mdi-content-copy</v-icon>
             <v-tooltip activator="parent" location="top"> Copy invite link </v-tooltip>
@@ -128,6 +132,7 @@
             variant="outlined"
             icon
             @click="handleDeleteInvite(item)"
+            aria-label="Delete invite"
           >
             <v-icon>mdi-delete</v-icon>
             <v-tooltip activator="parent" location="top"> Delete invite </v-tooltip>
@@ -255,26 +260,3 @@ onMounted(async () => {
   await loadInvites()
 })
 </script>
-
-<style scoped>
-.admin-dashboard-table :deep(.v-data-table__tr:hover) {
-  background-color: rgb(var(--v-theme-primary), 0.04);
-  cursor: pointer;
-}
-
-.admin-dashboard-table :deep(.v-data-table__td) {
-  padding: 12px 16px;
-  border-bottom: 1px solid rgb(var(--v-theme-on-surface), 0.08);
-}
-
-.admin-dashboard-table :deep(.v-data-table__th) {
-  padding: 16px;
-  font-weight: 600;
-  color: rgb(var(--v-theme-on-surface), 0.87);
-  border-bottom: 2px solid rgb(var(--v-theme-on-surface), 0.12);
-}
-
-.admin-dashboard-table :deep(.v-data-table-rows-no-data) {
-  padding: 48px 16px;
-}
-</style>

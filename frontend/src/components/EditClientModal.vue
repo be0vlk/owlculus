@@ -5,6 +5,7 @@
     @update:model-value="updateForm"
     title="Edit Client"
     :is-submitting="isSubmitting"
+    :error="error"
     :submit-button-text="isSubmitting ? 'Updating...' : 'Update Client'"
     @close="closeModal"
     @submit="handleSubmit"
@@ -30,6 +31,7 @@ const props = defineProps({
 const emit = defineEmits(['close', 'updated'])
 
 const isSubmitting = ref(false)
+const error = ref('')
 const form = reactive({
   name: '',
   email: '',
@@ -56,6 +58,7 @@ const updateForm = (newForm) => {
 }
 
 const closeModal = () => {
+  error.value = ''
   form.name = ''
   form.email = ''
   form.phone = ''
@@ -64,15 +67,21 @@ const closeModal = () => {
 }
 
 const handleSubmit = async () => {
+  if (isSubmitting.value) return
+  error.value = ''
   if (!props.client?.id) return
 
   try {
     isSubmitting.value = true
-    const updatedClient = await clientService.updateClient(props.client.id, form)
+    const updatedClient = await clientService.updateClient(props.client.id, {
+      ...form,
+      email: form.email || null,
+    })
     emit('updated', updatedClient)
     closeModal()
-  } catch (error) {
-    console.error('Error updating client:', error)
+  } catch (err) {
+    error.value = 'Failed to update client. Please try again.'
+    console.error('Error updating client:', err)
   } finally {
     isSubmitting.value = false
   }
