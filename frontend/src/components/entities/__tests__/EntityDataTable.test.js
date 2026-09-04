@@ -9,12 +9,13 @@ vi.mock('@/utils/download', () => ({ downloadBlob: vi.fn() }))
 
 const DataTableStub = defineComponent({
   props: {
+    modelValue: { type: Array, default: () => [] },
     items: { type: Array, default: () => [] },
     itemsLength: { type: Number, default: 0 },
     loading: Boolean,
     sortBy: { type: Array, default: () => [] },
   },
-  emits: ['update:options', 'update:sortBy'],
+  emits: ['update:modelValue', 'update:options', 'update:sortBy'],
   template: `<section aria-label="Entities">
     <slot name="top" />
     <div v-if="loading" role="status">Loading entities</div>
@@ -215,6 +216,68 @@ describe('EntityDataTable workflow', () => {
     )
     expect(wrapper.find('[role="dialog"]').exists()).toBe(true)
     expect(wrapper.emitted('deleted')).toBeUndefined()
+  })
+
+  it('removes successful items from a partial bulk deletion before retrying failures', async () => {
+    const remainingEntity = {
+      id: 2,
+      entity_type: 'person',
+      data: { first_name: 'Retry', last_name: 'Person' },
+      created_at: '2026-09-02T00:00:00Z',
+    }
+    const entityService = {
+      getCaseEntities: vi
+        .fn()
+        .mockResolvedValueOnce([matchingEntity, remainingEntity])
+        .mockResolvedValue([remainingEntity]),
+      exportEntities: vi.fn(),
+      deleteEntity: vi
+        .fn()
+        .mockResolvedValueOnce()
+        .mockRejectedValueOnce(new Error('Deletion service unavailable'))
+        .mockResolvedValueOnce(),
+    }
+    const wrapper = mount(EntityDataTable, {
+      props: { caseId: 42, entityService },
+      global,
+    })
+    await flushPromises()
+
+    wrapper
+      .findComponent(DataTableStub)
+      .vm.$emit('update:modelValue', [matchingEntity, remainingEntity])
+    await flushPromises()
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('Delete (2)'))
+      .trigger('click')
+    let dialog = wrapper.get('[role="dialog"]')
+    await dialog
+      .findAll('button')
+      .find((button) => button.text().trim() === 'Delete')
+      .trigger('click')
+    await flushPromises()
+
+    expect(entityService.deleteEntity.mock.calls).toEqual([
+      [42, matchingEntity.id],
+      [42, remainingEntity.id],
+    ])
+    expect(wrapper.emitted('deleted')).toEqual([[[matchingEntity]]])
+    expect(wrapper.get('[data-testid="entity-delete-error"]').text()).toContain(
+      '1 entity could not be deleted: Deletion service unavailable',
+    )
+    dialog = wrapper.get('[role="dialog"]')
+    expect(dialog.text()).toContain('delete this entity')
+    expect(wrapper.findComponent(DataTableStub).props('items')).toEqual([remainingEntity])
+
+    await dialog
+      .findAll('button')
+      .find((button) => button.text().trim() === 'Delete')
+      .trigger('click')
+    await flushPromises()
+
+    expect(entityService.deleteEntity).toHaveBeenLastCalledWith(42, remainingEntity.id)
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
   })
 
   it('reports a loading failure and lets the user retry', async () => {

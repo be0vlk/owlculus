@@ -182,6 +182,7 @@ import { clientService } from '../services/client'
 import { caseService } from '../services/case'
 import { userService } from '../services/user'
 import { useAuthStore } from '../stores/auth'
+import { useDialogFocusRestore } from '../composables/useDialogFocusRestore'
 import { getErrorMessage } from '../utils/errorMessage'
 import ModalActions from './ModalActions.vue'
 
@@ -191,6 +192,8 @@ const props = defineProps({
     required: true,
   },
 })
+
+useDialogFocusRestore(() => props.isOpen)
 
 const dialogVisible = computed({
   get: () => props.isOpen,

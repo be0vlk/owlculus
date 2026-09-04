@@ -125,6 +125,7 @@
                   <v-col cols="12" md="6">
                     <v-select
                       v-model="selectedUserId"
+                      autofocus
                       :items="availableUsers"
                       :rules="[rules.required]"
                       clearable
@@ -193,6 +194,7 @@
 import { computed, ref, watch } from 'vue'
 import { userService } from '@/services/user'
 import { caseService } from '@/services/case'
+import { useDialogFocusRestore } from '@/composables/useDialogFocusRestore'
 import { getErrorMessage } from '@/utils/errorMessage'
 import ModalActions from './ModalActions.vue'
 
@@ -210,6 +212,8 @@ const props = defineProps({
     required: true,
   },
 })
+
+useDialogFocusRestore(() => props.show)
 
 const emit = defineEmits(['close', 'updated'])
 
