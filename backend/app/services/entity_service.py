@@ -7,17 +7,18 @@ entity operations with case access control, data enrichment capabilities,
 and specialized search functions for OSINT investigation workflows.
 """
 
-from typing import Optional
+from typing import cast
 
-from sqlmodel import Session, col, select
+from sqlmodel import Session, col, or_, select
 
 from app import schemas
 from app.core.exceptions import (
+    DuplicateResourceException,
     ResourceNotFoundException,
     ValidationException,
 )
 from app.core.utils import get_utc_now
-from app.database import crud, models
+from app.database import models
 from app.database.db_utils import transaction
 from app.services.case_access import CaseAccess
 
@@ -27,11 +28,108 @@ class EntityService:
         self.db = db
         self.case_access = CaseAccess(db)
 
+    async def _check_duplicates(
+        self,
+        case_id: int,
+        entity: schemas.EntityCreate | schemas.EntityUpdate,
+        entity_id: int | None = None,
+    ) -> None:
+        entity_data = entity.model_dump()
+        entity_type = cast(
+            str | None,
+            getattr(entity, "entity_type", None)
+            or getattr(entity, "entity_type_hint", None)
+            or entity_data.get("__entity_type"),
+        )
+
+        if entity_type == "person":
+            first_name = entity.data.get("first_name")
+            last_name = entity.data.get("last_name")
+            if not first_name or not last_name:
+                return
+            query = select(models.Entity).where(
+                models.Entity.case_id == case_id,
+                models.Entity.entity_type == "person",
+                models.Entity.data["first_name"].as_string().ilike(first_name),
+                models.Entity.data["last_name"].as_string().ilike(last_name),
+            )
+            if entity_id is not None:
+                query = query.where(models.Entity.id != entity_id)
+            if self.db.exec(query).first():
+                raise DuplicateResourceException(
+                    f"A person with the name '{first_name} {last_name}' already exists in this case"
+                )
+            return
+
+        if entity_type is None:
+            return
+
+        duplicate_fields = {
+            "company": [("name", "name")],
+            "ip_address": [("ip_address", "ip_address")],
+            "domain": [("domain", "domain")],
+            "vehicle": [("vin", "vin"), ("license_plate", "license plate")],
+        }
+        fields = duplicate_fields.get(entity_type)
+        if fields:
+            present_fields = [
+                (field, label) for field, label in fields if entity.data.get(field)
+            ]
+            for field, label in present_fields:
+                value = entity.data[field]
+                expression = models.Entity.data[field].as_string()
+                comparison = (
+                    expression == value
+                    if entity_type == "ip_address"
+                    else expression.ilike(value)
+                )
+                query = select(models.Entity).where(
+                    models.Entity.case_id == case_id,
+                    models.Entity.entity_type == entity_type,
+                    comparison,
+                )
+                if entity_id is not None:
+                    query = query.where(models.Entity.id != entity_id)
+                if self.db.exec(query).first():
+                    messages = {
+                        "company": f"A company with the name '{value}' already exists in this case",
+                        "ip_address": f"An IP address '{value}' already exists in this case",
+                        "domain": f"A domain '{value}' already exists in this case",
+                        "vehicle": f"A vehicle with {label} '{value}' already exists in this case",
+                    }
+                    raise DuplicateResourceException(messages[entity_type])
+
+        if entity_type == "network_assets":
+            conditions = []
+            for field in ("domains", "ip_addresses", "subdomains"):
+                values = entity.data.get(field, [])
+                if values:
+                    conditions.append(
+                        or_(
+                            *[
+                                models.Entity.data[field].as_array().any(value.lower())
+                                for value in values
+                            ]
+                        )
+                    )
+            if conditions:
+                query = select(models.Entity).where(
+                    models.Entity.case_id == case_id,
+                    models.Entity.entity_type == "network_assets",
+                    or_(*conditions),
+                )
+                if entity_id is not None:
+                    query = query.where(models.Entity.id != entity_id)
+                if self.db.exec(query).first():
+                    raise DuplicateResourceException(
+                        "Network assets with overlapping domains, IP addresses, or subdomains already exist in this case"
+                    )
+
     async def get_case_entities(
         self,
         case_id: int,
         current_user: models.User,
-        entity_type: Optional[str] = None,
+        entity_type: str | None = None,
         skip: int = 0,
         limit: int = 100,
     ) -> list[models.Entity]:
@@ -67,7 +165,9 @@ class EntityService:
     ) -> models.Entity:
         case = self.case_access.writable(current_user, case_id)
 
-        await crud.check_entity_duplicates(self.db, case.id, entity)
+        if case.id is None:
+            raise ResourceNotFoundException("Case not found")
+        await self._check_duplicates(case.id, entity)
         with transaction(self.db):
             db_entity = models.Entity(
                 case_id=case.id,
@@ -104,9 +204,7 @@ class EntityService:
         except ValueError as e:
             raise ValidationException(str(e))
 
-        await crud.check_entity_duplicates(
-            self.db, db_entity.case_id, validated_update, entity_id
-        )
+        await self._check_duplicates(db_entity.case_id, validated_update, entity_id)
         with transaction(self.db):
             db_entity.data = validated_update.data
             db_entity.updated_at = get_utc_now()
@@ -132,7 +230,7 @@ class EntityService:
 
     async def find_entity_by_ip_address(
         self, case_id: int, ip_address: str, current_user: models.User
-    ) -> Optional[models.Entity]:
+    ) -> models.Entity | None:
         """Find an existing IP address entity in the given case"""
         case = self.case_access.readable(current_user, case_id)
 
@@ -146,7 +244,7 @@ class EntityService:
 
     async def find_entity_by_domain(
         self, case_id: int, domain: str, current_user: models.User
-    ) -> Optional[models.Entity]:
+    ) -> models.Entity | None:
         """Find an existing domain entity in the given case (case-insensitive)"""
         case = self.case_access.readable(current_user, case_id)
 

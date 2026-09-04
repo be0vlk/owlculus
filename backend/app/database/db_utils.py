@@ -1,20 +1,21 @@
-"""
-Database utilities for session management and transactions
+"""Database session and transaction boundaries.
+
+``transaction`` is the sole commit point for service operations. Code running
+inside it may add, delete, flush, and refresh, but must never commit. This keeps
+each service operation atomic and prevents helpers from committing a caller's
+partially completed work.
 """
 
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Any, Callable, Generator, TypeVar
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session
 
-from app.core.exceptions import BaseException as DomainException
 from app.core.logging import get_logger_with_context
 from app.database.connection import engine
 
 logger = get_logger_with_context(module="db_utils")
-
-T = TypeVar("T")
 
 
 @contextmanager
@@ -34,7 +35,7 @@ def get_session() -> Generator[Session, None, None]:
         yield session
     except SQLAlchemyError as e:
         session.rollback()
-        logger.error(f"Database error: {str(e)}")
+        logger.error(f"Database error: {e!s}")
         raise
     finally:
         session.close()
@@ -58,89 +59,5 @@ def transaction(session: Session) -> Generator[Session, None, None]:
         session.commit()
     except Exception as e:
         session.rollback()
-        logger.error(f"Transaction failed: {str(e)}")
-        raise
-
-
-def execute_in_transaction(
-    session: Session,
-    operation: Callable[[Session], T],
-    error_message: str = "Database operation failed",
-) -> T:
-    """
-    Execute a database operation within a transaction.
-
-    Args:
-        session: Database session
-        operation: Function that performs database operations
-        error_message: Custom domain error message
-
-    Returns:
-        Result of the operation
-
-    Raises:
-        DomainException: If the operation fails
-    """
-    try:
-        with transaction(session):
-            return operation(session)
-    except SQLAlchemyError as e:
-        logger.error(f"{error_message}: {str(e)}")
-        raise DomainException(error_message) from e
-    except Exception as e:
-        logger.error(f"Unexpected error: {str(e)}")
-        raise DomainException(error_message) from e
-
-
-def bulk_save(session: Session, models: list[Any]) -> None:
-    """
-    Efficiently save multiple models in a single transaction.
-
-    Args:
-        session: Database session
-        models: List of models to save
-    """
-    try:
-        with transaction(session):
-            for model in models:
-                session.add(model)
-    except SQLAlchemyError as e:
-        logger.error(f"Bulk save failed: {str(e)}")
-        raise
-
-
-def bulk_delete(session: Session, models: list[Any]) -> None:
-    """
-    Efficiently delete multiple models in a single transaction.
-
-    Args:
-        session: Database session
-        models: List of models to delete
-    """
-    try:
-        with transaction(session):
-            for model in models:
-                session.delete(model)
-    except SQLAlchemyError as e:
-        logger.error(f"Bulk delete failed: {str(e)}")
-        raise
-
-
-def refresh_model(session: Session, model: Any) -> Any:
-    """
-    Refresh a model instance from the database.
-    Useful after commits or to get updated data.
-
-    Args:
-        session: Database session
-        model: Model instance to refresh
-
-    Returns:
-        Refreshed model instance
-    """
-    try:
-        session.refresh(model)
-        return model
-    except SQLAlchemyError as e:
-        logger.error(f"Failed to refresh model: {str(e)}")
+        logger.error(f"Transaction failed: {e!s}")
         raise

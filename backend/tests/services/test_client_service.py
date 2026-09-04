@@ -7,21 +7,26 @@ service layer.
 """
 
 import pytest
+from sqlmodel import Session
+
 from app import schemas
 from app.core.exceptions import (
     DuplicateResourceException,
     ResourceNotFoundException,
     ValidationException,
 )
-from app.database import crud, models
+from app.database import models
 from app.services.client_service import ClientService
-from sqlmodel import Session
 
 
 # Helper function to create a client
 async def create_client_helper(db: Session, client_data: dict) -> models.Client:
     client_create = schemas.ClientCreate(**client_data)
-    return await crud.create_client(db, client=client_create)
+    client = models.Client(**client_create.model_dump())
+    db.add(client)
+    db.commit()
+    db.refresh(client)
+    return client
 
 
 @pytest.mark.asyncio
