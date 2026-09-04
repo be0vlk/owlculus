@@ -10,6 +10,7 @@
         <v-col cols="12" md="6">
           <v-text-field
             :model-value="modelValue.make"
+            autofocus
             @update:model-value="updateField('make', $event)"
             label="Make"
             variant="outlined"

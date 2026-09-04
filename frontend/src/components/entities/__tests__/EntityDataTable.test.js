@@ -165,7 +165,7 @@ describe('EntityDataTable exports', () => {
     await flushPromises()
 
     expect(wrapper.get('[data-testid="entity-export-error"]').text()).toContain(
-      'Failed to export entities',
+      'The export service is unavailable',
     )
   })
 })

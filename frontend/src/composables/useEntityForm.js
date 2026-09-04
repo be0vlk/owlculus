@@ -1,6 +1,7 @@
 import { reactive, watch } from 'vue'
 import { entityService } from '../services/entity'
 import { cleanFormData } from '../utils/cleanFormData'
+import { getErrorMessage } from '../utils/errorMessage'
 
 export function useEntityForm(caseId) {
   const state = reactive({
@@ -94,7 +95,7 @@ export function useEntityForm(caseId) {
       const response = await entityService.createEntity(caseId, submitData)
       return response
     } catch (error) {
-      state.error = error.response?.data?.detail || error.message || 'Failed to create entity'
+      state.error = getErrorMessage(error, 'Failed to create entity')
       throw error
     } finally {
       state.loading = false

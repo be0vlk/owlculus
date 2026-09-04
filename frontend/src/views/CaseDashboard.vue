@@ -202,6 +202,7 @@
 
                   <template #[`item.actions`]="{ item }">
                     <v-btn
+                      :aria-label="`View ${getFormattedHuntTitle(item)}`"
                       icon="mdi-eye"
                       size="small"
                       variant="text"
@@ -426,6 +427,7 @@ import { entityService } from '../services/entity'
 import { evidenceService } from '../services/evidence'
 import { useHuntStore } from '../stores/huntStore.js'
 import { downloadBlob } from '../utils/download'
+import { getErrorMessage } from '../utils/errorMessage'
 import { formatHuntExecutionTitle } from '../utils/huntDisplayUtils'
 
 const route = useRoute()
@@ -502,8 +504,6 @@ const activeCaseTab = computed({
       : availableTabs.value[0]?.name
   },
   set: (tabName) => {
-    if (!availableTabs.value.some((tab) => tab.name === tabName)) return
-
     const query = { ...route.query }
     if (tabName === availableTabs.value[0]?.name) {
       delete query.tab
@@ -633,7 +633,7 @@ const loadEvidence = async () => {
   try {
     evidence.value = await evidenceService.getFolderTree(Number(route.params.id))
   } catch (error) {
-    evidenceError.value = error.response?.data?.detail || 'Failed to load evidence'
+    evidenceError.value = getErrorMessage(error, 'Failed to load evidence')
   } finally {
     loadingEvidence.value = false
   }
@@ -711,8 +711,7 @@ const handleExtractMetadata = async (evidenceItem) => {
     const metadata = await evidenceService.extractMetadata(evidenceItem.id)
     extractedMetadata.value = metadata
   } catch (error) {
-    metadataError.value =
-      error.response?.data?.detail || error.message || 'Failed to extract metadata'
+    metadataError.value = getErrorMessage(error, 'Failed to extract metadata')
   } finally {
     loadingMetadata.value = false
   }

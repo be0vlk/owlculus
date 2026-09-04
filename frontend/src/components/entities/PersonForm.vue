@@ -10,6 +10,7 @@
         <v-col cols="12" md="6">
           <v-text-field
             :model-value="modelValue.first_name"
+            autofocus
             @update:model-value="updateField('first_name', $event)"
             label="First Name"
             variant="outlined"

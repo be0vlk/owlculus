@@ -1,5 +1,11 @@
 <template>
-  <v-dialog v-model="dialogVisible" aria-label="Manage Case Users" max-width="800px" persistent>
+  <v-dialog
+    v-model="dialogVisible"
+    aria-label="Manage Case Users"
+    max-width="800px"
+    persistent
+    @keydown.esc="!loading && $emit('close')"
+  >
     <v-card prepend-icon="mdi-account-group">
       <v-card-title id="manage-case-users-dialog-title">Manage Case Users</v-card-title>
       <v-card-text>
@@ -68,6 +74,7 @@
                       <v-tooltip :text="getLeadButtonTooltip(user)" location="top">
                         <template #activator="{ props }">
                           <v-btn
+                            :aria-label="`${getLeadButtonTooltip(user)} for ${user.email}`"
                             :color="user.is_lead ? 'primary' : 'default'"
                             :icon="user.is_lead ? 'mdi-star' : 'mdi-star-outline'"
                             :loading="updatingLeadStatus === user.id"
@@ -83,6 +90,7 @@
                       <v-tooltip location="top" text="Remove from Case">
                         <template #activator="{ props }">
                           <v-btn
+                            :aria-label="`Remove ${user.email} from case`"
                             :loading="removingUser === user.id"
                             color="error"
                             icon="mdi-account-remove"
@@ -185,6 +193,7 @@
 import { computed, ref, watch } from 'vue'
 import { userService } from '@/services/user'
 import { caseService } from '@/services/case'
+import { getErrorMessage } from '@/utils/errorMessage'
 import ModalActions from './ModalActions.vue'
 
 const props = defineProps({
@@ -257,7 +266,7 @@ const loadUsers = async () => {
     error.value = null
     allUsers.value = await userService.getUsers()
   } catch (err) {
-    error.value = err.response?.data?.message || err.message || 'Failed to load users'
+    error.value = getErrorMessage(err, 'Failed to load users')
   } finally {
     loading.value = false
   }
@@ -279,7 +288,7 @@ const addUser = async () => {
       formRef.value.resetValidation()
     }
   } catch (err) {
-    error.value = err.response?.data?.message || err.message || 'Failed to add user to case'
+    error.value = getErrorMessage(err, 'Failed to add user to case')
   } finally {
     addingUser.value = false
   }
@@ -296,7 +305,7 @@ const removeUser = async (user) => {
     await caseService.removeUserFromCase(props.caseId, user.id)
     emit('updated')
   } catch (err) {
-    error.value = err.response?.data?.message || err.message || 'Failed to remove user from case'
+    error.value = getErrorMessage(err, 'Failed to remove user from case')
   } finally {
     removingUser.value = null
   }
@@ -314,7 +323,7 @@ const toggleLeadStatus = async (user) => {
     await caseService.updateCaseUserLeadStatus(props.caseId, user.id, !user.is_lead)
     emit('updated')
   } catch (err) {
-    error.value = err.response?.data?.message || err.message || 'Failed to update lead status'
+    error.value = getErrorMessage(err, 'Failed to update lead status')
   } finally {
     updatingLeadStatus.value = null
   }
