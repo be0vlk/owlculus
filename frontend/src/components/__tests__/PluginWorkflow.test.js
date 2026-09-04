@@ -86,3 +86,20 @@ it('does not describe a failed correlation scan as a successful empty result', (
   expect(wrapper.text()).not.toContain('No correlations found')
   expect(wrapper.text()).not.toContain('Correlation scan complete')
 })
+
+it('offers optional saving for correlation without source or destination selectors', async () => {
+  const { default: CorrelationScanPluginParams } = await import(
+    '../plugins/CorrelationScanPluginParams.vue'
+  )
+  const wrapper = mountWithVuetify(CorrelationScanPluginParams, {
+    props: { parameters: {}, modelValue: { save_to_case: false, case_id: 999 } },
+  })
+  await flushPromises()
+  expect(wrapper.findAll('input')).toHaveLength(1)
+  const toggle = wrapper.get('input[type="checkbox"]')
+  expect(toggle.element.checked).toBe(false)
+  await toggle.setValue(true)
+  expect(wrapper.emitted('update:modelValue').at(-1)[0]).toEqual({ save_to_case: true })
+  expect(wrapper.text()).not.toContain('Case to Scan')
+  expect(wrapper.text()).not.toContain('Case to Save')
+})

@@ -54,9 +54,15 @@ export const routes = [
   },
   {
     path: '/plugins',
-    name: 'Plugins',
+    name: 'LegacyPlugins',
     component: () => import('../views/PluginsDashboard.vue'),
     meta: { requiresAuth: true, requiresActiveCase: true },
+  },
+  {
+    path: '/case/:caseId/plugins',
+    name: 'Plugins',
+    component: () => import('../views/PluginsDashboard.vue'),
+    meta: { requiresAuth: true, requiresActiveCase: true, caseScoped: true, caseSwitchable: true },
   },
   {
     path: '/case/:id',
@@ -238,9 +244,12 @@ export function createAppRouter(history = createWebHistory(), appRoutes = routes
         next({ ...caseLocation(activeCase.activeCaseId, to), replace: true })
         return
       }
-      if (['LegacyTasks', 'LegacyHunts'].includes(to.name) && activeCase.activeCaseId) {
+      if (
+        ['LegacyTasks', 'LegacyHunts', 'LegacyPlugins'].includes(to.name) &&
+        activeCase.activeCaseId
+      ) {
         next({
-          name: to.name === 'LegacyTasks' ? 'Tasks' : 'Hunts',
+          name: to.name.replace('Legacy', ''),
           params: { caseId: activeCase.activeCaseId },
           query: to.query,
           hash: to.hash,

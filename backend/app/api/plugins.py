@@ -11,7 +11,7 @@ from collections.abc import AsyncGenerator, Callable
 from contextlib import AbstractContextManager
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session
 
@@ -87,15 +87,27 @@ async def execute_plugin(
     runner: PluginRunner = Depends(get_plugin_runner),
 ):
     CaseAccess(db).require_non_analyst(current_user)
-    run_params = params or {}
+    run_params = dict(params or {})
+    case_id = run_params.pop("case_id", None)
+    if type(case_id) is not int or case_id <= 0:
+        raise HTTPException(
+            status_code=422, detail="A positive integer case_id is required"
+        )
+    save_to_case = run_params.pop("save_to_case", False)
+    if not isinstance(save_to_case, bool):
+        raise HTTPException(status_code=422, detail="save_to_case must be a boolean")
+    access = CaseAccess(db)
+    if save_to_case:
+        access.writable(current_user, case_id)
+    else:
+        access.readable(current_user, case_id)
     run_adapter = build_run_adapter(api_keys, session_factory)
 
     async def stream() -> AsyncGenerator[str, None]:
-        case_id = run_params.get("case_id")
         with run_adapter.open(
             user=current_user,
-            case_id=case_id if isinstance(case_id, int) else None,
-            save_to_case=run_params.get("save_to_case") is True,
+            case_id=case_id,
+            save_to_case=save_to_case,
         ) as run:
             async for event in runner.run(plugin_name, run_params, run):
                 yield json.dumps(event.to_wire()) + "\n"

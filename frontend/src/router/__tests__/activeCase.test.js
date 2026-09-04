@@ -186,3 +186,11 @@ it('does not request executions without an accessible case', async () => {
   expect(router.currentRoute.value.path).toBe('/cases')
   expect(huntService.getExecution).not.toHaveBeenCalled()
 })
+
+it('redirects legacy plugins and keeps the plugin workspace when switching cases', async () => {
+  await router.push('/plugins?category=network#tools')
+  expect(router.currentRoute.value.fullPath).toBe('/case/2/plugins?category=network#tools')
+  await useActiveCaseStore().select(1)
+  expect(router.currentRoute.value.fullPath).toBe('/case/1/plugins?category=network#tools')
+  expect(useActiveCaseStore().activeCaseId).toBe(1)
+})

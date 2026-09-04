@@ -826,10 +826,7 @@ test.describe('first-run browser journey', () => {
       page.getByRole('button', { name: 'Refresh plugins', exact: true }),
     ).toBeInViewport()
     await page.getByRole('button', { name: 'Configure Correlation Scan', exact: true }).click()
-    const caseToScan = page.getByLabel('Case to Scan', { exact: true })
-    await expect(caseToScan).toBeEnabled()
-    await caseToScan.press('Enter')
-    await page.getByRole('option').filter({ hasText: 'Migration' }).first().click()
+    await expect(page.getByLabel('Case to Scan', { exact: true })).toHaveCount(0)
     await page.getByRole('button', { name: 'Execute Plugin', exact: true }).click()
     const pluginDialog = page.getByRole('dialog', { name: 'Plugin results', exact: true })
     await expect(pluginDialog).toBeVisible()

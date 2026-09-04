@@ -165,6 +165,8 @@
                     <!-- Execute Button -->
                     <v-btn
                       :disabled="
+                        !activeCase.ready ||
+                        !activeCase.activeCaseId ||
                         !plugin.enabled ||
                         executing[name] ||
                         (plugin.api_key_requirements &&
@@ -251,6 +253,7 @@
 </template>
 
 <script setup>
+import { useActiveCaseStore } from '@/stores/activeCase'
 import GenericPluginParams from '@/components/plugins/GenericPluginParams.vue'
 import { ref, onMounted, reactive, computed, markRaw } from 'vue'
 import { pluginService } from '@/services/plugin'
@@ -258,6 +261,7 @@ import { usePluginApiKeys } from '@/composables/usePluginApiKeys'
 import PluginResultsModal from '@/components/plugins/PluginResultsModal.vue'
 import BaseDashboard from '@/components/BaseDashboard.vue'
 
+const activeCase = useActiveCaseStore()
 const plugins = ref({})
 const loading = ref(true)
 const error = ref(null)
@@ -372,6 +376,7 @@ const loadPlugins = async () => {
       pluginParams[name] = {}
       if (plugins.value[name].parameters) {
         Object.keys(plugins.value[name].parameters).forEach((paramName) => {
+          if (paramName === 'case_id') return
           const param = plugins.value[name].parameters[paramName]
           // Set default value based on type
           if (param.type === 'boolean') {
@@ -394,7 +399,8 @@ const loadPlugins = async () => {
 const pluginForms = {}
 
 const executePlugin = async (name) => {
-  if (!plugins.value[name].enabled || executing[name]) return
+  const caseId = activeCase.activeCaseId
+  if (!activeCase.ready || !caseId || !plugins.value[name].enabled || executing[name]) return
   if (pluginForms[name] && !(await pluginForms[name].validate()).valid) return
   // Check API key requirements first
   const plugin = plugins.value[name]
@@ -407,13 +413,15 @@ const executePlugin = async (name) => {
     }
   }
 
+  if (!activeCase.ready || activeCase.activeCaseId !== caseId) return
+
   executing[name] = true
   pluginErrors[name] = null
   results[name] = null // Clear previous results
   executionTimes[name] = new Date() // Track execution time
 
   try {
-    const result = await pluginService.executePlugin(name, pluginParams[name])
+    const result = await pluginService.executePlugin(name, pluginParams[name], caseId)
 
     // Handle async generator result
     if (result && typeof result[Symbol.asyncIterator] === 'function') {

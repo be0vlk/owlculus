@@ -1,42 +1,24 @@
 <template>
-  <div class="d-flex flex-column ga-3">
-    <!-- Save to Case Option -->
-    <v-switch
-      v-model="caseParams.save_to_case"
-      label="Save to case evidence"
-      persistent-hint
-      color="primary"
-      density="compact"
-      @update:model-value="updateCaseParams"
-    />
-
-    <!-- Case Selection (only when save_to_case is enabled) -->
-    <CaseSelector
-      v-if="caseParams.save_to_case"
-      v-model="caseParams.case_id"
-      label="Case to Save Evidence To"
-      @update:model-value="updateCaseParams"
-    />
-  </div>
+  <v-switch
+    :model-value="modelValue.save_to_case === true"
+    label="Save to case evidence"
+    hint="Saved output belongs to the active case."
+    persistent-hint
+    color="primary"
+    density="compact"
+    @update:model-value="updateSaving"
+  />
 </template>
 
 <script setup>
-import { useCaseSelection } from '@/composables/useCaseSelection'
-import CaseSelector from './CaseSelector.vue'
-
 const props = defineProps({
-  modelValue: {
-    type: Object,
-    required: true,
-    default: () => ({
-      save_to_case: false,
-      case_id: null,
-    }),
-  },
+  modelValue: { type: Object, required: true },
 })
-
 const emit = defineEmits(['update:modelValue'])
 
-// Use case selection composable
-const { caseParams, updateCaseParams } = useCaseSelection(props, emit)
+const updateSaving = (saveToCase) => {
+  const params = { ...props.modelValue, save_to_case: saveToCase }
+  delete params.case_id
+  emit('update:modelValue', params)
+}
 </script>
