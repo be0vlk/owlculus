@@ -24,12 +24,12 @@ from app.services.case_access import CaseAccess
 class ClientService:
     def __init__(self, db: Session):
         self.db = db
-        self.access = CaseAccess(db)
+        self.case_access = CaseAccess(db)
 
     async def get_clients(
         self, skip: int = 0, limit: int = 100, *, current_user: models.User
     ) -> list[models.Client]:
-        self.access.require_non_analyst(current_user)
+        self.case_access.require_non_analyst(current_user)
         if skip < 0 or limit < 0:
             raise ValidationException("Skip and limit must be non-negative")
         return await crud.get_clients(self.db, skip=skip, limit=limit)
@@ -37,7 +37,7 @@ class ClientService:
     async def create_client(
         self, client: schemas.ClientCreate, *, current_user: models.User
     ) -> models.Client:
-        self.access.require_admin(current_user)
+        self.case_access.require_admin(current_user)
         client_logger = get_security_logger(
             admin_user_id=current_user.id,
             action="create_client",
@@ -74,7 +74,7 @@ class ClientService:
     async def get_client(
         self, client_id: int, *, current_user: models.User
     ) -> models.Client:
-        self.access.require_non_analyst(current_user)
+        self.case_access.require_non_analyst(current_user)
         db_client = await crud.get_client(self.db, client_id=client_id)
         if not db_client:
             raise ResourceNotFoundException(f"Client with id {client_id} not found")
@@ -87,7 +87,7 @@ class ClientService:
         *,
         current_user: models.User,
     ) -> models.Client:
-        self.access.require_admin(current_user)
+        self.case_access.require_admin(current_user)
         client_logger = get_security_logger(
             admin_user_id=current_user.id,
             client_id=client_id,
@@ -132,7 +132,7 @@ class ClientService:
             raise BaseException(f"Client update error: {str(e)}")
 
     async def delete_client(self, client_id: int, *, current_user: models.User) -> None:
-        self.access.require_admin(current_user)
+        self.case_access.require_admin(current_user)
         client_logger = get_security_logger(
             admin_user_id=current_user.id,
             client_id=client_id,

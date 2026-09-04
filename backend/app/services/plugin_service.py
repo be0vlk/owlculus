@@ -29,7 +29,7 @@ class PluginService:
         self._plugins: dict[str, type[BasePlugin]] = {}
         self._parameter_catalogue: dict[str, set[str]] = {}
         self.db = db
-        self.access = CaseAccess(db)
+        self.case_access = CaseAccess(db)
         self._load_plugins()
 
     def _load_plugins(self) -> None:
@@ -71,7 +71,7 @@ class PluginService:
         }
 
     async def list_plugins(self, *, current_user: User) -> dict[str, Any]:
-        self.access.require_non_analyst(current_user)
+        self.case_access.require_non_analyst(current_user)
         plugins_metadata = {}
         for name, plugin_class in self._plugins.items():
             plugin_instance = plugin_class(db_session=self.db)
@@ -82,7 +82,7 @@ class PluginService:
     async def execute_plugin(
         self, name: str, params: dict[str, Any] | None = None, *, current_user: User
     ) -> AsyncGenerator[dict[str, Any], None]:
-        self.access.require_non_analyst(current_user)
+        self.case_access.require_non_analyst(current_user)
         plugin = self.get_plugin(name)
         plugin._current_user = current_user
         return plugin.execute_with_evidence_collection(params or {})
@@ -95,7 +95,7 @@ class PluginService:
         current_user: User,
     ) -> AsyncGenerator[str, None]:
         """Execute a plugin while preserving the NDJSON streaming contract."""
-        self.access.require_non_analyst(current_user)
+        self.case_access.require_non_analyst(current_user)
 
         async def stream() -> AsyncGenerator[str, None]:
             try:

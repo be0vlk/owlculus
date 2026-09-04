@@ -87,7 +87,7 @@ class SystemConfigService:
     ) -> None:
         self.db = db
         self._clock = clock
-        self.access = CaseAccess(db)
+        self.case_access = CaseAccess(db)
 
     def _persist_configuration(
         self, config: models.SystemConfiguration
@@ -122,7 +122,7 @@ class SystemConfigService:
         self, current_user: models.User
     ) -> models.SystemConfiguration:
         """Admin-only method to get configuration."""
-        self.access.require_admin(current_user)
+        self.case_access.require_admin(current_user)
         return await self.get_configuration()
 
     async def update_configuration(
@@ -131,7 +131,7 @@ class SystemConfigService:
         current_user: models.User,
         case_number_prefix: Optional[str] = None,
     ) -> models.SystemConfiguration:
-        self.access.require_admin(current_user)
+        self.case_access.require_admin(current_user)
         config_logger = get_security_logger(
             admin_user_id=current_user.id,
             action="update_system_config",
@@ -204,7 +204,7 @@ class SystemConfigService:
         name: str,
         current_user: models.User,
     ) -> models.SystemConfiguration:
-        self.access.require_admin(current_user)
+        self.case_access.require_admin(current_user)
         config = await self.get_configuration()
         current_keys = config.api_keys.copy() if config.api_keys else {}
         provider_name = provider.value
@@ -278,7 +278,7 @@ class SystemConfigService:
     async def remove_api_key(
         self, provider: Provider, current_user: models.User
     ) -> models.SystemConfiguration:
-        self.access.require_admin(current_user)
+        self.case_access.require_admin(current_user)
         config = await self.get_configuration()
 
         existing_key_data = None
@@ -328,7 +328,7 @@ class SystemConfigService:
 
     async def list_api_keys(self, current_user: models.User) -> Dict[str, dict]:
         """List all configured API keys (admin only)"""
-        self.access.require_admin(current_user)
+        self.case_access.require_admin(current_user)
         try:
             config = await self.get_configuration()
 
@@ -359,7 +359,7 @@ class SystemConfigService:
         self, template: str, prefix: Optional[str], current_user: models.User
     ) -> tuple[str, str]:
         """Authorize and render an administrative case-number preview."""
-        self.access.require_admin(current_user)
+        self.case_access.require_admin(current_user)
         SystemConfigValidator.validate_case_number_template(template)
         return (
             self.generate_example_case_number(template, prefix),
@@ -376,7 +376,7 @@ class SystemConfigService:
     async def update_evidence_folder_templates(
         self, templates: dict, current_user: models.User
     ) -> models.SystemConfiguration:
-        self.access.require_admin(current_user)
+        self.case_access.require_admin(current_user)
         config_logger = get_security_logger(
             admin_user_id=current_user.id,
             action="update_evidence_templates",
