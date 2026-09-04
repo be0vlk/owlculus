@@ -109,6 +109,7 @@
 import { watch, computed, ref } from 'vue'
 import { useEntityForm } from '../composables/useEntityForm'
 import { useEntityValidation } from '../composables/useEntityValidation'
+import { useDialogFocusRestore } from '../composables/useDialogFocusRestore'
 import PersonForm from './entities/PersonForm.vue'
 import CompanyForm from './entities/CompanyForm.vue'
 import DomainForm from './entities/DomainForm.vue'
@@ -119,6 +120,8 @@ const props = defineProps({
   show: { type: Boolean, required: true, default: false },
   caseId: { type: String, required: true },
 })
+
+useDialogFocusRestore(() => props.show)
 
 const emit = defineEmits(['close', 'created'])
 

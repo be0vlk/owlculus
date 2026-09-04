@@ -250,6 +250,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { formatDate } from '@/composables/dateUtils'
 import { downloadBlob } from '@/utils/download'
 import { getErrorMessage } from '@/utils/errorMessage'
+import { useDialogFocusRestore } from '@/composables/useDialogFocusRestore'
 
 const props = defineProps({
   caseId: {
@@ -289,6 +290,8 @@ const showExportError = ref(false)
 const exportErrorMessage = ref('')
 const showDeleteError = ref(false)
 const deleteErrorMessage = ref('')
+
+useDialogFocusRestore(deleteDialog)
 
 // Configuration
 const itemsPerPageOptions = [
@@ -489,23 +492,32 @@ const performDelete = async () => {
   deleting.value = true
   showDeleteError.value = false
 
-  try {
-    for (const item of itemsToDelete.value) {
-      await props.entityService.deleteEntity(props.caseId, item.id)
-    }
+  const targets = [...itemsToDelete.value]
+  const results = await Promise.allSettled(
+    targets.map((item) => props.entityService.deleteEntity(props.caseId, item.id)),
+  )
+  const deletedItems = targets.filter((_, index) => results[index].status === 'fulfilled')
+  const failedItems = targets.filter((_, index) => results[index].status === 'rejected')
 
-    emit('deleted', itemsToDelete.value)
-    deleteDialog.value = false
-    itemsToDelete.value = []
-    selected.value = [] // Clear selection after successful deletion
-    await loadItems()
-  } catch (error) {
-    console.error('Error deleting entities:', error)
-    deleteErrorMessage.value = getErrorMessage(error, 'Failed to delete entities')
-    showDeleteError.value = true
-  } finally {
-    deleting.value = false
+  if (deletedItems.length > 0) {
+    emit('deleted', deletedItems)
   }
+
+  selected.value = selected.value.filter((item) => failedItems.some(({ id }) => id === item.id))
+  itemsToDelete.value = failedItems
+  await loadItems()
+
+  if (failedItems.length > 0) {
+    const firstFailure = results.find((result) => result.status === 'rejected')
+    console.error('Error deleting entities:', firstFailure.reason)
+    deleteErrorMessage.value = `${failedItems.length} ${failedItems.length === 1 ? 'entity' : 'entities'} could not be deleted: ${getErrorMessage(firstFailure.reason, 'deletion service unavailable')}`
+    showDeleteError.value = true
+  } else {
+    deleteDialog.value = false
+    selected.value = []
+  }
+
+  deleting.value = false
 }
 
 const exportEntities = async (format) => {

@@ -101,6 +101,7 @@ import { useEntityIcons } from '../../composables/useEntityIcons.js'
 import { useEntityDisplay } from '../../composables/useEntityDisplay.js'
 import { useEntityNoteEditor } from '../../composables/useEntityNoteEditor.js'
 import { useEntitySources } from '../../composables/useEntitySources.js'
+import { useDialogFocusRestore } from '../../composables/useDialogFocusRestore.js'
 
 const props = defineProps({
   show: { type: Boolean, required: true, default: false },
@@ -108,6 +109,8 @@ const props = defineProps({
   caseId: { type: Number, required: true },
   existingEntities: { type: Array, required: true },
 })
+
+useDialogFocusRestore(() => props.show)
 
 const emit = defineEmits(['close', 'edit', 'viewEntity'])
 

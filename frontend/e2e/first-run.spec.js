@@ -82,8 +82,16 @@ async function exerciseCaseAndEntityWorkflow(page) {
   await expect(page).not.toHaveURL(/[?&]tab=/)
 
   await expect(page.getByText('No Entities Found', { exact: true })).toBeVisible()
-  await page.getByRole('button', { name: 'Add Entity', exact: true }).click()
-  const newEntityDialog = page.getByRole('dialog', { name: 'Add New Entity', exact: true })
+  const openNewEntityButton = page.getByRole('button', { name: 'Add Entity', exact: true })
+  await openNewEntityButton.click()
+  let newEntityDialog = page.getByRole('dialog', { name: 'Add New Entity', exact: true })
+  await expect(newEntityDialog.getByLabel('First Name', { exact: true })).toBeFocused()
+  await page.keyboard.press('Escape')
+  await expect(newEntityDialog).toBeHidden()
+  await expect(openNewEntityButton).toBeFocused()
+
+  await openNewEntityButton.click()
+  newEntityDialog = page.getByRole('dialog', { name: 'Add New Entity', exact: true })
   const addEntityButton = newEntityDialog.getByRole('button', {
     name: 'Add Entity',
     exact: true,

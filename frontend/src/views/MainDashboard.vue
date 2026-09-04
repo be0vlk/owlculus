@@ -35,7 +35,7 @@
             color="primary"
             prepend-icon="mdi-plus"
             variant="flat"
-            @click="openNewCaseModal"
+            @click="isNewCaseModalOpen = true"
           >
             New Case
           </v-btn>
@@ -173,7 +173,7 @@
               v-if="shouldShowCreateButton()"
               color="primary"
               prepend-icon="mdi-plus"
-              @click="openNewCaseModal"
+              @click="isNewCaseModalOpen = true"
             >
               Create First Case
             </v-btn>
@@ -185,7 +185,7 @@
 
   <NewCaseModal
     :is-open="isNewCaseModalOpen"
-    @close="closeNewCaseModal"
+    @close="isNewCaseModalOpen = false"
     @created="handleCaseCreated"
   />
 
@@ -205,7 +205,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import BaseDashboard from '../components/BaseDashboard.vue'
 import NewCaseModal from '../components/NewCaseModal.vue'
 import { useDashboard } from '../composables/useDashboard'
@@ -228,7 +228,6 @@ const {
 } = useDashboard()
 
 const isNewCaseModalOpen = ref(false)
-let newCaseModalActivator = null
 const activeQuickFilter = ref('all')
 
 const snackbar = ref({
@@ -262,20 +261,10 @@ const enhancedFilteredCases = computed(() => {
   return filteredCases
 })
 
-const openNewCaseModal = (event) => {
-  newCaseModalActivator = event?.currentTarget || document.activeElement
-  isNewCaseModalOpen.value = true
-}
-
-const closeNewCaseModal = () => {
-  isNewCaseModalOpen.value = false
-  nextTick(() => newCaseModalActivator?.focus())
-}
-
 const handleCaseCreated = (newCase, { assignmentWarning } = {}) => {
   // Refresh the cases list
   loadData()
-  closeNewCaseModal()
+  isNewCaseModalOpen.value = false
   if (assignmentWarning) {
     showNotification(
       `Case "${newCase?.case_number || 'New case'}" was created, but ${assignmentWarning}. Manage the case users to retry.`,

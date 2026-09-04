@@ -25,6 +25,7 @@
             <v-card-text>
               <v-text-field
                 v-model="formData.title"
+                autofocus
                 label="Case Title"
                 variant="outlined"
                 density="comfortable"
@@ -105,6 +106,7 @@
 import { ref, watch, computed } from 'vue'
 import api from '../services/api'
 import { formatDate } from '../composables/dateUtils'
+import { useDialogFocusRestore } from '../composables/useDialogFocusRestore'
 import { getErrorMessage } from '../utils/errorMessage'
 import ModalActions from './ModalActions.vue'
 
@@ -124,6 +126,8 @@ const props = defineProps({
     }),
   },
 })
+
+useDialogFocusRestore(() => props.show)
 
 const emit = defineEmits(['close', 'update'])
 
