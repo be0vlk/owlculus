@@ -190,4 +190,5 @@ megalinter-reports
 /.agents/
 /.codex/
 /docs/agents/
+/docs/verification/
 /.scratch/

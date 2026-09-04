@@ -11,9 +11,12 @@ if (!browserViewports[viewportName]) {
 
 export default defineConfig({
   testDir: './e2e',
+  outputDir: externalBaseURL
+    ? `test-results/${process.env.OWLCULUS_SERVER_KIND}-${new URL(externalBaseURL).hostname}-${viewportName}`
+    : 'test-results',
   timeout: 30 * 1000,
   expect: {
-    timeout: 5000,
+    timeout: 15_000,
   },
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

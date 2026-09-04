@@ -33,14 +33,18 @@ async function exerciseTextInput(input) {
   await input.clear()
 }
 
+async function captureReview(page, name) {
+  const path = test.info().outputPath(`${name}.png`)
+  // Full-page Chromium captures can briefly resize the viewport to 1px, starting
+  // Vuetify scroll animations against geometry that disappears after capture.
+  await page.screenshot({ path, animations: 'disabled' })
+  await test.info().attach(name, { path, contentType: 'image/png' })
+}
+
 async function captureOperations(page, surface) {
   for (const theme of ['light', 'dark']) {
     if (theme === 'dark') await page.getByRole('button', { name: 'Dark Mode', exact: true }).click()
-    await page.screenshot({
-      path: `test-results/${surface}-${process.env.OWLCULUS_SERVER_KIND}-${process.env.OWLCULUS_VIEWPORT}-${theme}.png`,
-      fullPage: true,
-      animations: 'disabled',
-    })
+    await captureReview(page, `${surface}-${theme}`)
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     ).toBe(true)
@@ -136,11 +140,21 @@ async function exerciseAdministration(page) {
   await captureOperations(page, 'administration')
 }
 
+async function uploadEvidence(page, folderName, file) {
+  await page.getByRole('button', { name: `Actions for ${folderName}`, exact: true }).click()
+  await page.getByText('Upload Files', { exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Upload Evidence', exact: true })
+  await dialog.locator('input[type="file"]').setInputFiles(file)
+  await dialog.getByRole('button', { name: 'Upload', exact: true }).click()
+  await expect(dialog).toBeHidden()
+}
+
 async function exerciseEvidenceAndNotes(page) {
   const createFolder = page.getByRole('button', { name: 'Create Folder', exact: true })
   await createFolder.click()
   const folderDialog = page.getByRole('dialog', { name: 'Create New Folder', exact: true })
   await expect(folderDialog.getByLabel('Folder Name', { exact: true })).toBeFocused()
+  await captureReview(page, 'evidence-folder-dialog-light')
   await page.keyboard.press('Shift+Tab')
   await expect(folderDialog.locator(':focus')).toHaveCount(1)
   await page.keyboard.press('Escape')
@@ -150,16 +164,11 @@ async function exerciseEvidenceAndNotes(page) {
   await folderDialog.getByLabel('Folder Name', { exact: true }).fill('Documents')
   await folderDialog.getByRole('button', { name: 'Create Folder', exact: true }).click()
   await expect(folderDialog).toBeHidden()
-  await page.getByRole('button', { name: 'Actions for Documents', exact: true }).click()
-  await page.getByText('Upload Files', { exact: true }).click()
-  const uploadDialog = page.getByRole('dialog', { name: 'Upload Evidence', exact: true })
-  await uploadDialog.locator('input[type="file"]').setInputFiles({
+  await uploadEvidence(page, 'Documents', {
     name: 'statement.txt',
     mimeType: 'text/plain',
     buffer: Buffer.from('Witness statement for migration verification'),
   })
-  await uploadDialog.getByRole('button', { name: 'Upload', exact: true }).click()
-  await expect(uploadDialog).toBeHidden()
   await page.getByText('Documents', { exact: true }).click()
   const previewButton = page.getByRole('button', { name: 'Preview statement.txt', exact: true })
   await expect(previewButton).toBeVisible()
@@ -172,6 +181,17 @@ async function exerciseEvidenceAndNotes(page) {
   await page.keyboard.press('Escape')
   await expect(preview).toBeHidden()
   await expect(previewButton).toBeFocused()
+  await uploadEvidence(page, 'Documents', 'public/owl_logo.png')
+  await page.getByRole('button', { name: 'Actions for owl_logo.png', exact: true }).click()
+  await page.getByText('Extract Metadata', { exact: true }).click()
+  const metadata = page.getByRole('dialog', { name: 'File Metadata', exact: true })
+  await expect(metadata.getByText('owl_logo.png', { exact: true })).toBeVisible()
+  const category = metadata.getByRole('button', { name: /Metadata.*fields/i }).first()
+  await category.click()
+  await expect(category).toHaveAttribute('aria-expanded', 'true')
+  await expect(metadata.getByText('File Modify Date', { exact: true })).toBeVisible()
+  await captureReview(page, 'metadata-expanded-light')
+  await metadata.getByRole('button', { name: 'Close', exact: true }).click()
   await page.getByRole('checkbox', { name: 'Select statement.txt', exact: true }).check()
   await expect(page.getByText('1 selected', { exact: true })).toBeVisible()
   await createFolder.click()
@@ -179,9 +199,13 @@ async function exerciseEvidenceAndNotes(page) {
   await folderDialog.getByRole('button', { name: 'Create Folder', exact: true }).click()
   await expect(folderDialog).toBeHidden()
   await expect(previewButton).toBeVisible()
-  await page
-    .getByText('statement.txt', { exact: true })
-    .dragTo(page.getByText('Archive', { exact: true }))
+  await page.getByText('statement.txt', { exact: true }).hover()
+  await page.mouse.down()
+  await page.getByText('Archive', { exact: true }).hover()
+  // A second move delivers dragover consistently across browsers.
+  await page.getByText('Archive', { exact: true }).hover()
+  await captureReview(page, 'evidence-drag-target-light')
+  await page.mouse.up()
   await expect(
     page.getByRole('status').filter({ hasText: 'Evidence moved to Archive' }),
   ).toBeVisible()
@@ -190,11 +214,7 @@ async function exerciseEvidenceAndNotes(page) {
   await page
     .getByRole('button', { name: 'Delete statement.txt', exact: true })
     .click({ trial: true })
-  await page.screenshot({
-    path: `test-results/evidence-${process.env.OWLCULUS_VIEWPORT}-light.png`,
-    fullPage: true,
-    animations: 'disabled',
-  })
+  await captureOperations(page, 'evidence')
   await page.getByRole('button', { name: 'Delete statement.txt', exact: true }).click()
   const deleteDialog = page.getByRole('dialog', { name: 'Confirm Delete', exact: true })
   await expect(deleteDialog).toContainText('statement.txt')
@@ -227,11 +247,7 @@ async function exerciseEvidenceAndNotes(page) {
   await page.getByRole('button', { name: 'Dark Mode', exact: true }).click()
   await expect(notes).toBeVisible()
   await expect(bold).toBeDisabled()
-  await page.screenshot({
-    path: `test-results/evidence-notes-${process.env.OWLCULUS_VIEWPORT}-dark.png`,
-    fullPage: true,
-    animations: 'disabled',
-  })
+  await captureReview(page, 'evidence-notes-dark')
   await page.getByRole('button', { name: 'Light Mode', exact: true }).click()
 }
 
@@ -261,7 +277,7 @@ async function exerciseCaseAndEntityWorkflow(page) {
 
   const caseRow = page.getByRole('row').filter({ hasText: 'Migration Safety Case' })
   await expect(caseRow).toContainText('Migration Safety Client')
-  await caseRow.click()
+  await caseRow.getByRole('cell', { name: 'Migration Safety Case', exact: true }).click()
   await expect(page).toHaveURL(/\/case\/\d+$/)
   await expect(page.getByText('Case Information', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Manage Users', exact: true }).click()
@@ -296,6 +312,7 @@ async function exerciseCaseAndEntityWorkflow(page) {
   await expect(page).not.toHaveURL(/[?&]tab=/)
 
   await expect(page.getByText('No Entities Found', { exact: true })).toBeVisible()
+  await captureReview(page, 'entities-empty-light')
   const openNewEntityButton = page.getByRole('button', { name: 'Add Entity', exact: true })
   await openNewEntityButton.click()
   let newEntityDialog = page.getByRole('dialog', { name: 'Add New Entity', exact: true })
@@ -573,6 +590,7 @@ test.describe('first-run browser journey', () => {
     await statusRequestWasMade
 
     await expect(page.getByRole('status')).toHaveText('Loading...')
+    await captureReview(page, 'setup-loading')
     await expect(page.getByRole('button', { name: 'Sign in' })).toHaveCount(0)
     await expect(page.getByText('Case Management')).toHaveCount(0)
 
@@ -658,6 +676,7 @@ test.describe('first-run browser journey', () => {
     }
 
     await expect(visibleAlert(page, 'Invalid setup token')).toHaveText('Invalid setup token')
+    await captureReview(page, 'setup-validation-light')
     await expect(username).toHaveValue(administrator.username)
     await expect(page.getByRole('button', { name: 'Create Administrator Account' })).toBeEnabled()
 
@@ -819,10 +838,7 @@ test.describe('first-run browser journey', () => {
     await expect(
       pluginDialog.getByText('Correlation scan complete. No correlations found.', { exact: true }),
     ).toBeVisible()
-    await page.screenshot({
-      animations: 'disabled',
-      path: `test-results/plugin-results-${process.env.OWLCULUS_SERVER_KIND}-${process.env.OWLCULUS_VIEWPORT}.png`,
-    })
+    await captureReview(page, 'plugin-results-light')
     await pluginDialog.getByRole('button', { name: 'Close plugin results', exact: true }).click()
     await captureOperations(page, 'plugins')
 

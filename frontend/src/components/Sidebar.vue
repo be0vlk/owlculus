@@ -32,13 +32,16 @@
         :key="item.name"
         :to="item.href"
         :prepend-icon="item.icon"
-        :title="item.name"
         :aria-label="item.name"
         color="primary"
         rounded="xl"
         class="ma-1"
         min-height="56"
-      />
+      >
+        <template #title>
+          <span class="sidebar-item-title">{{ item.name }}</span>
+        </template>
+      </v-list-item>
     </v-list>
 
     <!-- Actions Section -->
@@ -137,7 +140,8 @@ const handleLogout = () => {
 
 <style scoped>
 /* Fix text clipping in navigation items and increase font size */
-.v-list-item :deep(.v-list-item-title) {
+.sidebar-item-title {
+  display: block;
   line-height: 1.2;
   padding-bottom: 2px;
   font-size: medium;
