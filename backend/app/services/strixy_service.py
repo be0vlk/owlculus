@@ -17,6 +17,8 @@ from typing import List
 from openai import OpenAI
 from sqlmodel import Session
 
+from app.core.exceptions import BaseException as DomainException
+from app.core.exceptions import ValidationException
 from app.schemas.strixy_schema import ChatMessage, ChatResponse
 from app.services.api_key_vault import ApiKeyVault, ConfigurationApiKeyVault, Provider
 
@@ -39,9 +41,6 @@ class StrixyService:
         return self._client
 
     async def send_chat_message(self, messages: List[ChatMessage]) -> ChatResponse:
-        if not messages:
-            raise ValidationException("At least one chat message is required")
-
         try:
             client = self._get_openai_client()
 
@@ -99,7 +98,3 @@ Maintain professional objectivity.""",
             raise
         except Exception as e:
             raise DomainException(f"Error communicating with OpenAI: {str(e)}") from e
-
-
-from app.core.exceptions import BaseException as DomainException
-from app.core.exceptions import ValidationException

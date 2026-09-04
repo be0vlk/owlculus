@@ -8,7 +8,9 @@ privilege escalation protection, and audit logging for OSINT investigation platf
 """
 
 import re
+from typing import TypeVar
 
+from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
 from sqlmodel import Session
 
@@ -27,6 +29,17 @@ from app.core.roles import UserRole
 from app.database import crud, models
 
 _BOOTSTRAP_USERNAME_PATTERN = re.compile(r"[A-Za-z0-9_]{3,50}\Z")
+_UserPayload = TypeVar("_UserPayload", bound=BaseModel)
+
+
+def _validate_user_payload(
+    schema: type[_UserPayload], user_data: object
+) -> _UserPayload:
+    """Validate an untrusted user payload without leaking validation details."""
+    try:
+        return schema.model_validate(user_data)
+    except PydanticValidationError as error:
+        raise ValidationException("Invalid user data") from error
 
 
 class UserService:
@@ -69,10 +82,7 @@ class UserService:
             ).warning("Bootstrap user creation failed: invalid setup token")
             raise AuthorizationException("Invalid setup token")
 
-        try:
-            user = schemas.BootstrapUserCreate.model_validate(user_data)
-        except PydanticValidationError as error:
-            raise ValidationException("Invalid user data") from error
+        user = _validate_user_payload(schemas.BootstrapUserCreate, user_data)
         self._validate_bootstrap_credentials(user)
 
         try:
@@ -114,10 +124,7 @@ class UserService:
         self, user_data: object, current_user: models.User
     ) -> schemas.User:
         """Validate an authenticated creation payload before creating its user."""
-        try:
-            user = schemas.UserCreate.model_validate(user_data)
-        except PydanticValidationError as error:
-            raise ValidationException("Invalid user data") from error
+        user = _validate_user_payload(schemas.UserCreate, user_data)
         return await self.create_user(user=user, current_user=current_user)
 
     async def create_user(

@@ -11,6 +11,7 @@ from app import schemas
 from app.core.exceptions import (
     DuplicateResourceException,
     ResourceNotFoundException,
+    ValidationException,
 )
 from app.database import crud, models
 from app.services.client_service import ClientService
@@ -68,9 +69,9 @@ class TestClientService:
 
     async def test_get_clients_negative_skip_limit(self, session, test_user):
         client_service = ClientService(session)
-        with pytest.raises(ValueError):
+        with pytest.raises(ValidationException):
             await client_service.get_clients(skip=-1, limit=10, current_user=test_user)
-        with pytest.raises(ValueError):
+        with pytest.raises(ValidationException):
             await client_service.get_clients(skip=0, limit=-5, current_user=test_user)
 
     async def test_create_client_success(self, session, test_admin):
@@ -168,12 +169,9 @@ class TestClientService:
             "",
         ]
 
-        client_service = ClientService(session)
         for invalid_email in invalid_emails:
             with pytest.raises(ValueError) as excinfo:
-                client_data = schemas.ClientCreate(
-                    name="Test Client", email=invalid_email
-                )
+                schemas.ClientCreate(name="Test Client", email=invalid_email)
             assert (
                 "validation error" in str(excinfo.value).lower()
                 or "invalid" in str(excinfo.value).lower()
@@ -303,7 +301,7 @@ class TestClientService:
         await client_service.delete_client(created_client.id, current_user=test_admin)
 
         # Verify client is deleted
-        with pytest.raises(ResourceNotFoundException) as exc_info:
+        with pytest.raises(ResourceNotFoundException):
             await client_service.get_client(created_client.id, current_user=test_admin)
 
     async def test_concurrent_client_creation_same_email(self, session, test_admin):
@@ -313,9 +311,7 @@ class TestClientService:
         # Create first client
         client_data1 = schemas.ClientCreate(name="Client 1", email=email)
         client_service = ClientService(session)
-        client1 = await client_service.create_client(
-            client_data1, current_user=test_admin
-        )
+        await client_service.create_client(client_data1, current_user=test_admin)
 
         # Try to create second client with same email
         client_data2 = schemas.ClientCreate(name="Client 2", email=email)
@@ -328,7 +324,7 @@ class TestClientService:
     ):
         """Test that email uniqueness check is case-sensitive (current implementation)"""
         # Create two clients
-        client1 = await create_client_helper(
+        await create_client_helper(
             session, {"name": "Client 1", "email": "test@example.com"}
         )
         client2 = await create_client_helper(

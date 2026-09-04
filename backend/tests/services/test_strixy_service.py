@@ -9,8 +9,9 @@ within the Strixy service layer.
 from unittest.mock import Mock, patch
 
 import pytest
-from fastapi import HTTPException
 
+from app.core.exceptions import BaseException as DomainException
+from app.core.exceptions import ValidationException
 from app.schemas.strixy_schema import ChatMessage
 from app.services.api_key_vault import Provider, StaticApiKeyVault
 from app.services.strixy_service import StrixyService
@@ -49,11 +50,10 @@ class TestStrixyService:
         strixy_service = StrixyService(mock_db, StaticApiKeyVault({}))
         messages = [ChatMessage(role="user", content="Hello")]
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ValidationException) as exc_info:
             await strixy_service.send_chat_message(messages)
 
-        assert exc_info.value.status_code == 400
-        assert "OpenAI API key not configured" in exc_info.value.detail
+        assert "OpenAI API key not configured" in str(exc_info.value)
 
     @patch("app.services.strixy_service.OpenAI")
     async def test_send_chat_message_openai_error(
@@ -65,11 +65,10 @@ class TestStrixyService:
 
         messages = [ChatMessage(role="user", content="Hello")]
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(DomainException) as exc_info:
             await strixy_service.send_chat_message(messages)
 
-        assert exc_info.value.status_code == 500
-        assert "Error communicating with OpenAI" in exc_info.value.detail
+        assert "Error communicating with OpenAI" in str(exc_info.value)
 
     @patch("app.services.strixy_service.OpenAI")
     async def test_client_reuse(self, mock_openai_class, strixy_service):
