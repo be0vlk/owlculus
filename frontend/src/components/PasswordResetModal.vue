@@ -4,8 +4,8 @@
       <v-card-title class="d-flex align-center pa-4 bg-warning">
         <v-icon start color="white" size="large">mdi-key-variant</v-icon>
         <div class="text-white">
-          <div class="text-h5 font-weight-bold">Reset Password</div>
-          <div class="text-subtitle-2 text-yellow-lighten-2">
+          <div class="text-headline-small font-weight-bold">Reset Password</div>
+          <div class="text-title-small text-yellow-lighten-2">
             Set a new password for this user account
           </div>
         </div>
@@ -69,7 +69,7 @@
                     rounded
                     class="mb-2"
                   />
-                  <div class="text-body-2" :class="`text-${passwordStrength.color}`">
+                  <div class="text-body-medium" :class="`text-${passwordStrength.color}`">
                     {{ passwordStrength.label }}
                   </div>
                   <div class="mt-2">

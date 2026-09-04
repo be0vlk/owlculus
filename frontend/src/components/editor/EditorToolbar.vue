@@ -15,7 +15,7 @@
 
     <v-spacer />
 
-    <div class="text-caption text-medium-emphasis mr-3">
+    <div class="text-body-small text-medium-emphasis mr-3">
       <v-progress-circular v-if="saving" class="mr-2" indeterminate size="16" width="2" />
       <span v-if="saving">Saving...</span>
       <span v-else-if="lastSavedTime">Last saved: {{ formatLastSaved }}</span>

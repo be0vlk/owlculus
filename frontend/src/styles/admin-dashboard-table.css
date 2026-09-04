@@ -1,20 +1,21 @@
+/* stylelint-disable selector-pseudo-class-no-unknown -- Vue compiles :deep() in scoped style imports. */
 .admin-dashboard-table :deep(.v-data-table__tr:hover) {
-  background-color: rgb(var(--v-theme-primary), 0.04) !important;
-  cursor: pointer;
+    background-color: rgb(var(--v-theme-primary), 0.04);
+    cursor: pointer;
 }
 
 .admin-dashboard-table :deep(.v-data-table__td) {
-  padding: 12px 16px !important;
-  border-bottom: 1px solid rgb(var(--v-theme-on-surface), 0.08) !important;
+    padding: 12px 16px;
+    border-bottom: 1px solid rgb(var(--v-theme-on-surface), 0.08);
 }
 
 .admin-dashboard-table :deep(.v-data-table__th) {
-  padding: 16px !important;
-  font-weight: 600 !important;
-  color: rgb(var(--v-theme-on-surface), 0.87) !important;
-  border-bottom: 2px solid rgb(var(--v-theme-on-surface), 0.12) !important;
+    padding: 16px;
+    font-weight: 600;
+    color: rgb(var(--v-theme-on-surface), 0.87);
+    border-bottom: 2px solid rgb(var(--v-theme-on-surface), 0.12);
 }
 
 .admin-dashboard-table :deep(.v-data-table-rows-no-data) {
-  padding: 48px 16px !important;
+    padding: 48px 16px;
 }

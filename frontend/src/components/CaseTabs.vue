@@ -5,7 +5,13 @@
     </v-tabs>
 
     <v-window v-model="activeTab" :touch="false" :transition="false">
-      <v-window-item v-for="tab in tabs" :key="tab.name" :value="tab.name" eager :transition="false">
+      <v-window-item
+        v-for="tab in tabs"
+        :key="tab.name"
+        :value="tab.name"
+        eager
+        :transition="false"
+      >
         <v-container class="pa-4">
           <slot :active-tab="tab.name" />
         </v-container>

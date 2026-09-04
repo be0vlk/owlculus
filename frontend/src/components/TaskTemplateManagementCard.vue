@@ -3,8 +3,8 @@
     <v-card-title class="d-flex align-center pa-4 bg-surface">
       <v-icon icon="mdi-clipboard-text" color="primary" size="large" class="me-3" />
       <div class="flex-grow-1">
-        <div class="text-h6 font-weight-bold">Task Templates</div>
-        <div class="text-body-2 text-medium-emphasis">
+        <div class="text-title-large font-weight-bold">Task Templates</div>
+        <div class="text-body-medium text-medium-emphasis">
           Manage reusable task templates for standardized workflows
         </div>
       </div>
@@ -33,8 +33,8 @@
       <!-- Empty state -->
       <div v-else-if="!sortedTemplates.length" class="pa-8 text-center">
         <v-icon icon="mdi-clipboard-off" size="64" color="grey-darken-1" class="mb-4" />
-        <div class="text-h6 text-medium-emphasis mb-2">No Task Templates</div>
-        <div class="text-body-2 text-medium-emphasis mb-4">
+        <div class="text-title-large text-medium-emphasis mb-2">No Task Templates</div>
+        <div class="text-body-medium text-medium-emphasis mb-4">
           Create task templates to standardize your investigation workflows
         </div>
         <v-btn color="primary" prepend-icon="mdi-plus" variant="flat" @click="openAddDialog">
@@ -59,7 +59,7 @@
             <td>
               <div>
                 <div class="font-weight-medium">{{ template.display_name }}</div>
-                <div class="text-caption text-medium-emphasis">{{ template.name }}</div>
+                <div class="text-body-small text-medium-emphasis">{{ template.name }}</div>
               </div>
             </td>
             <td>
@@ -78,10 +78,10 @@
               </v-chip>
             </td>
             <td>
-              <div v-if="template.creator" class="text-body-2">
+              <div v-if="template.creator" class="text-body-medium">
                 {{ template.creator.username }}
               </div>
-              <div v-else class="text-caption text-medium-emphasis">System</div>
+              <div v-else class="text-body-small text-medium-emphasis">System</div>
             </td>
             <td>
               <div class="d-flex align-center" style="gap: 8px">
@@ -297,18 +297,18 @@ onMounted(async () => {
 
 <style scoped>
 .admin-dashboard-table :deep(.v-data-table__tr:hover) {
-  background-color: rgb(var(--v-theme-primary), 0.04) !important;
+  background-color: rgb(var(--v-theme-primary), 0.04);
 }
 
 .admin-dashboard-table :deep(.v-data-table__td) {
-  padding: 12px 16px !important;
-  border-bottom: 1px solid rgb(var(--v-theme-on-surface), 0.08) !important;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgb(var(--v-theme-on-surface), 0.08);
 }
 
 .admin-dashboard-table :deep(.v-data-table__th) {
-  padding: 16px !important;
-  font-weight: 600 !important;
-  color: rgb(var(--v-theme-on-surface), 0.87) !important;
-  border-bottom: 2px solid rgb(var(--v-theme-on-surface), 0.12) !important;
+  padding: 16px;
+  font-weight: 600;
+  color: rgb(var(--v-theme-on-surface), 0.87);
+  border-bottom: 2px solid rgb(var(--v-theme-on-surface), 0.12);
 }
 </style>

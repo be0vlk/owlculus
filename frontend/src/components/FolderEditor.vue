@@ -208,11 +208,11 @@ watch(
 .subfolders-container {
   margin-left: 24px;
   padding-left: 16px;
-  border-left: 2px solid rgba(var(--v-theme-outline), 0.2);
+  border-left: 2px solid rgb(var(--v-theme-outline), 0.2);
   margin-top: 8px;
 }
 
-@media (max-width: 768px) {
+@media (width <= 768px) {
   .folder-fields {
     flex-direction: column;
     width: 100%;

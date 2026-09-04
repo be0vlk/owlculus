@@ -36,7 +36,7 @@
     <div>
       <div class="d-flex align-center justify-space-between mb-2">
         <span class="text-subtitle2">Result Limit</span>
-        <span class="text-caption text-medium-emphasis"
+        <span class="text-body-small text-medium-emphasis"
           >{{ Math.round(localParams.limit) }} results</span
         >
       </div>
@@ -50,10 +50,10 @@
         @update:model-value="updateParams"
       >
         <template #prepend>
-          <span class="text-caption">1</span>
+          <span class="text-body-small">1</span>
         </template>
         <template #append>
-          <span class="text-caption">100</span>
+          <span class="text-body-small">100</span>
         </template>
       </v-slider>
     </div>

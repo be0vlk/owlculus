@@ -2,26 +2,26 @@
   <div class="d-flex flex-column h-100">
     <v-card v-if="fileInfo" class="ma-4 mb-2 flex-shrink-0" variant="outlined">
       <v-card-text class="py-3">
-        <v-row dense align="center">
+        <v-row class="align-center" density="compact">
           <v-col cols="12" sm="6" md="3">
-            <div class="text-caption text-medium-emphasis">File</div>
-            <div class="text-body-2 font-weight-medium">
+            <div class="text-body-small text-medium-emphasis">File</div>
+            <div class="text-body-medium font-weight-medium">
               {{ fileInfo.filename || evidenceItem?.title }}
             </div>
           </v-col>
           <v-col cols="12" sm="6" md="2">
-            <div class="text-caption text-medium-emphasis">Size</div>
-            <div class="text-body-2 font-weight-medium">
+            <div class="text-body-small text-medium-emphasis">Size</div>
+            <div class="text-body-medium font-weight-medium">
               {{ formatFileSize(fileInfo.file_size) }}
             </div>
           </v-col>
           <v-col cols="12" sm="6" md="2">
-            <div class="text-caption text-medium-emphasis">Dimensions</div>
-            <div class="text-body-2 font-weight-medium">{{ imageDimensions }}</div>
+            <div class="text-body-small text-medium-emphasis">Dimensions</div>
+            <div class="text-body-medium font-weight-medium">{{ imageDimensions }}</div>
           </v-col>
           <v-col cols="12" sm="6" md="2">
-            <div class="text-caption text-medium-emphasis">Format</div>
-            <div class="text-body-2 font-weight-medium">{{ imageFormat }}</div>
+            <div class="text-body-small text-medium-emphasis">Format</div>
+            <div class="text-body-medium font-weight-medium">{{ imageFormat }}</div>
           </v-col>
           <v-col cols="12" md="3" class="d-flex justify-end ga-2">
             <v-btn
@@ -75,11 +75,7 @@
       </v-btn-toggle>
     </div>
 
-    <div
-      ref="imageContainer"
-      class="image-container flex-grow-1"
-      @wheel.prevent="handleWheel"
-    >
+    <div ref="imageContainer" class="image-container flex-grow-1" @wheel.prevent="handleWheel">
       <div :style="imageWrapperStyle" class="image-wrapper">
         <img
           ref="imageElement"
@@ -121,7 +117,7 @@ const props = defineProps({
   imageDataUrl: {
     type: String,
     default: '',
-  }
+  },
 })
 
 const imageUrl = ref('')
@@ -252,44 +248,45 @@ watch(
   () => props.imageDataUrl,
   (newUrl) => {
     if (imageUrl.value && imageUrl.value.startsWith('blob:') && imageUrl.value !== newUrl) {
-      URL.revokeObjectURL(imageUrl.value);
+      URL.revokeObjectURL(imageUrl.value)
     }
-    imageUrl.value = newUrl;
+    imageUrl.value = newUrl
   },
-  { immediate: true }
-);
+  { immediate: true },
+)
 
 const reset = () => {
   if (imageUrl.value && imageUrl.value.startsWith('blob:')) {
     URL.revokeObjectURL(imageUrl.value)
   }
-  imageUrl.value = '';
-  zoomLevel.value = 1;
-  fitMode.value = 'contain';
-  imageDimensions.value = '';
-  imageFormat.value = '';
-};
+  imageUrl.value = ''
+  zoomLevel.value = 1
+  fitMode.value = 'contain'
+  imageDimensions.value = ''
+  imageFormat.value = ''
+}
 
-defineExpose({ reset });
+defineExpose({ reset })
 
 onUnmounted(() => {
   if (imageUrl.value && imageUrl.value.startsWith('blob:')) {
-    URL.revokeObjectURL(imageUrl.value);
+    URL.revokeObjectURL(imageUrl.value)
   }
-});
+})
 </script>
 
 <style scoped>
 .h-100 {
   height: 100%;
 }
+
 .image-container {
   max-height: 70vh;
   min-height: 400px;
-  border: 1px solid rgba(var(--v-theme-outline), 0.2);
+  border: 1px solid rgb(var(--v-theme-outline), 0.2);
   margin: 0 16px 16px;
   border-radius: 8px;
-  background-color: rgba(var(--v-theme-surface-variant), 0.05);
+  background-color: rgb(var(--v-theme-surface-variant), 0.05);
   overflow: hidden;
   position: relative;
 }
@@ -319,7 +316,7 @@ onUnmounted(() => {
   height: 100vh;
 }
 
-@media (max-width: 599px) {
+@media (width <= 599px) {
   .image-container {
     max-height: 50vh;
     min-height: 300px;
@@ -327,7 +324,7 @@ onUnmounted(() => {
   }
 }
 
-@media (min-width: 1280px) {
+@media (width >= 1280px) {
   .image-container {
     max-height: 80vh;
   }
@@ -339,16 +336,16 @@ onUnmounted(() => {
 }
 
 .image-wrapper::-webkit-scrollbar-track {
-  background: rgba(var(--v-theme-surface-variant), 0.1);
+  background: rgb(var(--v-theme-surface-variant), 0.1);
   border-radius: 4px;
 }
 
 .image-wrapper::-webkit-scrollbar-thumb {
-  background: rgba(var(--v-theme-outline), 0.3);
+  background: rgb(var(--v-theme-outline), 0.3);
   border-radius: 4px;
 }
 
 .image-wrapper::-webkit-scrollbar-thumb:hover {
-  background: rgba(var(--v-theme-outline), 0.5);
+  background: rgb(var(--v-theme-outline), 0.5);
 }
 </style>

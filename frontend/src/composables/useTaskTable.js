@@ -104,7 +104,9 @@ export function useTaskTable() {
     } catch (error) {
       console.error('Failed to assign task:', error)
       if (error.response?.status === 403) {
-        showError('You do not have permission to assign this task. Only admins and case leads can assign tasks.')
+        showError(
+          'You do not have permission to assign this task. Only admins and case leads can assign tasks.',
+        )
       } else {
         showError(error.response?.data?.detail || 'Failed to assign task')
       }

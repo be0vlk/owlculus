@@ -5,8 +5,8 @@
       <v-card-title class="d-flex align-center pa-4 bg-primary text-white">
         <v-icon :icon="categoryIcon" class="me-3" />
         <div class="flex-grow-1">
-          <div class="text-h6">Execute Hunt</div>
-          <div class="text-subtitle-2 opacity-75">{{ hunt?.display_name }}</div>
+          <div class="text-title-large">Execute Hunt</div>
+          <div class="text-title-small opacity-75">{{ hunt?.display_name }}</div>
         </div>
         <v-btn
           icon="mdi-close"
@@ -22,8 +22,8 @@
       <v-card-text class="pa-4">
         <!-- Hunt Description -->
         <div class="mb-4">
-          <div class="text-body-1 mb-2">{{ hunt?.description }}</div>
-          <div class="d-flex align-center text-caption text-medium-emphasis">
+          <div class="text-body-large mb-2">{{ hunt?.description }}</div>
+          <div class="d-flex align-center text-body-small text-medium-emphasis">
             <v-icon icon="mdi-play-box-multiple" size="small" class="me-1" />
             {{ hunt?.step_count || 0 }} steps
             <v-divider vertical class="mx-2" />
@@ -49,14 +49,14 @@
               <v-list-item v-bind="props">
                 <template #title>
                   <div class="d-flex align-center">
-                    <span>{{ item.raw.case_number }}</span>
-                    <span v-if="item.raw.title" class="text-medium-emphasis ml-2">
-                      - {{ item.raw.title }}
+                    <span>{{ item.case_number }}</span>
+                    <span v-if="item.title" class="text-medium-emphasis ml-2">
+                      - {{ item.title }}
                     </span>
                   </div>
                 </template>
                 <template #subtitle>
-                  {{ item.raw.client?.name || 'No client' }}
+                  {{ item.client?.name || 'No client' }}
                 </template>
               </v-list-item>
             </template>
@@ -65,7 +65,7 @@
 
         <!-- Parameters Form -->
         <div v-if="hunt?.initial_parameters" class="mb-4">
-          <div class="text-h6 mb-3">Hunt Parameters</div>
+          <div class="text-title-large mb-3">Hunt Parameters</div>
 
           <HuntParameterForm
             :parameters="hunt.initial_parameters"

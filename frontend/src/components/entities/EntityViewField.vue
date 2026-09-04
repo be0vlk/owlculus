@@ -92,15 +92,15 @@
             <template #[`item.subdomain`]="{ item }">
               <div class="d-flex align-center">
                 <v-icon size="small" class="me-2">mdi-subdirectory-arrow-right</v-icon>
-                <span class="text-body-2 font-weight-medium">{{ item.subdomain }}</span>
+                <span class="text-body-medium font-weight-medium">{{ item.subdomain }}</span>
               </div>
             </template>
             <template #[`item.ip`]="{ item }">
               <div v-if="item.ip" class="d-flex align-center">
                 <v-icon size="x-small" class="me-1">mdi-ip-network</v-icon>
-                <span class="text-body-2">{{ item.ip }}</span>
+                <span class="text-body-medium">{{ item.ip }}</span>
               </div>
-              <span v-else class="text-body-2 text-medium-emphasis">-</span>
+              <span v-else class="text-body-medium text-medium-emphasis">-</span>
             </template>
             <template #[`item.resolved`]="{ item }">
               <v-chip
@@ -115,9 +115,9 @@
             <template #[`item.source`]="{ item }">
               <div v-if="item.source" class="d-flex align-center">
                 <v-icon size="x-small" class="me-1">mdi-source-branch</v-icon>
-                <span class="text-body-2">{{ item.source }}</span>
+                <span class="text-body-medium">{{ item.source }}</span>
               </div>
-              <span v-else class="text-body-2 text-medium-emphasis">-</span>
+              <span v-else class="text-body-medium text-medium-emphasis">-</span>
             </template>
           </v-data-table>
         </div>
@@ -125,7 +125,7 @@
       </div>
 
       <!-- Regular Fields -->
-      <div v-else class="text-body-1">
+      <div v-else class="text-body-large">
         <span v-if="regularValue">
           {{ regularValue }}
         </span>

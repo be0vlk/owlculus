@@ -3,9 +3,9 @@
   <div>
     <v-main>
       <v-container class="fill-height" fluid>
-        <v-row align="center" justify="center">
+        <v-row class="align-center justify-center">
           <v-col cols="12" sm="8" md="6" lg="4" xl="3">
-            <v-card elevation="8" class="rounded-xl">
+            <v-card elevation="3" class="rounded-xl">
               <v-card-text class="pa-8">
                 <!-- Logo -->
                 <div class="text-center mb-8">
@@ -13,15 +13,14 @@
                     :src="isDark ? '/owl_logo_white.png' : '/owl_logo.png'"
                     alt="Owlculus Logo"
                     max-height="200"
-                    contain
                     class="mx-auto"
                   />
                 </div>
 
                 <!-- Title -->
                 <div class="text-center mb-6">
-                  <h2 class="text-h5 font-weight-bold mb-2">Create Account</h2>
-                  <p class="text-body-2 text-medium-emphasis">
+                  <h2 class="text-headline-small font-weight-bold mb-2">Create Account</h2>
+                  <p class="text-body-medium text-medium-emphasis">
                     Complete your registration to get started
                   </p>
                 </div>
@@ -29,7 +28,7 @@
                 <!-- Loading State -->
                 <div v-if="isValidatingToken" class="text-center py-8">
                   <v-progress-circular :size="50" :width="6" color="primary" indeterminate />
-                  <p class="text-body-2 text-medium-emphasis mt-4">Validating invite...</p>
+                  <p class="text-body-medium text-medium-emphasis mt-4">Validating invite...</p>
                 </div>
 
                 <!-- Invalid Token State -->
@@ -39,7 +38,7 @@
                       <v-icon start>mdi-alert-circle</v-icon>
                       <div>
                         <div class="font-weight-bold">Invalid Invite</div>
-                        <div class="text-body-2">{{ tokenValidation.error }}</div>
+                        <div class="text-body-medium">{{ tokenValidation.error }}</div>
                       </div>
                     </div>
                   </v-alert>
@@ -70,10 +69,10 @@
                           class="me-3"
                         />
                         <div>
-                          <div class="text-subtitle-2 font-weight-bold">
+                          <div class="text-title-small font-weight-bold">
                             You're registering as a {{ tokenValidation.role }}
                           </div>
-                          <div class="text-caption text-medium-emphasis">
+                          <div class="text-body-small text-medium-emphasis">
                             {{ getRoleDescription(tokenValidation.role) }}
                           </div>
                         </div>
@@ -159,7 +158,7 @@
                   <!-- Success Alert -->
                   <v-alert v-if="registrationSuccess" class="mb-4" type="success" variant="tonal">
                     <div class="font-weight-bold">Registration Successful!</div>
-                    <div class="text-body-2">
+                    <div class="text-body-medium">
                       Your account has been created. Redirecting to login...
                     </div>
                   </v-alert>

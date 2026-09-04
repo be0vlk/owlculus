@@ -55,4 +55,20 @@ describe('frontend runtime baseline', () => {
       vuePackages.map((packageName) => packageLock.packages[`node_modules/${packageName}`].version),
     ).toEqual(vuePackages.map(() => '3.5.42'))
   })
+
+  it('locks the stable Vuetify 4 runtime and its migration tooling', async () => {
+    const [packageJsonText, packageLockText] = await Promise.all([
+      readFrontendFile('package.json'),
+      readFrontendFile('package-lock.json'),
+    ])
+    const packageJson = JSON.parse(packageJsonText)
+    const packageLock = JSON.parse(packageLockText)
+
+    expect(packageJson.dependencies.vuetify).toBe('4.2.0')
+    expect(packageJson.devDependencies['vite-plugin-vuetify']).toBe('2.1.3')
+    expect(packageJson.devDependencies['eslint-plugin-vuetify']).toBe('2.7.2')
+    expect(packageLock.packages['node_modules/vuetify'].version).toBe('4.2.0')
+    expect(packageLock.packages['node_modules/vite-plugin-vuetify'].version).toBe('2.1.3')
+    expect(packageLock.packages['node_modules/eslint-plugin-vuetify'].version).toBe('2.7.2')
+  })
 })

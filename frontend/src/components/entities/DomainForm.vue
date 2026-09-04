@@ -1,6 +1,6 @@
 <template>
   <v-card variant="outlined">
-    <v-card-title class="text-subtitle-1">
+    <v-card-title class="text-body-large">
       <v-icon start>mdi-web</v-icon>
       Details
     </v-card-title>

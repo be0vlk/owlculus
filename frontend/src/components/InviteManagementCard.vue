@@ -4,8 +4,8 @@
     <v-card-title class="d-flex align-center pa-4 bg-surface">
       <v-icon icon="mdi-email" color="primary" size="large" class="me-3" />
       <div class="flex-grow-1">
-        <div class="text-h6 font-weight-bold">Invite Management</div>
-        <div class="text-body-2 text-medium-emphasis">Manage user invitation links</div>
+        <div class="text-title-large font-weight-bold">Invite Management</div>
+        <div class="text-body-medium text-medium-emphasis">Manage user invitation links</div>
       </div>
       <div class="d-flex align-center ga-2">
         <v-btn
@@ -34,7 +34,7 @@
 
     <!-- Search Toolbar -->
     <v-card-text class="pa-4">
-      <v-row align="center" class="mb-0">
+      <v-row class="mb-0 align-center">
         <v-col cols="12" md="8">
           <div class="d-flex align-center ga-2">
             <v-btn
@@ -95,14 +95,14 @@
 
       <!-- Created date -->
       <template #[`item.created_at`]="{ item }">
-        <span class="text-body-2">
+        <span class="text-body-medium">
           {{ formatDate(item.created_at) }}
         </span>
       </template>
 
       <!-- Expires date -->
       <template #[`item.expires_at`]="{ item }">
-        <span class="text-body-2">
+        <span class="text-body-medium">
           {{ formatDate(item.expires_at) }}
         </span>
       </template>
@@ -139,10 +139,10 @@
       <template #no-data>
         <div class="text-center pa-12">
           <v-icon class="mb-4" color="grey-lighten-1" icon="mdi-email-outline" size="64" />
-          <h3 class="text-h6 font-weight-medium mb-2">
+          <h3 class="text-title-large font-weight-medium mb-2">
             {{ getInviteEmptyStateTitle() }}
           </h3>
-          <p class="text-body-2 text-medium-emphasis mb-4">
+          <p class="text-body-medium text-medium-emphasis mb-4">
             {{ getInviteEmptyStateMessage() }}
           </p>
           <v-btn
@@ -258,23 +258,23 @@ onMounted(async () => {
 
 <style scoped>
 .admin-dashboard-table :deep(.v-data-table__tr:hover) {
-  background-color: rgb(var(--v-theme-primary), 0.04) !important;
+  background-color: rgb(var(--v-theme-primary), 0.04);
   cursor: pointer;
 }
 
 .admin-dashboard-table :deep(.v-data-table__td) {
-  padding: 12px 16px !important;
-  border-bottom: 1px solid rgb(var(--v-theme-on-surface), 0.08) !important;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgb(var(--v-theme-on-surface), 0.08);
 }
 
 .admin-dashboard-table :deep(.v-data-table__th) {
-  padding: 16px !important;
-  font-weight: 600 !important;
-  color: rgb(var(--v-theme-on-surface), 0.87) !important;
-  border-bottom: 2px solid rgb(var(--v-theme-on-surface), 0.12) !important;
+  padding: 16px;
+  font-weight: 600;
+  color: rgb(var(--v-theme-on-surface), 0.87);
+  border-bottom: 2px solid rgb(var(--v-theme-on-surface), 0.12);
 }
 
 .admin-dashboard-table :deep(.v-data-table-rows-no-data) {
-  padding: 48px 16px !important;
+  padding: 48px 16px;
 }
 </style>

@@ -3,7 +3,7 @@
     <!-- Hunt Category Header -->
     <v-card-title class="d-flex align-center pa-3 header-gradient text-white">
       <v-icon :icon="categoryIcon" color="white" size="small" class="me-2" />
-      <span class="text-caption text-uppercase font-weight-bold">{{ displayCategory }}</span>
+      <span class="text-body-small text-uppercase font-weight-bold">{{ displayCategory }}</span>
       <v-spacer />
       <v-chip :color="hunt.is_active ? 'success' : 'error'" size="x-small" variant="flat">
         {{ hunt.is_active ? 'Active' : 'Inactive' }}
@@ -14,8 +14,8 @@
 
     <!-- Hunt Details -->
     <v-card-text class="pa-4">
-      <div class="text-h6 font-weight-bold mb-2">{{ hunt.display_name }}</div>
-      <div class="text-body-2 text-medium-emphasis mb-3 hunt-description">
+      <div class="text-title-large font-weight-bold mb-2">{{ hunt.display_name }}</div>
+      <div class="text-body-medium text-medium-emphasis mb-3 hunt-description">
         {{ hunt.description }}
       </div>
 
@@ -23,11 +23,11 @@
       <div class="d-flex align-center justify-space-between mb-3">
         <div class="d-flex align-center">
           <v-icon icon="mdi-play-box-multiple" size="small" class="me-1" />
-          <span class="text-caption">{{ hunt.step_count || 0 }} steps</span>
+          <span class="text-body-small">{{ hunt.step_count || 0 }} steps</span>
         </div>
         <div class="d-flex align-center">
           <v-icon icon="mdi-clock-outline" size="small" class="me-1" />
-          <span class="text-caption">v{{ hunt.version }}</span>
+          <span class="text-body-small">v{{ hunt.version }}</span>
         </div>
       </div>
     </v-card-text>

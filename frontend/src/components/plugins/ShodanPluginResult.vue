@@ -18,12 +18,12 @@
           lg="6"
           xl="4"
         >
-          <v-card elevation="2" rounded="lg" class="h-100 host-card">
+          <v-card elevation="1" rounded="lg" class="h-100 host-card">
             <!-- Host Header -->
             <v-card-title class="d-flex align-center bg-primary-lighten-5">
               <v-icon icon="mdi-server-network" class="mr-3" />
               <div class="flex-grow-1">
-                <div class="text-h6 d-flex align-center">
+                <div class="text-title-large d-flex align-center">
                   {{ result.ip }}
                   <v-btn
                     icon="mdi-content-copy"
@@ -35,7 +35,7 @@
                     <v-tooltip activator="parent" location="top">Copy IP</v-tooltip>
                   </v-btn>
                 </div>
-                <div class="text-caption text-medium-emphasis">
+                <div class="text-body-small text-medium-emphasis">
                   {{ result.organization || 'Unknown Organization' }}
                 </div>
               </div>
@@ -50,7 +50,7 @@
                     <v-icon icon="mdi-map-marker" size="small" class="mr-2" />
                     <span class="text-subtitle2">Location</span>
                   </div>
-                  <div class="text-body-2">
+                  <div class="text-body-medium">
                     {{ [result.city, result.country].filter(Boolean).join(', ') || 'Unknown' }}
                   </div>
                 </div>
@@ -121,8 +121,8 @@
                   <v-chip class="mr-2" color="success" size="small" variant="outlined">
                     {{ result.port }}/{{ result.transport || 'tcp' }}
                   </v-chip>
-                  <span class="text-body-2">{{ result.service || 'Unknown' }}</span>
-                  <span v-if="result.version" class="text-caption text-medium-emphasis ml-1">
+                  <span class="text-body-medium">{{ result.service || 'Unknown' }}</span>
+                  <span v-if="result.version" class="text-body-small text-medium-emphasis ml-1">
                     ({{ result.version }})
                   </span>
                 </div>
@@ -167,10 +167,10 @@
                           <v-chip size="x-small" variant="outlined" color="primary" class="mr-2">
                             {{ service.port }}/{{ service.transport }}
                           </v-chip>
-                          <span class="text-body-2">{{ service.service }}</span>
+                          <span class="text-body-medium">{{ service.service }}</span>
                           <span
                             v-if="service.version"
-                            class="text-caption text-medium-emphasis ml-2"
+                            class="text-body-small text-medium-emphasis ml-2"
                           >
                             v{{ service.version }}
                           </span>
@@ -178,8 +178,10 @@
                       </v-expansion-panel-title>
                       <v-expansion-panel-text>
                         <div v-if="service.banner" class="service-banner">
-                          <div class="text-caption text-medium-emphasis mb-1">Service Banner:</div>
-                          <pre class="text-body-2 font-mono">{{ service.banner }}</pre>
+                          <div class="text-body-small text-medium-emphasis mb-1">
+                            Service Banner:
+                          </div>
+                          <pre class="text-body-medium font-mono">{{ service.banner }}</pre>
                         </div>
                       </v-expansion-panel-text>
                     </v-expansion-panel>
@@ -187,7 +189,7 @@
 
                   <div
                     v-if="result.services.length > 5"
-                    class="text-caption text-center mt-2 text-medium-emphasis"
+                    class="text-body-small text-center mt-2 text-medium-emphasis"
                   >
                     Showing 5 of {{ result.services.length }} services
                   </div>
@@ -202,7 +204,7 @@
                   <v-card elevation="1" rounded="lg" color="grey-lighten-5">
                     <v-card-text class="pa-3">
                       <div class="d-flex justify-space-between align-start">
-                        <pre class="text-body-2 font-mono flex-grow-1 service-banner">{{
+                        <pre class="text-body-medium font-mono flex-grow-1 service-banner">{{
                           result.banner
                         }}</pre>
                         <v-btn
@@ -220,7 +222,7 @@
                 </div>
 
                 <!-- Last Update -->
-                <div v-if="result.last_update" class="text-caption text-medium-emphasis">
+                <div v-if="result.last_update" class="text-body-small text-medium-emphasis">
                   <v-icon icon="mdi-clock-outline" size="x-small" class="mr-1" />
                   Last updated: {{ formatDate(result.last_update) }}
                 </div>

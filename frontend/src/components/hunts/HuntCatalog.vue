@@ -3,7 +3,7 @@
     <!-- Search and Filter Bar -->
     <v-card variant="outlined" class="mb-4">
       <v-card-text>
-        <v-row align="center">
+        <v-row class="align-center">
           <v-col cols="12" md="6">
             <v-text-field
               v-model="searchQuery"
@@ -39,7 +39,7 @@
     <!-- Loading State -->
     <div v-if="loading" class="text-center pa-8">
       <v-progress-circular indeterminate size="64" />
-      <div class="text-h6 mt-4">Loading hunts...</div>
+      <div class="text-title-large mt-4">Loading hunts...</div>
     </div>
 
     <!-- Error State -->
@@ -53,8 +53,8 @@
     <!-- Empty State -->
     <v-card v-else-if="filteredHunts.length === 0" variant="outlined" class="text-center pa-8">
       <v-icon icon="mdi-folder-search" size="64" color="grey" class="mb-4" />
-      <div class="text-h6 mb-2">No hunts found</div>
-      <div class="text-body-2 text-medium-emphasis">
+      <div class="text-title-large mb-2">No hunts found</div>
+      <div class="text-body-medium text-medium-emphasis">
         {{
           searchQuery || selectedCategory
             ? 'Try adjusting your search or filter criteria'

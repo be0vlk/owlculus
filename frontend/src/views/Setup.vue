@@ -2,20 +2,19 @@
 <template>
   <v-main class="setup-page">
     <v-container class="fill-height d-flex align-center justify-center pa-4 pa-sm-6" fluid>
-      <v-row align="center" class="fill-height" justify="center">
+      <v-row class="fill-height align-center justify-center">
         <v-col cols="12" lg="5" md="7" sm="9" xl="4">
-          <v-card class="rounded-xl mx-auto setup-card" elevation="8">
+          <v-card class="rounded-xl mx-auto setup-card" elevation="3">
             <v-card-text class="pa-6 pa-sm-8">
               <div class="text-center mb-6">
                 <v-img
                   :src="isDark ? '/owl_logo_white.png' : '/owl_logo.png'"
                   alt="Owlculus Logo"
                   class="mx-auto mb-6"
-                  contain
                   max-height="140"
                 />
-                <h1 class="text-h4 font-weight-bold mb-2">Welcome to Owlculus</h1>
-                <p class="text-body-1 text-medium-emphasis">
+                <h1 class="text-headline-large font-weight-bold mb-2">Welcome to Owlculus</h1>
+                <p class="text-body-large text-medium-emphasis">
                   Create your administrator account to get started
                 </p>
               </div>

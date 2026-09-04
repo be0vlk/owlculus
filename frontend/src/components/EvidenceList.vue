@@ -14,7 +14,7 @@
             v-if="treeItems.length > 0 && selectedItems.length > 0"
             class="d-flex align-center ga-2"
           >
-            <span class="text-caption">{{ selectedItems.length }} selected</span>
+            <span class="text-body-small">{{ selectedItems.length }} selected</span>
             <v-btn
               v-if="userRole !== 'Analyst'"
               color="error"
@@ -43,8 +43,8 @@
         <template v-if="treeItems.length === 0">
           <div class="text-center py-8">
             <v-icon icon="mdi-folder-open" size="64" color="grey-darken-1" class="mb-4" />
-            <h3 class="text-h6 mb-2">No folders created yet</h3>
-            <p class="text-body-2 text-medium-emphasis mb-4">
+            <h3 class="text-title-large mb-2">No folders created yet</h3>
+            <p class="text-body-medium text-medium-emphasis mb-4">
               Create your first folder to organize evidence
             </p>
             <div v-if="userRole !== 'Analyst'" class="d-flex flex-column align-center ga-3">
@@ -63,7 +63,7 @@
                   Use Template
                 </v-btn>
               </div>
-              <p class="text-caption text-medium-emphasis">
+              <p class="text-body-small text-medium-emphasis">
                 Use a template to quickly create organized folder structures
               </p>
             </div>
@@ -272,7 +272,7 @@ import { useDragAndDrop } from '../composables/useDragAndDrop'
 import {
   getFileTypeByExtension,
   getIconByExtension,
-  SUPPORTED_PREVIEW_TYPES
+  SUPPORTED_PREVIEW_TYPES,
 } from '@/utils/fileExtension.js'
 
 const props = defineProps({
@@ -414,18 +414,18 @@ const getFileIcon = (item) => {
 
 function hasFileAction(item) {
   if (!item || !item.title) {
-    return false;
+    return false
   }
 
-  const fileExtension = item.title.split('.').pop();
-  const type = getFileTypeByExtension(fileExtension);
+  const fileExtension = item.title.split('.').pop()
+  const type = getFileTypeByExtension(fileExtension)
 
-  return SUPPORTED_PREVIEW_TYPES.includes(type);
+  return SUPPORTED_PREVIEW_TYPES.includes(type)
 }
 
 const handleFileDoubleClick = (item) => {
   if (hasFileAction(item)) {
-    emit('view-content', item);
+    emit('view-content', item)
   }
 }
 
@@ -663,13 +663,13 @@ defineExpose({
 }
 
 /* Responsive adjustments */
-@media (max-width: 599px) {
+@media (width <= 599px) {
   .evidence-container {
     max-height: 50vh;
   }
 }
 
-@media (min-width: 1280px) {
+@media (width >= 1280px) {
   .evidence-container {
     max-height: 70vh;
   }
@@ -696,7 +696,7 @@ defineExpose({
   background-color: rgb(var(--v-theme-success), 0.15);
   border: 2px solid rgb(var(--v-theme-success));
   border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(var(--v-theme-success), 0.3);
+  box-shadow: 0 2px 8px rgb(var(--v-theme-success), 0.3);
 }
 
 .evidence-invalid-drop {
@@ -721,14 +721,14 @@ defineExpose({
 }
 
 :deep(.v-treeview-item.evidence-drag-over) {
-  background-color: rgb(var(--v-theme-success), 0.1) !important;
+  background-color: rgb(var(--v-theme-success), 0.1);
   border-left: 4px solid rgb(var(--v-theme-success));
   padding-left: 8px;
   transition: all 0.2s ease;
 }
 
 :deep(.v-treeview-item.evidence-invalid-drop) {
-  background-color: rgb(var(--v-theme-error), 0.1) !important;
+  background-color: rgb(var(--v-theme-error), 0.1);
   border-left: 4px solid rgb(var(--v-theme-error));
   padding-left: 8px;
 }
@@ -739,7 +739,7 @@ defineExpose({
   border: 1px solid #ccc;
   border-radius: 4px;
   padding: 8px 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 15%);
   font-size: 14px;
   color: #333;
   display: flex;
@@ -750,7 +750,7 @@ defineExpose({
 
 /* Folder icon highlighting for valid drop targets */
 .v-icon.drop-target-highlight {
-  color: rgb(var(--v-theme-success)) !important;
+  color: rgb(var(--v-theme-success));
   transform: scale(1.1);
   transition: all 0.2s ease;
 }

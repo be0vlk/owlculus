@@ -14,7 +14,7 @@
   >
     <template #prepend-item>
       <v-list-item>
-        <v-list-item-title class="text-caption text-medium-emphasis">
+        <v-list-item-title class="text-body-small text-medium-emphasis">
           Only cases you have access to are shown
         </v-list-item-title>
       </v-list-item>

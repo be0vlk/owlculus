@@ -58,7 +58,7 @@
           />
 
           <v-container fluid class="flex-grow-1 overflow-auto pa-6">
-            <v-row justify="center">
+            <v-row class="justify-center">
               <v-col cols="12" lg="10" xl="8">
                 <div :class="{ 'read-only-notes': isEditing === false }">
                   <editor-content :editor="editor" class="tiptap-content fullscreen-editor" />
@@ -74,7 +74,7 @@
 
 <script setup>
 import { EditorContent } from '@tiptap/vue-3'
-import { defineEmits, defineProps, ref } from 'vue'
+import { ref } from 'vue'
 import { useCaseNoteSave } from '../composables/useCaseNoteSave'
 import EditorToolbar from './editor/EditorToolbar.vue'
 
@@ -117,6 +117,27 @@ const { editor, editorActions, saving, lastSavedTime, formatLastSaved } = useCas
 </script>
 
 <style scoped>
+/* Full screen rules come first so the more specific embedded editor rules can refine them. */
+.fullscreen-editor .ProseMirror {
+  outline: none;
+  min-height: 400px;
+  background: rgb(var(--v-theme-surface));
+  border-radius: 4px;
+  padding: 24px;
+}
+
+.fullscreen-editor .ProseMirror:focus {
+  box-shadow: 0 0 0 2px rgb(var(--v-theme-primary), 0.2);
+}
+
+.fullscreen-editor .ProseMirror p.is-editor-empty:first-child::before {
+  color: rgb(var(--v-theme-on-surface-variant));
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
 .note-editor .tiptap-content .ProseMirror,
 .note-editor-container .tiptap-content .ProseMirror {
   outline: none;
@@ -148,10 +169,12 @@ const { editor, editorActions, saving, lastSavedTime, formatLastSaved } = useCas
 .note-editor-container .tiptap-content h1 {
   font-size: 1.5rem;
 }
+
 .note-editor .tiptap-content h2,
 .note-editor-container .tiptap-content h2 {
   font-size: 1.3rem;
 }
+
 .note-editor .tiptap-content h3,
 .note-editor-container .tiptap-content h3 {
   font-size: 1.1rem;
@@ -233,36 +256,16 @@ const { editor, editorActions, saving, lastSavedTime, formatLastSaved } = useCas
 
 /* Read-only styling */
 .read-only-notes {
-  background-color: rgb(var(--v-theme-surface-variant), 0.05) !important;
+  background-color: rgb(var(--v-theme-surface-variant), 0.05);
 }
 
 .read-only-notes .tiptap-content .ProseMirror {
   cursor: default;
-  background-color: rgb(var(--v-theme-surface-variant), 0.03) !important;
+  background-color: rgb(var(--v-theme-surface-variant), 0.03);
 }
 
 .read-only-notes .tiptap-content .ProseMirror * {
   pointer-events: none;
 }
 
-/* Full screen editor styles */
-.fullscreen-editor .ProseMirror {
-  outline: none;
-  min-height: 400px;
-  background: rgb(var(--v-theme-surface));
-  border-radius: 4px;
-  padding: 24px;
-}
-
-.fullscreen-editor .ProseMirror:focus {
-  box-shadow: 0 0 0 2px rgba(var(--v-theme-primary), 0.2);
-}
-
-.fullscreen-editor .ProseMirror p.is-editor-empty:first-child::before {
-  color: rgb(var(--v-theme-on-surface-variant));
-  content: attr(data-placeholder);
-  float: left;
-  height: 0;
-  pointer-events: none;
-}
 </style>

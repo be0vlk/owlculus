@@ -7,7 +7,7 @@
       </v-card-title>
 
       <v-card-text>
-        <v-form ref="form" v-model="valid" lazy-validation @submit.prevent>
+        <v-form ref="form" v-model="valid" validate-on="lazy" @submit.prevent>
           <v-text-field
             v-model="folderName"
             label="Folder Name"

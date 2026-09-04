@@ -2,12 +2,12 @@
   <div class="d-flex flex-column ga-4">
     <template v-for="(resultItem, index) in normalizedResult" :key="index">
       <!-- Entity Match Card -->
-      <v-card v-if="resultItem.type === 'data'" elevation="2" rounded="lg">
+      <v-card v-if="resultItem.type === 'data'" elevation="1" rounded="lg">
         <!-- Entity Header -->
         <v-card-text class="border-b">
           <div class="d-flex align-center">
             <v-icon icon="mdi-link" class="mr-2" color="grey-darken-1" />
-            <h3 class="text-h6 font-weight-medium">
+            <h3 class="text-title-large font-weight-medium">
               {{ resultItem.data.entity_name }}
             </h3>
             <v-chip class="ml-2" color="primary" size="small" variant="tonal">
@@ -24,7 +24,7 @@
           </div>
 
           <!-- Correlation Context -->
-          <div class="mt-2 text-body-2 text-medium-emphasis">
+          <div class="mt-2 text-body-medium text-medium-emphasis">
             <template v-if="resultItem.data.match_type === 'employer'">
               Found multiple people who work at
               <span class="font-weight-medium">{{ resultItem.data.employer_name }}</span
@@ -68,12 +68,14 @@
               <v-card-text>
                 <div class="d-flex justify-space-between align-start">
                   <div class="d-flex flex-column ga-1">
-                    <h4 class="text-body-1 font-weight-medium">Case #{{ match.case_number }}</h4>
-                    <p class="text-body-2 text-medium-emphasis">
+                    <h4 class="text-body-large font-weight-medium">
+                      Case #{{ match.case_number }}
+                    </h4>
+                    <p class="text-body-medium text-medium-emphasis">
                       {{ match.case_title }}
                     </p>
                     <template v-if="resultItem.data.match_type === 'employer' && match.person_name">
-                      <p class="text-body-2 text-secondary">Person: {{ match.person_name }}</p>
+                      <p class="text-body-medium text-secondary">Person: {{ match.person_name }}</p>
                     </template>
                   </div>
                   <v-btn
@@ -93,7 +95,7 @@
       </v-card>
 
       <!-- Error Message -->
-      <v-alert v-else-if="resultItem.type === 'error'" border="start" elevation="2" type="error">
+      <v-alert v-else-if="resultItem.type === 'error'" border="start" elevation="1" type="error">
         {{ resultItem.data.message }}
       </v-alert>
 
@@ -109,10 +111,10 @@
     </template>
 
     <!-- No Results -->
-    <v-card v-if="!result || normalizedResult.length === 0" elevation="2" rounded="lg">
+    <v-card v-if="!result || normalizedResult.length === 0" elevation="1" rounded="lg">
       <v-card-text class="text-center pa-8">
         <v-icon icon="mdi-magnify" size="48" color="grey-darken-1" class="mb-3" />
-        <p class="text-body-2 text-medium-emphasis">No correlations found</p>
+        <p class="text-body-medium text-medium-emphasis">No correlations found</p>
       </v-card-text>
     </v-card>
   </div>

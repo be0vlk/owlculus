@@ -9,7 +9,6 @@
           alt="Owlculus Logo"
           max-height="140"
           max-width="220"
-          contain
         />
       </div>
     </v-container>

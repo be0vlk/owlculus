@@ -7,7 +7,7 @@
   >
     <v-card>
       <v-card-title>
-        <span class="text-h5">{{ title }}</span>
+        <span class="text-headline-small">{{ title }}</span>
       </v-card-title>
       <v-card-text>
         <v-form @submit.prevent="$emit('submit')">

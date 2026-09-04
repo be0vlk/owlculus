@@ -3,6 +3,9 @@ import pluginVue from 'eslint-plugin-vue'
 import pluginVitest from '@vitest/eslint-plugin'
 import pluginPlaywright from 'eslint-plugin-playwright'
 import skipFormatting from '@vue/eslint-config-prettier/skip-formatting'
+import pluginVuetify from 'eslint-plugin-vuetify'
+
+const [vuetifyBaseConfig, vuetifyMigrationConfig] = pluginVuetify.configs['flat/recommended-v4']
 
 export default [
   {
@@ -17,6 +20,13 @@ export default [
 
   js.configs.recommended,
   ...pluginVue.configs['flat/essential'],
+  {
+    ...vuetifyBaseConfig,
+    plugins: {
+      vuetify: vuetifyBaseConfig.plugins.vuetify,
+    },
+  },
+  vuetifyMigrationConfig,
 
   {
     name: 'app/browser-globals',

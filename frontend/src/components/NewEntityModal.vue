@@ -10,7 +10,7 @@
         <v-form ref="formRef" @submit.prevent="handleSubmit">
           <!-- Entity Type Selector -->
           <v-card variant="outlined" class="mb-6">
-            <v-card-title class="text-subtitle-1 pb-2">
+            <v-card-title class="text-body-large pb-2">
               <v-icon start>mdi-shape</v-icon>
               Entity Type
             </v-card-title>

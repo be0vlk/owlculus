@@ -62,7 +62,7 @@
             <v-card-text class="text-center pa-8">
               <v-icon class="mb-4" color="primary" size="64"> mdi-cloud-upload-outline </v-icon>
 
-              <div class="text-h6 mb-2">Drop files here or browse</div>
+              <div class="text-title-large mb-2">Drop files here or browse</div>
 
               <v-btn
                 color="primary"
@@ -87,7 +87,7 @@
 
           <!-- Selected Files Display -->
           <v-card v-if="selectedFiles.length > 0" variant="outlined" class="mb-4">
-            <v-card-title class="text-subtitle-1">
+            <v-card-title class="text-body-large">
               Selected Files ({{ selectedFiles.length }})
               <v-spacer />
               <v-btn color="error" size="small" variant="text" @click="clearFiles">
@@ -149,7 +149,7 @@
 </template>
 
 <script setup>
-import { ref, defineProps, defineEmits, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { evidenceService } from '../services/evidence'
 import { FileExtensionGroups, getIconByExtension, MimeGroups } from '@/utils/fileExtension.js'
 // Vuetify components are auto-imported
@@ -334,12 +334,11 @@ const getFileIcon = (item) => {
 
 const acceptedExtensions = Object.values(FileExtensionGroups)
   .flat()
-  .map(ext => `.${ext}`)
+  .map((ext) => `.${ext}`)
 
 const acceptedMimes = Object.values(MimeGroups).flat()
 
 const acceptString = [...acceptedMimes, ...acceptedExtensions].join(',')
-
 </script>
 
 <style scoped>

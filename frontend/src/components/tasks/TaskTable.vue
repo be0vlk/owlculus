@@ -85,10 +85,10 @@
       <template #no-data>
         <div class="text-center pa-12">
           <v-icon class="mb-4" color="grey-lighten-1" icon="mdi-format-list-checks" size="64" />
-          <h3 class="text-h6 font-weight-medium mb-2">
+          <h3 class="text-title-large font-weight-medium mb-2">
             <slot name="empty-title">No tasks yet</slot>
           </h3>
-          <p class="text-body-2 text-medium-emphasis mb-4">
+          <p class="text-body-medium text-medium-emphasis mb-4">
             <slot name="empty-message">Get started by creating your first task.</slot>
           </p>
           <slot name="empty-action" />
@@ -210,23 +210,23 @@ async function handleDeleteClick(task) {
 
 <style scoped>
 .tasks-table :deep(.v-data-table__tr:hover) {
-  background-color: rgb(var(--v-theme-primary), 0.04) !important;
+  background-color: rgb(var(--v-theme-primary), 0.04);
   cursor: pointer;
 }
 
 .tasks-table :deep(.v-data-table__td) {
-  padding: 12px 16px !important;
-  border-bottom: 1px solid rgb(var(--v-theme-on-surface), 0.08) !important;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgb(var(--v-theme-on-surface), 0.08);
 }
 
 .tasks-table :deep(.v-data-table__th) {
-  padding: 16px !important;
-  font-weight: 600 !important;
-  color: rgb(var(--v-theme-on-surface), 0.87) !important;
-  border-bottom: 2px solid rgb(var(--v-theme-on-surface), 0.12) !important;
+  padding: 16px;
+  font-weight: 600;
+  color: rgb(var(--v-theme-on-surface), 0.87);
+  border-bottom: 2px solid rgb(var(--v-theme-on-surface), 0.12);
 }
 
 .tasks-table :deep(.v-data-table-rows-no-data) {
-  padding: 48px 16px !important;
+  padding: 48px 16px;
 }
 </style>

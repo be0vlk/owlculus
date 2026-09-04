@@ -33,7 +33,7 @@
         <!-- Custom Fields -->
         <div v-if="customFields.length > 0">
           <v-divider class="mb-4" />
-          <div class="text-subtitle-2 text-medium-emphasis mb-3">Additional Fields</div>
+          <div class="text-title-small text-medium-emphasis mb-3">Additional Fields</div>
           <CustomFieldInput
             v-for="field in customFields"
             :key="field.name"

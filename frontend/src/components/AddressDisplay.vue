@@ -9,36 +9,38 @@
       <v-row>
         <v-col cols="12">
           <div class="mb-3">
-            <v-label class="text-subtitle-2 font-weight-medium mb-1">Street</v-label>
-            <div class="text-body-2 text-medium-emphasis">{{ address.street || 'N/A' }}</div>
+            <v-label class="text-title-small font-weight-medium mb-1">Street</v-label>
+            <div class="text-body-medium text-medium-emphasis">{{ address.street || 'N/A' }}</div>
           </div>
         </v-col>
 
         <v-col cols="12" sm="6">
           <div class="mb-3">
-            <v-label class="text-subtitle-2 font-weight-medium mb-1">City</v-label>
-            <div class="text-body-2 text-medium-emphasis">{{ address.city || 'N/A' }}</div>
+            <v-label class="text-title-small font-weight-medium mb-1">City</v-label>
+            <div class="text-body-medium text-medium-emphasis">{{ address.city || 'N/A' }}</div>
           </div>
         </v-col>
 
         <v-col cols="12" sm="6">
           <div class="mb-3">
-            <v-label class="text-subtitle-2 font-weight-medium mb-1">State</v-label>
-            <div class="text-body-2 text-medium-emphasis">{{ address.state || 'N/A' }}</div>
+            <v-label class="text-title-small font-weight-medium mb-1">State</v-label>
+            <div class="text-body-medium text-medium-emphasis">{{ address.state || 'N/A' }}</div>
           </div>
         </v-col>
 
         <v-col cols="12" sm="6">
           <div class="mb-3">
-            <v-label class="text-subtitle-2 font-weight-medium mb-1">Country</v-label>
-            <div class="text-body-2 text-medium-emphasis">{{ address.country || 'N/A' }}</div>
+            <v-label class="text-title-small font-weight-medium mb-1">Country</v-label>
+            <div class="text-body-medium text-medium-emphasis">{{ address.country || 'N/A' }}</div>
           </div>
         </v-col>
 
         <v-col cols="12" sm="6">
           <div class="mb-3">
-            <v-label class="text-subtitle-2 font-weight-medium mb-1">Postal Code</v-label>
-            <div class="text-body-2 text-medium-emphasis">{{ address.postal_code || 'N/A' }}</div>
+            <v-label class="text-title-small font-weight-medium mb-1">Postal Code</v-label>
+            <div class="text-body-medium text-medium-emphasis">
+              {{ address.postal_code || 'N/A' }}
+            </div>
           </div>
         </v-col>
       </v-row>

@@ -33,7 +33,7 @@
 
           <!-- Add Users Section -->
           <v-card variant="outlined" class="mb-4">
-            <v-card-title class="text-subtitle-1 pb-2">
+            <v-card-title class="text-body-large pb-2">
               <v-icon start>mdi-account-group</v-icon>
               Assign Users
             </v-card-title>
@@ -99,7 +99,7 @@
               </v-list>
 
               <!-- Add User Form -->
-              <v-row align="center">
+              <v-row class="align-center">
                 <v-col cols="12" md="6">
                   <v-select
                     v-model="userToAdd"

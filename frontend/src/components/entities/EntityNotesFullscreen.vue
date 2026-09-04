@@ -28,7 +28,7 @@
         />
 
         <v-container fluid class="flex-grow-1 overflow-auto pa-6">
-          <v-row justify="center">
+          <v-row class="justify-center">
             <v-col cols="12" lg="10" xl="8">
               <div :class="{ 'read-only-notes': isEditing === false }">
                 <editor-content
@@ -68,12 +68,12 @@ defineEmits(['update:show', 'close'])
 </script>
 
 <style scoped>
-@import '../../styles/entity-editor.css';
+@import url('../../styles/entity-editor.css');
 
 /* Read-only styling for fullscreen notes */
 .read-only-notes .tiptap-content .ProseMirror {
   cursor: default;
-  background-color: rgb(var(--v-theme-surface-variant), 0.03) !important;
+  background-color: rgb(var(--v-theme-surface-variant), 0.03);
 }
 
 .read-only-notes .tiptap-content .ProseMirror * {

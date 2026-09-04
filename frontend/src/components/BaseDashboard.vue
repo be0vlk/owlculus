@@ -7,7 +7,7 @@
         <!-- Page Header Card -->
         <v-card class="mb-6 header-gradient">
           <v-card-title class="d-flex align-center pa-6 text-white">
-            <div class="text-h4 font-weight-bold">{{ title }}</div>
+            <div class="text-headline-large font-weight-bold">{{ title }}</div>
             <v-spacer />
             <slot name="header-actions" />
           </v-card-title>
