@@ -7,15 +7,15 @@ FastAPI application. It handles JWT token validation and user permissions.
 """
 
 from ipaddress import ip_address, ip_network
+from typing import Annotated
 
 from fastapi import Depends, Request
 from fastapi.security import OAuth2PasswordBearer
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.core import security
 from app.core.config import settings
 from app.core.exceptions import AuthenticationException
-from app.database import crud
 from app.database.connection import get_db as _get_db
 from app.database.models import User
 
@@ -29,7 +29,7 @@ async def _resolve_current_user(db: Session, token: str) -> User:
     """Resolve and validate a bearer token into an active user."""
     credentials_exception = AuthenticationException("Could not validate credentials")
     username = security.verify_access_token(token, credentials_exception)
-    user = await crud.get_user_by_username(db, username=username)
+    user = db.exec(select(User).where(User.username == username)).first()
     if user is None:
         raise credentials_exception
 
@@ -106,14 +106,15 @@ def get_user_agent(request: Request) -> str:
 
 
 async def get_current_user(
-    db: Session = Depends(_get_db), token: str = Depends(oauth2_scheme)
+    db: Annotated[Session, Depends(_get_db)],
+    token: Annotated[str, Depends(oauth2_scheme)],
 ) -> User:
     return await _resolve_current_user(db, token)
 
 
 async def get_optional_current_user(
-    db: Session = Depends(_get_db),
-    token: str | None = Depends(optional_oauth2_scheme),
+    db: Annotated[Session, Depends(_get_db)],
+    token: Annotated[str | None, Depends(optional_oauth2_scheme)],
 ) -> User | None:
     """Return no user when a bearer token is absent, while rejecting invalid tokens."""
     if token is None:

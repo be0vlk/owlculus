@@ -523,7 +523,7 @@ class TestUsersAPI:
     ):
         """An insert failure does not consume the setup token."""
         with patch(
-            "app.services.user_service.crud.create_user",
+            "app.services.user_service.UserService._new_user",
             side_effect=RuntimeError("simulated insert failure"),
         ):
             response = await self._post_bootstrap(
@@ -794,17 +794,9 @@ class TestUsersAPI:
         }
 
         try:
-            with patch(
-                "app.services.user_service.UserService.create_user"
-            ) as mock_create:
-                from fastapi import HTTPException
-
-                mock_create.side_effect = HTTPException(
-                    status_code=400, detail="Username already registered"
-                )
-
-                response = client.post("/api/users/", json=user_data)
-                assert response.status_code == status.HTTP_400_BAD_REQUEST
+            response = client.post("/api/users/", json=user_data)
+            assert response.status_code == status.HTTP_400_BAD_REQUEST
+            assert response.json() == {"detail": "Username already registered"}
         finally:
             app.dependency_overrides.clear()
 
