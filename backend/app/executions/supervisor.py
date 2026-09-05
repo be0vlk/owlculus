@@ -10,10 +10,10 @@ import sys
 import time
 from datetime import UTC
 
-from sqlmodel import Session, create_engine
+from sqlmodel import Session
 
-from app.core.config import settings
 from app.core.utils import get_utc_now
+from app.database.connection import create_execution_engine
 from app.executions.cancellation import finish_stopped
 from app.executions.limits import (
     CLEANUP_SECONDS,
@@ -51,9 +51,7 @@ def stop_process(process):
 
 
 def run(execution_id: int, kind: str):
-    engine = create_engine(
-        settings.get_database_url(), pool_pre_ping=True, hide_parameters=True
-    )
+    engine = create_execution_engine()
     # PR_SET_CHILD_SUBREAPER: adopted descendants stay attributable by process group.
     if ctypes.CDLL(None, use_errno=True).prctl(36, 1, 0, 0, 0) != 0:
         raise OSError(ctypes.get_errno(), "Could not enable execution process cleanup")

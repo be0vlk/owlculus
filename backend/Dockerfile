@@ -43,6 +43,7 @@ WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv
 
 COPY app ./app
+COPY uv.lock ./uv.lock
 
 RUN mkdir -p uploads data/setup && \
     chown -R app:app /app

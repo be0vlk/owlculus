@@ -12,11 +12,10 @@ from uuid import uuid4
 
 import httpx
 import pytest
-from sqlmodel import Session, SQLModel, create_engine
-
 from app.core.security import create_access_token, encrypt_api_key
 from app.database.models import Case, CaseUserLink, Client, SystemConfiguration, User
 from app.database.upgrade_executions import upgrade
+from sqlmodel import Session, SQLModel, create_engine
 
 
 def eventually(check, timeout=40):
@@ -44,18 +43,52 @@ class ExecutionSystem:
         self.root, self.env = root, env
         self.processes = []
         self.logs = []
+        self.containers = {}
 
     def start(self, *args):
         log = (self.root / f"process-{len(self.processes)}.log").open("w")
         self.logs.append(log)
+        command = [sys.executable, *args]
+        image = os.environ.get("EXECUTION_TEST_IMAGE")
+        if image:
+            name = f"owlculus-smoke-{uuid4().hex[:12]}"
+            command = [
+                "docker",
+                "run",
+                "--rm",
+                "--name",
+                name,
+                "--network",
+                "host",
+                "--user",
+                f"{os.getuid()}:{os.getgid()}",
+                "-v",
+                f"{self.root}:{self.root}",
+                "-v",
+                f"{Path(__file__).resolve().parents[1]}:/app/tests:ro",
+                "-w",
+                str(self.root),
+            ]
+            for key, value in {**self.env, "PYTHONPATH": "/app"}.items():
+                if key.startswith(("POSTGRES_", "EXECUTION_", "OWLCULUS_")) or key in {
+                    "SECRET_KEY",
+                    "REDIS_URL",
+                    "PLUGIN_QUEUE",
+                    "HUNT_QUEUE",
+                    "PYTHONPATH",
+                }:
+                    command.extend(["-e", f"{key}={value}"])
+            command.extend([image, "python", *args])
         process = subprocess.Popen(
-            [sys.executable, *args],
+            command,
             cwd=self.root,
             env=self.env,
             stdout=log,
             stderr=subprocess.STDOUT,
             start_new_session=True,
         )
+        if image:
+            self.containers[process.pid] = name
         self.processes.append(process)
         return process
 
@@ -74,6 +107,12 @@ class ExecutionSystem:
         return self.start("-m", "tests.executions.runtime", "worker")
 
     def stop(self, process):
+        if process.pid in self.containers:
+            subprocess.run(
+                ["docker", "stop", "-t", "8", self.containers.pop(process.pid)],
+                capture_output=True,
+                check=False,
+            )
         if process.poll() is None:
             os.killpg(process.pid, signal.SIGTERM)
             try:

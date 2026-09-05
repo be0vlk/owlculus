@@ -9,10 +9,10 @@ from datetime import UTC, timedelta
 
 from redis import Redis
 from redis.exceptions import RedisError
-from sqlmodel import Session, create_engine, select
+from sqlmodel import Session, select
 
-from app.core.config import settings
 from app.core.utils import get_utc_now
+from app.database.connection import create_execution_engine
 from app.database.models import HuntStep
 from app.executions.limits import STEP_SECONDS
 from app.executions.ownership import (
@@ -27,12 +27,11 @@ from app.executions.ownership import (
 def main():
     kind, execution_id, control_id, generation, owner, supervisor_pid = sys.argv[1:]
     ownership = Ownership(int(control_id), int(generation), owner)
-    engine = create_engine(
-        settings.get_database_url(), pool_pre_ping=True, hide_parameters=True
-    )
+    engine = create_execution_engine()
     next_heartbeat = 0.0
     redis = Redis.from_url(
-        os.environ.get("REDIS_URL", "redis://localhost:6379/0"),
+        os.environ.get("EXECUTION_EVENT_REDIS_URL")
+        or os.environ.get("REDIS_URL", "redis://localhost:6379/0"),
         socket_connect_timeout=0.2,
         socket_timeout=0.6,
     )

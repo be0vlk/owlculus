@@ -354,3 +354,128 @@ Focused shared-observation acceptance: `RUN_EXECUTION_ACCEPTANCE=1 uv run --lock
 pytest tests/executions/test_observation.py -q`. It uses real Redis 7, PostgreSQL,
 independent APIs and workers; it includes deterministic snapshot and slow-transport
 barriers, event loss/repair, authorization changes, and output above stream retention.
+
+## Operations and release acceptance (ticket 08)
+
+Run `docker compose exec backend python -m app.executions.operations` for a JSON
+background capability report (exit 0 ready, 1 degraded). It reports pending and
+active work by queue, unpublished dispatch backlog, oldest waiting age, dispatch
+errors, live workers, retained failure/recovery totals, mean execution duration,
+maximum completed cancellation latency, event publication backlog, and Redis
+memory. Duration and cancellation aggregates cover retained history, not a rolling
+window. Missing workers, failed dispatch, and waiting for capacity have distinct
+conditions. Redis and worker inspection use bounded timeouts. `/health/live`
+checks the API process; `/health/ready` checks API dependencies, independently of
+worker availability. A healthy API can accept durable queued work while workers
+are unavailable. Inspect dispatcher health separately with
+`docker compose ps execution-dispatcher`.
+
+`docker compose logs execution-dispatcher backend plugin-worker hunt-worker`
+contains JSON dispatch records with execution ID, kind, attempt, generation, and
+publication/retry state. `observation_failure` records identify stream reconnect
+failures by kind, ID, and cursor; count these events over your chosen time window
+using existing log tooling. Connection exceptions, credentials, tokens, and result
+bodies are excluded. Investigation views retain their existing waiting reasons,
+explicit errors, polling fallback, and durable result links.
+
+Configuration defaults:
+
+| Setting | Default / meaning |
+| --- | --- |
+| `PLUGIN_CONCURRENCY`, `HUNT_CONCURRENCY` | Two prefork slots independently; prefetch one |
+| `PLUGIN_WORKER_MEMORY`, `HUNT_WORKER_MEMORY` | 1 GiB container limits each, including owned child processes |
+| `WORKER_MAX_TASKS_PER_CHILD` | Recycle Celery children after 100 jobs |
+| `WORKER_MAX_MEMORY_KB` | Recycle Celery children above 262144 KiB after their task; container limit bounds their subprocesses |
+| `API_DATABASE_POOL_SIZE`, `API_DATABASE_MAX_OVERFLOW` | 5 + 5 connections in bundled API |
+| `WORKER_DATABASE_POOL_SIZE`, `WORKER_DATABASE_MAX_OVERFLOW` | 2 + 0 per owning process |
+| `PLUGIN_EXECUTION_SECONDS`, `HUNT_STEP_SECONDS`, `HUNT_EXECUTION_SECONDS` | 900 / 900 / 7200 seconds including cleanup |
+| `EXECUTION_BROKER_URL`, `EXECUTION_EVENT_REDIS_URL` | Bundled Redis by default; direct launches fall back to `REDIS_URL` |
+| `REDIS_MAXMEMORY` | 256 MiB, noeviction, AOF; Redis container 384 MiB |
+
+Budget database connections for each API process plus each slot's supervisor,
+control monitor, and execution process, plus the dispatcher and maintenance.
+Pools are lazy and process local; with two slots per queue, a conservative worker
+budget is 4 × 3 × 2 = 24 connections, plus dispatcher 2 and API 10. Allow room for
+operations and migrations below PostgreSQL's connection limit. Pool acquisition
+and PostgreSQL connection establishment time out after five seconds; execution
+Redis connections use two seconds. The 60-second ownership lease still bounds
+work if a database command becomes unresponsive. Workers receive 75 seconds for
+shutdown; longer work is interrupted with retained output and conservative recovery.
+Broker visibility is consistently at least three hours and automatically raised
+above the largest plugin/hunt duration plus 60 seconds in all Celery settings.
+
+Queues are `owlculus.plugins` and `owlculus.hunts`; events, control hints, tokens,
+and rate limits have separate key namespaces. Namespaces and logical databases
+provide no memory isolation. For stronger isolation, use physically separate
+broker/event/rate-limit Redis services. Never use an eviction policy on a shared
+broker: memory exhaustion must reject writes so durable outbox retry can recover.
+Streams default to 10,000 entries and 24-hour retention; single-use tokens expire
+after 30 seconds. Durable PostgreSQL results survive stream expiry. Provider
+workers have the egress network; production PostgreSQL and Redis have no published
+ports and stay on the private network. Development starts both queues and the
+dispatcher, using the same source mount, secret, database, and uploads as the API.
+
+### Upgrade and failed-rollout rehearsal
+
+1. Stop new submissions (maintenance at the gateway), retain database and uploads
+   backups, and record the current image digest. Check retained plugin results and
+   a historical hunt JSON export before changing anything.
+2. Stop the dispatcher to prevent further publication. Gracefully stop both old
+   workers, allow the configured shutdown budget, and then stop the old API. Do not
+   mix implementation builds. Queued hunts retain a definition snapshot and content
+   build identity; a different build fails explicitly before provider work. Review
+   those queued definitions and deliberately resubmit incompatible hunts after
+   cutover; never rewrite an accepted build identity to force execution.
+3. Run `docker compose run --rm db-init` with the new image. Initialization applies
+   the explicit repeatable upgrade; it is not only table creation. Alternatively
+   run `python -m app.database.upgrade_executions` in a configured backend container.
+   Run it again to verify repeatability. Historical hunt and step IDs/output stay
+   intact; API-owned nonterminal legacy hunts become `legacy_interrupted` failures.
+4. Start compatible API, dispatcher, plugin-worker, and hunt-worker images. Check
+   `/health/ready`, service health, and the operator report. Open retained results
+   and export the historical hunt again. Run a deterministic plugin and two-step
+   hunt before restoring submission traffic.
+5. If rollout fails, stop new processes, keep the additive schema and all database,
+   uploads, and Redis volumes, and deploy the last compatible image. Never use
+   `down -v`, delete investigation rows, or replay uncertain provider operations.
+   If the previous image cannot read the additive schema or accepted definitions,
+   retain maintenance mode and roll forward with a corrected image. Restore a backup
+   only through a separately reviewed recovery plan that accounts for newer writes.
+
+The dedicated historical-schema test removes the new hunt columns and constraints
+from populated records, upgrades twice, and verifies original IDs, outputs, history,
+and exports through the API. The production-image fixture can rehearse API restart,
+retained results, and compatible worker startup without outside provider accounts:
+
+```bash
+docker build --target production -t owlculus-execution-acceptance:ticket8 backend
+cd backend
+EXECUTION_TEST_IMAGE=owlculus-execution-acceptance:ticket8 RUN_EXECUTION_ACCEPTANCE=1 \
+  uv run --locked pytest tests/executions/test_execution_system.py::test_provider_survives_api_restart_and_retains_ordered_partial_results \
+  tests/executions/test_hunt_execution_system.py::test_hunt_survives_api_restart_and_uses_accepted_definition -q
+```
+
+This fixture runs the real locked image with separate API/dispatcher/prefork worker
+containers and isolated PostgreSQL/Redis. It uses host networking only to reach
+random loopback test ports; Compose topology checks separately verify production
+privacy, egress, shared mounts, and matching configuration.
+
+### Reproducible benchmark
+
+Run on an otherwise idle reference host, outside restricted socket sandboxes:
+
+```bash
+cd backend
+RUN_EXECUTION_ACCEPTANCE=1 RUN_EXECUTION_BENCHMARK=1 \
+  EXECUTION_BENCHMARK_REPORT=/tmp/owlculus-benchmark.json \
+  uv run --locked pytest tests/executions/test_performance.py -q
+```
+
+Timing begins after fault-free API and both worker queues are ready and the
+dispatcher has started. Twenty submissions launch concurrently: ten five-second
+plugins and ten two-step hunts, 2.5 seconds per step, with two slots per queue.
+The report includes hardware, database defaults, output shape, submission/case-read
+p95, queue wait, completion time, overlap, Redis memory, rate-limit sentinel
+preservation, separate saturated-hunt plugin startup, and cooperative cancellation.
+Targets are engineering acceptance criteria, not production SLAs. Run this test
+separately from other workloads. It is opt-in and never part of ordinary unit runs.

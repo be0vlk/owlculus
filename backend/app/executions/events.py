@@ -29,7 +29,8 @@ STREAM_TTL = max(1, int(os.environ.get("EXECUTION_STREAM_TTL_SECONDS", "86400"))
 
 def redis_client():
     return Redis.from_url(
-        os.environ.get("REDIS_URL", "redis://localhost:6379/0"),
+        os.environ.get("EXECUTION_EVENT_REDIS_URL")
+        or os.environ.get("REDIS_URL", "redis://localhost:6379/0"),
         socket_connect_timeout=2,
         socket_timeout=2,
         decode_responses=True,

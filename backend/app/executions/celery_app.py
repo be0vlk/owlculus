@@ -8,13 +8,16 @@ from app.executions.limits import VISIBILITY_SECONDS
 
 app = Celery(
     "owlculus_executions",
-    broker=os.environ.get("REDIS_URL", "redis://localhost:6379/0"),
+    broker=os.environ.get("EXECUTION_BROKER_URL")
+    or os.environ.get("REDIS_URL", "redis://localhost:6379/0"),
 )
 HUNT_QUEUE = os.environ.get("HUNT_QUEUE", "owlculus.hunts")
 QUEUE = os.environ.get("PLUGIN_QUEUE", "owlculus.plugins")
 app.conf.update(
     task_default_queue=QUEUE,
     worker_prefetch_multiplier=1,
+    worker_max_tasks_per_child=int(os.environ.get("WORKER_MAX_TASKS_PER_CHILD", "100")),
+    worker_max_memory_per_child=int(os.environ.get("WORKER_MAX_MEMORY_KB", "262144")),
     task_ignore_result=True,
     task_acks_late=True,
     task_reject_on_worker_lost=True,

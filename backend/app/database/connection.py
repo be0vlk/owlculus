@@ -6,6 +6,7 @@ database creation, table initialization, and session management. It uses SQLMode
 with PostgreSQL and includes connection pooling and health check configuration.
 """
 
+import os
 from collections.abc import Generator
 
 from fastapi import HTTPException
@@ -17,14 +18,23 @@ from sqlmodel import Session, create_engine
 from ..core.config import settings
 from .models import SQLModel
 
-engine = create_engine(
-    settings.get_database_url(),
-    echo=False,
-    pool_size=20,
-    max_overflow=10,
-    pool_pre_ping=True,
-    pool_recycle=3600,
-)
+
+def create_execution_engine() -> Engine:
+    """Create a pool in its owning process, with a bounded connection budget."""
+    return create_engine(
+        settings.get_database_url(),
+        echo=False,
+        hide_parameters=True,
+        pool_size=int(os.environ.get("DATABASE_POOL_SIZE", "2")),
+        max_overflow=int(os.environ.get("DATABASE_MAX_OVERFLOW", "0")),
+        pool_timeout=5,
+        connect_args={"connect_timeout": 5},
+        pool_pre_ping=True,
+        pool_recycle=3600,
+    )
+
+
+engine = create_execution_engine()
 
 
 def create_db_and_tables(database_engine: Engine = engine) -> None:

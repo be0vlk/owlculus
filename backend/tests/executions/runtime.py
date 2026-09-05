@@ -14,6 +14,7 @@ class AcceptancePlugin(BasePlugin):
         super().__init__()
         self.parameters = {
             "mode": {"type": "string", "default": "success"},
+            "delay_ms": {"type": "integer", "default": 0},
             "barrier": {"type": "string"},
             "query": {"type": "string"},
             "bytes": {"type": "integer", "default": 0},
@@ -24,6 +25,8 @@ class AcceptancePlugin(BasePlugin):
         root = Path(os.environ["EXECUTION_TEST_DIR"])
         with (root / "provider-starts").open("a") as output:
             output.write(f"{params.get('barrier', 'none')}\n")
+        if params.get("delay_ms"):
+            await asyncio.sleep(params["delay_ms"] / 1000)
         if params.get("mode") == "sized":
             for _ in range(params["count"]):
                 yield self.data({"value": "x" * (params["bytes"] - 35)})
@@ -246,14 +249,13 @@ if __name__ == "__main__":
     elif sys.argv[1] == "replay-effects":
         from contextlib import contextmanager
 
-        from sqlalchemy import event
-        from sqlmodel import Session, select
-
         from app.database.connection import engine
         from app.database.models import ExecutionControl, PluginExecution, User
         from app.executions.ownership import Ownership
         from app.executions.worker import WorkerVault, worker_adapter
         from app.plugins.plugin_types import EvidenceWrite
+        from sqlalchemy import event
+        from sqlmodel import Session, select
 
         execution_id = int(sys.argv[2])
         window = sys.argv[3]
