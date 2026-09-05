@@ -151,9 +151,9 @@ class HuntExecution(SQLModel, table=True):
     status: str = Field(default="pending")
     progress: float = Field(default=0.0)
     initial_parameters: dict = Field(sa_column=Column(JSON))
-    definition_snapshot: Optional[dict] = Field(default=None, sa_column=Column(JSON))
-    implementation_build: Optional[str] = None
-    error: Optional[dict] = Field(default=None, sa_column=Column(JSON))
+    definition_snapshot: dict | None = Field(default=None, sa_column=Column(JSON))
+    implementation_build: str | None = None
+    error: dict | None = Field(default=None, sa_column=Column(JSON))
     context_data: Optional[dict] = Field(default=None, sa_column=Column(JSON))
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
@@ -250,10 +250,10 @@ class ExecutionControl(SQLModel, table=True):
         ),
     )
     id: Optional[int] = Field(default=None, primary_key=True)
-    plugin_execution_id: Optional[int] = Field(
+    plugin_execution_id: int | None = Field(
         default=None, foreign_key="pluginexecution.id", unique=True
     )
-    hunt_execution_id: Optional[int] = Field(
+    hunt_execution_id: int | None = Field(
         default=None, foreign_key="huntexecution.id", unique=True
     )
     generation: int = 0

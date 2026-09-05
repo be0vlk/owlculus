@@ -299,8 +299,6 @@ class HuntExecutor:
             async for result in self.plugin_runner.run(
                 step_def.plugin_name, parameters, run
             ):
-                if self.before_step:
-                    run.session.rollback()
                 if result.kind == "data":
                     results.append(self.sanitize(result.payload))
                 elif result.kind == "error":

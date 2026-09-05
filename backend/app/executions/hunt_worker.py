@@ -9,10 +9,9 @@ from app.database.db_utils import transaction
 from app.database.models import HuntExecution
 from app.executions.ownership import OwnershipLost, claim
 from app.executions.service import authorize_execution
-from app.executions.worker import worker_adapter, worker_resources
+from app.executions.worker import WorkerPluginRunner, worker_adapter, worker_resources
 from app.hunts.hunt_executor import HuntExecutor
 from app.plugins.plugin_registry import PluginRegistry
-from app.plugins.plugin_runner import PluginRunner
 
 
 class DurableHuntNotifier:
@@ -56,7 +55,7 @@ async def execute(engine: Engine, registry: PluginRegistry, execution_id: int) -
             executor = HuntExecutor(
                 db,
                 DurableHuntNotifier(),
-                plugin_runner=PluginRunner(registry),
+                plugin_runner=WorkerPluginRunner(registry),
                 run_adapter=worker_adapter(session_factory, vault),
                 before_step=before_step,
                 sanitize=vault.redact,
