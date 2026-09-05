@@ -43,7 +43,6 @@ def dispatch_once(database_engine=engine) -> bool:
             .where(
                 ExecutionOutbox.available_at <= now,
                 ExecutionControl.owner == None,
-                ExecutionControl.generation == 0,
                 or_(
                     col(PluginExecution.status) == "queued",
                     col(HuntExecution.status) == "pending",
@@ -104,8 +103,14 @@ def dispatch_once(database_engine=engine) -> bool:
 
 
 def main():
+    from app.executions.recovery import reconcile
+
+    next_reconcile = 0.0
     while True:
         try:
+            if time.monotonic() >= next_reconcile:
+                reconcile()
+                next_reconcile = time.monotonic() + 10
             busy = dispatch_once()
             Path("/tmp/owlculus-dispatcher-heartbeat").touch()
         except Exception:  # noqa: BLE001 - isolate infrastructure failures

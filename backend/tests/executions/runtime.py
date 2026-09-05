@@ -97,6 +97,9 @@ def install():
         "child",
     ]
 
+    if os.environ.get("EXECUTION_TEST_EXIT_BEFORE_START"):
+        supervisor.CHILD_COMMAND = [sys.executable, "-c", "raise SystemExit(1)"]
+
     boundary = os.environ.get("EXECUTION_TEST_BOUNDARY")
     if boundary:
         import time
@@ -106,7 +109,7 @@ def install():
 
         def wait_at_boundary():
             root = Path(os.environ["EXECUTION_TEST_DIR"])
-            (root / "boundary-reached").touch()
+            (root / "boundary-reached").write_text(str(os.getpid()))
             while not (root / "release-boundary").exists():
                 time.sleep(0.05)
 
@@ -119,7 +122,36 @@ def install():
         def finish_at_boundary(*args, **kwargs):
             if boundary == "before-terminal":
                 wait_at_boundary()
-            return original_finish(*args, **kwargs)
+            result = original_finish(*args, **kwargs)
+            if boundary == "after-terminal":
+                wait_at_boundary()
+            return result
+
+        from app.executions.hunt_worker import DurableHuntNotifier
+        from app.executions.worker import WorkerEvidenceSink
+
+        async def checkpoint(self, event):
+            if boundary == "hunt-boundary" and event.event_type in {
+                "step_complete",
+                "step_failed",
+            }:
+                root = Path(os.environ["EXECUTION_TEST_DIR"])
+                (root / "boundary-reached").write_text(str(os.getpid()))
+                while not (root / "release-boundary").exists():
+                    await asyncio.sleep(0.05)
+
+        original_evidence = WorkerEvidenceSink.write
+
+        async def evidence_boundary(self, *args, **kwargs):
+            await original_evidence(self, *args, **kwargs)
+            if boundary == "after-effect":
+                root = Path(os.environ["EXECUTION_TEST_DIR"])
+                (root / "boundary-reached").write_text(str(os.getpid()))
+                while not (root / "release-boundary").exists():
+                    await asyncio.sleep(0.05)
+
+        DurableHuntNotifier.broadcast = checkpoint
+        WorkerEvidenceSink.write = evidence_boundary
 
         supervisor.claim = claim_at_boundary
         supervisor.finish_stopped = finish_at_boundary
@@ -187,13 +219,14 @@ if __name__ == "__main__":
     elif sys.argv[1] == "replay-effects":
         from contextlib import contextmanager
 
+        from sqlalchemy import event
+        from sqlmodel import Session, select
+
         from app.database.connection import engine
         from app.database.models import ExecutionControl, PluginExecution, User
         from app.executions.ownership import Ownership
         from app.executions.worker import WorkerVault, worker_adapter
         from app.plugins.plugin_types import EvidenceWrite
-        from sqlalchemy import event
-        from sqlmodel import Session, select
 
         execution_id = int(sys.argv[2])
         window = sys.argv[3]

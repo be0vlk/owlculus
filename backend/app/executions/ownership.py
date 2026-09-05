@@ -1,7 +1,7 @@
 """Generation-fenced execution writes; transactions never span provider calls."""
 
 from dataclasses import dataclass
-from datetime import UTC, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import cast
 from uuid import uuid4
 
@@ -35,6 +35,7 @@ class Ownership:
     control_id: int
     generation: int
     owner: str
+    deadline_at: datetime | None = None
 
     def lock(
         self, db: Session
@@ -142,14 +143,16 @@ def claim(db: Session, execution_id: int, *, kind: str = "plugin") -> Ownership 
         control.owner = str(uuid4())
         control.heartbeat_at = get_utc_now()
         control.lease_until = get_utc_now() + timedelta(seconds=LEASE_SECONDS)
-        control.deadline_at = get_utc_now() + timedelta(
+        control.deadline_at = control.deadline_at or get_utc_now() + timedelta(
             seconds=HUNT_SECONDS if kind == "hunt" else PLUGIN_SECONDS
         )
         control.revision += 1
         execution.status = ExecutionStatus.RUNNING.value
-        execution.started_at = get_utc_now()
+        execution.started_at = execution.started_at or get_utc_now()
         assert control.id is not None
-        return Ownership(control.id, control.generation, control.owner)
+        return Ownership(
+            control.id, control.generation, control.owner, control.deadline_at
+        )
 
 
 def heartbeat(db: Session, ownership: Ownership) -> None:
@@ -215,3 +218,15 @@ def fail_execution(db: Session, ownership: Ownership) -> None:
             "message": "Execution could not finish; check initiating user access and worker configuration",
             "partial": True,
         }
+
+
+def start_operation(db: Session, ownership: Ownership, operation_id: str) -> None:
+    """Commit intent before handing control to any provider operation."""
+    with transaction(db):
+        control, execution = ownership.lock(db)
+        authorize_execution(db, execution)
+        if control.operation_id is not None:
+            raise OwnershipLost()
+        control.operation_id = operation_id
+        control.operation_started_at = get_utc_now()
+        control.revision += 1

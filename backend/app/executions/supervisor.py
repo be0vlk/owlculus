@@ -8,15 +8,15 @@ import signal
 import subprocess
 import sys
 import time
+from datetime import UTC
 
 from sqlmodel import Session, create_engine
 
 from app.core.config import settings
+from app.core.utils import get_utc_now
 from app.executions.cancellation import finish_stopped
 from app.executions.limits import (
     CLEANUP_SECONDS,
-    HUNT_SECONDS,
-    PLUGIN_SECONDS,
 )
 from app.executions.ownership import (
     LEASE_SECONDS,
@@ -68,7 +68,11 @@ def run(execution_id: int, kind: str):
     process = None
     reason = None
     lease_end = started + LEASE_SECONDS
-    deadline_end = started + (HUNT_SECONDS if kind == "hunt" else PLUGIN_SECONDS)
+    assert ownership.deadline_at is not None
+    deadline_end = (
+        time.monotonic()
+        + (ownership.deadline_at.replace(tzinfo=UTC) - get_utc_now()).total_seconds()
+    )
     monitor = None
     previous = signal.getsignal(signal.SIGTERM)
 
@@ -79,6 +83,10 @@ def run(execution_id: int, kind: str):
     try:
         process = subprocess.Popen(
             [
+                sys.executable,
+                "-m",
+                "app.executions.process_guard",
+                str(min(lease_end, deadline_end)),
                 *CHILD_COMMAND,
                 kind,
                 str(execution_id),
@@ -87,6 +95,8 @@ def run(execution_id: int, kind: str):
                 ownership.owner,
             ],
             start_new_session=True,
+            stdin=subprocess.PIPE,
+            bufsize=0,
         )
         monitor = subprocess.Popen(
             [
@@ -98,6 +108,7 @@ def run(execution_id: int, kind: str):
                 str(ownership.control_id),
                 str(ownership.generation),
                 ownership.owner,
+                str(os.getpid()),
             ],
             stdout=subprocess.PIPE,
             start_new_session=True,
@@ -117,6 +128,14 @@ def run(execution_id: int, kind: str):
                     update = json.loads(line)
                     lease_end = update.get("lease_end") or lease_end
                     deadline_end = update.get("deadline_end") or deadline_end
+                    if process.stdin is not None:
+                        try:
+                            process.stdin.write(
+                                f"{min(lease_end, deadline_end)}\n".encode()
+                            )
+                            process.stdin.flush()
+                        except BrokenPipeError:
+                            reason = "control_lost"
                     if update.get("reason"):
                         reason = update["reason"]
                 if reason:
@@ -132,10 +151,14 @@ def run(execution_id: int, kind: str):
     finally:
         if process is not None:
             stop_process(process)
+            if process.stdin is not None:
+                process.stdin.close()
         if monitor is not None:
             stop_process(monitor)
             if monitor.stdout is not None:
                 monitor.stdout.close()
+        if time.monotonic() >= deadline_end - CLEANUP_SECONDS:
+            reason = "execution_timeout"
         # Finish only once cleanup is proven. A partition keeps the durable view
         # nonterminal until this transaction can be committed.
         while True:

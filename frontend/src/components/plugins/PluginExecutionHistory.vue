@@ -10,7 +10,7 @@
           v-for="item in items"
           :key="item.id"
           :title="item.plugin_name"
-          :subtitle="`${item.status} · ${new Date(item.created_at).toLocaleString()}`"
+          :subtitle="`${item.dispatch_state === 'recovery_waiting' ? 'Recovery waiting' : item.status} · ${new Date(item.created_at).toLocaleString()}`"
           @click="open(item.id)"
         />
       </v-list>

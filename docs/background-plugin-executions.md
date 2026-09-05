@@ -76,11 +76,11 @@ role-specific targeted ping. Ownership heartbeat is 10 seconds, lease 60 seconds
 Every result, terminal transition and case-effect commit checks that lease and
 ownership generation. Provider calls do not hold database transactions.
 
-Tickets 01–03 provide plugin and hunt background execution with reliable submission
-and dispatch. Output caps, cancellation and stale-worker recovery are delivered by
-subsequent tickets. A lost running worker is fenced after its lease expires;
-it is not automatically replayed in this slice. Do not delete execution records or
-manually repeat uncertain provider work as a recovery mechanism.
+Tickets 01–06 provide durable submission, bounded results and effects, cancellation,
+and conservative worker recovery. A lost owner is fenced after its lease expires.
+Only known-unstarted work and committed hunt boundaries can resume automatically.
+Review retained output before deliberately rerunning an uncertain operation; a
+rerun creates a new execution.
 
 ## Focused acceptance
 
@@ -220,15 +220,16 @@ independent monotonic clock stops provider work before the last confirmed lease
 expires even if a PostgreSQL call blocks. Database writes also reject expired or
 superseded ownership. A control-storage outage delays the durable confirmation:
 the view remains nonterminal until connectivity permits the cleanup report to
-commit. Missing heartbeats alone do not mark an execution cancelled. Worker-loss
-reconciliation and replay are delivered separately in ticket 06.
+commit. Missing heartbeats alone do not mark an execution cancelled. Recovery waits
+for cleanup confirmation or the enforced lease stopping bound plus five seconds.
 
 Broker, result-backend transport, and Celery visibility settings use at least
 10,800 seconds, increased automatically when the configured maximum execution
 lifetime plus a 60-second margin is longer. Keep these lifetime values identical
-across broker participants. Early acknowledgement remains enabled; worker-loss
-replay remains disabled. Compose grants both worker services a 75-second shutdown
-grace period.
+across broker participants. Late acknowledgement and rejection on worker loss are
+enabled together with database ownership and conservative reconciliation. A live
+owner or terminal execution makes redelivery a no-op. Compose grants both worker
+services a 75-second shutdown grace period.
 
 Before starting updated workers and APIs, drain old workers and run the repeatable
 `python -m app.database.upgrade_executions` upgrade. Version
@@ -242,4 +243,56 @@ Focused distributed checks:
 ```bash
 cd backend
 RUN_EXECUTION_ACCEPTANCE=1 uv run pytest tests/executions/test_cancellation.py
+```
+
+
+## Worker recovery and hunt resumption
+
+The dispatcher reconciles stale owners every ten seconds independently of API
+requests and broker availability. Ownership expires after the 60-second lease;
+reconciliation observes an additional five-second cleanup margin. Detection and
+recovery are bounded by 75 seconds after the last heartbeat plus dispatcher
+scheduling tolerance. The provider process group has a database-free watchdog:
+it receives monotonic lease/deadline updates over a pipe, and stops the group on
+expiry or pipe EOF when its Celery supervisor is hard-killed. The control monitor
+stops renewing ownership after losing its supervisor.
+
+Each standalone invocation journals operation-start intent before calling the
+plugin runner. Hunts journal intent atomically with step start, and clear it only
+in the transaction committing the step's output and outcome. An interrupted
+started operation without a committed outcome fails with
+`interrupted_uncertain_outcome`; provider calls and case effects are never
+silently repeated. Results, completed steps, and effect receipts remain readable.
+Completion committed before broker acknowledgement stays terminal on redelivery.
+
+A hunt at a committed boundary resumes its existing step records and reconstructs
+HuntContext from committed StepOutput values, including failed optional/required
+steps and dependency skips. Accepted definition snapshots and implementation build
+identity remain authoritative. Incompatible builds fail with `incompatible_build`
+before more provider activity. Current user activity and case access are checked
+again at claim, later steps, and case-effect commits. Resumption preserves the
+original execution start and deadline; it does not grant a fresh time budget.
+Durably accepted cancellation takes precedence over recovery and completion.
+Repeated failures before operation start have a separate five-attempt recovery
+budget with capped exponential backoff and jitter. Exhaustion records
+`recovery_exhausted` with instructions to check worker configuration and submit a
+new run. A committed hunt step resets this consecutive-failure budget. Broker
+publication retains its existing five-attempt dispatch policy.
+
+Status and history expose `dispatch_state: recovery_waiting` with a readable
+waiting reason while cleanup or safe redispatch is pending. Opening or refreshing
+an execution only observes it. An uncertain failure requires an investigator to
+review its retained output and deliberately submit a new execution to run again.
+
+Upgrade with all previous API, dispatcher, and worker processes stopped. The
+repeatable `006_worker_recovery` upgrade adds operation intent and recovery
+metadata. Owned work from the previous schema is marked `legacy_unknown` so
+missing intent cannot incorrectly authorize replay. Preserve the additive schema
+and investigation records on rollback; do not mix old and new execution workers.
+
+Focused recovery verification:
+
+```bash
+cd backend
+RUN_EXECUTION_ACCEPTANCE=1 uv run pytest tests/executions/test_recovery.py
 ```

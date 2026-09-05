@@ -8,6 +8,7 @@ import { pluginService } from '@/services/plugin'
 vi.mock('@/services/plugin', () => ({
   pluginService: {
     getHistory: vi.fn(),
+    executePlugin: vi.fn(),
     getExecution: vi.fn(),
     getResults: vi.fn(),
     cancelExecution: vi.fn(),
@@ -93,5 +94,44 @@ it('offers an explicit cancel control and waits for confirmed cleanup', async ()
   expect(wrapper.findAll('button').some((button) => button.text() === 'Cancel execution')).toBe(
     false,
   )
+  wrapper.unmount()
+})
+
+it('reopens recovery waiting and then an uncertain failure without resubmitting', async () => {
+  const saved = {
+    id: 19,
+    plugin_name: 'ExamplePlugin',
+    status: 'running',
+    dispatch_state: 'recovery_waiting',
+    waiting_reason: 'Worker interrupted; waiting for cleanup and safe recovery',
+    created_at: '2026-09-05T00:00:00Z',
+  }
+  const retained = [{ type: 'data', data: { query: 'owl' } }]
+  pluginService.getHistory.mockResolvedValue({ items: [saved], next_cursor: null })
+  pluginService.getExecution.mockResolvedValue(saved)
+  pluginService.getResults.mockResolvedValue({ items: retained, cursor: 1 })
+  const wrapper = mountWithVuetify(PluginExecutionHistory, { props: { caseId: 7 } })
+  await flushPromises()
+  expect(wrapper.get('.v-list-item').text()).toContain('Recovery waiting')
+  await wrapper.get('.v-list-item').trigger('click')
+  await flushPromises()
+  expect(wrapper.text()).toContain(saved.waiting_reason)
+  const failed = {
+    ...saved,
+    status: 'failed',
+    dispatch_state: 'published',
+    waiting_reason: null,
+    error: {
+      code: 'interrupted_uncertain_outcome',
+      message:
+        'External work may have occurred; review retained output before submitting a new run.',
+    },
+  }
+  pluginService.getExecution.mockResolvedValue(failed)
+  await wrapper.get('.v-list-item').trigger('click')
+  await flushPromises()
+  expect(wrapper.get('[role="alert"]').text()).toContain(failed.error.message)
+  expect(wrapper.findComponent(PluginResultsModal).props('results')).toEqual(retained)
+  expect(pluginService.executePlugin).not.toHaveBeenCalled()
   wrapper.unmount()
 })
