@@ -19,14 +19,16 @@ from ..core.config import settings
 from .models import SQLModel
 
 
-def create_execution_engine() -> Engine:
+def create_execution_engine(
+    *, default_pool_size: int = 2, default_max_overflow: int = 0
+) -> Engine:
     """Create a pool in its owning process, with a bounded connection budget."""
     return create_engine(
         settings.get_database_url(),
         echo=False,
         hide_parameters=True,
-        pool_size=int(os.environ.get("DATABASE_POOL_SIZE", "2")),
-        max_overflow=int(os.environ.get("DATABASE_MAX_OVERFLOW", "0")),
+        pool_size=int(os.environ.get("DATABASE_POOL_SIZE", default_pool_size)),
+        max_overflow=int(os.environ.get("DATABASE_MAX_OVERFLOW", default_max_overflow)),
         pool_timeout=5,
         connect_args={"connect_timeout": 5},
         pool_pre_ping=True,
@@ -34,7 +36,7 @@ def create_execution_engine() -> Engine:
     )
 
 
-engine = create_execution_engine()
+engine = create_execution_engine(default_pool_size=5, default_max_overflow=5)
 
 
 def create_db_and_tables(database_engine: Engine = engine) -> None:

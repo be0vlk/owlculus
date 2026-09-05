@@ -29,3 +29,30 @@ def test_missing_workers_do_not_make_api_dead(execution_system):
     assert client.get(accepted["links"]["detail"]).json()["status"] == "queued"
     assert system.env["SECRET_KEY"] not in result.stdout
     client.close()
+
+
+def test_separate_broker_and_event_urls_run_both_queues(execution_system):
+    from redis import Redis
+
+    from tests.executions.conftest import eventually
+    from tests.executions.test_hunt_execution_system import step, submit_hunt, terminal
+
+    system = execution_system
+    base = system.env["REDIS_URL"].rsplit("/", 1)[0]
+    system.env["EXECUTION_BROKER_URL"] = base + "/1"
+    system.env["EXECUTION_EVENT_REDIS_URL"] = base + "/2"
+    _, client = system.api()
+    system.worker()
+    system.start("-m", "tests.executions.runtime", "hunt-worker")
+    system.start("-m", "app.executions.dispatcher")
+    plugin = submit(client, system, barrier="cancel-split", save_to_case=False)
+    hunt = submit_hunt(system, client, [step("first")])
+    eventually(lambda: client.get(plugin["links"]["results"]).json()["items"])
+    assert client.delete(plugin["links"]["detail"]).status_code == 200
+    assert eventually(lambda: terminal(client, plugin))["status"] == "cancelled"
+    assert eventually(lambda: terminal(client, hunt))["status"] == "completed"
+    with Redis.from_url(system.env["EXECUTION_EVENT_REDIS_URL"]) as events:
+        eventually(lambda: events.xlen(f"owlculus:events:plugin:{plugin['id']}") > 0)
+    with Redis.from_url(system.env["REDIS_URL"]) as rate_limits:
+        assert rate_limits.xlen(f"owlculus:events:plugin:{plugin['id']}") == 0
+    client.close()

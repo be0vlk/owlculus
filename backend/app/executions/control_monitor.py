@@ -14,6 +14,7 @@ from sqlmodel import Session, select
 from app.core.utils import get_utc_now
 from app.database.connection import create_execution_engine
 from app.database.models import HuntStep
+from app.executions.events import event_redis_url
 from app.executions.limits import STEP_SECONDS
 from app.executions.ownership import (
     HEARTBEAT_SECONDS,
@@ -30,8 +31,7 @@ def main():
     engine = create_execution_engine()
     next_heartbeat = 0.0
     redis = Redis.from_url(
-        os.environ.get("EXECUTION_EVENT_REDIS_URL")
-        or os.environ.get("REDIS_URL", "redis://localhost:6379/0"),
+        event_redis_url(),
         socket_connect_timeout=0.2,
         socket_timeout=0.6,
     )
