@@ -1,6 +1,9 @@
 import { defineComponent, nextTick } from 'vue'
 import { flushPromises, shallowMount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createVuetify } from 'vuetify'
+import * as components from 'vuetify/components'
+import * as directives from 'vuetify/directives'
 
 import CaseDashboard from '../CaseDashboard.vue'
 
@@ -11,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   downloadBlob: vi.fn(),
   getCase: vi.fn(),
   getClient: vi.fn(),
+  updateEntity: vi.fn(),
   getFolderTree: vi.fn(),
   getCaseExecutions: vi.fn(),
   replaceRoute: vi.fn(),
@@ -51,7 +55,7 @@ vi.mock('@/services/client', () => ({
 }))
 
 vi.mock('@/services/entity', () => ({
-  entityService: { getEntity: vi.fn() },
+  entityService: { getEntity: vi.fn(), updateEntity: mocks.updateEntity },
 }))
 
 vi.mock('@/services/evidence', () => ({
@@ -95,9 +99,10 @@ const EditCaseModalStub = defineComponent({
     "<button data-testid=\"emit-case-update\" @click=\"$emit('update', { title: 'Updated investigation', status: 'Closed' })\">Update</button>",
 })
 
-const mountDashboard = async () => {
+const mountDashboard = async (global = {}) => {
   const wrapper = shallowMount(CaseDashboard, {
     global: {
+      ...global,
       stubs: {
         BaseDashboard: BaseDashboardStub,
         VBtn: ButtonStub,
@@ -111,6 +116,7 @@ const mountDashboard = async () => {
         CaseTabs: CaseTabsStub,
         CaseDetail: CaseDetailStub,
         EditCaseModal: EditCaseModalStub,
+        ...global.stubs,
       },
     },
   })
@@ -203,5 +209,83 @@ describe('CaseDashboard export', () => {
     await wrapper.get('[data-testid="emit-case-update"]').trigger('click')
 
     expect(wrapper.get('[data-testid="case-detail"]').text()).toBe('Updated investigation Closed')
+  })
+
+  it('keeps pending notes with their entity when selection changes during a save', async () => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    )
+    vi.stubGlobal('visualViewport', new EventTarget())
+    const EntityTableStub = defineComponent({
+      emits: ['view'],
+      methods: { refresh() {} },
+      template: `<div>
+        <button data-testid="view-a" @click="$emit('view', { id: 1, entity_type: 'person', data: { first_name: 'Ada', notes: '<p>A initial</p>' } })">A</button>
+        <button data-testid="view-b" @click="$emit('view', { id: 2, entity_type: 'person', data: { first_name: 'Grace', notes: '<p>B initial</p>' } })">B</button>
+      </div>`,
+    })
+    const wrapper = await mountDashboard({
+      plugins: [createVuetify({ components, directives, theme: false })],
+      stubs: {
+        ...Object.fromEntries(Object.keys(components).map((name) => [name, false])),
+        EntityDataTable: EntityTableStub,
+        CaseTabs: defineComponent({ template: '<div><slot active-tab="entities" /></div>' }),
+        EntityDetailsModal: false,
+        EntityTabContent: false,
+        EntityNotesFullscreen: false,
+        EntityModalActions: false,
+        EditorToolbar: false,
+        EditorContent: false,
+        MaybeTransition: false,
+        VIcon: true,
+        VDialog: defineComponent({
+          props: ['modelValue'],
+          template: '<div v-if="modelValue"><slot /></div>',
+        }),
+      },
+    })
+    const notesTab = () => wrapper.findAll('[role="tab"]').find((tab) => tab.text() === 'Notes')
+    const button = (text) => wrapper.findAll('button').find((button) => button.text() === text)
+    try {
+      await wrapper.get('[data-testid="view-a"]').trigger('click')
+      await flushPromises()
+      await notesTab().trigger('click')
+      await button('Edit Entity').trigger('click')
+      await flushPromises()
+      vi.useFakeTimers()
+      let finishSave
+      mocks.updateEntity.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishSave = resolve
+          }),
+      )
+      const box = wrapper.get('[aria-label="Entity notes"]')
+      box.element.innerHTML = '<p>A pending</p>'
+      await box.trigger('input')
+      await vi.advanceTimersByTimeAsync(5000)
+      await wrapper.get('[data-testid="view-b"]').trigger('click')
+      await flushPromises()
+      await notesTab().trigger('click')
+      await flushPromises()
+      expect(wrapper.get('[aria-label="Entity notes"]').text()).toBe('B initial')
+      finishSave({ id: 1, ...mocks.updateEntity.mock.calls[0][2] })
+      await flushPromises()
+      await button('Close').trigger('click')
+      await flushPromises()
+      expect(mocks.updateEntity).toHaveBeenCalledExactlyOnceWith(42, 1, {
+        entity_type: 'person',
+        data: { first_name: 'Ada', notes: '<p>A pending</p>' },
+      })
+    } finally {
+      wrapper.unmount()
+      vi.useRealTimers()
+      vi.unstubAllGlobals()
+    }
   })
 })
