@@ -141,15 +141,26 @@ def detail(db: Session, user: User, execution_id: int) -> dict:
 
 def history(db: Session, user: User, case_id: int, cursor: int, limit: int) -> dict:
     CaseAccess(db).readable(user, case_id)
-    query = select(PluginExecution).where(PluginExecution.case_id == case_id)
+    query = (
+        select(PluginExecution, ExecutionControl, ExecutionOutbox)
+        .join(
+            ExecutionControl,
+            col(ExecutionControl.plugin_execution_id) == PluginExecution.id,
+        )
+        .join(ExecutionOutbox, col(ExecutionOutbox.control_id) == ExecutionControl.id)
+        .where(PluginExecution.case_id == case_id)
+    )
     if cursor:
         query = query.where(col(PluginExecution.id) < cursor)
     rows = db.exec(
         query.order_by(col(PluginExecution.id).desc()).limit(limit + 1)
     ).all()
     return {
-        "items": [detail(db, user, cast(int, row.id)) for row in rows[:limit]],
-        "next_cursor": rows[limit - 1].id if len(rows) > limit else None,
+        "items": [
+            representation(execution, control, outbox)
+            for execution, control, outbox in rows[:limit]
+        ],
+        "next_cursor": rows[limit - 1][0].id if len(rows) > limit else None,
     }
 
 

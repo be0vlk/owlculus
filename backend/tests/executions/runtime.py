@@ -42,7 +42,8 @@ class AcceptancePlugin(BasePlugin):
             yield self.complete()
 
     def entity_writes(self, payloads, params):
-        return [IpAddressWrite("192.0.2.10", "Acceptance discovery")]
+        description = payloads[0].get("redacted", "Acceptance discovery")
+        return [IpAddressWrite("192.0.2.10", description)]
 
 
 def install():

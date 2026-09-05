@@ -1,12 +1,14 @@
 """Worker-owned loops, vault reads and fenced production case effects."""
 
 from contextlib import contextmanager
+from dataclasses import asdict, replace
 from threading import Event, Thread
 
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
 from sqlmodel import Session
 
+from app.database.models import User
 from app.executions.ownership import (
     HEARTBEAT_SECONDS,
     OwnershipLost,
@@ -15,9 +17,14 @@ from app.executions.ownership import (
     heartbeat,
 )
 from app.executions.service import authorize_execution
-from app.plugins.plugin_context import ProductionPluginRunAdapter
+from app.plugins.plugin_context import (
+    EntitySink,
+    EvidenceSink,
+    ProductionPluginRunAdapter,
+)
 from app.plugins.plugin_registry import PluginRegistry
 from app.plugins.plugin_runner import PluginRunner
+from app.plugins.plugin_types import EntityWrite, EvidenceWrite
 from app.services.api_key_vault import ConfigurationApiKeyVault, Provider
 
 
@@ -48,6 +55,34 @@ class WorkerVault:
         if isinstance(value, list):
             return [self.redact(item) for item in value]
         return value
+
+
+class WorkerEvidenceSink:
+    """Sanitize evidence before it reaches case services or file storage."""
+
+    def __init__(
+        self, sink: EvidenceSink, vault: WorkerVault, case_id: int, user: User
+    ):
+        self.sink, self.vault, self.case_id, self.user = sink, vault, case_id, user
+
+    async def write(self, request: EvidenceWrite, user: User) -> None:
+        if request.case_id != self.case_id:
+            raise ValueError("Evidence must belong to the execution case")
+        sanitized = EvidenceWrite(**self.vault.redact(asdict(request)))
+        await self.sink.write(sanitized, self.user)
+
+
+class WorkerEntitySink:
+    """Sanitize discovered entity fields while fixing case and attribution."""
+
+    def __init__(self, sink: EntitySink, vault: WorkerVault, case_id: int, user: User):
+        self.sink, self.vault, self.case_id, self.user = sink, vault, case_id, user
+
+    async def write(self, request: EntityWrite, case_id: int, user: User) -> None:
+        if case_id != self.case_id:
+            raise ValueError("Entities must belong to the execution case")
+        sanitized = type(request)(**self.vault.redact(asdict(request)))
+        await self.sink.write(sanitized, self.case_id, self.user)
 
 
 async def execute(engine: Engine, registry: PluginRegistry, execution_id: int) -> None:
@@ -96,6 +131,11 @@ async def execute(engine: Engine, registry: PluginRegistry, execution_id: int) -
             db.expunge(user)
         adapter = ProductionPluginRunAdapter(session_factory, lambda _: vault)
         with adapter.open(user=user, case_id=case_id, save_to_case=save) as run:
+            run = replace(
+                run,
+                evidence=WorkerEvidenceSink(run.evidence, vault, case_id, user),
+                entities=WorkerEntitySink(run.entities, vault, case_id, user),
+            )
             async for result in PluginRunner(registry).run(name, params, run):
                 run.session.rollback()
                 if lease_lost.is_set():
