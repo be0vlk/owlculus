@@ -3,7 +3,7 @@ Tests for HuntService
 """
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 from sqlmodel import Session, select
@@ -117,7 +117,10 @@ def test_hunt_fixture(session: Session):
         description="Test Hunt Description",
         category="test",
         version="1.0",
-        definition_json={"steps": [{"name": "step1", "description": "Test step"}]},
+        definition_json={
+            "steps": [],
+            "initial_parameters": {"param1": {"type": "string"}},
+        },
         is_active=True,
     )
     session.add(hunt)
@@ -181,10 +184,8 @@ class TestHuntService:
             await hunt_service.get_hunt(9999, current_user=test_user)
 
     @pytest.mark.asyncio
-    @patch("app.services.hunt_service.HuntService._run_hunt_async")
     async def test_create_execution(
         self,
-        mock_run_hunt_async,
         hunt_service: HuntService,
         test_hunt: Hunt,
         test_case: Case,
@@ -205,34 +206,8 @@ class TestHuntService:
         assert execution.initial_parameters == initial_params
         assert execution.status == "pending"
         assert execution.created_by_id == test_user.id
-        mock_run_hunt_async.assert_called_once()
-
-    @pytest.mark.asyncio
-    @patch("app.database.connection.get_db")
-    async def test_run_hunt_async(
-        self,
-        mock_get_db,
-        hunt_service: HuntService,
-        test_hunt_execution: HuntExecution,
-        test_user: User,
-        test_hunt: Hunt,
-    ):
-        """Test running a hunt asynchronously."""
-        # Mock the database session generator
-        mock_get_db.return_value = iter([hunt_service.db])
-
-        # Setup mock executor
-        mock_executor = AsyncMock()
-        service = HuntService(
-            hunt_service.db, executor_factory=lambda session: mock_executor
-        )
-
-        # Run the async method
-        await service._run_hunt_async(test_hunt_execution.id, test_user.id)
-
-        # Verify the executor was called with the correct parameters
-        mock_executor.execute_hunt.assert_awaited_once()
-        assert mock_executor.execute_hunt.call_args[0][0].id == test_hunt_execution.id
+        assert execution.definition_snapshot == test_hunt.definition_json
+        assert execution.implementation_build
 
     @pytest.mark.asyncio
     async def test_get_execution(
@@ -399,43 +374,3 @@ class TestHuntService:
                 initial_parameters={},
                 current_user=test_analyst,
             )
-
-    @pytest.mark.asyncio
-    async def test_run_hunt_async_error_handling(self, hunt_service: HuntService):
-        """Test error handling in _run_hunt_async."""
-        # Test with non-existent execution ID - should not raise an exception
-        await hunt_service._run_hunt_async(9999, 1)
-
-    @pytest.mark.asyncio
-    @patch("app.database.connection.get_db")
-    async def test_run_hunt_async_execution_error(
-        self,
-        mock_get_db,
-        hunt_service: HuntService,
-        test_hunt_execution: HuntExecution,
-        test_user: User,
-        test_hunt: Hunt,
-    ):
-        """Test error handling during hunt execution."""
-        # Mock the database session generator
-        mock_get_db.return_value = iter([hunt_service.db])
-
-        # Setup mock executor to raise an exception
-        mock_executor = AsyncMock()
-        mock_executor.execute_hunt.side_effect = Exception("Test error")
-        service = HuntService(
-            hunt_service.db, executor_factory=lambda session: mock_executor
-        )
-
-        # Save the execution ID before calling async method
-        execution_id = test_hunt_execution.id
-
-        # Run the async method
-        await service._run_hunt_async(execution_id, test_user.id)
-
-        # Get the execution from the current session since _run_hunt_async uses its own session
-        execution = hunt_service.db.get(HuntExecution, execution_id)
-
-        # Verify the execution was marked as failed
-        assert execution.status == "failed"
-        assert execution.completed_at is not None

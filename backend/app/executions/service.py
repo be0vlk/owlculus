@@ -10,6 +10,8 @@ from app.database.db_utils import transaction
 from app.database.models import (
     ExecutionControl,
     ExecutionOutbox,
+    Hunt,
+    HuntExecution,
     PluginExecution,
     PluginExecutionResult,
     User,
@@ -29,6 +31,10 @@ def validate_parameters(registry: PluginRegistry, name: str, params: dict) -> di
         for k, v in metadata["parameters"].items()
         if k not in {"case_id", "save_to_case"}
     }
+    return normalize_parameters(definitions, params)
+
+
+def normalize_parameters(definitions: dict, params: dict) -> dict:
     if params.keys() - definitions.keys():
         raise HTTPException(422, "Unknown plugin parameters")
     normalized = dict(params)
@@ -57,13 +63,15 @@ def validate_parameters(registry: PluginRegistry, name: str, params: dict) -> di
     return normalized
 
 
-def authorize_execution(db: Session, execution: PluginExecution) -> User:
+def authorize_execution(
+    db: Session, execution: PluginExecution | HuntExecution
+) -> User:
     user = db.get(User, execution.created_by_id, populate_existing=True)
     if user is None or not user.is_active:
         raise HTTPException(403, "Initiating user is inactive")
     access = CaseAccess(db)
     access.require_non_analyst(user)
-    if execution.save_to_case:
+    if isinstance(execution, HuntExecution) or execution.save_to_case:
         access.writable(user, execution.case_id)
     else:
         access.readable(user, execution.case_id)
@@ -184,3 +192,59 @@ def results(
         "next_cursor": page[-1].sequence if len(rows) > limit else None,
         "revision": state["revision"],
     }
+
+
+def accept_hunt(db: Session, user: User, hunt: Hunt, params: dict) -> HuntExecution:
+    """Persist accepted work and its dispatch intent in the same transaction."""
+    from copy import deepcopy
+
+    from app.executions.build import implementation_build
+
+    execution = HuntExecution(
+        hunt_id=hunt.id,
+        case_id=params["case_id"],
+        created_by_id=user.id,
+        initial_parameters=params["parameters"],
+        definition_snapshot=deepcopy(hunt.definition_json),
+        implementation_build=implementation_build(),
+    )
+    try:
+        authorize_execution(db, execution)
+        with transaction(db):
+            db.add(execution)
+            db.flush()
+            control = ExecutionControl(hunt_execution_id=execution.id)
+            db.add(control)
+            db.flush()
+            db.add(ExecutionOutbox(control_id=control.id))
+            db.expunge(execution)
+        return execution
+    except SQLAlchemyError:
+        raise HTTPException(503, "Execution could not be accepted") from None
+
+
+def hunt_observation(db: Session, execution: HuntExecution) -> dict:
+    rows = db.exec(
+        select(ExecutionControl, ExecutionOutbox)
+        .join(ExecutionOutbox, col(ExecutionOutbox.control_id) == ExecutionControl.id)
+        .where(ExecutionControl.hunt_execution_id == execution.id)
+    ).first()
+    base = f"/api/hunts/executions/{execution.id}"
+    return {
+        "kind": "hunt",
+        "revision": rows[0].revision if rows else 0,
+        "dispatch_state": (
+            ("published" if rows[1].published_at else "pending") if rows else "legacy"
+        ),
+        "links": {
+            "detail": base,
+            "history": f"/api/hunts/cases/{execution.case_id}/executions",
+            "export": f"{base}/export",
+        },
+    }
+
+
+def plugin_catalogue(db: Session, user: User, registry: PluginRegistry, api_keys):
+    """Keep catalogue authorization at the same service boundary as execution."""
+    CaseAccess(db).require_non_analyst(user)
+    return registry.metadata(api_keys)

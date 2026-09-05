@@ -19,6 +19,7 @@ from app.core.dependencies import get_current_user
 from app.core.websocket_manager import websocket_manager
 from app.database import models
 from app.database.connection import get_db
+from app.executions.service import hunt_observation
 from app.hunts.hunt_event import HuntEvent
 from app.schemas import hunt_schema as schemas
 from app.services.export_service import ExportService
@@ -92,10 +93,13 @@ async def get_hunt(
     return schemas.HuntResponse(**hunt_dict)
 
 
-@router.post("/{hunt_id}/execute", response_model=schemas.HuntExecutionResponse)
+@router.post(
+    "/{hunt_id}/execute", response_model=schemas.HuntExecutionResponse, status_code=202
+)
 async def execute_hunt(
     hunt_id: int,
     request: schemas.HuntExecuteRequest,
+    response: Response,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -117,7 +121,9 @@ async def execute_hunt(
 
     hunt = db.get(models.Hunt, execution.hunt_id)
 
+    response.headers["Location"] = f"/api/hunts/executions/{execution.id}"
     return schemas.HuntExecutionResponse(
+        **hunt_observation(db, execution),
         **execution.model_dump(),
         hunt=(
             schemas.HuntResponse(
@@ -157,6 +163,7 @@ async def get_execution_status(
         )
 
     response = schemas.HuntExecutionResponse(
+        **hunt_observation(db, execution),
         **execution.model_dump(),
         hunt=(
             schemas.HuntResponse(

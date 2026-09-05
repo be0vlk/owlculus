@@ -1,4 +1,4 @@
-# Background plugin executions
+# Background plugin and hunt executions
 
 Standalone `POST /api/plugins/{name}/execute` now returns HTTP 202 JSON, not
 NDJSON. Send the plugin parameters plus a positive `case_id` and optional boolean
@@ -19,15 +19,42 @@ Leaving the page releases polling resources; it does not cancel accepted work.
 Failed work retains partial results. Empty output completes successfully. Saving
 uses the initiating user's current case permissions and the original case.
 
+## Hunt execution
+
+`POST /api/hunts/{hunt_id}/execute` accepts `{case_id, parameters}` and returns
+HTTP 202 with the existing execution fields plus `kind`, `dispatch_state`,
+`revision`, observation `links`, and `Location`. The durable `pending` state is
+shown as Queued. Detail (`?include_steps=true`), case history and PDF/JSON exports
+keep their existing URLs and public execution/step IDs. Polling backs off from
+one to ten seconds, stops at terminal outcomes, and is released on navigation.
+Required step failures produce Partial with retained output; optional failures
+can still complete. Execution-level errors are available in detail.
+
+Hunts snapshot the accepted definition and a content hash of application Python
+sources plus `uv.lock`. Deploy matching API and worker builds. An incompatible
+worker fails queued work with `incompatible_build` before provider activity;
+submit a new run after aligning builds. Each hunt uses one hunt worker slot and
+calls the plugin runner directly for sequential steps. `HUNT_CONCURRENCY` defaults
+to two prefork slots with prefetch one, independent of plugin capacity. Access is
+rechecked at claim, before each step and at case-effect commits. Accepted case
+and initiating user cannot change.
+
+Upgrade 002 marks legacy pending/running API-owned hunts Failed with a
+`legacy_interrupted` error and retained output; it never replays them. Historical
+execution IDs, numeric step IDs and output are preserved. Duplicate historical
+step labels receive `__legacy_duplicate_<id>` before enforcing unique associations;
+all rows and outputs remain available in history and exports. New accepted work
+has immutable definition/build snapshots. Stop old API processes before cutover.
+
 ## Upgrade and operation
 
 Back up PostgreSQL and uploads before upgrading. Stop the API, dispatcher and
-plugin worker during the upgrade; use a graceful worker shutdown to allow active
+plugin and hunt workers during the upgrade; use a graceful worker shutdown to allow active
 provider work to finish. Build the backend image and run:
 
 ```sh
 docker compose run --rm db-init python -m app.database.upgrade_executions
-docker compose up -d --build backend execution-dispatcher plugin-worker frontend
+docker compose up -d --build backend execution-dispatcher plugin-worker hunt-worker frontend
 ```
 
 The explicit, versioned upgrade is transactional, repeatable, and adds immutable
@@ -49,9 +76,9 @@ role-specific targeted ping. Ownership heartbeat is 10 seconds, lease 60 seconds
 Every result, terminal transition and case-effect commit checks that lease and
 ownership generation. Provider calls do not hold database transactions.
 
-This is ticket 01: hunt execution migration, submission idempotency, dispatch
-reconciliation, output caps, cancellation, and stale-worker recovery are delivered
-by the subsequent tickets. A lost running worker is fenced after its lease expires;
+Tickets 01 and 02 provide plugin and hunt background execution. Submission
+idempotency, dispatch reconciliation, output caps, cancellation and stale-worker
+recovery are delivered by subsequent tickets. A lost running worker is fenced after its lease expires;
 it is not automatically replayed in this slice. Do not delete execution records or
 manually repeat uncertain provider work as a recovery mechanism.
 

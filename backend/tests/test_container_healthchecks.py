@@ -79,13 +79,15 @@ def test_compose_backend_healthchecks_wait_for_readiness(topology):
     assert "http://localhost:8000/health/ready" in command
 
 
+@pytest.mark.parametrize("worker_name", ["plugin-worker", "hunt-worker"])
 @pytest.mark.parametrize("topology", SUPPORTED_TOPOLOGIES)
-def test_plugin_execution_processes_share_configuration_and_have_role_healthchecks(
+def test_execution_processes_share_configuration_and_have_role_healthchecks(
     topology,
+    worker_name,
 ):
     services = load_compose_configuration(topology)["services"]
     api = services["backend"]
-    worker = services["plugin-worker"]
+    worker = services[worker_name]
     dispatcher = services["execution-dispatcher"]
     for service in (worker, dispatcher):
         assert service["build"] == api["build"]

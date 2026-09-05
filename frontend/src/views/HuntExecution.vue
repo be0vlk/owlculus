@@ -1,5 +1,5 @@
 <template>
-  <BaseDashboard :error="error" :loading="loading" :title="pageTitle">
+  <BaseDashboard :error="error || huntStore.error" :loading="loading" :title="pageTitle">
     <!-- Header Actions -->
     <template #header-actions>
       <div class="d-flex align-center ga-2">
@@ -58,6 +58,9 @@
 
     <!-- Main Content -->
     <div v-if="execution">
+      <v-alert v-if="execution.error" type="error" role="alert" class="mb-4">
+        {{ execution.error.message }}
+      </v-alert>
       <!-- Execution Overview Card -->
       <v-card variant="outlined" class="mb-6">
         <v-card-title class="d-flex align-center pa-4 bg-surface">
@@ -450,9 +453,9 @@ const loadExecution = async () => {
     execution.value = result
 
     // Subscribe to real-time updates if running
-    if (execution.value.status === 'running') {
+    if (['pending', 'running'].includes(execution.value.status)) {
       huntStore.subscribeToExecution(executionId.value)
-      startElapsedTimer()
+      if (execution.value.status === 'running') startElapsedTimer()
     }
   } catch (err) {
     error.value = err.message || 'Failed to load execution details'
@@ -574,6 +577,7 @@ watch(
       execution.value = updatedExecution
 
       // Stop timer if execution is no longer running
+      if (updatedExecution.status === 'running' && !elapsedInterval) startElapsedTimer()
       if (updatedExecution.status !== 'running') {
         stopElapsedTimer()
 

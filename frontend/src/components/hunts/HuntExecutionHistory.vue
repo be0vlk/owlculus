@@ -192,7 +192,7 @@ const statusOptions = [
   { title: 'Partial', value: 'partial' },
   { title: 'Cancelled', value: 'cancelled' },
   { title: 'Running', value: 'running' },
-  { title: 'Pending', value: 'pending' },
+  { title: 'Queued', value: 'pending' },
 ]
 
 const categoryOptions = computed(() => {
@@ -290,7 +290,7 @@ const getStatusIcon = (status) => {
 const getStatusText = (status) => {
   switch (status) {
     case 'pending':
-      return 'Pending'
+      return 'Queued'
     case 'running':
       return 'Running'
     case 'completed':

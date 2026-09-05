@@ -18,7 +18,6 @@ from ..executions import service as execution_service
 from ..plugins.plugin_registry import PluginRegistry
 from ..schemas.plugin_schema import PluginMetadata
 from ..services.api_key_vault import ApiKeyVault, ConfigurationApiKeyVault
-from ..services.case_access import CaseAccess
 
 router = APIRouter(tags=["plugins"])
 
@@ -40,8 +39,7 @@ async def list_plugins(
     api_keys: ApiKeyVault = Depends(get_plugin_api_keys),
     registry: PluginRegistry = Depends(get_plugin_registry),
 ):
-    CaseAccess(db).require_non_analyst(current_user)
-    return registry.metadata(api_keys)
+    return execution_service.plugin_catalogue(db, current_user, registry, api_keys)
 
 
 @router.get("/executions/case/{case_id}")

@@ -84,28 +84,24 @@ it('blocks hunt actions without context and submits with the active case', async
   wrapper.unmount()
 })
 
-it('closes a stream that finishes connecting after switching cases', async () => {
+it('discards a polling response after switching cases', async () => {
   await useActiveCaseStore().initialize(1)
   const running = { ...execution(10, 1), status: 'running' }
   huntService.getCaseExecutions.mockResolvedValueOnce([running])
   huntService.getExecution.mockResolvedValueOnce(running)
-  let finishStream
-  let oldMessage
-  huntService.createExecutionStream.mockImplementationOnce((id, onMessage) => {
-    oldMessage = onMessage
-    return new Promise((resolve) => {
-      finishStream = resolve
-    })
-  })
+  let finishPoll
+  huntService.getExecution.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finishPoll = resolve
+      }),
+  )
   const wrapper = mountDashboard()
   await flushPromises()
   useActiveCaseStore().resolve(2)
   await flushPromises()
-  const oldStream = { readyState: 0 }
-  finishStream(oldStream)
+  finishPoll(running)
   await flushPromises()
-  expect(huntService.closeExecutionStream).toHaveBeenCalledWith(oldStream)
-  await oldMessage({ event_type: 'complete' })
   expect(wrapper.findComponent({ name: 'HuntExecutionHistory' }).props('executions')).toEqual([
     execution(20, 2),
   ])

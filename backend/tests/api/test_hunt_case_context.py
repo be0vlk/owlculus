@@ -1,7 +1,5 @@
 """Hunt HTTP boundaries keep execution and history within authorized cases."""
 
-from unittest.mock import AsyncMock
-
 import pytest
 
 from app.core.dependencies import get_current_user
@@ -14,8 +12,8 @@ from app.main import app
     [
         ("Investigator", False, 403),
         ("Analyst", True, 403),
-        ("Investigator", True, 200),
-        ("Admin", False, 200),
+        ("Investigator", True, 202),
+        ("Admin", False, 202),
     ],
 )
 def test_hunt_execution_authorizes_supplied_case(
@@ -31,7 +29,10 @@ def test_hunt_execution_authorizes_supplied_case(
         display_name="Context test",
         description="Test hunt context",
         category="general",
-        definition_json={"steps": []},
+        definition_json={
+            "steps": [],
+            "initial_parameters": {"subject": {"type": "string"}},
+        },
     )
     session.add_all([user, case, other, hunt])
     session.commit()
@@ -39,8 +40,6 @@ def test_hunt_execution_authorizes_supplied_case(
         session.add(CaseUserLink(case_id=case.id, user_id=user.id))
         session.commit()
     app.dependency_overrides[get_current_user] = lambda: user
-    runner = AsyncMock()
-    monkeypatch.setattr("app.services.hunt_service.HuntService._run_hunt_async", runner)
 
     response = client.post(
         f"/api/hunts/{hunt.id}/execute",
@@ -49,9 +48,12 @@ def test_hunt_execution_authorizes_supplied_case(
 
     assert response.status_code == expected
     if expected == 403:
-        runner.assert_not_called()
         return
     execution = response.json()
+    assert execution["kind"] == "hunt"
+    assert execution["status"] == "pending"
+    assert execution["dispatch_state"] == "pending"
+    assert response.headers["location"] == execution["links"]["detail"]
     assert execution["case_id"] == case.id
     assert execution["initial_parameters"] == {"subject": "example.org"}
     detail = client.get(f"/api/hunts/executions/{execution['id']}")
@@ -71,3 +73,38 @@ def test_hunt_execution_authorizes_supplied_case(
     session.add(user)
     session.commit()
     assert client.get(f"/api/hunts/executions/{execution['id']}").status_code == 403
+
+
+@pytest.mark.parametrize(
+    "parameters",
+    [{"subject": 42}, {}, {"subject": ""}, {"subject": "owl", "extra": True}],
+)
+def test_hunt_rejects_invalid_initial_parameters_before_acceptance(
+    client, session, parameters
+):
+    user = User(
+        username="validation",
+        email="validation@example.com",
+        password_hash="unused",
+        role="Admin",
+    )
+    case = Case(case_number="VALIDATE-1")
+    hunt = Hunt(
+        name="validation",
+        display_name="Validation",
+        description="Validation",
+        category="test",
+        definition_json={
+            "steps": [],
+            "initial_parameters": {"subject": {"type": "string", "required": True}},
+        },
+    )
+    session.add_all([user, case, hunt])
+    session.commit()
+    app.dependency_overrides[get_current_user] = lambda: user
+    response = client.post(
+        f"/api/hunts/{hunt.id}/execute",
+        json={"case_id": case.id, "parameters": parameters},
+    )
+    assert response.status_code == 422
+    assert client.get(f"/api/hunts/cases/{case.id}/executions").json() == []

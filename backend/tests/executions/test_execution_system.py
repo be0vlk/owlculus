@@ -221,7 +221,7 @@ def test_upgrade_preserves_hunts_and_enforces_immutable_execution(execution_syst
     with Session(system.engine) as db:
         assert {row.status for row in db.exec(select(HuntExecution)).all()} == {
             "completed",
-            "running",
+            "failed",
         }
     _, client = system.api()
     system.worker()

@@ -26,6 +26,7 @@ class HuntResponse(BaseModel):
     class Config:
         orm_mode = True
 
+
 class HuntExecuteRequest(BaseModel):
     """Request model for starting a hunt"""
 
@@ -67,6 +68,12 @@ class HuntExecutionResponse(BaseModel):
     completed_at: Optional[datetime] = None
     created_at: datetime
     created_by_id: int
+
+    kind: str = "hunt"
+    revision: int = 0
+    dispatch_state: str = "legacy"
+    links: Dict[str, str] = Field(default_factory=dict)
+    error: Optional[Dict[str, Any]] = None
 
     # Related data
     hunt: Optional[HuntResponse] = None
