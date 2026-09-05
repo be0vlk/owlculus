@@ -20,6 +20,7 @@ def test_missing_workers_do_not_make_api_dead(execution_system):
     )
     report = json.loads(result.stdout)
     assert result.returncode == 1
+    assert report["dispatcher"] == "unavailable"
     queue = report["queues"][system.env["PLUGIN_QUEUE"]]
     assert queue["condition"] == "missing_workers"
     assert queue["dispatch_backlog"] == 1

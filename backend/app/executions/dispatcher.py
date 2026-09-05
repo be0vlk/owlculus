@@ -122,7 +122,7 @@ def dispatch_once(database_engine=engine) -> bool:
 
 
 def main():
-    from app.executions.events import publish_once, refresh_active_streams
+    from app.executions.events import publish_once, redis_client, refresh_active_streams
     from app.executions.recovery import reconcile
 
     next_reconcile = 0.0
@@ -140,6 +140,8 @@ def main():
                         break
                     busy = True
                 refresh_active_streams()
+                with redis_client() as connection:
+                    connection.set("owlculus:execution:dispatcher", "ready", ex=30)
             except Exception:  # noqa: BLE001 - durable intent remains for retry
                 logging.getLogger(__name__).info(
                     "Live publication deferred; durable results and retry intent retained"
