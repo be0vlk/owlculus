@@ -29,7 +29,7 @@ def readable_execution(db, user_id, kind, execution_id):
     model = HuntExecution if kind == "hunt" else PluginExecution
     execution = db.get(model, execution_id, populate_existing=True)
     if execution is None:
-        raise HTTPException(404, "Execution not found")
+        raise ResourceNotFoundException("Execution not found")
     CaseAccess(db).readable(user, execution.case_id)
     return execution
 
@@ -164,10 +164,10 @@ async def observe(websocket: WebSocket, database_engine, kind: str, execution_id
                                     )
                                     last_cursor = event_cursor
                 except (
+                    TimeoutError,
                     HTTPException,
                     AuthorizationException,
                     ResourceNotFoundException,
-                    asyncio.TimeoutError,
                 ):
                     raise
                 except Exception:  # noqa: BLE001 - recover from durable state
@@ -198,7 +198,7 @@ async def observe(websocket: WebSocket, database_engine, kind: str, execution_id
         await websocket.close(code=1000)
     except (HTTPException, AuthorizationException, ResourceNotFoundException):
         await websocket.close(code=1008, reason="Observation access revoked")
-    except asyncio.TimeoutError:
+    except TimeoutError:
         await websocket.close(code=1013, reason=f"Reconnect from {last_cursor}")
     except WebSocketDisconnect:
         pass

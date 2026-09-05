@@ -63,8 +63,14 @@ def _execution(session: Session, creator: User) -> HuntExecution:
 
 @pytest.mark.asyncio
 async def test_websocket_token_returns_schema_for_readable_execution(
-    session: Session, test_user: User
+    session: Session, test_user: User, monkeypatch
 ):
+    from unittest.mock import MagicMock
+
+    from redis import Redis
+
+    # Redis transport is exercised across real processes in test_observation.
+    monkeypatch.setattr(Redis, "from_url", MagicMock())
     execution = _execution(session, test_user)
     session.add(CaseUserLink(case_id=execution.case_id, user_id=test_user.id))
     session.commit()
@@ -90,3 +96,27 @@ async def test_websocket_token_rejects_existing_inaccessible_case(
     execution = _execution(session, test_user)
     with pytest.raises(AuthorizationException):
         await AuthService(session).create_websocket_token(execution.id, test_user)
+
+
+def test_handshake_logs_redact_observation_tokens(caplog):
+    import logging
+
+    from app.core.logging import ObservationTokenFilter
+
+    logger = logging.getLogger("observation-handshake-test")
+    redaction = ObservationTokenFilter()
+    logger.addFilter(redaction)
+    try:
+        with caplog.at_level(logging.INFO, logger=logger.name):
+            logger.info(
+                "WebSocket %s accepted",
+                "/api/hunts/executions/1/stream?token=private-capability&cursor=1-0",
+            )
+            logger.info(
+                "WebSocket /api/plugins/executions/1/stream?token=another-capability accepted"
+            )
+        assert "private-capability" not in caplog.text
+        assert "another-capability" not in caplog.text
+        assert "[redacted]&cursor=1-0" in caplog.text
+    finally:
+        logger.removeFilter(redaction)

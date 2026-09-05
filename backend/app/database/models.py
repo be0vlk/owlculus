@@ -270,6 +270,12 @@ class ExecutionControl(SQLModel, table=True):
     recovered_at: datetime | None = None
     recovery_attempts: int = 0
 
+    def execution_reference(self) -> tuple[str, int]:
+        if self.hunt_execution_id is not None:
+            return "hunt", self.hunt_execution_id
+        assert self.plugin_execution_id is not None
+        return "plugin", self.plugin_execution_id
+
 
 class ExecutionOutbox(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

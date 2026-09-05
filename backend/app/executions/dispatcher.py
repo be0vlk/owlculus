@@ -1,5 +1,6 @@
 """Supervised PostgreSQL outbox publisher, independent of API lifetimes."""
 
+import logging
 import os
 import random
 import time
@@ -123,7 +124,9 @@ def main():
                     busy = True
                 refresh_active_streams()
             except Exception:  # noqa: BLE001 - durable intent remains for retry
-                pass
+                logging.getLogger(__name__).info(
+                    "Live publication deferred; durable results and retry intent retained"
+                )
             Path("/tmp/owlculus-dispatcher-heartbeat").touch()
         except Exception:  # noqa: BLE001 - isolate infrastructure failures
             busy = False
