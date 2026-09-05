@@ -249,13 +249,14 @@ if __name__ == "__main__":
     elif sys.argv[1] == "replay-effects":
         from contextlib import contextmanager
 
+        from sqlalchemy import event
+        from sqlmodel import Session, select
+
         from app.database.connection import engine
         from app.database.models import ExecutionControl, PluginExecution, User
         from app.executions.ownership import Ownership
         from app.executions.worker import WorkerVault, worker_adapter
         from app.plugins.plugin_types import EvidenceWrite
-        from sqlalchemy import event
-        from sqlmodel import Session, select
 
         execution_id = int(sys.argv[2])
         window = sys.argv[3]

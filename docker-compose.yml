@@ -72,8 +72,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-owlculus}
       SECRET_KEY: ${SECRET_KEY:-development_key_not_secure}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      EXECUTION_BROKER_URL: ${EXECUTION_BROKER_URL:-redis://redis:6379/0}
-      EXECUTION_EVENT_REDIS_URL: ${EXECUTION_EVENT_REDIS_URL:-redis://redis:6379/0}
+      EXECUTION_BROKER_URL: ${EXECUTION_BROKER_URL:-${REDIS_URL:-redis://redis:6379/0}}
+      EXECUTION_EVENT_REDIS_URL: ${EXECUTION_EVENT_REDIS_URL:-${REDIS_URL:-redis://redis:6379/0}}
       DATABASE_POOL_SIZE: ${API_DATABASE_POOL_SIZE:-5}
       DATABASE_MAX_OVERFLOW: ${API_DATABASE_MAX_OVERFLOW:-5}
       EXECUTION_LIMIT_GLOBAL: ${EXECUTION_LIMIT_GLOBAL:-1000}
@@ -124,8 +124,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-owlculus}
       SECRET_KEY: ${SECRET_KEY:-development_key_not_secure}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
-      EXECUTION_BROKER_URL: ${EXECUTION_BROKER_URL:-redis://redis:6379/0}
-      EXECUTION_EVENT_REDIS_URL: ${EXECUTION_EVENT_REDIS_URL:-redis://redis:6379/0}
+      EXECUTION_BROKER_URL: ${EXECUTION_BROKER_URL:-${REDIS_URL:-redis://redis:6379/0}}
+      EXECUTION_EVENT_REDIS_URL: ${EXECUTION_EVENT_REDIS_URL:-${REDIS_URL:-redis://redis:6379/0}}
     volumes:
       - uploads_data:/app/uploads
     depends_on:

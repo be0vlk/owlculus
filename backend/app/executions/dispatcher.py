@@ -70,6 +70,8 @@ def dispatch_once(database_engine=engine) -> bool:
         execution_id = (
             control.hunt_execution_id if kind == "hunt" else control.plugin_execution_id
         )
+        attempt = row.attempts + 1
+        dispatch_status = "published"
         row.last_attempt_at = now
         try:
             app.send_task(
@@ -81,11 +83,13 @@ def dispatch_once(database_engine=engine) -> bool:
             )
         except Exception:  # noqa: BLE001 - broker errors must never expose credentials
             row.attempts += 1
+            dispatch_status = "retry"
             row.last_error = "Background broker unavailable; dispatch will retry"
             row.available_at = get_utc_now() + timedelta(
                 seconds=min(60, 2 ** min(row.attempts, 6)) + random.random()
             )
             if row.attempts >= 5:
+                dispatch_status = "failed"
                 execution = db.get(
                     HuntExecution if kind == "hunt" else PluginExecution, execution_id
                 )
@@ -108,9 +112,9 @@ def dispatch_once(database_engine=engine) -> bool:
                     "event": "dispatch",
                     "execution_id": execution_id,
                     "kind": kind,
-                    "attempt": row.attempts,
+                    "attempt": attempt,
                     "generation": control.generation,
-                    "status": "retry" if row.last_error else "published",
+                    "status": dispatch_status,
                 }
             )
         )

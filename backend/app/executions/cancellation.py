@@ -1,7 +1,6 @@
 """Authoritative stop requests and post-cleanup terminal transitions."""
 
 import logging
-import os
 
 from fastapi import HTTPException
 from redis import Redis
@@ -16,7 +15,7 @@ from app.database.models import (
     HuntStep,
     PluginExecution,
 )
-from app.executions.events import record_event
+from app.executions.events import event_redis_url, record_event
 from app.services.case_access import CaseAccess
 
 TERMINAL = {"completed", "partial", "failed", "cancelled"}
@@ -78,8 +77,7 @@ def request_cancel(db, user, execution_id, *, kind="plugin"):
     # The hint is expendable. The worker polls PostgreSQL independently.
     try:
         with Redis.from_url(
-            os.environ.get("EXECUTION_EVENT_REDIS_URL")
-            or os.environ.get("REDIS_URL", "redis://localhost:6379/0"),
+            event_redis_url(),
             socket_connect_timeout=0.2,
             socket_timeout=0.2,
         ) as redis:

@@ -129,10 +129,10 @@ def test_execution_resource_budgets_and_private_storage(topology):
     assert "noeviction" in redis["command"]
     assert "--maxmemory" in redis["command"]
     assert not redis.get("ports")
-    assert redis["mem_limit"] > 256 * 1024 * 1024
+    assert int(redis["mem_limit"]) > 256 * 1024 * 1024
     for name in ("plugin-worker", "hunt-worker"):
         worker = services[name]
-        assert worker["mem_limit"] == 1024 * 1024 * 1024
+        assert int(worker["mem_limit"]) == 1024 * 1024 * 1024
         assert worker["environment"]["DATABASE_POOL_SIZE"] == "2"
         assert worker["environment"]["DATABASE_MAX_OVERFLOW"] == "0"
         assert worker["environment"]["WORKER_MAX_TASKS_PER_CHILD"] == "100"

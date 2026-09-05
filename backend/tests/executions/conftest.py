@@ -12,10 +12,11 @@ from uuid import uuid4
 
 import httpx
 import pytest
+from sqlmodel import Session, SQLModel, create_engine
+
 from app.core.security import create_access_token, encrypt_api_key
 from app.database.models import Case, CaseUserLink, Client, SystemConfiguration, User
 from app.database.upgrade_executions import upgrade
-from sqlmodel import Session, SQLModel, create_engine
 
 
 def eventually(check, timeout=40):

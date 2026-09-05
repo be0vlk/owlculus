@@ -475,7 +475,16 @@ Timing begins after fault-free API and both worker queues are ready and the
 dispatcher has started. Twenty submissions launch concurrently: ten five-second
 plugins and ten two-step hunts, 2.5 seconds per step, with two slots per queue.
 The report includes hardware, database defaults, output shape, submission/case-read
-p95, queue wait, completion time, overlap, Redis memory, rate-limit sentinel
+p95, queue wait, completion time, overlap, Redis memory, real rate-limit rejection
 preservation, separate saturated-hunt plugin startup, and cooperative cancellation.
 Targets are engineering acceptance criteria, not production SLAs. Run this test
 separately from other workloads. It is opt-in and never part of ordinary unit runs.
+
+The second opt-in test, `test_fault_and_limits_acceptance_under_load`, places
+cooperative, blocking, subprocess, uncertain-owner and output-cap subjects ahead
+of the same 20 concurrently submitted background jobs. It measures cancellation
+while that work is outstanding, kills an actual prefork child and waits for natural
+lease expiry (no timestamp editing), verifies conservative failure and retained
+output, and proves results survive exact stream trimming and deletion. It uses
+reduced 8-event/2048-byte limits to exercise bounds quickly. Set
+`EXECUTION_FAULT_REPORT=/tmp/owlculus-faults.json` to retain its measurements.
