@@ -140,7 +140,7 @@ describe('useBaseNoteEditor', () => {
 
     result.updateContent(newContent)
 
-    expect(mockEditor.commands.setContent).toHaveBeenCalledWith(newContent, false)
+    expect(mockEditor.commands.setContent).toHaveBeenCalledWith(newContent, { emitUpdate: false })
   })
 
   it('should not update content when same as current', () => {
@@ -161,7 +161,7 @@ describe('useBaseNoteEditor', () => {
 
     result.updateContent(null)
 
-    expect(mockEditor.commands.setContent).toHaveBeenCalledWith('', false)
+    expect(mockEditor.commands.setContent).toHaveBeenCalledWith('', { emitUpdate: false })
   })
 
   it('should cleanup on unmount', () => {

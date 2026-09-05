@@ -1,11 +1,8 @@
 import { useEditor } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
-import Underline from '@tiptap/extension-underline'
-import Link from '@tiptap/extension-link'
 import Highlight from '@tiptap/extension-highlight'
-import TaskList from '@tiptap/extension-task-list'
-import TaskItem from '@tiptap/extension-task-item'
-import Placeholder from '@tiptap/extension-placeholder'
+import { TaskList, TaskItem } from '@tiptap/extension-list'
+import { Placeholder } from '@tiptap/extensions'
 import { ref, computed, onBeforeUnmount } from 'vue'
 import { formatDistanceToNow } from 'date-fns'
 
@@ -39,10 +36,10 @@ export function useBaseNoteEditor({
     editable,
     extensions: [
       StarterKit.configure({
-        taskList: false,
+        // Preserve v2 editing behavior without the new v3 defaults.
+        trailingNode: false,
+        listKeymap: false,
       }),
-      Underline,
-      Link,
       Highlight.configure({
         multicolor: true,
       }),
@@ -143,13 +140,13 @@ export function useBaseNoteEditor({
   const updateContent = (newVal) => {
     const currentContent = editor.value?.getHTML()
     if (newVal !== currentContent && editor.value) {
-      editor.value.commands.setContent(newVal || '', false)
+      editor.value.commands.setContent(newVal || '', { emitUpdate: false })
     }
   }
 
   const cleanup = (saveCallback) => {
     clearTimeout(saveTimeout)
-    if (editor.value) {
+    if (editor.value && !editor.value.isDestroyed) {
       const content = editor.value.getHTML()
       if (content !== lastSaved.value && saveCallback) {
         saveCallback()
