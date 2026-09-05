@@ -164,6 +164,19 @@ def execution_system(tmp_path):
                     f"127.0.0.1::{port}",
                     *extra,
                     image,
+                    *(
+                        [
+                            "redis-server",
+                            "--appendonly",
+                            "yes",
+                            "--maxmemory",
+                            "256mb",
+                            "--maxmemory-policy",
+                            "noeviction",
+                        ]
+                        if suffix == "redis"
+                        else []
+                    ),
                 ],
                 check=True,
                 capture_output=True,

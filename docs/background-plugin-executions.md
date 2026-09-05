@@ -362,7 +362,8 @@ background capability report (exit 0 ready, 1 degraded). It reports pending and
 active work by queue, unpublished dispatch backlog, oldest waiting age, dispatch
 errors, live workers, retained failure/recovery totals, mean execution duration,
 maximum completed cancellation latency, event publication backlog, and Redis
-memory. Duration and cancellation aggregates cover retained history, not a rolling
+memory. A 30-second Redis dispatcher heartbeat identifies missing dispatch capability
+and gates benchmark startup alongside worker readiness. Duration and cancellation aggregates cover retained history, not a rolling
 window. Missing workers, failed dispatch, and waiting for capacity have distinct
 conditions. Redis and worker inspection use bounded timeouts. `/health/live`
 checks the API process; `/health/ready` checks API dependencies, independently of

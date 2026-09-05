@@ -76,6 +76,14 @@ def snapshot():
     ):
         try:
             with client:
+                if role == "events":
+                    report["dispatcher"] = (
+                        "ready"
+                        if client.get("owlculus:execution:dispatcher")
+                        else "unavailable"
+                    )
+                    if report["dispatcher"] == "unavailable":
+                        report["status"] = "degraded"
                 info = cast(dict[str, Any], client.info("memory"))
                 report["redis"][role] = {
                     key: info[key]
