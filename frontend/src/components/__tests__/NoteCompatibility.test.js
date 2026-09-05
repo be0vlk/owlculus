@@ -119,6 +119,94 @@ function expectRichContent() {
 }
 
 describe.each(['case', 'entity'])('%s note compatibility', (kind) => {
+  const saveService = () => (kind === 'case' ? caseService.updateCase : entityService.updateEntity)
+  const delay = kind === 'case' ? 1000 : 5000
+  const edit = async (html) => {
+    textbox().element.innerHTML = html
+    await textbox().trigger('input')
+  }
+
+  it('debounces successive edits, synchronizes saved content silently, and skips unchanged HTML', async () => {
+    await open(kind, '<p>Initial</p>')
+    vi.useFakeTimers()
+    await edit('<p>First edit</p>')
+    if (kind === 'case')
+      expect(wrapper.emitted('update:modelValue').at(-1)).toEqual(['<p>First edit</p>'])
+    await vi.advanceTimersByTimeAsync(delay - 1)
+    expect(saveService()).not.toHaveBeenCalled()
+    await edit('<p>Latest edit</p>')
+    await vi.advanceTimersByTimeAsync(delay - 1)
+    expect(saveService()).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(saveService()).toHaveBeenCalledTimes(1)
+    const payload = saveService().mock.calls[0].at(-1)
+    expect(kind === 'case' ? payload.notes : payload.data.notes).toBe('<p>Latest edit</p>')
+    const emissions = wrapper.emitted(kind === 'case' ? 'update:modelValue' : 'edit').length
+    await wrapper.setProps(
+      kind === 'case'
+        ? { modelValue: '<p>Latest edit</p>' }
+        : { entity: { ...entity, data: { ...entity.data, notes: '<p>Latest edit</p>' } } },
+    )
+    await edit('<p>Latest edit</p>')
+    await vi.advanceTimersByTimeAsync(delay)
+    expect(saveService()).toHaveBeenCalledTimes(1)
+    expect(wrapper.emitted(kind === 'case' ? 'update:modelValue' : 'edit')).toHaveLength(emissions)
+    await edit('<p>Next edit</p>')
+    await vi.advanceTimersByTimeAsync(delay)
+    expect(saveService()).toHaveBeenCalledTimes(2)
+  })
+
+  it.each([false, true])(
+    'keeps failed text and recovers saved feedback (fullscreen: %s)',
+    async (fullscreen) => {
+      await open(kind, '<p>Initial</p>')
+      if (fullscreen) {
+        await control('Expand to fullscreen').trigger('click')
+        await flushPromises()
+      }
+      vi.useFakeTimers()
+      let rejectSave
+      saveService().mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectSave = reject
+          }),
+      )
+      await edit('<p>Unsaved text</p>')
+      await vi.advanceTimersByTimeAsync(delay)
+      expect(wrapper.get('[role="status"]').text()).toContain('Saving')
+      rejectSave(new Error('Unavailable'))
+      await flushPromises()
+      expect(textbox().text()).toBe('Unsaved text')
+      expect(
+        wrapper
+          .findAll('[role="alert"]')
+          .some((alert) => alert.isVisible() && alert.text().includes('Failed to save notes')),
+      ).toBe(true)
+      expect(wrapper.text()).not.toContain('Saving...')
+      await edit('<p>Recovered text</p>')
+      await vi.advanceTimersByTimeAsync(delay)
+      expect(textbox().text()).toBe('Recovered text')
+      expect(
+        wrapper
+          .findAll('[role="alert"]')
+          .some((alert) => alert.text().includes('Failed to save notes')),
+      ).toBe(false)
+      expect(wrapper.get('[role="status"]').text()).toContain('Last saved:')
+      expect(saveService()).toHaveBeenCalledTimes(2)
+    },
+  )
+
+  it('cancels pending autosave when the component unmounts', async () => {
+    await open(kind, '<p>Initial</p>')
+    vi.useFakeTimers()
+    await edit('<p>Pending</p>')
+    await vi.advanceTimersByTimeAsync(delay - 1)
+    wrapper.unmount()
+    await vi.advanceTimersByTimeAsync(delay * 2)
+    expect(saveService()).not.toHaveBeenCalled()
+  })
+
   it('preserves supported rich HTML through editing, saving and reopening', async () => {
     await open(kind, richNote)
     expectRichContent()

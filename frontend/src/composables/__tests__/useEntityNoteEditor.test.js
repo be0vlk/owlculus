@@ -254,23 +254,7 @@ describe('useEntityNoteEditor', () => {
     isEditing.value = false
     await nextTick()
 
-    expect(mockEditor.setEditable).toHaveBeenCalledWith(false)
-  })
-
-  it('should save pending changes when exiting edit mode', async () => {
-    useEntityNoteEditor(entity, caseId, isEditing, formData, emit)
-
-    // Simulate the scenario from the actual implementation
-    // When editing state changes, check for pending changes and save
-    mockEditor.getHTML.mockReturnValue('<p>New content</p>')
-    mockBaseReturn.lastSaved.value = '<p>Old content</p>'
-
-    // Get the save function that was set up in useEntityNoteEditor
-    const onUpdateCallback = mockUseBaseNoteEditor.mock.calls[0][0].onUpdate
-    onUpdateCallback(mockEditor)
-
-    // Verify triggerSave was called (which would eventually call entityService.updateEntity)
-    expect(mockBaseReturn.triggerSave).toHaveBeenCalled()
+    expect(mockEditor.setEditable).toHaveBeenCalledWith(false, false)
   })
 
   it('should not save when exiting edit mode if no changes', async () => {
