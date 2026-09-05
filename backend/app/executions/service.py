@@ -16,6 +16,7 @@ from app.database.models import (
     PluginExecutionResult,
     User,
 )
+from app.executions import admission
 from app.plugins.plugin_registry import PluginRegistry
 from app.services.case_access import CaseAccess
 
@@ -79,7 +80,12 @@ def authorize_execution(
 
 
 def accept(
-    db: Session, user: User, registry: PluginRegistry, name: str, params: dict
+    db: Session,
+    user: User,
+    registry: PluginRegistry,
+    name: str,
+    params: dict,
+    idempotency_key: str | None = None,
 ) -> dict:
     CaseAccess(db).require_non_analyst(user)
     values = dict(params)
@@ -100,6 +106,19 @@ def accept(
     try:
         authorize_execution(db, execution)
         with transaction(db):
+            admission.lock_acceptance(db)
+            payload = {
+                "case_id": case_id,
+                "parameters": normalized,
+                "save_to_case": save,
+            }
+            prior = admission.previous(
+                db, cast(int, user.id), "plugin", name, idempotency_key, payload
+            )
+            if prior is not None:
+                authorize_execution(db, prior)
+                return detail(db, user, prior.id)
+            admission.require_capacity(db, case_id, cast(int, user.id))
             db.add(execution)
             db.flush()
             control = ExecutionControl(plugin_execution_id=cast(int, execution.id))
@@ -107,11 +126,49 @@ def accept(
             db.flush()
             outbox = ExecutionOutbox(control_id=cast(int, control.id))
             db.add(outbox)
+            admission.remember(
+                db,
+                control,
+                cast(int, user.id),
+                "plugin",
+                name,
+                idempotency_key,
+                payload,
+            )
             # Build before commit so a post-commit read failure cannot hide acceptance.
             response = representation(execution, control, outbox)
         return response
     except SQLAlchemyError:
         raise HTTPException(503, "Execution could not be accepted") from None
+
+
+def dispatch_observation(execution, outbox: ExecutionOutbox | None) -> dict:
+    waiting = execution.status in {"queued", "pending"}
+    reason = None
+    if waiting and outbox is not None:
+        reason = outbox.last_error or (
+            "Waiting for an available background worker"
+            if outbox.published_at
+            else "Waiting for background dispatch"
+        )
+    failed = execution.error and execution.error.get("code") == "dispatch_failed"
+    return {
+        "dispatch_state": (
+            "failed"
+            if failed
+            else (
+                ("published" if outbox.published_at else "pending")
+                if outbox
+                else "legacy"
+            )
+        ),
+        "waiting_reason": reason,
+        "dispatch_attempts": outbox.attempts if outbox else 0,
+        "last_dispatch_at": outbox.last_attempt_at if outbox else None,
+        "next_dispatch_at": (
+            outbox.available_at if outbox and waiting and outbox.last_error else None
+        ),
+    }
 
 
 def representation(
@@ -122,7 +179,7 @@ def representation(
         **execution.model_dump(),
         "kind": "plugin",
         "revision": control.revision,
-        "dispatch_state": "published" if outbox.published_at else "pending",
+        **dispatch_observation(execution, outbox),
         "links": {
             "detail": base,
             "results": f"{base}/results",
@@ -194,7 +251,13 @@ def results(
     }
 
 
-def accept_hunt(db: Session, user: User, hunt: Hunt, params: dict) -> HuntExecution:
+def accept_hunt(
+    db: Session,
+    user: User,
+    hunt: Hunt,
+    params: dict,
+    idempotency_key: str | None = None,
+) -> HuntExecution:
     """Persist accepted work and its dispatch intent in the same transaction."""
     from copy import deepcopy
 
@@ -211,12 +274,30 @@ def accept_hunt(db: Session, user: User, hunt: Hunt, params: dict) -> HuntExecut
     try:
         authorize_execution(db, execution)
         with transaction(db):
+            admission.lock_acceptance(db)
+            prior = admission.previous(
+                db, cast(int, user.id), "hunt", str(hunt.id), idempotency_key, params
+            )
+            if prior is not None:
+                authorize_execution(db, prior)
+                db.expunge(prior)
+                return prior
+            admission.require_capacity(db, execution.case_id, cast(int, user.id))
             db.add(execution)
             db.flush()
             control = ExecutionControl(hunt_execution_id=execution.id)
             db.add(control)
             db.flush()
             db.add(ExecutionOutbox(control_id=control.id))
+            admission.remember(
+                db,
+                control,
+                cast(int, user.id),
+                "hunt",
+                str(hunt.id),
+                idempotency_key,
+                params,
+            )
             db.expunge(execution)
         return execution
     except SQLAlchemyError:
@@ -233,9 +314,7 @@ def hunt_observation(db: Session, execution: HuntExecution) -> dict:
     return {
         "kind": "hunt",
         "revision": rows[0].revision if rows else 0,
-        "dispatch_state": (
-            ("published" if rows[1].published_at else "pending") if rows else "legacy"
-        ),
+        **dispatch_observation(execution, rows[1] if rows else None),
         "links": {
             "detail": base,
             "history": f"/api/hunts/cases/{execution.case_id}/executions",

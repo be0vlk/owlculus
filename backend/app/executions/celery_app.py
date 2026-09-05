@@ -18,6 +18,13 @@ app.conf.update(
     task_serializer="json",
     accept_content=["json"],
     broker_connection_retry_on_startup=True,
+    broker_connection_timeout=2,
+    broker_transport_options={
+        "socket_connect_timeout": 2,
+        "socket_timeout": 2,
+        "retry_on_timeout": False,
+        "max_retries": 0,
+    },
 )
 
 

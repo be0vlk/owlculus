@@ -59,6 +59,7 @@ class HuntService:
         initial_parameters: dict[str, Any],
         *,
         current_user: User,
+        idempotency_key: str | None = None,
     ) -> HuntExecution:
         case = self.case_access.writable(current_user, case_id)
         hunt = self.db.get(Hunt, hunt_id)
@@ -106,7 +107,11 @@ class HuntService:
         except (ValueError, KeyError, TypeError) as error:
             raise HTTPException(422, str(error)) from None
         return accept_hunt(
-            self.db, current_user, hunt, {"case_id": case.id, "parameters": validated}
+            self.db,
+            current_user,
+            hunt,
+            {"case_id": case.id, "parameters": validated},
+            idempotency_key,
         )
 
     async def get_execution(

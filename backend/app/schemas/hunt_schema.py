@@ -72,6 +72,10 @@ class HuntExecutionResponse(BaseModel):
     kind: str = "hunt"
     revision: int = 0
     dispatch_state: str = "legacy"
+    waiting_reason: str | None = None
+    dispatch_attempts: int = 0
+    last_dispatch_at: datetime | None = None
+    next_dispatch_at: datetime | None = None
     links: dict[str, str] = Field(default_factory=dict)
     error: dict[str, Any] | None = None
 

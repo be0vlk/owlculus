@@ -10,10 +10,14 @@ it.each([false, true])(
   async (save) => {
     api.post.mockResolvedValue({ data: { id: 12, status: 'queued' } })
     await pluginService.executePlugin('Example', { case_id: 999, save_to_case: save }, 7)
-    expect(api.post).toHaveBeenCalledWith('/api/plugins/Example/execute', {
-      case_id: 7,
-      save_to_case: save,
-    })
+    expect(api.post).toHaveBeenCalledWith(
+      '/api/plugins/Example/execute',
+      {
+        case_id: 7,
+        save_to_case: save,
+      },
+      { headers: { 'Idempotency-Key': expect.any(String) } },
+    )
   },
 )
 

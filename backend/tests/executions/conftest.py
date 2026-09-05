@@ -186,7 +186,9 @@ def execution_system(tmp_path):
             client = Client(name="Acceptance")
             db.add_all([user, client])
             db.flush()
-            case = Case(case_number="ACCEPT-1", client_id=client.id)
+            case = Case(
+                case_number="ACCEPT-1", title="Acceptance case", client_id=client.id
+            )
             db.add(case)
             db.flush()
             db.add(CaseUserLink(case_id=case.id, user_id=user.id))
@@ -204,6 +206,7 @@ def execution_system(tmp_path):
             user_id, case_id = user.id, case.id
         system = ExecutionSystem(tmp_path, env)
         system.engine, system.user_id, system.case_id = engine, user_id, case_id
+        system.redis_container = names[1]
         system.token = create_access_token(data={"sub": "acceptance"})
         yield system
     finally:

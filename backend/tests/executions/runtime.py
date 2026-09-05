@@ -93,3 +93,20 @@ if __name__ == "__main__":
                 f"--hostname={sys.argv[1]}@%h",
             ]
         )
+
+    elif sys.argv[1] in {"dispatch-before", "dispatch-after"}:
+        import time
+
+        from app.executions import dispatcher
+
+        original_send = dispatcher.app.send_task
+
+        def interrupted_send(*args, **kwargs):
+            if sys.argv[1] == "dispatch-after":
+                original_send(*args, **kwargs)
+            (Path(os.environ["EXECUTION_TEST_DIR"]) / "publication-window").touch()
+            while True:
+                time.sleep(1)
+
+        dispatcher.app.send_task = interrupted_send
+        dispatcher.dispatch_once()

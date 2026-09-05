@@ -268,7 +268,20 @@ class ExecutionOutbox(SQLModel, table=True):
     control_id: int = Field(foreign_key="executioncontrol.id", unique=True)
     published_at: Optional[datetime] = None
     attempts: int = 0
+    last_attempt_at: datetime | None = None
+    last_error: str | None = None
     available_at: datetime = Field(default_factory=get_utc_now, index=True)
+
+
+class ExecutionSubmission(SQLModel, table=True):
+    __table_args__ = (UniqueConstraint("user_id", "kind", "endpoint", "key"),)
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id")
+    kind: str
+    endpoint: str
+    key: str = Field(max_length=200)
+    payload: dict = Field(sa_column=Column(JSON, nullable=False))
+    control_id: int = Field(foreign_key="executioncontrol.id", unique=True)
 
 
 class PluginExecutionResult(SQLModel, table=True):

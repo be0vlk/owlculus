@@ -1,4 +1,5 @@
 import api from './api'
+import { submitExecution } from './executionSubmission'
 import { createDownloadArtifact } from '@/utils/download'
 
 /**
@@ -32,11 +33,10 @@ export const huntService = {
    * @returns {Promise<Object>} Hunt execution details
    */
   async executeHunt(huntId, caseId, parameters) {
-    const response = await api.post(`/api/hunts/${huntId}/execute`, {
+    return submitExecution(`/api/hunts/${huntId}/execute`, {
       case_id: caseId,
       parameters: parameters || {},
     })
-    return response.data
   },
 
   /**
