@@ -8,7 +8,7 @@ const activeCase = vi.hoisted(() => ({ activeCaseId: 7, ready: true }))
 vi.mock('@/stores/activeCase', () => ({ useActiveCaseStore: () => activeCase }))
 
 vi.mock('@/services/plugin', () => ({
-  pluginService: { listPlugins: vi.fn(), executePlugin: vi.fn() },
+  pluginService: { listPlugins: vi.fn(), executePlugin: vi.fn(), getHistory: vi.fn().mockResolvedValue({ items: [] }) },
 }))
 vi.mock('@/composables/usePluginApiKeys', () => ({
   usePluginApiKeys: () => ({

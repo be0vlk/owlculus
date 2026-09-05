@@ -53,7 +53,9 @@ class MyToolPlugin(BasePlugin):
 
 Use only the event constructors `self.data(payload)`, `self.error(message)`,
 `self.status(message)`, and `self.complete()`. `ResultEvent` is converted to the
-existing `{ "type": ..., "data": ... }` NDJSON envelope at the HTTP boundary.
+existing `{ "type": ..., "data": ... }` envelope in retained execution results.
+Standalone submission returns HTTP 202 with an execution reference; see
+[the background execution API](background-plugin-executions.md).
 
 ## Run context
 

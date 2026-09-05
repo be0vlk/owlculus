@@ -38,6 +38,22 @@ services:
     ports:
       - "${BACKEND_PORT:-8000}:8000"
 
+  plugin-worker:
+    build: *backend-development-build
+    environment: &execution-development-environment
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-owlculus_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-owlculus_dev}
+      SECRET_KEY: ${SECRET_KEY:-dev_secret_key_change_in_production}
+    volumes:
+      - ./backend:/app
+      - uploads_dev_data:/app/uploads
+
+  execution-dispatcher:
+    build: *backend-development-build
+    environment: *execution-development-environment
+    volumes:
+      - ./backend:/app
+
   db-init:
     build: *backend-development-build
     environment:

@@ -198,7 +198,7 @@
                     </v-btn>
 
                     <!-- Results Available Indicator -->
-                    <div v-if="results[name] || pluginErrors[name]" class="mb-4" @click.stop>
+                    <div v-if="pluginErrors[name]" class="mb-4" @click.stop>
                       <v-alert
                         v-if="pluginErrors[name]"
                         :text="pluginErrors[name]"
@@ -206,17 +206,6 @@
                         type="error"
                         variant="tonal"
                       />
-
-                      <v-btn
-                        v-else
-                        block
-                        color="success"
-                        prepend-icon="mdi-eye"
-                        variant="outlined"
-                        @click="openResultsModal(name)"
-                      >
-                        View Results
-                      </v-btn>
                     </div>
                   </v-form>
                 </v-expand-transition>
@@ -238,50 +227,33 @@
         </div>
       </v-card-text>
     </v-card>
+    <PluginExecutionHistory
+      v-if="activeCase.activeCaseId"
+      :case-id="activeCase.activeCaseId"
+      :execution-id="acceptedExecutionId"
+    />
   </BaseDashboard>
-
-  <!-- Results Modal -->
-  <PluginResultsModal
-    v-model="modalState.isOpen"
-    :error="modalState.error"
-    :execution-time="modalState.executionTime"
-    :parameters="modalState.parameters"
-    :plugin-name="modalState.pluginName"
-    :results="modalState.results"
-    @export="handleExportResults"
-  />
 </template>
 
 <script setup>
 import { useActiveCaseStore } from '@/stores/activeCase'
+import PluginExecutionHistory from '@/components/plugins/PluginExecutionHistory.vue'
 import GenericPluginParams from '@/components/plugins/GenericPluginParams.vue'
 import { ref, onMounted, reactive, computed, markRaw } from 'vue'
 import { pluginService } from '@/services/plugin'
 import { usePluginApiKeys } from '@/composables/usePluginApiKeys'
-import PluginResultsModal from '@/components/plugins/PluginResultsModal.vue'
 import BaseDashboard from '@/components/BaseDashboard.vue'
 
+const acceptedExecutionId = ref(null)
 const activeCase = useActiveCaseStore()
 const plugins = ref({})
 const loading = ref(true)
 const error = ref(null)
 const expandedCards = ref({})
 const executing = reactive({})
-const results = reactive({})
 const pluginParams = reactive({})
 const pluginErrors = reactive({})
 const pluginParamComponents = ref({})
-const executionTimes = reactive({})
-
-// Modal state
-const modalState = reactive({
-  isOpen: false,
-  pluginName: '',
-  results: null,
-  error: null,
-  parameters: {},
-  executionTime: new Date(),
-})
 
 const categories = ['Person', 'Network', 'Company', 'Other']
 const selectedTab = ref('all')
@@ -417,59 +389,16 @@ const executePlugin = async (name) => {
 
   executing[name] = true
   pluginErrors[name] = null
-  results[name] = null // Clear previous results
-  executionTimes[name] = new Date() // Track execution time
 
   try {
-    const result = await pluginService.executePlugin(name, pluginParams[name], caseId)
-
-    // Handle async generator result
-    if (result && typeof result[Symbol.asyncIterator] === 'function') {
-      for await (const data of result) {
-        try {
-          results[name] = JSON.parse(data)
-        } catch (parseError) {
-          console.error('Failed to parse plugin response:', parseError)
-          results[name] = data
-        }
-      }
-    } else {
-      results[name] = result
-    }
-
-    // Auto-open modal when execution completes
-    if (results[name]) {
-      openResultsModal(name)
-    }
+    const accepted = await pluginService.executePlugin(name, pluginParams[name], caseId)
+    if (activeCase.activeCaseId === caseId) acceptedExecutionId.value = accepted.id
   } catch (err) {
     console.error('Plugin error:', err)
     pluginErrors[name] = err.message
   } finally {
     executing[name] = false
   }
-}
-
-const openResultsModal = (pluginName) => {
-  modalState.pluginName = pluginName
-  modalState.results = results[pluginName]
-  modalState.error = pluginErrors[pluginName]
-  modalState.parameters = { ...pluginParams[pluginName] }
-  modalState.executionTime = executionTimes[pluginName] || new Date()
-  modalState.isOpen = true
-}
-
-const handleExportResults = (exportData) => {
-  // Create downloadable JSON file
-  const dataStr = JSON.stringify(exportData, null, 2)
-  const dataBlob = new Blob([dataStr], { type: 'application/json' })
-  const url = URL.createObjectURL(dataBlob)
-
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `${exportData.pluginName}_results_${Date.now()}.json`
-  link.click()
-
-  URL.revokeObjectURL(url)
 }
 
 onMounted(() => {

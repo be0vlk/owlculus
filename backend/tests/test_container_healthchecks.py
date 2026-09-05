@@ -77,3 +77,39 @@ def test_compose_backend_healthchecks_wait_for_readiness(topology):
     command = configuration["services"]["backend"]["healthcheck"]["test"]
 
     assert "http://localhost:8000/health/ready" in command
+
+
+@pytest.mark.parametrize("topology", SUPPORTED_TOPOLOGIES)
+def test_plugin_execution_processes_share_configuration_and_have_role_healthchecks(
+    topology,
+):
+    services = load_compose_configuration(topology)["services"]
+    api = services["backend"]
+    worker = services["plugin-worker"]
+    dispatcher = services["execution-dispatcher"]
+    for service in (worker, dispatcher):
+        assert service["build"] == api["build"]
+        for key in (
+            "POSTGRES_USER",
+            "POSTGRES_PASSWORD",
+            "POSTGRES_DB",
+            "POSTGRES_HOST",
+            "SECRET_KEY",
+            "REDIS_URL",
+        ):
+            assert service["environment"][key] == api["environment"][key]
+        assert "8000" not in str(service["healthcheck"])
+        assert (
+            service["depends_on"]["db-init"]["condition"]
+            == "service_completed_successfully"
+        )
+    assert "--pool=prefork" in worker["command"]
+    assert "--concurrency=2" in worker["command"]
+    assert "--prefetch-multiplier=1" in worker["command"]
+    assert "worker-egress" in worker["networks"]
+    uploads = lambda service: next(
+        volume["source"]
+        for volume in service["volumes"]
+        if volume["target"] == "/app/uploads"
+    )
+    assert uploads(worker) == uploads(api)

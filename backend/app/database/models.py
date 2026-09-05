@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from pydantic import EmailStr
-from sqlalchemy import JSON, Column
+from sqlalchemy import JSON, Column, UniqueConstraint
 from sqlmodel import Field, Relationship, SQLModel
 
 from ..core.enums import TaskPriority, TaskStatus
@@ -222,3 +222,44 @@ class Task(SQLModel, table=True):
     completed_by: Optional[User] = Relationship(
         sa_relationship_kwargs={"foreign_keys": "[Task.completed_by_id]"}
     )
+
+
+class PluginExecution(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    case_id: int = Field(foreign_key="case.id", index=True)
+    created_by_id: int = Field(foreign_key="user.id")
+    plugin_name: str
+    parameters: dict = Field(sa_column=Column(JSON, nullable=False))
+    save_to_case: bool = False
+    status: str = "queued"
+    created_at: datetime = Field(default_factory=get_utc_now)
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
+    error: Optional[dict] = Field(default=None, sa_column=Column(JSON))
+
+
+class ExecutionControl(SQLModel, table=True):
+    # Ticket 02 adds the alternative hunt association and XOR constraint.
+    id: Optional[int] = Field(default=None, primary_key=True)
+    plugin_execution_id: int = Field(foreign_key="pluginexecution.id", unique=True)
+    generation: int = 0
+    owner: Optional[str] = None
+    lease_until: Optional[datetime] = None
+    heartbeat_at: Optional[datetime] = None
+    revision: int = 1
+
+
+class ExecutionOutbox(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    control_id: int = Field(foreign_key="executioncontrol.id", unique=True)
+    published_at: Optional[datetime] = None
+    attempts: int = 0
+    available_at: datetime = Field(default_factory=get_utc_now, index=True)
+
+
+class PluginExecutionResult(SQLModel, table=True):
+    __table_args__ = (UniqueConstraint("execution_id", "sequence"),)
+    id: Optional[int] = Field(default=None, primary_key=True)
+    execution_id: int = Field(foreign_key="pluginexecution.id", index=True)
+    sequence: int
+    payload: dict = Field(sa_column=Column(JSON, nullable=False))

@@ -8,16 +8,12 @@ beforeEach(() => vi.clearAllMocks())
 it.each([false, true])(
   'uses application context over plugin parameters when saving is %s',
   async (save) => {
-    api.post.mockResolvedValue({ data: '{"type":"complete","data":{}}\n' })
+    api.post.mockResolvedValue({ data: { id: 12, status: 'queued' } })
     await pluginService.executePlugin('Example', { case_id: 999, save_to_case: save }, 7)
-    expect(api.post).toHaveBeenCalledWith(
-      '/api/plugins/Example/execute',
-      {
-        case_id: 7,
-        save_to_case: save,
-      },
-      expect.any(Object),
-    )
+    expect(api.post).toHaveBeenCalledWith('/api/plugins/Example/execute', {
+      case_id: 7,
+      save_to_case: save,
+    })
   },
 )
 

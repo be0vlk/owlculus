@@ -11,6 +11,10 @@ from app.database.models import Client
 def initialize_database(database_engine: Engine = engine) -> None:
     """Create the schema and idempotently seed the default Personal client."""
     create_db_and_tables(database_engine)
+    if database_engine.dialect.name == "postgresql":
+        from app.database.upgrade_executions import upgrade
+
+        upgrade(database_engine)
 
     with Session(database_engine) as session:
         personal_client = session.exec(
