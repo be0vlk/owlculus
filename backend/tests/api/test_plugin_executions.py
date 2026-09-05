@@ -61,3 +61,29 @@ def test_acceptance_commit_failure_returns_503_without_execution(
     )
     assert response.status_code == 503
     assert "location" not in response.headers
+
+
+def test_retry_uses_accepted_definition_when_plugin_becomes_unavailable(
+    client, test_admin, test_case
+):
+    app.dependency_overrides[get_current_user] = lambda: test_admin
+    app.dependency_overrides[get_plugin_registry] = lambda: PluginRegistry.from_classes(
+        [AcceptedPlugin]
+    )
+    payload = {"case_id": test_case.id, "query": "owl"}
+    first = client.post(
+        "/api/plugins/AcceptedPlugin/execute",
+        json=payload,
+        headers={"Idempotency-Key": "accepted-definition"},
+    )
+    assert first.status_code == 202
+    app.dependency_overrides[get_plugin_registry] = lambda: PluginRegistry.from_classes(
+        []
+    )
+    retry = client.post(
+        "/api/plugins/AcceptedPlugin/execute",
+        json=payload,
+        headers={"Idempotency-Key": "accepted-definition"},
+    )
+    assert retry.status_code == 202
+    assert retry.json()["id"] == first.json()["id"]

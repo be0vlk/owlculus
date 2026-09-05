@@ -206,6 +206,7 @@ def execution_system(tmp_path):
             user_id, case_id = user.id, case.id
         system = ExecutionSystem(tmp_path, env)
         system.engine, system.user_id, system.case_id = engine, user_id, case_id
+        system.db_container = names[0]
         system.redis_container = names[1]
         system.token = create_access_token(data={"sub": "acceptance"})
         yield system

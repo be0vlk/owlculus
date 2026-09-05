@@ -189,6 +189,17 @@ def test_hunt_retry_normalization_conflicts_and_revoked_access(execution_system)
     )
     assert submit(1).json()["id"] == accepted["id"]
     with Session(system.engine) as db:
+        hunt = db.get(Hunt, hunt_id)
+        hunt.is_active = False
+        hunt.definition_json = {
+            "steps": [],
+            "initial_parameters": {
+                "query": {"type": "string", "default": "changed-default"}
+            },
+        }
+        db.commit()
+    assert submit(1).json()["id"] == accepted["id"]
+    with Session(system.engine) as db:
         link = db.exec(
             select(CaseUserLink).where(
                 CaseUserLink.case_id == system.case_id,
@@ -397,3 +408,20 @@ def test_upgrade_adds_submission_metadata_to_prior_schema(execution_system):
     )
     assert first.status_code == retry.status_code == 202
     assert first.json()["id"] == retry.json()["id"]
+
+
+def test_database_unavailable_returns_503_for_both_submission_endpoints(
+    execution_system,
+):
+    import subprocess
+
+    system = execution_system
+    _, client = system.api()
+    subprocess.run(
+        ["docker", "stop", system.db_container], check=True, capture_output=True
+    )
+    for path in ["/api/plugins/AcceptancePlugin/execute", "/api/hunts/1/execute"]:
+        response = client.post(path, json={"case_id": system.case_id})
+        assert response.status_code == 503
+        assert "location" not in response.headers
+    assert not (system.root / "provider-starts").exists()

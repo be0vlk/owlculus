@@ -62,6 +62,20 @@ class HuntService:
         idempotency_key: str | None = None,
     ) -> HuntExecution:
         case = self.case_access.writable(current_user, case_id)
+        from app.executions.admission import SubmissionRequest
+        from app.executions.service import retry_hunt
+
+        assert current_user.id is not None
+        submission = SubmissionRequest(
+            current_user.id,
+            "hunt",
+            str(hunt_id),
+            idempotency_key,
+            {"case_id": case_id, "parameters": initial_parameters},
+        )
+        prior = retry_hunt(self.db, current_user, submission)
+        if prior is not None:
+            return prior
         hunt = self.db.get(Hunt, hunt_id)
         if not hunt or not hunt.is_active:
             raise ResourceNotFoundException("Hunt not found or inactive")
@@ -111,7 +125,7 @@ class HuntService:
             current_user,
             hunt,
             {"case_id": case.id, "parameters": validated},
-            idempotency_key,
+            submission,
         )
 
     async def get_execution(

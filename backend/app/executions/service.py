@@ -21,18 +21,17 @@ from app.plugins.plugin_registry import PluginRegistry
 from app.services.case_access import CaseAccess
 
 
-def validate_parameters(registry: PluginRegistry, name: str, params: dict) -> dict:
+def plugin_parameter_definitions(registry: PluginRegistry, name: str) -> dict:
     metadata = registry.metadata().get(name)
     if metadata is None:
         raise HTTPException(404, "Plugin not found")
     if not metadata["enabled"]:
         raise HTTPException(409, "Plugin is disabled")
-    definitions = {
+    return {
         k: v
         for k, v in metadata["parameters"].items()
         if k not in {"case_id", "save_to_case"}
     }
-    return normalize_parameters(definitions, params)
 
 
 def normalize_parameters(definitions: dict, params: dict) -> dict:
@@ -95,29 +94,30 @@ def accept(
     save = values.pop("save_to_case", False)
     if type(save) is not bool:
         raise HTTPException(422, "save_to_case must be a boolean")
-    normalized = validate_parameters(registry, name, values)
-    execution = PluginExecution(
-        case_id=case_id,
-        created_by_id=cast(int, user.id),
-        plugin_name=name,
-        parameters=normalized,
-        save_to_case=save,
+    submission = admission.SubmissionRequest(
+        cast(int, user.id),
+        "plugin",
+        name,
+        idempotency_key,
+        {"case_id": case_id, "parameters": values, "save_to_case": save},
     )
     try:
-        authorize_execution(db, execution)
         with transaction(db):
             admission.lock_acceptance(db)
-            payload = {
-                "case_id": case_id,
-                "parameters": normalized,
-                "save_to_case": save,
-            }
-            prior = admission.previous(
-                db, cast(int, user.id), "plugin", name, idempotency_key, payload
-            )
+            prior = submission.previous(db, normalize_parameters)
             if prior is not None:
                 authorize_execution(db, prior)
                 return detail(db, user, prior.id)
+            definitions = plugin_parameter_definitions(registry, name)
+            normalized = normalize_parameters(definitions, values)
+            execution = PluginExecution(
+                case_id=case_id,
+                created_by_id=cast(int, user.id),
+                plugin_name=name,
+                parameters=normalized,
+                save_to_case=save,
+            )
+            authorize_execution(db, execution)
             admission.require_capacity(db, case_id, cast(int, user.id))
             db.add(execution)
             db.flush()
@@ -126,15 +126,7 @@ def accept(
             db.flush()
             outbox = ExecutionOutbox(control_id=cast(int, control.id))
             db.add(outbox)
-            admission.remember(
-                db,
-                control,
-                cast(int, user.id),
-                "plugin",
-                name,
-                idempotency_key,
-                payload,
-            )
+            submission.remember(db, control, normalized, definitions)
             # Build before commit so a post-commit read failure cannot hide acceptance.
             response = representation(execution, control, outbox)
         return response
@@ -251,12 +243,25 @@ def results(
     }
 
 
+def retry_hunt(
+    db: Session, user: User, submission: admission.SubmissionRequest
+) -> HuntExecution | None:
+    """Resolve an accepted retry independently of current definition availability."""
+    try:
+        prior = submission.previous(db, normalize_parameters)
+        if prior is not None:
+            authorize_execution(db, prior)
+        return prior
+    except SQLAlchemyError:
+        raise HTTPException(503, "Execution could not be accepted") from None
+
+
 def accept_hunt(
     db: Session,
     user: User,
     hunt: Hunt,
     params: dict,
-    idempotency_key: str | None = None,
+    submission: admission.SubmissionRequest,
 ) -> HuntExecution:
     """Persist accepted work and its dispatch intent in the same transaction."""
     from copy import deepcopy
@@ -275,9 +280,7 @@ def accept_hunt(
         authorize_execution(db, execution)
         with transaction(db):
             admission.lock_acceptance(db)
-            prior = admission.previous(
-                db, cast(int, user.id), "hunt", str(hunt.id), idempotency_key, params
-            )
+            prior = submission.previous(db, normalize_parameters)
             if prior is not None:
                 authorize_execution(db, prior)
                 db.expunge(prior)
@@ -289,14 +292,11 @@ def accept_hunt(
             db.add(control)
             db.flush()
             db.add(ExecutionOutbox(control_id=control.id))
-            admission.remember(
+            submission.remember(
                 db,
                 control,
-                cast(int, user.id),
-                "hunt",
-                str(hunt.id),
-                idempotency_key,
-                params,
+                params["parameters"],
+                hunt.definition_json.get("initial_parameters", {}),
             )
             db.expunge(execution)
         return execution

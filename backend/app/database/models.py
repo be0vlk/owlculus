@@ -281,6 +281,7 @@ class ExecutionSubmission(SQLModel, table=True):
     endpoint: str
     key: str = Field(max_length=200)
     payload: dict = Field(sa_column=Column(JSON, nullable=False))
+    parameter_definitions: dict = Field(sa_column=Column(JSON, nullable=False))
     control_id: int = Field(foreign_key="executioncontrol.id", unique=True)
 
 

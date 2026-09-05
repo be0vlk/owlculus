@@ -1,7 +1,28 @@
 import api from './api'
+import { authService } from './auth'
 
-// Keep unresolved runs across navigation. Observation never calls this module.
+// Store only a digest and random key, never credentials or investigation input.
 const pending = new Map()
+const active = new Set()
+
+function readKey(identity) {
+  try {
+    return sessionStorage.getItem(identity) || pending.get(identity)
+  } catch {
+    return pending.get(identity)
+  }
+}
+
+function writeKey(identity, key) {
+  if (key) pending.set(identity, key)
+  else pending.delete(identity)
+  try {
+    if (key) sessionStorage.setItem(identity, key)
+    else sessionStorage.removeItem(identity)
+  } catch {
+    // Browser storage restrictions still permit retries within this page.
+  }
+}
 
 function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical)
@@ -16,16 +37,26 @@ function canonical(value) {
 }
 
 export async function submitExecution(endpoint, payload) {
-  const identity = JSON.stringify([endpoint, canonical(payload)])
-  const key = pending.get(identity) || crypto.randomUUID()
-  pending.set(identity, key)
+  const input = JSON.stringify([authService.getCurrentToken(), endpoint, canonical(payload)])
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input))
+  const identity =
+    'owlculus:submission:' +
+    Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
+  const remembered = readKey(identity)
+  const key = remembered && !active.has(remembered) ? remembered : crypto.randomUUID()
+  active.add(key)
+  writeKey(identity, key)
   try {
     const response = await api.post(endpoint, payload, { headers: { 'Idempotency-Key': key } })
-    pending.delete(identity)
+    if (readKey(identity) === key) writeKey(identity, null)
     return response.data
   } catch (failure) {
     const status = failure.response?.status
-    if (status >= 400 && status < 500 && ![408, 429].includes(status)) pending.delete(identity)
+    if (status >= 400 && status < 500 && ![408, 429].includes(status)) {
+      if (readKey(identity) === key) writeKey(identity, null)
+    } else {
+      writeKey(identity, key)
+    }
     const guidance = {
       409: 'This retry conflicts with an earlier submission. Start a new run with the intended input.',
       429: 'Execution capacity is full. Wait for work to finish, then retry.',
@@ -42,5 +73,7 @@ export async function submitExecution(endpoint, payload) {
     const error = new Error(message, { cause: failure })
     error.response = failure.response
     throw error
+  } finally {
+    active.delete(key)
   }
 }
