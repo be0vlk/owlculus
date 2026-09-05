@@ -17,6 +17,7 @@
       <v-btn v-if="nextCursor" :loading="loading" @click="load(true)">Load more executions</v-btn>
       <section v-if="selected" aria-label="Selected plugin execution">
         <p v-if="execution" role="status">{{ execution.plugin_name }} — {{ execution.status }}</p>
+        <ExecutionWaiting :execution="execution" />
         <v-alert v-if="error || execution?.error" type="error" role="alert">
           {{ error || execution.error.message }}
         </v-alert>
@@ -37,6 +38,7 @@
 </template>
 
 <script setup>
+import ExecutionWaiting from '@/components/ExecutionWaiting.vue'
 import { downloadBlob } from '@/utils/download'
 import { ref, watch, onScopeDispose } from 'vue'
 import { pluginService } from '@/services/plugin'

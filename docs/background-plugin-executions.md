@@ -76,9 +76,9 @@ role-specific targeted ping. Ownership heartbeat is 10 seconds, lease 60 seconds
 Every result, terminal transition and case-effect commit checks that lease and
 ownership generation. Provider calls do not hold database transactions.
 
-Tickets 01 and 02 provide plugin and hunt background execution. Submission
-idempotency, dispatch reconciliation, output caps, cancellation and stale-worker
-recovery are delivered by subsequent tickets. A lost running worker is fenced after its lease expires;
+Tickets 01–03 provide plugin and hunt background execution with reliable submission
+and dispatch. Output caps, cancellation and stale-worker recovery are delivered by
+subsequent tickets. A lost running worker is fenced after its lease expires;
 it is not automatically replayed in this slice. Do not delete execution records or
 manually repeat uncertain provider work as a recovery mechanism.
 
@@ -91,3 +91,44 @@ isolated containers with random loopback ports, committed PostgreSQL fixtures,
 test-only worker-loadable providers, separate APIs, a dispatcher and a prefork
 worker. Bounded readiness and process-group/container cleanup run even on failure.
 It does not use eager Celery or live provider accounts.
+
+
+## Reliable submission and dispatch
+
+Both execution POST endpoints accept `Idempotency-Key` (1–200 characters), scoped
+to the initiating user, execution kind and endpoint. A retry with the same
+normalized case and payload returns the original execution, including after
+completion, and rechecks current access. Conflicting reuse returns 409. The
+frontend retains the key for uncertain responses across in-app navigation and
+reuses it when retrying the same input. A submission after successful acceptance
+gets a new key. Observation and reconnecting only read existing executions.
+
+Admission is serialized in a short PostgreSQL transaction across API processes.
+`EXECUTION_LIMIT_GLOBAL=1000`, `EXECUTION_LIMIT_CASE=100` and
+`EXECUTION_LIMIT_USER=25` cap outstanding plugin and hunt executions together.
+Configure identical limits on every API process; Compose forwards these values.
+Terminal state releases capacity. Retrying accepted work consumes no extra slot.
+Capacity rejection returns 429 with `Retry-After: 10`; database acceptance failure
+returns 503. Neither creates partial accepted work or invokes a provider inline.
+
+Upgrade `003_reliable_submission` adds durable submission identities and dispatch
+attempt timestamps/error metadata. Run the existing upgrade command before
+starting the new API and dispatcher; it is safe to repeat on existing data.
+Dispatcher claims use PostgreSQL row locks with `SKIP LOCKED`, held until publish
+and acknowledgment commit. Multiple dispatchers can run concurrently. A crash
+releases its locks, and redelivery retains the same Celery delivery ID. Workers
+claim under the same control lock, preventing duplicate live provider starts.
+
+Every `EXECUTION_REDISPATCH_SECONDS` (default 30 seconds), unstarted queued work
+is eligible for republication even if its earlier publication was recorded.
+This recovers from Redis queue loss independently of API traffic. Only executions
+with no owner and generation zero are eligible; expired running owners are never
+replayed here. Queued work can wait while workers are stopped. Status and the UI
+show waiting reasons, acceptance time, last attempt and the next retry time.
+
+Failed publications retry with exponential delays capped at 60 seconds plus up to
+one second of jitter. Five consecutive failures produce immutable `dispatch_failed`
+with guidance to restore services and deliberately submit a new run. A successful
+publication resets the failure streak. Redis connect/read timeouts are two seconds;
+Celery publication retries are disabled so PostgreSQL owns the retry policy.
+No validation, authorization, credential or provider error is automatically retried.

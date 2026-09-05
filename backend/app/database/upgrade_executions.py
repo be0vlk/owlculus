@@ -8,6 +8,7 @@ from app.database.connection import engine
 from app.database.models import (
     ExecutionControl,
     ExecutionOutbox,
+    ExecutionSubmission,
     PluginExecution,
     PluginExecutionResult,
 )
@@ -69,7 +70,7 @@ def upgrade_plugins(database_engine: Engine = engine) -> None:
 HUNT_VERSION = "002_hunt_executions"
 
 
-def upgrade(database_engine: Engine = engine) -> None:
+def upgrade_hunts(database_engine: Engine = engine) -> None:
     upgrade_plugins(database_engine)
     with database_engine.begin() as connection:
         connection.execute(text("SELECT pg_advisory_xact_lock(827104001)"))
@@ -157,6 +158,37 @@ def upgrade(database_engine: Engine = engine) -> None:
         connection.execute(
             text("INSERT INTO schema_upgrade(version) VALUES (:version)"),
             {"version": HUNT_VERSION},
+        )
+
+
+SUBMISSION_VERSION = "003_reliable_submission"
+
+
+def upgrade(database_engine: Engine = engine) -> None:
+    upgrade_hunts(database_engine)
+    with database_engine.begin() as connection:
+        connection.execute(text("SELECT pg_advisory_xact_lock(827104001)"))
+        if connection.execute(
+            text("SELECT 1 FROM schema_upgrade WHERE version=:version"),
+            {"version": SUBMISSION_VERSION},
+        ).first():
+            return
+        SQLModel.metadata.tables[ExecutionSubmission.__name__.lower()].create(
+            connection, checkfirst=True
+        )
+        connection.execute(
+            text(
+                "ALTER TABLE executionoutbox ADD COLUMN IF NOT EXISTS last_attempt_at TIMESTAMP"
+            )
+        )
+        connection.execute(
+            text(
+                "ALTER TABLE executionoutbox ADD COLUMN IF NOT EXISTS last_error VARCHAR"
+            )
+        )
+        connection.execute(
+            text("INSERT INTO schema_upgrade(version) VALUES (:version)"),
+            {"version": SUBMISSION_VERSION},
         )
 
 

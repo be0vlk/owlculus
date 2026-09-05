@@ -58,6 +58,7 @@
 
     <!-- Main Content -->
     <div v-if="execution">
+      <ExecutionWaiting :execution="execution" />
       <v-alert v-if="execution.error" type="error" role="alert" class="mb-4">
         {{ execution.error.message }}
       </v-alert>
@@ -337,6 +338,7 @@
 </template>
 
 <script setup>
+import ExecutionWaiting from '@/components/ExecutionWaiting.vue'
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useHuntStore } from '@/stores/huntStore.js'

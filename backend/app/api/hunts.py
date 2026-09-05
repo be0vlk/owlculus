@@ -8,6 +8,7 @@ enabling complex multi-step investigations with real-time monitoring and results
 from fastapi import (
     APIRouter,
     Depends,
+    Header,
     Response,
     WebSocket,
     WebSocketDisconnect,
@@ -100,6 +101,7 @@ async def execute_hunt(
     hunt_id: int,
     request: schemas.HuntExecuteRequest,
     response: Response,
+    idempotency_key: str | None = Header(None, max_length=200),
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -117,6 +119,7 @@ async def execute_hunt(
         case_id=request.case_id,
         initial_parameters=request.parameters,
         current_user=current_user,
+        idempotency_key=idempotency_key,
     )
 
     hunt = db.get(models.Hunt, execution.hunt_id)

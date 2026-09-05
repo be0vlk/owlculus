@@ -8,7 +8,7 @@ enabling extensible investigation capabilities through a standardized plugin arc
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi import APIRouter, Depends, Header, Query, Request, Response
 from sqlmodel import Session
 
 from ..core.dependencies import get_current_user
@@ -78,12 +78,13 @@ def execute_plugin(
     plugin_name: str,
     response: Response,
     params: dict[str, Any] | None = None,
+    idempotency_key: str | None = Header(None, max_length=200),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     registry: PluginRegistry = Depends(get_plugin_registry),
 ):
     accepted = execution_service.accept(
-        db, current_user, registry, plugin_name, params or {}
+        db, current_user, registry, plugin_name, params or {}, idempotency_key
     )
     response.headers["Location"] = accepted["links"]["detail"]
     return accepted

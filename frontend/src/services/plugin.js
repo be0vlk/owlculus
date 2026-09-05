@@ -1,4 +1,5 @@
 import api from './api'
+import { submitExecution } from './executionSubmission'
 
 export const pluginService = {
   async listPlugins() {
@@ -9,7 +10,7 @@ export const pluginService = {
     if (!Number.isInteger(caseId) || caseId <= 0) {
       throw new Error('An active case is required to execute a plugin')
     }
-    return (await api.post(`/api/plugins/${name}/execute`, { ...params, case_id: caseId })).data
+    return submitExecution(`/api/plugins/${name}/execute`, { ...params, case_id: caseId })
   },
 
   async getExecution(id, signal) {
