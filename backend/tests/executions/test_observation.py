@@ -50,8 +50,9 @@ def test_shared_tokens_and_completion_before_subscription(execution_system):
 def test_publication_failure_repairs_without_api_traffic_and_retention_recovers(
     execution_system,
 ):
-    from app.executions.events import stream_key
     from redis import Redis
+
+    from app.executions.events import stream_key
 
     system = execution_system
     system.env["EXECUTION_STREAM_LIMIT"] = "3"
@@ -101,10 +102,10 @@ def test_publication_failure_repairs_without_api_traffic_and_retention_recovers(
 
 def test_two_api_observers_receive_hunt_progress_and_revocation(execution_system):
     import pytest
-    from app.database.models import CaseUserLink, User
     from sqlmodel import Session, select
     from websockets.exceptions import ConnectionClosed
 
+    from app.database.models import CaseUserLink, User
     from tests.executions.test_hunt_execution_system import step, submit_hunt, terminal
 
     system = execution_system
@@ -157,11 +158,11 @@ def test_tokens_expire_are_single_use_and_bind_kind_id_and_current_user(
     from concurrent.futures import ThreadPoolExecutor
 
     import pytest
-    from app.database.models import User
     from redis import Redis
     from sqlmodel import Session
     from websockets.exceptions import InvalidStatus
 
+    from app.database.models import User
     from tests.executions.test_hunt_execution_system import step, submit_hunt
 
     system = execution_system
@@ -170,6 +171,27 @@ def test_tokens_expire_are_single_use_and_bind_kind_id_and_current_user(
     accepted = submit(first, system)
     hunt = submit_hunt(system, first, [step("first")])
     assert hunt["id"] == accepted["id"]
+    from app.core.security import create_access_token
+
+    with Session(system.engine) as db:
+        db.add(
+            User(
+                username="outsider",
+                email="outsider@example.org",
+                password_hash="unused",
+                role="Investigator",
+                is_active=True,
+            )
+        )
+        db.commit()
+    denied = first.post(
+        "/api/auth/websocket-token",
+        json={"execution_id": accepted["id"], "kind": "plugin"},
+        headers={
+            "Authorization": "Bearer " + create_access_token(data={"sub": "outsider"})
+        },
+    )
+    assert denied.status_code == 403
     url = stream(first, accepted)
     wrong_kind = url.replace("/plugins/", "/hunts/")
     with pytest.raises(InvalidStatus):
@@ -213,8 +235,9 @@ def test_tokens_expire_are_single_use_and_bind_kind_id_and_current_user(
 def test_commit_between_snapshot_and_subscription_is_replayed(execution_system):
     from concurrent.futures import ThreadPoolExecutor
 
-    from app.executions.events import stream_key
     from redis import Redis
+
+    from app.executions.events import stream_key
 
     system = execution_system
     system.env["EXECUTION_TEST_SNAPSHOT_BARRIER"] = "1"
@@ -307,8 +330,9 @@ def test_slow_socket_has_bounded_sends_and_does_not_block_worker_or_other_api(
 def test_more_than_default_retention_preserves_complete_durable_output(
     execution_system,
 ):
-    from app.executions.events import stream_key
     from redis import Redis
+
+    from app.executions.events import stream_key
 
     system = execution_system
     _, client = system.api()
@@ -344,9 +368,10 @@ def test_both_observers_receive_same_updates_and_active_retention_expires_only_a
 ):
     import time
 
-    from app.executions.events import stream_key
     from redis import Redis
     from websockets.exceptions import ConnectionClosedOK
+
+    from app.executions.events import stream_key
 
     system = execution_system
     system.env["EXECUTION_STREAM_TTL_SECONDS"] = "3"
@@ -394,14 +419,30 @@ def test_lost_event_acknowledgment_retries_without_duplicate_revision(
 ):
     from datetime import timedelta
 
-    from app.executions import events
     from redis import Redis
     from redis.exceptions import ConnectionError
+
+    from app.executions import events
 
     system = execution_system
     _, client = system.api()
     accepted = submit(client, system)
     redis = Redis.from_url(system.env["REDIS_URL"], decode_responses=True)
+    from sqlalchemy import text
+
+    from app.database.upgrade_executions import upgrade
+
+    # Recreate the ticket 06 schema, preserving accepted execution identity.
+    with system.engine.begin() as connection:
+        connection.execute(text("DROP TABLE executionevent"))
+        connection.execute(
+            text("ALTER TABLE executioncontrol DROP COLUMN event_publish_after")
+        )
+        connection.execute(
+            text("DELETE FROM schema_upgrade WHERE version='007_shared_observation'")
+        )
+    upgrade(system.engine)
+    upgrade(system.engine)
 
     class LostAcknowledgment:
         def eval(self, *args):

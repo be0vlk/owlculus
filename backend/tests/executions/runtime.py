@@ -103,6 +103,7 @@ def install():
 
     if os.environ.get("EXECUTION_TEST_SNAPSHOT_BARRIER"):
         import time
+
         from app.executions import observation
 
         original_snapshot = observation.snapshot

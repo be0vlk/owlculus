@@ -5,6 +5,7 @@ PostgreSQL owns state; the dispatcher retries publication independently of worke
 """
 
 import os
+from contextlib import nullcontext
 from datetime import UTC, timedelta
 
 from redis import Redis
@@ -68,7 +69,7 @@ def publish_once(database_engine=engine, client=None) -> bool:
             .where(
                 or_(
                     col(ExecutionControl.event_publish_after).is_(None),
-                    ExecutionControl.event_publish_after <= get_utc_now(),
+                    col(ExecutionControl.event_publish_after) <= get_utc_now(),
                 )
             )
             .order_by(
@@ -86,10 +87,7 @@ def publish_once(database_engine=engine, client=None) -> bool:
             .order_by(col(ExecutionEvent.revision))
             .limit(1)
         ).one()
-        kind = "hunt" if control.hunt_execution_id is not None else "plugin"
-        execution_id = (
-            control.hunt_execution_id if kind == "hunt" else control.plugin_execution_id
-        )
+        kind, execution_id = control.execution_reference()
         execution = db.get(
             HuntExecution if kind == "hunt" else PluginExecution, execution_id
         )
@@ -103,18 +101,10 @@ def publish_once(database_engine=engine, client=None) -> bool:
             )
         try:
             if ttl > 0:
-                if client is None:
-                    with redis_client() as connection:
-                        connection.eval(
-                            PUBLISH,
-                            1,
-                            stream_key(kind, execution_id),
-                            intent.revision,
-                            STREAM_LIMIT,
-                            ttl,
-                        )
-                else:
-                    client.eval(
+                with (
+                    redis_client() if client is None else nullcontext(client)
+                ) as connection:
+                    connection.eval(
                         PUBLISH,
                         1,
                         stream_key(kind, execution_id),
@@ -153,10 +143,5 @@ def refresh_active_streams(database_engine=engine):
                 )
             )
         ).yield_per(200):
-            kind = "hunt" if control.hunt_execution_id is not None else "plugin"
-            execution_id = (
-                control.hunt_execution_id
-                if kind == "hunt"
-                else control.plugin_execution_id
-            )
+            kind, execution_id = control.execution_reference()
             client.expire(stream_key(kind, execution_id), STREAM_TTL)
