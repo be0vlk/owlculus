@@ -383,6 +383,7 @@ Configuration defaults:
 
 | Setting | Default / meaning |
 | --- | --- |
+| `EXECUTION_DISPATCH_POLL_SECONDS` | 0.2 seconds idle polling; minimum 0.05; recovery remains every 10 seconds |
 | `PLUGIN_CONCURRENCY`, `HUNT_CONCURRENCY` | Two prefork slots independently; prefetch one |
 | `PLUGIN_WORKER_MEMORY`, `HUNT_WORKER_MEMORY` | 1 GiB container limits each, including owned child processes |
 | `WORKER_MAX_TASKS_PER_CHILD` | Recycle Celery children after 100 jobs |
@@ -489,3 +490,41 @@ lease expiry (no timestamp editing), verifies conservative failure and retained
 output, and proves results survive exact stream trimming and deletion. It uses
 reduced 8-event/2048-byte limits to exercise bounds quickly. Set
 `EXECUTION_FAULT_REPORT=/tmp/owlculus-faults.json` to retain its measurements.
+
+
+### Reference measurements — 2026-09-05
+
+Reference host: KVM Linux x86-64, four virtual AMD EPYC 9354P CPUs, 16,370,740 KiB
+RAM. PostgreSQL 15 Alpine in an isolated Docker database with image defaults;
+Redis 7 with AOF, 256 MiB maximum memory and noeviction. API pool 5+5, execution
+pools 2+0; two prefork slots per queue, prefetch one. Processes run from the locked
+uv environment. No external providers or billable requests. Results contain one
+small JSON data object per provider and completion events; retained plugin result
+and hunt detail responses totaled 22,567 bytes.
+
+| Measurement | Observed | Target |
+| --- | ---: | ---: |
+| 20 concurrent submissions, p95 | 0.727 s | <1 s |
+| Idle case read, p95 | 5.92 ms | Baseline |
+| Case read under load, p95 | 16.51 ms | <500 ms here |
+| All 20 jobs complete | 37.66 s | <40 s |
+| Queue wait, p95 | 29.05 s | Recorded |
+| Maximum concurrent executions | 2 plugins / 2 hunts | Exactly configured capacity |
+| Idle plugin slot start while hunts saturated | 0.271 s | <2 s |
+| Cooperative cancellation in saturation scenario | 1.224 s | <5 s |
+
+Redis memory grew from 1,874,288 to 2,254,640 bytes
+at the sampled peak. API/dispatcher/worker process-tree summed RSS peaked at
+1,888,240 KiB; this sum includes shared
+pages more than once, so it is not unique physical memory. A real bootstrap
+rate-limit decision remained rejected after the execution workload, proving its
+state survived. Operator report ended ready with zero pending/active work,
+zero publication backlog, and live workers on both queues.
+
+The initial one-second dispatcher idle poll missed the completion target on this
+host: 40.35 seconds during concurrent verification, then 40.61 seconds in an
+isolated run. Reducing only that poll to 200 ms produced the passing 37.66-second
+reference measurement above. Provider durations and worker capacity stayed fixed.
+These measurements describe this reference environment; they are not a production
+SLA. Raw reports are retained in the local Redis issue directory as
+`benchmark.json`, `benchmark-before-poll.json`, and `benchmark-contended.json`.

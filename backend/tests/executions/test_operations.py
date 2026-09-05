@@ -24,7 +24,7 @@ def test_missing_workers_do_not_make_api_dead(execution_system):
     queue = report["queues"][system.env["PLUGIN_QUEUE"]]
     assert queue["condition"] == "missing_workers"
     assert queue["dispatch_backlog"] == 1
-    assert queue["oldest_pending_seconds"] > 0
+    assert 0 <= queue["oldest_pending_seconds"] < 30
     assert client.get("/health/live").status_code == 200
     assert client.get("/health/ready").status_code == 200
     assert client.get(accepted["links"]["detail"]).json()["status"] == "queued"

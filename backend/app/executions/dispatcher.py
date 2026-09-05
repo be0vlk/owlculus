@@ -125,6 +125,9 @@ def main():
     from app.executions.events import publish_once, redis_client, refresh_active_streams
     from app.executions.recovery import reconcile
 
+    poll_seconds = max(
+        0.05, float(os.environ.get("EXECUTION_DISPATCH_POLL_SECONDS", "0.2"))
+    )
     next_reconcile = 0.0
     while True:
         try:
@@ -150,7 +153,7 @@ def main():
         except Exception:  # noqa: BLE001 - isolate infrastructure failures
             busy = False
         if not busy:
-            time.sleep(1)
+            time.sleep(poll_seconds)
 
 
 if __name__ == "__main__":
