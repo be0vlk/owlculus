@@ -252,7 +252,7 @@ def test_expired_owner_cannot_commit_late_results_or_case_effects(execution_syst
     try:
         accepted = submit(client, system, barrier="stale-release", save_to_case=True)
         eventually(lambda: client.get(accepted["links"]["results"]).json()["items"])
-        before = client.get(accepted["links"]["detail"]).json()
+        before = client.get(accepted["links"]["results"]).json()["items"]
         with Session(system.engine) as db:
             control = db.exec(
                 select(ExecutionControl).where(
@@ -264,10 +264,10 @@ def test_expired_owner_cannot_commit_late_results_or_case_effects(execution_syst
         (system.root / "stale-release").touch()
         subsequent = submit(client, system, mode="empty")
         eventually(lambda: finished(client, subsequent))
-        assert (
-            client.get(accepted["links"]["detail"]).json()["revision"]
-            == before["revision"]
-        )
+        stopped = eventually(lambda: finished(client, accepted))
+        assert stopped["status"] == "failed"
+        assert stopped["error"]["code"] == "lease_expired"
+        assert client.get(accepted["links"]["results"]).json()["items"] == before
         assert client.get(f"/api/evidence/case/{system.case_id}").json() == []
         assert client.get(f"/api/cases/{system.case_id}/entities").json() == []
     finally:

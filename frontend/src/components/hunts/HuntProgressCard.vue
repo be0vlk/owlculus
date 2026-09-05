@@ -153,7 +153,12 @@
 <script setup>
 import ExecutionWaiting from '@/components/ExecutionWaiting.vue'
 import { computed, ref, onMounted, onUnmounted } from 'vue'
-import { formatHuntExecutionTitle, getStatusText } from '@/utils/huntDisplayUtils'
+import {
+  formatHuntExecutionTitle,
+  getStatusText,
+  getStatusColor,
+  getStatusIcon,
+} from '@/utils/huntDisplayUtils'
 import { formatDate } from '@/composables/dateUtils'
 
 const props = defineProps({
@@ -174,47 +179,8 @@ const elapsedTime = ref('')
 let elapsedInterval = null
 
 // Computed properties
-const statusColor = computed(() => {
-  switch (props.execution.status) {
-    case 'pending':
-      return 'grey'
-    case 'running':
-      return 'primary'
-    case 'completed':
-      return 'success'
-    case 'partial':
-      return 'warning'
-    case 'failed':
-      return 'error'
-    case 'cancelling':
-      return 'warning'
-    case 'cancelled':
-      return 'grey'
-    default:
-      return 'grey'
-  }
-})
-
-const statusIcon = computed(() => {
-  switch (props.execution.status) {
-    case 'pending':
-      return 'mdi-clock-outline'
-    case 'running':
-      return 'mdi-play'
-    case 'completed':
-      return 'mdi-check'
-    case 'partial':
-      return 'mdi-alert'
-    case 'failed':
-      return 'mdi-close'
-    case 'cancelling':
-      return 'mdi-timer-sand'
-    case 'cancelled':
-      return 'mdi-stop'
-    default:
-      return 'mdi-help'
-  }
-})
+const statusColor = computed(() => getStatusColor(props.execution.status))
+const statusIcon = computed(() => getStatusIcon(props.execution.status))
 
 const statusText = computed(() => getStatusText(props.execution.status, true))
 

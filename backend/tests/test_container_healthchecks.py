@@ -105,6 +105,10 @@ def test_execution_processes_share_configuration_and_have_role_healthchecks(
             service["depends_on"]["db-init"]["condition"]
             == "service_completed_successfully"
         )
+    assert worker["stop_grace_period"] == "1m15s"
+    assert worker["environment"]["PLUGIN_EXECUTION_SECONDS"] == "900"
+    assert worker["environment"]["HUNT_STEP_SECONDS"] == "900"
+    assert worker["environment"]["HUNT_EXECUTION_SECONDS"] == "7200"
     assert "--pool=prefork" in worker["command"]
     assert "--concurrency=2" in worker["command"]
     assert "--prefetch-multiplier=1" in worker["command"]

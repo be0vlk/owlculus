@@ -5,7 +5,12 @@ import { huntService } from '@/services/hunt'
 import { useHuntStore } from '../huntStore'
 
 vi.mock('@/services/hunt', () => ({
-  huntService: { getExecution: vi.fn(), executeHunt: vi.fn(), createExecutionStream: vi.fn() },
+  huntService: {
+    getExecution: vi.fn(),
+    executeHunt: vi.fn(),
+    createExecutionStream: vi.fn(),
+    cancelExecution: vi.fn(),
+  },
 }))
 beforeEach(() => {
   setActivePinia(createPinia())
@@ -48,4 +53,26 @@ it('discards an in-flight observation after navigation', async () => {
   await vi.advanceTimersByTimeAsync(30000)
   expect(store.activeExecutions).toEqual({})
   expect(huntService.getExecution).toHaveBeenCalledTimes(1)
+})
+
+it('retains terminal state when an older cancellation response arrives late', async () => {
+  huntService.getExecution
+    .mockResolvedValueOnce({ id: 1, status: 'running', revision: 2 })
+    .mockResolvedValue({ id: 1, status: 'cancelled', revision: 4 })
+  let resolveCancel
+  huntService.cancelExecution.mockReturnValue(
+    new Promise((resolve) => {
+      resolveCancel = resolve
+    }),
+  )
+  const store = useHuntStore()
+  store.subscribeToExecution(1)
+  await flushPromises()
+  const pending = store.cancelExecution(1)
+  await vi.advanceTimersByTimeAsync(1000)
+  resolveCancel({ execution_id: 1, status: 'cancelling', revision: 3 })
+  await pending
+  expect(store.activeExecutions[1].status).toBe('cancelled')
+  await vi.advanceTimersByTimeAsync(30000)
+  expect(huntService.getExecution).toHaveBeenCalledTimes(2)
 })

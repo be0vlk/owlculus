@@ -1,34 +1,26 @@
 """Keep control I/O outside provider processes so blocked adapters remain stoppable."""
 
 import ctypes
-import logging
+import json
 import os
-import queue
+import select
 import signal
 import subprocess
 import sys
-import threading
 import time
-from datetime import UTC, timedelta
 
-from sqlmodel import Session, create_engine, select
+from sqlmodel import Session, create_engine
 
 from app.core.config import settings
-from app.core.utils import get_utc_now
-from app.database.models import HuntStep
 from app.executions.cancellation import finish_stopped
 from app.executions.limits import (
     CLEANUP_SECONDS,
     HUNT_SECONDS,
     PLUGIN_SECONDS,
-    STEP_SECONDS,
 )
 from app.executions.ownership import (
-    HEARTBEAT_SECONDS,
     LEASE_SECONDS,
-    OwnershipLost,
     claim,
-    heartbeat,
 )
 
 CHILD_COMMAND = [sys.executable, "-m", "app.executions.child"]
@@ -66,63 +58,18 @@ def run(execution_id: int, kind: str):
     if ctypes.CDLL(None, use_errno=True).prctl(36, 1, 0, 0, 0) != 0:
         raise OSError(ctypes.get_errno(), "Could not enable execution process cleanup")
     started = time.monotonic()
-    with Session(engine) as db:
-        ownership = claim(db, execution_id, kind=kind)
-    if ownership is None:
+    try:
+        with Session(engine) as db:
+            ownership = claim(db, execution_id, kind=kind)
+    finally:
         engine.dispose()
+    if ownership is None:
         return
-    updates: queue.Queue = queue.Queue()
-    stopped = threading.Event()
-
-    def monitor():
-        next_heartbeat = 0.0
-        while not stopped.is_set():
-            checked = time.monotonic()
-            try:
-                with Session(engine) as db:
-                    control, _ = ownership.lock(db)
-                    assert control.deadline_at is not None
-                    deadline = control.deadline_at.replace(tzinfo=UTC)
-                    if kind == "hunt":
-                        step = db.exec(
-                            select(HuntStep).where(
-                                HuntStep.execution_id == execution_id,
-                                HuntStep.status == "running",
-                            )
-                        ).first()
-                        if step and step.started_at:
-                            deadline = min(
-                                deadline,
-                                step.started_at.replace(tzinfo=UTC)
-                                + timedelta(seconds=STEP_SECONDS),
-                            )
-                    remaining = (deadline - get_utc_now()).total_seconds()
-                    db.rollback()
-                    renewed = checked >= next_heartbeat
-                    if renewed:
-                        heartbeat(db, ownership)
-                        next_heartbeat = checked + HEARTBEAT_SECONDS
-                    updates.put(
-                        (
-                            checked + LEASE_SECONDS if renewed else None,
-                            checked + remaining,
-                            None,
-                        )
-                    )
-            except OwnershipLost:
-                updates.put((None, None, "control_lost"))
-                return
-            except Exception:  # noqa: BLE001 - local clock enforces the last lease
-                logging.getLogger(__name__).warning(
-                    "Execution control unavailable; stopping by lease expiry"
-                )
-            stopped.wait(0.5)
-
     process = None
     reason = None
     lease_end = started + LEASE_SECONDS
     deadline_end = started + (HUNT_SECONDS if kind == "hunt" else PLUGIN_SECONDS)
-    monitor_thread = threading.Thread(target=monitor, daemon=True)
+    monitor = None
     previous = signal.getsignal(signal.SIGTERM)
 
     def shutting_down(signum, frame):
@@ -141,19 +88,39 @@ def run(execution_id: int, kind: str):
             ],
             start_new_session=True,
         )
-        monitor_thread.start()
+        monitor = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "app.executions.control_monitor",
+                kind,
+                str(execution_id),
+                str(ownership.control_id),
+                str(ownership.generation),
+                ownership.owner,
+            ],
+            stdout=subprocess.PIPE,
+            start_new_session=True,
+        )
+        assert monitor.stdout is not None
+        pending = b""
         while process.poll() is None:
-            try:
-                lease, deadline, stop_reason = updates.get(timeout=0.1)
-                if lease:
-                    lease_end = lease
-                if deadline:
-                    deadline_end = deadline
-                if stop_reason:
-                    reason = stop_reason
+            readable, _, _ = select.select([monitor.stdout], [], [], 0.1)
+            if readable:
+                chunk = os.read(monitor.stdout.fileno(), 4096)
+                if not chunk:
+                    reason = "control_lost"
                     break
-            except queue.Empty:
-                pass
+                pending += chunk
+                while b"\n" in pending:
+                    line, pending = pending.split(b"\n", 1)
+                    update = json.loads(line)
+                    lease_end = update.get("lease_end") or lease_end
+                    deadline_end = update.get("deadline_end") or deadline_end
+                    if update.get("reason"):
+                        reason = update["reason"]
+                if reason:
+                    break
             now = time.monotonic()
             if now >= min(lease_end, deadline_end) - CLEANUP_SECONDS:
                 reason = (
@@ -163,9 +130,12 @@ def run(execution_id: int, kind: str):
                 )
                 break
     finally:
-        stopped.set()
         if process is not None:
             stop_process(process)
+        if monitor is not None:
+            stop_process(monitor)
+            if monitor.stdout is not None:
+                monitor.stdout.close()
         # Finish only once cleanup is proven. A partition keeps the durable view
         # nonterminal until this transaction can be committed.
         while True:
