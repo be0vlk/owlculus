@@ -1,6 +1,8 @@
 """Authorized snapshot/replay observation with no worker-to-socket coupling."""
 
 import asyncio
+import json
+import logging
 import os
 import time
 
@@ -171,6 +173,16 @@ async def observe(websocket: WebSocket, database_engine, kind: str, execution_id
                 ):
                     raise
                 except Exception:  # noqa: BLE001 - recover from durable state
+                    logging.getLogger(__name__).warning(
+                        json.dumps(
+                            {
+                                "event": "observation_failure",
+                                "kind": kind,
+                                "execution_id": execution_id,
+                                "cursor": last_cursor,
+                            }
+                        )
+                    )
                     await send({"event_type": "resync", **current})
                     last_cursor = current["cursor"]
                 if current["state"]["status"] in {

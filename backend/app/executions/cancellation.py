@@ -78,7 +78,8 @@ def request_cancel(db, user, execution_id, *, kind="plugin"):
     # The hint is expendable. The worker polls PostgreSQL independently.
     try:
         with Redis.from_url(
-            os.environ.get("REDIS_URL", "redis://localhost:6379/0"),
+            os.environ.get("EXECUTION_EVENT_REDIS_URL")
+            or os.environ.get("REDIS_URL", "redis://localhost:6379/0"),
             socket_connect_timeout=0.2,
             socket_timeout=0.2,
         ) as redis:

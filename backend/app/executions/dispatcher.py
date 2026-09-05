@@ -1,5 +1,6 @@
 """Supervised PostgreSQL outbox publisher, independent of API lifetimes."""
 
+import json
 import logging
 import os
 import random
@@ -101,6 +102,18 @@ def dispatch_once(database_engine=engine) -> bool:
             row.published_at = get_utc_now()
             row.attempts = 0
             row.last_error = None
+        logging.getLogger(__name__).warning(
+            json.dumps(
+                {
+                    "event": "dispatch",
+                    "execution_id": execution_id,
+                    "kind": kind,
+                    "attempt": row.attempts,
+                    "generation": control.generation,
+                    "status": "retry" if row.last_error else "published",
+                }
+            )
+        )
         return True
 
 

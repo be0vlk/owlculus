@@ -119,3 +119,22 @@ def test_execution_processes_share_configuration_and_have_role_healthchecks(
         if volume["target"] == "/app/uploads"
     )
     assert uploads(worker) == uploads(api)
+
+
+@pytest.mark.parametrize("topology", SUPPORTED_TOPOLOGIES)
+def test_execution_resource_budgets_and_private_storage(topology):
+    services = load_compose_configuration(topology)["services"]
+    redis = services["redis"]
+    assert "--appendonly" in redis["command"]
+    assert "noeviction" in redis["command"]
+    assert "--maxmemory" in redis["command"]
+    assert not redis.get("ports")
+    assert redis["mem_limit"] > 256 * 1024 * 1024
+    for name in ("plugin-worker", "hunt-worker"):
+        worker = services[name]
+        assert worker["mem_limit"] == 1024 * 1024 * 1024
+        assert worker["environment"]["DATABASE_POOL_SIZE"] == "2"
+        assert worker["environment"]["DATABASE_MAX_OVERFLOW"] == "0"
+        assert worker["environment"]["WORKER_MAX_TASKS_PER_CHILD"] == "100"
+        for key in ("EXECUTION_BROKER_URL", "EXECUTION_EVENT_REDIS_URL"):
+            assert worker["environment"][key] == services["backend"]["environment"][key]

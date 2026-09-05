@@ -4,9 +4,7 @@ import asyncio
 import signal
 import sys
 
-from sqlmodel import create_engine
-
-from app.core.config import settings
+from app.database.connection import create_execution_engine
 from app.executions.ownership import Ownership
 from app.plugins.plugin_registry import get_shipped_plugin_registry
 
@@ -16,9 +14,7 @@ def main():
     from app.executions.hunt_worker import execute as hunt
     from app.executions.worker import execute as plugin
 
-    engine = create_engine(
-        settings.get_database_url(), pool_pre_ping=True, hide_parameters=True
-    )
+    engine = create_execution_engine()
 
     async def run():
         task = asyncio.current_task()
