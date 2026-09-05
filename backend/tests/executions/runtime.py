@@ -57,7 +57,7 @@ class AcceptancePlugin(BasePlugin):
 
             (root / "blocked").touch()
             time.sleep(600)  # noqa: ASYNC251 - deliberately uncooperative adapter
-        if params.get("mode") == "subprocess":
+        if params.get("mode") in {"subprocess", "orphan-subprocess"}:
             import subprocess
             import sys
 
@@ -65,7 +65,8 @@ class AcceptancePlugin(BasePlugin):
                 [sys.executable, "-c", "import time; time.sleep(600)"]
             )
             (root / "subprocess-pid").write_text(str(process.pid))
-            process.wait()
+            if params.get("mode") == "subprocess":
+                process.wait()
         if params.get("barrier"):
             for _ in range(600):
                 if (root / params["barrier"]).exists():
@@ -106,6 +107,7 @@ def install():
 
         original_claim = supervisor.claim
         original_finish = supervisor.finish_stopped
+        original_stop = supervisor.stop_process
 
         def wait_at_boundary():
             root = Path(os.environ["EXECUTION_TEST_DIR"])
@@ -153,6 +155,12 @@ def install():
         DurableHuntNotifier.broadcast = checkpoint
         WorkerEvidenceSink.write = evidence_boundary
 
+        def stop_at_boundary(process):
+            if boundary == "before-cleanup" and process.stdin is not None:
+                wait_at_boundary()
+            return original_stop(process)
+
+        supervisor.stop_process = stop_at_boundary
         supervisor.claim = claim_at_boundary
         supervisor.finish_stopped = finish_at_boundary
 

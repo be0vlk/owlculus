@@ -80,7 +80,20 @@ def recover_stopped(db, control, execution, *, reason=None):
     cancel_steps(db, execution)
 
 
+BATCH_SIZE = 100
+
+
 def reconcile(database_engine=engine) -> int:
+    """Drain stale ownership promptly, committing between bounded batches."""
+    total = 0
+    while True:
+        recovered = _reconcile_batch(database_engine)
+        total += recovered
+        if recovered < BATCH_SIZE:
+            return total
+
+
+def _reconcile_batch(database_engine) -> int:
     """Run independently of broker availability; serialize with all owner writes."""
     count = 0
     with Session(database_engine) as db, transaction(db):
@@ -104,7 +117,7 @@ def reconcile(database_engine=engine) -> int:
                 <= get_utc_now() - timedelta(seconds=CLEANUP_SECONDS),
             )
             .with_for_update(skip_locked=True)
-            .limit(100)
+            .limit(BATCH_SIZE)
         ).all()
         for control in controls:
             execution = associated_execution(db, control)
