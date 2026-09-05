@@ -142,6 +142,7 @@ def execution_system(tmp_path):
             "SECRET_KEY": settings.SECRET_KEY.get_secret_value(),
             "REDIS_URL": f"redis://127.0.0.1:{ports[1]}/0",
             "PLUGIN_QUEUE": namespace,
+            "HUNT_QUEUE": f"{namespace}-hunts",
             "CUSTOM_API_KEY": "",
             "EXECUTION_TEST_DIR": str(tmp_path),
             "PYTHONPATH": str(Path(__file__).resolve().parents[2]),

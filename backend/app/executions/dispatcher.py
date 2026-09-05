@@ -11,7 +11,7 @@ from app.core.utils import get_utc_now
 from app.database.connection import engine
 from app.database.db_utils import transaction
 from app.database.models import ExecutionControl, ExecutionOutbox
-from app.executions.celery_app import QUEUE, app
+from app.executions.celery_app import HUNT_QUEUE, QUEUE, app
 
 
 def dispatch_once(database_engine=engine) -> bool:
@@ -30,13 +30,17 @@ def dispatch_once(database_engine=engine) -> bool:
             return False
         control = db.get(ExecutionControl, row.control_id)
         assert control is not None
+        kind = "hunt" if control.hunt_execution_id is not None else "plugin"
+        execution_id = (
+            control.hunt_execution_id if kind == "hunt" else control.plugin_execution_id
+        )
         row.attempts += 1
         try:
             app.send_task(
-                "owlculus.execute_plugin",
-                args=[control.plugin_execution_id],
-                task_id=f"plugin-{control.plugin_execution_id}",
-                queue=QUEUE,
+                f"owlculus.execute_{kind}",
+                args=[execution_id],
+                task_id=f"{kind}-{execution_id}",
+                queue=HUNT_QUEUE if kind == "hunt" else QUEUE,
                 retry=False,
             )
         except Exception:  # noqa: BLE001 - isolate execution failures

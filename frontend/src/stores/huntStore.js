@@ -10,7 +10,7 @@ export const useHuntStore = defineStore('hunt', () => {
   const executionHistory = ref([])
   const loading = ref(false)
   const error = ref(null)
-  const websocketConnections = ref(new Map())
+  const observations = new Map()
 
   // Getters
   const huntsByCategory = computed(() => {
@@ -95,7 +95,7 @@ export const useHuntStore = defineStore('hunt', () => {
       executionHistory.value.unshift(fullExecution)
       executionHistory.value.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
 
-      // Start WebSocket monitoring
+      // Start durable observation
       if (['pending', 'running'].includes(fullExecution.status)) {
         subscribeToExecution(fullExecution.id)
       }
@@ -171,7 +171,7 @@ export const useHuntStore = defineStore('hunt', () => {
         activeExecutions.value[executionId] = execution
       }
 
-      // Close WebSocket connection
+      // Stop observation
       unsubscribeFromExecution(executionId)
 
       return result
@@ -184,150 +184,50 @@ export const useHuntStore = defineStore('hunt', () => {
   }
 
   function subscribeToExecution(executionId) {
+    if (observations.has(executionId)) return
     const request = generation
-    // Don't create duplicate connections
-    if (websocketConnections.value.has(executionId)) {
-      return
-    }
-
-    const onMessage = async (data) => {
-      if (request !== generation) return
-      // Handle initial connection message
-      if (data.event_type === 'connected') {
-        // Ensure we have the execution data
-        if (!activeExecutions.value[executionId]) {
-          try {
-            await getExecution(executionId, true)
-          } catch (err) {
-            console.error('Failed to load execution data on WebSocket connect:', err)
-          }
-        }
-        return
-      }
-
-      // Update execution in store based on WebSocket message
-      const execution = activeExecutions.value[executionId]
-      if (execution) {
-        // Create a new object to ensure reactivity
-        const updatedExecution = { ...execution }
-
-        switch (data.event_type) {
-          case 'progress':
-            updatedExecution.progress = data.progress || execution.progress
-            // Update step status if provided
-            if (data.step_id && updatedExecution.steps) {
-              const stepIndex = updatedExecution.steps.findIndex((s) => s.step_id === data.step_id)
-              if (stepIndex !== -1) {
-                updatedExecution.steps[stepIndex] = {
-                  ...updatedExecution.steps[stepIndex],
-                  status: 'running',
-                }
-              }
-            }
-            break
-          case 'step_complete':
-            updatedExecution.progress = data.progress || execution.progress
-            // Update step status if provided
-            if (data.step_id && updatedExecution.steps) {
-              const stepIndex = updatedExecution.steps.findIndex((s) => s.step_id === data.step_id)
-              if (stepIndex !== -1) {
-                updatedExecution.steps[stepIndex] = {
-                  ...updatedExecution.steps[stepIndex],
-                  status: 'completed',
-                }
-              }
-            }
-            break
-          case 'step_failed':
-            updatedExecution.progress = data.progress || execution.progress
-            // Update step status if provided
-            if (data.step_id && updatedExecution.steps) {
-              const stepIndex = updatedExecution.steps.findIndex((s) => s.step_id === data.step_id)
-              if (stepIndex !== -1) {
-                updatedExecution.steps[stepIndex] = {
-                  ...updatedExecution.steps[stepIndex],
-                  status: 'failed',
-                }
-              }
-            }
-            break
-          case 'complete': {
-            updatedExecution.status = 'completed'
-            updatedExecution.progress = 1.0
-            updatedExecution.completed_at = new Date().toISOString()
-
-            // Fetch the latest execution details with steps
-            try {
-              const fullExecution = await getExecution(executionId, true)
-              Object.assign(updatedExecution, fullExecution)
-            } catch (err) {
-              console.error('Failed to fetch completed execution details:', err)
-            }
-
-            if (request !== generation) return
-
-            // Update execution history to include the completed execution
-            const historyIndex = executionHistory.value.findIndex((e) => e.id === executionId)
-            if (historyIndex !== -1) {
-              executionHistory.value[historyIndex] = { ...updatedExecution }
-            } else {
-              executionHistory.value.unshift({ ...updatedExecution })
-            }
-
-            unsubscribeFromExecution(executionId)
-            break
-          }
-          case 'error': {
-            updatedExecution.status = 'failed'
-            updatedExecution.completed_at = new Date().toISOString()
-
-            // Update execution history
-            const errorHistoryIndex = executionHistory.value.findIndex((e) => e.id === executionId)
-            if (errorHistoryIndex !== -1) {
-              executionHistory.value[errorHistoryIndex] = { ...updatedExecution }
-            } else {
-              executionHistory.value.unshift({ ...updatedExecution })
-            }
-
-            unsubscribeFromExecution(executionId)
-            break
-          }
-        }
-
-        // Force reactivity by replacing the entire object
-        activeExecutions.value = {
-          ...activeExecutions.value,
-          [executionId]: updatedExecution,
-        }
-      }
-    }
-
-    const onError = (error) => {
-      console.error(`WebSocket error for execution ${executionId}:`, error)
-      // Don't immediately remove on error, let it retry
-    }
-
-    huntService
-      .createExecutionStream(executionId, onMessage, onError)
-      .then((ws) => {
-        if (request !== generation) {
-          huntService.closeExecutionStream(ws)
+    const observation = { controller: new AbortController(), timer: null }
+    observations.set(executionId, observation)
+    let delay = 1000
+    const current = () => request === generation && observations.get(executionId) === observation
+    async function poll() {
+      try {
+        const execution = await huntService.getExecution(
+          executionId,
+          true,
+          observation.controller.signal,
+        )
+        if (!current()) return
+        activeExecutions.value[executionId] = execution
+        const index = executionHistory.value.findIndex((item) => item.id === executionId)
+        if (index >= 0) executionHistory.value[index] = execution
+        error.value = null
+        if (!['pending', 'running'].includes(execution.status)) {
+          unsubscribeFromExecution(executionId)
           return
         }
-        websocketConnections.value.set(executionId, ws)
-      })
-      .catch((err) => {
-        console.error('Failed to create WebSocket connection:', err)
-        if (request === generation) error.value = 'Failed to connect to execution stream'
-      })
+      } catch (failure) {
+        if (!current()) return
+        error.value = failure.response?.data?.detail || failure.message || 'Could not refresh hunt'
+        if ([401, 403, 404].includes(failure.response?.status)) {
+          unsubscribeFromExecution(executionId)
+          return
+        }
+      }
+      if (current()) {
+        observation.timer = setTimeout(poll, delay)
+        delay = Math.min(delay * 1.5, 10000)
+      }
+    }
+    poll()
   }
 
   function unsubscribeFromExecution(executionId) {
-    const ws = websocketConnections.value.get(executionId)
-    if (ws) {
-      huntService.closeExecutionStream(ws)
-      websocketConnections.value.delete(executionId)
-    }
+    const observation = observations.get(executionId)
+    if (!observation) return
+    observations.delete(executionId)
+    clearTimeout(observation.timer)
+    observation.controller.abort()
   }
 
   function clearError() {
@@ -390,10 +290,7 @@ export const useHuntStore = defineStore('hunt', () => {
     activeExecutions.value = {}
     executionHistory.value = []
     error.value = null
-    websocketConnections.value.forEach((ws) => {
-      huntService.closeExecutionStream(ws)
-    })
-    websocketConnections.value.clear()
+    for (const id of observations.keys()) unsubscribeFromExecution(id)
   }
 
   return {

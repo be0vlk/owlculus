@@ -45,9 +45,10 @@ export const huntService = {
    * @param {boolean} includeSteps - Whether to include step details
    * @returns {Promise<Object>} Hunt execution details
    */
-  async getExecution(executionId, includeSteps = false) {
+  async getExecution(executionId, includeSteps = false, signal) {
     const response = await api.get(`/api/hunts/executions/${executionId}`, {
       params: { include_steps: includeSteps },
+      signal,
     })
     return response.data
   },

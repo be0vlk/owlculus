@@ -48,6 +48,13 @@ services:
       - ./backend:/app
       - uploads_dev_data:/app/uploads
 
+  hunt-worker:
+    build: *backend-development-build
+    environment: *execution-development-environment
+    volumes:
+      - ./backend:/app
+      - uploads_dev_data:/app/uploads
+
   execution-dispatcher:
     build: *backend-development-build
     environment: *execution-development-environment

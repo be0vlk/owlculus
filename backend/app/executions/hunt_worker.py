@@ -1,0 +1,79 @@
+"""One owned hunt per worker slot, with sequential in-process plugin steps."""
+
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
+from sqlmodel import Session
+
+from app.core.utils import get_utc_now
+from app.database.db_utils import transaction
+from app.database.models import HuntExecution
+from app.executions.ownership import OwnershipLost, claim
+from app.executions.service import authorize_execution
+from app.executions.worker import worker_adapter, worker_resources
+from app.hunts.hunt_executor import HuntExecutor
+from app.plugins.plugin_registry import PluginRegistry
+from app.plugins.plugin_runner import PluginRunner
+
+
+class DurableHuntNotifier:
+    """Observation reads committed state until shared streaming is introduced."""
+
+    async def broadcast(self, event):
+        pass
+
+
+async def execute(engine: Engine, registry: PluginRegistry, execution_id: int) -> None:
+    with Session(engine) as db:
+        ownership = claim(db, execution_id, kind="hunt")
+    if ownership is None:
+        return
+    with (
+        worker_resources(engine, ownership) as (vault, session_factory, lease_lost),
+        Session(engine, expire_on_commit=False) as db,
+    ):
+
+        def fence(session):
+            if lease_lost.is_set():
+                raise OwnershipLost()
+            control, _ = ownership.lock(session)
+            control.revision += 1
+
+        def before_step():
+            with Session(engine) as check:
+                _, execution = ownership.lock(check)
+                authorize_execution(check, execution)
+
+        event.listen(db, "before_commit", fence)
+        try:
+            _, execution = ownership.lock(db)
+            assert isinstance(execution, HuntExecution)
+            user = authorize_execution(db, execution)
+            definition = execution.definition_snapshot
+            assert definition is not None
+            db.expunge(user)
+            # End the initial read transaction without expiring the run data.
+            db.commit()
+            executor = HuntExecutor(
+                db,
+                DurableHuntNotifier(),
+                plugin_runner=PluginRunner(registry),
+                run_adapter=worker_adapter(session_factory, vault),
+                before_step=before_step,
+                sanitize=vault.redact,
+            )
+            await executor.execute_hunt(execution, definition, user)
+        except OwnershipLost:
+            db.rollback()
+        except Exception:  # noqa: BLE001 - record infrastructure failure safely
+            db.rollback()
+            try:
+                with transaction(db):
+                    _, failed = ownership.lock(db)
+                    failed.status = "failed"
+                    failed.completed_at = get_utc_now()
+                    failed.error = {
+                        "code": "hunt_error",
+                        "message": "Hunt could not finish",
+                    }
+            except OwnershipLost:
+                db.rollback()

@@ -213,7 +213,7 @@ const statusIcon = computed(() => {
 const statusText = computed(() => {
   switch (props.execution.status) {
     case 'pending':
-      return 'Pending'
+      return 'Queued'
     case 'running':
       return 'Running'
     case 'completed':

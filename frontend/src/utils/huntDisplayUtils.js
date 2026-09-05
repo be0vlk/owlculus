@@ -131,7 +131,7 @@ export const getStatusIcon = (status) => {
 // Status text mapping
 export const getStatusText = (status) => {
   const statusTexts = {
-    pending: 'Pending',
+    pending: 'Queued',
     running: 'Running',
     completed: 'Completed',
     partial: 'Partial Success',

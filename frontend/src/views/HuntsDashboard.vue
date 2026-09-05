@@ -1,5 +1,5 @@
 <template>
-  <BaseDashboard :error="error" :loading="loading" title="Hunt Management">
+  <BaseDashboard :error="error || huntStore.error" :loading="loading" title="Hunt Management">
     <!-- Header Actions -->
     <template #header-actions>
       <div class="d-flex align-center ga-2">
@@ -174,7 +174,6 @@
 </template>
 
 <script setup>
-// Watch for tab changes to manage polling
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
@@ -207,7 +206,6 @@ const submittingHunt = ref(false)
 const huntSubmissionError = ref(null)
 const showDetailsModal = ref(false)
 const cancellingExecutions = ref(new Set())
-let pollingInterval = null
 let loadGeneration = 0
 
 // Computed properties
@@ -245,29 +243,6 @@ const loadData = async () => {
 
 const refreshData = async () => {
   await loadData()
-}
-
-const refreshActiveExecutions = async () => {
-  await huntStore.refreshRunningExecutions()
-}
-
-const startPolling = () => {
-  // Stop any existing polling
-  stopPolling()
-
-  // Poll every 5 seconds for active executions updates
-  pollingInterval = setInterval(() => {
-    if (activeTab.value === 'active' && huntStore.runningExecutions.length > 0) {
-      refreshActiveExecutions()
-    }
-  }, 5000)
-}
-
-const stopPolling = () => {
-  if (pollingInterval) {
-    clearInterval(pollingInterval)
-    pollingInterval = null
-  }
 }
 
 const handleExecuteHunt = (hunt) => {
@@ -346,30 +321,9 @@ const handleViewExecutionDetails = (executionId) => {
   if (execution) router.push(`/case/${execution.case_id}/hunts/execution/${executionId}`)
 }
 
-watch(activeTab, (newTab) => {
-  if (newTab === 'active') {
-    startPolling()
-  } else {
-    stopPolling()
-  }
-})
-
-// Watch for changes in running executions to manage polling
-watch(
-  () => huntStore.runningExecutions.length,
-  (count) => {
-    if (count > 0 && activeTab.value === 'active') {
-      startPolling()
-    } else if (count === 0) {
-      stopPolling()
-    }
-  },
-)
-
 watch(
   caseId,
   () => {
-    stopPolling()
     showExecutionModal.value = false
     showDetailsModal.value = false
     selectedHunt.value = null
@@ -381,7 +335,6 @@ watch(
 
 onBeforeUnmount(() => {
   loadGeneration++
-  stopPolling()
   huntStore.resetCaseExecutions()
 })
 </script>

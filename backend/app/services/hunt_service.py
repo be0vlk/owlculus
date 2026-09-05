@@ -7,18 +7,15 @@ OSINT investigation workflows that chain multiple plugins together with paramete
 validation, progress tracking, and real-time status updates.
 """
 
-import asyncio
 from collections.abc import Callable
-from typing import Any, cast
+from typing import Any
 
 from sqlmodel import Session, col, select
 
 from app.core.exceptions import ResourceNotFoundException, ValidationException
 from app.core.logging import get_security_logger
-from app.core.utils import get_utc_now
 from app.core.websocket_manager import websocket_manager
 from app.database.models import Hunt, HuntExecution, HuntStep, User
-from app.database.db_utils import transaction
 from app.hunts.hunt_executor import HuntExecutor
 from app.hunts.hunt_registry import HuntRegistry, shipped_hunt_registry
 from app.services.case_access import CaseAccess
@@ -68,70 +65,49 @@ class HuntService:
         if not hunt or not hunt.is_active:
             raise ResourceNotFoundException("Hunt not found or inactive")
 
-        hunt_instance = self.registry.create(hunt.name)
-        if hunt_instance is not None:
-            validated_params = hunt_instance.validate_parameters(initial_parameters)
-        else:
-            validated_params = initial_parameters
+        from fastapi import HTTPException
 
-        execution = HuntExecution(
-            hunt_id=hunt_id,
-            case_id=case.id,
-            initial_parameters=validated_params,
-            status="pending",
-            created_by_id=current_user.id,
-        )
-        with transaction(self.db):
-            self.db.add(execution)
-        self.db.refresh(execution)
+        from app.executions.service import accept_hunt, normalize_parameters
+        from app.hunts.base_hunt import BaseHunt, HuntStepDefinition
+        from app.hunts.hunt_definition_check import HuntDefinitionCheck
+        from app.plugins.plugin_registry import get_shipped_plugin_registry
 
-        asyncio.create_task(
-            self._run_hunt_async(cast(int, execution.id), cast(int, current_user.id))
-        )
+        stored_definition = hunt.definition_json
 
-        return execution
+        class AcceptedDefinition(BaseHunt):
+            def get_steps(self):
+                return [
+                    HuntStepDefinition(**step) for step in stored_definition["steps"]
+                ]
 
-    async def _run_hunt_async(self, execution_id: int, user_id: int):
-        execution = None
-        db = None
         try:
-            from app.database.connection import get_db
-
-            db = next(get_db())
-
-            execution = db.get(HuntExecution, execution_id)
-            user = db.get(User, user_id)
-
-            if not execution or not user:
-                security_logger(
-                    action="hunt_execution_not_found",
-                    execution_id=execution_id,
-                    user_id=user_id,
-                ).error(f"Hunt execution {execution_id} or user {user_id} not found")
-                return
-
-            hunt = db.get(Hunt, execution.hunt_id)
-            if not hunt:
-                security_logger(
-                    action="hunt_not_found", hunt_id=execution.hunt_id
-                ).error(f"Hunt {execution.hunt_id} not found")
-                return
-
-            executor = self._executor_factory(db)
-            await executor.execute_hunt(execution, hunt.definition_json, user)
-
-        except Exception as e:  # noqa: BLE001 - background jobs must record failure
-            security_logger(
-                action="hunt_execution_failed", execution_id=execution_id, error=str(e)
-            ).error(f"Hunt execution {execution_id} failed: {e}")
-            if execution and db:
-                execution.status = "failed"
-                execution.completed_at = get_utc_now()
-                with transaction(db):
-                    db.add(execution)
-        finally:
-            if db:
-                db.close()
+            definition = AcceptedDefinition()
+            definition.name = hunt.name
+            definition.initial_parameters = hunt.definition_json.get(
+                "initial_parameters", {}
+            )
+            registry = get_shipped_plugin_registry()
+            HuntDefinitionCheck(
+                {
+                    name: meta["parameters"]
+                    for name, meta in registry.metadata().items()
+                    if meta["enabled"]
+                }
+            ).check(definition)
+            steps = definition.get_steps()
+            if len({step.step_id for step in steps}) != len(steps):
+                raise ValueError("Hunt step IDs must be unique")
+            validated = normalize_parameters(
+                definition.initial_parameters, initial_parameters
+            )
+            hunt_instance = self.registry.create(hunt.name)
+            if hunt_instance is not None:
+                validated = hunt_instance.validate_parameters(validated)
+        except (ValueError, KeyError, TypeError) as error:
+            raise HTTPException(422, str(error)) from None
+        return accept_hunt(
+            self.db, current_user, hunt, {"case_id": case.id, "parameters": validated}
+        )
 
     async def get_execution(
         self, execution_id: int, *, current_user: User

@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import List, Optional
 
 from pydantic import EmailStr
-from sqlalchemy import JSON, Column, UniqueConstraint
+from sqlalchemy import JSON, CheckConstraint, Column, UniqueConstraint
 from sqlmodel import Field, Relationship, SQLModel
 
 from ..core.enums import ExecutionStatus, TaskPriority, TaskStatus
@@ -151,6 +151,9 @@ class HuntExecution(SQLModel, table=True):
     status: str = Field(default="pending")
     progress: float = Field(default=0.0)
     initial_parameters: dict = Field(sa_column=Column(JSON))
+    definition_snapshot: Optional[dict] = Field(default=None, sa_column=Column(JSON))
+    implementation_build: Optional[str] = None
+    error: Optional[dict] = Field(default=None, sa_column=Column(JSON))
     context_data: Optional[dict] = Field(default=None, sa_column=Column(JSON))
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
@@ -164,6 +167,7 @@ class HuntExecution(SQLModel, table=True):
 
 
 class HuntStep(SQLModel, table=True):
+    __table_args__ = (UniqueConstraint("execution_id", "step_id", name="uq_hunt_step"),)
     id: Optional[int] = Field(default=None, primary_key=True)
     execution_id: int = Field(foreign_key="huntexecution.id")
     step_id: str
@@ -239,9 +243,19 @@ class PluginExecution(SQLModel, table=True):
 
 
 class ExecutionControl(SQLModel, table=True):
-    # Ticket 02 adds the alternative hunt association and XOR constraint.
+    __table_args__ = (
+        CheckConstraint(
+            "(plugin_execution_id IS NULL) <> (hunt_execution_id IS NULL)",
+            name="execution_kind_xor",
+        ),
+    )
     id: Optional[int] = Field(default=None, primary_key=True)
-    plugin_execution_id: int = Field(foreign_key="pluginexecution.id", unique=True)
+    plugin_execution_id: Optional[int] = Field(
+        default=None, foreign_key="pluginexecution.id", unique=True
+    )
+    hunt_execution_id: Optional[int] = Field(
+        default=None, foreign_key="huntexecution.id", unique=True
+    )
     generation: int = 0
     owner: Optional[str] = None
     lease_until: Optional[datetime] = None

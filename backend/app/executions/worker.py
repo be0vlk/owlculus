@@ -8,7 +8,7 @@ from sqlalchemy import event
 from sqlalchemy.engine import Engine
 from sqlmodel import Session
 
-from app.database.models import User
+from app.database.models import PluginExecution, User
 from app.executions.ownership import (
     HEARTBEAT_SECONDS,
     OwnershipLost,
@@ -85,11 +85,9 @@ class WorkerEntitySink:
         await self.sink.write(sanitized, self.case_id, self.user)
 
 
-async def execute(engine: Engine, registry: PluginRegistry, execution_id: int) -> None:
-    with Session(engine) as db:
-        ownership = claim(db, execution_id)
-    if ownership is None:
-        return
+@contextmanager
+def worker_resources(engine: Engine, ownership):
+    """Own heartbeat, vault and fenced effect sessions for either execution kind."""
     stop = Event()
     lease_lost = Event()
 
@@ -119,8 +117,46 @@ async def execute(engine: Engine, registry: PluginRegistry, execution_id: int) -
             yield db
 
     try:
+        yield vault, session_factory, lease_lost
+    finally:
+        stop.set()
+        thread.join(timeout=2)
+
+
+def worker_adapter(session_factory, vault):
+    class SanitizedAdapter(ProductionPluginRunAdapter):
+        @contextmanager
+        def open(self, *, user, case_id, save_to_case):
+            with super().open(
+                user=user, case_id=case_id, save_to_case=save_to_case
+            ) as run:
+                yield replace(
+                    run,
+                    evidence=WorkerEvidenceSink(run.evidence, vault, case_id, user),
+                    entities=WorkerEntitySink(run.entities, vault, case_id, user),
+                )
+
+    return SanitizedAdapter(session_factory, lambda _: vault)
+
+
+async def execute(engine: Engine, registry: PluginRegistry, execution_id: int) -> None:
+    with Session(engine) as db:
+        ownership = claim(db, execution_id)
+    if ownership is None:
+        return
+    with worker_resources(engine, ownership) as (vault, session_factory, lease_lost):
+        await execute_plugin_run(
+            engine, registry, ownership, vault, session_factory, lease_lost
+        )
+
+
+async def execute_plugin_run(
+    engine, registry, ownership, vault, session_factory, lease_lost
+):
+    try:
         with Session(engine) as db:
             _, execution = ownership.lock(db)
+            assert isinstance(execution, PluginExecution)
             user = authorize_execution(db, execution)
             name, params, case_id, save = (
                 execution.plugin_name,
@@ -129,13 +165,8 @@ async def execute(engine: Engine, registry: PluginRegistry, execution_id: int) -
                 execution.save_to_case,
             )
             db.expunge(user)
-        adapter = ProductionPluginRunAdapter(session_factory, lambda _: vault)
+        adapter = worker_adapter(session_factory, vault)
         with adapter.open(user=user, case_id=case_id, save_to_case=save) as run:
-            run = replace(
-                run,
-                evidence=WorkerEvidenceSink(run.evidence, vault, case_id, user),
-                entities=WorkerEntitySink(run.entities, vault, case_id, user),
-            )
             async for result in PluginRunner(registry).run(name, params, run):
                 run.session.rollback()
                 if lease_lost.is_set():
@@ -160,6 +191,3 @@ async def execute(engine: Engine, registry: PluginRegistry, execution_id: int) -
                 append_result(db, ownership, {"type": "complete", "data": {}})
         except OwnershipLost:
             pass
-    finally:
-        stop.set()
-        thread.join(timeout=2)
