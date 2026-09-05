@@ -3,7 +3,7 @@ import StarterKit from '@tiptap/starter-kit'
 import Highlight from '@tiptap/extension-highlight'
 import { TaskList, TaskItem } from '@tiptap/extension-list'
 import { Placeholder } from '@tiptap/extensions'
-import { ref, computed, onBeforeUnmount } from 'vue'
+import { ref, computed, onBeforeUnmount, onMounted } from 'vue'
 import { formatDistanceToNow } from 'date-fns'
 
 export function useBaseNoteEditor({
@@ -12,6 +12,7 @@ export function useBaseNoteEditor({
   editable = true,
   label = 'Notes',
   onUpdate = null,
+  onExit = null,
   saveDelay = 1000,
 }) {
   const lastSaved = ref(null)
@@ -24,12 +25,16 @@ export function useBaseNoteEditor({
   })
 
   let saveTimeout
+  const cancelPendingSave = () => clearTimeout(saveTimeout)
   const triggerSave = (saveCallback) => {
     clearTimeout(saveTimeout)
     if (saveCallback) {
       saveTimeout = setTimeout(saveCallback, saveDelay)
     }
   }
+
+  // Capture pending notes before Tiptap's own unmount hook destroys the editor.
+  onBeforeUnmount(() => cleanup(onExit))
 
   const editor = useEditor({
     content: initialContent,
@@ -137,10 +142,15 @@ export function useBaseNoteEditor({
     },
   ])
 
+  onMounted(() => {
+    lastSaved.value = editor.value.getHTML()
+  })
+
   const updateContent = (newVal) => {
     const currentContent = editor.value?.getHTML()
     if (newVal !== currentContent && editor.value) {
       editor.value.commands.setContent(newVal || '', { emitUpdate: false })
+      lastSaved.value = editor.value.getHTML()
     }
   }
 
@@ -148,14 +158,12 @@ export function useBaseNoteEditor({
     clearTimeout(saveTimeout)
     if (editor.value && !editor.value.isDestroyed) {
       const content = editor.value.getHTML()
-      if (content !== lastSaved.value && saveCallback) {
+      if ((content !== lastSaved.value || saving.value) && saveCallback) {
         saveCallback()
       }
       editor.value.destroy()
     }
   }
-
-  onBeforeUnmount(() => cleanup())
 
   return {
     editor,
@@ -166,6 +174,7 @@ export function useBaseNoteEditor({
     formatLastSaved,
     updateContent,
     cleanup,
+    cancelPendingSave,
     triggerSave,
   }
 }

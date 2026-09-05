@@ -85,7 +85,10 @@ export function useEntityDetails(entity, caseId) {
     error.value = ''
   }
 
-  const updateEntity = async (processAssociates) => {
+  const updateEntity = async (
+    processAssociates,
+    persistEntity = (payload) => entityService.updateEntity(caseId.value, entity.value.id, payload),
+  ) => {
     try {
       updating.value = true
       error.value = ''
@@ -106,7 +109,7 @@ export function useEntityDetails(entity, caseId) {
         },
       }
 
-      const updatedEntity = await entityService.updateEntity(caseId.value, entity.value.id, {
+      const updatedEntity = await persistEntity({
         entity_type: entity.value.entity_type,
         data: submitData.data,
       })

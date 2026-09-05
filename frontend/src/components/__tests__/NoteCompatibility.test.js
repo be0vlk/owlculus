@@ -125,6 +125,14 @@ describe.each(['case', 'entity'])('%s note compatibility', (kind) => {
     textbox().element.innerHTML = html
     await textbox().trigger('input')
   }
+  const exitEditing = async () => {
+    if (kind === 'case') await wrapper.setProps({ isEditing: false })
+    else
+      await wrapper
+        .findAll('button')
+        .find((button) => button.text() === 'Cancel')
+        .trigger('click')
+  }
 
   it('debounces successive edits, synchronizes saved content silently, and skips unchanged HTML', async () => {
     await open(kind, '<p>Initial</p>')
@@ -197,14 +205,121 @@ describe.each(['case', 'entity'])('%s note compatibility', (kind) => {
     },
   )
 
-  it('cancels pending autosave when the component unmounts', async () => {
+  it('flushes pending autosave once when the component unmounts', async () => {
     await open(kind, '<p>Initial</p>')
     vi.useFakeTimers()
     await edit('<p>Pending</p>')
     await vi.advanceTimersByTimeAsync(delay - 1)
     wrapper.unmount()
     await vi.advanceTimersByTimeAsync(delay * 2)
+    expect(saveService()).toHaveBeenCalledTimes(1)
+    const payload = saveService().mock.calls[0].at(-1)
+    expect(kind === 'case' ? payload.notes : payload.data.notes).toBe('<p>Pending</p>')
+  })
+
+  it.each([
+    ['empty', ''],
+    ['plain', '<p>Initial</p>'],
+    ['rich', richNote],
+  ])('does not write untouched %s notes on exit', async (_label, notes) => {
+    await open(kind, notes)
+    vi.useFakeTimers()
+    await exitEditing()
+    wrapper.unmount()
+    await vi.advanceTimersByTimeAsync(delay * 2)
     expect(saveService()).not.toHaveBeenCalled()
+  })
+
+  it.each([false, true])(
+    'serializes an exit during an in-flight save (newer edit: %s)',
+    async (newerEdit) => {
+      await open(kind, '<p>Initial</p>')
+      vi.useFakeTimers()
+      let completeSave
+      saveService().mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            completeSave = resolve
+          }),
+      )
+      await edit('<p>First</p>')
+      await vi.advanceTimersByTimeAsync(delay)
+      if (newerEdit) await edit('<p>Latest</p>')
+      wrapper.unmount()
+      expect(saveService()).toHaveBeenCalledTimes(1)
+      completeSave(
+        kind === 'case' ? {} : { ...entity, data: { ...entity.data, notes: '<p>First</p>' } },
+      )
+      await flushPromises()
+      await vi.advanceTimersByTimeAsync(delay * 2)
+      expect(saveService()).toHaveBeenCalledTimes(newerEdit ? 2 : 1)
+      const payload = saveService().mock.calls.at(-1).at(-1)
+      expect(kind === 'case' ? payload.notes : payload.data.notes).toBe(
+        newerEdit ? '<p>Latest</p>' : '<p>First</p>',
+      )
+    },
+  )
+
+  it('keeps failed exit notes visible and retries them on the next exit', async () => {
+    await open(kind, '<p>Initial</p>')
+    vi.useFakeTimers()
+    saveService().mockRejectedValueOnce(new Error('Unavailable'))
+    await edit('<p>Unsaved</p>')
+    await exitEditing()
+    await flushPromises()
+    expect(saveService()).toHaveBeenCalledTimes(1)
+    expect(textbox().text()).toBe('Unsaved')
+    expect(wrapper.text()).toContain('Failed to save notes')
+    if (kind === 'case') await wrapper.setProps({ isEditing: true })
+    else
+      await wrapper
+        .findAll('button')
+        .find((button) => button.text() === 'Edit Entity')
+        .trigger('click')
+    await exitEditing()
+    await flushPromises()
+    expect(saveService()).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).not.toContain('Failed to save notes')
+    wrapper.unmount()
+    await vi.advanceTimersByTimeAsync(delay * 2)
+    expect(saveService()).toHaveBeenCalledTimes(2)
+  })
+
+  it('persists a reversion to the original text after an in-flight save on exit', async () => {
+    await open(kind, '<p>Initial</p>')
+    vi.useFakeTimers()
+    let completeSave
+    saveService().mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          completeSave = resolve
+        }),
+    )
+    await edit('<p>First</p>')
+    await vi.advanceTimersByTimeAsync(delay)
+    await edit('<p>Initial</p>')
+    await exitEditing()
+    wrapper.unmount()
+    completeSave(
+      kind === 'case' ? {} : { ...entity, data: { ...entity.data, notes: '<p>First</p>' } },
+    )
+    await flushPromises()
+    expect(saveService()).toHaveBeenCalledTimes(2)
+    const payload = saveService().mock.calls.at(-1).at(-1)
+    expect(kind === 'case' ? payload.notes : payload.data.notes).toBe('<p>Initial</p>')
+  })
+
+  it('retries an already failed autosave on unmount without a timer retry loop', async () => {
+    await open(kind, '<p>Initial</p>')
+    vi.useFakeTimers()
+    saveService().mockRejectedValueOnce(new Error('Unavailable'))
+    await edit('<p>Pending</p>')
+    await vi.advanceTimersByTimeAsync(delay)
+    expect(wrapper.text()).toContain('Failed to save notes')
+    saveService().mockRejectedValueOnce(new Error('Still unavailable'))
+    wrapper.unmount()
+    await vi.advanceTimersByTimeAsync(delay * 2)
+    expect(saveService()).toHaveBeenCalledTimes(2)
   })
 
   it('preserves supported rich HTML through editing, saving and reopening', async () => {

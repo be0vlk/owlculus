@@ -70,7 +70,7 @@
       <EntityModalActions
         :is-editing="isEditing"
         :updating="updating"
-        @close="$emit('close')"
+        @close="handleClose"
         @edit="startEditing"
         @cancel="cancelEdit"
         @save="handleSubmit"
@@ -94,7 +94,7 @@
 </template>
 
 <script setup>
-import { ref, computed, toRef } from 'vue'
+import { ref, computed, toRef, watch } from 'vue'
 import EntityTabContent from './EntityTabContent.vue'
 import EntityModalActions from './EntityModalActions.vue'
 import EntityNotesFullscreen from './EntityNotesFullscreen.vue'
@@ -132,7 +132,7 @@ const dialogVisible = computed({
   get: () => props.show,
   set: (value) => {
     if (!value) {
-      emit('close')
+      handleClose()
     }
   },
 })
@@ -166,7 +166,16 @@ const {
   saveError: noteSaveError,
   lastSavedTime: noteLastSavedTime,
   formatLastSaved: noteFormatLastSaved,
+  saveEntity,
+  saveNotes,
 } = useEntityNoteEditor(entity, caseId, isEditing, formData, emit)
+
+watch(
+  () => props.show,
+  (show) => {
+    if (!show) saveNotes()
+  },
+)
 
 const { getSourceValue, updateSourceValue } = useEntitySources(entity, formData, isEditing)
 
@@ -193,13 +202,17 @@ function handleEscape() {
   if (isEditing.value) {
     cancelEdit()
   } else {
-    emit('close')
+    handleClose()
   }
+}
+
+async function handleClose() {
+  if (await saveNotes()) emit('close')
 }
 
 async function handleSubmit() {
   try {
-    const { updatedEntity, createdAssociates } = await updateEntity(processAssociates)
+    const { updatedEntity, createdAssociates } = await updateEntity(processAssociates, saveEntity)
 
     if (createdAssociates.length > 0) {
       emit('edit', updatedEntity, createdAssociates)

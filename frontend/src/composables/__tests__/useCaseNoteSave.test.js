@@ -43,6 +43,7 @@ describe('useCaseNoteSave', () => {
       updateContent: vi.fn(),
       cleanup: vi.fn(),
       triggerSave: vi.fn(),
+      cancelPendingSave: vi.fn(),
     }
 
     mockUseBaseNoteEditor.mockReturnValue(mockBaseReturn)
@@ -70,6 +71,7 @@ describe('useCaseNoteSave', () => {
         placeholder: 'Write your case notes here... Use / for commands.',
         editable: true,
         onUpdate: expect.any(Function),
+        onExit: expect.any(Function),
         saveDelay: 1000,
       })
     })
@@ -141,6 +143,7 @@ describe('useCaseNoteSave', () => {
         placeholder: 'Notes (read-only)',
         editable: false,
         onUpdate: expect.any(Function),
+        onExit: null,
         saveDelay: null,
       })
     })

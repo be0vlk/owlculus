@@ -338,6 +338,7 @@
 
   <EntityDetailsModal
     v-if="selectedEntity"
+    :key="`${caseId}:${selectedEntity.id}`"
     :case-id="caseId"
     :entity="selectedEntity"
     :existing-entities="entities"

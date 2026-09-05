@@ -46,6 +46,7 @@ describe('useEntityNoteEditor', () => {
       updateContent: vi.fn(),
       cleanup: vi.fn(),
       triggerSave: vi.fn(),
+      cancelPendingSave: vi.fn(),
     }
 
     mockUseBaseNoteEditor.mockReturnValue(mockBaseReturn)
@@ -94,6 +95,7 @@ describe('useEntityNoteEditor', () => {
       placeholder: 'Write your entity notes here... Use / for commands.',
       editable: true,
       onUpdate: expect.any(Function),
+      onExit: expect.any(Function),
       saveDelay: 5000,
     })
   })
@@ -180,9 +182,10 @@ describe('useEntityNoteEditor', () => {
     )
   })
 
-  it('should not save if not editing', async () => {
-    const result = useEntityNoteEditor(entity, caseId, isEditing, formData, emit)
+  it('should not save unchanged readonly notes', async () => {
     isEditing.value = false
+    mockBaseReturn.lastSaved.value = mockEditor.getHTML()
+    const result = useEntityNoteEditor(entity, caseId, isEditing, formData, emit)
 
     const { saveNotes } = result
     await saveNotes()
@@ -234,7 +237,6 @@ describe('useEntityNoteEditor', () => {
     await nextTick()
 
     expect(mockBaseReturn.updateContent).toHaveBeenCalledWith('<p>Changed notes</p>')
-    expect(mockBaseReturn.lastSaved.value).toBe('<p>Changed notes</p>')
   })
 
   it('should handle undefined entity notes', async () => {

@@ -1,38 +1,37 @@
 import { ref, watch } from 'vue'
 import { entityService } from '../services/entity'
 import { useBaseNoteEditor } from './useBaseNoteEditor'
+import { useNoteSaveQueue } from './useNoteSaveQueue'
 
 export function useEntityNoteEditor(entity, caseId, isEditing, formData, emit) {
   const saveError = ref('')
+  let persistedEntity = entity.value
   const saveNotes = async () => {
-    if (!editor.value || !entity.value || !isEditing.value) return
+    if (!editor.value || !entity.value) return true
 
+    cancelPendingSave()
     const content = editor.value.getHTML()
-    if (content === lastSaved.value) return
+    const target = entity.value
+    const targetCaseId = caseId.value
+    return saveQueue
+      .save(content, async () => {
+        const updatedEntity = await entityService.updateEntity(targetCaseId, target.id, {
+          entity_type: target.entity_type,
+          data: {
+            ...(persistedEntity?.id === target.id ? persistedEntity.data : target.data),
+            notes: content,
+          },
+        })
+        persistedEntity = updatedEntity
 
-    try {
-      saving.value = true
-      saveError.value = ''
-
-      const updatedEntity = await entityService.updateEntity(caseId.value, entity.value.id, {
-        entity_type: entity.value.entity_type,
-        data: {
-          ...entity.value.data,
-          notes: content,
-        },
+        if (emit) {
+          emit('edit', updatedEntity)
+        }
       })
-
-      lastSaved.value = content
-      lastSavedTime.value = new Date()
-
-      if (emit) {
-        emit('edit', updatedEntity)
-      }
-    } catch {
-      saveError.value = 'Failed to save notes. Your changes are still in the editor.'
-    } finally {
-      saving.value = false
-    }
+      .then(
+        () => true,
+        () => false,
+      )
   }
 
   const {
@@ -45,6 +44,7 @@ export function useEntityNoteEditor(entity, caseId, isEditing, formData, emit) {
     updateContent,
     cleanup,
     triggerSave,
+    cancelPendingSave,
   } = useBaseNoteEditor({
     label: 'Entity notes',
     initialContent: entity.value?.data?.notes || '',
@@ -52,6 +52,7 @@ export function useEntityNoteEditor(entity, caseId, isEditing, formData, emit) {
       ? 'Write your entity notes here... Use / for commands.'
       : 'Notes (read-only)',
     editable: isEditing.value,
+    onExit: saveNotes,
     onUpdate: (editor) => {
       const content = editor.getHTML()
       if (isEditing.value) {
@@ -65,13 +66,36 @@ export function useEntityNoteEditor(entity, caseId, isEditing, formData, emit) {
     saveDelay: 5000,
   })
 
+  const saveQueue = useNoteSaveQueue({ saving, saveError, lastSaved, lastSavedTime })
+
+  // Main-form writes use the same queue and acknowledge notes before edit mode ends.
+  const saveEntity = (payload) => {
+    cancelPendingSave()
+    const content = editor.value.getHTML()
+    const targetId = entity.value.id
+    const targetCaseId = caseId.value
+    return saveQueue.save(
+      content,
+      async () => {
+        const updatedEntity = await entityService.updateEntity(targetCaseId, targetId, payload)
+        persistedEntity = updatedEntity
+        return updatedEntity
+      },
+      { force: true },
+    )
+  }
+
+  watch(entity, (newEntity) => {
+    persistedEntity = newEntity
+  })
+
   // Watch for entity changes and update editor content
   watch(
     () => entity.value?.data?.notes,
     (newNotes) => {
       if (newNotes !== undefined && editor.value) {
+        if (saving.value || newNotes === lastSaved.value) return
         updateContent(newNotes)
-        lastSaved.value = newNotes || ''
       }
     },
     { immediate: true },
@@ -82,12 +106,15 @@ export function useEntityNoteEditor(entity, caseId, isEditing, formData, emit) {
     () => isEditing.value,
     (newEditingState, oldEditingState) => {
       if (editor.value) {
+        if (newEditingState && formData?.value) {
+          const content = editor.value.getHTML()
+          if (content !== lastSaved.value || persistedEntity !== entity.value) {
+            formData.value.data.notes = content
+          }
+        }
         // If exiting edit mode, save any pending changes first
         if (oldEditingState && !newEditingState) {
-          const content = editor.value.getHTML()
-          if (content !== lastSaved.value) {
-            saveNotes()
-          }
+          saveNotes()
         }
         editor.value.setEditable(newEditingState, false)
       }
@@ -109,5 +136,6 @@ export function useEntityNoteEditor(entity, caseId, isEditing, formData, emit) {
     updateContent,
     cleanup: enhancedCleanup,
     saveNotes,
+    saveEntity,
   }
 }
