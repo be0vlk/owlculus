@@ -143,25 +143,9 @@ const { editor, editorActions, saving, saveError, lastSavedTime, formatLastSaved
   box-shadow: 0 0 0 2px rgb(var(--v-theme-primary), 0.2);
 }
 
-.fullscreen-editor :deep(.ProseMirror .is-editor-empty:first-child::before) {
-  color: rgb(var(--v-theme-on-surface));
-  content: attr(data-placeholder);
-  float: left;
-  height: 0;
-  pointer-events: none;
-}
-
 .tiptap-content :deep(.ProseMirror) {
   outline: none;
   min-height: 150px;
-}
-
-.tiptap-content :deep(.ProseMirror .is-editor-empty:first-child::before) {
-  color: rgb(var(--v-theme-on-surface));
-  content: attr(data-placeholder);
-  float: left;
-  height: 0;
-  pointer-events: none;
 }
 
 /* TipTap editor content styling */

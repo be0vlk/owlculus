@@ -103,12 +103,12 @@ function expectRichContent() {
     expect(box.get(selector).text()).toBe(text)
   expect(box.get('a').attributes('href')).toBe('https://example.org/evidence')
   expect(box.get('a').attributes('target')).toBe('_blank')
-  for (const [color, text] of [
-    ['#ffe066', 'Yellow'],
-    ['#74c0fc', 'Blue'],
+  for (const [color, text, background] of [
+    ['#ffe066', 'Yellow', 'rgb(255, 224, 102)'],
+    ['#74c0fc', 'Blue', 'rgb(116, 192, 252)'],
   ]) {
     expect(box.get(`mark[data-color="${color}"]`).text()).toBe(text)
-    expect(box.get(`mark[data-color="${color}"]`).element.style.backgroundColor).not.toBe('')
+    expect(box.get(`mark[data-color="${color}"]`).element.style.backgroundColor).toBe(background)
   }
   const tasks = box.findAll('li.task-item')
   expect(tasks.map((task) => task.attributes('data-checked'))).toEqual(['true', 'false', 'false'])
