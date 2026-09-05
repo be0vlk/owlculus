@@ -425,7 +425,16 @@ def test_stale_hunt_owner_cannot_write_output_or_effects(execution_system):
         (system.root / "stale").touch()
         subsequent = submit_hunt(system, client, [])
         assert eventually(lambda: terminal(client, subsequent))["status"] == "completed"
-        assert detail(client, accepted) == state
+        stopped = eventually(lambda: terminal(client, accepted))
+        assert stopped["status"] == "failed"
+        assert stopped["error"]["code"] == "lease_expired"
+        assert stopped["steps"][0] == state["steps"][0]
+        assert [step["status"] for step in stopped["steps"]] == [
+            "completed",
+            "cancelled",
+            "cancelled",
+        ]
+        assert stopped["steps"][1]["output"] == state["steps"][1]["output"]
         assert client.get(f"/api/evidence/case/{system.case_id}").json() == []
         assert client.get(f"/api/cases/{system.case_id}/entities").json() == []
         assert (system.root / "provider-starts").read_text().splitlines() == [

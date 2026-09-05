@@ -2,10 +2,13 @@
 
 import json
 import logging
+import os
 import sys
 import time
 from datetime import UTC, timedelta
 
+from redis import Redis
+from redis.exceptions import RedisError
 from sqlmodel import Session, create_engine, select
 
 from app.core.config import settings
@@ -28,6 +31,17 @@ def main():
         settings.get_database_url(), pool_pre_ping=True, hide_parameters=True
     )
     next_heartbeat = 0.0
+    redis = Redis.from_url(
+        os.environ.get("REDIS_URL", "redis://localhost:6379/0"),
+        socket_connect_timeout=0.2,
+        socket_timeout=0.6,
+    )
+    hints = redis.pubsub(ignore_subscribe_messages=True)
+    hints_available = True
+    try:
+        hints.subscribe(f"owlculus:execution:cancel:{control_id}")
+    except RedisError:
+        hints_available = False
     try:
         while True:
             checked = time.monotonic()
@@ -73,8 +87,16 @@ def main():
                 logging.getLogger(__name__).warning(
                     "Execution control unavailable; stopping by lease expiry"
                 )
-            time.sleep(0.5)
+            if hints_available:
+                try:
+                    hints.get_message(timeout=0.5)
+                except RedisError:
+                    hints_available = False
+            else:
+                time.sleep(0.5)
     finally:
+        hints.close()
+        redis.close()
         engine.dispose()
 
 
