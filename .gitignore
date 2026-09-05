@@ -189,6 +189,5 @@ megalinter-reports
 /AGENTS.md
 /.agents/
 /.codex/
-/docs/agents/
-/docs/verification/
+/docs/
 /.scratch/
