@@ -499,3 +499,45 @@ def test_recovery_drains_all_stale_batches_even_without_broker(execution_system)
         assert {row["status"] for row in rows} == {"queued"}
         assert {row["id"] for row in rows} == {run["id"] for run in accepted}
         assert not (system.root / "provider-starts").exists()
+
+
+def test_hunt_resumption_does_not_reset_the_original_deadline(execution_system):
+    from tests.executions.test_hunt_execution_system import (
+        detail,
+        step,
+        submit_hunt,
+        terminal,
+    )
+
+    system = execution_system
+    system.env["EXECUTION_TEST_BOUNDARY"] = "hunt-boundary"
+    _, client = system.api()
+    system.start("-m", "tests.executions.runtime", "hunt-worker")
+    dispatcher = system.start("-m", "app.executions.dispatcher")
+    with closing(client):
+        accepted = submit_hunt(
+            system, client, [step("first"), step("never", depends_on=["first"])]
+        )
+        marker = system.root / "boundary-reached"
+        eventually(marker.exists)
+        before = detail(client, accepted)
+        system.stop(dispatcher)
+        os.kill(int(marker.read_text()), signal.SIGKILL)
+        eventually(lambda: detail(client, accepted)["status"] == "pending")
+        # Advance the accepted deadline past expiry while recovery is queued.
+        with Session(system.engine) as db:
+            control = db.exec(
+                select(ExecutionControl).where(
+                    ExecutionControl.hunt_execution_id == accepted["id"]
+                )
+            ).one()
+            control.deadline_at = get_utc_now() - timedelta(seconds=1)
+            db.commit()
+        (system.root / "release-boundary").touch()
+        system.start("-m", "app.executions.dispatcher")
+        result = eventually(lambda: terminal(client, accepted))
+        assert result["status"] == "failed"
+        assert result["error"]["code"] == "execution_timeout"
+        assert result["started_at"] == before["started_at"]
+        assert result["steps"][0] == before["steps"][0]
+        assert (system.root / "provider-starts").read_text().splitlines() == ["none"]
