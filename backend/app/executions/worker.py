@@ -14,6 +14,7 @@ from app.executions.ownership import (
     append_result,
     claim,
     fail_execution,
+    start_operation,
 )
 from app.executions.service import authorize_execution
 from app.plugins.output_limits import serialized_size
@@ -171,6 +172,8 @@ async def execute_plugin_run(engine, registry, ownership, vault, session_factory
             db.expunge(user)
         adapter = worker_adapter(session_factory, vault, ownership)
         with adapter.open(user=user, case_id=case_id, save_to_case=save) as run:
+            with Session(engine) as db:
+                start_operation(db, ownership, "plugin")
             operation_index = 0
             async for result in WorkerPluginRunner(registry, vault).run(
                 name, params, run

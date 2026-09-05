@@ -4,7 +4,7 @@ from sqlalchemy import event
 from sqlalchemy.engine import Engine
 from sqlmodel import Session
 
-from app.database.models import HuntExecution
+from app.database.models import HuntExecution, HuntStep
 from app.executions.ownership import OwnershipLost, claim, fail_execution
 from app.executions.service import authorize_execution
 from app.executions.worker import WorkerPluginRunner, worker_adapter, worker_resources
@@ -37,6 +37,22 @@ async def execute(
             with session.no_autoflush:
                 control, owned_execution = ownership.lock(session)
                 authorize_execution(session, owned_execution)
+                # Journal in the same transaction as the step transition. Clearing
+                # intent separately would leave a replay window after provider work.
+                for record in session.dirty:
+                    if isinstance(record, HuntStep):
+                        if record.status == "running":
+                            if control.operation_id not in {None, record.step_id}:
+                                raise OwnershipLost()
+                            control.operation_id = record.step_id
+                            control.operation_started_at = record.started_at
+                        elif (
+                            record.status in {"completed", "failed"}
+                            and control.operation_id == record.step_id
+                        ):
+                            control.operation_id = None
+                            control.operation_started_at = None
+                            control.recovery_attempts = 0
                 control.revision += 1
                 if owned_execution.status in {"completed", "partial", "failed"}:
                     control.pending_status = owned_execution.status

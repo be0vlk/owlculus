@@ -217,7 +217,7 @@ def test_storage_partition_stops_at_lease_expiry_and_reports_after_restoration(
                 else None
             )
         )
-        assert result["error"]["code"] == "lease_expired"
+        assert result["error"]["code"] == "interrupted_uncertain_outcome"
 
 
 def test_cancellation_races_claim_and_completion(execution_system):

@@ -25,7 +25,7 @@ from app.executions.ownership import (
 
 
 def main():
-    kind, execution_id, control_id, generation, owner = sys.argv[1:]
+    kind, execution_id, control_id, generation, owner, supervisor_pid = sys.argv[1:]
     ownership = Ownership(int(control_id), int(generation), owner)
     engine = create_engine(
         settings.get_database_url(), pool_pre_ping=True, hide_parameters=True
@@ -43,7 +43,7 @@ def main():
     except RedisError:
         hints_available = False
     try:
-        while True:
+        while os.getppid() == int(supervisor_pid):
             checked = time.monotonic()
             try:
                 with Session(engine) as db:
@@ -66,6 +66,8 @@ def main():
                     remaining = (deadline - get_utc_now()).total_seconds()
                     db.rollback()
                     renewed = checked >= next_heartbeat
+                    if os.getppid() != int(supervisor_pid):
+                        return
                     if renewed:
                         heartbeat(db, ownership)
                         next_heartbeat = checked + HEARTBEAT_SECONDS

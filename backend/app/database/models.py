@@ -264,6 +264,10 @@ class ExecutionControl(SQLModel, table=True):
     cancellation_requested_at: datetime | None = None
     deadline_at: datetime | None = None
     pending_status: str | None = None
+    operation_id: str | None = None
+    operation_started_at: datetime | None = None
+    recovered_at: datetime | None = None
+    recovery_attempts: int = 0
 
 
 class ExecutionOutbox(SQLModel, table=True):

@@ -427,7 +427,7 @@ def test_stale_hunt_owner_cannot_write_output_or_effects(execution_system):
         assert eventually(lambda: terminal(client, subsequent))["status"] == "completed"
         stopped = eventually(lambda: terminal(client, accepted))
         assert stopped["status"] == "failed"
-        assert stopped["error"]["code"] == "lease_expired"
+        assert stopped["error"]["code"] == "interrupted_uncertain_outcome"
         assert stopped["steps"][0] == state["steps"][0]
         assert [step["status"] for step in stopped["steps"]] == [
             "completed",

@@ -251,6 +251,33 @@ def upgrade(database_engine: Engine = engine) -> None:
             )
         )
 
+        for name, sql_type in (
+            ("operation_id", "VARCHAR"),
+            ("operation_started_at", "TIMESTAMP"),
+            ("recovered_at", "TIMESTAMP"),
+            ("recovery_attempts", "INTEGER NOT NULL DEFAULT 0"),
+        ):
+            connection.execute(
+                text(
+                    f"ALTER TABLE executioncontrol ADD COLUMN IF NOT EXISTS {name} {sql_type}"
+                )
+            )
+        # Old workers did not journal starts. Never interpret their missing intent
+        # as proof of safety. Deploy only after stopping the previous workers.
+        if not connection.execute(
+            text("SELECT 1 FROM schema_upgrade WHERE version='006_worker_recovery'")
+        ).first():
+            connection.execute(text("""
+                UPDATE executioncontrol SET operation_id='legacy_unknown',
+                    operation_started_at=CURRENT_TIMESTAMP
+                WHERE owner IS NOT NULL AND operation_id IS NULL
+            """))
+            connection.execute(
+                text(
+                    "INSERT INTO schema_upgrade(version) VALUES ('006_worker_recovery')"
+                )
+            )
+
 
 if __name__ == "__main__":
     upgrade()

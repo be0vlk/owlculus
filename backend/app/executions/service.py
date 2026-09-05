@@ -1,11 +1,13 @@
 """Transactional acceptance, authorization and bounded durable observation."""
 
+from datetime import UTC
 from typing import Any, cast
 
 from fastapi import HTTPException
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session, col, select
 
+from app.core.utils import get_utc_now
 from app.database.db_utils import transaction
 from app.database.models import (
     ExecutionControl,
@@ -134,7 +136,9 @@ def accept(
         raise HTTPException(503, "Execution could not be accepted") from None
 
 
-def dispatch_observation(execution, outbox: ExecutionOutbox | None) -> dict:
+def dispatch_observation(
+    execution, outbox: ExecutionOutbox | None, control=None
+) -> dict:
     waiting = execution.status in {"queued", "pending"}
     reason = None
     if waiting and outbox is not None:
@@ -143,15 +147,35 @@ def dispatch_observation(execution, outbox: ExecutionOutbox | None) -> dict:
             if outbox.published_at
             else "Waiting for background dispatch"
         )
+    recovering = control is not None and (
+        (
+            execution.status in {"running", "cancelling"}
+            and control.lease_until
+            and control.lease_until.replace(tzinfo=UTC) <= get_utc_now()
+        )
+        or (waiting and control.recovered_at is not None)
+    )
+    if recovering:
+        reason = (
+            "Worker interrupted; waiting for cleanup and safe recovery. Committed output is retained"
+            if control.owner
+            else "Waiting to resume unstarted work after worker interruption"
+        )
+        if outbox and outbox.last_error:
+            reason += f". {outbox.last_error}"
     failed = execution.error and execution.error.get("code") == "dispatch_failed"
     return {
         "dispatch_state": (
-            "failed"
-            if failed
+            "recovery_waiting"
+            if recovering
             else (
-                ("published" if outbox.published_at else "pending")
-                if outbox
-                else "legacy"
+                "failed"
+                if failed
+                else (
+                    ("published" if outbox.published_at else "pending")
+                    if outbox
+                    else "legacy"
+                )
             )
         ),
         "waiting_reason": reason,
@@ -171,7 +195,7 @@ def representation(
         **execution.model_dump(),
         "kind": "plugin",
         "revision": control.revision,
-        **dispatch_observation(execution, outbox),
+        **dispatch_observation(execution, outbox, control),
         "links": {
             "detail": base,
             "results": f"{base}/results",
@@ -314,7 +338,9 @@ def hunt_observation(db: Session, execution: HuntExecution) -> dict:
     return {
         "kind": "hunt",
         "revision": rows[0].revision if rows else 0,
-        **dispatch_observation(execution, rows[1] if rows else None),
+        **dispatch_observation(
+            execution, rows[1] if rows else None, rows[0] if rows else None
+        ),
         "links": {
             "detail": base,
             "history": f"/api/hunts/cases/{execution.case_id}/executions",

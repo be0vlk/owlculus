@@ -2,7 +2,6 @@
 
 import logging
 import os
-from datetime import UTC
 
 from fastapi import HTTPException
 from redis import Redis
@@ -105,41 +104,6 @@ def finish_stopped(db: Session, ownership, *, reason=None):
             or execution.status in TERMINAL
         ):
             return
-        expired = (
-            control.lease_until is None
-            or control.lease_until.replace(tzinfo=UTC) <= get_utc_now()
-        )
-        if expired and reason != "execution_timeout":
-            reason = "lease_expired"
-        if (
-            control.deadline_at
-            and control.deadline_at.replace(tzinfo=UTC) <= get_utc_now()
-        ):
-            reason = "execution_timeout"
-        control.generation += 1
-        control.owner = None
-        control.revision += 1
-        if control.cancellation_requested_at:
-            execution.status = "cancelled"
-            execution.error = {
-                "code": "cancelled",
-                "message": "Execution cancelled; committed output retained",
-                "partial": True,
-            }
-        elif reason or expired:
-            execution.status = "failed"
-            execution.error = {
-                "code": reason or "lease_expired",
-                "message": "Execution stopped after its deadline or loss of execution control; committed output retained",
-                "partial": True,
-            }
-        else:
-            execution.status = control.pending_status or "failed"
-            if not control.pending_status:
-                execution.error = {
-                    "code": "execution_error",
-                    "message": "Execution process stopped unexpectedly",
-                    "partial": True,
-                }
-        execution.completed_at = get_utc_now()
-        cancel_steps(db, execution)
+        from app.executions.recovery import recover_stopped
+
+        recover_stopped(db, control, execution, reason=reason)

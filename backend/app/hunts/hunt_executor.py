@@ -8,7 +8,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any
 
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.core.utils import get_utc_now
 from app.database.db_utils import transaction
@@ -92,14 +92,36 @@ class HuntExecutor:
         try:
             # Update execution status
             execution.status = "running"
-            execution.started_at = get_utc_now()
+            execution.started_at = execution.started_at or get_utc_now()
             with transaction(self.db):
                 self.db.add(execution)
 
-            # Create HuntStep records for all steps
-            step_records = {}
+            # Completed outputs are the durable boundary, including optional errors.
+            step_records = {
+                record.step_id: record
+                for record in self.db.exec(
+                    select(HuntStep).where(HuntStep.execution_id == execution_id)
+                ).all()
+            }
+            step_state = HuntStepState()
+            for step_def in steps:
+                record = step_records.get(step_def.step_id)
+                if record and record.status in {"completed", "failed"}:
+                    if record.output is not None:
+                        context.set_step_output(
+                            step_def.step_id, deepcopy(record.output)
+                        )
+                    if record.status == "completed":
+                        step_state.completed.add(step_def.step_id)
+                    else:
+                        step_state.record_failure(step_def)
+                        context.mark_step_failed(step_def.step_id)
+                elif record and record.status != "pending":
+                    raise ValueError("Hunt cannot resume an unfinished operation")
             with transaction(self.db):
                 for step_def in steps:
+                    if step_def.step_id in step_records:
+                        continue
                     step_record = HuntStep(
                         execution_id=execution.id,
                         step_id=step_def.step_id,
@@ -111,7 +133,6 @@ class HuntExecutor:
                     step_records[step_def.step_id] = step_record
 
             # Execute steps with dependency management
-            step_state = HuntStepState()
 
             while len(step_state.completed) < len(steps):
                 # Find executable steps (dependencies satisfied)
