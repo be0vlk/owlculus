@@ -262,6 +262,8 @@ class ExecutionControl(SQLModel, table=True):
     heartbeat_at: Optional[datetime] = None
     revision: int = 1
     cancellation_requested_at: datetime | None = None
+    deadline_at: datetime | None = None
+    pending_status: str | None = None
 
 
 class ExecutionOutbox(SQLModel, table=True):

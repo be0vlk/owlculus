@@ -242,7 +242,16 @@ async def cancel_execution(
     service = HuntService(db)
 
     execution = await service.cancel_execution(execution_id, current_user=current_user)
-    return {"message": "Hunt execution cancelled", "execution_id": execution.id}
+    return {
+        "message": (
+            "Cancellation requested"
+            if execution.status == "cancelling"
+            else "Execution stopped"
+        ),
+        "execution_id": execution.id,
+        "status": execution.status,
+        "revision": hunt_observation(db, execution)["revision"],
+    }
 
 
 @router.websocket("/executions/{execution_id}/stream")

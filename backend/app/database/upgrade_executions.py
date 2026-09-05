@@ -197,7 +197,7 @@ def upgrade_submissions(database_engine: Engine = engine) -> None:
 RESULT_VERSION = "004_bounded_results_and_effects"
 
 
-def upgrade(database_engine: Engine = engine) -> None:
+def upgrade_results(database_engine: Engine = engine) -> None:
     upgrade_submissions(database_engine)
     with database_engine.begin() as connection:
         connection.execute(text("SELECT pg_advisory_xact_lock(827104001)"))
@@ -228,6 +228,27 @@ def upgrade(database_engine: Engine = engine) -> None:
         connection.execute(
             text("INSERT INTO schema_upgrade(version) VALUES (:version)"),
             {"version": RESULT_VERSION},
+        )
+
+
+def upgrade(database_engine: Engine = engine) -> None:
+    upgrade_results(database_engine)
+    with database_engine.begin() as connection:
+        connection.execute(text("SELECT pg_advisory_xact_lock(827104001)"))
+        connection.execute(
+            text(
+                "ALTER TABLE executioncontrol ADD COLUMN IF NOT EXISTS deadline_at TIMESTAMP"
+            )
+        )
+        connection.execute(
+            text(
+                "ALTER TABLE executioncontrol ADD COLUMN IF NOT EXISTS pending_status VARCHAR"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO schema_upgrade(version) VALUES ('005_cancellation_deadlines') ON CONFLICT DO NOTHING"
+            )
         )
 
 

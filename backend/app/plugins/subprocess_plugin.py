@@ -1,10 +1,8 @@
-"""Opt-in subprocess support for command-line plugins."""
+"""Opt-in streaming subprocess support with cancellation-owned cleanup."""
 
 import asyncio
-import subprocess
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator, Sequence
-from concurrent.futures import ThreadPoolExecutor
 
 from .plugin_types import Payload
 
@@ -16,28 +14,37 @@ class SubprocessPluginMixin(ABC):
     async def run_subprocess(
         self, command: Sequence[str]
     ) -> AsyncGenerator[Payload, None]:
-        executor = ThreadPoolExecutor(max_workers=3)
+        process = await asyncio.create_subprocess_exec(
+            *command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        errors = bytearray()
+
+        async def drain_errors():
+            assert process.stderr is not None
+            while chunk := await process.stderr.read(8192):
+                errors.extend(chunk[: max(0, 65536 - len(errors))])
+
+        drain = asyncio.create_task(drain_errors())
         try:
-            loop = asyncio.get_running_loop()
-            process = await loop.run_in_executor(
-                executor,
-                lambda: subprocess.Popen(
-                    list(command),
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    bufsize=1,
-                ),
-            )
             assert process.stdout is not None
-            while line := await loop.run_in_executor(executor, process.stdout.readline):
-                parsed = self.parse_output(line.strip())
+            while line := await process.stdout.readline():
+                parsed = self.parse_output(line.decode(errors="replace").strip())
                 if parsed is not None:
                     yield parsed
-            if await loop.run_in_executor(executor, process.wait):
-                assert process.stderr is not None
-                yield {
-                    "error": await loop.run_in_executor(executor, process.stderr.read)
-                }
+            code = await process.wait()
+            await drain
+            if code:
+                yield {"error": errors.decode(errors="replace")}
         finally:
-            executor.shutdown(wait=False)
+            if process.returncode is None:
+                try:
+                    process.terminate()
+                except ProcessLookupError:
+                    pass
+                try:
+                    await asyncio.wait_for(process.wait(), timeout=1)
+                except TimeoutError:
+                    process.kill()
+                    await process.wait()
+            drain.cancel()
+            await asyncio.gather(drain, return_exceptions=True)

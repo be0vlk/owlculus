@@ -20,6 +20,8 @@ class TaskPriority(str, Enum):
 
 class ExecutionStatus(str, Enum):
     QUEUED = "queued"
+    CANCELLING = "cancelling"
+    CANCELLED = "cancelled"
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"

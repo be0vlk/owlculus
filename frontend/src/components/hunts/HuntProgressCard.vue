@@ -21,6 +21,7 @@
 
     <!-- Progress Section -->
     <v-card-text class="pa-3 pa-sm-4">
+      <ExecutionWaiting :execution="execution" />
       <!-- Timing Information -->
       <div class="timing-info mb-4">
         <div class="d-flex align-center flex-wrap">
@@ -105,7 +106,7 @@
     <!-- Actions -->
     <v-card-actions class="pa-3 pa-sm-4 pt-0 flex-wrap">
       <v-btn
-        v-if="execution.status === 'running'"
+        v-if="['pending', 'running'].includes(execution.status)"
         color="error"
         variant="outlined"
         size="small"
@@ -150,6 +151,7 @@
 </template>
 
 <script setup>
+import ExecutionWaiting from '@/components/ExecutionWaiting.vue'
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { formatHuntExecutionTitle, getStatusText } from '@/utils/huntDisplayUtils'
 import { formatDate } from '@/composables/dateUtils'
@@ -184,6 +186,8 @@ const statusColor = computed(() => {
       return 'warning'
     case 'failed':
       return 'error'
+    case 'cancelling':
+      return 'warning'
     case 'cancelled':
       return 'grey'
     default:
@@ -203,6 +207,8 @@ const statusIcon = computed(() => {
       return 'mdi-alert'
     case 'failed':
       return 'mdi-close'
+    case 'cancelling':
+      return 'mdi-timer-sand'
     case 'cancelled':
       return 'mdi-stop'
     default:
@@ -266,6 +272,8 @@ const getStepStatusIcon = (status) => {
       return 'mdi-close'
     case 'skipped':
       return 'mdi-skip-next'
+    case 'cancelling':
+      return 'mdi-timer-sand'
     case 'cancelled':
       return 'mdi-stop'
     default:

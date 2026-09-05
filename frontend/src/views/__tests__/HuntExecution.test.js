@@ -100,11 +100,14 @@ describe('HuntExecution exports', () => {
     },
   )
 
-  it.each(['pending', 'running'])('hides the export menu for a %s execution', async (status) => {
-    const wrapper = await mountExecution(status)
+  it.each(['pending', 'running', 'cancelling'])(
+    'hides the export menu for a %s execution',
+    async (status) => {
+      const wrapper = await mountExecution(status)
 
-    expect(wrapper.find('[data-testid="export-menu"]').exists()).toBe(false)
-  })
+      expect(wrapper.find('[data-testid="export-menu"]').exists()).toBe(false)
+    },
+  )
 
   it.each(['pdf', 'json'])('downloads a backend-generated %s export', async (format) => {
     const artifact = {

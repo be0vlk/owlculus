@@ -87,3 +87,42 @@ def test_retry_uses_accepted_definition_when_plugin_becomes_unavailable(
     )
     assert retry.status_code == 202
     assert retry.json()["id"] == first.json()["id"]
+
+
+import pytest
+
+
+@pytest.mark.parametrize(
+    "role,active,member,expected",
+    [
+        ("Investigator", True, False, 403),
+        ("Analyst", True, True, 403),
+        ("Investigator", False, True, 403),
+        ("Investigator", True, True, 200),
+    ],
+)
+def test_cancel_enforces_access_and_is_idempotent(
+    client, session, test_admin, test_case, test_user, role, active, member, expected
+):
+    from app.database.models import CaseUserLink
+
+    case_id, user_id = test_case.id, test_user.id
+    if member:
+        session.add(CaseUserLink(case_id=case_id, user_id=user_id))
+    test_user.role = role
+    test_user.is_active = active
+    session.commit()
+    app.dependency_overrides[get_current_user] = lambda: test_admin
+    app.dependency_overrides[get_plugin_registry] = lambda: PluginRegistry.from_classes(
+        [AcceptedPlugin]
+    )
+    accepted = client.post(
+        "/api/plugins/AcceptedPlugin/execute", json={"case_id": case_id, "query": "owl"}
+    ).json()
+    url = accepted["links"]["detail"]
+    app.dependency_overrides[get_current_user] = lambda: test_user
+    cancelled = client.delete(url)
+    assert cancelled.status_code == expected
+    if expected == 200:
+        assert cancelled.json()["status"] == "cancelled"
+        assert client.delete(url).json() == cancelled.json()

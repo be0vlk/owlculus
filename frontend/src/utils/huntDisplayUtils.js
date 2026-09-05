@@ -108,6 +108,7 @@ export const getStatusColor = (status) => {
     completed: 'success',
     partial: 'warning',
     failed: 'error',
+    cancelling: 'warning',
     cancelled: 'grey',
     skipped: 'warning',
   }
@@ -122,6 +123,7 @@ export const getStatusIcon = (status) => {
     completed: 'mdi-check',
     partial: 'mdi-alert',
     failed: 'mdi-close',
+    cancelling: 'mdi-timer-sand',
     cancelled: 'mdi-stop',
     skipped: 'mdi-skip-next',
   }
@@ -136,6 +138,7 @@ export const getStatusText = (status, compact = false) => {
     completed: 'Completed',
     partial: compact ? 'Partial' : 'Partial Success',
     failed: 'Failed',
+    cancelling: 'Cancelling',
     cancelled: 'Cancelled',
     skipped: 'Skipped',
   }

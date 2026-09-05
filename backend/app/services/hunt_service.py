@@ -12,7 +12,7 @@ from typing import Any
 
 from sqlmodel import Session, col, select
 
-from app.core.exceptions import ResourceNotFoundException, ValidationException
+from app.core.exceptions import ResourceNotFoundException
 from app.core.logging import get_security_logger
 from app.core.websocket_manager import websocket_manager
 from app.database.models import Hunt, HuntExecution, HuntStep, User
@@ -154,22 +154,9 @@ class HuntService:
     async def cancel_execution(
         self, execution_id: int, *, current_user: User
     ) -> HuntExecution:
-        execution = self.db.get(HuntExecution, execution_id)
-        if not execution:
-            raise ResourceNotFoundException("Hunt execution not found")
+        from app.executions.cancellation import request_cancel
 
-        case = self.case_access.writable(current_user, execution.case_id)
-        execution.case = case
-
-        # Only running executions can be cancelled
-        if execution.status != "running":
-            raise ValidationException("Only running executions can be cancelled")
-
-        executor = self._executor_factory(self.db)
-        await executor.cancel_execution(execution_id)
-
-        self.db.refresh(execution)
-        return execution
+        return request_cancel(self.db, current_user, execution_id, kind="hunt")
 
     async def get_execution_steps(
         self, execution_id: int, *, current_user: User

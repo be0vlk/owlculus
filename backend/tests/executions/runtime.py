@@ -52,6 +52,20 @@ class AcceptancePlugin(BasePlugin):
         if params.get("mode") == "many-results":
             for index in range(10):
                 yield self.data({"index": index, "value": "x" * 65})
+        if params.get("mode") == "blocking":
+            import time
+
+            (root / "blocked").touch()
+            time.sleep(600)
+        if params.get("mode") == "subprocess":
+            import subprocess
+            import sys
+
+            process = subprocess.Popen(
+                [sys.executable, "-c", "import time; time.sleep(600)"]
+            )
+            (root / "subprocess-pid").write_text(str(process.pid))
+            process.wait()
         if params.get("barrier"):
             for _ in range(600):
                 if (root / params["barrier"]).exists():
@@ -73,6 +87,16 @@ class AcceptancePlugin(BasePlugin):
 def install():
     from app.plugins import plugin_registry
 
+    from app.executions import supervisor
+    import sys
+
+    supervisor.CHILD_COMMAND = [
+        sys.executable,
+        "-m",
+        "tests.executions.runtime",
+        "child",
+    ]
+
     original = plugin_registry.get_shipped_plugin_registry
     registry = original()
     # Keep shipped definitions for startup hunt validation.
@@ -88,7 +112,12 @@ if __name__ == "__main__":
     import sys
 
     install()
-    if sys.argv[1] == "api":
+    if sys.argv[1] == "child":
+        from app.executions.child import main
+
+        sys.argv.pop(1)
+        main()
+    elif sys.argv[1] == "api":
         import uvicorn
 
         uvicorn.run(

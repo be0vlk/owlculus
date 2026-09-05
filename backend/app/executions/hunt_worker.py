@@ -19,22 +19,27 @@ class DurableHuntNotifier:
         pass
 
 
-async def execute(engine: Engine, registry: PluginRegistry, execution_id: int) -> None:
-    with Session(engine) as db:
-        ownership = claim(db, execution_id, kind="hunt")
+async def execute(
+    engine: Engine, registry: PluginRegistry, execution_id: int, *, ownership=None
+) -> None:
+    if ownership is None:
+        with Session(engine) as db:
+            ownership = claim(db, execution_id, kind="hunt")
     if ownership is None:
         return
     with (
-        worker_resources(engine, ownership) as (vault, session_factory, lease_lost),
+        worker_resources(engine, ownership) as (vault, session_factory),
         Session(engine, expire_on_commit=False) as db,
     ):
 
         def fence(session):
-            if lease_lost.is_set():
-                raise OwnershipLost()
             control, owned_execution = ownership.lock(session)
             authorize_execution(session, owned_execution)
             control.revision += 1
+            if owned_execution.status in {"completed", "partial", "failed"}:
+                control.pending_status = owned_execution.status
+                owned_execution.status = "running"
+                owned_execution.completed_at = None
 
         def before_step():
             with Session(engine) as check:

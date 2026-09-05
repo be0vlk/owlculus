@@ -6,7 +6,7 @@ from typing import cast
 from uuid import uuid4
 
 from fastapi import HTTPException
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.core.enums import ExecutionStatus
 from app.core.exceptions import AuthorizationException, ResourceNotFoundException
@@ -15,9 +15,11 @@ from app.database.db_utils import transaction
 from app.database.models import (
     ExecutionControl,
     HuntExecution,
+    HuntStep,
     PluginExecution,
     PluginExecutionResult,
 )
+from app.executions.limits import HUNT_SECONDS, PLUGIN_SECONDS, STEP_SECONDS
 from app.executions.service import authorize_execution
 
 LEASE_SECONDS = 60
@@ -67,6 +69,20 @@ class Ownership:
                 or control.lease_until.replace(tzinfo=UTC) <= get_utc_now()
             ):
                 raise OwnershipLost()
+            now = get_utc_now()
+            if control.deadline_at and control.deadline_at.replace(tzinfo=UTC) <= now:
+                raise OwnershipLost()
+            if control.hunt_execution_id:
+                overdue = db.exec(
+                    select(HuntStep).where(
+                        HuntStep.execution_id == control.hunt_execution_id,
+                        HuntStep.status == "running",
+                        col(HuntStep.started_at)
+                        <= now - timedelta(seconds=STEP_SECONDS),
+                    )
+                ).first()
+                if overdue:
+                    raise OwnershipLost()
             execution = cast(
                 HuntExecution | PluginExecution | None, db.get(model, execution_id)
             )
@@ -126,6 +142,9 @@ def claim(db: Session, execution_id: int, *, kind: str = "plugin") -> Ownership 
         control.owner = str(uuid4())
         control.heartbeat_at = get_utc_now()
         control.lease_until = get_utc_now() + timedelta(seconds=LEASE_SECONDS)
+        control.deadline_at = get_utc_now() + timedelta(
+            seconds=HUNT_SECONDS if kind == "hunt" else PLUGIN_SECONDS
+        )
         control.revision += 1
         execution.status = ExecutionStatus.RUNNING.value
         execution.started_at = get_utc_now()
@@ -178,12 +197,11 @@ def append_result(
                 "message": payload["data"].get("message", "Plugin failed"),
             }
         if payload["type"] == "complete":
-            execution.status = (
+            control.pending_status = (
                 ExecutionStatus.FAILED.value
                 if execution.error
                 else ExecutionStatus.COMPLETED.value
             )
-            execution.completed_at = get_utc_now()
 
 
 def fail_execution(db: Session, ownership: Ownership) -> None:
@@ -191,8 +209,7 @@ def fail_execution(db: Session, ownership: Ownership) -> None:
     with transaction(db):
         control, execution = ownership.lock(db)
         control.revision += 1
-        execution.status = ExecutionStatus.FAILED.value
-        execution.completed_at = get_utc_now()
+        control.pending_status = ExecutionStatus.FAILED.value
         execution.error = {
             "code": "execution_error",
             "message": "Execution could not finish; check initiating user access and worker configuration",

@@ -29,7 +29,7 @@
           </v-list>
         </v-menu>
         <v-btn
-          v-if="execution?.status === 'running'"
+          v-if="['pending', 'running'].includes(execution?.status)"
           color="error"
           variant="outlined"
           prepend-icon="mdi-stop"
@@ -415,7 +415,7 @@ const statusText = computed(() => {
 })
 
 const canExport = computed(() => {
-  return execution.value && !['pending', 'running'].includes(execution.value.status)
+  return execution.value && !['pending', 'running', 'cancelling'].includes(execution.value.status)
 })
 
 const filteredSteps = computed(() => {
@@ -467,7 +467,7 @@ const loadExecution = async () => {
     execution.value = result
 
     // Subscribe to real-time updates if running
-    if (['pending', 'running'].includes(execution.value.status)) {
+    if (['pending', 'running', 'cancelling'].includes(execution.value.status)) {
       huntStore.subscribeToExecution(executionId.value)
       if (execution.value.status === 'running') startElapsedTimer()
     }
@@ -488,7 +488,7 @@ const handleCancelExecution = async () => {
     cancelling.value = true
     await huntStore.cancelExecution(executionId.value)
     if (disposed) return
-    showNotification('Hunt execution cancelled', 'info')
+    showNotification('Cancellation requested', 'info')
     await loadExecution()
   } catch (err) {
     showNotification(err.message || 'Failed to cancel execution', 'error')

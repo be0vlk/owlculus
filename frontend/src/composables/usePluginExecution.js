@@ -5,6 +5,7 @@ export function usePluginExecution() {
   const execution = ref(null)
   const results = ref([])
   const error = ref(null)
+  const cancelling = ref(false)
   let controller
   let timer
   let generation = 0
@@ -30,7 +31,12 @@ export function usePluginExecution() {
         const state = await pluginService.getExecution(id, signal)
         const page = await pluginService.getResults(id, cursor, signal)
         if (current !== generation) return
-        execution.value = state
+        if (
+          !execution.value?.revision ||
+          !state.revision ||
+          state.revision >= execution.value.revision
+        )
+          execution.value = state
         results.value.push(...page.items)
         cursor = page.cursor
         error.value = null
@@ -51,6 +57,21 @@ export function usePluginExecution() {
     poll()
   }
 
+  async function cancel() {
+    if (!execution.value || cancelling.value) return
+    const current = generation
+    const id = execution.value.id
+    cancelling.value = true
+    try {
+      const state = await pluginService.cancelExecution(id)
+      if (current === generation) execution.value = state
+    } catch (failure) {
+      if (current === generation) error.value = failure.response?.data?.detail || failure.message
+    } finally {
+      cancelling.value = false
+    }
+  }
+
   onScopeDispose(stop)
-  return { execution, results, error, observe, stop }
+  return { execution, results, error, observe, stop, cancel, cancelling }
 }
