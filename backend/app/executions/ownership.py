@@ -7,6 +7,7 @@ from uuid import uuid4
 from fastapi import HTTPException
 from sqlmodel import Session, select
 
+from app.core.enums import ExecutionStatus
 from app.core.exceptions import AuthorizationException, ResourceNotFoundException
 from app.core.utils import get_utc_now
 from app.database.db_utils import transaction
@@ -39,7 +40,7 @@ class Ownership:
         )
         if (
             execution is None
-            or execution.status != "running"
+            or execution.status != ExecutionStatus.RUNNING.value
             or control.owner != self.owner
             or control.generation != self.generation
             or control.lease_until is None
@@ -61,14 +62,14 @@ def claim(db: Session, execution_id: int) -> Ownership | None:
         execution = db.get(PluginExecution, execution_id)
         if (
             execution is None
-            or execution.status != "queued"
+            or execution.status != ExecutionStatus.QUEUED.value
             or control.owner is not None
         ):
             return None
         try:
             authorize_execution(db, execution)
         except (HTTPException, AuthorizationException, ResourceNotFoundException):
-            execution.status = "failed"
+            execution.status = ExecutionStatus.FAILED.value
             execution.error = {
                 "code": "access_revoked",
                 "message": "Initiating user no longer has execution access",
@@ -81,7 +82,7 @@ def claim(db: Session, execution_id: int) -> Ownership | None:
         control.heartbeat_at = get_utc_now()
         control.lease_until = get_utc_now() + timedelta(seconds=LEASE_SECONDS)
         control.revision += 1
-        execution.status = "running"
+        execution.status = ExecutionStatus.RUNNING.value
         execution.started_at = get_utc_now()
         assert control.id is not None
         return Ownership(control.id, control.generation, control.owner)
@@ -109,5 +110,9 @@ def append_result(db: Session, ownership: Ownership, payload: dict) -> None:
                 "message": payload["data"].get("message", "Plugin failed"),
             }
         if payload["type"] == "complete":
-            execution.status = "failed" if execution.error else "completed"
+            execution.status = (
+                ExecutionStatus.FAILED.value
+                if execution.error
+                else ExecutionStatus.COMPLETED.value
+            )
             execution.completed_at = get_utc_now()

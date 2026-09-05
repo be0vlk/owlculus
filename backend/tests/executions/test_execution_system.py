@@ -237,3 +237,63 @@ def test_upgrade_preserves_hunts_and_enforces_immutable_execution(execution_syst
         assert client.get(accepted["links"]["detail"]).json()["status"] == "completed"
     finally:
         client.close()
+
+
+def test_expired_owner_cannot_commit_late_results_or_case_effects(execution_system):
+    from datetime import timedelta
+
+    from app.core.utils import get_utc_now
+    from app.database.models import ExecutionControl
+
+    system = execution_system
+    _, client = system.api()
+    system.worker()
+    system.start("-m", "app.executions.dispatcher")
+    try:
+        accepted = submit(client, system, barrier="stale-release", save_to_case=True)
+        eventually(lambda: client.get(accepted["links"]["results"]).json()["items"])
+        before = client.get(accepted["links"]["detail"]).json()
+        with Session(system.engine) as db:
+            control = db.exec(
+                select(ExecutionControl).where(
+                    ExecutionControl.plugin_execution_id == accepted["id"]
+                )
+            ).one()
+            control.lease_until = get_utc_now() - timedelta(seconds=1)
+            db.commit()
+        (system.root / "stale-release").touch()
+        subsequent = submit(client, system, mode="empty")
+        eventually(lambda: finished(client, subsequent))
+        assert (
+            client.get(accepted["links"]["detail"]).json()["revision"]
+            == before["revision"]
+        )
+        assert client.get(f"/api/evidence/case/{system.case_id}").json() == []
+        assert client.get(f"/api/cases/{system.case_id}/entities").json() == []
+    finally:
+        client.close()
+
+
+def test_vault_secrets_are_redacted_from_saved_evidence_and_entities(execution_system):
+    system = execution_system
+    _, client = system.api()
+    system.worker()
+    system.start("-m", "app.executions.dispatcher")
+    try:
+        accepted = submit(client, system, mode="vault", save_to_case=True)
+        assert eventually(lambda: finished(client, accepted))["status"] == "completed"
+        evidence = client.get(f"/api/evidence/case/{system.case_id}").json()
+        file = next(item for item in evidence if not item["is_folder"])
+        content = client.get(f"/api/evidence/{file['id']}/download")
+        assert content.status_code == 200
+        assert "acceptance-vault-secret" not in content.text
+        assert "[redacted]" in content.text
+        entities = client.get(f"/api/cases/{system.case_id}/entities")
+        assert "acceptance-vault-secret" not in entities.text
+        assert "[redacted]" in entities.text
+        assert all(
+            "acceptance-vault-secret" not in path.read_text()
+            for path in system.root.glob("*.log")
+        )
+    finally:
+        client.close()

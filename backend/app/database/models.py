@@ -13,7 +13,7 @@ from pydantic import EmailStr
 from sqlalchemy import JSON, Column, UniqueConstraint
 from sqlmodel import Field, Relationship, SQLModel
 
-from ..core.enums import TaskPriority, TaskStatus
+from ..core.enums import ExecutionStatus, TaskPriority, TaskStatus
 from ..core.utils import get_utc_now
 
 
@@ -231,7 +231,7 @@ class PluginExecution(SQLModel, table=True):
     plugin_name: str
     parameters: dict = Field(sa_column=Column(JSON, nullable=False))
     save_to_case: bool = False
-    status: str = "queued"
+    status: str = ExecutionStatus.QUEUED.value
     created_at: datetime = Field(default_factory=get_utc_now)
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
