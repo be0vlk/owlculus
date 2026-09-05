@@ -249,7 +249,8 @@ RUN_EXECUTION_ACCEPTANCE=1 uv run pytest tests/executions/test_cancellation.py
 ## Worker recovery and hunt resumption
 
 The dispatcher reconciles stale owners every ten seconds independently of API
-requests and broker availability. Ownership expires after the 60-second lease;
+requests and broker availability. Full batches of 100 are drained immediately,
+committing between batches so a fleet outage does not wait another interval per batch. Ownership expires after the 60-second lease;
 reconciliation observes an additional five-second cleanup margin. Detection and
 recovery are bounded by 75 seconds after the last heartbeat plus dispatcher
 scheduling tolerance. The provider process group has a database-free watchdog:

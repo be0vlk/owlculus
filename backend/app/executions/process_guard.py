@@ -29,7 +29,9 @@ def main():
         if time.monotonic() >= deadline - CLEANUP_SECONDS:
             break
     else:
-        return
+        # A finished provider may have left descendants behind. Clean the group
+        # even when the supervisor died before it could observe that exit.
+        os.killpg(os.getpgrp(), signal.SIGKILL)
     # On pipe EOF or lease expiry the supervisor cannot be trusted to clean up.
     # Ignore our own TERM, allowing cooperative providers a bounded exit window.
     signal.signal(signal.SIGTERM, signal.SIG_IGN)

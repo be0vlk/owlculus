@@ -439,3 +439,63 @@ def test_repeated_prestart_infrastructure_failure_exhausts_a_bounded_retry_budge
         assert rerun["id"] != accepted["id"]
         assert eventually(lambda: finished(client, rerun))["status"] == "completed"
         assert client.get(accepted["links"]["detail"]).json() == result
+
+
+def test_supervisor_loss_after_provider_exit_still_stops_descendants(execution_system):
+    from tests.executions.test_cancellation import stopped
+
+    system = execution_system
+    system.env["EXECUTION_TEST_BOUNDARY"] = "before-cleanup"
+    _, client = system.api()
+    system.worker()
+    system.start("-m", "app.executions.dispatcher")
+    descendant = None
+    try:
+        with closing(client):
+            accepted = submit(client, system, mode="orphan-subprocess")
+            marker = system.root / "boundary-reached"
+            eventually(marker.exists)
+            descendant = int((system.root / "subprocess-pid").read_text())
+            os.kill(int(marker.read_text()), signal.SIGKILL)
+            eventually(lambda: stopped(descendant), timeout=8)
+            expire_owner(system, accepted)
+            result = eventually(lambda: finished(client, accepted))
+            assert result["status"] == "completed", result
+    finally:
+        if descendant and not stopped(descendant):
+            os.kill(descendant, signal.SIGKILL)
+
+
+def test_recovery_drains_all_stale_batches_even_without_broker(execution_system):
+    import subprocess
+
+    from app.database.models import PluginExecution
+
+    system = execution_system
+    system.env["EXECUTION_LIMIT_USER"] = "200"
+    system.env["EXECUTION_LIMIT_CASE"] = "200"
+    _, client = system.api()
+    with closing(client):
+        accepted = [submit(client, system) for _ in range(101)]
+        # Arrange a fleet outage with expired leases before operation start.
+        with Session(system.engine) as db:
+            for control in db.exec(select(ExecutionControl)).all():
+                control.owner = f"lost-{control.id}"
+                control.generation = 1
+                control.lease_until = get_utc_now() - timedelta(seconds=6)
+                execution = db.get(PluginExecution, control.plugin_execution_id)
+                execution.status = "running"
+            db.commit()
+        subprocess.run(
+            ["docker", "stop", system.redis_container], check=True, capture_output=True
+        )
+        recovery = system.start("-m", "app.executions.recovery")
+        eventually(lambda: recovery.poll() is not None)
+        assert recovery.returncode == 0
+        rows = client.get(
+            accepted[0]["links"]["history"], params={"limit": 200}
+        ).json()["items"]
+        assert len(rows) == 101
+        assert {row["status"] for row in rows} == {"queued"}
+        assert {row["id"] for row in rows} == {run["id"] for run in accepted}
+        assert not (system.root / "provider-starts").exists()
