@@ -33,13 +33,15 @@ async def execute(
     ):
 
         def fence(session):
-            control, owned_execution = ownership.lock(session)
-            authorize_execution(session, owned_execution)
-            control.revision += 1
-            if owned_execution.status in {"completed", "partial", "failed"}:
-                control.pending_status = owned_execution.status
-                owned_execution.status = "running"
-                owned_execution.completed_at = None
+            # Authorization queries must not flush a provisional terminal status.
+            with session.no_autoflush:
+                control, owned_execution = ownership.lock(session)
+                authorize_execution(session, owned_execution)
+                control.revision += 1
+                if owned_execution.status in {"completed", "partial", "failed"}:
+                    control.pending_status = owned_execution.status
+                    owned_execution.status = "running"
+                    owned_execution.completed_at = None
 
         def before_step():
             with Session(engine) as check:
