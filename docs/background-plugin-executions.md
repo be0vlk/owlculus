@@ -528,3 +528,27 @@ reference measurement above. Provider durations and worker capacity stayed fixed
 These measurements describe this reference environment; they are not a production
 SLA. Raw reports are retained in the local Redis issue directory as
 `benchmark.json`, `benchmark-before-poll.json`, and `benchmark-contended.json`.
+
+
+With the final polling setting, the separate loaded fault scenario measured
+cooperative cancellation at 0.150 s, blocking cleanup
+at 0.176 s, and subprocess cleanup at
+0.164 s. Natural stale-owner recovery took
+65.72 s, within 75 seconds plus dispatcher tolerance.
+The killed worker's uncertain operation failed explicitly without replay; committed
+output remained accessible. Redis peaked at 2,383,912 bytes. Exact trimming
+to eight live events, output-limit failure, and subsequent stream deletion retained
+2,040 response bytes of durable partial results. The independent
+default-limit check also retained all 10,005 data results with exactly 10,000 live
+events. Raw loaded measurements are in the local ticket's `faults.json`.
+
+Final verification: 99 affected backend deployment, readiness, execution, upgrade,
+cancellation, recovery, observation and submission checks passed across focused
+runs (97 in the combined pass, then two corrected legacy test assumptions rerun).
+After the polling adjustment, all 12 submission/dispatch checks and the loaded
+fault acceptance passed again (13). The final production-image plugin/hunt smoke
+and Compose resource/topology checks passed (21), operator and split-Redis checks
+passed (2), and the three frontend workflow/view files passed (27). Backend mypy
+passed all 117 application files; affected Black/Ruff checks passed. Neither the
+full backend suite nor the full repository suite was run. Independent standards
+and spec reviews confirmed the accepted findings were resolved.
