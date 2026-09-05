@@ -192,7 +192,7 @@ def test_upgrade_preserves_hunts_and_enforces_immutable_execution(execution_syst
     with system.engine.begin() as db:
         db.execute(
             text(
-                "DROP TABLE executioneffect, huntstepresult, executionsubmission, pluginexecutionresult, executionoutbox, executioncontrol, pluginexecution, schema_upgrade"
+                "DROP TABLE executionevent, executioneffect, huntstepresult, executionsubmission, pluginexecutionresult, executionoutbox, executioncontrol, pluginexecution, schema_upgrade"
             )
         )
     with Session(system.engine) as db:
@@ -266,7 +266,7 @@ def test_expired_owner_cannot_commit_late_results_or_case_effects(execution_syst
         eventually(lambda: finished(client, subsequent))
         stopped = eventually(lambda: finished(client, accepted))
         assert stopped["status"] == "failed"
-        assert stopped["error"]["code"] == "lease_expired"
+        assert stopped["error"]["code"] == "interrupted_uncertain_outcome"
         assert client.get(accepted["links"]["results"]).json()["items"] == before
         assert client.get(f"/api/evidence/case/{system.case_id}").json() == []
         assert client.get(f"/api/cases/{system.case_id}/entities").json() == []
