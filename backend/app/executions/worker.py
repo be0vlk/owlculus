@@ -139,6 +139,15 @@ def worker_adapter(session_factory, vault):
     return SanitizedAdapter(session_factory, lambda _: vault)
 
 
+class WorkerPluginRunner(PluginRunner):
+    """Release provider session reads at each event boundary in worker runs."""
+
+    async def run(self, name, params, context):
+        async for result in super().run(name, params, context):
+            context.session.rollback()
+            yield result
+
+
 async def execute(engine: Engine, registry: PluginRegistry, execution_id: int) -> None:
     with Session(engine) as db:
         ownership = claim(db, execution_id)
@@ -167,8 +176,7 @@ async def execute_plugin_run(
             db.expunge(user)
         adapter = worker_adapter(session_factory, vault)
         with adapter.open(user=user, case_id=case_id, save_to_case=save) as run:
-            async for result in PluginRunner(registry).run(name, params, run):
-                run.session.rollback()
+            async for result in WorkerPluginRunner(registry).run(name, params, run):
                 if lease_lost.is_set():
                     raise OwnershipLost()
                 with Session(engine) as db:

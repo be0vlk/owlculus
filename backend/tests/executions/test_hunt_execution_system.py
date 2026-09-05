@@ -1,8 +1,8 @@
 """Durable hunt behavior through independent API, dispatcher and worker processes."""
 
+from app.database.models import Hunt
 from sqlmodel import Session
 
-from app.database.models import Hunt
 from tests.executions.conftest import eventually
 
 
@@ -235,10 +235,9 @@ def test_hunt_incompatible_worker_fails_before_provider(execution_system):
 def test_hunt_cutover_preserves_historical_output_and_interrupts_legacy_work(
     execution_system,
 ):
-    from sqlalchemy import text
-
     from app.database.models import HuntExecution, HuntStep
     from app.database.upgrade_executions import upgrade
+    from sqlalchemy import text
 
     system = execution_system
     with Session(system.engine) as db:
@@ -332,5 +331,106 @@ def test_hunt_cutover_preserves_historical_output_and_interrupts_legacy_work(
             ).status_code
             == 200
         )
+    finally:
+        client.close()
+
+
+def test_hunt_effects_are_sanitized_and_redelivery_preserves_terminal_output(
+    execution_system,
+):
+    import pytest
+    from celery import Celery
+    from sqlalchemy import text
+    from sqlalchemy.exc import DBAPIError
+
+    system = execution_system
+    _, client = system.api()
+    system.start("-m", "tests.executions.runtime", "hunt-worker")
+    system.start("-m", "app.executions.dispatcher")
+    try:
+        accepted = submit_hunt(
+            system,
+            client,
+            [step("vault", save_to_case=True, static_parameters={"mode": "vault"})],
+        )
+        state = eventually(lambda: terminal(client, accepted))
+        assert state["status"] == "completed", state
+        assert state["steps"][0]["output"]["results"][0]["redacted"] == "[redacted]"
+        evidence = client.get(f"/api/evidence/case/{system.case_id}").json()
+        file = next(item for item in evidence if not item["is_folder"])
+        content = client.get(f"/api/evidence/{file['id']}/download").text
+        assert "acceptance-vault-secret" not in content
+        assert "[redacted]" in content
+        assert all(item["created_by_id"] == system.user_id for item in evidence)
+        broker = Celery(broker=system.env["REDIS_URL"])
+        broker.send_task(
+            "owlculus.execute_hunt",
+            args=[accepted["id"]],
+            queue=system.env["HUNT_QUEUE"],
+        )
+        subsequent = submit_hunt(system, client, [])
+        assert eventually(lambda: terminal(client, subsequent))["status"] == "completed"
+        assert detail(client, accepted) == state
+        assert client.get(f"/api/evidence/case/{system.case_id}").json() == evidence
+        assert (system.root / "provider-starts").read_text().splitlines() == ["none"]
+        with pytest.raises(DBAPIError), system.engine.begin() as db:
+            db.execute(
+                text("UPDATE huntexecution SET status='running' WHERE id=:id"),
+                {"id": accepted["id"]},
+            )
+    finally:
+        client.close()
+
+
+def test_stale_hunt_owner_cannot_write_output_or_effects(execution_system):
+    from datetime import timedelta
+
+    from app.core.utils import get_utc_now
+    from app.database.models import ExecutionControl
+    from sqlmodel import select
+
+    system = execution_system
+    _, client = system.api()
+    system.start("-m", "tests.executions.runtime", "hunt-worker")
+    system.start("-m", "app.executions.dispatcher")
+    try:
+        accepted = submit_hunt(
+            system,
+            client,
+            [
+                step("retained"),
+                step(
+                    "stale",
+                    depends_on=["retained"],
+                    save_to_case=True,
+                    static_parameters={"barrier": "stale"},
+                ),
+                step("never", depends_on=["stale"]),
+            ],
+        )
+        eventually(
+            lambda: (system.root / "provider-starts").exists()
+            and "stale" in (system.root / "provider-starts").read_text().splitlines()
+        )
+        state = detail(client, accepted)
+        assert state["steps"][0]["output"]["result_count"] == 1
+        with Session(system.engine) as db:
+            control = db.exec(
+                select(ExecutionControl).where(
+                    ExecutionControl.hunt_execution_id == accepted["id"]
+                )
+            ).one()
+            control.lease_until = get_utc_now() - timedelta(seconds=1)
+            db.commit()
+        (system.root / "stale").touch()
+        subsequent = submit_hunt(system, client, [])
+        assert eventually(lambda: terminal(client, subsequent))["status"] == "completed"
+        assert detail(client, accepted) == state
+        assert client.get(f"/api/evidence/case/{system.case_id}").json() == []
+        assert client.get(f"/api/cases/{system.case_id}/entities").json() == []
+        assert (system.root / "provider-starts").read_text().splitlines() == [
+            "none",
+            "stale",
+        ]
     finally:
         client.close()

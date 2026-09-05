@@ -129,12 +129,12 @@ export const getStatusIcon = (status) => {
 }
 
 // Status text mapping
-export const getStatusText = (status) => {
+export const getStatusText = (status, compact = false) => {
   const statusTexts = {
     pending: 'Queued',
     running: 'Running',
     completed: 'Completed',
-    partial: 'Partial Success',
+    partial: compact ? 'Partial' : 'Partial Success',
     failed: 'Failed',
     cancelled: 'Cancelled',
     skipped: 'Skipped',

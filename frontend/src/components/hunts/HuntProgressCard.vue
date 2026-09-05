@@ -151,7 +151,7 @@
 
 <script setup>
 import { computed, ref, onMounted, onUnmounted } from 'vue'
-import { formatHuntExecutionTitle } from '@/utils/huntDisplayUtils'
+import { formatHuntExecutionTitle, getStatusText } from '@/utils/huntDisplayUtils'
 import { formatDate } from '@/composables/dateUtils'
 
 const props = defineProps({
@@ -210,24 +210,7 @@ const statusIcon = computed(() => {
   }
 })
 
-const statusText = computed(() => {
-  switch (props.execution.status) {
-    case 'pending':
-      return 'Queued'
-    case 'running':
-      return 'Running'
-    case 'completed':
-      return 'Completed'
-    case 'partial':
-      return 'Partial'
-    case 'failed':
-      return 'Failed'
-    case 'cancelled':
-      return 'Cancelled'
-    default:
-      return 'Unknown'
-  }
-})
+const statusText = computed(() => getStatusText(props.execution.status, true))
 
 const completedSteps = computed(() => {
   if (!props.execution.steps) return []

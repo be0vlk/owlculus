@@ -72,8 +72,8 @@ class HuntExecutionResponse(BaseModel):
     kind: str = "hunt"
     revision: int = 0
     dispatch_state: str = "legacy"
-    links: Dict[str, str] = Field(default_factory=dict)
-    error: Optional[Dict[str, Any]] = None
+    links: dict[str, str] = Field(default_factory=dict)
+    error: dict[str, Any] | None = None
 
     # Related data
     hunt: Optional[HuntResponse] = None

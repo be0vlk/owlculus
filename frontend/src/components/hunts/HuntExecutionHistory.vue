@@ -152,7 +152,12 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import { getHuntTargetSummary, getCategoryColor, getCategoryIcon } from '@/utils/huntDisplayUtils'
+import {
+  getHuntTargetSummary,
+  getCategoryColor,
+  getCategoryIcon,
+  getStatusText as formatStatusText,
+} from '@/utils/huntDisplayUtils'
 import { formatDate } from '@/composables/dateUtils'
 
 const props = defineProps({
@@ -186,14 +191,9 @@ const headers = [
 ]
 
 // Filter options
-const statusOptions = [
-  { title: 'Completed', value: 'completed' },
-  { title: 'Failed', value: 'failed' },
-  { title: 'Partial', value: 'partial' },
-  { title: 'Cancelled', value: 'cancelled' },
-  { title: 'Running', value: 'running' },
-  { title: 'Queued', value: 'pending' },
-]
+const statusOptions = ['completed', 'failed', 'partial', 'cancelled', 'running', 'pending'].map(
+  (value) => ({ title: formatStatusText(value, true), value }),
+)
 
 const categoryOptions = computed(() => {
   const categories = [
@@ -287,24 +287,7 @@ const getStatusIcon = (status) => {
   }
 }
 
-const getStatusText = (status) => {
-  switch (status) {
-    case 'pending':
-      return 'Queued'
-    case 'running':
-      return 'Running'
-    case 'completed':
-      return 'Completed'
-    case 'partial':
-      return 'Partial'
-    case 'failed':
-      return 'Failed'
-    case 'cancelled':
-      return 'Cancelled'
-    default:
-      return 'Unknown'
-  }
-}
+const getStatusText = (status) => formatStatusText(status, true)
 
 // formatDate and formatTimeOnly are now imported from dateUtils
 

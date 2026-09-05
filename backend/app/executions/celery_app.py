@@ -1,4 +1,4 @@
-"""Dedicated plugin queue; the parent process never imports database resources."""
+"""Dedicated execution queues; database resources are created only after fork."""
 
 import asyncio
 import os
@@ -21,12 +21,11 @@ app.conf.update(
 )
 
 
-@app.task(name="owlculus.execute_plugin")
-def execute_plugin(execution_id: int):
+def run_in_worker(execution_id: int, execute):
+    """Create and dispose process-local resources for one asynchronous execution."""
     from sqlmodel import create_engine
 
     from app.core.config import settings
-    from app.executions.worker import execute
     from app.plugins.plugin_registry import get_shipped_plugin_registry
 
     engine = create_engine(
@@ -36,20 +35,17 @@ def execute_plugin(execution_id: int):
         asyncio.run(execute(engine, get_shipped_plugin_registry(), execution_id))
     finally:
         engine.dispose()
+
+
+@app.task(name="owlculus.execute_plugin")
+def execute_plugin(execution_id: int):
+    from app.executions.worker import execute
+
+    run_in_worker(execution_id, execute)
 
 
 @app.task(name="owlculus.execute_hunt")
 def execute_hunt(execution_id: int):
-    from sqlmodel import create_engine
-
-    from app.core.config import settings
     from app.executions.hunt_worker import execute
-    from app.plugins.plugin_registry import get_shipped_plugin_registry
 
-    engine = create_engine(
-        settings.get_database_url(), pool_pre_ping=True, hide_parameters=True
-    )
-    try:
-        asyncio.run(execute(engine, get_shipped_plugin_registry(), execution_id))
-    finally:
-        engine.dispose()
+    run_in_worker(execution_id, execute)
