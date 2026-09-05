@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { reactive, nextTick } from 'vue'
 import { useCaseNoteSave } from '../useCaseNoteSave'
 import { caseService } from '../../services/case'
 
@@ -144,14 +145,13 @@ describe('useCaseNoteSave', () => {
       })
     })
 
-    it('updates editor editability when isEditing changes', () => {
-      props.isEditing = true
+    it('updates editor editability silently when the prop changes', async () => {
+      props = reactive({ ...props, isEditing: true })
       useCaseNoteSave(props, emit, { saveMode: 'manual' })
-
-      // Simulate the watch callback
-      mockEditor.setEditable(false)
-
-      expect(mockEditor.setEditable).toHaveBeenCalledWith(false)
+      props.isEditing = false
+      await nextTick()
+      expect(mockEditor.setEditable).toHaveBeenCalledWith(false, false)
+      expect(emit).not.toHaveBeenCalled()
     })
   })
 

@@ -54,6 +54,56 @@ const textbox = () => wrapper.get('[role="textbox"][aria-label="Entity notes"]')
 const button = (text) => wrapper.findAll('button').find((item) => item.text() === text)
 
 describe('Entity notes with the real editor', () => {
+  it('does not turn entering edit mode into a form edit or an autosave', async () => {
+    await openNotes({ id: 9, entity_type: 'person', data: { first_name: 'Ada', notes: '' } })
+    await button('Edit Entity').trigger('click')
+    await flushPromises()
+    vi.useFakeTimers()
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(entityService.updateEntity).not.toHaveBeenCalled()
+    entityService.updateEntity.mockResolvedValue({ id: 9 })
+    await button('Save Changes').trigger('click')
+    await flushPromises()
+    expect(entityService.updateEntity).toHaveBeenCalledExactlyOnceWith(7, 9, {
+      entity_type: 'person',
+      data: expect.objectContaining({ notes: '' }),
+    })
+  })
+
+  it('includes pending notes in the main form save before debounce and exits without a second write', async () => {
+    const entity = {
+      id: 9,
+      entity_type: 'person',
+      data: { first_name: 'Ada', notes: '<p>Initial</p>' },
+    }
+    await openNotes(entity)
+    await button('Edit Entity').trigger('click')
+    await flushPromises()
+    vi.useFakeTimers()
+    textbox().element.innerHTML = '<p>Pending notes</p>'
+    await textbox().trigger('input')
+    entityService.updateEntity.mockImplementation(async (_caseId, id, payload) => ({
+      id,
+      ...payload,
+    }))
+    await button('Save Changes').trigger('click')
+    await flushPromises()
+    expect(entityService.updateEntity).toHaveBeenCalledExactlyOnceWith(7, 9, {
+      entity_type: 'person',
+      data: expect.objectContaining({ first_name: 'Ada', notes: '<p>Pending notes</p>' }),
+    })
+    const saved = wrapper.emitted('edit').at(-1)[0]
+    await wrapper.setProps({ entity: saved })
+    expect(textbox().attributes('contenteditable')).toBe('false')
+    expect(textbox().text()).toBe('Pending notes')
+    await vi.advanceTimersByTimeAsync(10000)
+    expect(entityService.updateEntity).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+    vi.useRealTimers()
+    await openNotes(saved)
+    expect(textbox().text()).toBe('Pending notes')
+  })
+
   it('loads and refreshes silently, saves edits through the service and form, and reopens HTML', async () => {
     const entity = {
       id: 9,

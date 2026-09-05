@@ -89,7 +89,7 @@ export function useEntityNoteEditor(entity, caseId, isEditing, formData, emit) {
             saveNotes()
           }
         }
-        editor.value.setEditable(newEditingState)
+        editor.value.setEditable(newEditingState, false)
       }
     },
   )

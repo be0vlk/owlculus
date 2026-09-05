@@ -33,6 +33,46 @@ afterEach(() => {
 })
 
 describe('Case note editor', () => {
+  it('changes edit mode silently and still saves subsequent user edits', async () => {
+    wrapper = mount(NoteEditor, {
+      props: { modelValue: '<p>Initial notes</p>', caseId: 7, isEditing: false },
+      global: { plugins: [createVuetify({ components, directives, theme: false })] },
+    })
+    await flushPromises()
+    vi.useFakeTimers()
+    await wrapper.setProps({ isEditing: true })
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    expect(caseService.updateCase).not.toHaveBeenCalled()
+    const box = wrapper.get('[aria-label="Case notes"]')
+    box.element.innerHTML = '<p>User edit</p>'
+    await box.trigger('input')
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(caseService.updateCase).toHaveBeenCalledExactlyOnceWith(7, { notes: '<p>User edit</p>' })
+    await wrapper.setProps({ isEditing: false })
+    expect(box.attributes('contenteditable')).toBe('false')
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(wrapper.emitted('update:modelValue')).toEqual([['<p>User edit</p>']])
+    expect(caseService.updateCase).toHaveBeenCalledTimes(1)
+  })
+
+  it('emits manual edits immediately without saving on timers or unmount', async () => {
+    wrapper = mount(NoteEditor, {
+      props: { modelValue: '<p>Initial</p>', caseId: 7, saveMode: 'manual' },
+      global: { plugins: [createVuetify({ components, directives, theme: false })] },
+    })
+    await flushPromises()
+    vi.useFakeTimers()
+    const box = wrapper.get('[aria-label="Case notes"]')
+    box.element.innerHTML = '<p>Manual edit</p>'
+    await box.trigger('input')
+    expect(wrapper.emitted('update:modelValue')).toEqual([['<p>Manual edit</p>']])
+    await vi.advanceTimersByTimeAsync(5000)
+    wrapper.unmount()
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(caseService.updateCase).not.toHaveBeenCalled()
+  })
+
   it('loads and replaces notes silently, then saves a user edit and reopens the HTML', async () => {
     const mountNotes = (modelValue) =>
       mount(NoteEditor, {

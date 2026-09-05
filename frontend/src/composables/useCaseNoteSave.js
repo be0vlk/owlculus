@@ -69,7 +69,7 @@ export function useCaseNoteSave(props, emit, options = {}) {
       () => props.isEditing,
       (newEditingState) => {
         if (editor.value) {
-          editor.value.setEditable(newEditingState)
+          editor.value.setEditable(newEditingState, false)
         }
       },
     )
