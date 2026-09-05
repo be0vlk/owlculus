@@ -1,0 +1,39 @@
+/* Shared note content in case/entity embedded and fullscreen views. */
+.tiptap-content .ProseMirror .task-list {
+    list-style: none;
+    padding-left: 0;
+}
+
+.tiptap-content .task-item {
+    display: flex;
+    align-items: flex-start;
+    margin: 4px 0;
+}
+
+.tiptap-content .task-item > label {
+    flex: 0 0 auto;
+    margin-right: 8px;
+    margin-top: 2px;
+    user-select: none;
+}
+
+.tiptap-content .task-item > div {
+    flex: 1 1 auto;
+}
+
+.tiptap-content .task-item input[type='checkbox'] {
+    margin: 0;
+}
+
+.tiptap-content .task-item[data-checked='true'] > div {
+    text-decoration: line-through;
+    opacity: 0.6;
+}
+
+.tiptap-content .ProseMirror .is-editor-empty:first-child::before {
+    color: rgb(var(--v-theme-on-surface));
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    pointer-events: none;
+}

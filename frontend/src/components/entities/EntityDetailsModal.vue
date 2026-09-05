@@ -41,6 +41,7 @@
 
         <!-- Tab Contents -->
         <EntityTabContent
+          ref="tabContent"
           :active-tab="activeTab"
           :entity-schema="entitySchema"
           :is-editing="isEditing"
@@ -121,6 +122,11 @@ useDialogFocusRestore(
 const emit = defineEmits(['close', 'edit', 'viewEntity'])
 
 const notesExpanded = ref(false)
+const tabContent = ref(null)
+useDialogFocusRestore(
+  () => notesExpanded.value,
+  () => tabContent.value?.$el?.querySelector('[aria-label="Expand to fullscreen"]'),
+)
 
 const dialogVisible = computed({
   get: () => props.show,

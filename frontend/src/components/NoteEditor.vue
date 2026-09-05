@@ -143,7 +143,7 @@ const { editor, editorActions, saving, saveError, lastSavedTime, formatLastSaved
   box-shadow: 0 0 0 2px rgb(var(--v-theme-primary), 0.2);
 }
 
-.fullscreen-editor :deep(.ProseMirror p.is-editor-empty:first-child::before) {
+.fullscreen-editor :deep(.ProseMirror .is-editor-empty:first-child::before) {
   color: rgb(var(--v-theme-on-surface));
   content: attr(data-placeholder);
   float: left;
@@ -156,7 +156,7 @@ const { editor, editorActions, saving, saveError, lastSavedTime, formatLastSaved
   min-height: 150px;
 }
 
-.tiptap-content :deep(.ProseMirror p.is-editor-empty:first-child::before) {
+.tiptap-content :deep(.ProseMirror .is-editor-empty:first-child::before) {
   color: rgb(var(--v-theme-on-surface));
   content: attr(data-placeholder);
   float: left;
@@ -219,38 +219,6 @@ const { editor, editorActions, saving, saveError, lastSavedTime, formatLastSaved
   color: rgb(var(--v-theme-on-warning));
   padding: 0 2px;
   border-radius: 2px;
-}
-
-/* Task list styling */
-.tiptap-content :deep(.task-list) {
-  list-style: none;
-  padding-left: 0;
-}
-
-.tiptap-content :deep(.task-item) {
-  display: flex;
-  align-items: flex-start;
-  margin: 4px 0;
-}
-
-.tiptap-content :deep(.task-item > label) {
-  flex: 0 0 auto;
-  margin-right: 8px;
-  margin-top: 2px;
-  user-select: none;
-}
-
-.tiptap-content :deep(.task-item > div) {
-  flex: 1 1 auto;
-}
-
-.tiptap-content :deep(.task-item input[type='checkbox']) {
-  margin: 0;
-}
-
-.tiptap-content :deep(.task-item[data-checked='true'] > div) {
-  text-decoration: line-through;
-  opacity: 0.6;
 }
 
 /* Read-only styling */

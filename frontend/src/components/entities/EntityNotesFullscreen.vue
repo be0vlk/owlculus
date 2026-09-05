@@ -55,9 +55,8 @@
 <script setup>
 import { EditorContent } from '@tiptap/vue-3'
 import EditorToolbar from '../editor/EditorToolbar.vue'
-import { useDialogFocusRestore } from '@/composables/useDialogFocusRestore'
 
-const props = defineProps({
+defineProps({
   show: { type: Boolean, required: true },
   title: { type: String, required: true },
   editor: { type: Object, default: null },
@@ -68,8 +67,6 @@ const props = defineProps({
   formatLastSaved: { type: String, default: '' },
   isEditing: { type: Boolean, default: undefined },
 })
-
-useDialogFocusRestore(() => props.show)
 
 defineEmits(['update:show', 'close'])
 </script>
