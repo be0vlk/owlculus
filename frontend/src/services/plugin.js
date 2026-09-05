@@ -1,7 +1,13 @@
+import { createExecutionStream, closeExecutionStream } from './executionStream'
 import api from './api'
 import { submitExecution } from './executionSubmission'
 
 export const pluginService = {
+  createExecutionStream(id, onMessage, onError, cursor) {
+    return createExecutionStream('plugin', id, onMessage, onError, cursor)
+  },
+  closeExecutionStream,
+
   async listPlugins() {
     return (await api.get('/api/plugins/')).data
   },

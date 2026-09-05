@@ -8,6 +8,7 @@ from app.database.connection import engine
 from app.database.models import (
     ExecutionControl,
     ExecutionEffect,
+    ExecutionEvent,
     ExecutionOutbox,
     ExecutionSubmission,
     HuntStepResult,
@@ -35,6 +36,7 @@ def upgrade_plugins(database_engine: Engine = engine) -> None:
         for model in (
             PluginExecution,
             ExecutionControl,
+            ExecutionEvent,
             ExecutionOutbox,
             PluginExecutionResult,
         ):
@@ -275,6 +277,28 @@ def upgrade(database_engine: Engine = engine) -> None:
             connection.execute(
                 text(
                     "INSERT INTO schema_upgrade(version) VALUES ('006_worker_recovery')"
+                )
+            )
+
+        connection.execute(
+            text(
+                "ALTER TABLE executioncontrol ADD COLUMN IF NOT EXISTS event_publish_after TIMESTAMP"
+            )
+        )
+        SQLModel.metadata.tables[ExecutionEvent.__name__.lower()].create(
+            connection, checkfirst=True
+        )
+        if not connection.execute(
+            text("SELECT 1 FROM schema_upgrade WHERE version='007_shared_observation'")
+        ).first():
+            connection.execute(
+                text(
+                    "INSERT INTO executionevent(control_id, revision) SELECT id, revision FROM executioncontrol ON CONFLICT DO NOTHING"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO schema_upgrade(version) VALUES ('007_shared_observation')"
                 )
             )
 

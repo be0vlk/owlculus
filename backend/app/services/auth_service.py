@@ -8,11 +8,9 @@ from app.core import security
 from app.core.config import settings
 from app.core.exceptions import (
     AuthenticationException,
-    AuthorizationException,
-    ResourceNotFoundException,
 )
 from app.core.logging import get_security_logger
-from app.database.models import HuntExecution, User
+from app.database.models import User
 from app.schemas.auth_schema import Token, WebSocketToken
 from app.services.case_access import CaseAccess
 
@@ -55,7 +53,7 @@ class AuthService:
         return Token(access_token=token, token_type=TOKEN_TYPE_BEARER)
 
     async def create_websocket_token(
-        self, execution_id: int, current_user: User
+        self, execution_id: int, current_user: User, kind: str = "hunt"
     ) -> WebSocketToken:
         """Return a one-use token after resolving its execution and case access."""
         logger = get_security_logger(
@@ -64,26 +62,27 @@ class AuthService:
             execution_id=execution_id,
             event_type="websocket_token_attempt",
         )
-        execution = self.db.get(HuntExecution, execution_id)
-        if execution is None:
-            logger.bind(
-                event_type="websocket_token_failed",
-                failure_reason="execution_not_found",
-            ).warning("WebSocket token creation failed")
-            raise ResourceNotFoundException(EXECUTION_NOT_FOUND_ERROR)
+        import asyncio
 
-        try:
-            self.case_access.readable(current_user, execution.case_id)
-        except AuthorizationException:
-            logger.bind(
-                event_type="websocket_token_failed", failure_reason="access_denied"
-            ).warning("WebSocket token creation denied")
-            raise
+        from fastapi import HTTPException
+
+        from app.executions.observation import readable_execution
+
+        execution = readable_execution(self.db, current_user.id, kind, execution_id)
         if current_user.id is None:
             raise AuthenticationException("Could not validate credentials")
-        token = security.ephemeral_token_manager.create_token(
-            current_user.id, execution_id
-        )
+        try:
+            token = await asyncio.to_thread(
+                security.ephemeral_token_manager.create_token,
+                current_user.id,
+                execution_id,
+                kind,
+            )
+        except Exception:  # noqa: BLE001 - never expose Redis credentials
+            raise HTTPException(
+                503,
+                "Live updates are unavailable; retained investigation results remain available",
+            ) from None
         logger.bind(
             event_type="websocket_token_success", case_id=execution.case_id
         ).info("WebSocket token created successfully")

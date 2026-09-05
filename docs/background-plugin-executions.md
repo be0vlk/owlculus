@@ -297,3 +297,60 @@ Focused recovery verification:
 cd backend
 RUN_EXECUTION_ACCEPTANCE=1 uv run pytest tests/executions/test_recovery.py
 ```
+
+## Shared live observation (upgrade 007)
+
+`POST /api/auth/websocket-token` accepts `{execution_id, kind}` (`kind` defaults
+ to `hunt` for existing callers). The authenticated user must currently be active
+and able to read the execution's case, including analyst readers. Tokens expire
+in Redis after 30 seconds and are consumed atomically once. Kind and execution ID
+are bound to the token; minting and consuming may use different API processes.
+
+Open `/api/{plugins|hunts}/executions/{id}/stream?token=...`, optionally with
+`cursor=<revision>-0` from an earlier stream. The first message is an authoritative
+`snapshot`, or `resync` when the cursor is trimmed, expired, ahead of retained
+history, or Redis has lost the stream. Both include current status, durable
+revision, a cursor, and links to authorized execution detail and ordered results.
+Load those result links to recover all output. Later `update` messages carry only
+new revisions and result links; they are invalidations, not result bodies. A
+snapshot supersedes earlier revisions, so clients need not replay old output.
+The control-row lock makes the snapshot/revision consistent; independent Redis
+XREAD cursors deliver newer retained updates to every API observer without a
+consumer group. Legacy completed hunts without a control row remain readable.
+
+Every revision journals an `ExecutionEvent` in the same PostgreSQL transaction as
+its state or result change. The supervised dispatcher publishes committed intents
+and removes each only after acknowledgment. Redis publication failures cannot
+change execution status. Deterministic stream IDs make duplicate publication
+safe. Upgrade 007 creates the journal and backfills the current revision for
+existing controls; rerunning the upgrade is safe. Use the same stopped-process
+upgrade procedure above before starting the new API, dispatcher and workers.
+
+`EXECUTION_STREAM_LIMIT` defaults to 10,000 entries per execution (exact trimming).
+`EXECUTION_STREAM_TTL_SECONDS` defaults to 86,400 seconds: active streams refresh,
+and terminal retention is measured from durable completion, including delayed
+publication. Cleanup removes no PostgreSQL history. Event keys use
+`owlculus:events:<kind>:<id>`, token keys use `owlculus:tokens:<capability>`, separate
+from execution queues, cancellation hints, and rate-limit state. Redis connections
+have two-second connect and command timeouts. API observation buffers at most 100
+small entries and has no application send queue. Each socket send has a two-second
+deadline (`EXECUTION_STREAM_SEND_SECONDS`, capped at five); slow connections close
+with code 1013 and a recoverable cursor. Current user/case authorization is refreshed
+every five seconds (`EXECUTION_STREAM_AUTH_SECONDS`, capped at ten) and during
+long batches; revoked observation closes with 1008.
+
+Both frontends serialize durable reads, deduplicate results by cursor and state by
+revision, and coalesce live bursts into refreshes. Failed streams reconnect with a
+new token and their previous cursor while bounded polling backs off from one to ten
+seconds. Terminal results drain any remaining pages and stop observation. Navigation
+aborts reads and closes streams without cancellation or another submission. Hunt
+step renderers and exports continue using their existing durable contracts.
+
+Uvicorn handshake logging redacts observation token query values. Configure any
+external reverse proxy or access-log collector to omit query strings for stream
+URLs as well; capabilities and result bodies must never be logged.
+
+Focused shared-observation acceptance: `RUN_EXECUTION_ACCEPTANCE=1 uv run --locked
+pytest tests/executions/test_observation.py -q`. It uses real Redis 7, PostgreSQL,
+independent APIs and workers; it includes deterministic snapshot and slow-transport
+barriers, event loss/repair, authorization changes, and output above stream retention.

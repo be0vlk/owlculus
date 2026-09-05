@@ -16,6 +16,7 @@ from app.database.models import (
     PluginExecution,
 )
 from app.executions.cancellation import TERMINAL, associated_execution, cancel_steps
+from app.executions.events import record_event
 from app.executions.limits import CLEANUP_SECONDS
 
 
@@ -24,7 +25,7 @@ def recover_stopped(db, control, execution, *, reason=None):
     now = get_utc_now()
     control.generation += 1
     control.owner = None
-    control.revision += 1
+    record_event(db, control)
     control.recovered_at = now
     if control.cancellation_requested_at:
         execution.status = "cancelled"

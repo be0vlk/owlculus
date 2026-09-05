@@ -75,3 +75,19 @@ it('closes a connecting stream when its case context is discarded', async () => 
   expect(stream.close).toHaveBeenCalledOnce()
   vi.unstubAllGlobals()
 })
+
+it('sends a reconnect cursor and ignores duplicate or stale revisions', async () => {
+  vi.stubGlobal('WebSocket', WebSocketStub)
+  vi.stubGlobal('window', { location: { protocol: 'http:', host: 'localhost' } })
+  apiMock.post.mockResolvedValue({ data: { token: 'once' } })
+  const { huntService } = await import('../hunt')
+  const messages = vi.fn()
+  const stream = await huntService.createExecutionStream(7, messages, vi.fn(), '4-0')
+  expect(stream.url).toContain('cursor=4-0')
+  for (const revision of [5, 5, 3, 6]) {
+    stream.onmessage({ data: JSON.stringify({ event_type: 'update', revision }) })
+  }
+  expect(messages.mock.calls.map(([event]) => event.revision)).toEqual([5, 6])
+  huntService.closeExecutionStream(stream)
+  vi.unstubAllGlobals()
+})

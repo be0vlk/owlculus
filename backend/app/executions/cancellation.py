@@ -16,6 +16,7 @@ from app.database.models import (
     HuntStep,
     PluginExecution,
 )
+from app.executions.events import record_event
 from app.services.case_access import CaseAccess
 
 TERMINAL = {"completed", "partial", "failed", "cancelled"}
@@ -68,7 +69,7 @@ def request_cancel(db, user, execution_id, *, kind="plugin"):
             )
         if control.cancellation_requested_at is None:
             control.cancellation_requested_at = get_utc_now()
-            control.revision += 1
+            record_event(db, control)
             execution.status = "cancelling" if control.owner else "cancelled"
             if control.owner is None:
                 control.generation += 1

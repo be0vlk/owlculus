@@ -5,6 +5,7 @@ from sqlalchemy.engine import Engine
 from sqlmodel import Session
 
 from app.database.models import HuntExecution, HuntStep
+from app.executions.events import record_event
 from app.executions.ownership import OwnershipLost, claim, fail_execution
 from app.executions.service import authorize_execution
 from app.executions.worker import WorkerPluginRunner, worker_adapter, worker_resources
@@ -13,10 +14,15 @@ from app.plugins.plugin_registry import PluginRegistry
 
 
 class DurableHuntNotifier:
-    """Observation reads committed state until shared streaming is introduced."""
+    """Fenced commits journal revisions for the supervised Redis publisher.
+
+    HuntEvent is a presentation hint; publishing it directly would expose
+    provisional completion before worker cleanup has committed terminal state.
+    """
 
     async def broadcast(self, event):
-        pass
+        # Publication intent is already durable in the fenced commit below.
+        return None
 
 
 async def execute(
@@ -53,7 +59,7 @@ async def execute(
                             control.operation_id = None
                             control.operation_started_at = None
                             control.recovery_attempts = 0
-                control.revision += 1
+                record_event(session, control)
                 if owned_execution.status in {"completed", "partial", "failed"}:
                     control.pending_status = owned_execution.status
                     owned_execution.status = "running"

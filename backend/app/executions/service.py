@@ -126,6 +126,9 @@ def accept(
             control = ExecutionControl(plugin_execution_id=cast(int, execution.id))
             db.add(control)
             db.flush()
+            from app.executions.events import record_event
+
+            record_event(db, control, advance=False)
             outbox = ExecutionOutbox(control_id=cast(int, control.id))
             db.add(outbox)
             submission.remember(db, control, normalized, definitions)
@@ -198,6 +201,7 @@ def representation(
         **dispatch_observation(execution, outbox, control),
         "links": {
             "detail": base,
+            "stream": f"{base}/stream",
             "results": f"{base}/results",
             "history": f"/api/plugins/executions/case/{execution.case_id}",
         },
@@ -315,6 +319,9 @@ def accept_hunt(
             control = ExecutionControl(hunt_execution_id=execution.id)
             db.add(control)
             db.flush()
+            from app.executions.events import record_event
+
+            record_event(db, control, advance=False)
             db.add(ExecutionOutbox(control_id=control.id))
             submission.remember(
                 db,
@@ -343,6 +350,7 @@ def hunt_observation(db: Session, execution: HuntExecution) -> dict:
         ),
         "links": {
             "detail": base,
+            "stream": f"{base}/stream",
             "history": f"/api/hunts/cases/{execution.case_id}/executions",
             "export": f"{base}/export",
         },

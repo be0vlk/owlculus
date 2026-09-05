@@ -103,3 +103,44 @@ it('ignores a delayed cancellation response after a newer terminal poll', async 
   expect(pluginService.getExecution).toHaveBeenCalledTimes(2)
   scope.stop()
 })
+
+it('refreshes incremental results from live hints, reconnects, and stops streams at completion', async () => {
+  vi.useFakeTimers()
+  let message, disconnected
+  const socket = {}
+  pluginService.createExecutionStream = vi.fn(async (_id, onMessage, onError) => {
+    message = onMessage
+    disconnected = onError
+    return socket
+  })
+  pluginService.closeExecutionStream = vi.fn()
+  pluginService.getExecution.mockResolvedValue({ id: 12, status: 'running', revision: 2 })
+  pluginService.getResults.mockResolvedValue({ items: [], cursor: 0 })
+  const scope = effectScope()
+  const view = scope.run(() => usePluginExecution())
+  view.observe(12)
+  await flushPromises()
+  pluginService.getExecution.mockResolvedValue({ id: 12, status: 'running', revision: 3 })
+  pluginService.getResults.mockResolvedValue({
+    items: [{ type: 'data', data: 'incremental' }],
+    cursor: 3,
+  })
+  message({ event_type: 'update', revision: 3, cursor: '3-0' })
+  await flushPromises()
+  expect(view.results.value).toEqual([{ type: 'data', data: 'incremental' }])
+  disconnected()
+  expect(view.error.value).toContain('retained investigation results')
+  await vi.advanceTimersByTimeAsync(1500)
+  expect(pluginService.createExecutionStream.mock.calls.at(-1)[3]).toBe('3-0')
+  expect(view.results.value).toHaveLength(1)
+  pluginService.getExecution.mockResolvedValue({ id: 12, status: 'completed', revision: 4 })
+  pluginService.getResults.mockResolvedValue({ items: [], cursor: 3 })
+  message({ event_type: 'resync', revision: 4, cursor: '4-0' })
+  await flushPromises()
+  const reads = pluginService.getExecution.mock.calls.length
+  await vi.advanceTimersByTimeAsync(60000)
+  expect(view.execution.value.status).toBe('completed')
+  expect(pluginService.getExecution).toHaveBeenCalledTimes(reads)
+  expect(pluginService.closeExecutionStream).toHaveBeenCalledWith(socket)
+  scope.stop()
+})
