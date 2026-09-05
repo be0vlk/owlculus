@@ -101,6 +101,24 @@ def install():
     if os.environ.get("EXECUTION_TEST_EXIT_BEFORE_START"):
         supervisor.CHILD_COMMAND = [sys.executable, "-c", "raise SystemExit(1)"]
 
+    if os.environ.get("EXECUTION_TEST_SNAPSHOT_BARRIER"):
+        import time
+        from app.executions import observation
+
+        original_snapshot = observation.snapshot
+
+        def paused_snapshot(*args, **kwargs):
+            state = original_snapshot(*args, **kwargs)
+            root = Path(os.environ["EXECUTION_TEST_DIR"])
+            marker = root / "snapshot-read"
+            if not marker.exists():
+                marker.touch()
+                while not (root / "release-snapshot").exists():
+                    time.sleep(0.01)
+            return state
+
+        observation.snapshot = paused_snapshot
+
     boundary = os.environ.get("EXECUTION_TEST_BOUNDARY")
     if boundary:
         import time

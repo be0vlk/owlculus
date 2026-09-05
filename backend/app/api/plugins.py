@@ -8,7 +8,7 @@ enabling extensible investigation capabilities through a standardized plugin arc
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, Query, Request, Response
+from fastapi import APIRouter, Depends, Header, Query, Request, Response, WebSocket
 from sqlmodel import Session
 
 from ..core.dependencies import get_current_user
@@ -100,3 +100,12 @@ def execute_plugin(
     )
     response.headers["Location"] = accepted["links"]["detail"]
     return accepted
+
+
+@router.websocket("/executions/{execution_id}/stream")
+async def stream_execution(
+    websocket: WebSocket, execution_id: int, db: Session = Depends(get_db)
+):
+    from app.executions.observation import observe
+
+    await observe(websocket, db.get_bind(), "plugin", execution_id)

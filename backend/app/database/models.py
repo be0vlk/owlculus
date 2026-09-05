@@ -261,6 +261,7 @@ class ExecutionControl(SQLModel, table=True):
     lease_until: Optional[datetime] = None
     heartbeat_at: Optional[datetime] = None
     revision: int = 1
+    event_publish_after: datetime | None = None
     cancellation_requested_at: datetime | None = None
     deadline_at: datetime | None = None
     pending_status: str | None = None
@@ -321,3 +322,12 @@ class ExecutionEffect(SQLModel, table=True):
     operation_id: str
     artifact_id: str | None = Field(default=None, unique=True)
     created_at: datetime = Field(default_factory=get_utc_now)
+
+
+class ExecutionEvent(SQLModel, table=True):
+    """Unpublished revision, committed atomically with authoritative changes."""
+
+    __table_args__ = (UniqueConstraint("control_id", "revision"),)
+    id: int | None = Field(default=None, primary_key=True)
+    control_id: int = Field(foreign_key="executioncontrol.id", index=True)
+    revision: int

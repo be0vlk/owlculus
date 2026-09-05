@@ -76,3 +76,33 @@ it('retains terminal state when an older cancellation response arrives late', as
   await vi.advanceTimersByTimeAsync(30000)
   expect(huntService.getExecution).toHaveBeenCalledTimes(2)
 })
+
+it('refreshes hunt step output on a live hint and releases the subscription on navigation', async () => {
+  let notify
+  const socket = {}
+  huntService.createExecutionStream.mockImplementation(async (_id, message) => {
+    notify = message
+    return socket
+  })
+  huntService.closeExecutionStream = vi.fn()
+  huntService.getExecution.mockResolvedValue({ id: 1, status: 'running', revision: 2, steps: [] })
+  const store = useHuntStore()
+  store.subscribeToExecution(1)
+  await flushPromises()
+  huntService.getExecution.mockResolvedValue({
+    id: 1,
+    status: 'running',
+    revision: 3,
+    steps: [{ output: { results: ['found'] } }],
+  })
+  notify({ event_type: 'update', revision: 3, cursor: '3-0' })
+  await flushPromises()
+  expect(store.activeExecutions[1].steps[0].output.results).toEqual(['found'])
+  store.unsubscribeFromExecution(1)
+  expect(huntService.closeExecutionStream).toHaveBeenCalledWith(socket)
+  const reads = huntService.getExecution.mock.calls.length
+  notify({ event_type: 'update', revision: 4, cursor: '4-0' })
+  await vi.advanceTimersByTimeAsync(60000)
+  expect(huntService.getExecution).toHaveBeenCalledTimes(reads)
+  expect(huntService.executeHunt).not.toHaveBeenCalled()
+})

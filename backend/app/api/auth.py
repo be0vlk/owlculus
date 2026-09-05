@@ -5,7 +5,7 @@ This module provides JWT-based authentication endpoints for the Owlculus platfor
 enabling secure access to digital investigation tools and case management features.
 """
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends
 from fastapi.security import OAuth2PasswordRequestForm
@@ -41,6 +41,7 @@ async def login_for_access_token(
 
 class WebSocketTokenRequest(BaseModel):
     execution_id: int
+    kind: Literal["hunt", "plugin"] = "hunt"
 
 
 @router.post("/websocket-token", response_model=WebSocketToken)
@@ -56,4 +57,6 @@ async def create_websocket_token(
     to establish a WebSocket connection for the specified execution.
     """
     auth_service = AuthService(db)
-    return await auth_service.create_websocket_token(request.execution_id, current_user)
+    return await auth_service.create_websocket_token(
+        request.execution_id, current_user, request.kind
+    )

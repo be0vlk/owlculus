@@ -1,4 +1,5 @@
 import { ref, onScopeDispose } from 'vue'
+import { observeExecution } from '@/services/observeExecution'
 import { pluginService } from '@/services/plugin'
 
 export function usePluginExecution() {
@@ -6,55 +7,45 @@ export function usePluginExecution() {
   const results = ref([])
   const error = ref(null)
   const cancelling = ref(false)
-  let controller
-  let timer
+  let stopObservation
   let generation = 0
 
   function stop() {
     generation++
-    controller?.abort()
-    clearTimeout(timer)
+    stopObservation?.()
   }
 
   function observe(id) {
     stop()
     const current = generation
-    controller = new AbortController()
-    const signal = controller.signal
     execution.value = null
     results.value = []
     error.value = null
     let cursor = 0
-    let delay = 1000
-    async function poll() {
-      try {
+    stopObservation = observeExecution({
+      async refresh(signal) {
         const state = await pluginService.getExecution(id, signal)
         const page = await pluginService.getResults(id, cursor, signal)
-        if (current !== generation) return
-        if (
-          !execution.value?.revision ||
-          !state.revision ||
-          state.revision >= execution.value.revision
-        )
-          execution.value = state
-        results.value.push(...page.items)
-        cursor = page.cursor
+        if (current !== generation) return { terminal: true }
+        if ((state.revision ?? 0) >= (execution.value?.revision ?? 0)) execution.value = state
+        if (page.cursor > cursor) {
+          results.value.push(...page.items)
+          cursor = page.cursor
+        }
         error.value = null
-        const terminal = ['completed', 'failed', 'cancelled'].includes(state.status)
-        if (page.next_cursor || !terminal) {
-          timer = setTimeout(poll, page.next_cursor ? 0 : delay)
-          delay = Math.min(delay * 1.5, 10000)
+        return {
+          terminal: ['completed', 'failed', 'cancelled'].includes(execution.value.status),
+          more: !!page.next_cursor,
         }
-      } catch (failure) {
-        if (current !== generation) return
-        error.value = failure.response?.data?.detail || failure.message
-        if (![401, 403, 404].includes(failure.response?.status)) {
-          timer = setTimeout(poll, delay)
-          delay = Math.min(delay * 2, 10000)
-        }
-      }
-    }
-    poll()
+      },
+      openStream: pluginService.createExecutionStream
+        ? (...args) => pluginService.createExecutionStream(id, ...args)
+        : undefined,
+      closeStream: pluginService.closeExecutionStream,
+      onError(message) {
+        if (current === generation) error.value = message
+      },
+    })
   }
 
   async function cancel() {

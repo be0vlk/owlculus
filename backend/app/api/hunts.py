@@ -12,18 +12,14 @@ from fastapi import (
     Query,
     Response,
     WebSocket,
-    WebSocketDisconnect,
-    status,
 )
 from sqlmodel import Session
 
 from app.core.dependencies import get_current_user
-from app.core.websocket_manager import websocket_manager
 from app.database import models
 from app.database.connection import get_db
 from app.executions.results import step_output, step_results
 from app.executions.service import hunt_observation
-from app.hunts.hunt_event import HuntEvent
 from app.schemas import hunt_schema as schemas
 from app.services.export_service import ExportService
 from app.services.hunt_execution_export import HuntExecutionExportFormat
@@ -260,71 +256,9 @@ async def stream_execution(
     execution_id: int,
     db: Session = Depends(get_db),
 ):
-    """
-    WebSocket endpoint for real-time hunt execution updates
+    from app.executions.observation import observe
 
-    Streams progress events as the hunt executes including:
-    - Step start/complete events
-    - Progress updates
-    - Error notifications
-    - Final results
-
-    Authentication: Pass ephemeral token as query parameter ?token=<ephemeral_token>
-    The token must be obtained from POST /api/auth/websocket-token endpoint
-    """
-    token = websocket.query_params.get("token")
-
-    if not token:
-        await websocket.close(
-            code=status.WS_1008_POLICY_VIOLATION, reason="Authentication required"
-        )
-        return
-
-    try:
-        from app.core import security
-        from app.database.models import User
-
-        user_id = security.ephemeral_token_manager.validate_token(token, execution_id)
-
-        if not user_id:
-            await websocket.close(
-                code=status.WS_1008_POLICY_VIOLATION, reason="Invalid or expired token"
-            )
-            return
-
-        current_user = db.get(User, user_id)
-        if not current_user or not current_user.is_active:
-            await websocket.close(
-                code=status.WS_1008_POLICY_VIOLATION, reason="Invalid user"
-            )
-            return
-
-    except Exception:
-        await websocket.close(
-            code=status.WS_1008_POLICY_VIOLATION, reason="Authentication failed"
-        )
-        return
-
-    await websocket.accept()
-
-    try:
-        await websocket_manager.connect(execution_id, websocket)
-
-        await websocket.send_json(HuntEvent.connected(execution_id).to_wire())
-
-        while True:
-            data = await websocket.receive_text()
-            if data == "ping":
-                await websocket.send_text("pong")
-
-    except WebSocketDisconnect:
-        websocket_manager.disconnect(execution_id, websocket)
-    except Exception:
-        await websocket.send_json(
-            {"event_type": "error", "message": "Connection error"}
-        )
-        websocket_manager.disconnect(execution_id, websocket)
-        await websocket.close()
+    await observe(websocket, db.get_bind(), "hunt", execution_id)
 
 
 @router.get("/executions/{execution_id}/steps/{step_id}/results")

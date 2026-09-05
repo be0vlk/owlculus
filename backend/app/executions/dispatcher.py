@@ -19,6 +19,7 @@ from app.database.models import (
     PluginExecution,
 )
 from app.executions.celery_app import HUNT_QUEUE, QUEUE, app
+from app.executions.events import record_event
 
 
 def dispatch_once(database_engine=engine) -> bool:
@@ -94,7 +95,7 @@ def dispatch_once(database_engine=engine) -> bool:
                     "message": "Background dispatch failed after five consecutive attempts before worker claim. Check background services and deliberately submit a new run.",
                     "attempts": row.attempts,
                 }
-                control.revision += 1
+                record_event(db, control)
         else:
             row.published_at = get_utc_now()
             row.attempts = 0
@@ -103,6 +104,7 @@ def dispatch_once(database_engine=engine) -> bool:
 
 
 def main():
+    from app.executions.events import publish_once, refresh_active_streams
     from app.executions.recovery import reconcile
 
     next_reconcile = 0.0
@@ -112,6 +114,16 @@ def main():
                 reconcile()
                 next_reconcile = time.monotonic() + 10
             busy = dispatch_once()
+            # Event publication has its own failure boundary: completed work stays
+            # completed, and dispatch/recovery proceed during event outages.
+            try:
+                for _ in range(200):
+                    if not publish_once():
+                        break
+                    busy = True
+                refresh_active_streams()
+            except Exception:  # noqa: BLE001 - durable intent remains for retry
+                pass
             Path("/tmp/owlculus-dispatcher-heartbeat").touch()
         except Exception:  # noqa: BLE001 - isolate infrastructure failures
             busy = False

@@ -1,3 +1,4 @@
+import { observeExecution } from '@/services/observeExecution'
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { huntService } from '../services/hunt'
@@ -189,53 +190,36 @@ export const useHuntStore = defineStore('hunt', () => {
   function subscribeToExecution(executionId) {
     if (observations.has(executionId)) return
     const request = generation
-    const observation = { controller: new AbortController(), timer: null }
+    const observation = { stop: null }
     observations.set(executionId, observation)
-    let delay = 1000
     const current = () => request === generation && observations.get(executionId) === observation
-    async function poll() {
-      try {
-        const execution = await huntService.getExecution(
-          executionId,
-          true,
-          observation.controller.signal,
-        )
-        if (!current()) return
+    observation.stop = observeExecution({
+      async refresh(signal) {
+        const execution = await huntService.getExecution(executionId, true, signal)
+        if (!current()) return { terminal: true }
         const previous = activeExecutions.value[executionId]
-        if (previous?.revision && execution.revision < previous.revision) {
-          observation.timer = setTimeout(poll, 1000)
-          return
-        }
+        if ((execution.revision ?? 0) < (previous?.revision ?? 0)) return {}
         activeExecutions.value[executionId] = execution
         const index = executionHistory.value.findIndex((item) => item.id === executionId)
         if (index >= 0) executionHistory.value[index] = execution
         error.value = null
-        if (!['pending', 'running', 'cancelling'].includes(execution.status)) {
-          unsubscribeFromExecution(executionId)
-          return
-        }
-      } catch (failure) {
-        if (!current()) return
-        error.value = failure.response?.data?.detail || failure.message || 'Could not refresh hunt'
-        if ([401, 403, 404].includes(failure.response?.status)) {
-          unsubscribeFromExecution(executionId)
-          return
-        }
-      }
-      if (current()) {
-        observation.timer = setTimeout(poll, delay)
-        delay = Math.min(delay * 1.5, 10000)
-      }
-    }
-    poll()
+        const terminal = !['pending', 'running', 'cancelling'].includes(execution.status)
+        if (terminal) observations.delete(executionId)
+        return { terminal }
+      },
+      openStream: (...args) => huntService.createExecutionStream(executionId, ...args),
+      closeStream: huntService.closeExecutionStream,
+      onError(message) {
+        if (current()) error.value = message
+      },
+    })
   }
 
   function unsubscribeFromExecution(executionId) {
     const observation = observations.get(executionId)
     if (!observation) return
     observations.delete(executionId)
-    clearTimeout(observation.timer)
-    observation.controller.abort()
+    observation.stop?.()
   }
 
   function clearError() {

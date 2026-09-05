@@ -6,6 +6,8 @@ configurable log levels, file rotation, and security-focused logging features.
 It includes context variables for tracking client IP and user agent across requests.
 """
 
+import logging
+import re
 import sys
 from contextvars import ContextVar
 from pathlib import Path
@@ -19,7 +21,26 @@ client_ip_context: ContextVar[str | None] = ContextVar("client_ip", default=None
 user_agent_context: ContextVar[str | None] = ContextVar("user_agent", default=None)
 
 
+class ObservationTokenFilter(logging.Filter):
+    """Uvicorn logs handshake URLs; remove ephemeral capabilities before output."""
+
+    def filter(self, record):
+        if isinstance(record.args, tuple):
+            record.args = tuple(
+                (
+                    re.sub(r"([?&]token=)[^&\s\"]+", r"\1[redacted]", arg)
+                    if isinstance(arg, str)
+                    else arg
+                )
+                for arg in record.args
+            )
+        record.msg = re.sub(r"([?&]token=)[^&\s\"]+", r"\1[redacted]", str(record.msg))
+        return True
+
+
 def setup_logging():
+    for name in ("uvicorn.error", "uvicorn.access"):
+        logging.getLogger(name).addFilter(ObservationTokenFilter())
     logger.remove()
 
     log_dir = Path(logging_settings.LOG_FILE).parent

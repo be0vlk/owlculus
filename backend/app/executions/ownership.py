@@ -19,6 +19,7 @@ from app.database.models import (
     PluginExecution,
     PluginExecutionResult,
 )
+from app.executions.events import record_event
 from app.executions.limits import HUNT_SECONDS, PLUGIN_SECONDS, STEP_SECONDS
 from app.executions.service import authorize_execution
 
@@ -125,7 +126,7 @@ def claim(db: Session, execution_id: int, *, kind: str = "plugin") -> Ownership 
                 "message": "Initiating user no longer has execution access",
             }
             execution.completed_at = get_utc_now()
-            control.revision += 1
+            record_event(db, control)
             return None
         if isinstance(execution, HuntExecution):
             from app.executions.build import implementation_build
@@ -137,7 +138,7 @@ def claim(db: Session, execution_id: int, *, kind: str = "plugin") -> Ownership 
                     "message": "Hunt requires its accepted implementation build; deploy matching API and workers and submit a new run",
                 }
                 execution.completed_at = get_utc_now()
-                control.revision += 1
+                record_event(db, control)
                 return None
         control.generation += 1
         control.owner = str(uuid4())
@@ -146,7 +147,7 @@ def claim(db: Session, execution_id: int, *, kind: str = "plugin") -> Ownership 
         control.deadline_at = control.deadline_at or get_utc_now() + timedelta(
             seconds=HUNT_SECONDS if kind == "hunt" else PLUGIN_SECONDS
         )
-        control.revision += 1
+        record_event(db, control)
         execution.status = ExecutionStatus.RUNNING.value
         execution.started_at = execution.started_at or get_utc_now()
         assert control.id is not None
@@ -184,7 +185,7 @@ def append_result(
             is not None
         ):
             return
-        control.revision += 1
+        record_event(db, control)
         db.add(
             PluginExecutionResult(
                 execution_id=execution.id,
@@ -211,7 +212,7 @@ def fail_execution(db: Session, ownership: Ownership) -> None:
     """A fenced failure transition remains possible after case access is revoked."""
     with transaction(db):
         control, execution = ownership.lock(db)
-        control.revision += 1
+        record_event(db, control)
         control.pending_status = ExecutionStatus.FAILED.value
         execution.error = {
             "code": "execution_error",
@@ -229,4 +230,4 @@ def start_operation(db: Session, ownership: Ownership, operation_id: str) -> Non
             raise OwnershipLost()
         control.operation_id = operation_id
         control.operation_started_at = get_utc_now()
-        control.revision += 1
+        record_event(db, control)

@@ -9,10 +9,9 @@ and ephemeral token management for WebSocket authentication.
 import base64
 import os
 import secrets
-import time
 from datetime import timedelta
 from pathlib import Path
-from typing import Dict, Optional, Tuple, cast
+from typing import cast
 
 import bcrypt
 import filetype
@@ -190,82 +189,39 @@ def decrypt_api_key(encrypted_key: str) -> str:
 
 # Ephemeral Token Management for WebSocket Authentication
 class EphemeralTokenManager:
-    """Manages single-use ephemeral tokens for WebSocket connections"""
+    """Redis-backed, atomic single-use capabilities scoped to execution kind."""
 
     def __init__(self, token_ttl: int = 30):
-        """
-        Initialize the token manager
-
-        Args:
-            token_ttl: Token time-to-live in seconds (default: 30)
-        """
         self.token_ttl = token_ttl
-        # Store tokens with their associated data and expiration
-        # Format: {token: (user_id, execution_id, expiration_timestamp)}
-        self._tokens: Dict[str, Tuple[int, int, float]] = {}
 
-    def create_token(self, user_id: int, execution_id: int) -> str:
-        """
-        Create a single-use ephemeral token for WebSocket authentication
+    def create_token(self, user_id: int, execution_id: int, kind: str = "hunt") -> str:
+        import json
 
-        Args:
-            user_id: The authenticated user's ID
-            execution_id: The hunt execution ID
+        from app.executions.events import redis_client
 
-        Returns:
-            A secure random token string
-        """
-        # Generate a secure random token
         token = secrets.token_urlsafe(32)
-
-        # Store token with expiration
-        expiration = time.time() + self.token_ttl
-        self._tokens[token] = (user_id, execution_id, expiration)
-
-        # Clean up expired tokens periodically
-        self._cleanup_expired_tokens()
-
+        with redis_client() as client:
+            client.set(
+                f"owlculus:tokens:{token}",
+                json.dumps([user_id, kind, execution_id]),
+                ex=self.token_ttl,
+                nx=True,
+            )
         return token
 
-    def validate_token(self, token: str, execution_id: int) -> Optional[int]:
-        """
-        Validate and consume a single-use token
+    def validate_token(
+        self, token: str, execution_id: int, kind: str = "hunt"
+    ) -> int | None:
+        import json
 
-        Args:
-            token: The token to validate
-            execution_id: The execution ID to match against
+        from app.executions.events import redis_client
 
-        Returns:
-            The user_id if valid, None otherwise
-        """
-        if token not in self._tokens:
+        with redis_client() as client:
+            value = client.getdel(f"owlculus:tokens:{token}")
+        if value is None:
             return None
-
-        user_id, stored_execution_id, expiration = self._tokens[token]
-
-        # Check if token is expired
-        if time.time() > expiration:
-            del self._tokens[token]
-            return None
-
-        # Check if execution_id matches
-        if execution_id != stored_execution_id:
-            return None
-
-        # Token is valid - consume it (single-use)
-        del self._tokens[token]
-
-        return user_id
-
-    def _cleanup_expired_tokens(self):
-        """Remove expired tokens from storage"""
-        current_time = time.time()
-        expired_tokens = [
-            token for token, (_, _, exp) in self._tokens.items() if current_time > exp
-        ]
-        for token in expired_tokens:
-            del self._tokens[token]
+        user_id, stored_kind, stored_id = json.loads(value)
+        return user_id if (stored_kind, stored_id) == (kind, execution_id) else None
 
 
-# Global ephemeral token manager instance
 ephemeral_token_manager = EphemeralTokenManager()
