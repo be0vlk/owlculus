@@ -1,9 +1,14 @@
+import { webcrypto } from 'node:crypto'
 import { beforeEach, expect, it, vi } from 'vitest'
 import api from '../api'
 import { pluginService } from '../plugin'
 
 vi.mock('../api', () => ({ default: { post: vi.fn() } }))
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  vi.stubGlobal('crypto', webcrypto)
+  sessionStorage.clear()
+})
 
 it.each([false, true])(
   'uses application context over plugin parameters when saving is %s',

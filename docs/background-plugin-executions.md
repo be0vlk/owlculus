@@ -98,9 +98,14 @@ It does not use eager Celery or live provider accounts.
 Both execution POST endpoints accept `Idempotency-Key` (1–200 characters), scoped
 to the initiating user, execution kind and endpoint. A retry with the same
 normalized case and payload returns the original execution, including after
-completion, and rechecks current access. Conflicting reuse returns 409. The
-frontend retains the key for uncertain responses across in-app navigation and
-reuses it when retrying the same input. A submission after successful acceptance
+completion, and rechecks current access. Retries use the accepted parameter
+definitions, so later deactivation or changed defaults cannot hide acceptance.
+Conflicting reuse returns 409. The
+frontend persists unresolved keys in tab session storage across navigation and
+reloads, scoped to the authenticated login, and reuses them when retrying the same
+input. Storage contains only random keys and SHA-256 digests, never credentials or
+investigation parameters. Restricted browser storage retains in-page retry support.
+A submission after successful acceptance
 gets a new key. Observation and reconnecting only read existing executions.
 
 Admission is serialized in a short PostgreSQL transaction across API processes.
@@ -111,7 +116,8 @@ Terminal state releases capacity. Retrying accepted work consumes no extra slot.
 Capacity rejection returns 429 with `Retry-After: 10`; database acceptance failure
 returns 503. Neither creates partial accepted work or invokes a provider inline.
 
-Upgrade `003_reliable_submission` adds durable submission identities and dispatch
+Upgrade `003_reliable_submission` adds durable submission identities with accepted
+parameter definitions and dispatch
 attempt timestamps/error metadata. Run the existing upgrade command before
 starting the new API and dispatcher; it is safe to repeat on existing data.
 Dispatcher claims use PostgreSQL row locks with `SKIP LOCKED`, held until publish
