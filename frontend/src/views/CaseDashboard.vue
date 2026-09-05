@@ -66,6 +66,8 @@
         </v-card-text>
       </v-card>
 
+      <PluginExecutionHistory :case-id="caseId" />
+
       <!-- Case Tabs Card -->
       <v-card variant="outlined">
         <!-- Header -->
@@ -413,6 +415,7 @@
 </template>
 
 <script setup>
+import PluginExecutionHistory from '@/components/plugins/PluginExecutionHistory.vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'

@@ -103,3 +103,14 @@ it('offers optional saving for correlation without source or destination selecto
   expect(wrapper.text()).not.toContain('Case to Scan')
   expect(wrapper.text()).not.toContain('Case to Save')
 })
+
+it('renders retained typed events through the specialized correlation renderer', async () => {
+  const { default: PluginResult } = await import('../plugins/PluginResult.vue')
+  const wrapper = mountWithVuetify(PluginResult, {
+    props: { pluginName: 'CorrelationScan', result: [{ type: 'complete', data: {} }] },
+  })
+  await vi.waitFor(() =>
+    expect(wrapper.findComponent(CorrelationScanPluginResult).exists()).toBe(true),
+  )
+  expect(wrapper.text()).toContain('Correlation scan complete')
+})
