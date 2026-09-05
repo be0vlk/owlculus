@@ -4,10 +4,8 @@ from sqlalchemy import event
 from sqlalchemy.engine import Engine
 from sqlmodel import Session
 
-from app.core.utils import get_utc_now
-from app.database.db_utils import transaction
 from app.database.models import HuntExecution
-from app.executions.ownership import OwnershipLost, claim
+from app.executions.ownership import OwnershipLost, claim, fail_execution
 from app.executions.service import authorize_execution
 from app.executions.worker import WorkerPluginRunner, worker_adapter, worker_resources
 from app.hunts.hunt_executor import HuntExecutor
@@ -34,7 +32,8 @@ async def execute(engine: Engine, registry: PluginRegistry, execution_id: int) -
         def fence(session):
             if lease_lost.is_set():
                 raise OwnershipLost()
-            control, _ = ownership.lock(session)
+            control, owned_execution = ownership.lock(session)
+            authorize_execution(session, owned_execution)
             control.revision += 1
 
         def before_step():
@@ -56,7 +55,7 @@ async def execute(engine: Engine, registry: PluginRegistry, execution_id: int) -
                 db,
                 DurableHuntNotifier(),
                 plugin_runner=WorkerPluginRunner(registry),
-                run_adapter=worker_adapter(session_factory, vault),
+                run_adapter=worker_adapter(session_factory, vault, ownership),
                 before_step=before_step,
                 sanitize=vault.redact,
             )
@@ -66,13 +65,7 @@ async def execute(engine: Engine, registry: PluginRegistry, execution_id: int) -
         except Exception:  # noqa: BLE001 - record infrastructure failure safely
             db.rollback()
             try:
-                with transaction(db):
-                    _, failed = ownership.lock(db)
-                    failed.status = "failed"
-                    failed.completed_at = get_utc_now()
-                    failed.error = {
-                        "code": "hunt_error",
-                        "message": "Hunt could not finish",
-                    }
+                with Session(engine) as failure_db:
+                    fail_execution(failure_db, ownership)
             except OwnershipLost:
                 db.rollback()

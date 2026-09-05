@@ -56,8 +56,9 @@ class ListEntitySink:
 
 
 class ServiceEvidenceSink:
-    def __init__(self, session: Session):
+    def __init__(self, session: Session, artifact_id: str | None = None):
         self._session = session
+        self.artifact_id = artifact_id
 
     async def write(self, request: EvidenceWrite, user: models.User) -> None:
         service = EvidenceService(self._session)
@@ -93,6 +94,7 @@ class ServiceEvidenceSink:
                     parent_folder_id=folder.id,
                 ),
                 current_user=user,
+                artifact_id=self.artifact_id,
                 file=UploadFile(
                     filename=request.filename,
                     file=cast(BinaryIO, temporary_file),
@@ -195,6 +197,8 @@ class PluginRun:
     api_keys: ApiKeyVault
     evidence: EvidenceSink
     entities: EntitySink
+    execution_id: int | None = None
+    operation_id: str = "plugin"
 
     @classmethod
     def for_test(
@@ -241,7 +245,12 @@ class ProductionPluginRunAdapter:
 
     @contextmanager
     def open(
-        self, *, user: models.User, case_id: int | None, save_to_case: bool
+        self,
+        *,
+        user: models.User,
+        case_id: int | None,
+        save_to_case: bool,
+        operation_id: str = "plugin",
     ) -> Iterator[PluginRun]:
         with self._session_factory() as session:
             yield PluginRun(
@@ -252,4 +261,5 @@ class ProductionPluginRunAdapter:
                 self._api_key_vault_factory(session),
                 ServiceEvidenceSink(session),
                 ServiceEntitySink(session),
+                operation_id=operation_id,
             )

@@ -9,6 +9,7 @@ from app.core.utils import get_utc_now
 from app.schemas.evidence_schema import EvidenceCreate
 from app.services.api_key_vault import ApiKeyVault, Provider
 
+from .output_limits import OutputBudget
 from .plugin_context import PluginRun
 from .plugin_types import (
     EntityWrite,
@@ -68,9 +69,11 @@ class BasePlugin(ABC):
     async def execute_with_evidence_collection(
         self, params: dict[str, Any], ctx: PluginRun
     ) -> AsyncGenerator[ResultEvent, None]:
+        budget = OutputBudget()
         payloads: list[Payload] = []
         async for event in self.run(params, ctx):
-            if event.kind == "data":
+            budget.accept(event)
+            if ctx.save_to_case and event.kind == "data":
                 payloads.append(event.payload)
             yield event
 
@@ -79,17 +82,22 @@ class BasePlugin(ABC):
         content = self.format_evidence(payloads, params)
         if content:
             timestamp = get_utc_now().strftime("%Y%m%d_%H%M%S")
-            await ctx.evidence.write(
-                EvidenceWrite(
-                    self.name,
-                    self.display_name,
-                    self.evidence_category,
-                    ctx.case_id,
-                    content,
-                    f"{self.name}_results_{timestamp}.txt",
-                ),
-                ctx.user,
-            )
+            # Keep normal evidence formatting; large documents use ordered parts
+            # below the upload service's existing file size limit (even in UTF-8).
+            part_size = 2 * 1024 * 1024
+            for index, offset in enumerate(range(0, len(content), part_size), 1):
+                suffix = f"_part_{index:04d}" if len(content) > part_size else ""
+                await ctx.evidence.write(
+                    EvidenceWrite(
+                        self.name,
+                        self.display_name + (f" part {index}" if suffix else ""),
+                        self.evidence_category,
+                        ctx.case_id,
+                        content[offset : offset + part_size],
+                        f"{self.name}_results_{timestamp}{suffix}.txt",
+                    ),
+                    ctx.user,
+                )
         for request in self.entity_writes(payloads, params):
             await ctx.entities.write(request, ctx.case_id, ctx.user)
 

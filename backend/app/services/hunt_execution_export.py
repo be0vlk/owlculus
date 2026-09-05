@@ -229,6 +229,14 @@ def _render_step(pdf: FPDF, step: HuntStepSnapshot, index: int) -> None:
 
     pdf.set_font("DejaVu", size=10)
     _pdf_text(pdf, "Output")
+    if step.output and (
+        step.status != "completed"
+        or step.output.get("partial")
+        or step.output.get("errors")
+    ):
+        _pdf_text(
+            pdf, "Partial retained results; this step has not completed successfully."
+        )
     output_text = json.dumps(step.output, ensure_ascii=False, indent=2, default=str)
     output_text, truncated = _truncate_utf8(output_text, HUNT_OUTPUT_LIMIT_BYTES)
     if truncated:

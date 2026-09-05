@@ -307,6 +307,18 @@
         <v-card-title class="pa-4"> Step Output: {{ selectedStep?.step_id }} </v-card-title>
         <v-divider />
         <v-card-text class="pa-4">
+          <v-alert
+            v-if="
+              selectedStep?.output?.partial ||
+              selectedStep?.output?.errors?.length ||
+              selectedStep?.status !== 'completed'
+            "
+            type="warning"
+            role="alert"
+            class="mb-4"
+          >
+            Partial retained results. This step has not completed successfully.
+          </v-alert>
           <pre class="step-output">{{ JSON.stringify(selectedStep?.output, null, 2) }}</pre>
         </v-card-text>
         <v-card-actions class="pa-4">

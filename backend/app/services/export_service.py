@@ -24,6 +24,7 @@ from app.core.exceptions import ResourceNotFoundException
 from app.core.logging import get_security_logger
 from app.core.utils import get_utc_now
 from app.database import models
+from app.executions.results import step_output
 from app.schemas.entity_schema import ENTITY_TYPE_SCHEMAS, NetworkAssets
 from app.schemas.entity_schema import entity_display_name as entity_data_display_name
 from app.services.case_access import CaseAccess
@@ -565,7 +566,7 @@ class ExportService:
                     plugin_name=step.plugin_name,
                     status=step.status,
                     parameters=step.parameters,
-                    output=step.output,
+                    output=step_output(self.db, step),
                     error_details=step.error_details,
                     started_at=step.started_at,
                     completed_at=step.completed_at,

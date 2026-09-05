@@ -3,9 +3,11 @@ File storage utilities for handling evidence uploads
 """
 
 import hashlib
+import os
 import urllib.parse
 from pathlib import Path
 from typing import Any, Optional, Tuple
+from uuid import UUID
 
 from .exceptions import BaseException as DomainException
 from .exceptions import ValidationException
@@ -104,7 +106,11 @@ def delete_folder(case_id: int, folder_path: str) -> None:
 
 
 async def save_upload_file(
-    upload_file: Any, case_id: int, folder_path: Optional[str] = None
+    upload_file: Any,
+    case_id: int,
+    folder_path: Optional[str] = None,
+    *,
+    artifact_id: str | None = None,
 ) -> Tuple[str, str]:
     """
     Save an uploaded file to the uploads directory.
@@ -138,7 +144,18 @@ async def save_upload_file(
             case_dir = case_dir / normalized_path
         case_dir.mkdir(parents=True, exist_ok=True)
 
-        safe_filename = secure_filename_with_path(upload_file.filename, case_dir)
+        if artifact_id is not None:
+            # Only internal effect adapters supply this UUID. A reserved directory
+            # keeps reconciliation separate from ordinary uploaded evidence.
+            control_id, _, identity = artifact_id.partition("-")
+            if not control_id.isdigit() or int(control_id) <= 0:
+                raise ValidationException("Invalid execution artifact identity")
+            artifact_id = f"{int(control_id)}-{UUID(identity)}"
+            case_dir = UPLOAD_DIR / str(case_id) / ".execution-artifacts"
+            case_dir.mkdir(parents=True, exist_ok=True)
+            safe_filename = f"{artifact_id}.txt"
+        else:
+            safe_filename = secure_filename_with_path(upload_file.filename, case_dir)
         file_path = case_dir / safe_filename
 
         content = await upload_file.read()
@@ -148,8 +165,19 @@ async def save_upload_file(
 
         file_hash = calculate_file_hash(content)
 
-        with open(file_path, "wb") as buffer:
+        staging_path = file_path.with_suffix(".staging") if artifact_id else file_path
+        with open(staging_path, "wb") as buffer:
             buffer.write(content)
+            if artifact_id:
+                buffer.flush()
+                os.fsync(buffer.fileno())
+        if artifact_id:
+            os.replace(staging_path, file_path)
+            directory_fd = os.open(case_dir, os.O_RDONLY)
+            try:
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
 
         relative_path = str(file_path.relative_to(UPLOAD_DIR))
 

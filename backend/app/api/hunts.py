@@ -9,6 +9,7 @@ from fastapi import (
     APIRouter,
     Depends,
     Header,
+    Query,
     Response,
     WebSocket,
     WebSocketDisconnect,
@@ -20,6 +21,7 @@ from app.core.dependencies import get_current_user
 from app.core.websocket_manager import websocket_manager
 from app.database import models
 from app.database.connection import get_db
+from app.executions.results import step_output, step_results
 from app.executions.service import hunt_observation
 from app.hunts.hunt_event import HuntEvent
 from app.schemas import hunt_schema as schemas
@@ -177,7 +179,12 @@ async def get_execution_status(
             else None
         ),
         steps=(
-            [schemas.HuntStepResponse(**step.__dict__) for step in steps]
+            [
+                schemas.HuntStepResponse(
+                    **{**step.model_dump(), "output": step_output(db, step)}
+                )
+                for step in steps
+            ]
             if steps
             else None
         ),
@@ -309,3 +316,25 @@ async def stream_execution(
         )
         websocket_manager.disconnect(execution_id, websocket)
         await websocket.close()
+
+
+@router.get("/executions/{execution_id}/steps/{step_id}/results")
+async def get_step_results(
+    execution_id: int,
+    step_id: str,
+    cursor: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    current_user: models.User = Depends(
+        get_current_user
+    ),  # noqa: B008 - FastAPI dependency
+    db: Session = Depends(get_db),  # noqa: B008 - FastAPI dependency
+):
+    from app.core.exceptions import ResourceNotFoundException
+
+    steps = await HuntService(db).get_execution_steps(
+        execution_id, current_user=current_user
+    )
+    step = next((step for step in steps if step.step_id == step_id), None)
+    if step is None:
+        raise ResourceNotFoundException("Hunt step not found")
+    return step_results(db, step, cursor, limit)

@@ -9,17 +9,17 @@ from sqlalchemy.engine import Engine
 from sqlmodel import Session
 
 from app.database.models import PluginExecution, User
+from app.executions.effects import CaseEffects
 from app.executions.ownership import (
     HEARTBEAT_SECONDS,
     OwnershipLost,
     append_result,
     claim,
+    fail_execution,
     heartbeat,
 )
 from app.executions.service import authorize_execution
 from app.plugins.plugin_context import (
-    EntitySink,
-    EvidenceSink,
     ProductionPluginRunAdapter,
 )
 from app.plugins.plugin_registry import PluginRegistry
@@ -60,29 +60,27 @@ class WorkerVault:
 class WorkerEvidenceSink:
     """Sanitize evidence before it reaches case services or file storage."""
 
-    def __init__(
-        self, sink: EvidenceSink, vault: WorkerVault, case_id: int, user: User
-    ):
+    def __init__(self, sink: CaseEffects, vault: WorkerVault, case_id: int, user: User):
         self.sink, self.vault, self.case_id, self.user = sink, vault, case_id, user
 
     async def write(self, request: EvidenceWrite, user: User) -> None:
         if request.case_id != self.case_id:
             raise ValueError("Evidence must belong to the execution case")
         sanitized = EvidenceWrite(**self.vault.redact(asdict(request)))
-        await self.sink.write(sanitized, self.user)
+        await self.sink.evidence(sanitized)
 
 
 class WorkerEntitySink:
     """Sanitize discovered entity fields while fixing case and attribution."""
 
-    def __init__(self, sink: EntitySink, vault: WorkerVault, case_id: int, user: User):
+    def __init__(self, sink: CaseEffects, vault: WorkerVault, case_id: int, user: User):
         self.sink, self.vault, self.case_id, self.user = sink, vault, case_id, user
 
     async def write(self, request: EntityWrite, case_id: int, user: User) -> None:
         if case_id != self.case_id:
             raise ValueError("Entities must belong to the execution case")
         sanitized = type(request)(**self.vault.redact(asdict(request)))
-        await self.sink.write(sanitized, self.case_id, self.user)
+        await self.sink.entity(sanitized)
 
 
 @contextmanager
@@ -123,17 +121,27 @@ def worker_resources(engine: Engine, ownership):
         thread.join(timeout=2)
 
 
-def worker_adapter(session_factory, vault):
+def worker_adapter(session_factory, vault, ownership):
     class SanitizedAdapter(ProductionPluginRunAdapter):
         @contextmanager
-        def open(self, *, user, case_id, save_to_case):
+        def open(self, *, user, case_id, save_to_case, operation_id="plugin"):
             with super().open(
                 user=user, case_id=case_id, save_to_case=save_to_case
             ) as run:
+                effects = CaseEffects(
+                    session_factory,
+                    ownership,
+                    operation_id,
+                    case_id,
+                    user,
+                    save_to_case,
+                )
                 yield replace(
                     run,
-                    evidence=WorkerEvidenceSink(run.evidence, vault, case_id, user),
-                    entities=WorkerEntitySink(run.entities, vault, case_id, user),
+                    execution_id=ownership.control_id,
+                    operation_id=operation_id,
+                    evidence=WorkerEvidenceSink(effects, vault, case_id, user),
+                    entities=WorkerEntitySink(effects, vault, case_id, user),
                 )
 
     return SanitizedAdapter(session_factory, lambda _: vault)
@@ -174,13 +182,20 @@ async def execute_plugin_run(
                 execution.save_to_case,
             )
             db.expunge(user)
-        adapter = worker_adapter(session_factory, vault)
+        adapter = worker_adapter(session_factory, vault, ownership)
         with adapter.open(user=user, case_id=case_id, save_to_case=save) as run:
+            operation_index = 0
             async for result in WorkerPluginRunner(registry).run(name, params, run):
                 if lease_lost.is_set():
                     raise OwnershipLost()
                 with Session(engine) as db:
-                    append_result(db, ownership, vault.redact(result.to_wire()))
+                    append_result(
+                        db,
+                        ownership,
+                        vault.redact(result.to_wire()),
+                        operation_index=operation_index,
+                    )
+                operation_index += 1
     except OwnershipLost:
         pass
     except Exception:  # noqa: BLE001 - isolate execution failures
@@ -188,14 +203,6 @@ async def execute_plugin_run(
         # infrastructure exceptions (connection URLs, SQL params, credentials).
         try:
             with Session(engine) as db:
-                append_result(
-                    db,
-                    ownership,
-                    {
-                        "type": "error",
-                        "data": {"message": "Execution could not finish"},
-                    },
-                )
-                append_result(db, ownership, {"type": "complete", "data": {}})
+                fail_execution(db, ownership)
         except OwnershipLost:
             pass

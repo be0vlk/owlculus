@@ -7,8 +7,10 @@ from sqlmodel import SQLModel
 from app.database.connection import engine
 from app.database.models import (
     ExecutionControl,
+    ExecutionEffect,
     ExecutionOutbox,
     ExecutionSubmission,
+    HuntStepResult,
     PluginExecution,
     PluginExecutionResult,
 )
@@ -164,7 +166,7 @@ def upgrade_hunts(database_engine: Engine = engine) -> None:
 SUBMISSION_VERSION = "003_reliable_submission"
 
 
-def upgrade(database_engine: Engine = engine) -> None:
+def upgrade_submissions(database_engine: Engine = engine) -> None:
     upgrade_hunts(database_engine)
     with database_engine.begin() as connection:
         connection.execute(text("SELECT pg_advisory_xact_lock(827104001)"))
@@ -189,6 +191,43 @@ def upgrade(database_engine: Engine = engine) -> None:
         connection.execute(
             text("INSERT INTO schema_upgrade(version) VALUES (:version)"),
             {"version": SUBMISSION_VERSION},
+        )
+
+
+RESULT_VERSION = "004_bounded_results_and_effects"
+
+
+def upgrade(database_engine: Engine = engine) -> None:
+    upgrade_submissions(database_engine)
+    with database_engine.begin() as connection:
+        connection.execute(text("SELECT pg_advisory_xact_lock(827104001)"))
+        if connection.execute(
+            text("SELECT 1 FROM schema_upgrade WHERE version=:version"),
+            {"version": RESULT_VERSION},
+        ).first():
+            return
+        connection.execute(
+            text(
+                "ALTER TABLE pluginexecutionresult ADD COLUMN IF NOT EXISTS operation_index INTEGER"
+            )
+        )
+        connection.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_plugin_result_operation ON pluginexecutionresult(execution_id, operation_index)"
+            )
+        )
+        for model in (ExecutionEffect, HuntStepResult):
+            SQLModel.metadata.tables[model.__name__.lower()].create(
+                connection, checkfirst=True
+            )
+        connection.execute(
+            text(
+                "ALTER TABLE executioncontrol ADD COLUMN IF NOT EXISTS cancellation_requested_at TIMESTAMP"
+            )
+        )
+        connection.execute(
+            text("INSERT INTO schema_upgrade(version) VALUES (:version)"),
+            {"version": RESULT_VERSION},
         )
 
 
