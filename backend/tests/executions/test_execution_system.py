@@ -192,7 +192,7 @@ def test_upgrade_preserves_hunts_and_enforces_immutable_execution(execution_syst
     with system.engine.begin() as db:
         db.execute(
             text(
-                "DROP TABLE executionsubmission, pluginexecutionresult, executionoutbox, executioncontrol, pluginexecution, schema_upgrade"
+                "DROP TABLE executioneffect, huntstepresult, executionsubmission, pluginexecutionresult, executionoutbox, executioncontrol, pluginexecution, schema_upgrade"
             )
         )
     with Session(system.engine) as db:

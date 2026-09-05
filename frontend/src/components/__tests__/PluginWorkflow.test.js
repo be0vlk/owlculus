@@ -114,3 +114,29 @@ it('renders retained typed events through the specialized correlation renderer',
   )
   expect(wrapper.text()).toContain('Correlation scan complete')
 })
+
+it('labels retained partial output and preserves its failure in exports', async () => {
+  const wrapper = mountWithVuetify(PluginResultsModal, {
+    props: {
+      modelValue: false,
+      pluginName: 'ExamplePlugin',
+      results: [{ type: 'data', data: { match: 'example.org' } }],
+      error: 'Output exceeds the operation limit',
+    },
+    attachTo: document.body,
+  })
+  await wrapper.setProps({ modelValue: true })
+  await flushPromises()
+  const dialog = new DOMWrapper(document.querySelector('[role="dialog"]'))
+  expect(dialog.text()).toContain('Partial retained results')
+  expect(dialog.text()).toContain('Output exceeds the operation limit')
+  expect(dialog.text()).toContain('example.org')
+  await dialog
+    .findAll('button')
+    .find((button) => button.text().includes('Export'))
+    .trigger('click')
+  expect(wrapper.emitted('export')[0][0]).toMatchObject({
+    partial: true,
+    error: 'Output exceeds the operation limit',
+  })
+})

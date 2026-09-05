@@ -100,6 +100,8 @@ services:
     restart: unless-stopped
     command: ["celery", "-A", "app.executions.celery_app:app", "worker", "--pool=prefork", "--concurrency=${PLUGIN_CONCURRENCY:-2}", "--prefetch-multiplier=1", "--queues=owlculus.plugins", "--hostname=plugins@%h", "--loglevel=WARNING"]
     environment: &execution-environment
+      EXECUTION_EVENT_LIMIT_BYTES: ${EXECUTION_EVENT_LIMIT_BYTES:-1048576}
+      EXECUTION_RESULT_LIMIT_BYTES: ${EXECUTION_RESULT_LIMIT_BYTES:-26214400}
       EXECUTION_REDISPATCH_SECONDS: ${EXECUTION_REDISPATCH_SECONDS:-30}
       POSTGRES_USER: ${POSTGRES_USER:-owlculus}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-owlculus_secure_password}

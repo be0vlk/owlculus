@@ -53,10 +53,17 @@ def transaction(session: Session) -> Generator[Session, None, None]:
             tx_session.add(model2)
             # auto-commit on successful exit
     """
+    outermost = not session.info.get("transaction_depth", 0)
+    session.info["transaction_depth"] = session.info.get("transaction_depth", 0) + 1
     try:
         yield session
-        session.commit()
+        if outermost:
+            session.commit()
+        else:
+            session.flush()
     except Exception as e:
         session.rollback()
         logger.error(f"Transaction failed: {e!s}")
         raise
+    finally:
+        session.info["transaction_depth"] -= 1

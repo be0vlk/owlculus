@@ -261,6 +261,7 @@ class ExecutionControl(SQLModel, table=True):
     lease_until: Optional[datetime] = None
     heartbeat_at: Optional[datetime] = None
     revision: int = 1
+    cancellation_requested_at: datetime | None = None
 
 
 class ExecutionOutbox(SQLModel, table=True):
@@ -286,8 +287,31 @@ class ExecutionSubmission(SQLModel, table=True):
 
 
 class PluginExecutionResult(SQLModel, table=True):
-    __table_args__ = (UniqueConstraint("execution_id", "sequence"),)
+    __table_args__ = (
+        UniqueConstraint("execution_id", "sequence"),
+        UniqueConstraint("execution_id", "operation_index"),
+    )
     id: Optional[int] = Field(default=None, primary_key=True)
     execution_id: int = Field(foreign_key="pluginexecution.id", index=True)
+    operation_index: int | None = None
     sequence: int
     payload: dict = Field(sa_column=Column(JSON, nullable=False))
+
+
+class HuntStepResult(SQLModel, table=True):
+    __table_args__ = (UniqueConstraint("step_id", "sequence"),)
+    id: int | None = Field(default=None, primary_key=True)
+    step_id: int = Field(foreign_key="huntstep.id", index=True)
+    sequence: int
+    payload: dict = Field(sa_column=Column(JSON, nullable=False))
+
+
+class ExecutionEffect(SQLModel, table=True):
+    """An operation receipt committed in the same transaction as its case effect."""
+
+    __table_args__ = (UniqueConstraint("control_id", "operation_id"),)
+    id: int | None = Field(default=None, primary_key=True)
+    control_id: int = Field(foreign_key="executioncontrol.id", index=True)
+    operation_id: str
+    artifact_id: str | None = Field(default=None, unique=True)
+    created_at: datetime = Field(default_factory=get_utc_now)

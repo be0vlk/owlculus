@@ -60,6 +60,7 @@ class Ownership:
             ).one_or_none()
             if (
                 status != ExecutionStatus.RUNNING.value
+                or control.cancellation_requested_at is not None
                 or control.owner != self.owner
                 or control.generation != self.generation
                 or control.lease_until is None
@@ -139,19 +140,41 @@ def heartbeat(db: Session, ownership: Ownership) -> None:
         control.lease_until = get_utc_now() + timedelta(seconds=LEASE_SECONDS)
 
 
-def append_result(db: Session, ownership: Ownership, payload: dict) -> None:
+def append_result(
+    db: Session,
+    ownership: Ownership,
+    payload: dict,
+    *,
+    operation_index: int | None = None
+) -> None:
     with transaction(db):
         control, execution = ownership.lock(db)
         assert isinstance(execution, PluginExecution)
+        authorize_execution(db, execution)
+        if (
+            operation_index is not None
+            and db.exec(
+                select(PluginExecutionResult).where(
+                    PluginExecutionResult.execution_id == execution.id,
+                    PluginExecutionResult.operation_index == operation_index,
+                )
+            ).first()
+            is not None
+        ):
+            return
         control.revision += 1
         db.add(
             PluginExecutionResult(
-                execution_id=execution.id, sequence=control.revision, payload=payload
+                execution_id=execution.id,
+                sequence=control.revision,
+                payload=payload,
+                operation_index=operation_index,
             )
         )
         if payload["type"] == "error":
             execution.error = {
-                "code": "plugin_error",
+                "code": payload["data"].get("code", "plugin_error"),
+                "partial": True,
                 "message": payload["data"].get("message", "Plugin failed"),
             }
         if payload["type"] == "complete":
@@ -161,3 +184,17 @@ def append_result(db: Session, ownership: Ownership, payload: dict) -> None:
                 else ExecutionStatus.COMPLETED.value
             )
             execution.completed_at = get_utc_now()
+
+
+def fail_execution(db: Session, ownership: Ownership) -> None:
+    """A fenced failure transition remains possible after case access is revoked."""
+    with transaction(db):
+        control, execution = ownership.lock(db)
+        control.revision += 1
+        execution.status = ExecutionStatus.FAILED.value
+        execution.completed_at = get_utc_now()
+        execution.error = {
+            "code": "execution_error",
+            "message": "Execution could not finish; check initiating user access and worker configuration",
+            "partial": True,
+        }

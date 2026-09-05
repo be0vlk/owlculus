@@ -73,6 +73,10 @@
             </v-card-text>
           </v-card>
 
+          <v-alert v-if="hasResults && error" type="warning" role="alert" class="mb-4">
+            <strong>Partial retained results</strong>
+            <div>{{ error }}</div>
+          </v-alert>
           <!-- Results Display -->
           <div v-if="hasResults" class="results-container">
             <PluginResult :plugin-name="pluginName" :result="results" class="modal-plugin-result" />
@@ -205,6 +209,8 @@ const exportResults = () => {
     results: props.results,
     parameters: props.parameters,
     executionTime: props.executionTime,
+    partial: Boolean(props.error),
+    error: props.error || null,
   })
 }
 </script>

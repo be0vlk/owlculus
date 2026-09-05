@@ -5,6 +5,8 @@ from typing import Any
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from sqlmodel import select
+
 from app.core import file_storage
 from app.database import models
 from app.plugins.base_plugin import BasePlugin, PluginRun, ResultEvent
@@ -13,7 +15,6 @@ from app.plugins.plugin_context import ServiceEntitySink, ServiceEvidenceSink
 from app.plugins.plugin_registry import PluginRegistry, get_shipped_plugin_registry
 from app.plugins.plugin_runner import PluginRunner
 from app.services.api_key_vault import StaticApiKeyVault
-from sqlmodel import select
 
 
 class TrivialPlugin(BasePlugin):
@@ -136,3 +137,36 @@ async def test_dns_lookup_saves_results_and_discovered_ips_to_case(
         select(models.Entity).where(models.Entity.case_id == case.id)
     ).all()
     assert {entity.data["ip_address"] for entity in entities} == set(addresses)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "event_limit,total_limit,expected_count,code",
+    [(80, 1000, 1, "event_size_limit"), (1000, 90, 2, "result_size_limit")],
+)
+async def test_output_limit_retains_prefix_and_stops_provider(
+    session, test_user, monkeypatch, event_limit, total_limit, expected_count, code
+):
+    monkeypatch.setenv("EXECUTION_EVENT_LIMIT_BYTES", str(event_limit))
+    monkeypatch.setenv("EXECUTION_RESULT_LIMIT_BYTES", str(total_limit))
+
+    class LimitedPlugin(BasePlugin):
+        async def run(self, params, ctx):
+            yield self.data({"value": "a"})
+            yield self.data({"value": "b" * 60 if event_limit == 80 else "b"})
+            yield self.data({"value": "c" * 60})
+            raise AssertionError("Provider must stop at the first rejected event")
+
+    run = PluginRun.for_test(
+        session=session, user=test_user, api_keys={}, evidence=[], entities=[]
+    )
+    events = [
+        event
+        async for event in PluginRunner(
+            PluginRegistry.from_classes([LimitedPlugin])
+        ).run("LimitedPlugin", {}, run)
+    ]
+    assert len([event for event in events if event.kind == "data"]) == expected_count
+    assert events[-2].payload["code"] == code
+    assert events[-2].payload["partial"] is True
+    assert events[-1] == ResultEvent.complete()

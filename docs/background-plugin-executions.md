@@ -138,3 +138,52 @@ with guidance to restore services and deliberately submit a new run. A successfu
 publication resets the failure streak. Redis connect/read timeouts are two seconds;
 Celery publication retries are disabled so PostgreSQL owns the retry policy.
 No validation, authorization, credential or provider error is automatically retried.
+
+## Bounded results and repeatable case effects
+
+Workers enforce `EXECUTION_EVENT_LIMIT_BYTES` (1,048,576 by default) per compact
+UTF-8 serialized ResultEvent, including its envelope, and
+`EXECUTION_RESULT_LIMIT_BYTES` (26,214,400 by default) per standalone invocation or
+hunt step. All provider events count, including status/error events. These values
+must be positive and should match across workers. A rejected event stops provider
+iteration; it is never truncated or saved. A small runtime error/complete pair is
+reserved outside the provider budget so reaching the limit still reports an
+explicit `event_size_limit` or `result_size_limit` error and partial retained output.
+Previously committed PostgreSQL chunks remain available, including when saving is
+disabled or Redis live events expire. Required and optional hunt failures retain
+their existing outcome semantics.
+
+Hunt step events are available incrementally at
+`GET /api/hunts/executions/{id}/steps/{step_id}/results?cursor=0&limit=50`.
+Both plugin and hunt result pages default to 50 events and cap at 200. Existing
+StepOutput, specialized renderers, and hunt exports retain their contracts. A
+running/interrupted step's output is reconstructed from committed chunks when its
+final output is unavailable. Failed/unfinished step output is explicitly labeled
+partial. Evidence formatting remains intact; formatted documents larger than
+2,097,152 characters are saved in ordered parts under the existing upload limit.
+
+Upgrade `004_bounded_results_and_effects` adds hunt chunks, unique effect receipts,
+result operation identities, and the shared cancellation-request boundary. Run the
+existing repeatable upgrade command before starting updated API/workers. Case
+context and initiating user remain fixed. Each evidence/entity operation uses a
+stable execution + step + effect kind + ordinal identity. The receipt and existing
+service mutations commit atomically; a retry after a lost acknowledgment skips the
+committed effect. Different executions remain independent. A case row lock
+serializes worker folder creation and entity matching/enrichment. Result/effect
+transactions check current authorization, owner generation, lease and cancellation.
+
+Execution evidence uses stable files in each case's `.execution-artifacts`
+directory, with fsynced staging and atomic publication before the database commit.
+Replaying an interrupted operation replaces its uncommitted artifact at the same
+identity; it never creates a second visible evidence item. To remove abandoned
+files from owners whose lease expired or whose execution terminated, run:
+
+```bash
+docker compose run --rm plugin-worker python -m app.executions.reconcile_artifacts
+```
+
+Reconciliation takes the writer's control lock, preserves database-referenced
+files and live owners, and removes only recognized, unreferenced execution artifacts.
+It leaves ordinary uploads, unrelated evidence, and unknown files alone. This is
+file reconciliation only; provider replay and worker recovery remain separate
+lifecycle responsibilities.

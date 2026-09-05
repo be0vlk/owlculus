@@ -63,6 +63,8 @@ class EvidenceService:
         evidence: schemas.EvidenceCreate,
         current_user: models.User,
         file: Optional[Any] = None,
+        *,
+        artifact_id: str | None = None,
     ) -> models.Evidence:
         self.case_access.writable(current_user, evidence.case_id)
         evidence_logger = get_security_logger(
@@ -107,11 +109,13 @@ class EvidenceService:
                         upload_file=file,
                         case_id=evidence.case_id,
                         folder_path=evidence.folder_path,
+                        artifact_id=artifact_id,
                     )
                     evidence.content = relative_path
                     evidence.file_hash = file_hash
                     # Update title to reflect actual saved filename after duplicate handling
-                    evidence.title = relative_path.split("/")[-1]
+                    if artifact_id is None:
+                        evidence.title = relative_path.split("/")[-1]
                 except DomainException:
                     raise
                 except Exception as e:
@@ -154,7 +158,11 @@ class EvidenceService:
             raise
         except Exception as e:
             # Clean up uploaded file on database operation failure
-            if evidence.evidence_type == "file" and evidence.content:
+            if (
+                evidence.evidence_type == "file"
+                and evidence.content
+                and artifact_id is None
+            ):
                 try:
                     await delete_file(evidence.content)
                 except Exception:

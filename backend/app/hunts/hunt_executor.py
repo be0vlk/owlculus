@@ -12,7 +12,7 @@ from sqlmodel import Session
 
 from app.core.utils import get_utc_now
 from app.database.db_utils import transaction
-from app.database.models import HuntExecution, HuntStep, User
+from app.database.models import HuntExecution, HuntStep, HuntStepResult, User
 from app.executions.ownership import OwnershipLost
 from app.plugins.plugin_context import ProductionPluginRunAdapter
 from app.plugins.plugin_registry import get_shipped_plugin_registry
@@ -288,17 +288,29 @@ class HuntExecutor:
             HuntEvent.progress(execution.id, progress, step_def.step_id)
         )
 
-        # Collect results
+        # Bounded per-step materialization preserves StepOutput and parameter mapping.
         results = []
         errors = []
+        sequence = 0
         with self.run_adapter.open(
             user=current_user,
             case_id=execution.case_id,
             save_to_case=step_def.save_to_case,
+            operation_id=step_def.step_id,
         ) as run:
             async for result in self.plugin_runner.run(
                 step_def.plugin_name, parameters, run
             ):
+                sequence += 1
+                # Persist every event independently before asking the provider for more.
+                with transaction(self.db):
+                    self.db.add(
+                        HuntStepResult(
+                            step_id=step_record.id,
+                            sequence=sequence,
+                            payload=self.sanitize(result.to_wire()),
+                        )
+                    )
                 if result.kind == "data":
                     results.append(self.sanitize(result.payload))
                 elif result.kind == "error":
