@@ -308,7 +308,7 @@ const handleCancelExecution = async (executionId) => {
     cancellingExecutions.value.add(executionId)
 
     await huntStore.cancelExecution(executionId)
-    showNotification('Hunt execution cancelled', 'info')
+    showNotification('Cancellation requested', 'info')
   } catch (err) {
     showNotification(err.message || 'Failed to cancel execution', 'error')
   } finally {

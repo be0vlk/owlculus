@@ -13,6 +13,10 @@ export const pluginService = {
     return submitExecution(`/api/plugins/${name}/execute`, { ...params, case_id: caseId })
   },
 
+  async cancelExecution(id) {
+    return (await api.delete(`/api/plugins/executions/${id}`)).data
+  },
+
   async getExecution(id, signal) {
     return (await api.get(`/api/plugins/executions/${id}`, { signal })).data
   },

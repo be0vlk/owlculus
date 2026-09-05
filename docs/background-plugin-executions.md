@@ -188,3 +188,58 @@ files and live owners, and removes only recognized, unreferenced execution artif
 It leaves ordinary uploads, unrelated evidence, and unknown files alone. This is
 file reconciliation only; provider replay and worker recovery remain separate
 lifecycle responsibilities.
+
+## Cancellation and deadlines
+
+`DELETE /api/plugins/executions/{id}` returns the current execution. The existing
+`DELETE /api/hunts/executions/{id}` now returns `status` alongside `execution_id`
+and its message. Both require an active non-analyst with writable case access,
+including retries and terminal records. Queued cancellation is atomic with claim;
+running work becomes `cancelling`. Repeated requests preserve the current state.
+Navigation only disconnects observation. Both views keep committed output and
+poll until cleanup has been confirmed.
+
+Each Celery slot supervises a separate Linux process session for its execution.
+Blocking SDK calls, provider threads and command-line descendants belong to that
+session. Cancellation checks PostgreSQL every half second independently of the
+provider event loop; a best-effort Redis hint follows the durable request. The
+supervisor sends TERM, allows up to four seconds for cooperative resource cleanup,
+then kills and reaps remaining owned processes. It fences the owner and publishes
+the terminal state only after cleanup. Normal completion also waits for cleanup.
+Async subprocess streams drain stderr concurrently and retain at most 64 KiB of
+error text. Cancellation does not signal other execution groups.
+
+Configure `PLUGIN_EXECUTION_SECONDS` (900), `HUNT_STEP_SECONDS` (900), and
+`HUNT_EXECUTION_SECONDS` (7200) consistently across execution services. Values must
+exceed five seconds; each lifetime includes a five-second cleanup reservation.
+Timeouts fail the execution with `execution_timeout`, preserve committed output,
+and cancel unfinished hunt steps. Completed steps remain intact.
+
+The supervisor renews ownership every ten seconds for a 60-second lease. Its
+independent monotonic clock stops provider work before the last confirmed lease
+expires even if a PostgreSQL call blocks. Database writes also reject expired or
+superseded ownership. A control-storage outage delays the durable confirmation:
+the view remains nonterminal until connectivity permits the cleanup report to
+commit. Missing heartbeats alone do not mark an execution cancelled. Worker-loss
+reconciliation and replay are delivered separately in ticket 06.
+
+Broker, result-backend transport, and Celery visibility settings use at least
+10,800 seconds, increased automatically when the configured maximum execution
+lifetime plus a 60-second margin is longer. Keep these lifetime values identical
+across broker participants. Early acknowledgement remains enabled; worker-loss
+replay remains disabled. Compose grants both worker services a 75-second shutdown
+grace period.
+
+Before starting updated workers and APIs, drain old workers and run the repeatable
+`python -m app.database.upgrade_executions` upgrade. Version
+`005_cancellation_deadlines` adds durable deadlines and provisional completion
+state without changing retained results. Do not run old workers against the new
+cancellation lifecycle. To roll back, stop and drain the updated workers first;
+preserve the additive schema and all investigation records.
+
+Focused distributed checks:
+
+```bash
+cd backend
+RUN_EXECUTION_ACCEPTANCE=1 uv run pytest tests/executions/test_cancellation.py
+```

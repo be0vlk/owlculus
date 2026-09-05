@@ -62,6 +62,18 @@ def execution_detail(
     return execution_service.detail(db, current_user, execution_id)
 
 
+@router.delete("/executions/{execution_id}")
+def cancel_execution(
+    execution_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from ..executions.cancellation import request_cancel
+
+    request_cancel(db, current_user, execution_id)
+    return execution_service.detail(db, current_user, execution_id)
+
+
 @router.get("/executions/{execution_id}/results")
 def execution_results(
     execution_id: int,

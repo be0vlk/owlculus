@@ -337,19 +337,3 @@ class HuntExecutor:
         with transaction(self.db):
             self.db.add(step_record)
             self.db.add(execution)
-
-    async def cancel_execution(self, execution_id: int):
-        """Cancel a running hunt execution"""
-        execution = self.db.get(HuntExecution, execution_id)
-        if execution and execution.status == "running":
-            execution.status = "cancelled"
-            execution.completed_at = get_utc_now()
-
-            # Mark pending steps as cancelled
-            for step in execution.steps:
-                if step.status == "pending":
-                    step.status = "cancelled"
-                    step.completed_at = get_utc_now()
-
-            with transaction(self.db):
-                self.db.add(execution)

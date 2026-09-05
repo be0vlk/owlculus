@@ -251,29 +251,17 @@ class TestHuntService:
         hunt_service.db.add(test_hunt_execution)
         hunt_service.db.commit()
 
-        # Setup mock executor
-        mock_executor = AsyncMock()
-        mock_executor.cancel_execution = AsyncMock()
+        from app.database.models import ExecutionControl
 
-        # Mock the cancel_execution to update the status
-        async def mock_cancel(exec_id):
-            test_hunt_execution.status = "canceled"
-            hunt_service.db.add(test_hunt_execution)
-            hunt_service.db.commit()
-
-        mock_executor.cancel_execution.side_effect = mock_cancel
-        service = HuntService(
-            hunt_service.db, executor_factory=lambda session: mock_executor
+        hunt_service.db.add(
+            ExecutionControl(hunt_execution_id=test_hunt_execution.id, owner="active")
         )
-
-        # Test cancelation
-        execution = await service.cancel_execution(
+        hunt_service.db.commit()
+        execution = await hunt_service.cancel_execution(
             test_hunt_execution.id, current_user=test_user
         )
-
-        # Verify the executor was called
-        mock_executor.cancel_execution.assert_awaited_once_with(test_hunt_execution.id)
-        assert execution.status == "canceled"
+        assert execution.status == "cancelling"
+        assert execution.completed_at is None
 
     @pytest.mark.asyncio
     async def test_get_execution_steps(
@@ -343,12 +331,10 @@ class TestHuntService:
         hunt_service.db.add(test_hunt_execution)
         hunt_service.db.commit()
 
-        with pytest.raises(
-            ValidationException, match="Only running executions can be cancelled"
-        ):
-            await hunt_service.cancel_execution(
-                test_hunt_execution.id, current_user=test_user
-            )
+        execution = await hunt_service.cancel_execution(
+            test_hunt_execution.id, current_user=test_user
+        )
+        assert execution.status == "completed"
 
     @pytest.mark.asyncio
     async def test_analyst_cannot_create_execution(

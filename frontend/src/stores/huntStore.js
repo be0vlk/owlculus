@@ -25,8 +25,8 @@ export const useHuntStore = defineStore('hunt', () => {
   })
 
   const runningExecutions = computed(() => {
-    return Object.values(activeExecutions.value).filter(
-      (execution) => execution.status === 'running' || execution.status === 'pending',
+    return Object.values(activeExecutions.value).filter((execution) =>
+      ['pending', 'running', 'cancelling'].includes(execution.status),
     )
   })
 
@@ -96,7 +96,7 @@ export const useHuntStore = defineStore('hunt', () => {
       executionHistory.value.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
 
       // Start durable observation
-      if (['pending', 'running'].includes(fullExecution.status)) {
+      if (['pending', 'running', 'cancelling'].includes(fullExecution.status)) {
         subscribeToExecution(fullExecution.id)
       }
 
@@ -139,7 +139,7 @@ export const useHuntStore = defineStore('hunt', () => {
       )
       await Promise.all(
         executions
-          .filter((execution) => ['running', 'pending'].includes(execution.status))
+          .filter((execution) => ['running', 'pending', 'cancelling'].includes(execution.status))
           .map(async (execution) => {
             try {
               await getExecution(execution.id, true)
@@ -167,12 +167,14 @@ export const useHuntStore = defineStore('hunt', () => {
       // Update execution status
       const execution = activeExecutions.value[executionId]
       if (execution) {
-        execution.status = 'cancelled'
+        execution.status = result.status
+        execution.revision = result.revision
         activeExecutions.value[executionId] = execution
       }
 
-      // Stop observation
-      unsubscribeFromExecution(executionId)
+      if (['pending', 'running', 'cancelling'].includes(result.status))
+        subscribeToExecution(executionId)
+      else unsubscribeFromExecution(executionId)
 
       return result
     } catch (err) {
@@ -198,11 +200,16 @@ export const useHuntStore = defineStore('hunt', () => {
           observation.controller.signal,
         )
         if (!current()) return
+        const previous = activeExecutions.value[executionId]
+        if (previous?.revision && execution.revision < previous.revision) {
+          observation.timer = setTimeout(poll, 1000)
+          return
+        }
         activeExecutions.value[executionId] = execution
         const index = executionHistory.value.findIndex((item) => item.id === executionId)
         if (index >= 0) executionHistory.value[index] = execution
         error.value = null
-        if (!['pending', 'running'].includes(execution.status)) {
+        if (!['pending', 'running', 'cancelling'].includes(execution.status)) {
           unsubscribeFromExecution(executionId)
           return
         }

@@ -5,7 +5,7 @@ import { pluginService } from '@/services/plugin'
 import { usePluginExecution } from '../usePluginExecution'
 
 vi.mock('@/services/plugin', () => ({
-  pluginService: { getExecution: vi.fn(), getResults: vi.fn() },
+  pluginService: { getExecution: vi.fn(), getResults: vi.fn(), cancelExecution: vi.fn() },
 }))
 afterEach(() => {
   vi.useRealTimers()
@@ -49,4 +49,31 @@ it('navigation aborts observation without cancelling or submitting work', async 
   expect(signal.aborted).toBe(true)
   await vi.advanceTimersByTimeAsync(30000)
   expect(pluginService.getExecution).toHaveBeenCalledTimes(1)
+})
+
+it('keeps partial output and polls while cancellation cleanup is pending', async () => {
+  vi.useFakeTimers()
+  pluginService.getExecution.mockResolvedValue({ id: 12, status: 'running', revision: 2 })
+  pluginService.getResults.mockResolvedValue({
+    items: [{ type: 'data', data: 'retained' }],
+    cursor: 2,
+  })
+  pluginService.cancelExecution.mockResolvedValue({ id: 12, status: 'cancelling', revision: 3 })
+  const scope = effectScope()
+  const view = scope.run(() => usePluginExecution())
+  view.observe(12)
+  await flushPromises()
+  await view.cancel()
+  expect(view.execution.value.status).toBe('cancelling')
+  expect(view.results.value).toHaveLength(1)
+  pluginService.getResults.mockResolvedValue({ items: [], cursor: 2 })
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(view.execution.value.status).toBe('cancelling')
+  pluginService.getExecution.mockResolvedValue({ id: 12, status: 'cancelled', revision: 4 })
+  await vi.advanceTimersByTimeAsync(1500)
+  const calls = pluginService.getExecution.mock.calls.length
+  await vi.advanceTimersByTimeAsync(30000)
+  expect(pluginService.getExecution).toHaveBeenCalledTimes(calls)
+  expect(view.results.value).toHaveLength(1)
+  scope.stop()
 })

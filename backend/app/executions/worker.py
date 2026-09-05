@@ -2,7 +2,6 @@
 
 from contextlib import contextmanager
 from dataclasses import asdict, replace
-from threading import Event, Thread
 
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
@@ -11,12 +10,10 @@ from sqlmodel import Session
 from app.database.models import PluginExecution, User
 from app.executions.effects import CaseEffects
 from app.executions.ownership import (
-    HEARTBEAT_SECONDS,
     OwnershipLost,
     append_result,
     claim,
     fail_execution,
-    heartbeat,
 )
 from app.executions.service import authorize_execution
 from app.plugins.output_limits import serialized_size
@@ -86,21 +83,8 @@ class WorkerEntitySink:
 
 @contextmanager
 def worker_resources(engine: Engine, ownership):
-    """Own heartbeat, vault and fenced effect sessions for either execution kind."""
-    stop = Event()
-    lease_lost = Event()
+    """Own vault and fenced effect sessions inside the supervised child."""
 
-    def keep_alive():
-        while not stop.wait(HEARTBEAT_SECONDS):
-            try:
-                with Session(engine) as db:
-                    heartbeat(db, ownership)
-            except Exception:  # noqa: BLE001 - isolate execution failures
-                lease_lost.set()
-                return
-
-    thread = Thread(target=keep_alive, daemon=True)
-    thread.start()
     vault = WorkerVault(engine)
 
     @contextmanager
@@ -115,11 +99,7 @@ def worker_resources(engine: Engine, ownership):
             event.listen(db, "before_commit", guard)
             yield db
 
-    try:
-        yield vault, session_factory, lease_lost
-    finally:
-        stop.set()
-        thread.join(timeout=2)
+    yield vault, session_factory
 
 
 def worker_adapter(session_factory, vault, ownership):
@@ -164,20 +144,19 @@ class WorkerPluginRunner(PluginRunner):
             yield result
 
 
-async def execute(engine: Engine, registry: PluginRegistry, execution_id: int) -> None:
-    with Session(engine) as db:
-        ownership = claim(db, execution_id)
+async def execute(
+    engine: Engine, registry: PluginRegistry, execution_id: int, *, ownership=None
+) -> None:
+    if ownership is None:
+        with Session(engine) as db:
+            ownership = claim(db, execution_id)
     if ownership is None:
         return
-    with worker_resources(engine, ownership) as (vault, session_factory, lease_lost):
-        await execute_plugin_run(
-            engine, registry, ownership, vault, session_factory, lease_lost
-        )
+    with worker_resources(engine, ownership) as (vault, session_factory):
+        await execute_plugin_run(engine, registry, ownership, vault, session_factory)
 
 
-async def execute_plugin_run(
-    engine, registry, ownership, vault, session_factory, lease_lost
-):
+async def execute_plugin_run(engine, registry, ownership, vault, session_factory):
     try:
         with Session(engine) as db:
             _, execution = ownership.lock(db)
@@ -196,8 +175,6 @@ async def execute_plugin_run(
             async for result in WorkerPluginRunner(registry, vault).run(
                 name, params, run
             ):
-                if lease_lost.is_set():
-                    raise OwnershipLost()
                 with Session(engine) as db:
                     append_result(
                         db,

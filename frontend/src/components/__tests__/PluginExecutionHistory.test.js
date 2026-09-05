@@ -6,7 +6,12 @@ import PluginResultsModal from '../plugins/PluginResultsModal.vue'
 import { pluginService } from '@/services/plugin'
 
 vi.mock('@/services/plugin', () => ({
-  pluginService: { getHistory: vi.fn(), getExecution: vi.fn(), getResults: vi.fn() },
+  pluginService: {
+    getHistory: vi.fn(),
+    getExecution: vi.fn(),
+    getResults: vi.fn(),
+    cancelExecution: vi.fn(),
+  },
 }))
 
 it('reopens a failed run from case history after reload with retained typed results', async () => {
@@ -60,5 +65,33 @@ it('shows why accepted work is waiting with acceptance and dispatch times', asyn
   expect(wrapper.text()).toContain('Accepted')
   expect(wrapper.text()).toContain('Last dispatch attempt')
   expect(wrapper.text()).toContain('Next retry')
+  wrapper.unmount()
+})
+
+it('offers an explicit cancel control and waits for confirmed cleanup', async () => {
+  const saved = {
+    id: 18,
+    plugin_name: 'ExamplePlugin',
+    status: 'running',
+    created_at: '2026-09-05T00:00:00Z',
+  }
+  pluginService.getHistory.mockResolvedValue({ items: [saved], next_cursor: null })
+  pluginService.getExecution.mockResolvedValue(saved)
+  pluginService.getResults.mockResolvedValue({ items: [], cursor: 0 })
+  pluginService.cancelExecution.mockResolvedValue({ ...saved, status: 'cancelling' })
+  const wrapper = mountWithVuetify(PluginExecutionHistory, { props: { caseId: 7 } })
+  await flushPromises()
+  await wrapper.get('.v-list-item').trigger('click')
+  await flushPromises()
+  await wrapper
+    .findAll('button')
+    .find((button) => button.text() === 'Cancel execution')
+    .trigger('click')
+  await flushPromises()
+  expect(pluginService.cancelExecution).toHaveBeenCalledWith(18)
+  expect(wrapper.text()).toContain('Waiting for execution cleanup')
+  expect(wrapper.findAll('button').some((button) => button.text() === 'Cancel execution')).toBe(
+    false,
+  )
   wrapper.unmount()
 })

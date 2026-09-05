@@ -18,6 +18,13 @@
       <section v-if="selected" aria-label="Selected plugin execution">
         <p v-if="execution" role="status">{{ execution.plugin_name }} — {{ execution.status }}</p>
         <ExecutionWaiting :execution="execution" />
+        <v-btn
+          v-if="['queued', 'running'].includes(execution?.status)"
+          :loading="cancelling"
+          color="error"
+          @click="cancel"
+          >Cancel execution</v-btn
+        >
         <v-alert v-if="error || execution?.error" type="error" role="alert">
           {{ error || execution.error.message }}
         </v-alert>
@@ -62,7 +69,7 @@ const loading = ref(false)
 const historyError = ref(null)
 const selected = ref(null)
 const showResults = ref(false)
-const { execution, results, error, observe, stop } = usePluginExecution()
+const { execution, results, error, observe, stop, cancel, cancelling } = usePluginExecution()
 let controller
 async function load(more = false) {
   controller?.abort()
