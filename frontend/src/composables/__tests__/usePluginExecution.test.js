@@ -77,3 +77,29 @@ it('keeps partial output and polls while cancellation cleanup is pending', async
   expect(view.results.value).toHaveLength(1)
   scope.stop()
 })
+
+it('ignores a delayed cancellation response after a newer terminal poll', async () => {
+  vi.useFakeTimers()
+  pluginService.getExecution
+    .mockResolvedValueOnce({ id: 12, status: 'running', revision: 2 })
+    .mockResolvedValue({ id: 12, status: 'cancelled', revision: 4 })
+  pluginService.getResults.mockResolvedValue({ items: [], cursor: 0 })
+  let resolveCancel
+  pluginService.cancelExecution.mockReturnValue(
+    new Promise((resolve) => {
+      resolveCancel = resolve
+    }),
+  )
+  const scope = effectScope()
+  const view = scope.run(() => usePluginExecution())
+  view.observe(12)
+  await flushPromises()
+  const pending = view.cancel()
+  await vi.advanceTimersByTimeAsync(1000)
+  resolveCancel({ id: 12, status: 'cancelling', revision: 3 })
+  await pending
+  expect(view.execution.value.status).toBe('cancelled')
+  await vi.advanceTimersByTimeAsync(30000)
+  expect(pluginService.getExecution).toHaveBeenCalledTimes(2)
+  scope.stop()
+})

@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from tests.executions.conftest import eventually
+from tests.executions.test_case_effects import contents
 from tests.executions.test_execution_system import submit
 from tests.executions.test_hunt_execution_system import step, submit_hunt, terminal
 
@@ -62,6 +63,17 @@ def test_cancel_stops_local_work_and_retains_output_without_redis(
         pid = next(item["data"]["pid"] for item in items if item["type"] == "data")
         if mode == "subprocess":
             eventually(lambda: (system.root / "subprocess-pid").exists())
+        independent = None
+        if mode == "subprocess":
+            independent = submit(client, system, barrier="independent")
+            independent_items = eventually(
+                lambda: client.get(independent["links"]["results"]).json()["items"]
+            )
+            independent_pid = next(
+                item["data"]["pid"]
+                for item in independent_items
+                if item["type"] == "data"
+            )
         subprocess.run(
             ["docker", "stop", system.redis_container], check=True, capture_output=True
         )
@@ -73,15 +85,21 @@ def test_cancel_stops_local_work_and_retains_output_without_redis(
             lambda accepted=accepted: state(client, accepted)["status"] == "cancelled",
             timeout=30,
         )
-        assert time.monotonic() - started < 30
+        assert time.monotonic() - started < (5 if mode == "success" else 30)
         assert stopped(pid)
         if mode == "subprocess":
             assert stopped(int((system.root / "subprocess-pid").read_text()))
         retained = client.get(accepted["links"]["results"]).json()["items"]
         assert retained == items
+        assert contents(client, system) == []
+        assert client.get(f"/api/cases/{system.case_id}/entities").json() == []
         assert other.delete(accepted["links"]["detail"]).json()["status"] == "cancelled"
         (system.root / "never").touch()
         assert state(client, accepted)["status"] == "cancelled"
+        if independent:
+            assert not stopped(independent_pid)
+            (system.root / "independent").touch()
+            eventually(lambda: state(client, independent)["status"] == "completed")
 
 
 def test_hunt_cancel_preserves_completed_steps_and_prevents_later_steps(
@@ -241,5 +259,98 @@ def test_cancellation_races_claim_and_completion(execution_system):
                 )
             )
             retained = client.get(accepted["links"]["results"]).json()["items"]
+            evidence = contents(client, system)
+            entities = client.get(f"/api/cases/{system.case_id}/entities").json()
             assert other.delete(accepted["links"]["detail"]).json() == result
+            assert contents(client, system) == evidence
+            assert (
+                client.get(f"/api/cases/{system.case_id}/entities").json() == entities
+            )
             assert client.get(accepted["links"]["results"]).json()["items"] == retained
+
+
+@pytest.mark.parametrize("fence", ["cancel", "expire", "supersede"])
+def test_stale_owner_cannot_commit_results_state_or_case_effects(
+    execution_system, fence
+):
+    from datetime import timedelta
+
+    from app.core.utils import get_utc_now
+    from app.database.models import ExecutionControl
+    from sqlmodel import Session, select
+
+    system = execution_system
+    _, client = system.api()
+    system.worker()
+    system.start("-m", "app.executions.dispatcher")
+    with closing(client):
+        accepted = submit(client, system, barrier="hold", save_to_case=True)
+        retained = eventually(
+            lambda: client.get(accepted["links"]["results"]).json()["items"]
+        )
+        attempts = {}
+        for operation in ["effects", "results", "state"]:
+            window = f"stale-{operation}"
+            attempts[window] = system.start(
+                "-m",
+                "tests.executions.runtime",
+                "replay-effects",
+                str(accepted["id"]),
+                window,
+            )
+            eventually(
+                lambda window=window: (system.root / f"effect-{window}").exists()
+            )
+        if fence == "cancel":
+            assert client.delete(accepted["links"]["detail"]).status_code == 200
+        else:
+            with Session(system.engine) as db:
+                control = db.exec(
+                    select(ExecutionControl).where(
+                        ExecutionControl.plugin_execution_id == accepted["id"]
+                    )
+                ).one()
+                if fence == "expire":
+                    control.lease_until = get_utc_now() - timedelta(seconds=1)
+                else:
+                    control.generation += 1
+                db.commit()
+        for window, process in attempts.items():
+            (system.root / f"release-{window}").touch()
+            eventually(lambda process=process: process.poll() is not None)
+            assert process.returncode != 0
+        assert client.get(accepted["links"]["results"]).json()["items"] == retained
+        assert contents(client, system) == []
+        assert client.get(f"/api/cases/{system.case_id}/entities").json() == []
+        error = state(client, accepted).get("error")
+        assert not error or error["code"] != "execution_error"
+
+
+@pytest.mark.parametrize("boundary", ["after-claim", "before-terminal"])
+def test_cancel_at_controlled_claim_and_completion_boundaries(
+    execution_system, boundary
+):
+    system = execution_system
+    system.env["EXECUTION_TEST_BOUNDARY"] = boundary
+    _, client = system.api()
+    _, other = system.api()
+    system.worker()
+    system.start("-m", "app.executions.dispatcher")
+    with closing(client), closing(other):
+        accepted = submit(client, system, save_to_case=True)
+        eventually(lambda: (system.root / "boundary-reached").exists())
+        evidence = contents(client, system)
+        entities = client.get(f"/api/cases/{system.case_id}/entities").json()
+        retained = client.get(accepted["links"]["results"]).json()["items"]
+        assert (
+            other.delete(accepted["links"]["detail"]).json()["status"] == "cancelling"
+        )
+        (system.root / "release-boundary").touch()
+        eventually(lambda: state(client, accepted)["status"] == "cancelled")
+        assert contents(client, system) == evidence
+        assert client.get(f"/api/cases/{system.case_id}/entities").json() == entities
+        assert client.get(accepted["links"]["results"]).json()["items"] == retained
+        if boundary == "after-claim":
+            assert not (system.root / "provider-starts").exists()
+        else:
+            assert evidence and entities and retained

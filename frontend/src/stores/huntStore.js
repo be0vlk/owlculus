@@ -166,6 +166,7 @@ export const useHuntStore = defineStore('hunt', () => {
 
       // Update execution status
       const execution = activeExecutions.value[executionId]
+      if (execution?.revision && result.revision < execution.revision) return result
       if (execution) {
         execution.status = result.status
         execution.revision = result.revision

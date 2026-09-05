@@ -64,7 +64,11 @@ export function usePluginExecution() {
     cancelling.value = true
     try {
       const state = await pluginService.cancelExecution(id)
-      if (current === generation) execution.value = state
+      if (
+        current === generation &&
+        (!execution.value?.revision || state.revision >= execution.value.revision)
+      )
+        execution.value = state
     } catch (failure) {
       if (current === generation) error.value = failure.response?.data?.detail || failure.message
     } finally {

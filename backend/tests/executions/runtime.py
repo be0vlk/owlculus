@@ -56,12 +56,12 @@ class AcceptancePlugin(BasePlugin):
             import time
 
             (root / "blocked").touch()
-            time.sleep(600)
+            time.sleep(600)  # noqa: ASYNC251 - deliberately uncooperative adapter
         if params.get("mode") == "subprocess":
             import subprocess
             import sys
 
-            process = subprocess.Popen(
+            process = subprocess.Popen(  # noqa: ASYNC220 - deliberate blocking adapter
                 [sys.executable, "-c", "import time; time.sleep(600)"]
             )
             (root / "subprocess-pid").write_text(str(process.pid))
@@ -85,10 +85,10 @@ class AcceptancePlugin(BasePlugin):
 
 
 def install():
-    from app.plugins import plugin_registry
+    import sys
 
     from app.executions import supervisor
-    import sys
+    from app.plugins import plugin_registry
 
     supervisor.CHILD_COMMAND = [
         sys.executable,
@@ -96,6 +96,33 @@ def install():
         "tests.executions.runtime",
         "child",
     ]
+
+    boundary = os.environ.get("EXECUTION_TEST_BOUNDARY")
+    if boundary:
+        import time
+
+        original_claim = supervisor.claim
+        original_finish = supervisor.finish_stopped
+
+        def wait_at_boundary():
+            root = Path(os.environ["EXECUTION_TEST_DIR"])
+            (root / "boundary-reached").touch()
+            while not (root / "release-boundary").exists():
+                time.sleep(0.05)
+
+        def claim_at_boundary(*args, **kwargs):
+            ownership = original_claim(*args, **kwargs)
+            if ownership and boundary == "after-claim":
+                wait_at_boundary()
+            return ownership
+
+        def finish_at_boundary(*args, **kwargs):
+            if boundary == "before-terminal":
+                wait_at_boundary()
+            return original_finish(*args, **kwargs)
+
+        supervisor.claim = claim_at_boundary
+        supervisor.finish_stopped = finish_at_boundary
 
     original = plugin_registry.get_shipped_plugin_registry
     registry = original()
@@ -160,14 +187,13 @@ if __name__ == "__main__":
     elif sys.argv[1] == "replay-effects":
         from contextlib import contextmanager
 
-        from sqlalchemy import event
-        from sqlmodel import Session, select
-
         from app.database.connection import engine
         from app.database.models import ExecutionControl, PluginExecution, User
         from app.executions.ownership import Ownership
         from app.executions.worker import WorkerVault, worker_adapter
         from app.plugins.plugin_types import EvidenceWrite
+        from sqlalchemy import event
+        from sqlmodel import Session, select
 
         execution_id = int(sys.argv[2])
         window = sys.argv[3]
@@ -183,6 +209,13 @@ if __name__ == "__main__":
             user = db.get(User, execution.created_by_id)
             case_id, save = execution.case_id, execution.save_to_case
             db.expunge(user)
+
+        if window.startswith("stale-"):
+            import time
+
+            marker.touch()
+            while not (marker.parent / f"release-{window}").exists():
+                time.sleep(0.05)
 
         def pause():
             import time
@@ -218,7 +251,13 @@ if __name__ == "__main__":
             evidence_service.save_upload_file = interrupted_save
 
         async def replay():
-            if window == "results":
+            if window == "stale-state":
+                from app.executions.ownership import fail_execution
+
+                with Session(engine) as db:
+                    fail_execution(db, ownership)
+                return
+            if window in {"results", "stale-results"}:
                 from app.executions.ownership import append_result
 
                 with Session(engine) as db:

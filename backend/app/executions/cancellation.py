@@ -109,6 +109,13 @@ def finish_stopped(db: Session, ownership, *, reason=None):
             control.lease_until is None
             or control.lease_until.replace(tzinfo=UTC) <= get_utc_now()
         )
+        if expired and reason != "execution_timeout":
+            reason = "lease_expired"
+        if (
+            control.deadline_at
+            and control.deadline_at.replace(tzinfo=UTC) <= get_utc_now()
+        ):
+            reason = "execution_timeout"
         control.generation += 1
         control.owner = None
         control.revision += 1
