@@ -184,3 +184,52 @@ def test_reconciliation_removes_only_uncommitted_owned_files(execution_system):
         assert len(contents(client, system)) == 2
     finally:
         client.close()
+
+
+def test_concurrent_plugin_and_hunt_share_one_results_folder(execution_system):
+    from tests.executions.test_execution_system import finished
+    from tests.executions.test_hunt_execution_system import step, submit_hunt, terminal
+
+    system = execution_system
+    _, client = system.api()
+    system.worker()
+    system.start("-m", "tests.executions.runtime", "hunt-worker")
+    system.start("-m", "app.executions.dispatcher")
+    try:
+        plugin = submit(client, system, barrier="both-save", save_to_case=True)
+        hunt = submit_hunt(
+            system,
+            client,
+            [
+                step(
+                    "save",
+                    save_to_case=True,
+                    static_parameters={"barrier": "both-save"},
+                )
+            ],
+        )
+        eventually(
+            lambda: (system.root / "provider-starts").exists()
+            and (system.root / "provider-starts")
+            .read_text()
+            .splitlines()
+            .count("both-save")
+            == 2
+        )
+        assert contents(client, system) == []
+        (system.root / "both-save").touch()
+        assert eventually(lambda: finished(client, plugin))["status"] == "completed"
+        assert eventually(lambda: terminal(client, hunt))["status"] == "completed"
+        evidence = contents(client, system)
+        folders = [item for item in evidence if item["is_folder"]]
+        files = [item for item in evidence if not item["is_folder"]]
+        assert len(folders) == 1
+        assert folders[0]["title"] == "Plugin Results"
+        assert len(files) == 2
+        assert all(item["parent_folder_id"] == folders[0]["id"] for item in files)
+        assert len({item["content"] for item in files}) == 2
+        entities = client.get(f"/api/cases/{system.case_id}/entities").json()
+        assert len(entities) == 1
+        assert entities[0]["data"]["description"].count("Acceptance discovery") == 2
+    finally:
+        client.close()

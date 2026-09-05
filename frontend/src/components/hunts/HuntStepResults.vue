@@ -37,8 +37,19 @@
 
     <v-divider class="mb-4" />
 
+    <v-alert
+      v-if="
+        displayResults.length &&
+        (step.status !== 'completed' || step.output?.partial || step.output?.errors?.length)
+      "
+      type="warning"
+      role="alert"
+      class="mb-4"
+    >
+      Partial retained results. This step has not completed successfully.
+    </v-alert>
     <!-- Display results based on plugin type -->
-    <div v-if="step.status === 'completed' && displayResults.length > 0">
+    <div v-if="displayResults.length > 0">
       <div v-for="(result, index) in displayResults" :key="index" class="result-item mb-3">
         <v-card variant="outlined" density="compact">
           <v-card-text class="pa-3">

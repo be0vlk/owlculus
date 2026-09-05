@@ -80,3 +80,23 @@ it('has no case selector and blocks execution without resolved context', async (
   await dialog.get('form').trigger('submit')
   expect(wrapper.emitted('execute')).toBeUndefined()
 })
+
+it.each(['failed', 'running', 'cancelled'])(
+  'shows useful partial results from a %s hunt step',
+  async (status) => {
+    const { default: HuntStepResults } = await import('../hunts/HuntStepResults.vue')
+    const wrapper = mountWithVuetify(HuntStepResults, {
+      props: {
+        stepNumber: 1,
+        step: {
+          step_id: 'lookup',
+          plugin_name: 'Lookup',
+          status,
+          output: { results: [{ finding: 'Retained finding' }], errors: [], result_count: 1 },
+        },
+      },
+    })
+    expect(wrapper.text()).toContain('Partial retained results')
+    expect(wrapper.text()).toContain('Retained finding')
+  },
+)

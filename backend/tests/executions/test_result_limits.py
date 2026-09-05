@@ -196,3 +196,33 @@ def test_receipt_upgrade_is_repeatable_on_prior_schema(execution_system):
         )
     finally:
         client.close()
+
+
+def test_redaction_cannot_expand_retained_output_past_event_limit(execution_system):
+    from sqlmodel import Session, select
+
+    from app.core.security import encrypt_api_key
+    from app.database.models import SystemConfiguration
+
+    system = execution_system
+    system.env.update(
+        EXECUTION_EVENT_LIMIT_BYTES="256", EXECUTION_RESULT_LIMIT_BYTES="500"
+    )
+    with Session(system.engine) as db:
+        config = db.exec(select(SystemConfiguration)).one()
+        config.api_keys = {
+            "custom": {"api_key": encrypt_api_key("x"), "is_active": True}
+        }
+        db.commit()
+    _, client = system.api()
+    system.worker()
+    system.start("-m", "app.executions.dispatcher")
+    try:
+        accepted = submit(client, system, mode="vault", query="x" * 100)
+        state = eventually(lambda: finished(client, accepted))
+        assert state["status"] == "failed"
+        assert state["error"]["code"] == "event_size_limit"
+        events = client.get(accepted["links"]["results"]).json()["items"]
+        assert len([e for e in events if e["type"] == "data"]) == 1
+    finally:
+        client.close()
