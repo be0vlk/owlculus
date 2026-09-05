@@ -19,12 +19,13 @@ from app.executions.ownership import (
     heartbeat,
 )
 from app.executions.service import authorize_execution
+from app.plugins.output_limits import serialized_size
 from app.plugins.plugin_context import (
     ProductionPluginRunAdapter,
 )
 from app.plugins.plugin_registry import PluginRegistry
 from app.plugins.plugin_runner import PluginRunner
-from app.plugins.plugin_types import EntityWrite, EvidenceWrite
+from app.plugins.plugin_types import EntityWrite, EvidenceWrite, ResultEvent
 from app.services.api_key_vault import ConfigurationApiKeyVault, Provider
 
 
@@ -60,8 +61,8 @@ class WorkerVault:
 class WorkerEvidenceSink:
     """Sanitize evidence before it reaches case services or file storage."""
 
-    def __init__(self, sink: CaseEffects, vault: WorkerVault, case_id: int, user: User):
-        self.sink, self.vault, self.case_id, self.user = sink, vault, case_id, user
+    def __init__(self, sink: CaseEffects, vault: WorkerVault, case_id: int):
+        self.sink, self.vault, self.case_id = sink, vault, case_id
 
     async def write(self, request: EvidenceWrite, user: User) -> None:
         if request.case_id != self.case_id:
@@ -73,8 +74,8 @@ class WorkerEvidenceSink:
 class WorkerEntitySink:
     """Sanitize discovered entity fields while fixing case and attribution."""
 
-    def __init__(self, sink: CaseEffects, vault: WorkerVault, case_id: int, user: User):
-        self.sink, self.vault, self.case_id, self.user = sink, vault, case_id, user
+    def __init__(self, sink: CaseEffects, vault: WorkerVault, case_id: int):
+        self.sink, self.vault, self.case_id = sink, vault, case_id
 
     async def write(self, request: EntityWrite, case_id: int, user: User) -> None:
         if case_id != self.case_id:
@@ -138,10 +139,10 @@ def worker_adapter(session_factory, vault, ownership):
                 )
                 yield replace(
                     run,
-                    execution_id=ownership.control_id,
+                    execution_control_id=ownership.control_id,
                     operation_id=operation_id,
-                    evidence=WorkerEvidenceSink(effects, vault, case_id, user),
-                    entities=WorkerEntitySink(effects, vault, case_id, user),
+                    evidence=WorkerEvidenceSink(effects, vault, case_id),
+                    entities=WorkerEntitySink(effects, vault, case_id),
                 )
 
     return SanitizedAdapter(session_factory, lambda _: vault)
@@ -149,6 +150,13 @@ def worker_adapter(session_factory, vault, ownership):
 
 class WorkerPluginRunner(PluginRunner):
     """Release provider session reads at each event boundary in worker runs."""
+
+    def __init__(self, registry: PluginRegistry, vault: WorkerVault):
+        super().__init__(registry)
+        self.vault = vault
+
+    def event_size(self, event: ResultEvent) -> int:
+        return serialized_size(self.vault.redact(event.to_wire()))
 
     async def run(self, name, params, context):
         async for result in super().run(name, params, context):
@@ -185,7 +193,9 @@ async def execute_plugin_run(
         adapter = worker_adapter(session_factory, vault, ownership)
         with adapter.open(user=user, case_id=case_id, save_to_case=save) as run:
             operation_index = 0
-            async for result in WorkerPluginRunner(registry).run(name, params, run):
+            async for result in WorkerPluginRunner(registry, vault).run(
+                name, params, run
+            ):
                 if lease_lost.is_set():
                     raise OwnershipLost()
                 with Session(engine) as db:

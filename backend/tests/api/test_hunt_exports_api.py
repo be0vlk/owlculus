@@ -145,6 +145,7 @@ def test_hunt_execution_pdf_is_a_readable_standalone_report(
         "PeopleData",
         "España",
         "Remote source timed out",
+        "Partial retained results",
         "München Москва",
         "Profile",
         "People",

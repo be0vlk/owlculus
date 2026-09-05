@@ -324,9 +324,7 @@ async def get_step_results(
     step_id: str,
     cursor: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
-    current_user: models.User = Depends(
-        get_current_user
-    ),  # noqa: B008 - FastAPI dependency
+    current_user: models.User = Depends(get_current_user),  # noqa: B008
     db: Session = Depends(get_db),  # noqa: B008 - FastAPI dependency
 ):
     from app.core.exceptions import ResourceNotFoundException

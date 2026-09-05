@@ -5,7 +5,7 @@ from typing import Any
 
 from app.core.exceptions import ResourceNotFoundException
 
-from .output_limits import OutputBudget, OutputLimitExceeded
+from .output_limits import OutputBudget, OutputLimitExceeded, serialized_size
 from .plugin_context import PluginRun
 from .plugin_registry import PluginRegistry
 from .plugin_types import ResultEvent
@@ -17,6 +17,10 @@ class PluginRunner:
     def __init__(self, registry: PluginRegistry):
         self.registry = registry
 
+    def event_size(self, event: ResultEvent) -> int:
+        """Measure the event representation retained by this runner's adapter."""
+        return serialized_size(event.to_wire())
+
     async def run(
         self, name: str, params: dict[str, Any], context: PluginRun
     ) -> AsyncGenerator[ResultEvent, None]:
@@ -24,7 +28,7 @@ class PluginRunner:
             plugin = self.registry.create(name)
             budget = OutputBudget()
             async for event in plugin.execute_with_evidence_collection(params, context):
-                budget.accept(event)
+                budget.accept(event, size=self.event_size(event))
                 if event.kind != "complete":
                     yield event
         except OutputLimitExceeded as error:

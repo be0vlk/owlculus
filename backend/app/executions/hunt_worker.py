@@ -54,7 +54,7 @@ async def execute(engine: Engine, registry: PluginRegistry, execution_id: int) -
             executor = HuntExecutor(
                 db,
                 DurableHuntNotifier(),
-                plugin_runner=WorkerPluginRunner(registry),
+                plugin_runner=WorkerPluginRunner(registry, vault),
                 run_adapter=worker_adapter(session_factory, vault, ownership),
                 before_step=before_step,
                 sanitize=vault.redact,

@@ -144,7 +144,8 @@ No validation, authorization, credential or provider error is automatically retr
 Workers enforce `EXECUTION_EVENT_LIMIT_BYTES` (1,048,576 by default) per compact
 UTF-8 serialized ResultEvent, including its envelope, and
 `EXECUTION_RESULT_LIMIT_BYTES` (26,214,400 by default) per standalone invocation or
-hunt step. All provider events count, including status/error events. These values
+hunt step. Both provider output and its redacted stored representation are checked. All
+provider events count, including status/error events. These values
 must be positive and should match across workers. A rejected event stops provider
 iteration; it is never truncated or saved. A small runtime error/complete pair is
 reserved outside the provider budget so reaching the limit still reports an

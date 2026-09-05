@@ -197,7 +197,7 @@ class PluginRun:
     api_keys: ApiKeyVault
     evidence: EvidenceSink
     entities: EntitySink
-    execution_id: int | None = None
+    execution_control_id: int | None = None
     operation_id: str = "plugin"
 
     @classmethod

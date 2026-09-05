@@ -42,8 +42,9 @@ class OutputBudget:
         if self.event_limit <= 0 or self.result_limit <= 0:
             raise ValueError("Execution output limits must be positive")
 
-    def accept(self, event: ResultEvent) -> None:
-        size = serialized_size(event.to_wire())
+    def accept(self, event: ResultEvent, *, size: int | None = None) -> None:
+        if size is None:
+            size = serialized_size(event.to_wire())
         if size > self.event_limit:
             raise OutputLimitExceeded("event_size_limit", self.event_limit)
         # Count all provider events: even a status-only provider cannot grow
