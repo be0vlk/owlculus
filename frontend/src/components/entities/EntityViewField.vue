@@ -16,17 +16,7 @@
 
       <!-- Associates Section -->
       <div v-if="section.parentField === 'associates'">
-        <div v-if="getAssociateEntities(field.id).length > 0" class="mb-2">
-          <EntityTag
-            v-for="associate in getAssociateEntities(field.id)"
-            :key="associate.id"
-            @click="$emit('viewEntity', associate)"
-            class="ma-1"
-          >
-            {{ getEntityDisplayName(associate) }}
-          </EntityTag>
-        </div>
-        <v-chip v-else variant="text" color="grey" size="small">
+        <v-chip variant="text" color="grey" size="small">
           {{ getFieldValue(entity.data, section.parentField, field.id) || 'Not specified' }}
         </v-chip>
       </div>
@@ -144,7 +134,6 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import EntityTag from './EntityTag.vue'
 import { useEntityIcons } from '../../composables/useEntityIcons.js'
 import { useEntityDisplay } from '../../composables/useEntityDisplay.js'
 import { ensureProtocol } from '../../utils/urlHelpers.js'
@@ -154,14 +143,13 @@ const props = defineProps({
   section: { type: Object, required: true },
   entity: { type: Object, required: true },
   sourceValue: { type: String, default: '' },
-  getAssociateEntities: { type: Function, required: true },
   existingEntities: { type: Array, required: true },
 })
 
 defineEmits(['viewEntity'])
 
 const { getFieldIcon, getSocialMediaIcon } = useEntityIcons(props.entity)
-const { getEntityDisplayName, getFieldValue } = useEntityDisplay(props.entity)
+const { getFieldValue } = useEntityDisplay(props.entity)
 
 const regularValue = computed(() =>
   getFieldValue(props.entity.data, props.section.parentField, props.field.id),

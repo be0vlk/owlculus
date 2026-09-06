@@ -3,124 +3,78 @@ import { entityService } from '../services/entity'
 import { entitySchemas } from './entitySchemas'
 import { cleanFormData } from '../utils/cleanFormData'
 import { getErrorMessage } from '../utils/errorMessage'
+import { useBaseNoteEditor } from './useBaseNoteEditor'
+import { useNoteSaveQueue } from './useNoteSaveQueue'
+import { useEntitySources } from './useEntitySources'
 
-export function useEntityDetails(entity, caseId) {
+// Entity transport data is JSON. Copy recursively, including arrays, to isolate Vue proxies too.
+const clone = (value) => JSON.parse(JSON.stringify(value))
+
+function draftData(data) {
+  return {
+    ...clone(data),
+    aliases: Array.isArray(data.aliases) ? clone(data.aliases) : [],
+    address: clone(data.address || {}),
+    social_media: clone(data.social_media || {}),
+    associates: clone(data.associates || {}),
+    executives: clone(data.executives || {}),
+    affiliates: clone(data.affiliates || {}),
+    notes: data.notes || '',
+  }
+}
+
+export function useEntityDetails(entity, caseId, emit) {
   const error = ref('')
   const isEditing = ref(false)
   const updating = ref(false)
   const activeTab = ref('basicInfo')
-
-  const formData = ref({
-    data: {
-      address: {},
-      social_media: {},
-      aliases: [],
-    },
-  })
-
-  const entitySchema = computed(() => {
-    return entitySchemas[entity.value?.entity_type]
-  })
-
-  const flattenNestedFields = (data, schema) => {
-    const result = { ...data }
-
-    Object.entries(schema).forEach(([, section]) => {
-      if (section.parentField && data[section.parentField]) {
-        section.fields.forEach((field) => {
-          const value = data[section.parentField][field.id]
-          if (value !== undefined) {
-            result[`${section.parentField}.${field.id}`] = value
-          }
-        })
-      }
-    })
-
-    return result
-  }
-
-  const restructureNestedFields = (data, schema) => {
-    const result = { ...data }
-
-    // First handle section-level parent fields
-    Object.entries(schema).forEach(([, section]) => {
-      if (section.parentField) {
-        result[section.parentField] = result[section.parentField] || {}
-
-        section.fields.forEach((field) => {
-          const dotKey = `${section.parentField}.${field.id}`
-          if (dotKey in result) {
-            result[section.parentField][field.id] = result[dotKey]
-            delete result[dotKey]
-          }
-        })
-      }
-    })
-
-    return result
-  }
+  const acknowledgedEntity = ref(clone(entity.value))
+  const formData = ref({ data: draftData(acknowledgedEntity.value.data) })
+  const entitySchema = computed(() => entitySchemas[acknowledgedEntity.value.entity_type])
 
   const startEditing = () => {
-    const initialData = {
-      ...entity.value.data,
-      aliases: Array.isArray(entity.value.data.aliases) ? [...entity.value.data.aliases] : [],
-      address: entity.value.data.address || {},
-      social_media: entity.value.data.social_media || {},
-      associates: entity.value.data.associates || {},
-      executives: entity.value.data.executives || {},
-      affiliates: entity.value.data.affiliates || {},
-      notes: entity.value.data.notes || '',
-    }
-
-    const flattenedData = flattenNestedFields(initialData, entitySchema.value)
-
-    formData.value = {
-      data: flattenedData,
-    }
+    formData.value = { data: draftData(acknowledgedEntity.value.data) }
     isEditing.value = true
   }
 
   const cancelEdit = () => {
+    formData.value = { data: draftData(acknowledgedEntity.value.data) }
     isEditing.value = false
     error.value = ''
   }
 
-  const updateEntity = async (
-    processAssociates,
-    persistEntity = (payload) => entityService.updateEntity(caseId.value, entity.value.id, payload),
-  ) => {
+  const getFieldValue = (parentField, fieldId) => {
+    const data = parentField ? formData.value.data[parentField] : formData.value.data
+    return data?.[fieldId] ?? ''
+  }
+
+  const updateFieldValue = (parentField, fieldId, value) => {
+    const data = formData.value.data
+    if (parentField) {
+      data[parentField] ||= {}
+      data[parentField][fieldId] = value
+    } else {
+      data[fieldId] = value
+    }
+  }
+
+  const { getSourceValue, updateSourceValue } = useEntitySources(
+    acknowledgedEntity,
+    formData,
+    isEditing,
+  )
+
+  const updateEntity = async () => {
     try {
       updating.value = true
       error.value = ''
-
-      const cleanedData = cleanFormData({ ...formData.value.data })
-      const restructuredData = restructureNestedFields(cleanedData, entitySchema.value)
-
-      const submitData = {
-        data: {
-          ...restructuredData,
-          aliases: Array.isArray(restructuredData.aliases) ? restructuredData.aliases : [],
-          social_media: restructuredData.social_media || {},
-          associates: restructuredData.associates || {},
-          executives: restructuredData.executives || {},
-          affiliates: restructuredData.affiliates || {},
-          address: restructuredData.address || {},
-          notes: restructuredData.notes || '',
-        },
-      }
-
-      const updatedEntity = await persistEntity({
-        entity_type: entity.value.entity_type,
-        data: submitData.data,
+      const updatedEntity = await saveEntity({
+        entity_type: acknowledgedEntity.value.entity_type,
+        data: draftData(cleanFormData(clone(formData.value.data))),
       })
-
-      let createdAssociates = []
-      if (processAssociates) {
-        createdAssociates = await processAssociates(submitData)
-      }
-
       isEditing.value = false
-      return { updatedEntity, createdAssociates }
+      emit?.('edit', updatedEntity)
+      return updatedEntity
     } catch (err) {
       error.value = getErrorMessage(err, 'Failed to update entity')
       throw err
@@ -129,39 +83,124 @@ export function useEntityDetails(entity, caseId) {
     }
   }
 
-  watch(
-    () => entity.value,
-    (newEntity, oldEntity) => {
-      if (newEntity) {
-        // Only update form data if we're not currently editing
-        // or if it's a completely different entity
-        if (!isEditing.value || !oldEntity || oldEntity.id !== newEntity.id) {
-          const flattenedData = flattenNestedFields(
-            {
-              ...newEntity.data,
-              aliases: Array.isArray(newEntity.data.aliases) ? [...newEntity.data.aliases] : [],
-              address: newEntity.data.address || {},
-              social_media: newEntity.data.social_media || {},
-              associates: newEntity.data.associates || {},
-              executives: newEntity.data.executives || {},
-              affiliates: newEntity.data.affiliates || {},
-              notes: newEntity.data.notes || '',
-            },
-            entitySchema.value,
-          )
+  // The parent keys the dialog by Case and Entity. Same-session refreshes must leave drafts alone.
+  watch(entity, (newEntity) => {
+    acknowledgedEntity.value = clone(newEntity)
+    if (!isEditing.value) formData.value = { data: draftData(newEntity.data) }
+  })
 
-          formData.value = {
-            data: flattenedData,
-          }
-        }
+  const saveError = ref('')
+  const saveNotes = async () => {
+    if (!editor.value || !entity.value) return true
 
-        // Only reset tab if this is a completely different entity (different ID)
-        if (!oldEntity || oldEntity.id !== newEntity.id) {
-          activeTab.value = Object.keys(entitySchema.value)[0]
+    cancelPendingSave()
+    const content = editor.value.getHTML()
+    const target = clone(acknowledgedEntity.value)
+    const targetCaseId = caseId.value
+    return saveQueue
+      .save(content, async () => {
+        const updatedEntity = await entityService.updateEntity(targetCaseId, target.id, {
+          entity_type: target.entity_type,
+          data: {
+            ...clone(
+              acknowledgedEntity.value?.id === target.id
+                ? acknowledgedEntity.value.data
+                : target.data,
+            ),
+            notes: content,
+          },
+        })
+        acknowledgedEntity.value = clone(updatedEntity)
+
+        if (emit) {
+          emit('edit', updatedEntity)
         }
+      })
+      .then(
+        () => true,
+        () => false,
+      )
+  }
+
+  const {
+    editor,
+    editorActions,
+    saving,
+    lastSaved,
+    lastSavedTime,
+    formatLastSaved,
+    updateContent,
+    triggerSave,
+    cancelPendingSave,
+  } = useBaseNoteEditor({
+    label: 'Entity notes',
+    initialContent: entity.value?.data?.notes || '',
+    placeholder: isEditing.value
+      ? 'Write your entity notes here... Use / for commands.'
+      : 'Notes (read-only)',
+    editable: isEditing.value,
+    onExit: saveNotes,
+    onUpdate: (editor) => {
+      const content = editor.getHTML()
+      if (isEditing.value) {
+        // Update the form data so main form save includes latest notes
+        formData.value.data.notes = content
+        triggerSave(saveNotes)
       }
     },
-    { deep: true },
+    saveDelay: 5000,
+  })
+
+  const saveQueue = useNoteSaveQueue({ saving, saveError, lastSaved, lastSavedTime })
+
+  // Main-form writes use the same queue and acknowledge notes before edit mode ends.
+  const saveEntity = (payload) => {
+    cancelPendingSave()
+    const content = editor.value.getHTML()
+    const targetId = entity.value.id
+    const targetCaseId = caseId.value
+    return saveQueue.save(
+      content,
+      async () => {
+        const updatedEntity = await entityService.updateEntity(targetCaseId, targetId, payload)
+        acknowledgedEntity.value = clone(updatedEntity)
+        return updatedEntity
+      },
+      { force: true },
+    )
+  }
+
+  // Watch for entity changes and update editor content
+  watch(
+    () => acknowledgedEntity.value?.data?.notes,
+    (newNotes) => {
+      if (newNotes !== undefined && editor.value) {
+        if (saving.value || newNotes === lastSaved.value) return
+        if (editor.value.getHTML() !== lastSaved.value) return
+        updateContent(newNotes)
+      }
+    },
+    { immediate: true },
+  )
+
+  // Watch for editing state changes and update editor editability
+  watch(
+    () => isEditing.value,
+    (newEditingState, oldEditingState) => {
+      if (editor.value) {
+        if (newEditingState) {
+          const content = editor.value.getHTML()
+          if (content !== lastSaved.value) {
+            formData.value.data.notes = content
+          }
+        }
+        // If exiting edit mode, save any pending changes first
+        if (oldEditingState && !newEditingState) {
+          saveNotes()
+        }
+        editor.value.setEditable(newEditingState, false)
+      }
+    },
   )
 
   return {
@@ -169,10 +208,21 @@ export function useEntityDetails(entity, caseId) {
     isEditing,
     updating,
     activeTab,
-    formData,
     entitySchema,
+    acknowledgedEntity,
     startEditing,
     cancelEdit,
     updateEntity,
+    getFieldValue,
+    updateFieldValue,
+    getSourceValue,
+    updateSourceValue,
+    editor,
+    editorActions,
+    saving,
+    saveError,
+    lastSavedTime,
+    formatLastSaved,
+    saveNotes,
   }
 }

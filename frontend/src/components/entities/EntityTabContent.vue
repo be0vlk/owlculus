@@ -31,10 +31,10 @@
               v-for="field in section.fields"
               :key="field.id"
               :field="field"
-              :field-value="getFieldValue(section, field)"
+              :field-value="getFieldValue(section.parentField, field.id)"
               :source-value="getSourceValue(section.parentField, field.id)"
               :entity="entity"
-              @update:field="updateFieldValue(section, field, $event)"
+              @update:field="updateFieldValue(section.parentField, field.id, $event)"
               @update:source="updateSourceValue(section.parentField, field.id, $event)"
             />
           </v-row>
@@ -51,7 +51,6 @@
             :section="section"
             :entity="entity"
             :source-value="getSourceValue(section.parentField, field.id)"
-            :get-associate-entities="getAssociateEntities"
             :existing-entities="existingEntities"
             @view-entity="$emit('viewEntity', $event)"
           />
@@ -67,12 +66,13 @@ import EntityFormField from './EntityFormField.vue'
 import EntityViewField from './EntityViewField.vue'
 import EditorToolbar from '../editor/EditorToolbar.vue'
 
-const props = defineProps({
+defineProps({
   activeTab: { type: String, required: true },
   entitySchema: { type: Object, required: true },
   isEditing: { type: Boolean, required: true },
   entity: { type: Object, required: true },
-  formData: { type: Object, required: true },
+  getFieldValue: { type: Function, required: true },
+  updateFieldValue: { type: Function, required: true },
   notesExpanded: { type: Boolean, required: true },
   noteEditor: { type: Object, default: null },
   noteEditorActions: { type: Array, default: () => [] },
@@ -82,25 +82,8 @@ const props = defineProps({
   noteFormatLastSaved: { type: String, default: '' },
   getSourceValue: { type: Function, required: true },
   updateSourceValue: { type: Function, required: true },
-  getAssociateEntities: { type: Function, required: true },
   existingEntities: { type: Array, required: true },
 })
 
-const emit = defineEmits(['submit', 'toggleExpand', 'viewEntity', 'updateField'])
-
-function getFieldValue(section, field) {
-  if (section.parentField) {
-    // Handle nested fields (e.g., address.street, social_media.twitter)
-    const parentData = props.formData.data[section.parentField]
-    return parentData ? parentData[field.id] || '' : ''
-  } else {
-    // Handle flat fields (e.g., name, email)
-    return props.formData.data[field.id] || ''
-  }
-}
-
-function updateFieldValue(section, field, value) {
-  const fieldPath = section.parentField ? `${section.parentField}.${field.id}` : field.id
-  emit('updateField', fieldPath, value)
-}
+defineEmits(['submit', 'toggleExpand', 'viewEntity'])
 </script>
