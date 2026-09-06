@@ -78,14 +78,4 @@ export default defineConfig({
       },
     },
   },
-  build: {
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          // Separate auth-related modules to reduce HMR impact
-          auth: ['./src/stores/auth.js', './src/services/auth.js'],
-        },
-      },
-    },
-  },
 })

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { defineConfig, mergeConfig } from 'vitest/config'
-import vitestConfig from './vitest.config'
+import vitestConfig from './vitest.config.js'
 
 // Keep the collection and enforcement scopes identical, including unimported modules.
 export const auditedTests = [
@@ -56,7 +56,6 @@ export default mergeConfig(
       include: auditedTests,
       coverage: {
         provider: 'v8',
-        all: true,
         include: auditedSources,
         exclude: ['**/__tests__/**', '**/__mocks__/**', '**/node_modules/**', '**/dist/**'],
         reportsDirectory: 'coverage/audit',

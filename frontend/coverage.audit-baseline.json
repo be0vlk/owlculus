@@ -2,10 +2,10 @@
     "status": "Provisional execution coverage; unresolved product defects remain.",
     "measuredWith": {
         "node": "24.20.0",
-        "vitest": "3.2.7",
-        "provider": "@vitest/coverage-v8@3.2.7",
+        "vitest": "4.1.11",
+        "provider": "@vitest/coverage-v8@4.1.11",
         "command": "npm run test:coverage:audit",
-        "sourceAndTestCommit": "f708ff1",
+        "sourceAndTestCommit": "7cb37e2",
         "testFiles": 8,
         "testCases": 124,
         "passingBehaviors": 109,
@@ -13,41 +13,41 @@
         "sourceFiles": 28
     },
     "total": {
-        "lines": 82.5,
-        "statements": 82.5,
-        "functions": 45.05,
-        "branches": 78.11
+        "lines": 66.49,
+        "statements": 65.06,
+        "functions": 60.21,
+        "branches": 60.76
     },
     "files": {
         "src/App.vue": {
-            "lines": 100,
-            "statements": 100,
+            "lines": 87.5,
+            "statements": 82.14,
             "functions": 66.66,
-            "branches": 95
+            "branches": 80
         },
         "src/components/EvidenceList.vue": {
-            "lines": 72.57,
-            "statements": 72.57,
-            "functions": 15.21,
-            "branches": 75.51
+            "lines": 44.6,
+            "statements": 43.53,
+            "functions": 26.53,
+            "branches": 44.31
         },
         "src/components/EvidenceTemplateManagementCard.vue": {
-            "lines": 91.25,
-            "statements": 91.25,
-            "functions": 69.23,
-            "branches": 91.3
+            "lines": 87.01,
+            "statements": 86.07,
+            "functions": 87.5,
+            "branches": 90.47
         },
         "src/components/EvidenceTemplateSelectionModal.vue": {
-            "lines": 98.77,
-            "statements": 98.77,
+            "lines": 98.36,
+            "statements": 96.92,
             "functions": 100,
-            "branches": 89.28
+            "branches": 92.85
         },
         "src/components/FolderEditor.vue": {
-            "lines": 94.87,
-            "statements": 94.87,
-            "functions": 78.57,
-            "branches": 82.35
+            "lines": 90.69,
+            "statements": 90.9,
+            "functions": 82.35,
+            "branches": 81.25
         },
         "src/components/TemplateFolderTree.vue": {
             "lines": 100,
@@ -56,34 +56,34 @@
             "branches": 100
         },
         "src/components/tasks/CustomFieldInput.vue": {
-            "lines": 93.57,
-            "statements": 93.57,
-            "functions": 37.5,
-            "branches": 85.71
+            "lines": 56.52,
+            "statements": 56.52,
+            "functions": 41.66,
+            "branches": 25
         },
         "src/components/tasks/TaskAssignDialog.vue": {
-            "lines": 96.42,
-            "statements": 96.42,
-            "functions": 66.66,
-            "branches": 88.88
+            "lines": 96.15,
+            "statements": 92.85,
+            "functions": 91.66,
+            "branches": 100
         },
         "src/components/tasks/TaskForm.vue": {
-            "lines": 85.92,
-            "statements": 85.92,
-            "functions": 75,
-            "branches": 76.78
+            "lines": 75.67,
+            "statements": 73.8,
+            "functions": 81.81,
+            "branches": 66.26
         },
         "src/components/tasks/TaskQuickEditDialog.vue": {
-            "lines": 96.42,
-            "statements": 96.42,
-            "functions": 75,
-            "branches": 68.57
+            "lines": 95.45,
+            "statements": 89.18,
+            "functions": 90.9,
+            "branches": 67.16
         },
         "src/components/tasks/TaskTable.vue": {
-            "lines": 99.38,
-            "statements": 99.38,
-            "functions": 27.27,
-            "branches": 91.3
+            "lines": 81.48,
+            "statements": 81.25,
+            "functions": 74,
+            "branches": 88.46
         },
         "src/composables/useEvidenceTemplates.js": {
             "lines": 0,
@@ -92,100 +92,115 @@
             "branches": 0
         },
         "src/composables/useTaskTable.js": {
-            "lines": 91.55,
-            "statements": 91.55,
-            "functions": 58.33,
-            "branches": 89.47
+            "lines": 85.18,
+            "statements": 81.03,
+            "functions": 66.66,
+            "branches": 31.57
         },
         "src/router/index.js": {
-            "lines": 88.61,
-            "statements": 88.61,
-            "functions": 4.76,
-            "branches": 79.16
+            "lines": 57.14,
+            "statements": 59.61,
+            "functions": 31.03,
+            "branches": 75.38
         },
         "src/services/api.js": {
-            "lines": 97.72,
-            "statements": 97.72,
-            "functions": 100,
+            "lines": 93.33,
+            "statements": 93.33,
+            "functions": 75,
             "branches": 100
         },
         "src/services/auth.js": {
-            "lines": 76.66,
-            "statements": 76.66,
+            "lines": 68.29,
+            "statements": 68.29,
             "functions": 87.5,
-            "branches": 50
+            "branches": 62.5
         },
         "src/services/case.js": {
-            "lines": 66.66,
-            "statements": 66.66,
+            "lines": 36.84,
+            "statements": 36.84,
             "functions": 33.33,
-            "branches": 100
+            "branches": 50
         },
         "src/services/evidence.js": {
-            "lines": 37.11,
-            "statements": 37.11,
-            "functions": 15.38,
-            "branches": 100
+            "lines": 14.28,
+            "statements": 14.28,
+            "functions": 14.28,
+            "branches": 0
         },
         "src/services/invite.js": {
-            "lines": 70.37,
-            "statements": 70.37,
+            "lines": 38.46,
+            "statements": 38.46,
             "functions": 33.33,
             "branches": 100
         },
         "src/services/system.js": {
-            "lines": 88.23,
-            "statements": 88.23,
+            "lines": 71.42,
+            "statements": 71.42,
             "functions": 66.66,
             "branches": 100
         },
         "src/services/task.js": {
-            "lines": 93.71,
-            "statements": 93.71,
+            "lines": 65.51,
+            "statements": 65.51,
             "functions": 60,
             "branches": 100
         },
         "src/stores/activeCase.js": {
-            "lines": 81.81,
-            "statements": 81.81,
-            "functions": 84.61,
-            "branches": 67.5
+            "lines": 80.24,
+            "statements": 76.04,
+            "functions": 86.36,
+            "branches": 43.54
         },
         "src/stores/auth.js": {
-            "lines": 75.47,
-            "statements": 75.47,
-            "functions": 66.66,
-            "branches": 50
+            "lines": 71.25,
+            "statements": 71.25,
+            "functions": 72.72,
+            "branches": 66.66
         },
         "src/stores/taskStore.js": {
-            "lines": 82.37,
-            "statements": 82.37,
-            "functions": 85.71,
-            "branches": 67.14
+            "lines": 75.28,
+            "statements": 69.65,
+            "functions": 52.38,
+            "branches": 38.46
         },
         "src/views/CaseDashboard.vue": {
-            "lines": 69.16,
-            "statements": 69.16,
-            "functions": 8.16,
-            "branches": 63.63
+            "lines": 44.35,
+            "statements": 43.27,
+            "functions": 33.33,
+            "branches": 38.78
         },
         "src/views/Register.vue": {
-            "lines": 98.01,
-            "statements": 98.01,
-            "functions": 82.35,
-            "branches": 87.14
+            "lines": 91.83,
+            "statements": 92.07,
+            "functions": 92.5,
+            "branches": 90.62
         },
         "src/views/cases/CaseTasks.vue": {
-            "lines": 87.5,
-            "statements": 87.5,
-            "functions": 25,
-            "branches": 100
+            "lines": 60.86,
+            "statements": 64.28,
+            "functions": 57.14,
+            "branches": 73.33
         },
         "src/views/tasks/TaskDetail.vue": {
-            "lines": 97.4,
-            "statements": 97.4,
-            "functions": 60,
-            "branches": 81.39
+            "lines": 92.85,
+            "statements": 87.97,
+            "functions": 87.65,
+            "branches": 79.08
+        }
+    },
+    "measurementMigration": {
+        "reason": "Vite 8 / Vitest 4 AST coverage remapping; identical audited source and tests, no removed assertions or source files.",
+        "comparison": "docs/vite-8-upgrade.md",
+        "previous": {
+            "vitest": "3.2.7",
+            "provider": "@vitest/coverage-v8@3.2.7",
+            "sourceAndTestCommit": "7cb37e2",
+            "total": {
+                "lines": 82.5,
+                "statements": 82.5,
+                "functions": 45.05,
+                "branches": 78.11
+            }
         }
     }
 }

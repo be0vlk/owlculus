@@ -1,6 +1,6 @@
 # Frontend behavioral audit coverage
 
-This is a **provisional execution-coverage baseline for five audited workflows**, not a completed behavioral baseline or comprehensive frontend coverage. The focused suites contain 124 cases: 109 intended behaviors pass and 15 are explicit expected-failure reproductions of seven unresolved product defects. Vitest displays 124 passes because `it.fails` inverts those known failures; it does not mean that their acceptance criteria are satisfied. No production behavior or permission policy was changed.
+This is a **provisional execution-coverage baseline for five audited workflows**, not a completed behavioral baseline or comprehensive frontend coverage. The focused suites contain 124 cases: 109 intended behaviors pass and 15 are explicit expected-failure reproductions of seven unresolved product defects. Vitest 4 reports those 15 separately as expected failures; it does not mean that their acceptance criteria are satisfied. No production behavior or permission policy was changed.
 
 ## Reproduce the focused evidence
 
@@ -14,7 +14,7 @@ npm run test:coverage:audit
 
 `test:audit` runs only the eight files listed below. `test:coverage:audit` runs the identical files and enforces the committed scoped thresholds. Neither command runs the full frontend, backend, or browser suite. Reports are generated under the ignored `frontend/coverage/audit/` directory: terminal text, inspectable `index.html`, and machine-readable `coverage-summary.json`.
 
-Vitest and `@vitest/coverage-v8` resolve to 3.2.7 in the lockfile. The separate [audit configuration](vitest.audit.config.js) explicitly includes every audited source, including unimported files, with `coverage.all: true`; dependencies, test helpers, mocks, and generated output are excluded. Keep this collection scope unchanged when comparing measurements.
+Vitest and `@vitest/coverage-v8` resolve to 4.1.11 in the lockfile. The separate [audit configuration](vitest.audit.config.js) explicitly includes every audited source, including unimported files, with `coverage.include`; Vitest 4 removed `coverage.all`. Dependencies, test helpers, mocks, and generated output are excluded. Keep this collection scope unchanged when comparing measurements.
 
 ## Executable scenario matrix
 
@@ -56,14 +56,16 @@ The eight configuration-listed suites are the router and session suites, registr
 
 Final values are recorded in [coverage.audit-baseline.json](coverage.audit-baseline.json), with exact source paths and four metrics (lines, statements, functions, branches). The configuration applies both the audited total and each source's measured percentages as minimums. Per-source floors prevent one module's improvement from masking a decrease in another. No arbitrary repository-wide percentage is imposed, and thresholds are not automatically lowered or updated.
 
-Measured with Node 24.20.0 / Vitest 3.2.7 / V8 3.2.7 over the 28-source, eight-suite scope (workflow test snapshot `f708ff1`):
+Measured with Node 24.20.0 / Vitest 4.1.11 / V8 4.1.11 over the unchanged 28-source, eight-suite scope (source and unit-test snapshot `7cb37e2`):
 
 | Metric     | Covered / total | Measured | Audited-total minimum |
 | ---------- | --------------- | -------- | --------------------- |
-| Lines      | 4135 / 5012     | 82.50%   | 82.50%                |
-| Statements | 4135 / 5012     | 82.50%   | 82.50%                |
-| Functions  | 155 / 344       | 45.05%   | 45.05%                |
-| Branches   | 571 / 731       | 78.11%   | 78.11%                |
+| Lines      | 1316 / 1979     | 66.49%   | 66.49%                |
+| Statements | 1395 / 2144     | 65.06%   | 65.06%                |
+| Functions  | 454 / 754       | 60.21%   | 60.21%                |
+| Branches   | 799 / 1315      | 60.76%   | 60.76%                |
+
+The [Vite 8 migration comparison](../docs/vite-8-upgrade.md) reproduces the previous toolchain's exact floors on the same source and tests, then records the changed coverage mapping. Total and per-source floors were explicitly recalibrated together; no test assertions, expected-failure cases, or collected source files were removed. Percentages across these provider versions are not directly comparable.
 
 Every included file also has its own four measured minimums in the JSON baseline.
 
