@@ -34,7 +34,7 @@ describe('Task detail through real stores and HTTP', () => {
     expect(flow.writes()).toEqual([])
   })
 
-  it('persists a full keyboard edit and synchronizes acknowledged list/detail records', async () => {
+  it('persists a full edit through native form submission and synchronizes acknowledged list/detail records', async () => {
     const flow = await detail()
     await button(flow.wrapper, 'Edit Task').trigger('click')
     await flushPromises()
