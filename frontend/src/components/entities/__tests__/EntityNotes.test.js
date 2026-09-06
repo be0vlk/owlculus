@@ -637,6 +637,61 @@ describe('Entity notes with the real editor', () => {
     },
   )
 
+  it('accepts a newer saved Entity when the mounted dialog is reopened and preserves it in autosave', async () => {
+    const entity = {
+      id: 9,
+      entity_type: 'person',
+      updated_at: '2026-09-06T01:00:00Z',
+      data: { address: { city: 'Old' }, notes: '<p>Initial</p>' },
+    }
+    await openNotes(entity)
+    await button('Edit Entity').trigger('click')
+    entityService.updateEntity.mockImplementation(async (_caseId, id, payload) => ({
+      id,
+      ...payload,
+      updated_at: '2026-09-06T01:01:00Z',
+    }))
+    await button('Save Changes').trigger('click')
+    await flushPromises()
+    const locallySaved = wrapper.emitted('edit').at(-1)[0]
+    await button('Close').trigger('click')
+    await flushPromises()
+    expect(wrapper.emitted('close')).toHaveLength(1)
+    await wrapper.setProps({ show: false })
+    const refreshed = {
+      ...entity,
+      updated_at: '2026-09-06T01:02:00Z',
+      data: {
+        address: { city: 'Refreshed city' },
+        sources: { 'address.city': 'Refreshed source' },
+        notes: '<p>Refreshed notes</p>',
+      },
+    }
+    await wrapper.setProps({ show: true, entity: refreshed })
+    expect(textbox().text()).toBe('Refreshed notes')
+    await button('Edit Entity').trigger('click')
+    await tab('Address')
+    expect(input('City').element.value).toBe('Refreshed city')
+    expect(input('Source for City').element.value).toBe('Refreshed source')
+    await wrapper.setProps({ entity: locallySaved })
+    await tab('Notes')
+    expect(textbox().text()).toBe('Refreshed notes')
+    vi.useFakeTimers()
+    await vi.advanceTimersByTimeAsync(10000)
+    expect(entityService.updateEntity).toHaveBeenCalledTimes(1)
+    textbox().element.innerHTML = '<p>New notes after reopening</p>'
+    await textbox().trigger('input')
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(entityService.updateEntity).toHaveBeenLastCalledWith(7, 9, {
+      entity_type: 'person',
+      data: { ...refreshed.data, notes: '<p>New notes after reopening</p>' },
+    })
+    expect(wrapper.emitted('edit').at(-1)[0].data).toEqual({
+      ...refreshed.data,
+      notes: '<p>New notes after reopening</p>',
+    })
+  })
+
   it('keeps the dialog open when Close fails to save and retries on Close', async () => {
     await openNotes({
       id: 9,

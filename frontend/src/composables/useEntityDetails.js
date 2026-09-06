@@ -33,6 +33,11 @@ export function useEntityDetails(entity, caseId, emit) {
   const formData = ref({ data: draftData(acknowledgedEntity.value.data) })
   const entitySchema = computed(() => entitySchemas[acknowledgedEntity.value.entity_type])
 
+  const acknowledgeEntity = (updatedEntity) => {
+    acknowledgedEntity.value = clone(updatedEntity)
+    hasPersisted = true
+  }
+
   const startEditing = () => {
     formData.value = { data: draftData(acknowledgedEntity.value.data) }
     isEditing.value = true
@@ -86,9 +91,13 @@ export function useEntityDetails(entity, caseId, emit) {
 
   // The parent keys the dialog by Case and Entity. Same-session refreshes must leave drafts alone.
   watch(entity, (newEntity) => {
-    // After our first successful write, the ordered queue owns this session's saved state.
-    // Parent list refreshes can arrive out of order and cannot acknowledge a newer write.
-    if (hasPersisted) return
+    // Parent refreshes can arrive out of order. After a local write, only a proven newer
+    // revision may replace its acknowledgement, including when this mounted dialog reopens.
+    if (
+      hasPersisted &&
+      !(Date.parse(newEntity.updated_at) > Date.parse(acknowledgedEntity.value.updated_at))
+    )
+      return
     acknowledgedEntity.value = clone(newEntity)
     if (!isEditing.value) formData.value = { data: draftData(newEntity.data) }
   })
@@ -114,8 +123,7 @@ export function useEntityDetails(entity, caseId, emit) {
             notes: content,
           },
         })
-        acknowledgedEntity.value = clone(updatedEntity)
-        hasPersisted = true
+        acknowledgeEntity(updatedEntity)
 
         if (emit) {
           emit('edit', updatedEntity)
@@ -177,8 +185,7 @@ export function useEntityDetails(entity, caseId, emit) {
           targetId,
           submittedPayload,
         )
-        acknowledgedEntity.value = clone(updatedEntity)
-        hasPersisted = true
+        acknowledgeEntity(updatedEntity)
         return updatedEntity
       },
       { force: true },
