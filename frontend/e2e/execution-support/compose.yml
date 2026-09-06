@@ -1,0 +1,18 @@
+# Applied only by the execution browser runner; never a shipped provider.
+x-browser-provider: &browser-provider
+  environment:
+    PYTHONPATH: /e2e:/app
+    OWLCULUS_EXECUTION_CONTROLS: /execution-controls
+  volumes:
+    - ./frontend/e2e/execution-support:/e2e:ro
+    - ${OWLCULUS_EXECUTION_CONTROLS:?runner-owned directory}:/execution-controls
+
+services:
+  backend:
+    <<: *browser-provider
+  plugin-worker:
+    <<: *browser-provider
+  hunt-worker:
+    <<: *browser-provider
+  execution-dispatcher:
+    <<: *browser-provider
