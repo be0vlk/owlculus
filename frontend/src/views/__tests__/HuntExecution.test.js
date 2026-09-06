@@ -257,3 +257,49 @@ it('keeps the newer of two manual reads and retains output through cancellation 
   expect(wrapper.findComponent({ name: 'HuntStepResults' }).props('step')).toEqual(latest.steps[0])
   wrapper.unmount()
 })
+
+it('retains detailed terminal output when same-Case history is loaded after a direct execution link', async () => {
+  const wrapper = await mountExecution('completed')
+  const store = useHuntStore()
+  const latest = {
+    ...mocks.execution,
+    revision: 8,
+    steps: [{ id: 1, status: 'completed', output: { results: ['retained'] } }],
+  }
+  mocks.getExecution.mockResolvedValueOnce(latest)
+  await store.getExecution(7, true)
+  huntService.getCaseExecutions.mockResolvedValue([
+    {
+      id: 7,
+      case_id: 42,
+      status: 'pending',
+      hunt_display_name: 'Person Hunt',
+      hunt_category: 'person',
+    },
+  ])
+  await store.getCaseExecutions(42)
+  await flushPromises()
+  expect(wrapper.text()).toContain('Completed')
+  expect(wrapper.findComponent({ name: 'HuntStepResults' }).props('step')).toEqual(latest.steps[0])
+  wrapper.unmount()
+})
+
+it.each([null, [{ id: 1, status: 'completed', output: { results: ['updated'] } }]])(
+  'recovers current revision steps after a non-step read (%j)',
+  async (steps) => {
+    const wrapper = await mountExecution('completed')
+    const store = useHuntStore()
+    const read = async (revision, resultSteps, includeSteps) => {
+      mocks.getExecution.mockResolvedValueOnce({ ...mocks.execution, revision, steps: resultSteps })
+      await store.getExecution(7, includeSteps)
+      await flushPromises()
+    }
+    await read(5, [{ id: 1, status: 'completed', output: { results: ['old'] } }], true)
+    await read(6, null, false)
+    await read(6, steps, true)
+    if (steps)
+      expect(wrapper.findComponent({ name: 'HuntStepResults' }).props('step')).toEqual(steps[0])
+    else expect(wrapper.text()).toContain('No steps available')
+    wrapper.unmount()
+  },
+)

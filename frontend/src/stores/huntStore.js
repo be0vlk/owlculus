@@ -9,6 +9,7 @@ export const useHuntStore = defineStore('hunt', () => {
   const availableHunts = ref([])
   const records = ref({})
   const historyIds = ref([])
+  const fieldRevisions = new Map()
   let workflowCaseId = null
   const activeExecutions = computed(() => records.value)
   const executionHistory = computed(() =>
@@ -18,6 +19,7 @@ export const useHuntStore = defineStore('hunt', () => {
 
   // Summaries and acknowledgements are partial. Only a requested step read can clear steps.
   function reconcile(response, { includeSteps = false } = {}) {
+    workflowCaseId ??= response.case_id
     const id = response.id ?? response.execution_id
     const previous = records.value[id]
     const incoming = Object.fromEntries(
@@ -45,18 +47,23 @@ export const useHuntStore = defineStore('hunt', () => {
     if (previous && !isActive(previous) && isActive(incoming) && revision <= knownRevision) {
       delete incoming.status
     }
+    // Retained fields may predate the record revision when a partial response advanced it.
+    const suppliedRevisions = fieldRevisions.get(id) ?? {}
     const merged = { ...previous }
     for (const [key, value] of Object.entries(incoming)) {
       if (key === 'hunt') {
         merged.hunt = enrichOnly ? { ...value, ...previous.hunt } : { ...previous?.hunt, ...value }
       } else if (
         !enrichOnly ||
+        (suppliedRevisions[key] ?? 0) < revision ||
         merged[key] == null ||
         (key === 'steps' && merged.steps.length === 0 && value.length > 0)
       ) {
         merged[key] = value
+        suppliedRevisions[key] = revision
       }
     }
+    fieldRevisions.set(id, suppliedRevisions)
     records.value[id] = merged
     return records.value[id]
   }
@@ -257,6 +264,7 @@ export const useHuntStore = defineStore('hunt', () => {
 
   function removeExecution(executionId) {
     delete records.value[executionId]
+    fieldRevisions.delete(executionId)
     historyIds.value = historyIds.value.filter((id) => id !== executionId)
     unsubscribeFromExecution(executionId)
   }
@@ -265,6 +273,7 @@ export const useHuntStore = defineStore('hunt', () => {
   function resetCaseExecutions() {
     generation++
     records.value = {}
+    fieldRevisions.clear()
     historyIds.value = []
     workflowCaseId = null
     error.value = null

@@ -182,3 +182,35 @@ it.each(['running', 'completed'])(
     wrapper.unmount()
   },
 )
+
+it('shows one history row when submission retries return an existing execution identity', async () => {
+  await useActiveCaseStore().initialize(1)
+  const wrapper = mountDashboard()
+  await flushPromises()
+  const result = {
+    ...execution(10, 1),
+    revision: 3,
+    hunt: { display_name: 'Lookup', category: 'domain' },
+  }
+  huntService.executeHunt.mockResolvedValue(result)
+  huntService.getExecution.mockResolvedValue(result)
+  wrapper
+    .findComponent({ name: 'HuntCatalog' })
+    .vm.$emit('execute', { id: 7, display_name: 'Lookup' })
+  await flushPromises()
+  const modal = wrapper.findComponent({ name: 'HuntExecutionModal' })
+  const submission = { huntId: 7, caseId: 1, parameters: { domain: 'example.org' } }
+  modal.vm.$emit('execute', submission)
+  await flushPromises()
+  modal.vm.$emit('execute', submission)
+  await flushPromises()
+  expect(wrapper.findComponent({ name: 'HuntExecutionHistory' }).props('executions')).toEqual([
+    expect.objectContaining({
+      id: 10,
+      status: 'completed',
+      hunt_display_name: 'Lookup',
+      hunt_category: 'domain',
+    }),
+  ])
+  wrapper.unmount()
+})
