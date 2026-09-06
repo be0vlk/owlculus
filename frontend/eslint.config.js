@@ -1,4 +1,5 @@
 import js from '@eslint/js'
+import globals from 'globals'
 import pluginVue from 'eslint-plugin-vue'
 import pluginVitest from '@vitest/eslint-plugin'
 import pluginPlaywright from 'eslint-plugin-playwright'
@@ -32,6 +33,8 @@ export default [
     name: 'app/browser-globals',
     languageOptions: {
       globals: {
+        // Vue plugin 10 no longer supplies the browser globals used by this frontend.
+        ...globals.browser,
         localStorage: 'readonly',
         window: 'readonly',
       },

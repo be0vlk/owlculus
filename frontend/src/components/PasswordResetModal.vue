@@ -189,7 +189,6 @@ const passwordStrength = computed(() => {
   const password = newPassword.value
   if (!password) return { score: 0, label: 'Enter a password', color: 'grey' }
 
-  let score = 0
   const checks = [
     password.length >= 8,
     /[A-Za-z]/.test(password),
@@ -197,7 +196,7 @@ const passwordStrength = computed(() => {
     /[!@#$%^&*(),.?":{}|<>]/.test(password),
   ]
 
-  score = checks.filter(Boolean).length
+  const score = checks.filter(Boolean).length
 
   const strengthMap = {
     0: { label: 'Very Weak', color: 'error' },

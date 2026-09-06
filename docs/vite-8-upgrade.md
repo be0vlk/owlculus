@@ -82,3 +82,7 @@ Both the original build and the upgrade warn about a statically and dynamically 
 Clean npm installation warns that unchanged ESLint 9.39.5 is unsupported and reports undeclared install-script approval for the existing `@parcel/watcher` and `vue-demi` packages. Native installation and build are verified separately; no unrelated package updates or script policy changes were made. No full frontend, backend, or repository suite, deployment, or backend implementation change is part of this migration.
 
 Independent standards and specification reviews compared the changes with starting commit `7cb37e2` and returned zero actionable findings. They also checked that every original and recalibrated coverage floor matches its corresponding measured report.
+
+## Maintenance resolution — 2026-09-06
+
+The two installation warnings recorded above are now resolved by the [frontend dependency maintenance](frontend-dependency-maintenance.md): supported ESLint 10.10.0 with compatible Vue parsing and utility peers, and explicit exact-version approvals for `vue-demi@0.14.10` and `@parcel/watcher@2.5.1`. Clean local and fresh Node 24 Alpine installs pass with strict project policy and without either targeted warning. Lint preserves the 22 existing Playwright warnings; focused tests, Vue 3 compatibility, native watcher edits, Sass compilation, and production builds pass. The historical Vite verification and resolved Vite issue remain unchanged.
