@@ -823,6 +823,7 @@ describe('Entity notes with the real editor', () => {
     expect(wrapper.emitted('close')).toBeUndefined()
     expect(textbox().text()).toBe('Unsaved notes')
     expect(wrapper.text()).toContain('Failed to save notes')
+    expect(button('Edit Entity').attributes('disabled')).toBeUndefined()
     entityService.updateEntity.mockImplementation(async (_caseId, id, payload) => ({
       id,
       ...payload,
@@ -837,21 +838,18 @@ describe('Entity notes with the real editor', () => {
     await openNotes({ id: 9, entity_type: 'person', data: { notes: '<p>Initial</p>' } })
     await button('Edit Entity').trigger('click')
     vi.useFakeTimers()
-    let completeSave
-    entityService.updateEntity.mockImplementationOnce(
-      (_caseId, id, payload) =>
-        new Promise((resolve) => {
-          completeSave = () => resolve({ id, ...payload })
-        }),
-    )
+    const writes = deferSaves()
     textbox().element.innerHTML = '<p>Pending <strong>notes</strong></p>'
     await textbox().trigger('input')
     await button('Cancel').trigger('click')
     await button('Close').trigger('click')
     await button('Close').trigger('click')
+    expect(button('Edit Entity').attributes('disabled')).toBeDefined()
+    await button('Edit Entity').trigger('click')
+    expect(textbox().attributes('contenteditable')).toBe('false')
     expect(wrapper.emitted('close')).toBeUndefined()
     expect(entityService.updateEntity).toHaveBeenCalledTimes(1)
-    completeSave()
+    writes[0].succeed()
     await flushPromises()
     expect(wrapper.emitted('close')).toHaveLength(1)
     expect(textbox().get('strong').text()).toBe('notes')

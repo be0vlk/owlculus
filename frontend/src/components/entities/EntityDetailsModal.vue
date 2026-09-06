@@ -69,6 +69,7 @@
       <EntityModalActions
         :is-editing="isEditing"
         :updating="updating"
+        :closing="closing"
         @close="handleClose"
         @edit="startEditing"
         @cancel="cancelEdit"
@@ -118,6 +119,7 @@ useDialogFocusRestore(
 const emit = defineEmits(['close', 'edit', 'viewEntity'])
 
 const notesExpanded = ref(false)
+const closing = ref(false)
 const tabContent = ref(null)
 useDialogFocusRestore(
   () => notesExpanded.value,
@@ -179,14 +181,13 @@ function handleEscape() {
   }
 }
 
-let closing = false
 async function handleClose() {
-  if (closing || updating.value) return
-  closing = true
+  if (closing.value || updating.value) return
+  closing.value = true
   try {
     if (await saveNotes()) emit('close')
   } finally {
-    closing = false
+    closing.value = false
   }
 }
 
