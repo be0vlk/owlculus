@@ -347,8 +347,14 @@ export const useHuntStore = defineStore('hunt', () => {
 
       return result
     } catch (err) {
-      // Newer durable state supersedes feedback from the older action.
-      if (!current() || (records.value[executionId]?.revision ?? 0) > revision) return null
+      if (!current()) return null
+      const latest = records.value[executionId]
+      // Ordinary running progress cannot establish that cancellation succeeded.
+      if (
+        (latest?.revision ?? 0) > revision &&
+        (latest.status === 'cancelling' || !isActive(latest))
+      )
+        return null
       cancellationErrors.value[executionId] =
         err.response?.data?.detail || err.message || 'Failed to cancel execution'
       throw err
