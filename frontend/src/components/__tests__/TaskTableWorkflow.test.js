@@ -24,11 +24,19 @@ describe('Task table mutation integration', () => {
       expect(flow.wrapper.find('[aria-label="Delete Review evidence"]').exists()).toBe(
         role === 'Admin',
       )
-      // Task responses omit membership. Assignment remains available for server authorization.
-      expect(
-        flow.wrapper.get('[aria-label="Assign Review evidence"]').attributes('disabled'),
-      ).toBeUndefined()
       expect(flow.writes()).toEqual([])
+    },
+  )
+
+  // Known defect: .scratch/frontend-test-coverage-defects/issues/03-tasks-analyst-controls.md
+  it.fails(
+    'denies assignment to an Analyst under the backend read-only policy (03-tasks-analyst-controls)',
+    async () => {
+      const flow = await table({ user: { id: 2, role: 'Analyst' } })
+      expect(flow.wrapper.text()).toContain('Review evidence')
+      expect(flow.writes()).toEqual([])
+      const assignment = flow.wrapper.find('[aria-label="Assign Review evidence"]')
+      expect(!assignment.exists() || assignment.attributes('disabled') !== undefined).toBe(true)
     },
   )
 
