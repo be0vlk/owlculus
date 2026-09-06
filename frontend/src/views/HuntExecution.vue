@@ -1,5 +1,5 @@
 <template>
-  <BaseDashboard :error="error || huntStore.error" :loading="loading" :title="pageTitle">
+  <BaseDashboard :loading="loading && !execution" :title="pageTitle">
     <!-- Header Actions -->
     <template #header-actions>
       <div class="d-flex align-center ga-2">
@@ -50,6 +50,9 @@
     </template>
 
     <!-- Loading State -->
+    <v-alert v-if="error || huntStore.error" type="error" role="alert" class="mb-4">
+      {{ error || huntStore.error }}
+    </v-alert>
     <template #loading>
       <v-card variant="outlined">
         <v-skeleton-loader type="article" />
@@ -459,6 +462,7 @@ const loadExecution = async () => {
   try {
     loading.value = true
     error.value = null
+    huntStore.clearError()
 
     const result = await huntStore.getExecution(executionId.value, true)
     if (disposed) return
