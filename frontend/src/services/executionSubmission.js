@@ -1,3 +1,5 @@
+import { sha256 } from '@noble/hashes/sha2.js'
+import { bytesToHex } from '@noble/hashes/utils.js'
 import api from './api'
 import { authService } from './auth'
 
@@ -36,14 +38,20 @@ function canonical(value) {
   return value
 }
 
+function submissionKey() {
+  // getRandomValues also works on HTTP deployments, unlike randomUUID and subtle.
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  bytes[6] = (bytes[6] & 0x0f) | 0x40
+  bytes[8] = (bytes[8] & 0x3f) | 0x80
+  const hex = bytesToHex(bytes)
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}
+
 export async function submitExecution(endpoint, payload) {
   const input = JSON.stringify([authService.getCurrentToken(), endpoint, canonical(payload)])
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input))
-  const identity =
-    'owlculus:submission:' +
-    Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
+  const identity = 'owlculus:submission:' + bytesToHex(sha256(new TextEncoder().encode(input)))
   const remembered = readKey(identity)
-  const key = remembered && !active.has(remembered) ? remembered : crypto.randomUUID()
+  const key = remembered && !active.has(remembered) ? remembered : submissionKey()
   active.add(key)
   writeKey(identity, key)
   try {
