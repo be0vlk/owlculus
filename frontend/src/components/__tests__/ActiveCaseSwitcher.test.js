@@ -74,10 +74,13 @@ it('prevents free text entry and switches to an existing case from the menu', as
     element.textContent.includes(cases[1].title),
   )
   expect(option).toBeTruthy()
+  expect(option.textContent).toContain(cases[1].case_number)
+  expect(option.textContent).toContain(cases[1].status)
   option.click()
   await flushPromises()
 
   expect(useActiveCaseStore().activeCaseId).toBe(2)
+  expect(wrapper.get('.active-case-summary').text()).toContain(cases[1].case_number)
   expect(wrapper.get('.active-case-summary').text()).toContain(cases[1].title)
   expect(wrapper.get('.active-case-summary').text()).toContain('Closed')
   expect(wrapper.get('[aria-live="polite"]').text()).toContain(cases[1].title)
