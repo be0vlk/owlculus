@@ -14,14 +14,16 @@ vi.mock('@/services/hunt', () => ({
     getCaseExecutions: vi.fn(),
     getExecution: vi.fn(),
     executeHunt: vi.fn(),
+    cancelExecution: vi.fn(),
     createExecutionStream: vi.fn(),
     closeExecutionStream: vi.fn(),
   },
 }))
 vi.mock('@/services/case', () => ({ caseService: { getCases: vi.fn() } }))
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
+const notifications = vi.hoisted(() => ({ show: vi.fn() }))
 vi.mock('@/composables/useNotifications', () => ({
-  useNotifications: () => ({ showNotification: vi.fn() }),
+  useNotifications: () => ({ showNotification: notifications.show }),
 }))
 const cases = [{ id: 1 }, { id: 2 }]
 const execution = (id, case_id) => ({ id, case_id, status: 'completed', created_at: '2026-01-01' })
@@ -455,5 +457,147 @@ it('keeps denial feedback and hidden output through late history details and ano
   expect(useHuntStore().activeExecutions[10]).toBeUndefined()
   expect(useHuntStore().activeExecutions[20].status).toBe('running')
   expect(wrapper.text()).toContain('Access revoked')
+  wrapper.unmount()
+})
+
+it.each(['pending', 'completed'])(
+  'acknowledges accepted %s work while detail is held and recovers without resubmission',
+  async (status) => {
+    await useActiveCaseStore().initialize(1)
+    huntService.getCaseExecutions.mockResolvedValue([])
+    huntService.getHunts.mockResolvedValue([
+      { id: 7, display_name: 'Domain Lookup', category: 'domain' },
+    ])
+    const wrapper = mountDashboard()
+    await flushPromises()
+    wrapper
+      .findComponent({ name: 'HuntCatalog' })
+      .vm.$emit('execute', { id: 7, display_name: 'Domain Lookup' })
+    await flushPromises()
+    let failDetail
+    huntService.getExecution.mockReturnValueOnce(
+      new Promise((_resolve, reject) => {
+        failDetail = reject
+      }),
+    )
+    huntService.executeHunt.mockResolvedValue({ id: 30, case_id: 1, status, revision: 1 })
+    const modal = wrapper.findComponent({ name: 'HuntExecutionModal' })
+    const submission = { huntId: 7, parameters: { domain: 'example.org' } }
+    modal.vm.$emit('execute', submission)
+    modal.vm.$emit('execute', submission)
+    await flushPromises()
+    expect(modal.props('executing')).toBe(false)
+    expect(modal.props('modelValue')).toBe(false)
+    expect(useHuntStore().executionHistory).toEqual([
+      expect.objectContaining({
+        id: 30,
+        status,
+        initial_parameters: submission.parameters,
+        hunt: expect.objectContaining({ display_name: 'Domain Lookup', category: 'domain' }),
+      }),
+    ])
+    expect(wrapper.findComponent({ name: 'HuntProgressCard' }).props('execution').status).toBe(
+      status,
+    )
+    failDetail(new Error('offline'))
+    await flushPromises()
+    expect(wrapper.text()).toContain('retrying')
+    expect(modal.props('error')).toBeNull()
+    const final = {
+      id: 30,
+      case_id: 1,
+      status: 'completed',
+      revision: 2,
+      steps: [{ id: 1, output: { results: ['recovered'] } }],
+    }
+    huntService.getExecution.mockResolvedValue(final)
+    await vi.advanceTimersByTimeAsync(1000)
+    await flushPromises()
+    expect(wrapper.findComponent({ name: 'HuntProgressCard' }).props('execution')).toMatchObject(
+      final,
+    )
+    expect(useHuntStore().executionHistory).toHaveLength(1)
+    expect(huntService.executeHunt).toHaveBeenCalledTimes(1)
+    expect(wrapper.text()).not.toContain('retrying')
+    wrapper.unmount()
+  },
+)
+
+it('retains the submission dialog after a real failure and permits an explicit retry', async () => {
+  await useActiveCaseStore().initialize(1)
+  const wrapper = mountDashboard()
+  await flushPromises()
+  wrapper
+    .findComponent({ name: 'HuntCatalog' })
+    .vm.$emit('execute', { id: 7, display_name: 'Lookup' })
+  await flushPromises()
+  const modal = wrapper.findComponent({ name: 'HuntExecutionModal' })
+  huntService.executeHunt.mockRejectedValueOnce(new Error('Submission unavailable'))
+  const submission = { huntId: 7, parameters: { domain: 'example.org' } }
+  modal.vm.$emit('execute', submission)
+  await flushPromises()
+  expect(modal.props('modelValue')).toBe(true)
+  expect(modal.props('executing')).toBe(false)
+  expect(modal.props('error')).toBe('Submission unavailable')
+  expect(huntService.getExecution).not.toHaveBeenCalled()
+  const accepted = { ...execution(30, 1), revision: 1 }
+  huntService.executeHunt.mockResolvedValueOnce(accepted)
+  huntService.getExecution.mockResolvedValue({ ...accepted, steps: [] })
+  modal.vm.$emit('execute', submission)
+  await flushPromises()
+  expect(huntService.executeHunt).toHaveBeenCalledTimes(2)
+  expect(modal.props('modelValue')).toBe(false)
+  expect(modal.props('error')).toBeNull()
+  expect(notifications.show).toHaveBeenLastCalledWith('Hunt "Lookup" accepted', 'success')
+  wrapper.unmount()
+})
+
+it('shares dashboard cancellation pending and failure feedback and continues observing cancelling work to completion', async () => {
+  await useActiveCaseStore().initialize(1)
+  const initial = { ...execution(10, 1), status: 'running', revision: 2, steps: [] }
+  huntService.getCaseExecutions.mockResolvedValue([initial])
+  huntService.getExecution.mockResolvedValue(initial)
+  const wrapper = mountDashboard()
+  await flushPromises()
+  const card = () => wrapper.findComponent({ name: 'HuntProgressCard' })
+  let fail
+  huntService.cancelExecution.mockReturnValueOnce(
+    new Promise((_resolve, reject) => {
+      fail = reject
+    }),
+  )
+  card().vm.$emit('cancel', 10)
+  card().vm.$emit('cancel', 10)
+  await flushPromises()
+  expect(huntService.cancelExecution).toHaveBeenCalledTimes(1)
+  expect(card().props('cancelling')).toBe(true)
+  fail(new Error('Cancellation unavailable'))
+  await flushPromises()
+  expect(card().props('cancelling')).toBe(false)
+  expect(wrapper.get('[role="alert"]').text()).toContain('Cancellation unavailable')
+  huntService.cancelExecution.mockResolvedValue({
+    execution_id: 10,
+    status: 'cancelling',
+    revision: 3,
+  })
+  card().vm.$emit('cancel', 10)
+  await flushPromises()
+  expect(card().props('execution').status).toBe('cancelling')
+  expect(wrapper.text()).not.toContain('Cancellation unavailable')
+  expect(notifications.show).toHaveBeenLastCalledWith('Cancellation requested', 'info')
+  const terminal = {
+    ...initial,
+    status: 'completed',
+    revision: 4,
+    steps: [{ id: 1, output: { results: ['finished'] } }],
+  }
+  huntService.getExecution.mockResolvedValue(terminal)
+  await vi.advanceTimersByTimeAsync(1000)
+  await flushPromises()
+  expect(card().props('execution')).toMatchObject(terminal)
+  expect(wrapper.findComponent({ name: 'HuntExecutionHistory' }).props('executions')).toEqual([
+    expect.objectContaining(terminal),
+  ])
+  expect(huntService.cancelExecution).toHaveBeenCalledTimes(2)
   wrapper.unmount()
 })

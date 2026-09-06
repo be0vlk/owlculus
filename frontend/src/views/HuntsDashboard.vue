@@ -88,7 +88,7 @@
                 >
                   <HuntProgressCard
                     :execution="execution"
-                    :cancelling="cancellingExecutions.has(execution.id)"
+                    :cancelling="!!huntStore.cancellationPending[execution.id]"
                     @cancel="handleCancelExecution"
                     @view-details="handleViewExecutionDetails"
                     class="flex-grow-1"
@@ -208,7 +208,6 @@ const showExecutionModal = ref(false)
 const submittingHunt = ref(false)
 const huntSubmissionError = ref(null)
 const showDetailsModal = ref(false)
-const cancellingExecutions = ref(new Set())
 let loadGeneration = 0
 let workflow = null
 
@@ -271,7 +270,7 @@ const handleExecuteHuntSubmit = async (executionData) => {
     )
 
     if (!owner?.isCurrent()) return execution
-    showNotification(`Hunt "${huntName}" started successfully`, 'success')
+    showNotification(`Hunt "${huntName}" accepted`, 'success')
 
     // Switch to active executions tab
     activeTab.value = 'active'
@@ -311,14 +310,10 @@ const handleDetailsModalClose = () => {
 const handleCancelExecution = async (executionId) => {
   const owner = workflow
   try {
-    cancellingExecutions.value.add(executionId)
-
-    await huntStore.cancelExecution(executionId)
-    if (owner?.isCurrent()) showNotification('Cancellation requested', 'info')
+    const result = await huntStore.cancelExecution(executionId)
+    if (result && owner?.isCurrent()) showNotification('Cancellation requested', 'info')
   } catch (err) {
     if (owner?.isCurrent()) showNotification(err.message || 'Failed to cancel execution', 'error')
-  } finally {
-    if (owner?.isCurrent()) cancellingExecutions.value.delete(executionId)
   }
 }
 
@@ -332,7 +327,6 @@ watch(
   () => {
     workflow = huntStore.openWorkflow({ caseId: caseId.value })
     submittingHunt.value = false
-    cancellingExecutions.value = new Set()
     error.value = null
     showExecutionModal.value = false
     showDetailsModal.value = false

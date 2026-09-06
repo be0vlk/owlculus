@@ -35,6 +35,7 @@
           prepend-icon="mdi-stop"
           @click="handleCancelExecution"
           :loading="cancelling"
+          :disabled="cancelling"
         >
           Cancel Hunt
         </v-btn>
@@ -387,7 +388,7 @@ const execution = computed(() => {
   const record = huntStore.activeExecutions[executionId.value]
   return record && String(record.case_id) === String(route.params.caseId) ? record : null
 })
-const cancelling = ref(false)
+const cancelling = computed(() => !!huntStore.cancellationPending[executionId.value])
 const selectedStep = ref(null)
 const showStepOutputModal = ref(false)
 const showStepErrorModal = ref(false)
@@ -483,15 +484,10 @@ const refreshExecution = async () => {
 const handleCancelExecution = async () => {
   const owner = workflow
   try {
-    cancelling.value = true
-    await huntStore.cancelExecution(executionId.value)
-    if (!owner?.isCurrent()) return
-    showNotification('Cancellation requested', 'info')
-    await loadExecution()
+    const result = await huntStore.cancelExecution(executionId.value)
+    if (result && owner?.isCurrent()) showNotification('Cancellation requested', 'info')
   } catch (err) {
     if (owner?.isCurrent()) showNotification(err.message || 'Failed to cancel execution', 'error')
-  } finally {
-    if (owner?.isCurrent()) cancelling.value = false
   }
 }
 
@@ -577,7 +573,6 @@ watch(
       caseId: route.params.caseId,
       executionId: executionId.value,
     })
-    cancelling.value = false
     exportingPDF.value = false
     selectedStep.value = null
     showStepOutputModal.value = false

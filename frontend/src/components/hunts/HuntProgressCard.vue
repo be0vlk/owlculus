@@ -112,6 +112,7 @@
         size="small"
         @click="$emit('cancel', execution.id)"
         :loading="cancelling"
+        :disabled="cancelling"
         class="mb-2 mb-sm-0"
       >
         <v-icon icon="mdi-stop" start />
