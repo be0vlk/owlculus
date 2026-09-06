@@ -179,8 +179,15 @@ function handleEscape() {
   }
 }
 
+let closing = false
 async function handleClose() {
-  if (await saveNotes()) emit('close')
+  if (closing || updating.value) return
+  closing = true
+  try {
+    if (await saveNotes()) emit('close')
+  } finally {
+    closing = false
+  }
 }
 
 async function handleSubmit() {

@@ -103,6 +103,11 @@ export function useEntityDetails(entity, caseId, emit) {
   })
 
   const saveError = ref('')
+  const noteSaveError = computed(() => {
+    if (!saveError.value) return ''
+    const retry = isEditing.value ? 'Retry with Save Changes.' : 'Retry with Close or Edit Entity.'
+    return `${saveError.value} ${retry}`
+  })
   const saveNotes = async () => {
     if (!editor.value || !entity.value) return true
 
@@ -236,7 +241,7 @@ export function useEntityDetails(entity, caseId, emit) {
     editor,
     editorActions,
     saving,
-    saveError,
+    saveError: noteSaveError,
     lastSavedTime,
     formatLastSaved,
     saveNotes,

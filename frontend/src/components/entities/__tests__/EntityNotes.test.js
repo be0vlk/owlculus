@@ -68,7 +68,119 @@ function input(label) {
   return field.get('input, textarea')
 }
 
+async function typeNotes(html) {
+  textbox().element.innerHTML = html
+  await textbox().trigger('input')
+}
+
+function deferSaves() {
+  const writes = []
+  entityService.updateEntity.mockImplementation(
+    (_caseId, id, payload) =>
+      new Promise((resolve, reject) => {
+        writes.push({
+          succeed: () => resolve({ id, ...payload }),
+          fail: () => reject(new Error('Unavailable')),
+        })
+      }),
+  )
+  return writes
+}
+
 describe('Entity notes with the real editor', () => {
+  it('retains a failed form draft while later queued notes save only acknowledged fields', async () => {
+    const entity = {
+      id: 9,
+      entity_type: 'person',
+      data: {
+        address: { city: 'Old', country: 'UK' },
+        sources: { 'address.city': 'Old source' },
+        notes: '<p>Initial</p>',
+      },
+    }
+    await openNotes(entity)
+    await button('Edit Entity').trigger('click')
+    await tab('Address')
+    await input('City').setValue('Draft city')
+    await input('Source for City').setValue('Draft source')
+    await tab('Notes')
+    vi.useFakeTimers()
+    const writes = deferSaves()
+    await typeNotes('<p>Form <em>notes</em></p>')
+    await button('Save Changes').trigger('click')
+    await typeNotes('<p>Later <strong>notes</strong></p>')
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(entityService.updateEntity).toHaveBeenCalledTimes(1)
+    writes[0].fail()
+    await flushPromises()
+    expect(wrapper.text()).toContain('Unavailable')
+    expect(textbox().attributes('contenteditable')).toBe('true')
+    expect(textbox().get('strong').text()).toBe('notes')
+    expect(wrapper.emitted('edit')).toBeUndefined()
+    expect(entityService.updateEntity.mock.calls[1]).toEqual([
+      7,
+      9,
+      {
+        entity_type: 'person',
+        data: { ...entity.data, notes: '<p>Later <strong>notes</strong></p>' },
+      },
+    ])
+    writes[1].succeed()
+    await flushPromises()
+    await tab('Address')
+    expect(input('City').element.value).toBe('Draft city')
+    expect(input('Source for City').element.value).toBe('Draft source')
+    await button('Save Changes').trigger('click')
+    writes[2].succeed()
+    await flushPromises()
+    expect(wrapper.text()).toContain('View Mode')
+    expect(wrapper.text()).not.toContain('Unavailable')
+    expect(wrapper.emitted('edit').at(-1)[0].data).toMatchObject({
+      address: { city: 'Draft city', country: 'UK' },
+      sources: { 'address.city': 'Draft source' },
+      notes: '<p>Later <strong>notes</strong></p>',
+    })
+    wrapper.unmount()
+    await vi.advanceTimersByTimeAsync(10000)
+    expect(entityService.updateEntity).toHaveBeenCalledTimes(3)
+  })
+
+  it('runs a queued form save after autosave fails and retains its current notes', async () => {
+    await openNotes({
+      id: 9,
+      entity_type: 'person',
+      data: { address: { city: 'Old' }, notes: '<p>Initial</p>' },
+    })
+    await button('Edit Entity').trigger('click')
+    vi.useFakeTimers()
+    const writes = deferSaves()
+    await typeNotes('<p>Autosave notes</p>')
+    await vi.advanceTimersByTimeAsync(5000)
+    await tab('Address')
+    await input('City').setValue('New')
+    await input('Source for City').setValue('New source')
+    await tab('Notes')
+    await typeNotes('<p>Submitted notes</p>')
+    await button('Save Changes').trigger('click')
+    writes[0].fail()
+    await flushPromises()
+    expect(textbox().text()).toBe('Submitted notes')
+    expect(wrapper.emitted('edit')).toBeUndefined()
+    expect(entityService.updateEntity.mock.calls[1][2].data).toMatchObject({
+      address: { city: 'New' },
+      sources: { 'address.city': 'New source' },
+      notes: '<p>Submitted notes</p>',
+    })
+    writes[1].succeed()
+    await flushPromises()
+    expect(wrapper.text()).toContain('View Mode')
+    expect(wrapper.text()).not.toContain('Failed to save')
+    expect(wrapper.emitted('edit')).toHaveLength(1)
+    wrapper.unmount()
+    await vi.advanceTimersByTimeAsync(10000)
+    expect(entityService.updateEntity).toHaveBeenCalledTimes(2)
+  })
+
   it('saves a populated nested city and reopens the acknowledged value without a parent refresh', async () => {
     const entity = {
       id: 9,
@@ -721,6 +833,34 @@ describe('Entity notes with the real editor', () => {
     expect(entityService.updateEntity).toHaveBeenCalledTimes(3)
   })
 
+  it('shares an active Cancel save across repeated Close requests and reports one close', async () => {
+    await openNotes({ id: 9, entity_type: 'person', data: { notes: '<p>Initial</p>' } })
+    await button('Edit Entity').trigger('click')
+    vi.useFakeTimers()
+    let completeSave
+    entityService.updateEntity.mockImplementationOnce(
+      (_caseId, id, payload) =>
+        new Promise((resolve) => {
+          completeSave = () => resolve({ id, ...payload })
+        }),
+    )
+    textbox().element.innerHTML = '<p>Pending <strong>notes</strong></p>'
+    await textbox().trigger('input')
+    await button('Cancel').trigger('click')
+    await button('Close').trigger('click')
+    await button('Close').trigger('click')
+    expect(wrapper.emitted('close')).toBeUndefined()
+    expect(entityService.updateEntity).toHaveBeenCalledTimes(1)
+    completeSave()
+    await flushPromises()
+    expect(wrapper.emitted('close')).toHaveLength(1)
+    expect(textbox().get('strong').text()).toBe('notes')
+    await wrapper.setProps({ show: false })
+    wrapper.unmount()
+    await vi.advanceTimersByTimeAsync(10000)
+    expect(entityService.updateEntity).toHaveBeenCalledTimes(1)
+  })
+
   it('flushes pending notes when the parent hides the mounted dialog', async () => {
     await openNotes({
       id: 9,
@@ -747,13 +887,133 @@ describe('Entity notes with the real editor', () => {
     expect(entityService.updateEntity).toHaveBeenCalledTimes(1)
   })
 
+  it.each([
+    ['hide', 'debounce'],
+    ['hide', 'active'],
+    ['hide', 'newer'],
+    ['unmount', 'debounce'],
+    ['unmount', 'active'],
+    ['unmount', 'newer'],
+  ])('captures notes on %s with %s work without duplicate writes', async (exit, pending) => {
+    const entity = {
+      id: 9,
+      entity_type: 'person',
+      data: {
+        address: { city: 'Saved' },
+        sources: { 'address.city': 'Saved source' },
+        notes: '<p>Initial</p>',
+      },
+    }
+    await openNotes(entity)
+    await button('Edit Entity').trigger('click')
+    await tab('Address')
+    await input('City').setValue('Unsubmitted')
+    await input('Source for City').setValue('Unsubmitted source')
+    await tab('Notes')
+    vi.useFakeTimers()
+    const writes = deferSaves()
+    await typeNotes('<p>Captured <em>notes</em></p>')
+    if (pending !== 'debounce') await vi.advanceTimersByTimeAsync(5000)
+    if (pending === 'newer') await typeNotes('<p>Newer <strong>notes</strong></p>')
+    if (exit === 'hide') await wrapper.setProps({ show: false })
+    wrapper.unmount()
+    expect(entityService.updateEntity).toHaveBeenCalledTimes(1)
+    writes[0].succeed()
+    await flushPromises()
+    if (pending === 'newer') {
+      expect(entityService.updateEntity).toHaveBeenCalledTimes(2)
+      writes[1].succeed()
+      await flushPromises()
+    }
+    await vi.advanceTimersByTimeAsync(10000)
+    expect(entityService.updateEntity).toHaveBeenCalledTimes(pending === 'newer' ? 2 : 1)
+    expect(entityService.updateEntity).toHaveBeenLastCalledWith(7, 9, {
+      entity_type: 'person',
+      data: {
+        ...entity.data,
+        notes:
+          pending === 'newer'
+            ? '<p>Newer <strong>notes</strong></p>'
+            : '<p>Captured <em>notes</em></p>',
+      },
+    })
+  })
+
+  it.each(['notes', 'form'])(
+    'does not retry a failed active %s save in a teardown loop',
+    async (kind) => {
+      await openNotes({ id: 9, entity_type: 'person', data: { notes: '<p>Initial</p>' } })
+      await button('Edit Entity').trigger('click')
+      vi.useFakeTimers()
+      const writes = deferSaves()
+      await typeNotes('<p>Pending notes</p>')
+      if (kind === 'form') await button('Save Changes').trigger('click')
+      else await vi.advanceTimersByTimeAsync(5000)
+      await wrapper.setProps({ show: false })
+      wrapper.unmount()
+      writes[0].fail()
+      await flushPromises()
+      await vi.advanceTimersByTimeAsync(20000)
+      expect(entityService.updateEntity).toHaveBeenCalledTimes(1)
+      expect(wrapper.emitted('edit')).toBeUndefined()
+    },
+  )
+
+  it('ignores Escape while form saving, then cancels editing and retries failed notes before closing', async () => {
+    await openNotes({
+      id: 9,
+      entity_type: 'person',
+      data: { address: { city: 'Old' }, notes: '<p>Initial</p>' },
+    })
+    await button('Edit Entity').trigger('click')
+    await tab('Address')
+    await input('City').setValue('Draft')
+    await tab('Notes')
+    vi.useFakeTimers()
+    const writes = deferSaves()
+    await typeNotes('<p>Pending notes</p>')
+    await button('Save Changes').trigger('click')
+    await textbox().trigger('keydown', { key: 'Escape' })
+    expect(textbox().attributes('contenteditable')).toBe('true')
+    expect(wrapper.emitted('close')).toBeUndefined()
+    writes[0].fail()
+    await flushPromises()
+    expect(wrapper.text()).toContain('Unavailable')
+    await textbox().trigger('keydown', { key: 'Escape' })
+    expect(textbox().attributes('contenteditable')).toBe('false')
+    writes[1].fail()
+    await flushPromises()
+    expect(wrapper.text()).toContain('Failed to save notes')
+    await textbox().trigger('keydown', { key: 'Escape' })
+    expect(wrapper.emitted('close')).toBeUndefined()
+    writes[2].fail()
+    await flushPromises()
+    expect(textbox().text()).toBe('Pending notes')
+    expect(wrapper.emitted('close')).toBeUndefined()
+    await textbox().trigger('keydown', { key: 'Escape' })
+    writes[3].succeed()
+    await flushPromises()
+    expect(wrapper.emitted('close')).toHaveLength(1)
+    expect(wrapper.text()).not.toContain('Failed to save notes')
+    expect(entityService.updateEntity.mock.calls[3][2].data.address.city).toBe('Old')
+  })
+
   it('includes failed Cancel notes when edit mode is reopened and Save Changes retries', async () => {
     await openNotes({
       id: 9,
       entity_type: 'person',
-      data: { first_name: 'Ada', notes: '<p>Initial</p>' },
+      data: {
+        first_name: 'Ada',
+        notes: '<p>Initial</p>',
+        address: { city: 'Old' },
+        sources: { 'address.city': 'Old source' },
+      },
     })
     await button('Edit Entity').trigger('click')
+    await tab('Address')
+    await input('City').setValue('Discarded city')
+    await input('Source for City').setValue('Discarded source')
+    await tab('Notes')
     await flushPromises()
     vi.useFakeTimers()
     entityService.updateEntity.mockRejectedValueOnce(new Error('Unavailable'))
@@ -761,7 +1021,14 @@ describe('Entity notes with the real editor', () => {
     await textbox().trigger('input')
     await button('Cancel').trigger('click')
     await flushPromises()
+    expect(wrapper.text()).toContain('Failed to save notes')
+    expect(textbox().attributes('contenteditable')).toBe('false')
     await button('Edit Entity').trigger('click')
+    await tab('Address')
+    expect(input('City').element.value).toBe('Old')
+    expect(input('Source for City').element.value).toBe('Old source')
+    await tab('Notes')
+    expect(wrapper.text()).toContain('Retry with Save Changes')
     entityService.updateEntity.mockImplementation(async (_caseId, id, payload) => ({
       id,
       ...payload,
@@ -770,7 +1037,11 @@ describe('Entity notes with the real editor', () => {
     await flushPromises()
     expect(entityService.updateEntity).toHaveBeenLastCalledWith(7, 9, {
       entity_type: 'person',
-      data: expect.objectContaining({ notes: '<p>Unsaved notes</p>' }),
+      data: expect.objectContaining({
+        notes: '<p>Unsaved notes</p>',
+        address: { city: 'Old' },
+        sources: { 'address.city': 'Old source' },
+      }),
     })
     expect(textbox().text()).toBe('Unsaved notes')
     wrapper.unmount()
