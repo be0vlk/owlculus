@@ -398,3 +398,62 @@ it('keeps searchable names, category filters, targets and terminal membership th
   expect(huntService.executeHunt).not.toHaveBeenCalled()
   wrapper.unmount()
 })
+
+it('stops an existing observer as soon as a history refresh recovers complete terminal details', async () => {
+  await useActiveCaseStore().initialize(1)
+  const running = { ...execution(10, 1), status: 'running', revision: 2, steps: [] }
+  huntService.getCaseExecutions.mockResolvedValue([running])
+  huntService.getExecution.mockResolvedValue(running)
+  const wrapper = mountDashboard()
+  await flushPromises()
+  const terminal = { ...running, status: 'completed', revision: 3, steps: [] }
+  huntService.getCaseExecutions.mockResolvedValue([terminal])
+  huntService.getExecution.mockResolvedValue(terminal)
+  await wrapper.vm.refreshData()
+  await flushPromises()
+  const reads = huntService.getExecution.mock.calls.length
+  await vi.advanceTimersByTimeAsync(60000)
+  expect(huntService.getExecution).toHaveBeenCalledTimes(reads)
+  expect(huntService.closeExecutionStream).toHaveBeenCalled()
+  expect(wrapper.findComponent({ name: 'HuntExecutionHistory' }).props('executions')).toEqual([
+    expect.objectContaining(terminal),
+  ])
+  wrapper.unmount()
+})
+
+it('keeps denial feedback and hidden output through late history details and another execution update', async () => {
+  await useActiveCaseStore().initialize(1)
+  const first = { ...execution(10, 1), status: 'running', revision: 2, steps: [] }
+  const second = { ...first, id: 20 }
+  huntService.getCaseExecutions.mockResolvedValue([first, second])
+  huntService.getExecution.mockImplementation(async (id) => (id === 10 ? first : second))
+  const streams = new Map()
+  huntService.createExecutionStream.mockImplementation(async (id, notify) => {
+    streams.set(id, notify)
+    return { id }
+  })
+  const wrapper = mountDashboard()
+  await flushPromises()
+  let finish
+  huntService.getExecution.mockReturnValueOnce(
+    new Promise((resolve) => {
+      finish = resolve
+    }),
+  )
+  const refresh = wrapper.vm.refreshData()
+  await flushPromises()
+  huntService.getExecution.mockRejectedValueOnce({
+    response: { status: 403, data: { detail: 'Access revoked' } },
+  })
+  streams.get(10)({ cursor: '3-0' })
+  await flushPromises()
+  streams.get(20)({ cursor: '3-0' })
+  await flushPromises()
+  finish({ ...first, status: 'completed', revision: 3 })
+  await refresh
+  await flushPromises()
+  expect(useHuntStore().activeExecutions[10]).toBeUndefined()
+  expect(useHuntStore().activeExecutions[20].status).toBe('running')
+  expect(wrapper.text()).toContain('Access revoked')
+  wrapper.unmount()
+})

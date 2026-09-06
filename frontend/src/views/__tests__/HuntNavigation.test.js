@@ -308,3 +308,29 @@ it('replaces an execution within the same Case without accepting a late failure 
   await vi.advanceTimersByTimeAsync(60000)
   expect(vi.getTimerCount()).toBe(0)
 })
+
+it.each([401, 403, 404])(
+  'cannot restore denied output from an older manual success (%s)',
+  async (status) => {
+    await open('/case/1/hunts/execution/7')
+    const pending = deferred()
+    huntService.getExecution.mockReturnValueOnce(pending.promise)
+    const refresh = wrapper.findComponent(HuntExecution).vm.refreshExecution()
+    const signal = huntService.getExecution.mock.calls.at(-1)[2]
+    huntService.getExecution.mockRejectedValueOnce({
+      response: { status, data: { detail: 'Access revoked' } },
+    })
+    streams[0].notify({ cursor: '4-0' })
+    await flushPromises()
+    expect(signal.aborted).toBe(true)
+    pending.resolve(detail(7, 1, 'completed', { revision: 4 }))
+    await refresh
+    await flushPromises()
+    expect(useHuntStore().activeExecutions).toEqual({})
+    expect(wrapper.text()).not.toContain('Hunt 7')
+    expect(wrapper.text()).toContain('Access revoked')
+    expect(streams).toHaveLength(1)
+    await vi.advanceTimersByTimeAsync(60000)
+    expect(vi.getTimerCount()).toBe(0)
+  },
+)
