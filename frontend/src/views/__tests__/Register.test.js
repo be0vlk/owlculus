@@ -81,10 +81,9 @@ async function fillForm(wrapper, overrides = {}) {
   }
 }
 
-// jsdom does not implement Enter's implicit form submission. Dispatch the native
-// public submit event it produces; keep the real VForm and its validation intact.
-async function submitWithKeyboard(wrapper) {
-  await field(wrapper, 'Confirm Password').trigger('keydown', { key: 'Enter' })
+// Exercise the public native submit boundary with real VForm validation.
+// Actual Enter submission is verified separately by the browser journey.
+async function submitNativeForm(wrapper) {
   await wrapper.get('form').trigger('submit')
   await flushPromises()
 }
@@ -241,17 +240,17 @@ describe('invite registration workflow', () => {
 
   // Known defect: .scratch/frontend-test-coverage-defects/issues/02-registration-validation.md
   it.fails.each(invalidDetails)(
-    'rejects %s through keyboard form submission',
+    'rejects %s through native form submission',
     async (_, overrides) => {
       const { wrapper } = await openRegistration()
       await fillForm(wrapper, overrides)
-      await submitWithKeyboard(wrapper)
+      await submitNativeForm(wrapper)
       expect(writes()).toEqual([])
       expect(wrapper.text()).not.toContain('Registration Successful!')
     },
   )
 
-  it.each(['button', 'keyboard'])(
+  it.each(['button', 'native form submission'])(
     'registers valid details through %s and redirects after confirmation',
     async (action) => {
       const { wrapper, router } = await openRegistration()
@@ -261,7 +260,7 @@ describe('invite registration workflow', () => {
         button(wrapper, 'Create Account').element.click()
         await flushPromises()
       } else {
-        await submitWithKeyboard(wrapper)
+        await submitNativeForm(wrapper)
       }
 
       expect(writes()).toEqual([
