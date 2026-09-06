@@ -117,6 +117,7 @@ run_variant() {
     local viewport="$3"
     shift 3
     local setup_token
+    local expired_token=""
     local test_status=0
 
     active_project="owlculus-e2e-${server_kind}-${viewport}-${host//./-}-$$"
@@ -150,8 +151,13 @@ run_variant() {
         return 1
     fi
 
+    if [[ "$*" == *"case-session.spec.js"* ]]; then
+        expired_token="$(run_compose exec -T backend python -c 'from datetime import timedelta; from app.core.security import create_access_token; print(create_access_token({"sub": "coverage_admin"}, timedelta(seconds=-60)))')"
+    fi
+
     (
         cd "$repository_root/frontend"
+        OWLCULUS_EXPIRED_TOKEN="$expired_token" \
         OWLCULUS_EXECUTION_CONTROLS="$execution_controls" \
         OWLCULUS_BASE_URL="$(browser_url "$host" "$active_frontend_port")" \
             OWLCULUS_SETUP_TOKEN="$setup_token" \
