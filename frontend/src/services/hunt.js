@@ -11,8 +11,8 @@ export const huntService = {
    * Get all available hunts
    * @returns {Promise<Array>} List of hunt definitions
    */
-  async getHunts() {
-    const response = await api.get('/api/hunts/')
+  async getHunts(signal) {
+    const response = await api.get('/api/hunts/', { signal })
     return response.data
   },
 
@@ -21,8 +21,8 @@ export const huntService = {
    * @param {number} huntId - Hunt ID
    * @returns {Promise<Object>} Hunt definition
    */
-  async getHunt(huntId) {
-    const response = await api.get(`/api/hunts/${huntId}`)
+  async getHunt(huntId, signal) {
+    const response = await api.get(`/api/hunts/${huntId}`, { signal })
     return response.data
   },
 
@@ -67,8 +67,8 @@ export const huntService = {
    * @param {number} caseId - Case ID
    * @returns {Promise<Array>} List of hunt executions
    */
-  async getCaseExecutions(caseId) {
-    const response = await api.get(`/api/hunts/cases/${caseId}/executions`)
+  async getCaseExecutions(caseId, signal) {
+    const response = await api.get(`/api/hunts/cases/${caseId}/executions`, { signal })
     return response.data
   },
 

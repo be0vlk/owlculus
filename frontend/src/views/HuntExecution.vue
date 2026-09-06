@@ -50,8 +50,8 @@
     </template>
 
     <!-- Loading State -->
-    <v-alert v-if="error || huntStore.error" type="error" role="alert" class="mb-4">
-      {{ error || huntStore.error }}
+    <v-alert v-if="huntStore.error" type="error" role="alert" class="mb-4">
+      {{ huntStore.error }}
     </v-alert>
     <template #loading>
       <v-card variant="outlined">
@@ -354,7 +354,7 @@
 
 <script setup>
 import ExecutionWaiting from '@/components/ExecutionWaiting.vue'
-import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useHuntStore } from '@/stores/huntStore.js'
 import { huntService } from '@/services/hunt'
@@ -383,7 +383,6 @@ const { showNotification } = useNotifications()
 
 // Local state
 const loading = ref(true)
-const error = ref(null)
 const execution = computed(() => {
   const record = huntStore.activeExecutions[executionId.value]
   return record && String(record.case_id) === String(route.params.caseId) ? record : null
@@ -397,6 +396,8 @@ const elapsedTime = ref('')
 const exportingPDF = ref(false)
 let elapsedInterval = null
 let disposed = false
+let workflow = null
+let loadGeneration = 0
 
 // Computed properties
 const executionId = computed(() => parseInt(route.params.id))
@@ -458,28 +459,20 @@ const displayCategory = computed(() => {
 
 // Methods
 const loadExecution = async () => {
-  if (disposed) return
+  const owner = workflow
+  const request = ++loadGeneration
+  if (!owner?.isCurrent()) return
   try {
     loading.value = true
-    error.value = null
-    huntStore.clearError()
-
-    const result = await huntStore.getExecution(executionId.value, true)
-    if (disposed) return
-    if (String(result.case_id) !== String(route.params.caseId)) {
+    const result = await owner.refresh()
+    if (!owner.isCurrent() || request !== loadGeneration) return
+    if (result && String(result.case_id) !== String(route.params.caseId)) {
       await router.replace(`/case/${result.case_id}/hunts/execution/${result.id}`)
-      return
     }
-
-    // Subscribe to real-time updates if running
-    if (['pending', 'running', 'cancelling'].includes(execution.value.status)) {
-      huntStore.subscribeToExecution(executionId.value)
-    }
-  } catch (err) {
-    error.value = err.message || 'Failed to load execution details'
-    console.error('Failed to load execution:', err)
+  } catch {
+    // The workflow retains read feedback until durable recovery succeeds.
   } finally {
-    loading.value = false
+    if (owner.isCurrent() && request === loadGeneration) loading.value = false
   }
 }
 
@@ -488,30 +481,35 @@ const refreshExecution = async () => {
 }
 
 const handleCancelExecution = async () => {
+  const owner = workflow
   try {
     cancelling.value = true
     await huntStore.cancelExecution(executionId.value)
-    if (disposed) return
+    if (!owner?.isCurrent()) return
     showNotification('Cancellation requested', 'info')
     await loadExecution()
   } catch (err) {
-    showNotification(err.message || 'Failed to cancel execution', 'error')
+    if (owner?.isCurrent()) showNotification(err.message || 'Failed to cancel execution', 'error')
   } finally {
-    cancelling.value = false
+    if (owner?.isCurrent()) cancelling.value = false
   }
 }
 
 const exportExecution = async (format) => {
+  const owner = workflow
+  const id = executionId.value
   try {
     exportingPDF.value = format === 'pdf'
-    const artifact = await huntService.exportExecution(executionId.value, format)
-    downloadBlob(artifact, `hunt-execution-${executionId.value}.${format}`)
+    const artifact = await huntService.exportExecution(id, format)
+    if (!owner?.isCurrent()) return
+    downloadBlob(artifact, `hunt-execution-${id}.${format}`)
     showNotification('Results exported successfully', 'success')
   } catch (error) {
+    if (!owner?.isCurrent()) return
     console.error(`Failed to export ${format.toUpperCase()}:`, error)
     showNotification(`Failed to export ${format.toUpperCase()}`, 'error')
   } finally {
-    exportingPDF.value = false
+    if (owner?.isCurrent()) exportingPDF.value = false
   }
 }
 
@@ -572,21 +570,34 @@ const stopElapsedTimer = () => {
 }
 
 // Lifecycle
-onMounted(async () => {
-  await loadExecution()
-})
+watch(
+  () => [route.params.caseId, route.params.id],
+  () => {
+    workflow = huntStore.openWorkflow({
+      caseId: route.params.caseId,
+      executionId: executionId.value,
+    })
+    cancelling.value = false
+    exportingPDF.value = false
+    selectedStep.value = null
+    showStepOutputModal.value = false
+    showStepErrorModal.value = false
+    executionLog.value = []
+    loadExecution()
+  },
+  { immediate: true },
+)
 
 onBeforeUnmount(() => {
   disposed = true
-  huntStore.resetCaseExecutions()
+  workflow?.release()
   stopElapsedTimer()
-  huntStore.unsubscribeFromExecution(executionId.value)
 })
 
 // Only the display timer follows lifecycle changes; execution data belongs to the store.
 watch(
-  () => execution.value?.status,
-  (status) => {
+  () => [execution.value?.id, execution.value?.status, execution.value?.started_at],
+  ([, status]) => {
     if (!disposed && status === 'running') startElapsedTimer()
     else {
       stopElapsedTimer()

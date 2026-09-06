@@ -58,7 +58,7 @@ it('loads only the active case and discards a late response from the previous ca
   )
   const wrapper = mountDashboard()
   await flushPromises()
-  expect(huntService.getCaseExecutions).toHaveBeenCalledExactlyOnceWith(1)
+  expect(huntService.getCaseExecutions).toHaveBeenCalledExactlyOnceWith(1, expect.any(AbortSignal))
   context.resolve(2)
   await flushPromises()
   finishOld([execution(10, 1)])
@@ -237,14 +237,14 @@ it('refreshes changed terminal summaries durably and keeps retained history on f
   await flushPromises()
   const history = () => wrapper.findComponent({ name: 'HuntExecutionHistory' }).props('executions')
   expect(history()).toEqual([expect.objectContaining(detail)])
-  expect(wrapper.text()).toContain('Failed to fetch execution')
+  expect(wrapper.text()).toContain('Temporary outage')
   huntService.getExecution.mockResolvedValue({ ...detail, revision: 5, status: 'partial' })
   await store.getCaseExecutions(1)
   await flushPromises()
   expect(history()).toEqual([
     expect.objectContaining({ ...detail, revision: 5, status: 'partial' }),
   ])
-  expect(wrapper.text()).not.toContain('Failed to fetch execution')
+  expect(wrapper.text()).not.toContain('Temporary outage')
   expect(huntService.executeHunt).not.toHaveBeenCalled()
   wrapper.unmount()
 })
@@ -330,7 +330,7 @@ it('retains ordered history during failed refreshes and ignores old-case detail 
   await refresh
   await flushPromises()
   expect(history()).toEqual([execution(20, 2)])
-  expect(wrapper.text()).not.toContain('Failed to fetch execution')
+  expect(wrapper.text()).not.toContain('Temporary outage')
   wrapper.unmount()
 })
 

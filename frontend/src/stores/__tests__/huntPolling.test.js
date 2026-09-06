@@ -58,7 +58,7 @@ it('discards an in-flight observation after navigation', async () => {
 it('retains terminal state when an older cancellation response arrives late', async () => {
   huntService.getExecution
     .mockResolvedValueOnce({ id: 1, status: 'running', revision: 2 })
-    .mockResolvedValue({ id: 1, status: 'cancelled', revision: 4 })
+    .mockResolvedValue({ id: 1, status: 'cancelled', revision: 4, steps: [] })
   let resolveCancel
   huntService.cancelExecution.mockReturnValue(
     new Promise((resolve) => {
@@ -105,4 +105,34 @@ it('refreshes hunt step output on a live hint and releases the subscription on n
   await vi.advanceTimersByTimeAsync(60000)
   expect(huntService.getExecution).toHaveBeenCalledTimes(reads)
   expect(huntService.executeHunt).not.toHaveBeenCalled()
+})
+
+it('releases workflow reads and ignores old cleanup on a later visit to the same execution', async () => {
+  let finish
+  huntService.getExecution.mockReturnValueOnce(
+    new Promise((resolve) => {
+      finish = resolve
+    }),
+  )
+  const store = useHuntStore()
+  const old = store.openWorkflow({ caseId: 1, executionId: 7 })
+  const pending = old.refresh()
+  const signal = huntService.getExecution.mock.calls.at(-1)[2]
+  const current = store.openWorkflow({ caseId: 1, executionId: 7 })
+  expect(signal.aborted).toBe(true)
+  huntService.getExecution.mockResolvedValue({
+    id: 7,
+    case_id: 1,
+    status: 'completed',
+    revision: 4,
+    steps: [],
+  })
+  await current.refresh()
+  old.release()
+  finish({ id: 7, case_id: 1, status: 'running', revision: 2 })
+  await pending
+  expect(store.activeExecutions[7].status).toBe('completed')
+  expect(current.isCurrent()).toBe(true)
+  current.release()
+  expect(vi.getTimerCount()).toBe(0)
 })
