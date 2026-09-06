@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.deployment import REPOSITORY_ROOT
+from tests.deployment import REPOSITORY_ROOT, load_compose_configuration
 
 
 def _write_executable(path: Path, contents: str) -> None:
@@ -36,6 +36,10 @@ if [[ "$*" == "compose version" ]]; then
     exit 0
 fi
 printf '%s\n' "$*" >> "$DOCKER_CALL_LOG"
+if [[ -n "${FAIL_COMPOSE_COMMAND:-}" && " $* " == *" $FAIL_COMPOSE_COMMAND "* ]]; then
+    echo "simulated Docker failure" >&2
+    exit 1
+fi
 if [[ "$*" == *"exec -T backend python -c"* ]]; then
     case "${SETUP_TOKEN_STATE:-pending}" in
         unavailable) exit 1 ;;
@@ -51,7 +55,9 @@ if [[ "$*" == *"exec -T backend python -c"* ]]; then
 fi
 """,
     )
-    _write_executable(fake_bin / "curl", "#!/usr/bin/env bash\nexit 0\n")
+    _write_executable(
+        fake_bin / "curl", "#!/usr/bin/env bash\nexit ${CURL_EXIT_CODE:-0}\n"
+    )
     _write_executable(fake_bin / "sleep", "#!/usr/bin/env bash\nexit 0\n")
 
     environment = os.environ.copy()
@@ -105,6 +111,7 @@ def test_non_interactive_setup_hands_account_creation_to_the_browser(
     assert "Open http://localhost/setup" in completed.stdout
     assert "Setup token: test-one-time-setup-token" in completed.stdout
     assert "logs backend" not in completed.stdout
+    assert "up -d --wait --wait-timeout 120" in (workspace / "docker-calls.log").read_text()
 
 
 @pytest.mark.parametrize("mode", ["production", "dev"])
@@ -243,3 +250,49 @@ def test_browser_extension_defaults_to_the_public_gateway():
     assert 'placeholder="http://localhost"' in options_page
     assert '"http://localhost/*"' in manifest
     assert "http://localhost:8000" not in api_client + options_page + manifest
+
+
+@pytest.mark.parametrize("command", ["build", "up"])
+def test_setup_reports_docker_failure_without_claiming_success(
+    setup_workspace, command
+):
+    workspace, environment = setup_workspace
+    environment["FAIL_COMPOSE_COMMAND"] = command
+    completed = subprocess.run(
+        ["bash", "setup.sh", "dev", "--non-interactive"],
+        cwd=workspace,
+        env=environment,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode != 0
+    assert "simulated Docker failure" in completed.stderr
+    assert "setup completed" not in completed.stdout
+    assert "exec -T backend" not in (workspace / "docker-calls.log").read_text()
+
+
+def test_setup_reports_failed_http_checks_without_claiming_success(setup_workspace):
+    workspace, environment = setup_workspace
+    environment["CURL_EXIT_CODE"] = "7"
+    completed = subprocess.run(
+        ["bash", "setup.sh", "dev", "--non-interactive"],
+        cwd=workspace,
+        env=environment,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode != 0
+    assert "setup completed" not in completed.stdout
+    assert "logs" in completed.stdout
+
+
+def test_development_logs_are_isolated_from_host_source_permissions():
+    configuration = load_compose_configuration("development")
+    mounts = configuration["services"]["backend"]["volumes"]
+    log_mount = next(
+        (mount for mount in mounts if mount["target"] == "/app/logs"), None
+    )
+    assert log_mount is not None
+    assert log_mount["type"] == "volume"
