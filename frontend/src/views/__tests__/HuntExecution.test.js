@@ -25,6 +25,7 @@ vi.mock('vue-router', () => ({
 vi.mock('@/services/hunt', () => ({
   huntService: {
     exportExecution: mocks.exportExecution,
+    executeHunt: vi.fn(),
     getExecution: mocks.getExecution,
     cancelExecution: mocks.cancelExecution,
     getCaseExecutions: vi.fn(),
@@ -56,7 +57,7 @@ const ListItemStub = defineComponent({
     '<button :data-testid="`export-${title.split(\' \').at(-1).toLowerCase()}`" :disabled="disabled" @click="$emit(\'click\')">{{ title }}</button>',
 })
 
-const mountExecution = async (status, caseId = 42) => {
+const mountExecution = async (status, caseId = 42, detail = {}) => {
   mocks.execution = {
     id: 7,
     case_id: caseId,
@@ -68,6 +69,7 @@ const mountExecution = async (status, caseId = 42) => {
     created_by_id: 1,
     hunt: { display_name: 'Person Hunt', category: 'person' },
     steps: [],
+    ...detail,
   }
   mocks.getExecution.mockResolvedValue(mocks.execution)
   const wrapper = shallowMount(HuntExecution, {
@@ -303,3 +305,76 @@ it.each([null, [{ id: 1, status: 'completed', output: { results: ['updated'] } }
     wrapper.unmount()
   },
 )
+
+it.each([undefined, 0])(
+  'reopens legacy results with revision %s through repeated summaries',
+  async (revision) => {
+    let wrapper = await mountExecution('completed')
+    const detail = {
+      ...mocks.execution,
+      revision,
+      steps: [
+        { id: 1, step_id: 'lookup', status: 'completed', output: { results: ['historical'] } },
+      ],
+    }
+    mocks.getExecution.mockResolvedValue(detail)
+    await useHuntStore().getExecution(7, true)
+    huntService.getCaseExecutions.mockResolvedValue([
+      {
+        id: 7,
+        case_id: 42,
+        status: 'completed',
+        progress: 1,
+        hunt_display_name: 'Person Hunt',
+        hunt_category: 'person',
+      },
+    ])
+    await useHuntStore().getCaseExecutions(42)
+    await useHuntStore().getCaseExecutions(42)
+    await flushPromises()
+    expect(wrapper.findComponent({ name: 'HuntStepResults' }).props('step')).toEqual(
+      detail.steps[0],
+    )
+    wrapper.unmount()
+    await useHuntStore().getCaseExecutions(42)
+    wrapper = await mountExecution('completed', 42, detail)
+    expect(wrapper.findComponent({ name: 'HuntStepResults' }).props('step')).toEqual(
+      detail.steps[0],
+    )
+    expect(wrapper.find('[data-testid="export-menu"]').exists()).toBe(true)
+    expect(huntService.executeHunt).not.toHaveBeenCalled()
+    wrapper.unmount()
+  },
+)
+
+it('retains results and accessible feedback on refresh failure and clears it on retry', async () => {
+  const wrapper = await mountExecution('completed')
+  mocks.getExecution.mockRejectedValueOnce(new Error('Temporary read failure'))
+  const refresh = wrapper.findAll('button').find((button) => button.text().includes('Refresh'))
+  await refresh.trigger('click')
+  await flushPromises()
+  expect(wrapper.get('[role="alert"]').text()).toContain('Temporary read failure')
+  expect(wrapper.find('[data-testid="export-menu"]').exists()).toBe(true)
+  await wrapper
+    .findAll('button')
+    .find((button) => button.text().includes('Refresh'))
+    .trigger('click')
+  await flushPromises()
+  expect(
+    wrapper
+      .findAll('[role="alert"]')
+      .map((alert) => alert.text())
+      .join(' '),
+  ).not.toContain('Temporary read failure')
+  wrapper.unmount()
+})
+
+it('reports export failure without discarding terminal results', async () => {
+  const wrapper = await mountExecution('completed')
+  mocks.exportExecution.mockRejectedValueOnce(new Error('offline'))
+  await wrapper.get('[data-testid="export-json"]').trigger('click')
+  await flushPromises()
+  expect(mocks.showNotification).toHaveBeenCalledWith('Failed to export JSON', 'error')
+  expect(wrapper.find('[data-testid="export-menu"]').exists()).toBe(true)
+  wrapper.unmount()
+})

@@ -1,5 +1,5 @@
 <template>
-  <BaseDashboard :error="error || huntStore.error" :loading="loading" title="Hunt Management">
+  <BaseDashboard :loading="loading && !huntStore.executionHistory.length" title="Hunt Management">
     <!-- Header Actions -->
     <template #header-actions>
       <div class="d-flex align-center ga-2">
@@ -23,6 +23,9 @@
       </v-card>
     </template>
 
+    <v-alert v-if="error || huntStore.error" type="error" role="alert" class="mb-4">
+      {{ error || huntStore.error }}
+    </v-alert>
     <!-- Main Content -->
     <v-alert v-if="!caseId" type="info">Resolve an accessible case to use Hunts.</v-alert>
     <v-card v-else variant="outlined">

@@ -5,6 +5,7 @@ import { huntService } from '../services/hunt'
 
 export const useHuntStore = defineStore('hunt', () => {
   let generation = 0
+  let historyRequest = 0
   // State
   const availableHunts = ref([])
   const records = ref({})
@@ -18,7 +19,7 @@ export const useHuntStore = defineStore('hunt', () => {
   const isActive = (execution) => ['pending', 'running', 'cancelling'].includes(execution?.status)
 
   // Summaries and acknowledgements are partial. Only a requested step read can clear steps.
-  function reconcile(response, { includeSteps = false } = {}) {
+  function reconcile(response, { includeSteps = false, summary = false } = {}) {
     workflowCaseId ??= response.case_id
     const id = response.id ?? response.execution_id
     const previous = records.value[id]
@@ -42,7 +43,14 @@ export const useHuntStore = defineStore('hunt', () => {
 
     const knownRevision = previous?.revision ?? 0
     const revision = incoming.revision ?? 0
-    if (revision < knownRevision) return previous
+    if (summary && previous) {
+      // History can fill presentation gaps, but cannot replace durable or retained legacy data.
+      for (const key of Object.keys(incoming)) {
+        if (key === 'hunt') incoming.hunt = { ...incoming.hunt, ...previous.hunt }
+        else if (previous[key] != null) delete incoming[key]
+      }
+    }
+    if (!summary && revision < knownRevision) return previous
     const enrichOnly = previous && knownRevision > 0 && revision === knownRevision
     if (previous && !isActive(previous) && isActive(incoming) && revision <= knownRevision) {
       delete incoming.status
@@ -68,8 +76,8 @@ export const useHuntStore = defineStore('hunt', () => {
     return records.value[id]
   }
 
-  function rememberHistory(id) {
-    historyIds.value = [...new Set([id, ...historyIds.value])].sort(
+  function rememberHistory(ids) {
+    historyIds.value = [...new Set([...ids, ...historyIds.value])].sort(
       (a, b) => new Date(records.value[b].created_at) - new Date(records.value[a].created_at),
     )
   }
@@ -142,7 +150,7 @@ export const useHuntStore = defineStore('hunt', () => {
 
       if (request !== generation) return execution
       reconcile(execution)
-      rememberHistory(execution.id)
+      rememberHistory([execution.id])
       // Accepted identity remains available even if the richer read fails.
       try {
         await getExecution(execution.id, true)
@@ -166,14 +174,24 @@ export const useHuntStore = defineStore('hunt', () => {
     try {
       const execution = await huntService.getExecution(executionId, includeSteps)
 
-      return request === generation ? reconcile(execution, { includeSteps }) : execution
+      if (request !== generation) return execution
+      return reconcile(execution, { includeSteps })
     } catch (err) {
-      if (request === generation)
+      if (request === generation) {
+        if (isAccessFailure(err)) removeExecution(executionId)
         error.value = err.response?.data?.detail || 'Failed to fetch execution'
+      }
       console.error('Failed to fetch execution:', err)
       throw err
     }
   }
+
+  const isAccessFailure = (err) => [401, 403, 404].includes(err.response?.status)
+  const summaryChanged = (summary, record) =>
+    record &&
+    ['status', 'progress', 'started_at', 'completed_at'].some(
+      (key) => Object.hasOwn(summary, key) && summary[key] !== record[key],
+    )
 
   async function getCaseExecutions(caseId) {
     if (String(caseId) !== String(workflowCaseId)) {
@@ -181,27 +199,38 @@ export const useHuntStore = defineStore('hunt', () => {
       workflowCaseId = caseId
     }
     const request = generation
+    const historyRead = ++historyRequest
+    const current = () => request === generation && historyRead === historyRequest
     if (!caseId) return []
+    error.value = null
     try {
       const executions = await huntService.getCaseExecutions(caseId)
-      if (request !== generation) return []
-      executions.forEach((execution) => reconcile(execution))
-      historyIds.value = [...new Set(executions.map((execution) => execution.id))]
+      if (!current()) return []
+      const detailIds = new Set()
+      executions.forEach((execution) => {
+        if (summaryChanged(execution, records.value[execution.id]) || isActive(execution))
+          detailIds.add(execution.id)
+        reconcile(execution, { summary: true })
+      })
+      rememberHistory(executions.map((execution) => execution.id))
       await Promise.all(
-        executions
-          .filter((execution) => isActive(records.value[execution.id]))
-          .map(async (execution) => {
-            try {
-              await getExecution(execution.id, true)
-            } catch {
-              // The list response still provides usable progress if details fail.
-            }
-            if (request === generation) subscribeToExecution(execution.id)
-          }),
+        [...detailIds].map(async (id) => {
+          try {
+            const detail = await huntService.getExecution(id, true)
+            if (!current()) return
+            reconcile(detail, { includeSteps: true })
+          } catch (err) {
+            if (!current()) return
+            if (isAccessFailure(err)) removeExecution(id)
+            error.value = err.response?.data?.detail || 'Failed to fetch execution'
+          }
+          if (current() && isActive(records.value[id])) subscribeToExecution(id)
+        }),
       )
-      return request === generation ? executionHistory.value : []
+      return current() ? executionHistory.value : []
     } catch (err) {
-      if (request !== generation) return []
+      if (!current()) return []
+      if (isAccessFailure(err)) resetCaseExecutions()
       error.value = err.response?.data?.detail || 'Failed to fetch case executions'
       throw err
     }
