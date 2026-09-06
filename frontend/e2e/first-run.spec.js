@@ -2,6 +2,7 @@ import process from 'node:process'
 import { Buffer } from 'node:buffer'
 import { readFile, writeFile } from 'node:fs/promises'
 import { basename } from 'node:path'
+import { setTimeout } from 'node:timers/promises'
 import { expect, test } from '@playwright/test'
 import { browserViewports } from './viewports'
 
@@ -299,7 +300,9 @@ async function exerciseCaseAndEntityWorkflow(page) {
     .fill('Migration Safety Case Updated')
   await editCaseDialog.getByRole('button', { name: 'Save Changes', exact: true }).click()
   await expect(editCaseDialog).toBeHidden()
-  await expect(page.getByText('Migration Safety Case Updated', { exact: true })).toBeVisible()
+  await expect(
+    page.getByRole('main').getByText('Migration Safety Case Updated', { exact: true }),
+  ).toBeVisible()
 
   const evidenceTab = page.getByRole('tab', { name: 'Evidence', exact: true })
   await evidenceTab.click()
@@ -479,6 +482,23 @@ function observeBrowserRuntime(page, { expectedConsoleErrors = [] } = {}) {
         )
         .toBe(true)
       await expect(page.locator('html')).toHaveAttribute('data-e2e-hmr-probe', 'active')
+
+      const appPath = new URL('../src/App.vue', import.meta.url)
+      const appSource = await readFile(appPath, 'utf8')
+      const updatedApp = appSource.replace(
+        '<v-app>',
+        '<v-app><span data-e2e-vue-hmr="active">Component HMR active</span>',
+      )
+      expect(updatedApp).not.toBe(appSource)
+      try {
+        await writeFile(appPath, updatedApp)
+        await expect(page.locator('[data-e2e-vue-hmr="active"]')).toBeVisible()
+      } finally {
+        // Separate the two edits beyond the file watcher's change-event throttle.
+        await setTimeout(150)
+        await writeFile(appPath, appSource)
+      }
+      await expect(page.locator('[data-e2e-vue-hmr]')).toHaveCount(0)
     },
     assertSafeTraffic() {
       const unexpectedBrowserErrors = [...browserErrors]
@@ -728,6 +748,11 @@ test.describe('first-run browser journey', () => {
     const { assertSafeTraffic, verifyViteHotReload } = observeBrowserRuntime(page)
     expect(page.viewportSize()).toEqual(browserViewports[process.env.OWLCULUS_VIEWPORT])
     await logIn(page)
+    // A document marker survives HMR and client routing, but not a full reload.
+    const documentMarker = await page.evaluate(() => {
+      window.__e2eDocumentMarker = window.crypto.randomUUID()
+      return window.__e2eDocumentMarker
+    })
     await verifyViteHotReload()
 
     await page.getByRole('button', { name: 'Dark Mode' }).click()
@@ -818,9 +843,13 @@ test.describe('first-run browser journey', () => {
       await expect(page).toHaveURL(expectedUrl, { timeout: 15_000 })
       await expect(landmark).toBeVisible({ timeout: 15_000 })
       await verifyOperable()
+      expect(await page.evaluate(() => window.__e2eDocumentMarker)).toBe(documentMarker)
     }
 
     await page.goto('/plugins')
+    await expect(page.getByText('Plugin Management', { exact: true })).toBeVisible()
+    await page.reload()
+    await expect(page).toHaveURL(/\/plugins$/)
     await expect(page.getByText('Plugin Management', { exact: true })).toBeVisible()
     await expect(
       page.getByRole('button', { name: 'Refresh plugins', exact: true }),
@@ -828,9 +857,17 @@ test.describe('first-run browser journey', () => {
     await page.getByRole('button', { name: 'Configure Correlation Scan', exact: true }).click()
     await expect(page.getByLabel('Case to Scan', { exact: true })).toHaveCount(0)
     await page.getByRole('button', { name: 'Execute Plugin', exact: true }).click()
+    const selectedExecution = page.getByRole('region', { name: 'Selected plugin execution' })
+    await expect(
+      selectedExecution.getByRole('status').filter({ hasText: 'CorrelationScan' }),
+    ).toHaveText('CorrelationScan — completed')
+    await selectedExecution
+      .getByRole('button', { name: 'View retained results', exact: true })
+      .click()
     const pluginDialog = page.getByRole('dialog', { name: 'Plugin results', exact: true })
     await expect(pluginDialog).toBeVisible()
-    await expect(pluginDialog.getByText('Execution Parameters', { exact: true })).toBeVisible()
+    // Case and evidence destination are stored separately from Plugin parameters.
+    await expect(pluginDialog.getByText('Execution Parameters', { exact: true })).toHaveCount(0)
     await expect(pluginDialog.getByRole('button', { name: 'Export', exact: true })).toBeEnabled()
     await expect(
       pluginDialog.getByText('Correlation scan complete. No correlations found.', { exact: true }),
