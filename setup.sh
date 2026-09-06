@@ -583,10 +583,45 @@ EOF
     fi
 
     echo ""
-    echo "Complete first-run setup:"
-    echo "   1. Retrieve the setup token with: docker compose logs backend"
-    echo "   2. Open $FRONTEND_URL/setup"
-    echo "   3. Create your administrator account, then log in normally"
+    # Read the current token from persistent storage, including on setup reruns.
+    local SETUP_TOKEN=""
+    local SETUP_TOKEN_READ="false"
+    local attempt
+    for attempt in {1..10}; do
+        if SETUP_TOKEN=$("$DOCKER_COMPOSE_CMD" "$COMPOSE_TOPOLOGY" exec -T backend python -c '
+import sys
+from sqlmodel import Session
+from app.core.setup import get_setup_token, is_setup_required
+from app.database.connection import engine
+
+with Session(engine) as session:
+    if is_setup_required(session):
+        token = get_setup_token()
+        if not token:
+            sys.exit(1)
+        print(token)
+' 2>/dev/null); then
+            SETUP_TOKEN_READ="true"
+            break
+        fi
+        if [ "$attempt" -lt 10 ]; then
+            sleep 2
+        fi
+    done
+
+    if [ "$SETUP_TOKEN_READ" = "true" ] && [ -z "$SETUP_TOKEN" ]; then
+        echo "Administrator setup is already complete. Log in at $FRONTEND_URL"
+    else
+        echo "Complete first-run setup:"
+        if [ "$SETUP_TOKEN_READ" = "true" ]; then
+            printf '   Setup token: %s\n' "$SETUP_TOKEN"
+        else
+            print_warning "Could not retrieve the setup token; the backend may still be starting."
+            echo "   Retrieve it with: $DOCKER_COMPOSE_CMD $COMPOSE_TOPOLOGY logs backend"
+        fi
+        echo "   Open $FRONTEND_URL/setup"
+        echo "   Enter the token and choose your administrator username and password"
+    fi
     
     echo ""
     echo "Useful commands:"

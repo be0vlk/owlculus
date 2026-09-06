@@ -36,6 +36,19 @@ if [[ "$*" == "compose version" ]]; then
     exit 0
 fi
 printf '%s\n' "$*" >> "$DOCKER_CALL_LOG"
+if [[ "$*" == *"exec -T backend python -c"* ]]; then
+    case "${SETUP_TOKEN_STATE:-pending}" in
+        unavailable) exit 1 ;;
+        complete) exit 0 ;;
+        delayed)
+            if [[ ! -f "$DOCKER_CALL_LOG.retried" ]]; then
+                touch "$DOCKER_CALL_LOG.retried"
+                exit 1
+            fi
+            ;;
+    esac
+    printf '%s\n' 'test-one-time-setup-token'
+fi
 """,
     )
     _write_executable(fake_bin / "curl", "#!/usr/bin/env bash\nexit 0\n")
@@ -90,7 +103,46 @@ def test_non_interactive_setup_hands_account_creation_to_the_browser(
     assert not (workspace / "Caddyfile").exists()
     assert "Generated admin credentials" not in completed.stdout
     assert "Open http://localhost/setup" in completed.stdout
-    assert "docker compose logs backend" in completed.stdout
+    assert "Setup token: test-one-time-setup-token" in completed.stdout
+    assert "logs backend" not in completed.stdout
+
+
+@pytest.mark.parametrize("mode", ["production", "dev"])
+def test_setup_retries_token_retrieval_during_startup(setup_workspace, mode):
+    workspace, environment = setup_workspace
+    environment["SETUP_TOKEN_STATE"] = "delayed"
+
+    completed = _run_setup(workspace, environment, mode, "--non-interactive")
+
+    assert "Setup token: test-one-time-setup-token" in completed.stdout
+    calls = (workspace / "docker-calls.log").read_text()
+    assert calls.count("exec -T backend python -c") == 2
+    if mode == "dev":
+        assert "docker-compose.dev.yml" in calls
+
+
+def test_setup_skips_token_for_existing_installation(setup_workspace):
+    workspace, environment = setup_workspace
+    environment["SETUP_TOKEN_STATE"] = "complete"
+
+    completed = _run_setup(workspace, environment, "--non-interactive")
+
+    assert "Administrator setup is already complete" in completed.stdout
+    assert "Setup token:" not in completed.stdout
+    assert "Complete first-run setup:" not in completed.stdout
+
+
+def test_setup_falls_back_to_topology_logs_when_token_is_unavailable(setup_workspace):
+    workspace, environment = setup_workspace
+    environment["SETUP_TOKEN_STATE"] = "unavailable"
+
+    completed = _run_setup(workspace, environment, "dev", "--non-interactive")
+
+    assert "Could not retrieve the setup token" in completed.stdout
+    assert "./scripts/compose.sh development logs backend" in completed.stdout
+    assert "Setup token:" not in completed.stdout
+    calls = (workspace / "docker-calls.log").read_text()
+    assert calls.count("exec -T backend python -c") == 10
 
 
 def test_clean_setup_removes_legacy_local_configuration(setup_workspace):

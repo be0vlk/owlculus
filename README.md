@@ -36,7 +36,8 @@ For a local production installation, run:
 ./setup.sh --non-interactive
 ```
 
-When the services are ready, retrieve the one-time setup token from the backend:
+When the services are ready, the setup script prints the one-time setup token
+directly in your terminal. If automatic retrieval fails, check the backend logs:
 
 ```bash
 docker compose logs backend
@@ -48,8 +49,8 @@ and password for the first administrator. The setup script does not create or pr
 administrator credentials.
 
 If the backend restarts before setup is complete, the same setup token remains valid
-and can be retrieved from the logs again. After the administrator is created, the
-token is consumed: use the normal login page on this and subsequent starts. When an
+and can be displayed again by rerunning the setup script. After the administrator
+is created, the token is consumed: use the normal login page on this and subsequent starts. When an
 upgraded installation already has users, setup is skipped and no setup token is
 created.
 
