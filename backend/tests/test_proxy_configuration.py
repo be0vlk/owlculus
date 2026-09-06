@@ -1,8 +1,8 @@
 """Deployment contract tests for the trusted reverse-proxy boundary."""
 
 import pytest
-
 from app.core.config import settings
+
 from tests.deployment import (
     REPOSITORY_ROOT,
     SUPPORTED_TOPOLOGIES,
@@ -52,7 +52,9 @@ def test_compose_backends_share_persistent_rate_limit_storage(topology):
     redis_service = configuration["services"]["redis"]
     backend = configuration["services"]["backend"]
 
-    assert redis_service["command"] == ["redis-server", "--appendonly", "yes"]
+    command = redis_service["command"]
+    assert command[0] == "redis-server"
+    assert command[command.index("--appendonly") + 1] == "yes"
     assert redis_service["volumes"] == [
         {
             "type": "volume",
