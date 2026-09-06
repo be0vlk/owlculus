@@ -104,8 +104,13 @@ export const useHuntStore = defineStore('hunt', () => {
   const loading = ref(false)
   const readErrors = ref({})
   const actionError = ref(null)
+  const cancellationPending = ref({})
+  const cancellationErrors = ref({})
   const visibleError = computed(
-    () => actionError.value || Object.values(readErrors.value).find(Boolean),
+    () =>
+      actionError.value ||
+      Object.values(cancellationErrors.value).find(Boolean) ||
+      Object.values(readErrors.value).find(Boolean),
   )
   const needsObservation = (record) =>
     record &&
@@ -206,21 +211,23 @@ export const useHuntStore = defineStore('hunt', () => {
 
   async function executeHunt(huntId, caseId, parameters) {
     const request = generation
+    const hunt = availableHunts.value.find((item) => item.id === huntId)
+    const initialParameters = { ...parameters }
     try {
       actionError.value = null
-      const execution = await huntService.executeHunt(huntId, caseId, parameters)
+      const execution = await huntService.executeHunt(huntId, caseId, initialParameters)
 
       if (request !== generation) return execution
-      reconcile(execution)
-      rememberHistory([execution.id])
-      // Accepted identity remains available even if the richer read fails.
-      try {
-        await getExecution(execution.id, true)
-      } catch (err) {
-        console.error('Failed to fetch full execution details:', err)
-      }
-      if (request !== generation) return execution
-      const current = records.value[execution.id]
+      const current = reconcile({
+        case_id: caseId,
+        hunt_id: huntId,
+        initial_parameters: initialParameters,
+        hunt: hunt ? { display_name: hunt.display_name, category: hunt.category } : undefined,
+        ...execution,
+      })
+      if (!current) return execution
+      rememberHistory([current.id])
+      // Acceptance completes the action; durable observation enriches it independently.
       if (needsObservation(current)) subscribeToExecution(current.id)
       return current
     } catch (err) {
@@ -322,11 +329,17 @@ export const useHuntStore = defineStore('hunt', () => {
   }
 
   async function cancelExecution(executionId) {
+    if (cancellationPending.value[executionId] || deniedExecutionIds.has(String(executionId)))
+      return null
     const request = generation
+    const revision = records.value[executionId]?.revision ?? 0
+    const current = () => request === generation && !deniedExecutionIds.has(String(executionId))
+    cancellationPending.value[executionId] = true
+    cancellationErrors.value[executionId] = null
     try {
-      actionError.value = null
       const result = await huntService.cancelExecution(executionId)
-      if (request !== generation) return result
+      if (!current()) return null
+      if ((result.revision ?? 0) < (records.value[executionId]?.revision ?? 0)) return null
 
       const execution = reconcile({ ...result, id: result.execution_id ?? executionId })
       if (needsObservation(execution)) subscribeToExecution(executionId)
@@ -334,10 +347,13 @@ export const useHuntStore = defineStore('hunt', () => {
 
       return result
     } catch (err) {
-      if (request === generation)
-        actionError.value = err.response?.data?.detail || 'Failed to cancel execution'
-      console.error('Failed to cancel execution:', err)
+      // Newer durable state supersedes feedback from the older action.
+      if (!current() || (records.value[executionId]?.revision ?? 0) > revision) return null
+      cancellationErrors.value[executionId] =
+        err.response?.data?.detail || err.message || 'Failed to cancel execution'
       throw err
+    } finally {
+      if (request === generation) delete cancellationPending.value[executionId]
     }
   }
 
@@ -385,6 +401,7 @@ export const useHuntStore = defineStore('hunt', () => {
   function clearError() {
     readErrors.value = {}
     actionError.value = null
+    cancellationErrors.value = {}
   }
 
   function removeExecution(executionId) {
@@ -393,6 +410,7 @@ export const useHuntStore = defineStore('hunt', () => {
     for (const [controller, id] of reads) {
       if (String(id) === String(executionId)) controller.abort()
     }
+    delete cancellationErrors.value[executionId]
     delete records.value[executionId]
     fieldRevisions.delete(executionId)
     terminalDetailRevisions.delete(executionId)
@@ -415,6 +433,8 @@ export const useHuntStore = defineStore('hunt', () => {
     }
     workflowCaseId = null
     loading.value = false
+    cancellationPending.value = {}
+    cancellationErrors.value = {}
     readErrors.value = {}
     actionError.value = null
   }
@@ -429,6 +449,8 @@ export const useHuntStore = defineStore('hunt', () => {
     activeExecutions,
     executionHistory,
     loading,
+    cancellationPending,
+    cancellationErrors,
     error: visibleError,
 
     // Getters

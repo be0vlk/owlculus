@@ -23,8 +23,9 @@ vi.mock('@/services/hunt', () => ({
     cancelExecution: vi.fn(),
   },
 }))
+const notifications = vi.hoisted(() => ({ show: vi.fn() }))
 vi.mock('@/composables/useNotifications', () => ({
-  useNotifications: () => ({ showNotification: vi.fn() }),
+  useNotifications: () => ({ showNotification: notifications.show }),
 }))
 
 const detail = (id = 7, caseId = 1, status = 'running', extra = {}) => ({
@@ -284,8 +285,8 @@ it('bounds retries during an outage and keeps action errors through unrelated su
   huntService.getExecution.mockResolvedValue(detail())
   streams[0].notify({ cursor: '3-0' })
   await flushPromises()
-  expect(useHuntStore().error).toBe('Failed to cancel execution')
-  expect(wrapper.text()).toContain('Failed to cancel execution')
+  expect(useHuntStore().error).toBe('Cancellation unavailable')
+  expect(wrapper.text()).toContain('Cancellation unavailable')
   expect(huntService.executeHunt).not.toHaveBeenCalled()
 })
 
@@ -334,3 +335,140 @@ it.each([401, 403, 404])(
     expect(vi.getTimerCount()).toBe(0)
   },
 )
+
+it.each(['case', 'selection', 'reopen'])(
+  'ignores an old cancellation result and failure across %s replacement, including a newer pending action',
+  async (destination) => {
+    await open('/case/1/hunts/execution/7')
+    const old = deferred()
+    huntService.cancelExecution.mockReturnValueOnce(old.promise)
+    const action = wrapper.findComponent(HuntExecution).vm.handleCancelExecution()
+    if (destination === 'reopen') {
+      await router.push('/cases')
+      await router.push('/case/1/hunts/execution/7')
+    } else {
+      await router.push(
+        destination === 'case' ? '/case/2/hunts/execution/8' : '/case/1/hunts/execution/9',
+      )
+    }
+    await flushPromises()
+    const currentId = destination === 'case' ? 8 : destination === 'selection' ? 9 : 7
+    expect(wrapper.text()).toContain(`Hunt ${currentId}`)
+    const current = deferred()
+    huntService.cancelExecution.mockReturnValueOnce(current.promise)
+    const newAction = wrapper.findComponent(HuntExecution).vm.handleCancelExecution()
+    const reads = huntService.getExecution.mock.calls.length
+    old.resolve({ execution_id: 7, status: 'cancelled', revision: 6 })
+    await action
+    await flushPromises()
+    expect(useHuntStore().cancellationPending[currentId]).toBe(true)
+    expect(useHuntStore().activeExecutions[currentId].status).toBe('running')
+    expect(notifications.show).not.toHaveBeenCalled()
+    expect(huntService.getExecution).toHaveBeenCalledTimes(reads)
+    // Failure from the newer action is relevant, and only its own retry clears it.
+    current.reject(new Error('Current cancellation failed'))
+    await newAction
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toContain('Current cancellation failed')
+    expect(huntService.cancelExecution).toHaveBeenCalledTimes(2)
+  },
+)
+
+it('does not apply a cancellation failure after leaving and reopening the same execution', async () => {
+  await open('/case/1/hunts/execution/7')
+  const old = deferred()
+  huntService.cancelExecution.mockReturnValueOnce(old.promise)
+  const action = wrapper.findComponent(HuntExecution).vm.handleCancelExecution()
+  await router.push('/cases')
+  await router.push('/case/1/hunts/execution/7')
+  await flushPromises()
+  const reads = huntService.getExecution.mock.calls.length
+  old.reject(new Error('Old cancellation failed'))
+  await action
+  await flushPromises()
+  expect(wrapper.text()).not.toContain('Old cancellation failed')
+  expect(notifications.show).not.toHaveBeenCalled()
+  expect(huntService.getExecution).toHaveBeenCalledTimes(reads)
+})
+
+it.each(['acceptance', 'detail'])(
+  'keeps late submission %s attached to its initiating Case after navigation',
+  async (phase) => {
+    await open('/case/1/hunts')
+    const late = deferred()
+    const accepted = detail(30, 1, 'pending', {
+      revision: 1,
+      initial_parameters: { domain: 'example.org' },
+    })
+    huntService.executeHunt.mockReturnValueOnce(
+      phase === 'acceptance' ? late.promise : Promise.resolve(accepted),
+    )
+    if (phase === 'detail') huntService.getExecution.mockReturnValueOnce(late.promise)
+    wrapper
+      .findComponent({ name: 'HuntCatalog' })
+      .vm.$emit('execute', { id: 7, display_name: 'Lookup' })
+    await flushPromises()
+    wrapper
+      .findComponent({ name: 'HuntExecutionModal' })
+      .vm.$emit('execute', { huntId: 7, parameters: { domain: 'example.org' } })
+    await flushPromises()
+    expect(huntService.executeHunt).toHaveBeenCalledWith(7, 1, { domain: 'example.org' })
+    await router.push('/case/2/hunts')
+    await flushPromises()
+    const newSubmission = deferred()
+    huntService.executeHunt.mockReturnValueOnce(newSubmission.promise)
+    wrapper
+      .findComponent({ name: 'HuntCatalog' })
+      .vm.$emit('execute', { id: 7, display_name: 'New Hunt' })
+    await flushPromises()
+    const modal = wrapper.findComponent({ name: 'HuntExecutionModal' })
+    modal.vm.$emit('execute', { huntId: 7, parameters: {} })
+    await flushPromises()
+    const notices = notifications.show.mock.calls.length
+    late.resolve(accepted)
+    await flushPromises()
+    expect(modal.props('executing')).toBe(true)
+    expect(modal.props('modelValue')).toBe(true)
+    expect(useHuntStore().activeExecutions[30]).toBeUndefined()
+    expect(useHuntStore().executionHistory.every((item) => item.case_id === 2)).toBe(true)
+    expect(notifications.show).toHaveBeenCalledTimes(notices)
+    newSubmission.resolve(detail(31, 2, 'completed'))
+    await flushPromises()
+    // Returning recovers accepted work from durable history, never by resubmitting.
+    huntService.getCaseExecutions.mockResolvedValue([accepted])
+    huntService.getExecution.mockResolvedValue({
+      ...accepted,
+      status: 'completed',
+      revision: 2,
+      steps: [],
+    })
+    await router.push('/case/1/hunts')
+    await flushPromises()
+    expect(useHuntStore().executionHistory).toEqual([
+      expect.objectContaining({ id: 30, status: 'completed', case_id: 1 }),
+    ])
+    expect(huntService.executeHunt).toHaveBeenCalledTimes(2)
+  },
+)
+
+it('does not revive a disposed dashboard on late acceptance', async () => {
+  await open('/case/1/hunts')
+  const acceptance = deferred()
+  huntService.executeHunt.mockReturnValueOnce(acceptance.promise)
+  wrapper
+    .findComponent({ name: 'HuntCatalog' })
+    .vm.$emit('execute', { id: 7, display_name: 'Lookup' })
+  await flushPromises()
+  wrapper
+    .findComponent({ name: 'HuntExecutionModal' })
+    .vm.$emit('execute', { huntId: 7, parameters: {} })
+  await flushPromises()
+  await router.push('/cases')
+  await flushPromises()
+  const reads = huntService.getExecution.mock.calls.length
+  acceptance.resolve(detail(30, 1))
+  await flushPromises()
+  expect(useHuntStore().activeExecutions).toEqual({})
+  expect(notifications.show).not.toHaveBeenCalled()
+  expect(huntService.getExecution).toHaveBeenCalledTimes(reads)
+})

@@ -378,3 +378,136 @@ it('reports export failure without discarding terminal results', async () => {
   expect(wrapper.find('[data-testid="export-menu"]').exists()).toBe(true)
   wrapper.unmount()
 })
+
+it('shares pending cancellation with the module, prevents repeated requests and permits a failed action retry', async () => {
+  const step = { id: 1, step_id: 'lookup', status: 'completed', output: { results: ['retained'] } }
+  const wrapper = await mountExecution('running', 42, { revision: 2, steps: [step] })
+  let fail
+  mocks.cancelExecution.mockReturnValueOnce(
+    new Promise((_resolve, reject) => {
+      fail = reject
+    }),
+  )
+  const cancel = () => wrapper.findAll('button').find((button) => button.text().includes('Cancel'))
+  await cancel().trigger('click')
+  // A second consumer of the Hunt seam must share the pending guard.
+  const duplicate = useHuntStore().cancelExecution(7)
+  expect(mocks.cancelExecution).toHaveBeenCalledTimes(1)
+  expect(cancel().element.disabled).toBe(true)
+  fail(new Error('Cancellation unavailable'))
+  await duplicate
+  await flushPromises()
+  expect(wrapper.get('[role="alert"]').text()).toContain('Cancellation unavailable')
+  expect(wrapper.findComponent({ name: 'HuntStepResults' }).props('step')).toEqual(step)
+  expect(cancel().element.disabled).toBe(false)
+  mocks.cancelExecution.mockResolvedValue({ execution_id: 7, status: 'cancelling', revision: 3 })
+  await cancel().trigger('click')
+  await flushPromises()
+  expect(mocks.cancelExecution).toHaveBeenCalledTimes(2)
+  expect(wrapper.text()).toContain('Cancelling')
+  expect(wrapper.text()).not.toContain('Cancellation unavailable')
+  expect(mocks.showNotification).toHaveBeenLastCalledWith('Cancellation requested', 'info')
+  wrapper.unmount()
+})
+
+it('recovers equal-revision final output after terminal cancellation despite an older refresh and a transient failure', async () => {
+  const step = { id: 1, step_id: 'lookup', status: 'completed', output: { results: ['retained'] } }
+  const wrapper = await mountExecution('running', 42, { revision: 2, steps: [step] })
+  const older = deferred()
+  mocks.getExecution.mockReturnValueOnce(older.promise)
+  const refresh = wrapper.findAll('button').find((button) => button.text().includes('Refresh'))
+  await refresh.trigger('click')
+  mocks.cancelExecution.mockResolvedValue({ execution_id: 7, status: 'cancelled', revision: 4 })
+  await wrapper
+    .findAll('button')
+    .find((button) => button.text().includes('Cancel'))
+    .trigger('click')
+  await flushPromises()
+  expect(wrapper.text()).toContain('Cancelled')
+  expect(wrapper.findComponent({ name: 'HuntStepResults' }).props('step')).toEqual(step)
+  // The view must not make a competing detail request on acknowledgement.
+  expect(mocks.getExecution).toHaveBeenCalledTimes(3)
+  older.resolve({ ...mocks.execution, revision: 3 })
+  await flushPromises()
+  mocks.getExecution.mockRejectedValueOnce(new Error('offline'))
+  await vi.advanceTimersByTimeAsync(1000)
+  await flushPromises()
+  expect(wrapper.get('[role="alert"]').text()).toContain('retrying')
+  expect(wrapper.text()).toContain('Cancelled')
+  expect(wrapper.findComponent({ name: 'HuntStepResults' }).props('step')).toEqual(step)
+  const finalStep = { ...step, output: { results: ['final'] } }
+  mocks.getExecution.mockResolvedValue({
+    ...mocks.execution,
+    status: 'cancelled',
+    revision: 4,
+    steps: [finalStep],
+  })
+  await vi.advanceTimersByTimeAsync(1500)
+  await flushPromises()
+  expect(wrapper.findComponent({ name: 'HuntStepResults' }).props('step')).toEqual(finalStep)
+  expect(wrapper.text()).not.toContain('retrying')
+  const reads = mocks.getExecution.mock.calls.length
+  await vi.advanceTimersByTimeAsync(60000)
+  expect(mocks.getExecution).toHaveBeenCalledTimes(reads)
+  expect(huntService.executeHunt).not.toHaveBeenCalled()
+  wrapper.unmount()
+})
+
+it.each(['completed', 'partial', 'failed', 'cancelled'])(
+  'ignores a late cancellation acknowledgement after newer %s output without restarting reads or showing obsolete feedback',
+  async (status) => {
+    let notify
+    huntService.createExecutionStream.mockImplementation(async (_id, callback) => {
+      notify = callback
+      return {}
+    })
+    const wrapper = await mountExecution('running', 42, { revision: 2 })
+    const cancellation = deferred()
+    mocks.cancelExecution.mockReturnValueOnce(cancellation.promise)
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('Cancel'))
+      .trigger('click')
+    const finalStep = { id: 1, status: 'completed', output: { results: ['final'] } }
+    mocks.getExecution.mockResolvedValue({
+      ...mocks.execution,
+      status,
+      revision: 5,
+      steps: [finalStep],
+    })
+    notify({ cursor: '5-0' })
+    await flushPromises()
+    const reads = mocks.getExecution.mock.calls.length
+    cancellation.resolve({ execution_id: 7, status: 'cancelling', revision: 3 })
+    await flushPromises()
+    expect(useHuntStore().activeExecutions[7].status).toBe(status)
+    expect(wrapper.findComponent({ name: 'HuntStepResults' }).props('step')).toEqual(finalStep)
+    expect(mocks.showNotification).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(60000)
+    expect(mocks.getExecution).toHaveBeenCalledTimes(reads)
+    wrapper.unmount()
+  },
+)
+
+it('suppresses an old cancellation failure after newer durable completion', async () => {
+  const wrapper = await mountExecution('running', 42, { revision: 2 })
+  let fail
+  mocks.cancelExecution.mockReturnValueOnce(
+    new Promise((_resolve, reject) => {
+      fail = reject
+    }),
+  )
+  await wrapper
+    .findAll('button')
+    .find((button) => button.text().includes('Cancel'))
+    .trigger('click')
+  mocks.getExecution.mockResolvedValue({ ...mocks.execution, status: 'completed', revision: 5 })
+  await vi.advanceTimersByTimeAsync(1000)
+  fail(new Error('Obsolete cancellation failure'))
+  await flushPromises()
+  expect(wrapper.text()).toContain('Completed')
+  expect(wrapper.text()).not.toContain('Obsolete cancellation failure')
+  expect(mocks.showNotification).not.toHaveBeenCalled()
+  expect(useHuntStore().cancellationPending[7]).toBeUndefined()
+  wrapper.unmount()
+})
