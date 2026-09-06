@@ -24,6 +24,11 @@ function draftData(data) {
 }
 
 export function useEntityDetails(entity, caseId, emit) {
+  // The Case-and-Entity keyed dialog owns one target for its entire lifetime,
+  // including queued writes that finish after the dialog is replaced.
+  const targetCaseId = caseId.value
+  const targetId = entity.value.id
+  const targetType = entity.value.entity_type
   const error = ref('')
   const isEditing = ref(false)
   const updating = ref(false)
@@ -75,7 +80,7 @@ export function useEntityDetails(entity, caseId, emit) {
       updating.value = true
       error.value = ''
       const updatedEntity = await saveEntity({
-        entity_type: acknowledgedEntity.value.entity_type,
+        entity_type: targetType,
         data: draftData(cleanFormData(clone(formData.value.data))),
       })
       isEditing.value = false
@@ -109,22 +114,16 @@ export function useEntityDetails(entity, caseId, emit) {
     return `${saveError.value} ${retry}`
   })
   const saveNotes = async () => {
-    if (!editor.value || !entity.value) return true
+    if (!editor.value) return true
 
     cancelPendingSave()
     const content = editor.value.getHTML()
-    const target = clone(acknowledgedEntity.value)
-    const targetCaseId = caseId.value
     return saveQueue
       .save(content, async () => {
-        const updatedEntity = await entityService.updateEntity(targetCaseId, target.id, {
-          entity_type: target.entity_type,
+        const updatedEntity = await entityService.updateEntity(targetCaseId, targetId, {
+          entity_type: targetType,
           data: {
-            ...clone(
-              acknowledgedEntity.value?.id === target.id
-                ? acknowledgedEntity.value.data
-                : target.data,
-            ),
+            ...clone(acknowledgedEntity.value.data),
             notes: content,
           },
         })
@@ -180,8 +179,6 @@ export function useEntityDetails(entity, caseId, emit) {
         notes: content === lastSaved.value ? acknowledgedEntity.value.data.notes || '' : content,
       },
     }
-    const targetId = entity.value.id
-    const targetCaseId = caseId.value
     return saveQueue.save(
       content,
       async () => {
