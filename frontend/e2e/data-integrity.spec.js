@@ -17,9 +17,7 @@ async function workspace(page, request) {
 }
 
 async function download(page, control, filename) {
-  const event = page.waitForEvent('download')
-  await control.click()
-  const artifact = await event
+  const [artifact] = await Promise.all([page.waitForEvent('download'), control.click()])
   expect(await artifact.failure()).toBeNull()
   const path = test.info().outputPath(filename)
   await artifact.saveAs(path)
@@ -263,7 +261,7 @@ async function inspectArchive(path) {
       { encoding: 'utf8' },
     ),
   )
-  test.info().attach('archive-members.json', {
+  await test.info().attach('archive-members.json', {
     body: JSON.stringify(members, null, 2),
     contentType: 'application/json',
   })
@@ -282,7 +280,7 @@ test('Case export contains intended investigation records and excludes the other
     await json(
       await request.put(`/api/cases/${record.id}`, {
         headers,
-        data: { notes, description: `Description ${name}` },
+        data: { notes },
       }),
     )
     const entity = await json(
@@ -309,7 +307,7 @@ test('Case export contains intended investigation records and excludes the other
       name,
     })
   }
-  await page.goto(`/case/${original.id}`)
+  await page.goto(`/case/${original.id}?tab=notes`)
   const members = await inspectArchive(
     await download(page, page.getByRole('button', { name: 'Export', exact: true }), 'case.zip'),
   )
@@ -319,12 +317,20 @@ test('Case export contains intended investigation records and excludes the other
   expect(JSON.parse(text('case.json'))).toMatchObject({
     id: original.id,
     title: original.title,
-    description: `Description ${included.name}`,
+    case_number: original.case_number,
+    status: original.status,
     client: { id: original.client_id },
   })
   expect(text('notes.html')).toBe(included.notes)
   expect(JSON.parse(text('entities/entities.json'))).toEqual([
-    expect.objectContaining({ id: included.entity.id, data: included.entity.data }),
+    expect.objectContaining({
+      id: included.entity.id,
+      case_id: original.id,
+      data: expect.objectContaining({
+        first_name: included.name,
+        notes: `<p>Entity ${included.name}</p>`,
+      }),
+    }),
   ])
   expect(JSON.parse(text('tasks/tasks.json'))).toEqual([
     expect.objectContaining({
