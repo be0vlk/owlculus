@@ -5,11 +5,11 @@
         "vitest": "3.2.7",
         "provider": "@vitest/coverage-v8@3.2.7",
         "command": "npm run test:coverage:audit",
-        "sourceAndTestCommit": "30a990d",
+        "sourceAndTestCommit": "f708ff1",
         "testFiles": 8,
-        "testCases": 123,
+        "testCases": 124,
         "passingBehaviors": 109,
-        "expectedFailureReproductions": 14,
+        "expectedFailureReproductions": 15,
         "sourceFiles": 28
     },
     "total": {
