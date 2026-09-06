@@ -523,6 +523,120 @@ describe('Entity notes with the real editor', () => {
     expect(entityService.updateEntity).toHaveBeenCalledTimes(3)
   })
 
+  it.each(['immediate', 'delayed'])(
+    'preserves submitted snapshots and later notes with %s parent acknowledgement',
+    async (parentTiming) => {
+      const entity = {
+        id: 9,
+        entity_type: 'person',
+        data: {
+          first_name: 'Ada',
+          address: { city: 'Old', country: 'UK' },
+          sources: { 'address.city': 'Old source' },
+          notes: '<p>Initial</p>',
+        },
+      }
+      await openNotes(entity)
+      await button('Edit Entity').trigger('click')
+      vi.useFakeTimers()
+      const completions = []
+      entityService.updateEntity.mockImplementation(
+        (_caseId, id, payload) =>
+          new Promise((resolve) => {
+            completions.push(async () => {
+              const saved = { id, ...payload }
+              resolve(saved)
+              await flushPromises()
+              if (parentTiming === 'immediate') await wrapper.setProps({ entity: saved })
+              return saved
+            })
+          }),
+      )
+      textbox().element.innerHTML = '<p>First</p>'
+      await textbox().trigger('input')
+      await vi.advanceTimersByTimeAsync(5000)
+      await tab('Address')
+      await input('City').setValue('Submitted city')
+      await input('Source for City').setValue('Submitted source')
+      await tab('Notes')
+      textbox().element.innerHTML = '<p>Submitted notes</p>'
+      await textbox().trigger('input')
+      await button('Save Changes').trigger('click')
+
+      // Mutate the live draft while the form snapshot waits behind the first note write.
+      await tab('Address')
+      await input('City').setValue('Later draft city')
+      await input('Source for City').setValue('Later draft source')
+      await tab('Notes')
+      textbox().element.innerHTML = '<p>Notes while queued</p>'
+      await textbox().trigger('input')
+      await wrapper.setProps({ entity: JSON.parse(JSON.stringify(entity)) })
+      const firstSaved = await completions[0]()
+      expect(textbox().text()).toBe('Notes while queued')
+      await tab('Address')
+      expect(input('City').element.value).toBe('Later draft city')
+      expect(input('Source for City').element.value).toBe('Later draft source')
+      expect(entityService.updateEntity.mock.calls[0]).toEqual([
+        7,
+        9,
+        { entity_type: 'person', data: { ...entity.data, notes: '<p>First</p>' } },
+      ])
+      expect(entityService.updateEntity.mock.calls[1]).toEqual([
+        7,
+        9,
+        {
+          entity_type: 'person',
+          data: expect.objectContaining({
+            address: { city: 'Submitted city', country: 'UK' },
+            sources: { 'address.city': 'Submitted source' },
+            notes: '<p>Submitted notes</p>',
+          }),
+        },
+      ])
+      await tab('Notes')
+      expect(textbox().text()).toBe('Notes while queued')
+      textbox().element.innerHTML = '<p>Latest notes</p>'
+      await textbox().trigger('input')
+      await vi.advanceTimersByTimeAsync(5000)
+      expect(entityService.updateEntity).toHaveBeenCalledTimes(2)
+      const formSaved = await completions[1]()
+      expect(textbox().text()).toBe('Latest notes')
+      expect(entityService.updateEntity.mock.calls[2]).toEqual([
+        7,
+        9,
+        {
+          entity_type: 'person',
+          data: { ...formSaved.data, notes: '<p>Latest notes</p>' },
+        },
+      ])
+      const latestSaved = await completions[2]()
+      expect(wrapper.emitted('edit')).toEqual([[firstSaved], [formSaved], [latestSaved]])
+
+      // An older parent refresh must not roll back the workflow after the queue is idle.
+      await wrapper.setProps({ entity: firstSaved })
+      expect(textbox().text()).toBe('Latest notes')
+      await button('Edit Entity').trigger('click')
+      await tab('Address')
+      expect(input('City').element.value).toBe('Submitted city')
+      expect(input('Source for City').element.value).toBe('Submitted source')
+      await tab('Notes')
+      textbox().element.innerHTML = '<p>Next notes</p>'
+      await textbox().trigger('input')
+      await vi.advanceTimersByTimeAsync(5000)
+      await button('Cancel').trigger('click')
+      await wrapper.setProps({ entity: formSaved })
+      expect(textbox().text()).toBe('Next notes')
+      const nextSaved = await completions[3]()
+      expect(nextSaved.data).toEqual({ ...formSaved.data, notes: '<p>Next notes</p>' })
+      expect(wrapper.emitted('edit').at(-1)).toEqual([nextSaved])
+      await vi.advanceTimersByTimeAsync(10000)
+      wrapper.unmount()
+      await flushPromises()
+      expect(entityService.updateEntity).toHaveBeenCalledTimes(4)
+      expect(entity.data.address.city).toBe('Old')
+    },
+  )
+
   it('keeps the dialog open when Close fails to save and retries on Close', async () => {
     await openNotes({
       id: 9,

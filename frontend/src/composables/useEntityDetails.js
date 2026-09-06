@@ -29,6 +29,7 @@ export function useEntityDetails(entity, caseId, emit) {
   const updating = ref(false)
   const activeTab = ref('basicInfo')
   const acknowledgedEntity = ref(clone(entity.value))
+  let hasPersisted = false
   const formData = ref({ data: draftData(acknowledgedEntity.value.data) })
   const entitySchema = computed(() => entitySchemas[acknowledgedEntity.value.entity_type])
 
@@ -85,6 +86,9 @@ export function useEntityDetails(entity, caseId, emit) {
 
   // The parent keys the dialog by Case and Entity. Same-session refreshes must leave drafts alone.
   watch(entity, (newEntity) => {
+    // After our first successful write, the ordered queue owns this session's saved state.
+    // Parent list refreshes can arrive out of order and cannot acknowledge a newer write.
+    if (hasPersisted) return
     acknowledgedEntity.value = clone(newEntity)
     if (!isEditing.value) formData.value = { data: draftData(newEntity.data) }
   })
@@ -111,6 +115,7 @@ export function useEntityDetails(entity, caseId, emit) {
           },
         })
         acknowledgedEntity.value = clone(updatedEntity)
+        hasPersisted = true
 
         if (emit) {
           emit('edit', updatedEntity)
@@ -173,6 +178,7 @@ export function useEntityDetails(entity, caseId, emit) {
           submittedPayload,
         )
         acknowledgedEntity.value = clone(updatedEntity)
+        hasPersisted = true
         return updatedEntity
       },
       { force: true },
