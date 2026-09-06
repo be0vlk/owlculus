@@ -87,12 +87,13 @@ services:
           cpus: "0.25"
     environment: !override
       NODE_ENV: development
+      __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: ${DEV_HOST:-localhost}
       API_PROXY_TARGET: http://backend:8000
     volumes: !override
       - ./frontend:/app
       - /app/node_modules
     ports: !override
-      - "${FRONTEND_PORT:-5173}:5173"
+      - "${DEV_FRONTEND_PORT:-5173}:5173"
     command: npm run dev -- --host 0.0.0.0
     healthcheck: !reset null
     networks: !override
