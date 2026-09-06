@@ -21,6 +21,7 @@
     },
     "dependencies": {
         "@mdi/font": "^7.4.47",
+        "@noble/hashes": "2.0.1",
         "@tiptap/extension-highlight": "3.31.3",
         "@tiptap/extension-list": "3.31.3",
         "@tiptap/extensions": "3.31.3",

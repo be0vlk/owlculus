@@ -8,23 +8,61 @@
       <v-btn size="small" @click="activeCase.refresh()">Retry loading cases</v-btn>
     </div>
     <template v-else-if="activeCase.accessibleCases.length">
-      <v-autocomplete
+      <p class="active-case-label">Active case</p>
+      <v-select
         :model-value="activeCase.activeCaseId"
         :items="options"
-        label="Active case"
+        :aria-label="`Active case: ${activeCase.activeCase?.case_number} — ${activeCase.activeCase?.title}. Switch case`"
         item-title="label"
         item-value="id"
         :clearable="false"
         :disabled="!activeCase.ready || activeCase.refreshing"
         :loading="activeCase.refreshing"
-        auto-select-first
         hide-details
         density="compact"
-        variant="outlined"
+        variant="solo-filled"
+        flat
+        rounded="lg"
+        class="active-case-select"
+        :menu-props="{ maxHeight: 360, width: 360, maxWidth: 'calc(100vw - 32px)' }"
+        :list-props="{ 'aria-label': 'Cases', 'aria-labelledby': undefined }"
         @update:model-value="activeCase.select($event)"
-      />
-      <p class="text-body-small mt-2" role="status" aria-live="polite" aria-atomic="true">
-        Active case: {{ activeCase.activeCase?.case_number }} · {{ activeCase.activeCase?.status }}
+      >
+        <template #selection="{ item }">
+          <div class="active-case-summary" :title="item.title">
+            <div class="active-case-meta">
+              <span class="active-case-number">{{ item.case_number }}</span>
+              <v-chip
+                :color="item.status === 'Open' ? 'success' : undefined"
+                size="x-small"
+                variant="tonal"
+              >
+                {{ item.status }}
+              </v-chip>
+            </div>
+            <span class="active-case-title">{{ item.title }}</span>
+          </div>
+        </template>
+        <template #item="{ props, item }">
+          <v-list-item v-bind="props" class="active-case-option" :title="item.case_number">
+            <template #subtitle>
+              <span class="active-case-option-title">{{ item.title }}</span>
+            </template>
+            <template #append>
+              <v-chip
+                :color="item.status === 'Open' ? 'success' : undefined"
+                size="x-small"
+                variant="tonal"
+              >
+                {{ item.status }}
+              </v-chip>
+            </template>
+          </v-list-item>
+        </template>
+      </v-select>
+      <p class="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        Active case: {{ activeCase.activeCase?.case_number }} — {{ activeCase.activeCase?.title }} ·
+        {{ activeCase.activeCase?.status }}
       </p>
     </template>
     <div v-else role="status">
@@ -46,7 +84,7 @@ const activeCase = useActiveCaseStore()
 const auth = useAuthStore()
 const options = computed(() =>
   activeCase.accessibleCases.map((item) => ({
-    id: item.id,
+    ...item,
     label: `${item.case_number} — ${item.title} (${item.status})`,
   })),
 )
@@ -56,5 +94,86 @@ const options = computed(() =>
 .active-case-switcher {
   width: 100%;
   min-width: 0;
+}
+
+.active-case-label {
+  margin: 0 0 6px;
+  color: rgb(var(--v-theme-on-surface), 0.65);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.active-case-select :deep(.v-field) {
+  border: 1px solid rgb(var(--v-theme-on-surface), 0.12);
+}
+
+.active-case-select :deep(.v-field--focused) {
+  outline: 2px solid rgb(var(--v-theme-on-surface), 0.65);
+  outline-offset: 2px;
+}
+
+.active-case-select :deep(.v-select__selection) {
+  width: 100%;
+  max-width: 100%;
+}
+
+.active-case-summary {
+  width: 100%;
+  min-width: 0;
+  padding-block: 2px;
+}
+
+.active-case-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.active-case-number {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.active-case-title {
+  display: block;
+  overflow: hidden;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.active-case-option {
+  padding-block: 8px;
+}
+
+.active-case-option :deep(.v-list-item-subtitle) {
+  display: block;
+  margin-top: 4px;
+  opacity: 0.8;
+}
+
+.active-case-option-title {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.active-case-option :deep(.v-list-item__append) {
+  padding-inline-start: 12px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 </style>
