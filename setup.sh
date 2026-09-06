@@ -134,6 +134,34 @@ validate_port() {
 
 # Derive operator-facing URLs without changing the browser's same-origin contract.
 configure_service_urls() {
+    if [ "$DEPLOYMENT_TYPE" = "local_dev" ]; then
+        # Compose resolves .env and shell overrides; never source .env as shell code.
+        local DEV_CONFIGURATION
+        if ! DEV_CONFIGURATION=$(
+            set -o pipefail
+            "$COMPOSE_SCRIPT" "$DEV_TOPOLOGY" config --format json | python3 -c '
+import json
+import sys
+
+services = json.load(sys.stdin)["services"]
+frontend = services["frontend"]
+def published_port(service, target):
+    return next(str(port["published"]) for port in service["ports"] if port["target"] == target)
+
+print(frontend["environment"]["__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS"])
+print(published_port(frontend, 5173))
+print(published_port(services["backend"], 8000))
+'
+        ); then
+            print_error "Could not read the development configuration. Check .env and Compose diagnostics above."
+            return 1
+        fi
+        local -a DEV_VALUES
+        mapfile -t DEV_VALUES <<< "$DEV_CONFIGURATION"
+        DOMAIN="${DEV_VALUES[0]}"
+        FRONTEND_PORT="${DEV_VALUES[1]}"
+        BACKEND_PORT="${DEV_VALUES[2]}"
+    fi
     if [ "$DEPLOYMENT_TYPE" = "remote" ]; then
         FRONTEND_URL="https://$DOMAIN"
     elif [ "$USE_REVERSE_PROXY" = "true" ]; then
@@ -237,21 +265,11 @@ interactive_config() {
         # Database port is not exposed for security
         DB_PORT="5432"
         
-        print_status "Using localhost defaults:"
-        print_status "  Domain: $DOMAIN"
-        print_status "  Frontend port: $FRONTEND_PORT"
-        if [ "$DEPLOYMENT_TYPE" = "local_dev" ]; then
-            print_status "  Backend port: $BACKEND_PORT (development only)"
-        else
-            print_status "  Backend API: Same origin through Caddy"
-        fi
-        print_status "  Database: Internal port 5432 (not exposed to host for security)"
-        
         USE_REVERSE_PROXY="false"
         USE_HTTPS="false"
     fi
     
-    configure_service_urls
+    configure_service_urls || return 1
     
     echo ""
     echo "Configuration Summary:"
@@ -406,7 +424,7 @@ set_defaults() {
     USE_REVERSE_PROXY="false"
     USE_HTTPS="false"
     
-    configure_service_urls
+    configure_service_urls || return 1
     
 }
 
@@ -447,7 +465,7 @@ setup_owlculus() {
     
     # Run interactive configuration or use defaults
     if [ "$INTERACTIVE_MODE" = "true" ]; then
-        interactive_config "$MODE"
+        interactive_config "$MODE" || return 1
         # MODE might have been changed by interactive_config
         if [ "$DEPLOYMENT_TYPE" = "local_dev" ]; then
             MODE="dev"
@@ -455,7 +473,7 @@ setup_owlculus() {
             MODE="production"
         fi
     else
-        set_defaults "$MODE"
+        set_defaults "$MODE" || return 1
         print_status "Using default configuration values"
     fi
     
@@ -475,6 +493,15 @@ setup_owlculus() {
 			DB_PORT_COMMENT="# Database port is internal only for security"
 		fi
 
+        local PRODUCTION_FRONTEND_PORT="$FRONTEND_PORT"
+        local DEVELOPMENT_FRONTEND_PORT="5173"
+        local DEVELOPMENT_HOST="localhost"
+        if [ "$DEPLOYMENT_TYPE" = "local_dev" ]; then
+            PRODUCTION_FRONTEND_PORT="$DEFAULT_FRONTEND_PORT"
+            DEVELOPMENT_FRONTEND_PORT="$FRONTEND_PORT"
+            DEVELOPMENT_HOST="$DOMAIN"
+        fi
+
         # Create .env file directly with all values
         cat > .env << EOF
 SECRET_KEY=$SECRET_KEY
@@ -484,7 +511,9 @@ POSTGRES_DB=owlculus
 DOMAIN=$CADDY_DOMAIN
 
 # Port Configuration
-FRONTEND_PORT=$FRONTEND_PORT
+FRONTEND_PORT=$PRODUCTION_FRONTEND_PORT
+DEV_FRONTEND_PORT=$DEVELOPMENT_FRONTEND_PORT
+DEV_HOST=$DEVELOPMENT_HOST
 BACKEND_PORT=$BACKEND_PORT
 $DB_PORT_COMMENT
 DB_PORT=5432
@@ -534,14 +563,14 @@ EOF
         print_status "Note: HTTPS certificates will be automatically obtained on first access"
     elif [ "$DEPLOYMENT_TYPE" = "local_dev" ]; then
         # The development backend remains directly reachable for local tooling.
-        if curl --connect-timeout 2 --max-time 5 --retry 10 --retry-delay 2 --retry-connrefused -f -s "http://$DOMAIN:$BACKEND_PORT/health/ready" > /dev/null; then
+        if curl --connect-timeout 2 --max-time 5 --retry 10 --retry-delay 2 --retry-connrefused -f -s "http://localhost:$BACKEND_PORT/health/ready" > /dev/null; then
             print_success "Development backend is ready"
         else
             print_error "Development backend did not become ready"
             SERVICES_READY="false"
         fi
 
-        if curl --connect-timeout 2 --max-time 5 --retry 10 --retry-delay 2 --retry-connrefused -f -s "$FRONTEND_URL/" > /dev/null; then
+        if curl --connect-timeout 2 --max-time 5 --retry 10 --retry-delay 2 --retry-connrefused -f -s -H "Host: $DOMAIN:$FRONTEND_PORT" "http://localhost:$FRONTEND_PORT/" > /dev/null; then
             print_success "Frontend is running at $FRONTEND_URL"
         else
             print_error "Frontend did not become ready at $FRONTEND_URL"

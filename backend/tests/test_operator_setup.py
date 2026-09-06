@@ -36,6 +36,10 @@ if [[ "$*" == "compose version" ]]; then
     exit 0
 fi
 printf '%s\n' "$*" >> "$DOCKER_CALL_LOG"
+if [[ "$*" == *"config --format json"* ]]; then
+    python3 -c 'import json, os; print(json.dumps({"services": {"frontend": {"environment": {"__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS": os.environ.get("TEST_DEV_HOST", "localhost")}, "ports": [{"target": 5173, "published": os.environ.get("TEST_DEV_PORT", "5173")}]}, "backend": {"ports": [{"target": 8000, "published": "8000"}]}}}))'
+    exit 0
+fi
 if [[ -n "${FAIL_COMPOSE_COMMAND:-}" && " $* " == *" $FAIL_COMPOSE_COMMAND "* ]]; then
     echo "simulated Docker failure" >&2
     exit 1
@@ -111,7 +115,10 @@ def test_non_interactive_setup_hands_account_creation_to_the_browser(
     assert "Open http://localhost/setup" in completed.stdout
     assert "Setup token: test-one-time-setup-token" in completed.stdout
     assert "logs backend" not in completed.stdout
-    assert "up -d --wait --wait-timeout 120" in (workspace / "docker-calls.log").read_text()
+    assert (
+        "up -d --wait --wait-timeout 120"
+        in (workspace / "docker-calls.log").read_text()
+    )
 
 
 @pytest.mark.parametrize("mode", ["production", "dev"])
@@ -296,3 +303,53 @@ def test_development_logs_are_isolated_from_host_source_permissions():
     )
     assert log_mount is not None
     assert log_mount["type"] == "volume"
+
+
+@pytest.mark.parametrize("interactive", [False, True])
+def test_development_setup_reports_effective_host_and_port(
+    setup_workspace, interactive
+):
+    workspace, environment = setup_workspace
+    (workspace / ".env").write_text("FRONTEND_PORT=80\n")
+    environment.update(TEST_DEV_HOST="devbox.example.test", TEST_DEV_PORT="5180")
+    completed = subprocess.run(
+        ["bash", "setup.sh", "dev", *([] if interactive else ["--non-interactive"])],
+        input="1\ny\n" if interactive else None,
+        cwd=workspace,
+        env=environment,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert "http://devbox.example.test:5180/setup" in completed.stdout
+    if interactive:
+        assert "Frontend URL: http://devbox.example.test:5180" in completed.stdout
+    assert (workspace / ".env").read_text() == "FRONTEND_PORT=80\n"
+
+
+@pytest.mark.parametrize("port", ["", "5180"])
+def test_development_port_is_independent_of_production_port(port):
+    configuration = load_compose_configuration(
+        "development",
+        environment_overrides={
+            "FRONTEND_PORT": "8080",
+            "DEV_FRONTEND_PORT": port,
+            "DEV_HOST": "devbox.example.test",
+        },
+    )
+    frontend = configuration["services"]["frontend"]
+    assert frontend["ports"][0]["published"] == (port or "5173")
+    assert (
+        frontend["environment"]["__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS"]
+        == "devbox.example.test"
+    )
+
+
+def test_fresh_development_setup_saves_separate_development_settings(setup_workspace):
+    workspace, environment = setup_workspace
+    environment.update(TEST_DEV_HOST="devbox.example.test", TEST_DEV_PORT="5180")
+    _run_setup(workspace, environment, "dev", "--non-interactive")
+    settings = (workspace / ".env").read_text().splitlines()
+    assert "FRONTEND_PORT=80" in settings
+    assert "DEV_FRONTEND_PORT=5180" in settings
+    assert "DEV_HOST=devbox.example.test" in settings

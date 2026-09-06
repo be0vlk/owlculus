@@ -28,6 +28,38 @@ collaborate, and run OSINT tools directly in your browser.
 
 ## Documentation
 
+### Development access
+
+Run `./setup.sh dev` and choose local development, or run
+`./setup.sh dev --non-interactive`. Development publishes Vite on port 5173 by
+default, independently of the production `FRONTEND_PORT` setting.
+
+For access from another machine over a LAN or private network, put the hostname
+you use in the browser in the repository's untracked `.env` file:
+
+```dotenv
+DEV_HOST=devbox.example.test
+DEV_FRONTEND_PORT=5173
+```
+
+Replace the example with a hostname that resolves to your development machine.
+`DEV_HOST` is a hostname only, without a scheme, port, or path; it defaults to
+`localhost`. It allows that additional hostname through Vite's host checks.
+`DEV_FRONTEND_PORT` controls the published development port. If you previously
+used `FRONTEND_PORT` for a custom development port, move that value to
+`DEV_FRONTEND_PORT`; `FRONTEND_PORT` now controls production only.
+
+After changing these settings, recreate the frontend:
+
+```bash
+./scripts/compose.sh development up -d --no-deps frontend
+```
+
+Open `http://devbox.example.test:5173` using your configured hostname and port.
+The client must be able to reach that machine and port. Browser API and WebSocket
+requests use the same origin through Vite. Keep machine-specific settings in
+`.env`; do not add them to Compose files or commit them.
+
 ### First-run setup
 
 For a local production installation, run:
