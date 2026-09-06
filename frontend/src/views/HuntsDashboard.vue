@@ -210,6 +210,7 @@ const huntSubmissionError = ref(null)
 const showDetailsModal = ref(false)
 const cancellingExecutions = ref(new Set())
 let loadGeneration = 0
+let workflow = null
 
 // Computed properties
 const userRole = computed(() => authStore.user?.role)
@@ -229,14 +230,14 @@ const loadData = async () => {
   const request = ++loadGeneration
   const id = caseId.value
   if (!id || !checkAccess()) {
-    huntStore.resetCaseExecutions()
+    workflow?.release()
     loading.value = false
     return
   }
   try {
     loading.value = true
     error.value = null
-    await Promise.all([huntStore.fetchHunts(), huntStore.getCaseExecutions(id)])
+    await workflow.refresh()
   } catch (err) {
     if (request === loadGeneration) error.value = err.message || 'Failed to load hunt data'
   } finally {
@@ -257,6 +258,7 @@ const handleExecuteHunt = (hunt) => {
 
 const handleExecuteHuntSubmit = async (executionData) => {
   if (submittingHunt.value || !caseId.value) return
+  const owner = workflow
   const submittedCaseId = caseId.value
   const huntName = selectedHunt.value?.display_name
   submittingHunt.value = true
@@ -268,7 +270,7 @@ const handleExecuteHuntSubmit = async (executionData) => {
       executionData.parameters,
     )
 
-    if (caseId.value !== submittedCaseId) return execution
+    if (!owner?.isCurrent()) return execution
     showNotification(`Hunt "${huntName}" started successfully`, 'success')
 
     // Switch to active executions tab
@@ -280,11 +282,11 @@ const handleExecuteHuntSubmit = async (executionData) => {
 
     return execution
   } catch (err) {
-    if (caseId.value !== submittedCaseId) return
+    if (!owner?.isCurrent()) return
     showNotification(err.message || 'Failed to execute hunt', 'error')
     huntSubmissionError.value = err.message || 'Failed to execute hunt'
   } finally {
-    submittingHunt.value = false
+    if (owner?.isCurrent()) submittingHunt.value = false
   }
 }
 
@@ -307,15 +309,16 @@ const handleDetailsModalClose = () => {
 }
 
 const handleCancelExecution = async (executionId) => {
+  const owner = workflow
   try {
     cancellingExecutions.value.add(executionId)
 
     await huntStore.cancelExecution(executionId)
-    showNotification('Cancellation requested', 'info')
+    if (owner?.isCurrent()) showNotification('Cancellation requested', 'info')
   } catch (err) {
-    showNotification(err.message || 'Failed to cancel execution', 'error')
+    if (owner?.isCurrent()) showNotification(err.message || 'Failed to cancel execution', 'error')
   } finally {
-    cancellingExecutions.value.delete(executionId)
+    if (owner?.isCurrent()) cancellingExecutions.value.delete(executionId)
   }
 }
 
@@ -327,6 +330,10 @@ const handleViewExecutionDetails = (executionId) => {
 watch(
   caseId,
   () => {
+    workflow = huntStore.openWorkflow({ caseId: caseId.value })
+    submittingHunt.value = false
+    cancellingExecutions.value = new Set()
+    error.value = null
     showExecutionModal.value = false
     showDetailsModal.value = false
     selectedHunt.value = null
@@ -338,7 +345,7 @@ watch(
 
 onBeforeUnmount(() => {
   loadGeneration++
-  huntStore.resetCaseExecutions()
+  workflow?.release()
 })
 </script>
 

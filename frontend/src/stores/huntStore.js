@@ -6,6 +6,9 @@ import { huntService } from '../services/hunt'
 export const useHuntStore = defineStore('hunt', () => {
   let generation = 0
   let historyRequest = 0
+  let workflow = null
+  const reads = new Set()
+  const terminalDetails = new Map()
   // State
   const availableHunts = ref([])
   const records = ref({})
@@ -20,6 +23,12 @@ export const useHuntStore = defineStore('hunt', () => {
 
   // Summaries and acknowledgements are partial. Only a requested step read can clear steps.
   function reconcile(response, { includeSteps = false, summary = false } = {}) {
+    if (
+      workflowCaseId != null &&
+      response.case_id != null &&
+      String(workflowCaseId) !== String(response.case_id)
+    )
+      return null
     workflowCaseId ??= response.case_id
     const id = response.id ?? response.execution_id
     const previous = records.value[id]
@@ -73,6 +82,15 @@ export const useHuntStore = defineStore('hunt', () => {
     }
     fieldRevisions.set(id, suppliedRevisions)
     records.value[id] = merged
+    if (
+      includeSteps &&
+      response.steps !== undefined &&
+      !isActive(response) &&
+      response.status &&
+      revision >= (merged.revision ?? 0)
+    ) {
+      terminalDetails.set(id, merged.revision ?? 0)
+    }
     return records.value[id]
   }
 
@@ -83,6 +101,40 @@ export const useHuntStore = defineStore('hunt', () => {
   }
   const loading = ref(false)
   const error = ref(null)
+  const actionError = ref(null)
+  const visibleError = computed(() => actionError.value || error.value)
+  const needsObservation = (record) =>
+    record && (isActive(record) || terminalDetails.get(record.id) !== (record.revision ?? 0))
+
+  async function read(operation) {
+    const controller = new AbortController()
+    reads.add(controller)
+    try {
+      return await operation(controller.signal)
+    } finally {
+      reads.delete(controller)
+    }
+  }
+
+  function openWorkflow({ caseId, executionId = null }) {
+    const sameCase = String(workflowCaseId) === String(caseId)
+    invalidateWorkflow(!sameCase)
+    workflowCaseId = caseId
+    const owner = generation
+    const handle = {
+      isCurrent: () => owner === generation,
+      async refresh() {
+        if (!handle.isCurrent() || !caseId) return
+        if (executionId != null) return getExecution(executionId, true)
+        await Promise.all([fetchHunts(), getCaseExecutions(caseId)])
+      },
+      release() {
+        if (handle.isCurrent()) invalidateWorkflow(true)
+      },
+    }
+    workflow = handle
+    return handle
+  }
   const observations = new Map()
 
   // Getters
@@ -117,26 +169,30 @@ export const useHuntStore = defineStore('hunt', () => {
 
   // Actions
   async function fetchHunts() {
+    const request = generation
     try {
       loading.value = true
       error.value = null
-      const hunts = await huntService.getHunts()
+      const hunts = await read((signal) => huntService.getHunts(signal))
+      if (request !== generation) return
       availableHunts.value = hunts
     } catch (err) {
+      if (request !== generation) return
       error.value = err.response?.data?.detail || 'Failed to fetch hunts'
       console.error('Failed to fetch hunts:', err)
       throw err
     } finally {
-      loading.value = false
+      if (request === generation) loading.value = false
     }
   }
 
   async function getHunt(huntId) {
+    const request = generation
     try {
-      const hunt = await huntService.getHunt(huntId)
+      const hunt = await read((signal) => huntService.getHunt(huntId, signal))
       return hunt
     } catch (err) {
-      error.value = err.response?.data?.detail || 'Failed to fetch hunt'
+      if (request === generation) error.value = err.response?.data?.detail || 'Failed to fetch hunt'
       console.error('Failed to fetch hunt:', err)
       throw err
     }
@@ -145,7 +201,7 @@ export const useHuntStore = defineStore('hunt', () => {
   async function executeHunt(huntId, caseId, parameters) {
     const request = generation
     try {
-      error.value = null
+      actionError.value = null
       const execution = await huntService.executeHunt(huntId, caseId, parameters)
 
       if (request !== generation) return execution
@@ -159,11 +215,11 @@ export const useHuntStore = defineStore('hunt', () => {
       }
       if (request !== generation) return execution
       const current = records.value[execution.id]
-      if (isActive(current)) subscribeToExecution(current.id)
+      if (needsObservation(current)) subscribeToExecution(current.id)
       return current
     } catch (err) {
       if (request === generation)
-        error.value = err.response?.data?.detail || 'Failed to execute hunt'
+        actionError.value = err.response?.data?.detail || 'Failed to execute hunt'
       console.error('Failed to execute hunt:', err)
       throw err
     }
@@ -172,14 +228,29 @@ export const useHuntStore = defineStore('hunt', () => {
   async function getExecution(executionId, includeSteps = false) {
     const request = generation
     try {
-      const execution = await huntService.getExecution(executionId, includeSteps)
+      const execution = await read((signal) =>
+        huntService.getExecution(executionId, includeSteps, signal),
+      )
 
       if (request !== generation) return execution
-      return reconcile(execution, { includeSteps })
+      const latest = reconcile(execution, { includeSteps })
+      if (!latest) {
+        removeExecution(executionId)
+        return execution
+      }
+      error.value = null
+      if (workflow && needsObservation(latest)) subscribeToExecution(executionId)
+      else if (!needsObservation(latest)) unsubscribeFromExecution(executionId)
+      return latest
     } catch (err) {
       if (request === generation) {
         if (isAccessFailure(err)) removeExecution(executionId)
-        error.value = err.response?.data?.detail || 'Failed to fetch execution'
+        else if (
+          workflow &&
+          (!records.value[executionId] || needsObservation(records.value[executionId]))
+        )
+          subscribeToExecution(executionId)
+        error.value = err.response?.data?.detail || err.message || 'Failed to fetch execution'
       }
       console.error('Failed to fetch execution:', err)
       throw err
@@ -204,7 +275,7 @@ export const useHuntStore = defineStore('hunt', () => {
     if (!caseId) return []
     error.value = null
     try {
-      const executions = await huntService.getCaseExecutions(caseId)
+      const executions = await read((signal) => huntService.getCaseExecutions(caseId, signal))
       if (!current()) return []
       const detailIds = new Set()
       executions.forEach((execution) => {
@@ -216,15 +287,15 @@ export const useHuntStore = defineStore('hunt', () => {
       await Promise.all(
         [...detailIds].map(async (id) => {
           try {
-            const detail = await huntService.getExecution(id, true)
+            const detail = await read((signal) => huntService.getExecution(id, true, signal))
             if (!current()) return
             reconcile(detail, { includeSteps: true })
           } catch (err) {
             if (!current()) return
             if (isAccessFailure(err)) removeExecution(id)
-            error.value = err.response?.data?.detail || 'Failed to fetch execution'
+            error.value = err.response?.data?.detail || err.message || 'Failed to fetch execution'
           }
-          if (current() && isActive(records.value[id])) subscribeToExecution(id)
+          if (current() && needsObservation(records.value[id])) subscribeToExecution(id)
         }),
       )
       return current() ? executionHistory.value : []
@@ -239,18 +310,18 @@ export const useHuntStore = defineStore('hunt', () => {
   async function cancelExecution(executionId) {
     const request = generation
     try {
-      error.value = null
+      actionError.value = null
       const result = await huntService.cancelExecution(executionId)
       if (request !== generation) return result
 
       const execution = reconcile({ ...result, id: result.execution_id ?? executionId })
-      if (isActive(execution)) subscribeToExecution(executionId)
+      if (needsObservation(execution)) subscribeToExecution(executionId)
       else unsubscribeFromExecution(executionId)
 
       return result
     } catch (err) {
       if (request === generation)
-        error.value = err.response?.data?.detail || 'Failed to cancel execution'
+        actionError.value = err.response?.data?.detail || 'Failed to cancel execution'
       console.error('Failed to cancel execution:', err)
       throw err
     }
@@ -264,11 +335,21 @@ export const useHuntStore = defineStore('hunt', () => {
     const current = () => request === generation && observations.get(executionId) === observation
     observation.stop = observeExecution({
       async refresh(signal) {
-        const execution = await huntService.getExecution(executionId, true, signal)
+        let execution
+        try {
+          execution = await huntService.getExecution(executionId, true, signal)
+        } catch (err) {
+          if (current() && isAccessFailure(err)) {
+            error.value = err.response?.data?.detail || 'Execution unavailable'
+            removeExecution(executionId)
+          }
+          throw err
+        }
         if (!current()) return { terminal: true }
         const latest = reconcile(execution, { includeSteps: true })
         error.value = null
-        const terminal = !isActive(latest)
+        if (!latest) removeExecution(executionId)
+        const terminal = !needsObservation(latest)
         if (terminal) observations.delete(executionId)
         return { terminal }
       },
@@ -289,24 +370,37 @@ export const useHuntStore = defineStore('hunt', () => {
 
   function clearError() {
     error.value = null
+    actionError.value = null
   }
 
   function removeExecution(executionId) {
     delete records.value[executionId]
     fieldRevisions.delete(executionId)
+    terminalDetails.delete(executionId)
     historyIds.value = historyIds.value.filter((id) => id !== executionId)
     unsubscribeFromExecution(executionId)
   }
 
-  // Invalidate the previous case’s requests, streams, and execution data.
-  function resetCaseExecutions() {
+  function invalidateWorkflow(clearRecords) {
     generation++
-    records.value = {}
-    fieldRevisions.clear()
-    historyIds.value = []
-    workflowCaseId = null
-    error.value = null
+    workflow = null
+    for (const controller of reads) controller.abort()
+    reads.clear()
     for (const id of observations.keys()) unsubscribeFromExecution(id)
+    if (clearRecords) {
+      records.value = {}
+      fieldRevisions.clear()
+      terminalDetails.clear()
+      historyIds.value = []
+    }
+    workflowCaseId = null
+    loading.value = false
+    error.value = null
+    actionError.value = null
+  }
+
+  function resetCaseExecutions() {
+    invalidateWorkflow(true)
   }
 
   return {
@@ -315,7 +409,7 @@ export const useHuntStore = defineStore('hunt', () => {
     activeExecutions,
     executionHistory,
     loading,
-    error,
+    error: visibleError,
 
     // Getters
     huntsByCategory,
@@ -324,6 +418,7 @@ export const useHuntStore = defineStore('hunt', () => {
     failedExecutions,
 
     // Actions
+    openWorkflow,
     fetchHunts,
     getHunt,
     executeHunt,
