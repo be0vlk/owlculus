@@ -140,11 +140,8 @@ export function useEntityDetails(entity, caseId, emit) {
       : 'Notes (read-only)',
     editable: isEditing.value,
     onExit: saveNotes,
-    onUpdate: (editor) => {
-      const content = editor.getHTML()
+    onUpdate: () => {
       if (isEditing.value) {
-        // Update the form data so main form save includes latest notes
-        formData.value.data.notes = content
         triggerSave(saveNotes)
       }
     },
@@ -157,12 +154,24 @@ export function useEntityDetails(entity, caseId, emit) {
   const saveEntity = (payload) => {
     cancelPendingSave()
     const content = editor.value.getHTML()
+    // Keep unchanged empty/legacy HTML conventions, otherwise submit the captured editor text.
+    const submittedPayload = {
+      ...payload,
+      data: {
+        ...payload.data,
+        notes: content === lastSaved.value ? acknowledgedEntity.value.data.notes || '' : content,
+      },
+    }
     const targetId = entity.value.id
     const targetCaseId = caseId.value
     return saveQueue.save(
       content,
       async () => {
-        const updatedEntity = await entityService.updateEntity(targetCaseId, targetId, payload)
+        const updatedEntity = await entityService.updateEntity(
+          targetCaseId,
+          targetId,
+          submittedPayload,
+        )
         acknowledgedEntity.value = clone(updatedEntity)
         return updatedEntity
       },
@@ -188,12 +197,6 @@ export function useEntityDetails(entity, caseId, emit) {
     () => isEditing.value,
     (newEditingState, oldEditingState) => {
       if (editor.value) {
-        if (newEditingState) {
-          const content = editor.value.getHTML()
-          if (content !== lastSaved.value) {
-            formData.value.data.notes = content
-          }
-        }
         // If exiting edit mode, save any pending changes first
         if (oldEditingState && !newEditingState) {
           saveNotes()
