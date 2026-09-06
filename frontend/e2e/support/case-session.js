@@ -9,13 +9,17 @@ export const test = base.extend({
     await use(async (matches) => {
       let release
       let accepted
+      let failed
       let finished
       const gate = new Promise((resolve) => {
         release = resolve
       })
-      const ready = new Promise((resolve) => {
+      const ready = new Promise((resolve, reject) => {
         accepted = resolve
+        failed = reject
       })
+      // A transport failure can arrive before the caller starts awaiting readiness.
+      ready.catch(() => {})
       const done = new Promise((resolve) => {
         finished = resolve
       })
@@ -33,6 +37,9 @@ export const test = base.extend({
           })
           await route.fulfill({ response })
           await delivered
+        } catch (error) {
+          failed(error)
+          throw error
         } finally {
           finished()
         }
