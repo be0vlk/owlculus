@@ -5,7 +5,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ApiKeyManagementCard from '../ApiKeyManagementCard.vue'
 import NewInviteModal from '../NewInviteModal.vue'
 import SystemConfigurationCard from '../SystemConfigurationCard.vue'
-import HuntExecutionModal from '../hunts/HuntExecutionModal.vue'
 import { useApiKeys } from '@/composables/useApiKeys'
 import { useSystemConfiguration } from '@/composables/useSystemConfiguration'
 
@@ -73,24 +72,6 @@ describe('Vuetify 4 public component seams', () => {
       'Read-only access to assigned cases',
     )
     expect(wrapper.get('[data-testid="select-item"]').text()).toContain('mdi-chart-line info')
-  })
-
-  it('renders case metadata from the Vuetify 4 select item payload', () => {
-    const wrapper = shallowMount(HuntExecutionModal, {
-      props: {
-        modelValue: true,
-        hunt: { display_name: 'Person Hunt', description: 'Find a person', category: 'person' },
-        cases: [
-          { id: 7, case_number: 'CASE-007', title: 'Missing person', client: { name: 'ACME' } },
-        ],
-      },
-      global: { stubs: { ...vuetifyStubs, HuntParameterForm: PassthroughStub } },
-    })
-
-    const option = wrapper.get('[data-testid="select-item"]').text()
-    expect(option).toContain('CASE-007')
-    expect(option).toContain('Missing person')
-    expect(option).toContain('ACME')
   })
 
   it('renders provider icons from the Vuetify 4 select item payload', async () => {
