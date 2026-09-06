@@ -4,6 +4,7 @@ FROM node:24-alpine AS frontend-builder
 WORKDIR /build
 
 COPY frontend/package*.json ./
+COPY frontend/.npmrc ./
 RUN npm ci
 COPY frontend/ ./
 RUN npm run build
