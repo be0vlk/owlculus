@@ -1,6 +1,7 @@
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { flushPromises, shallowMount } from '@vue/test-utils'
+import { useHuntStore } from '@/stores/huntStore'
 import { useActiveCaseStore } from '@/stores/activeCase'
 import { huntService } from '@/services/hunt'
 import { caseService } from '@/services/case'
@@ -26,6 +27,7 @@ const execution = (id, case_id) => ({ id, case_id, status: 'completed', created_
 const mountDashboard = () =>
   shallowMount(HuntsDashboard, {
     global: {
+      renderStubDefaultSlot: true,
       stubs: {
         BaseDashboard: { template: '<div><slot /></div>' },
         VCard: { template: '<div><slot /></div>' },
@@ -35,7 +37,8 @@ const mountDashboard = () =>
     },
   })
 beforeEach(() => {
-  vi.clearAllMocks()
+  vi.resetAllMocks()
+  vi.useFakeTimers()
   setActivePinia(createPinia())
   caseService.getCases.mockResolvedValue(cases)
   huntService.getHunts.mockResolvedValue([{ id: 7, display_name: 'Lookup' }])
@@ -107,3 +110,75 @@ it('discards a polling response after switching cases', async () => {
   ])
   wrapper.unmount()
 })
+
+afterEach(() => {
+  useHuntStore().resetCaseExecutions()
+  vi.useRealTimers()
+})
+
+it.each(['running', 'completed'])(
+  'projects newer %s live output into cards and history despite stale reads and duplicate hints',
+  async (status) => {
+    await useActiveCaseStore().initialize(1)
+    const initial = {
+      ...execution(10, 1),
+      status: 'running',
+      revision: 2,
+      hunt: { display_name: 'Lookup', category: 'domain' },
+      steps: [],
+    }
+    const summary = {
+      id: 10,
+      case_id: 1,
+      status: 'running',
+      created_at: '2026-01-01',
+      hunt_display_name: 'Lookup',
+      hunt_category: 'domain',
+    }
+    huntService.getCaseExecutions.mockResolvedValue([summary, summary])
+    huntService.getExecution.mockResolvedValue(initial)
+    let notify
+    huntService.createExecutionStream.mockImplementation(async (_id, onMessage) => {
+      notify = onMessage
+      return {}
+    })
+    const wrapper = mountDashboard()
+    await flushPromises()
+    let finishOld
+    huntService.getExecution.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishOld = resolve
+      }),
+    )
+    const store = useHuntStore()
+    const pending = store.getExecution(10, true)
+    const latest = {
+      ...initial,
+      status,
+      revision: 4,
+      progress: 0.8,
+      steps: [{ id: 1, output: { results: ['new'] } }],
+    }
+    huntService.getExecution.mockResolvedValue(latest)
+    notify({ event_type: 'update', revision: 4, cursor: '4-0' })
+    notify({ event_type: 'update', revision: 4, cursor: '4-0' })
+    await flushPromises()
+    finishOld({ ...initial, progress: 0.1 })
+    await pending
+    await store.getCaseExecutions(1)
+    await flushPromises()
+    const cards = wrapper.findAllComponents({ name: 'HuntProgressCard' })
+    expect(cards).toHaveLength(1)
+    expect(cards[0].props('execution')).toMatchObject(latest)
+    if (status === 'completed') {
+      expect(wrapper.findComponent({ name: 'HuntExecutionHistory' }).props('executions')).toEqual([
+        expect.objectContaining({
+          ...latest,
+          hunt_display_name: 'Lookup',
+          hunt_category: 'domain',
+        }),
+      ])
+    }
+    wrapper.unmount()
+  },
+)

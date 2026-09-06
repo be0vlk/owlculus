@@ -1,6 +1,9 @@
 import { defineComponent } from 'vue'
+import { createPinia, setActivePinia } from 'pinia'
+import { useHuntStore } from '@/stores/huntStore'
+import { huntService } from '@/services/hunt'
 import { flushPromises, shallowMount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import HuntExecution from '../HuntExecution.vue'
 
@@ -19,19 +22,15 @@ vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn(), replace: mocks.replace }),
 }))
 
-vi.mock('@/stores/huntStore.js', () => ({
-  useHuntStore: () => ({
-    activeExecutions: {},
-    resetCaseExecutions: vi.fn(),
-    getExecution: mocks.getExecution,
-    subscribeToExecution: vi.fn(),
-    unsubscribeFromExecution: vi.fn(),
-    cancelExecution: mocks.cancelExecution,
-  }),
-}))
-
 vi.mock('@/services/hunt', () => ({
-  huntService: { exportExecution: mocks.exportExecution },
+  huntService: {
+    exportExecution: mocks.exportExecution,
+    getExecution: mocks.getExecution,
+    cancelExecution: mocks.cancelExecution,
+    getCaseExecutions: vi.fn(),
+    createExecutionStream: vi.fn(),
+    closeExecutionStream: vi.fn(),
+  },
 }))
 
 vi.mock('@/utils/download', () => ({ downloadBlob: mocks.downloadBlob }))
@@ -73,6 +72,7 @@ const mountExecution = async (status, caseId = 42) => {
   mocks.getExecution.mockResolvedValue(mocks.execution)
   const wrapper = shallowMount(HuntExecution, {
     global: {
+      renderStubDefaultSlot: true,
       stubs: {
         BaseDashboard: BaseDashboardStub,
         VMenu: MenuStub,
@@ -87,7 +87,14 @@ const mountExecution = async (status, caseId = 42) => {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
+  vi.resetAllMocks()
+  vi.useFakeTimers()
+  setActivePinia(createPinia())
+})
+
+afterEach(() => {
+  useHuntStore().resetCaseExecutions()
+  vi.useRealTimers()
 })
 
 describe('HuntExecution exports', () => {
@@ -145,5 +152,108 @@ it('does not reload an execution after cancellation completes on an unmounted pa
   wrapper.unmount()
   finishCancel()
   await flushPromises()
-  expect(mocks.getExecution).toHaveBeenCalledTimes(1)
+  expect(mocks.getExecution).toHaveBeenCalledTimes(2)
+})
+
+const deferred = () => {
+  let resolve
+  const promise = new Promise((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
+it.each(['running', 'completed'])(
+  'keeps newer %s live results after an older manual refresh',
+  async (status) => {
+    let notify
+    huntService.createExecutionStream.mockImplementation(async (_id, onMessage) => {
+      notify = onMessage
+      return {}
+    })
+    const wrapper = await mountExecution('running')
+    const older = deferred()
+    mocks.getExecution.mockReturnValueOnce(older.promise)
+    const refresh = wrapper.findAll('button').find((button) => button.text().includes('Refresh'))
+    await refresh.trigger('click')
+    const latest = {
+      ...mocks.execution,
+      revision: 4,
+      status,
+      progress: 0.8,
+      steps: [{ step_id: 'lookup', status: 'completed', output: { results: ['new'] } }],
+    }
+    mocks.getExecution.mockResolvedValue(latest)
+    notify({ event_type: 'update', revision: 4, cursor: '4-0' })
+    await flushPromises()
+    older.resolve({ ...mocks.execution, revision: 2, progress: 0.1 })
+    await flushPromises()
+    expect(wrapper.findComponent({ name: 'HuntStepResults' }).props('step')).toEqual(
+      latest.steps[0],
+    )
+    expect(wrapper.text()).toContain(status === 'completed' ? 'Completed' : 'Running')
+    wrapper.unmount()
+  },
+)
+
+it('enriches equal revisions, preserves omitted steps, and accepts only newer authoritative empty steps', async () => {
+  const wrapper = await mountExecution('completed')
+  const store = useHuntStore()
+  const read = async (snapshot, includeSteps = true) => {
+    mocks.getExecution.mockResolvedValueOnce(snapshot)
+    await store.getExecution(7, includeSteps)
+    await flushPromises()
+  }
+  const detail = { ...mocks.execution, revision: 5, steps: null }
+  await read(detail, false)
+  const step = { id: 1, step_id: 'lookup', status: 'completed', output: { results: ['retained'] } }
+  await read({ ...detail, steps: [step] })
+  expect(wrapper.findComponent({ name: 'HuntStepResults' }).props('step')).toEqual(step)
+  await read({ ...detail, revision: 6 }, false)
+  expect(wrapper.findComponent({ name: 'HuntStepResults' }).props('step')).toEqual(step)
+  await read({ ...detail, revision: 4 })
+  expect(wrapper.findComponent({ name: 'HuntStepResults' }).props('step')).toEqual(step)
+  await read({ ...detail, revision: 7 })
+  expect(wrapper.text()).toContain('No steps available')
+  wrapper.unmount()
+})
+
+it('keeps the newer of two manual reads and retains output through cancellation acknowledgements', async () => {
+  const wrapper = await mountExecution('completed')
+  const store = useHuntStore()
+  const older = deferred()
+  const newer = deferred()
+  mocks.getExecution.mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise)
+  const first = store.getExecution(7, true)
+  const second = store.getExecution(7, true)
+  const latest = {
+    ...mocks.execution,
+    revision: 8,
+    steps: [{ id: 1, step_id: 'lookup', status: 'completed', output: { results: ['latest'] } }],
+  }
+  newer.resolve(latest)
+  await second
+  older.resolve({ ...mocks.execution, revision: 3, status: 'running' })
+  await first
+  mocks.cancelExecution.mockResolvedValue({
+    execution_id: 7,
+    status: 'cancelling',
+    revision: 6,
+    message: 'requested',
+  })
+  await store.cancelExecution(7)
+  await flushPromises()
+  expect(wrapper.text()).toContain('Completed')
+  expect(wrapper.findComponent({ name: 'HuntStepResults' }).props('step')).toEqual(latest.steps[0])
+  mocks.cancelExecution.mockResolvedValue({
+    execution_id: 7,
+    status: 'cancelled',
+    revision: 9,
+    message: 'cancelled',
+  })
+  await store.cancelExecution(7)
+  await flushPromises()
+  expect(wrapper.text()).toContain('Cancelled')
+  expect(wrapper.findComponent({ name: 'HuntStepResults' }).props('step')).toEqual(latest.steps[0])
+  wrapper.unmount()
 })
