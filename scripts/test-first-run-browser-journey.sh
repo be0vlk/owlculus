@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Run the first-install browser journey against disposable Owlculus stacks.
+# Run browser journeys against disposable Owlculus stacks. Arguments select
+# focused Playwright files/options, e.g. e2e/frontend-workflows.spec.js.
 
 set -euo pipefail
 
@@ -17,6 +18,7 @@ active_artifact_directory=""
 
 run_compose() {
     FRONTEND_PORT="$active_frontend_port" \
+        DEV_FRONTEND_PORT="$vite_port" \
         HTTPS_PORT="$gateway_https_port" \
         BACKEND_PORT="$backend_port" \
         OWLCULUS_LOG_FILE="/tmp/owlculus-e2e.log" \
@@ -95,11 +97,12 @@ run_variant() {
     local server_kind="$1"
     local host="$2"
     local viewport="$3"
+    shift 3
     local setup_token
     local test_status=0
 
     active_project="owlculus-e2e-${server_kind}-${viewport}-${host//./-}-$$"
-    active_artifact_directory="$repository_root/frontend/test-results/${server_kind}-${host}-${viewport}"
+    active_artifact_directory="$repository_root/frontend/test-results/${server_kind}-${host}-${viewport}${E2E_ARTIFACT_GROUP:+-$E2E_ARTIFACT_GROUP}"
     if [[ "$server_kind" == "gateway" ]]; then
         active_topology="direct"
         active_frontend_port="$gateway_port"
@@ -128,7 +131,7 @@ run_variant() {
             OWLCULUS_SERVER_KIND="$server_kind" \
             OWLCULUS_VIEWPORT="$viewport" \
             OWLCULUS_HMR_PROBE_PATH="$active_hmr_probe_path" \
-            npm run test:e2e:playwright -- --project=chromium
+            npm run test:e2e:playwright -- --project=chromium --output="$active_artifact_directory" "$@"
     ) || test_status=$?
 
     cleanup_stack
@@ -142,7 +145,14 @@ read -r -a viewports <<< "${E2E_VIEWPORTS:-desktop narrow}"
 for server_kind in "${server_kinds[@]}"; do
     for host in "${browser_hosts[@]}"; do
         for viewport in "${viewports[@]}"; do
-            run_variant "$server_kind" "$host" "$viewport"
+            if (( $# > 0 )); then
+                run_variant "$server_kind" "$host" "$viewport" "$@"
+            else
+                # Both groups bootstrap their own administrator. Keep the
+                # first-install assertions independent from workflow fixtures.
+                run_variant "$server_kind" "$host" "$viewport" e2e/first-run.spec.js e2e/active-case.spec.js
+                E2E_ARTIFACT_GROUP=workflows run_variant "$server_kind" "$host" "$viewport" e2e/frontend-workflows.spec.js
+            fi
         done
     done
 done
