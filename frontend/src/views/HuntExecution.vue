@@ -381,7 +381,10 @@ const { showNotification } = useNotifications()
 // Local state
 const loading = ref(true)
 const error = ref(null)
-const execution = ref(null)
+const execution = computed(() => {
+  const record = huntStore.activeExecutions[executionId.value]
+  return record && String(record.case_id) === String(route.params.caseId) ? record : null
+})
 const cancelling = ref(false)
 const selectedStep = ref(null)
 const showStepOutputModal = ref(false)
@@ -460,16 +463,13 @@ const loadExecution = async () => {
     const result = await huntStore.getExecution(executionId.value, true)
     if (disposed) return
     if (String(result.case_id) !== String(route.params.caseId)) {
-      execution.value = null
       await router.replace(`/case/${result.case_id}/hunts/execution/${result.id}`)
       return
     }
-    execution.value = result
 
     // Subscribe to real-time updates if running
     if (['pending', 'running', 'cancelling'].includes(execution.value.status)) {
       huntStore.subscribeToExecution(executionId.value)
-      if (execution.value.status === 'running') startElapsedTimer()
     }
   } catch (err) {
     error.value = err.message || 'Failed to load execution details'
@@ -579,24 +579,14 @@ onBeforeUnmount(() => {
   huntStore.unsubscribeFromExecution(executionId.value)
 })
 
-// Watch for execution updates from store
+// Only the display timer follows lifecycle changes; execution data belongs to the store.
 watch(
-  () => huntStore.activeExecutions[executionId.value],
-  (updatedExecution) => {
-    if (
-      !disposed &&
-      updatedExecution &&
-      String(updatedExecution.case_id) === String(route.params.caseId)
-    ) {
-      execution.value = updatedExecution
-
-      // Stop timer if execution is no longer running
-      if (updatedExecution.status === 'running' && !elapsedInterval) startElapsedTimer()
-      if (updatedExecution.status !== 'running') {
-        stopElapsedTimer()
-
-        // No need to auto-switch since results is the default tab
-      }
+  () => execution.value?.status,
+  (status) => {
+    if (!disposed && status === 'running') startElapsedTimer()
+    else {
+      stopElapsedTimer()
+      elapsedTime.value = ''
     }
   },
 )

@@ -7,8 +7,65 @@ export const useHuntStore = defineStore('hunt', () => {
   let generation = 0
   // State
   const availableHunts = ref([])
-  const activeExecutions = ref({})
-  const executionHistory = ref([])
+  const records = ref({})
+  const historyIds = ref([])
+  let workflowCaseId = null
+  const activeExecutions = computed(() => records.value)
+  const executionHistory = computed(() =>
+    historyIds.value.map((id) => records.value[id]).filter(Boolean),
+  )
+  const isActive = (execution) => ['pending', 'running', 'cancelling'].includes(execution?.status)
+
+  // Summaries and acknowledgements are partial. Only a requested step read can clear steps.
+  function reconcile(response, { includeSteps = false } = {}) {
+    const id = response.id ?? response.execution_id
+    const previous = records.value[id]
+    const incoming = Object.fromEntries(
+      Object.entries(response).filter(([, value]) => value !== undefined),
+    )
+    incoming.id = id
+    delete incoming.execution_id
+    delete incoming.message
+    if (incoming.hunt_display_name != null || incoming.hunt_category != null || incoming.hunt) {
+      incoming.hunt = { ...incoming.hunt }
+      if (incoming.hunt_display_name != null)
+        incoming.hunt.display_name = incoming.hunt_display_name
+      if (incoming.hunt_category != null) incoming.hunt.category = incoming.hunt_category
+      if (incoming.hunt.display_name != null)
+        incoming.hunt_display_name = incoming.hunt.display_name
+      if (incoming.hunt.category != null) incoming.hunt_category = incoming.hunt.category
+    }
+    if (!includeSteps || !Object.hasOwn(incoming, 'steps')) delete incoming.steps
+    else incoming.steps ??= []
+
+    const knownRevision = previous?.revision ?? 0
+    const revision = incoming.revision ?? 0
+    if (revision < knownRevision) return previous
+    const enrichOnly = previous && knownRevision > 0 && revision === knownRevision
+    if (previous && !isActive(previous) && isActive(incoming) && revision <= knownRevision) {
+      delete incoming.status
+    }
+    const merged = { ...previous }
+    for (const [key, value] of Object.entries(incoming)) {
+      if (key === 'hunt') {
+        merged.hunt = enrichOnly ? { ...value, ...previous.hunt } : { ...previous?.hunt, ...value }
+      } else if (
+        !enrichOnly ||
+        merged[key] == null ||
+        (key === 'steps' && merged.steps.length === 0 && value.length > 0)
+      ) {
+        merged[key] = value
+      }
+    }
+    records.value[id] = merged
+    return records.value[id]
+  }
+
+  function rememberHistory(id) {
+    historyIds.value = [...new Set([id, ...historyIds.value])].sort(
+      (a, b) => new Date(records.value[b].created_at) - new Date(records.value[a].created_at),
+    )
+  }
   const loading = ref(false)
   const error = ref(null)
   const observations = new Map()
@@ -76,32 +133,19 @@ export const useHuntStore = defineStore('hunt', () => {
       error.value = null
       const execution = await huntService.executeHunt(huntId, caseId, parameters)
 
-      // Fetch full execution details including steps
-      let fullExecution = execution
+      if (request !== generation) return execution
+      reconcile(execution)
+      rememberHistory(execution.id)
+      // Accepted identity remains available even if the richer read fails.
       try {
-        fullExecution = await huntService.getExecution(execution.id, true)
+        await getExecution(execution.id, true)
       } catch (err) {
         console.error('Failed to fetch full execution details:', err)
       }
-
-      if (request !== generation) return fullExecution
-
-      // Add to active executions with full data - ensure reactivity
-      activeExecutions.value = {
-        ...activeExecutions.value,
-        [fullExecution.id]: fullExecution,
-      }
-
-      // Also add to execution history
-      executionHistory.value.unshift(fullExecution)
-      executionHistory.value.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-
-      // Start durable observation
-      if (['pending', 'running', 'cancelling'].includes(fullExecution.status)) {
-        subscribeToExecution(fullExecution.id)
-      }
-
-      return fullExecution
+      if (request !== generation) return execution
+      const current = records.value[execution.id]
+      if (isActive(current)) subscribeToExecution(current.id)
+      return current
     } catch (err) {
       if (request === generation)
         error.value = err.response?.data?.detail || 'Failed to execute hunt'
@@ -115,10 +159,7 @@ export const useHuntStore = defineStore('hunt', () => {
     try {
       const execution = await huntService.getExecution(executionId, includeSteps)
 
-      // Update active executions
-      if (request === generation) activeExecutions.value[execution.id] = execution
-
-      return execution
+      return request === generation ? reconcile(execution, { includeSteps }) : execution
     } catch (err) {
       if (request === generation)
         error.value = err.response?.data?.detail || 'Failed to fetch execution'
@@ -128,19 +169,20 @@ export const useHuntStore = defineStore('hunt', () => {
   }
 
   async function getCaseExecutions(caseId) {
-    resetCaseExecutions()
+    if (String(caseId) !== String(workflowCaseId)) {
+      resetCaseExecutions()
+      workflowCaseId = caseId
+    }
     const request = generation
     if (!caseId) return []
     try {
       const executions = await huntService.getCaseExecutions(caseId)
       if (request !== generation) return []
-      executionHistory.value = executions
-      activeExecutions.value = Object.fromEntries(
-        executions.map((execution) => [execution.id, execution]),
-      )
+      executions.forEach((execution) => reconcile(execution))
+      historyIds.value = [...new Set(executions.map((execution) => execution.id))]
       await Promise.all(
         executions
-          .filter((execution) => ['running', 'pending', 'cancelling'].includes(execution.status))
+          .filter((execution) => isActive(records.value[execution.id]))
           .map(async (execution) => {
             try {
               await getExecution(execution.id, true)
@@ -150,7 +192,7 @@ export const useHuntStore = defineStore('hunt', () => {
             if (request === generation) subscribeToExecution(execution.id)
           }),
       )
-      return request === generation ? executions : []
+      return request === generation ? executionHistory.value : []
     } catch (err) {
       if (request !== generation) return []
       error.value = err.response?.data?.detail || 'Failed to fetch case executions'
@@ -165,17 +207,8 @@ export const useHuntStore = defineStore('hunt', () => {
       const result = await huntService.cancelExecution(executionId)
       if (request !== generation) return result
 
-      // Update execution status
-      const execution = activeExecutions.value[executionId]
-      if (execution?.revision && result.revision < execution.revision) return result
-      if (execution) {
-        execution.status = result.status
-        execution.revision = result.revision
-        activeExecutions.value[executionId] = execution
-      }
-
-      if (['pending', 'running', 'cancelling'].includes(result.status))
-        subscribeToExecution(executionId)
+      const execution = reconcile({ ...result, id: result.execution_id ?? executionId })
+      if (isActive(execution)) subscribeToExecution(executionId)
       else unsubscribeFromExecution(executionId)
 
       return result
@@ -197,13 +230,9 @@ export const useHuntStore = defineStore('hunt', () => {
       async refresh(signal) {
         const execution = await huntService.getExecution(executionId, true, signal)
         if (!current()) return { terminal: true }
-        const previous = activeExecutions.value[executionId]
-        if ((execution.revision ?? 0) < (previous?.revision ?? 0)) return {}
-        activeExecutions.value[executionId] = execution
-        const index = executionHistory.value.findIndex((item) => item.id === executionId)
-        if (index >= 0) executionHistory.value[index] = execution
+        const latest = reconcile(execution, { includeSteps: true })
         error.value = null
-        const terminal = !['pending', 'running', 'cancelling'].includes(execution.status)
+        const terminal = !isActive(latest)
         if (terminal) observations.delete(executionId)
         return { terminal }
       },
@@ -227,60 +256,17 @@ export const useHuntStore = defineStore('hunt', () => {
   }
 
   function removeExecution(executionId) {
-    delete activeExecutions.value[executionId]
+    delete records.value[executionId]
+    historyIds.value = historyIds.value.filter((id) => id !== executionId)
     unsubscribeFromExecution(executionId)
-  }
-
-  // Refresh all running executions with latest data
-  async function refreshRunningExecutions() {
-    const request = generation
-    const runningExecs = runningExecutions.value
-    if (runningExecs.length === 0) return
-
-    try {
-      const refreshPromises = runningExecs.map(async (execution) => {
-        try {
-          const updated = await huntService.getExecution(execution.id, true)
-
-          if (request !== generation) return
-
-          // Update in activeExecutions
-          activeExecutions.value = {
-            ...activeExecutions.value,
-            [updated.id]: updated,
-          }
-
-          // If execution is no longer running, update history
-          if (updated.status !== 'running' && updated.status !== 'pending') {
-            const historyIndex = executionHistory.value.findIndex((e) => e.id === updated.id)
-            if (historyIndex !== -1) {
-              executionHistory.value[historyIndex] = { ...updated }
-            } else {
-              executionHistory.value.unshift({ ...updated })
-            }
-
-            // Sort history by creation date
-            executionHistory.value.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-          }
-
-          return updated
-        } catch (err) {
-          console.error(`Failed to refresh execution ${execution.id}:`, err)
-          return execution
-        }
-      })
-
-      await Promise.all(refreshPromises)
-    } catch (err) {
-      console.error('Failed to refresh running executions:', err)
-    }
   }
 
   // Invalidate the previous case’s requests, streams, and execution data.
   function resetCaseExecutions() {
     generation++
-    activeExecutions.value = {}
-    executionHistory.value = []
+    records.value = {}
+    historyIds.value = []
+    workflowCaseId = null
     error.value = null
     for (const id of observations.keys()) unsubscribeFromExecution(id)
   }
@@ -310,7 +296,6 @@ export const useHuntStore = defineStore('hunt', () => {
     unsubscribeFromExecution,
     clearError,
     removeExecution,
-    refreshRunningExecutions,
     resetCaseExecutions,
   }
 })
