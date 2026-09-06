@@ -305,6 +305,36 @@ describe('Entity notes with the real editor', () => {
     expect(wrapper.text()).toContain('View Mode')
   })
 
+  it('includes silently refreshed notes when saving an existing field draft', async () => {
+    const entity = {
+      id: 9,
+      entity_type: 'person',
+      data: { first_name: 'Ada', address: { city: 'Old' }, notes: '<p>Initial</p>' },
+    }
+    await openNotes(entity)
+    await button('Edit Entity').trigger('click')
+    await tab('Address')
+    await input('City').setValue('New')
+    await wrapper.setProps({
+      entity: { ...entity, data: { ...entity.data, notes: '<p>Refreshed</p>' } },
+    })
+    await tab('Notes')
+    expect(textbox().text()).toBe('Refreshed')
+    expect(entityService.updateEntity).not.toHaveBeenCalled()
+    entityService.updateEntity.mockImplementation(async (_caseId, id, payload) => ({
+      id,
+      ...payload,
+    }))
+    await button('Save Changes').trigger('click')
+    await flushPromises()
+    expect(wrapper.emitted('edit').at(-1)[0].data).toMatchObject({
+      address: { city: 'New' },
+      notes: '<p>Refreshed</p>',
+    })
+    expect(entityService.updateEntity).toHaveBeenCalledTimes(1)
+    expect(textbox().text()).toBe('Refreshed')
+  })
+
   it('saves pending notes immediately on Cancel and preserves them when reopened', async () => {
     await openNotes({
       id: 9,
@@ -422,7 +452,12 @@ describe('Entity notes with the real editor', () => {
     await openNotes({
       id: 9,
       entity_type: 'person',
-      data: { first_name: 'Ada', notes: '<p>Initial</p>' },
+      data: {
+        first_name: 'Ada',
+        notes: '<p>Initial</p>',
+        address: { city: 'Old' },
+        sources: { 'address.city': 'Old source' },
+      },
     })
     await button('Edit Entity').trigger('click')
     await flushPromises()
@@ -451,6 +486,9 @@ describe('Entity notes with the real editor', () => {
       .findAll('input')
       .find((input) => input.element.value === 'Ada')
       .setValue('Grace')
+    await tab('Address')
+    await input('City').setValue('New')
+    await input('Source for City').setValue('New source')
     await wrapper
       .findAll('[role="tab"]')
       .find((tab) => tab.text() === 'Notes')
@@ -472,7 +510,12 @@ describe('Entity notes with the real editor', () => {
     expect(entityService.updateEntity).toHaveBeenCalledTimes(3)
     expect(entityService.updateEntity).toHaveBeenLastCalledWith(7, 9, {
       entity_type: 'person',
-      data: expect.objectContaining({ first_name: 'Grace', notes: '<p>Latest notes</p>' }),
+      data: expect.objectContaining({
+        first_name: 'Grace',
+        notes: '<p>Latest notes</p>',
+        address: { city: 'New' },
+        sources: { 'address.city': 'New source' },
+      }),
     })
     await completions[2]()
     wrapper.unmount()
