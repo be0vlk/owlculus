@@ -87,7 +87,6 @@ services:
           cpus: "0.25"
     environment: !override
       NODE_ENV: development
-      __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: ${__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS:-localhost}
       API_PROXY_TARGET: http://backend:8000
     volumes: !override
       - ./frontend:/app
