@@ -22,7 +22,13 @@
     <!-- View Mode Actions -->
     <template v-else>
       <v-btn prepend-icon="mdi-close" variant="text" @click="$emit('close')"> Close </v-btn>
-      <v-btn color="primary" prepend-icon="mdi-pencil" variant="flat" @click="$emit('edit')">
+      <v-btn
+        color="primary"
+        prepend-icon="mdi-pencil"
+        variant="flat"
+        :disabled="closing"
+        @click="$emit('edit')"
+      >
         Edit Entity
       </v-btn>
     </template>
@@ -33,6 +39,7 @@
 defineProps({
   isEditing: { type: Boolean, required: true },
   updating: { type: Boolean, required: true },
+  closing: { type: Boolean, default: false },
 })
 
 defineEmits(['close', 'edit', 'cancel', 'save'])
