@@ -1,46 +1,16 @@
-import process from 'node:process'
 import { randomUUID } from 'node:crypto'
 import { expect, test } from '@playwright/test'
 
-// Run this file on its own disposable stack through the browser runner. Only
-// bootstrap is shared; every test creates its own accounts and investigation data.
-const administrator = {
-  username: 'coverage_admin',
-  email: 'coverage-admin@example.org',
-  password: 'CoveragePassword123!',
-}
+import {
+  administrator,
+  adminHeaders,
+  bootstrap,
+  createCase,
+  json,
+  loginUi,
+} from './support/workflow'
 
-async function json(response) {
-  const body = await response.json()
-  expect(
-    response.ok(),
-    `API ${response.url()}: ${response.status()}${response.ok() ? '' : ` ${JSON.stringify(body)}`}`,
-  ).toBe(true)
-  return body
-}
-
-async function loginApi(request, credentials) {
-  return json(await request.post('/api/auth/login', { form: credentials }))
-}
-
-async function adminHeaders(request) {
-  const session = await loginApi(request, {
-    username: administrator.username,
-    password: administrator.password,
-  })
-  return { Authorization: `${session.token_type} ${session.access_token}` }
-}
-
-async function createCase(request, headers, title) {
-  const client = await json(
-    await request.post('/api/clients/', {
-      headers,
-      data: { name: title, email: `client-${randomUUID()}@example.org` },
-    }),
-  )
-  return json(await request.post('/api/cases/', { headers, data: { title, client_id: client.id } }))
-}
-
+// Each group bootstraps independently; every scenario owns its investigation data.
 async function createAnalystCase(request) {
   const headers = await adminHeaders(request)
   const credentials = {
@@ -59,27 +29,7 @@ async function createAnalystCase(request) {
   return { credentials, assignedCase }
 }
 
-async function loginUi(page, credentials) {
-  await page.goto('/login')
-  await page.getByLabel('Username', { exact: true }).fill(credentials.username)
-  await page.getByLabel('Password', { exact: true }).fill(credentials.password)
-  await page.getByRole('button', { name: 'Sign in', exact: true }).click()
-  await expect(page).toHaveURL(/\/cases$/)
-}
-
-test.beforeAll(async ({ request }) => {
-  expect(process.env.OWLCULUS_SETUP_TOKEN, 'Use the disposable-stack browser runner').toBeTruthy()
-  const setup = await json(await request.get('/api/auth/setup-status'))
-  if (setup.setup_required) {
-    await json(
-      await request.post('/api/users/', {
-        data: { ...administrator, setup_token: process.env.OWLCULUS_SETUP_TOKEN },
-      }),
-    )
-  }
-  // Also supports retrying this file on its own stack after bootstrap succeeded.
-  await adminHeaders(request)
-})
+test.beforeAll(async ({ request }) => bootstrap(request))
 
 test('redeems an invite using keyboard controls, then logs in with the created account', async ({
   page,

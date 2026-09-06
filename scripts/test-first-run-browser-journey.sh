@@ -10,6 +10,11 @@ gateway_port="${E2E_GATEWAY_PORT:-80}"
 gateway_https_port="${E2E_GATEWAY_HTTPS_PORT:-18443}"
 vite_port="${E2E_VITE_PORT:-5173}"
 backend_port="${E2E_BACKEND_PORT:-18000}"
+execution_controls=""
+execution_compose=()
+if [[ "${E2E_EXECUTIONS:-0}" == "1" || "$*" == *"durable-executions.spec.js"* ]]; then
+    execution_compose=(-f "$repository_root/frontend/e2e/execution-support/compose.yml")
+fi
 active_project=""
 active_topology=""
 active_frontend_port=""
@@ -17,22 +22,35 @@ active_hmr_probe_path=""
 active_artifact_directory=""
 
 run_compose() {
-    FRONTEND_PORT="$active_frontend_port" \
+    OWLCULUS_EXECUTION_CONTROLS="$execution_controls" \
+        FRONTEND_PORT="$active_frontend_port" \
         DEV_FRONTEND_PORT="$vite_port" \
         HTTPS_PORT="$gateway_https_port" \
         BACKEND_PORT="$backend_port" \
         OWLCULUS_LOG_FILE="/tmp/owlculus-e2e.log" \
-        "$compose_script" "$active_topology" --project-name "$active_project" "$@"
+        "$compose_script" "$active_topology" --project-name "$active_project" "${execution_compose[@]}" "$@"
 }
 
 cleanup_stack() {
     if [[ -n "$active_project" ]]; then
         if mkdir -p "$active_artifact_directory"; then
-            run_compose logs --no-color frontend > "$active_artifact_directory/frontend.log" 2>&1 || true
+            run_compose logs --no-color frontend backend execution-dispatcher plugin-worker hunt-worker > "$active_artifact_directory/stack.log" 2>&1 || true
+        fi
+        if [[ -n "$execution_controls" ]]; then
+            for ready_file in "$execution_controls"/*.ready; do
+                [[ -e "$ready_file" ]] || continue
+                touch "${ready_file%.ready}.release"
+            done
+            cp -R "$execution_controls" "$active_artifact_directory/provider-controls" || true
         fi
         echo "Removing ephemeral stack $active_project (including volumes)..."
         run_compose down --volumes --remove-orphans
         active_project=""
+    fi
+
+    if [[ -n "$execution_controls" ]]; then
+        rm -rf -- "$execution_controls"
+        execution_controls=""
     fi
 
     if [[ -n "$active_hmr_probe_path" ]]; then
@@ -89,7 +107,7 @@ wait_for_frontend() {
     done
 
     echo "Frontend did not become stable at $frontend_url." >&2
-    run_compose logs --no-color frontend >&2
+    run_compose logs --no-color frontend backend execution-dispatcher plugin-worker hunt-worker >&2
     return 1
 }
 
@@ -113,9 +131,17 @@ run_variant() {
         cp "$repository_root/frontend/e2e/fixtures/hmr-probe.js" "$active_hmr_probe_path"
     fi
 
+    if (( ${#execution_compose[@]} )); then
+        execution_controls="$(mktemp -d /tmp/owlculus-browser-executions.XXXXXX)"
+        chmod 777 "$execution_controls"
+    fi
+
     echo "Starting a fresh $server_kind stack for $host at the $viewport viewport..."
     run_compose up --detach --build --wait --wait-timeout 240
     wait_for_frontend
+    if (( ${#execution_compose[@]} )); then
+        run_compose exec -T backend python /e2e/seed.py
+    fi
 
     setup_token="$(read_setup_token_from_logs)"
     if [[ -z "$setup_token" ]]; then
@@ -126,6 +152,7 @@ run_variant() {
 
     (
         cd "$repository_root/frontend"
+        OWLCULUS_EXECUTION_CONTROLS="$execution_controls" \
         OWLCULUS_BASE_URL="$(browser_url "$host" "$active_frontend_port")" \
             OWLCULUS_SETUP_TOKEN="$setup_token" \
             OWLCULUS_SERVER_KIND="$server_kind" \
