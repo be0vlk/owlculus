@@ -34,3 +34,6 @@ Failed scenarios retain screenshots and traces. Runner output directories also
 contain `stack.log` (frontend, API, dispatcher and workers) and
 `provider-controls/`. Use a distinct `E2E_ARTIFACT_GROUP` to preserve results
 across focused runs. Do not count an expected failure or skip as passing coverage.
+
+See [COVERAGE.md](COVERAGE.md) for the ticket mapping, exact executed commands,
+review results, and separate final acceptance and development-run counts.

@@ -86,7 +86,7 @@ export function executionJourney(kind, page, request, fixture, mode = 'success',
     return json(accepted)
   }
 
-  async function reopen(accepted) {
+  async function reopen(accepted, fromActivity = false) {
     await page.goto(route)
     if (kind === 'plugin') {
       const detailResponse = page.waitForResponse(
@@ -101,11 +101,21 @@ export function executionJourney(kind, page, request, fixture, mode = 'success',
         .click()
       expect((await json(await detailResponse)).id).toBe(accepted.id)
     } else {
-      await page.getByRole('tab', { name: 'Execution History', exact: true }).click()
-      await page
-        .getByRole('button', { name: `View ${huntName} execution`, exact: true })
-        .first()
-        .click()
+      const state = await read(accepted.links.detail)
+      if (fromActivity || ['pending', 'running'].includes(state.status)) {
+        await page.getByRole('tab', { name: /Active Executions/ }).click()
+        await page
+          .locator('.hunt-progress-card')
+          .filter({ hasText: new RegExp(`Execution #${accepted.id}\\b`) })
+          .getByRole('button', { name: /^(View )?(Details|Results)$/ })
+          .click()
+      } else {
+        await page.getByRole('tab', { name: 'Execution History', exact: true }).click()
+        await page
+          .getByRole('button', { name: `View ${huntName} execution`, exact: true })
+          .first()
+          .click()
+      }
       await expect(page).toHaveURL(new RegExp(`/hunts/execution/${accepted.id}$`))
     }
   }

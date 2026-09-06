@@ -22,14 +22,15 @@ for (const kind of ['plugin', 'hunt']) {
         await ready(fixture.marker)
         expect((await journey.read(accepted.links.detail)).status).toBe('running')
         const other = fixture.cases[1]
-        await page.getByRole('combobox', { name: /Active case/ }).fill(other.case_number)
+        await page.getByRole('combobox', { name: /Active case/ }).press('Enter')
         await page
           .getByRole('option', {
-            name: `${other.case_number} — ${other.title} (Open)`,
-            exact: true,
+            name: new RegExp(other.case_number),
           })
           .click()
+        await expect(page).toHaveURL(new RegExp(`/case/${other.id}/`))
         await page.getByRole('link', { name: 'Case overview', exact: true }).click()
+        await expect(page).toHaveURL(new RegExp(`/case/${other.id}$`))
         await page.reload()
         await expect(
           page.getByRole('heading', { name: `Case: ${fixture.cases[1].case_number}`, exact: true }),
@@ -157,7 +158,7 @@ for (const kind of ['plugin', 'hunt']) {
       await journey.configure()
       const repeated = await journey.submit()
       expect(repeated.id).not.toBe(accepted.id)
-      await journey.reopen(repeated)
+      await journey.reopen(repeated, true)
       await journey.terminal(repeated, 'completed')
       expect((await journey.history()).map((item) => item.id).sort()).toEqual(
         [accepted.id, repeated.id].sort(),
