@@ -35,6 +35,7 @@ services:
       - ./backend:/app
       - uploads_dev_data:/app/uploads
       - setup_dev_data:/app/data/setup
+      - logs_dev_data:/app/logs
     ports:
       - "${BACKEND_PORT:-8000}:8000"
 
@@ -102,6 +103,8 @@ volumes:
   postgres_dev_data:
     driver: local
   uploads_dev_data:
+    driver: local
+  logs_dev_data:
     driver: local
   setup_dev_data:
     driver: local

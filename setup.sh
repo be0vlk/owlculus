@@ -512,30 +512,21 @@ EOF
         COMPOSE_TOPOLOGY="$DIRECT_TOPOLOGY"
     fi
     
-    # Build Docker images
+    # Keep Docker diagnostics visible and stop before claiming a failed install works.
     print_status "Building Docker images..."
-    if [ "$VERBOSE" = "true" ]; then
-        "$DOCKER_COMPOSE_CMD" "$COMPOSE_TOPOLOGY" build
-    else
-        "$DOCKER_COMPOSE_CMD" "$COMPOSE_TOPOLOGY" build > /dev/null 2>&1
+    if ! "$DOCKER_COMPOSE_CMD" "$COMPOSE_TOPOLOGY" build; then
+        print_error "Docker image build failed. See the error above."
+        return 1
     fi
-    
-    # Start services
-    print_status "Starting services..."
-    if [ "$VERBOSE" = "true" ]; then
-        "$DOCKER_COMPOSE_CMD" "$COMPOSE_TOPOLOGY" up -d
-    else
-        "$DOCKER_COMPOSE_CMD" "$COMPOSE_TOPOLOGY" up -d > /dev/null 2>&1
+
+    print_status "Starting services and waiting for readiness..."
+    if ! "$DOCKER_COMPOSE_CMD" "$COMPOSE_TOPOLOGY" up -d --wait --wait-timeout 120; then
+        print_error "Services failed to become ready. Inspect: $DOCKER_COMPOSE_CMD $COMPOSE_TOPOLOGY logs"
+        return 1
     fi
-    
-    # Wait for services to be healthy
-    print_status "Waiting for services to start..."
-    sleep 10
-    
-    # Check service health
+
     print_status "Checking service health..."
-    sleep 5
-    
+    local SERVICES_READY="true"
     # Test services based on deployment type
     if [ "$USE_REVERSE_PROXY" = "true" ]; then
         print_status "Caddy reverse proxy is handling requests"
@@ -543,25 +534,33 @@ EOF
         print_status "Note: HTTPS certificates will be automatically obtained on first access"
     elif [ "$DEPLOYMENT_TYPE" = "local_dev" ]; then
         # The development backend remains directly reachable for local tooling.
-        if curl -f -s "http://$DOMAIN:$BACKEND_PORT/health/ready" > /dev/null; then
+        if curl --connect-timeout 2 --max-time 5 --retry 10 --retry-delay 2 --retry-connrefused -f -s "http://$DOMAIN:$BACKEND_PORT/health/ready" > /dev/null; then
             print_success "Development backend is ready"
         else
-            print_warning "Development backend may still be starting up"
+            print_error "Development backend did not become ready"
+            SERVICES_READY="false"
         fi
 
-        if curl -f -s "$FRONTEND_URL/" > /dev/null; then
+        if curl --connect-timeout 2 --max-time 5 --retry 10 --retry-delay 2 --retry-connrefused -f -s "$FRONTEND_URL/" > /dev/null; then
             print_success "Frontend is running at $FRONTEND_URL"
         else
-            print_warning "Frontend may still be starting up at $FRONTEND_URL"
+            print_error "Frontend did not become ready at $FRONTEND_URL"
+            SERVICES_READY="false"
         fi
     else
-        if curl -f -s "$FRONTEND_URL/health/ready" > /dev/null; then
+        if curl --connect-timeout 2 --max-time 5 --retry 10 --retry-delay 2 --retry-connrefused -f -s "$FRONTEND_URL/health/ready" > /dev/null; then
             print_success "Caddy gateway is ready at $FRONTEND_URL"
         else
-            print_warning "Caddy gateway may still be starting up at $FRONTEND_URL"
+            print_error "Caddy gateway did not become ready at $FRONTEND_URL"
+            SERVICES_READY="false"
         fi
     fi
     
+    if [ "$SERVICES_READY" != "true" ]; then
+        print_error "Startup checks failed. Inspect: $DOCKER_COMPOSE_CMD $COMPOSE_TOPOLOGY logs"
+        return 1
+    fi
+
     # Success message
     echo ""
     print_success "Owlculus setup completed!"
