@@ -511,3 +511,31 @@ it('suppresses an old cancellation failure after newer durable completion', asyn
   expect(useHuntStore().cancellationPending[7]).toBeUndefined()
   wrapper.unmount()
 })
+
+it('reports a failed cancellation even when newer running progress arrives while the request is pending', async () => {
+  const wrapper = await mountExecution('running', 42, { revision: 2 })
+  let fail
+  mocks.cancelExecution.mockReturnValueOnce(
+    new Promise((_resolve, reject) => {
+      fail = reject
+    }),
+  )
+  const cancel = () => wrapper.findAll('button').find((button) => button.text().includes('Cancel'))
+  await cancel().trigger('click')
+  const step = { id: 1, status: 'completed', output: { results: ['new progress'] } }
+  mocks.getExecution.mockResolvedValue({ ...mocks.execution, revision: 3, steps: [step] })
+  await vi.advanceTimersByTimeAsync(1000)
+  fail(new Error('Cancellation unavailable'))
+  await flushPromises()
+  expect(wrapper.get('[role="alert"]').text()).toContain('Cancellation unavailable')
+  expect(wrapper.findComponent({ name: 'HuntStepResults' }).props('step')).toEqual(step)
+  expect(cancel().element.disabled).toBe(false)
+  expect(mocks.showNotification).toHaveBeenCalledWith('Cancellation unavailable', 'error')
+  mocks.cancelExecution.mockResolvedValue({ execution_id: 7, status: 'cancelling', revision: 4 })
+  await cancel().trigger('click')
+  await flushPromises()
+  expect(wrapper.text()).toContain('Cancelling')
+  expect(wrapper.text()).not.toContain('Cancellation unavailable')
+  expect(mocks.cancelExecution).toHaveBeenCalledTimes(2)
+  wrapper.unmount()
+})
