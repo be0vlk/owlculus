@@ -1,6 +1,14 @@
 import process from 'node:process'
 import { expect, test } from '@playwright/test'
 
+const workspaceViewports = [
+  [1440, 900],
+  [1366, 768],
+  [3440, 1440],
+  [390, 844],
+]
+const workspaceThemes = ['light', 'dark']
+
 async function setup(
   page,
   { theme = 'light', long = false, state = 'populated', role = 'Admin' } = {},
@@ -155,14 +163,25 @@ test('details and nested dialogs preserve focus, workspace draft and successful 
   expect((await download).suggestedFilename()).toContain('CASE-2026-041')
 })
 
+// Baseline captures use the same data without requiring the new panel to exist.
+async function verifyFinalLayout(page, capture) {
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+    ),
+  ).toBe(true)
+  await expect(page.getByRole('button', { name: 'Add Entity', exact: true })).toBeInViewport()
+  await detailsButton(page).click()
+  await expect(details(page)).toContainText('investigator-24')
+  await capture('details')
+  await details(page).getByRole('button', { name: 'Close Case details', exact: true }).click()
+}
+
+const evidenceChecks = { after: verifyFinalLayout }
+
 if (process.env.OWLCULUS_WORKSPACE_EVIDENCE) {
-  for (const [width, height] of [
-    [1440, 900],
-    [1366, 768],
-    [3440, 1440],
-    [390, 844],
-  ]) {
-    for (const theme of ['light', 'dark']) {
+  for (const [width, height] of workspaceViewports) {
+    for (const theme of workspaceThemes) {
       test(`render workspace ${width} ${theme}`, async ({ page }) => {
         await page.setViewportSize({ width, height })
         await setup(page, { theme, long: true })
@@ -176,22 +195,7 @@ if (process.env.OWLCULUS_WORKSPACE_EVIDENCE) {
             path: `../.scratch/case-workspace-polish/evidence/workspace/${phase}-${width}-${theme}-${name}.png`,
           })
         await capture('entities')
-        if (phase === 'after') {
-          expect(
-            await page.evaluate(
-              () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
-            ),
-          ).toBe(true)
-          await expect(
-            page.getByRole('button', { name: 'Add Entity', exact: true }),
-          ).toBeInViewport()
-          await detailsButton(page).click()
-          await expect(details(page)).toContainText('investigator-24')
-          await capture('details')
-          await details(page)
-            .getByRole('button', { name: 'Close Case details', exact: true })
-            .click()
-        }
+        await evidenceChecks[phase]?.(page, capture)
         await page.getByRole('tab', { name: 'Evidence', exact: true }).click()
         await expect(
           page.getByRole('button', { name: 'Upload Evidence', exact: true }),
@@ -226,13 +230,8 @@ for (const role of ['Analyst', 'Investigator']) {
 }
 
 if (process.env.OWLCULUS_WORKSPACE_EVIDENCE === 'after') {
-  for (const [width, height] of [
-    [1440, 900],
-    [1366, 768],
-    [3440, 1440],
-    [390, 844],
-  ]) {
-    for (const theme of ['light', 'dark']) {
+  for (const [width, height] of workspaceViewports) {
+    for (const theme of workspaceThemes) {
       test(`workspace feedback ${width} ${theme}`, async ({ page }) => {
         await page.setViewportSize({ width, height })
         await page.emulateMedia({ reducedMotion: 'reduce' })

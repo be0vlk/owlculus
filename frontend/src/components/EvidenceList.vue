@@ -28,7 +28,7 @@
           </div>
           <v-btn
             v-if="treeItems.length > 0 && userRole !== 'Analyst'"
-            color="primary"
+            color="on-surface"
             size="small"
             variant="outlined"
             @click="showCreateFolder = true"
