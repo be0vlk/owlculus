@@ -1,6 +1,6 @@
 <template>
   <div>
-    <v-tabs v-model="activeTab" color="primary">
+    <v-tabs v-model="activeTab" color="on-surface" show-arrows aria-label="Case workspaces">
       <v-tab v-for="tab in tabs" :key="tab.name" :text="tab.label" :value="tab.name" />
     </v-tabs>
 
@@ -12,7 +12,7 @@
         eager
         :transition="false"
       >
-        <v-container class="pa-4">
+        <v-container fluid class="pa-0">
           <slot :active-tab="tab.name" />
         </v-container>
       </v-window-item>
@@ -44,6 +44,11 @@ const activeTab = computed({
 </script>
 
 <style scoped>
+:deep(.v-tab:focus-visible) {
+  outline: 2px solid currentColor;
+  outline-offset: -3px;
+}
+
 .case-tab-window {
   min-height: 200px;
 }

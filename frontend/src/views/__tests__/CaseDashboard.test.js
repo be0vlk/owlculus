@@ -70,7 +70,7 @@ vi.mock('@/services/evidence', () => ({
 vi.mock('@/utils/download', () => ({ downloadBlob: mocks.downloadBlob }))
 
 const BaseDashboardStub = defineComponent({
-  template: '<div><slot name="header-actions" /><slot /></div>',
+  template: '<div><slot name="header" /><slot /></div>',
 })
 const PassthroughStub = defineComponent({ template: '<div><slot /></div>' })
 const ButtonStub = defineComponent({
@@ -101,7 +101,7 @@ const EditCaseModalStub = defineComponent({
   name: 'EditCaseModalStub',
   emits: ['update'],
   template:
-    "<button data-testid=\"emit-case-update\" @click=\"$emit('update', { title: 'Updated investigation', status: 'Closed' })\">Update</button>",
+    "<button data-testid=\"emit-case-update\" @click=\"$emit('update', { id: 42, title: 'Updated investigation', status: 'Closed' })\">Update</button>",
 })
 
 const mountDashboard = async (global = {}, keyedWorkspace = false) => {
@@ -287,7 +287,7 @@ describe('CaseDashboard', () => {
 
     await wrapper.get('[data-testid="emit-case-update"]').trigger('click')
 
-    expect(wrapper.get('[data-testid="case-detail"]').text()).toBe('Updated investigation Closed')
+    expect(wrapper.text()).toContain('Updated investigation')
   })
 
   it.each(

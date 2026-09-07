@@ -282,7 +282,7 @@ async function exerciseCaseAndEntityWorkflow(page) {
   await expect(caseRow).toContainText('Migration Safety Client')
   await caseRow.getByRole('cell', { name: 'Migration Safety Case', exact: true }).click()
   await expect(page).toHaveURL(/\/case\/\d+$/)
-  await expect(page.getByText('Case Information', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Case details', exact: true }).click()
   await page.getByRole('button', { name: 'Manage Users', exact: true }).click()
   const members = page.getByRole('dialog', { name: 'Manage Case Users', exact: true })
   await members.getByLabel('Select User', { exact: true }).press('ArrowDown')
@@ -301,9 +301,12 @@ async function exerciseCaseAndEntityWorkflow(page) {
   await editCaseDialog.getByRole('button', { name: 'Save Changes', exact: true }).click()
   await expect(editCaseDialog).toBeHidden()
   await expect(
-    page.getByRole('main').getByText('Migration Safety Case Updated', { exact: true }),
+    page
+      .getByRole('dialog', { name: 'Case details', exact: true })
+      .getByText('Migration Safety Case Updated', { exact: true }),
   ).toBeVisible()
 
+  await page.getByRole('button', { name: 'Close Case details', exact: true }).click()
   const evidenceTab = page.getByRole('tab', { name: 'Evidence', exact: true })
   await evidenceTab.click()
   await expect(evidenceTab).toHaveAttribute('aria-selected', 'true')

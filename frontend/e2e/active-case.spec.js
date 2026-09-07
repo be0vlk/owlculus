@@ -75,7 +75,9 @@ for (const viewport of [
     await expect(page.getByRole('option', { name: /CASE-OLD/ })).toBeVisible()
     await page.getByRole('option', { name: /CASE-OLD/ }).press('Enter')
     await expect(page).toHaveURL(/\/case\/1$/)
-    await expect(page.getByRole('heading', { name: 'Case: CASE-OLD', exact: true })).toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: 'Older investigation', exact: true }),
+    ).toBeVisible()
     await expect(
       page.getByRole('status').filter({ hasText: 'Active case: CASE-OLD' }),
     ).toBeVisible()
@@ -144,6 +146,7 @@ test('creating a case selects it and opens its overview', async ({ page }) => {
 test('refreshes membership without closing the current workspace dialog', async ({ page }) => {
   await setup(page)
   await page.goto('/case/2')
+  await page.getByRole('button', { name: 'Case details', exact: true }).click()
   await page.getByRole('button', { name: 'Manage Users', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Manage Case Users', exact: true })
   await dialog.getByLabel('Select User', { exact: true }).press('ArrowDown')

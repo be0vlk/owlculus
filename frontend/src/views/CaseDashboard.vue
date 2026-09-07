@@ -12,25 +12,41 @@
     :title="caseData ? `Case: ${caseData.case_number}` : 'Case Details'"
     :loading="loading"
     :error="error"
+    compact
   >
-    <template #header-actions>
-      <div v-if="caseData" class="d-flex flex-wrap justify-end ga-2">
-        <v-btn
-          data-testid="case-export-button"
-          color="white"
-          prepend-icon="mdi-download"
-          :loading="exportingCase"
-          @click="handleExportCase"
-        >
-          Export
-        </v-btn>
-        <v-btn color="white" prepend-icon="mdi-pencil" @click="showEditModal = true">
-          Edit Case
-        </v-btn>
-        <v-btn color="white" prepend-icon="mdi-account-group" @click="showManageUsersModal = true">
-          Manage Users
-        </v-btn>
-      </div>
+    <template #header>
+      <header v-if="caseData" class="case-header">
+        <div class="case-identity">
+          <div class="d-flex flex-wrap align-center ga-2 mb-1">
+            <span class="text-label-large case-number">{{ caseData.case_number }}</span>
+            <v-chip size="small" variant="tonal">
+              {{ caseData.status || 'N/A' }}
+            </v-chip>
+          </div>
+          <h1 class="font-weight-bold case-title" :title="caseData.title">
+            {{ caseData.title || 'Untitled case' }}
+          </h1>
+        </div>
+        <div class="d-flex flex-wrap ga-2">
+          <v-btn
+            data-testid="case-export-button"
+            variant="outlined"
+            prepend-icon="mdi-download"
+            :loading="exportingCase"
+            @click="handleExportCase"
+          >
+            Export
+          </v-btn>
+          <v-btn
+            variant="tonal"
+            prepend-icon="mdi-information-outline"
+            @click="showCaseDetails = true"
+          >
+            Case details
+          </v-btn>
+        </div>
+      </header>
+      <h1 v-else class="text-headline-small mb-4">Case details</h1>
     </template>
 
     <template #loading>
@@ -51,174 +67,135 @@
 
     <!-- Case Content -->
     <div v-if="caseData">
-      <!-- Case Information Card -->
-      <v-card class="mb-6" variant="outlined">
-        <!-- Header -->
-        <v-card-title class="d-flex align-center pa-4 bg-surface">
-          <v-icon icon="mdi-information" color="primary" size="large" class="me-3" />
-          <div class="flex-grow-1">
-            <div class="text-title-large font-weight-bold">Case Information</div>
-            <div class="text-body-medium text-medium-emphasis">
-              Details and metadata for this investigation
-            </div>
-          </div>
-        </v-card-title>
+      <CaseTabs v-model="activeCaseTab" :tabs="availableTabs">
+        <template #default="{ activeTab }">
+          <!-- Entities Tab -->
+          <div v-if="activeTab === 'entities'" class="py-4">
+            <v-row class="mb-4" no-gutters>
+              <v-col cols="auto">
+                <v-btn color="primary" prepend-icon="mdi-plus" @click="openNewEntityModal">
+                  Add Entity
+                </v-btn>
+              </v-col>
+            </v-row>
 
-        <v-divider />
-
-        <v-card-text class="pa-6">
-          <v-row>
-            <v-col cols="12" lg="8">
-              <CaseDetail :case-data="caseData" :client="client" />
-            </v-col>
-          </v-row>
-        </v-card-text>
-      </v-card>
-
-      <!-- Case Tabs Card -->
-      <v-card variant="outlined">
-        <!-- Header -->
-        <v-card-title class="d-flex align-center pa-4 bg-surface">
-          <v-icon icon="mdi-tab" color="primary" size="large" class="me-3" />
-          <div class="flex-grow-1">
-            <div class="text-title-large font-weight-bold">Case Management</div>
-            <div class="text-body-medium text-medium-emphasis">
-              Manage entities, evidence, and notes
-            </div>
-          </div>
-        </v-card-title>
-
-        <v-divider />
-        <CaseTabs v-model="activeCaseTab" :tabs="availableTabs">
-          <template #default="{ activeTab }">
-            <!-- Entities Tab -->
-            <div v-if="activeTab === 'entities'" class="pa-4">
-              <v-row class="mb-4" no-gutters>
-                <v-col cols="auto">
-                  <v-btn color="primary" prepend-icon="mdi-plus" @click="openNewEntityModal">
-                    Add Entity
-                  </v-btn>
-                </v-col>
-              </v-row>
-
-              <!-- Entity Data Table -->
-              <EntityDataTable
-                ref="entityTableRef"
-                :case-id="caseId"
-                :entity-service="entityServiceRef"
-                @create="openNewEntityModal"
-                @deleted="handleEntityDeleted"
-                @edit="showEntityDetails"
-                @view="showEntityDetails"
-              />
-            </div>
-
-            <!-- Evidence Tab -->
-            <div v-else-if="activeTab === 'evidence'" class="pa-2 pa-sm-4">
-              <v-row class="mb-4" no-gutters>
-                <v-col cols="auto">
-                  <v-btn
-                    :disabled="!hasFolders"
-                    color="primary"
-                    prepend-icon="mdi-upload"
-                    @click="showUploadEvidenceModal = true"
-                  >
-                    Upload Evidence
-                  </v-btn>
-                  <v-tooltip v-if="!hasFolders" activator="parent" location="bottom">
-                    Create a folder first to organize evidence
-                  </v-tooltip>
-                </v-col>
-              </v-row>
-              <EvidenceList
-                ref="evidenceListRef"
-                :case-id="caseId"
-                :error="evidenceError"
-                :evidence-list="evidence"
-                :loading="loadingEvidence"
-                :user-role="userRole"
-                @delete="handleDeleteEvidence"
-                @download="handleDownloadEvidence"
-                @refresh="loadEvidence"
-                @upload-to-folder="handleUploadToFolder"
-                @extract-metadata="handleExtractMetadata"
-                @view-content="handleViewFileContent"
-                @evidence-moved="handleEvidenceMoved"
-              />
-            </div>
-
-            <CaseExecutionHistory
-              v-else-if="activeTab === 'runs'"
+            <!-- Entity Data Table -->
+            <EntityDataTable
+              ref="entityTableRef"
               :case-id="caseId"
-              :allow-hunts="userRole !== 'Analyst'"
+              :entity-service="entityServiceRef"
+              @create="openNewEntityModal"
+              @deleted="handleEntityDeleted"
+              @edit="showEntityDetails"
+              @view="showEntityDetails"
             />
+          </div>
 
-            <!-- Tasks Tab -->
-            <div v-else-if="activeTab === 'tasks'" class="pa-4">
-              <CaseTasks :case-id="caseId" />
-            </div>
+          <!-- Evidence Tab -->
+          <div v-else-if="activeTab === 'evidence'" class="py-4">
+            <v-row class="mb-4" no-gutters>
+              <v-col cols="auto">
+                <v-btn
+                  :disabled="!hasFolders"
+                  color="primary"
+                  prepend-icon="mdi-upload"
+                  @click="showUploadEvidenceModal = true"
+                >
+                  Upload Evidence
+                </v-btn>
+                <v-tooltip v-if="!hasFolders" activator="parent" location="bottom">
+                  Create a folder first to organize evidence
+                </v-tooltip>
+              </v-col>
+            </v-row>
+            <EvidenceList
+              ref="evidenceListRef"
+              :case-id="caseId"
+              :error="evidenceError"
+              :evidence-list="evidence"
+              :loading="loadingEvidence"
+              :user-role="userRole"
+              @delete="handleDeleteEvidence"
+              @download="handleDownloadEvidence"
+              @refresh="loadEvidence"
+              @upload-to-folder="handleUploadToFolder"
+              @extract-metadata="handleExtractMetadata"
+              @view-content="handleViewFileContent"
+              @evidence-moved="handleEvidenceMoved"
+            />
+          </div>
 
-            <!-- Notes Tab -->
-            <div v-else-if="activeTab === 'notes'" class="pa-2 pa-sm-6">
-              <v-card variant="outlined">
-                <v-card-title class="d-flex flex-wrap ga-2 align-center text-wrap">
-                  <span><v-icon start>mdi-note-text</v-icon>Case Notes</span>
-                  <v-spacer />
-                  <v-chip
-                    :color="isEditingNotes ? 'warning' : 'primary'"
-                    class="me-3"
-                    size="small"
-                    variant="tonal"
+          <CaseExecutionHistory
+            v-else-if="activeTab === 'runs'"
+            :case-id="caseId"
+            :allow-hunts="userRole !== 'Analyst'"
+          />
+
+          <!-- Tasks Tab -->
+          <div v-else-if="activeTab === 'tasks'" class="py-4">
+            <CaseTasks :case-id="caseId" />
+          </div>
+
+          <!-- Notes Tab -->
+          <div v-else-if="activeTab === 'notes'" class="case-notes py-4">
+            <v-card variant="outlined">
+              <v-card-title class="d-flex flex-wrap ga-2 align-center text-wrap">
+                <span><v-icon start>mdi-note-text</v-icon>Case Notes</span>
+                <v-spacer />
+                <v-chip
+                  :color="isEditingNotes ? 'warning' : 'primary'"
+                  class="me-3"
+                  size="small"
+                  variant="tonal"
+                >
+                  {{ isEditingNotes ? 'Editing' : 'View Mode' }}
+                </v-chip>
+              </v-card-title>
+              <v-divider />
+              <v-card-text class="pa-0">
+                <v-alert v-if="notesSaveError" type="error" class="mb-3">{{
+                  notesSaveError
+                }}</v-alert>
+                <p v-if="notesSaveStatus" role="status">{{ notesSaveStatus }}</p>
+                <NoteEditor
+                  v-model="caseData.notes"
+                  :case-id="caseId"
+                  :is-editing="isEditingNotes"
+                  :save-mode="'manual'"
+                  :variant="'plain'"
+                  @update:modelValue="handleNotesUpdate"
+                />
+              </v-card-text>
+              <v-divider />
+              <v-card-actions class="pa-4">
+                <v-spacer />
+                <div v-if="!isEditingNotes">
+                  <v-btn
+                    color="primary"
+                    prepend-icon="mdi-pencil"
+                    variant="flat"
+                    @click="startEditingNotes"
                   >
-                    {{ isEditingNotes ? 'Editing' : 'View Mode' }}
-                  </v-chip>
-                </v-card-title>
-                <v-divider />
-                <v-card-text class="pa-0">
-                  <v-alert v-if="notesSaveError" type="error" class="mb-3">{{
-                    notesSaveError
-                  }}</v-alert>
-                  <p v-if="notesSaveStatus" role="status">{{ notesSaveStatus }}</p>
-                  <NoteEditor
-                    v-model="caseData.notes"
-                    :case-id="caseId"
-                    :is-editing="isEditingNotes"
-                    :save-mode="'manual'"
-                    :variant="'plain'"
-                    @update:modelValue="handleNotesUpdate"
-                  />
-                </v-card-text>
-                <v-divider />
-                <v-card-actions class="pa-4">
-                  <v-spacer />
-                  <div v-if="!isEditingNotes">
-                    <v-btn
-                      color="primary"
-                      prepend-icon="mdi-pencil"
-                      variant="flat"
-                      @click="startEditingNotes"
-                    >
-                      Edit Notes
-                    </v-btn>
-                  </div>
-                  <div v-else class="d-flex ga-2">
-                    <v-btn variant="text" @click="cancelEditingNotes"> Cancel </v-btn>
-                    <v-btn
-                      :loading="savingNotes"
-                      color="primary"
-                      prepend-icon="mdi-content-save"
-                      variant="flat"
-                      @click="saveNotes"
-                    >
-                      Save
-                    </v-btn>
-                  </div>
-                </v-card-actions>
-              </v-card>
-            </div>
-          </template>
-        </CaseTabs>
-      </v-card>
+                    Edit Notes
+                  </v-btn>
+                </div>
+                <div v-else class="d-flex ga-2">
+                  <v-btn variant="text" @click="cancelEditingNotes"> Cancel </v-btn>
+                  <v-btn
+                    :loading="savingNotes"
+                    color="primary"
+                    prepend-icon="mdi-content-save"
+                    variant="flat"
+                    @click="saveNotes"
+                  >
+                    Save
+                  </v-btn>
+                </div>
+              </v-card-actions>
+            </v-card>
+          </div>
+        </template>
+      </CaseTabs>
     </div>
   </BaseDashboard>
 
@@ -236,6 +213,20 @@
       <v-btn variant="text" @click="closeNotification">Close</v-btn>
     </template>
   </v-snackbar>
+
+  <CaseDetailsPanel
+    v-if="caseData"
+    v-model="showCaseDetails"
+    :case-data="caseData"
+    :client="client"
+    :refresh-error="detailsRefreshError"
+    @retry="loadCaseData({ refresh: true })"
+    :can-edit="userRole !== 'Analyst'"
+    :can-manage-users="userRole === 'Admin'"
+    :nested-dialog-open="showEditModal || showManageUsersModal"
+    @edit="showEditModal = true"
+    @manage-users="showManageUsersModal = true"
+  />
 
   <!-- Modals -->
   <EditCaseModal
@@ -347,7 +338,7 @@ import { useActiveCaseStore } from '../stores/activeCase'
 import { useNotifications } from '../composables/useNotifications'
 import { useDialogFocusRestore } from '../composables/useDialogFocusRestore'
 import BaseDashboard from '../components/BaseDashboard.vue'
-import CaseDetail from '../components/CaseDetail.vue'
+import CaseDetailsPanel from '../components/CaseDetailsPanel.vue'
 import EntityDataTable from '../components/entities/EntityDataTable.vue'
 import CaseTabs from '../components/CaseTabs.vue'
 import EditCaseModal from '../components/EditCaseModal.vue'
@@ -393,6 +384,8 @@ const client = ref(null)
 const entities = ref([])
 const entityTableRef = ref(null)
 const evidenceListRef = ref(null)
+const showCaseDetails = ref(false)
+const detailsRefreshError = ref('')
 const showEditModal = ref(false)
 const showManageUsersModal = ref(false)
 const showNewEntityModal = ref(false)
@@ -515,13 +508,21 @@ async function handleEditEntity(updatedEntity) {
 }
 
 const handleCaseUpdate = async (updatedCase) => {
-  Object.assign(caseData.value, updatedCase)
+  if (disposed || updatedCase.id !== caseId.value) return
+  applyCaseMetadata(updatedCase)
   await activeCase.refresh()
 }
 
 const handleMembershipUpdate = async () => {
+  const owner = caseId.value
   await activeCase.refresh()
-  if (caseId.value) await loadCaseData()
+  if (!disposed && caseId.value === owner) await loadCaseData({ refresh: true })
+}
+
+function applyCaseMetadata(data) {
+  // Logistics updates must not replace a draft or remount the retained editor.
+  const notes = isEditingNotes.value ? caseData.value.notes : data.notes
+  caseData.value = { ...caseData.value, ...data, notes }
 }
 
 const handleNotesUpdate = (notes) => {
@@ -591,32 +592,41 @@ const handleSkipEditEntity = () => {
 const handleEntityDeleted = () => {}
 
 const loadClientData = async (clientId) => {
+  const owner = caseId.value
   try {
     const response = await clientService.getClient(clientId)
-    client.value = response
+    if (!disposed && caseId.value === owner) client.value = response
   } catch (err) {
     console.error('Error loading client:', err)
   }
 }
 
-const loadCaseData = async () => {
+const loadCaseData = async ({ refresh = false } = {}) => {
   if (!caseId.value) return
   const requestedCaseId = caseId.value
   try {
-    loading.value = true
+    if (!refresh) loading.value = true
+    detailsRefreshError.value = ''
     error.value = null
     const data = await caseService.getCase(requestedCaseId)
-    if (caseId.value !== requestedCaseId) return
-    caseData.value = data
+    if (disposed || caseId.value !== requestedCaseId) return
+    applyCaseMetadata(data)
     if (data.client_id) {
       await loadClientData(data.client_id)
+    } else {
+      client.value = null
     }
   } catch (err) {
+    if (disposed || caseId.value !== requestedCaseId) return
     if ([403, 404].includes(err.response?.status)) {
       await activeCase.recoverUnavailable(requestedCaseId)
       return
     }
-    error.value = `Error loading case: ${err.message}`
+    if (refresh) {
+      detailsRefreshError.value = 'Failed to refresh case details. Your workspace is preserved.'
+    } else {
+      error.value = `Error loading case: ${err.message}`
+    }
     console.error('Error loading case:', err)
   } finally {
     loading.value = false
@@ -797,3 +807,44 @@ onMounted(async () => {
   }
 })
 </script>
+
+<style scoped>
+.case-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.case-identity {
+  flex: 1 1 360px;
+  min-width: 0;
+}
+
+.case-title,
+.case-number {
+  overflow-wrap: anywhere;
+}
+
+.case-title {
+  font-size: 24px;
+  line-height: 1.35;
+}
+
+@media (width <= 600px) {
+  .case-title {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    overflow: hidden;
+    font-size: 20px;
+    line-height: 1.4;
+  }
+}
+
+.case-notes {
+  max-width: 960px;
+  margin-inline: auto;
+}
+</style>
