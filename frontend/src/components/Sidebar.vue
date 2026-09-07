@@ -142,9 +142,12 @@ const navigationSections = computed(() => {
     },
   ]
 
-  // Add Clients for admin users
+  // Add management pages for admin users
   if (authStore.requiresAdmin()) {
-    managementItems.push({ name: 'Clients', href: '/clients', icon: 'mdi-account-group-outline' })
+    managementItems.push(
+      { name: 'Admin', href: '/admin', icon: 'mdi-shield-account-outline' },
+      { name: 'Clients', href: '/clients', icon: 'mdi-account-group-outline' },
+    )
   }
 
   items.push(
@@ -190,10 +193,8 @@ const navigationSections = computed(() => {
 })
 
 const settingsItem = computed(() => {
-  if (!authStore.isInitialized) return null
-  return authStore.requiresAdmin()
-    ? { name: 'Admin', href: '/admin', icon: 'mdi-shield-account-outline' }
-    : { name: 'Settings', href: '/settings', icon: 'mdi-cog-outline' }
+  if (!authStore.isInitialized || authStore.requiresAdmin()) return null
+  return { name: 'Settings', href: '/settings', icon: 'mdi-cog-outline' }
 })
 
 const handleLogout = () => {
