@@ -511,3 +511,25 @@ it('shows the latest progress once without repeated status keys and hides it at 
   expect(warn.mock.calls.flat().join(' ')).not.toContain('Duplicate keys')
   warn.mockRestore()
 })
+
+it('places legacy weak-only groups after useful associations', () => {
+  const group = (id, kind, signal) => ({
+    type: 'data',
+    data: {
+      case_id: 1,
+      entity_id: id,
+      entity_name: `Source ${id}`,
+      match_type: kind,
+      matches: [{ case_id: 2, entity_id: id + 10, signal }],
+    },
+  })
+  const wrapper = mountWithVuetify(CorrelationScanPluginResult, {
+    props: {
+      result: [
+        group(1, 'domain', 'Low signal: common email provider'),
+        group(2, 'employer', 'Shared employer'),
+      ],
+    },
+  })
+  expect(wrapper.findAll('h3').map((h) => h.text())).toEqual(['Source 2', 'Source 1'])
+})

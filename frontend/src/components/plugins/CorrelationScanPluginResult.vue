@@ -164,7 +164,11 @@
 
 <script setup>
 import { computed } from 'vue'
-import { assembleCorrelationResults, isWeakProviderMatch } from '@/utils/correlationResults'
+import {
+  assembleCorrelationResults,
+  isWeakProviderMatch,
+  correlationGroupKey,
+} from '@/utils/correlationResults'
 import { useRouter } from 'vue-router'
 
 const props = defineProps({
@@ -219,7 +223,7 @@ const entityLabel = (entity) =>
 const resultKey = (item) => {
   const data = item.data || {}
   return isGroup(item)
-    ? `${data.case_id}:${data.entity_id}:${data.match_type}:${data.normalized_value || data.matched_value || data.domain || data.employer_name || ''}`
+    ? correlationGroupKey(data)
     : `${item.type}:${data.notice_type || ''}:${data.case_id || ''}:${data.entity_id || ''}:${data.field || ''}:${data.message || ''}`
 }
 const counts = computed(() => {

@@ -160,3 +160,34 @@ it('ignores a delayed result page after switching executions', async () => {
   await vi.waitFor(() => expect(dialog().text()).toContain('New content'))
   expect(dialog().text()).not.toContain('Old content')
 })
+
+it('reloads the cleared prefix when access is restored and retrieval is retried', async () => {
+  pluginService.getExecution.mockResolvedValue(state(1, 'running'))
+  pluginService.getResults.mockImplementation(async (_id, cursor) =>
+    cursor === 0 ? page([result('Restored')]) : page([]),
+  )
+  await open()
+  await vi.waitFor(() => expect(dialog().text()).toContain('Restored'))
+  pluginService.getResults.mockRejectedValue({ response: { status: 403 } })
+  await button(dialog(), 'Export').trigger('click')
+  await flushPromises()
+  expect(dialog().text()).not.toContain('Restored')
+  pluginService.getExecution.mockResolvedValue(state())
+  pluginService.getResults.mockImplementation(async (_id, cursor) =>
+    cursor === 0 ? page([result('Restored')]) : page([]),
+  )
+  await button(dialog(), 'Retry retrieval').trigger('click')
+  await flushPromises()
+  expect(dialog().text()).toContain('Restored')
+})
+
+it('keeps the dialog available when reopening cannot refresh execution metadata', async () => {
+  pluginService.getExecution.mockResolvedValue(state())
+  pluginService.getResults.mockResolvedValue(page([result()]))
+  await open()
+  await dialog().get('button[aria-label="Close plugin results"]').trigger('click')
+  pluginService.getExecution.mockRejectedValue(new Error('offline'))
+  await button(wrapper, 'View retained results').trigger('click')
+  await flushPromises()
+  expect(dialog().text()).toContain('Retry retrieval')
+})
