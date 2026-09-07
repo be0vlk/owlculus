@@ -18,7 +18,7 @@ from sqlmodel import Session
 from app.core.dependencies import get_current_user
 from app.database import models
 from app.database.connection import get_db
-from app.executions.results import hunt_view, step_results, step_view
+from app.executions.results import HuntResultReader
 from app.executions.service import hunt_observation
 from app.schemas import hunt_schema as schemas
 from app.services.export_service import ExportService
@@ -125,7 +125,7 @@ async def execute_hunt(
     response.headers["Location"] = f"/api/hunts/executions/{execution.id}"
     return schemas.HuntExecutionResponse(
         **hunt_observation(db, execution),
-        **hunt_view(db, execution, current_user),
+        **HuntResultReader(db, execution, current_user).hunt_view(),
         hunt=(
             schemas.HuntResponse(
                 **hunt.__dict__,
@@ -163,9 +163,10 @@ async def get_execution_status(
             execution_id, current_user=current_user
         )
 
+    reader = HuntResultReader(db, execution, current_user, steps)
     response = schemas.HuntExecutionResponse(
         **hunt_observation(db, execution),
-        **hunt_view(db, execution, current_user),
+        **reader.hunt_view(),
         hunt=(
             schemas.HuntResponse(
                 **hunt.__dict__,
@@ -175,10 +176,7 @@ async def get_execution_status(
             else None
         ),
         steps=(
-            [
-                schemas.HuntStepResponse(**step_view(db, step, current_user))
-                for step in steps
-            ]
+            [schemas.HuntStepResponse(**reader.step_view(step)) for step in steps]
             if steps
             else None
         ),
@@ -276,4 +274,9 @@ async def get_step_results(
     step = next((step for step in steps if step.step_id == step_id), None)
     if step is None:
         raise ResourceNotFoundException("Hunt step not found")
-    return step_results(db, step, current_user, cursor, limit)
+    execution = await HuntService(db).get_execution(
+        execution_id, current_user=current_user
+    )
+    return HuntResultReader(db, execution, current_user, steps).step_results(
+        step, cursor, limit
+    )

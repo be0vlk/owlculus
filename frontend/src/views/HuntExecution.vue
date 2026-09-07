@@ -260,7 +260,14 @@
                   </div>
                 </v-expansion-panel-title>
                 <v-expansion-panel-text>
-                  <HuntStepResults :step="step" :step-number="index + 1" />
+                  <HuntStepResults
+                    :step="step"
+                    :step-number="index + 1"
+                    :retrieval-loading="loading"
+                    :retrieval-error="huntStore.error"
+                    :export-error="exportError"
+                    @retry="refreshExecution"
+                  />
                 </v-expansion-panel-text>
               </v-expansion-panel>
             </v-expansion-panels>
@@ -311,19 +318,30 @@
         <v-card-title class="pa-4"> Step Output: {{ selectedStep?.step_id }} </v-card-title>
         <v-divider />
         <v-card-text class="pa-4">
-          <v-alert
-            v-if="
-              selectedStep?.output?.partial ||
-              selectedStep?.output?.errors?.length ||
-              selectedStep?.status !== 'completed'
-            "
-            type="warning"
-            role="alert"
-            class="mb-4"
-          >
-            Partial retained results. This step has not completed successfully.
-          </v-alert>
-          <pre class="step-output">{{ JSON.stringify(selectedStep?.output, null, 2) }}</pre>
+          <HuntStepResults
+            v-if="selectedStep?.plugin_name === 'CorrelationScan'"
+            :step="selectedStep"
+            :step-number="1"
+            :retrieval-loading="loading"
+            :retrieval-error="huntStore.error"
+            :export-error="exportError"
+            @retry="refreshExecution"
+          />
+          <template v-else>
+            <v-alert
+              v-if="
+                selectedStep?.output?.partial ||
+                selectedStep?.output?.errors?.length ||
+                selectedStep?.status !== 'completed'
+              "
+              type="warning"
+              role="alert"
+              class="mb-4"
+            >
+              Partial retained results. This step has not completed successfully.
+            </v-alert>
+            <pre class="step-output">{{ JSON.stringify(selectedStep?.output, null, 2) }}</pre>
+          </template>
         </v-card-text>
         <v-card-actions class="pa-4">
           <v-spacer />
@@ -395,6 +413,7 @@ const showStepErrorModal = ref(false)
 const executionLog = ref([])
 const elapsedTime = ref('')
 const exportingPDF = ref(false)
+const exportError = ref(null)
 let elapsedInterval = null
 let disposed = false
 let workflow = null
@@ -495,6 +514,7 @@ const exportExecution = async (format) => {
   const owner = workflow
   const id = executionId.value
   try {
+    exportError.value = null
     exportingPDF.value = format === 'pdf'
     const artifact = await huntService.exportExecution(id, format)
     if (!owner?.isCurrent()) return
@@ -503,6 +523,7 @@ const exportExecution = async (format) => {
   } catch (error) {
     if (!owner?.isCurrent()) return
     console.error(`Failed to export ${format.toUpperCase()}:`, error)
+    exportError.value = `Failed to export ${format.toUpperCase()}`
     showNotification(`Failed to export ${format.toUpperCase()}`, 'error')
   } finally {
     if (owner?.isCurrent()) exportingPDF.value = false
@@ -574,6 +595,7 @@ watch(
       executionId: executionId.value,
     })
     exportingPDF.value = false
+    exportError.value = null
     selectedStep.value = null
     showStepOutputModal.value = false
     showStepErrorModal.value = false

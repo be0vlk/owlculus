@@ -2,7 +2,6 @@
 
 from sqlmodel import Session, col, select
 
-from app.core.exceptions import ResourceNotFoundException
 from app.database.models import (
     ExecutionControl,
     ExecutionEffect,
@@ -66,14 +65,6 @@ def _stored_output(db: Session, step: HuntStep) -> dict | None:
     }
 
 
-def _readable_execution(db: Session, step: HuntStep, user: User) -> HuntExecution:
-    execution = db.get(HuntExecution, step.execution_id)
-    if execution is None:
-        raise ResourceNotFoundException("Hunt execution not found")
-    CaseAccess(db).readable(user, execution.case_id)
-    return execution
-
-
 def _skipped_entity_results(db: Session, step: HuntStep) -> list[dict]:
     # Trust only a durable receipt, never a provider's notice payload or message.
     receipt = db.exec(
@@ -94,85 +85,100 @@ def _skipped_entity_results(db: Session, step: HuntStep) -> list[dict]:
     )
 
 
-def step_results(
-    db: Session, step: HuntStep, user: User, cursor: int = 0, limit: int = 50
-) -> dict:
-    execution = _readable_execution(db, step, user)
-    page = _step_results(db, step, cursor, limit)
-    if not HuntCorrelationScope(db, execution).can_read(db, user, step.step_id):
-        has_notice = any(
-            event.get("type") == "data"
-            and event.get("data", {}).get("notice_type") == "entity_save_skipped"
-            for event in page["items"]
+class HuntResultReader:
+    """One response's dependency analysis and reader permissions; never persisted."""
+
+    def __init__(
+        self,
+        db: Session,
+        execution: HuntExecution,
+        user: User,
+        steps: list[HuntStep] | None = None,
+    ):
+        self.db, self.execution, self.user = db, execution, user
+        self.visibility = CorrelationVisibility(db, user, execution.case_id)
+        self.scope = HuntCorrelationScope(db, execution, steps)
+
+    def can_read(self, step_id: str) -> bool:
+        scope = self.scope.inherited(step_id)
+        return (
+            scope is None
+            or CaseAccess.is_admin(self.user)
+            or bool(scope and set(scope) <= self.visibility.readable)
         )
-        page["items"] = (
-            [
-                {"type": "data", "data": notice}
-                for notice in _skipped_entity_results(db, step)
-            ]
-            if cursor == 0 or has_notice
-            else []
-        )
-    elif step.plugin_name == CORRELATION_PLUGIN:
-        page["items"] = CorrelationVisibility(db, user, execution.case_id).events(
-            page["items"]
-        )
-    return page
 
+    def step_results(self, step: HuntStep, cursor: int = 0, limit: int = 50) -> dict:
+        page = _step_results(self.db, step, cursor, limit)
+        if not self.can_read(step.step_id):
+            has_notice = any(
+                event.get("type") == "data"
+                and event.get("data", {}).get("notice_type") == "entity_save_skipped"
+                for event in page["items"]
+            )
+            page["items"] = (
+                [
+                    {"type": "data", "data": notice}
+                    for notice in _skipped_entity_results(self.db, step)
+                ]
+                if cursor == 0 or has_notice
+                else []
+            )
+        elif step.plugin_name == CORRELATION_PLUGIN:
+            page["items"] = self.visibility.events(page["items"])
+        return page
 
-def step_output(db: Session, step: HuntStep, user: User) -> dict | None:
-    execution = _readable_execution(db, step, user)
-    if not HuntCorrelationScope(db, execution).can_read(db, user, step.step_id):
-        notices = _skipped_entity_results(db, step)
-        return {
-            "results": notices,
-            "result_count": len(notices),
-            "plugin": step.plugin_name,
-            "errors": [],
-        }
-    output = _stored_output(db, step)
-    if step.plugin_name == CORRELATION_PLUGIN:
-        return CorrelationVisibility(db, user, execution.case_id).output(output)
-    return output
-
-
-def step_view(db: Session, step: HuntStep, user: User) -> dict:
-    data = step.model_dump()
-    data["output"] = step_output(db, step, user)
-    scope = HuntCorrelationScope(db, _readable_execution(db, step, user))
-    if not scope.can_read(db, user, step.step_id):
-        data["parameters"] = {}
-        data["error_details"] = None
-    elif step.plugin_name == CORRELATION_PLUGIN:
-        data["parameters"] = {}
-        data["error_details"] = CORRELATION_ERROR if step.error_details else None
-    return data
-
-
-def hunt_view(db: Session, execution: HuntExecution, user: User) -> dict:
-    CaseAccess(db).readable(user, execution.case_id)
-    data = execution.model_dump()
-    scope = HuntCorrelationScope(db, execution)
-    context = execution.context_data or {}
-    outputs = context.get("step_outputs", {})
-    correlation_ids = scope.roots
-    if correlation_ids or any(not scope.can_read(db, user, key) for key in outputs):
-        visibility = CorrelationVisibility(db, user, execution.case_id)
-        data["error"] = safe_error(execution.error)
-        # Legacy metadata/evidence_refs have no verifiable Case scope. Rebuild
-        # the context from its declared state and individually protected outputs.
-        data["context_data"] = (
-            {
-                "initial_parameters": execution.initial_parameters,
-                "step_outputs": {
-                    key: visibility.output(value) if key in correlation_ids else value
-                    for key, value in outputs.items()
-                    if scope.can_read(db, user, key)
-                },
-                "failed_steps": context.get("failed_steps", []),
-                "skipped_steps": context.get("skipped_steps", []),
+    def step_output(self, step: HuntStep) -> dict | None:
+        if not self.can_read(step.step_id):
+            notices = _skipped_entity_results(self.db, step)
+            return {
+                "results": notices,
+                "result_count": len(notices),
+                "plugin": step.plugin_name,
+                "errors": [],
             }
-            if execution.context_data is not None
-            else None
-        )
-    return data
+        output = _stored_output(self.db, step)
+        if step.plugin_name == CORRELATION_PLUGIN:
+            return self.visibility.output(output)
+        return output
+
+    def step_view(self, step: HuntStep) -> dict:
+        data = step.model_dump()
+        data["output"] = self.step_output(step)
+        if not self.can_read(step.step_id):
+            data["parameters"] = {}
+            data["error_details"] = None
+        elif step.plugin_name == CORRELATION_PLUGIN:
+            data["parameters"] = {}
+            data["error_details"] = CORRELATION_ERROR if step.error_details else None
+        return data
+
+    def hunt_view(self) -> dict:
+        execution = self.execution
+        data = execution.model_dump()
+        context = execution.context_data or {}
+        outputs = context.get("step_outputs", {})
+        correlation_ids = self.scope.roots
+        if correlation_ids or any(not self.can_read(key) for key in outputs):
+            visibility = self.visibility
+            data["error"] = safe_error(execution.error)
+            # Legacy metadata/evidence_refs have no verifiable Case scope. Rebuild
+            # the context from its declared state and individually protected outputs.
+            data["context_data"] = (
+                {
+                    "initial_parameters": execution.initial_parameters,
+                    "step_outputs": {
+                        key: (
+                            visibility.output(value)
+                            if key in correlation_ids
+                            else value
+                        )
+                        for key, value in outputs.items()
+                        if self.can_read(key)
+                    },
+                    "failed_steps": context.get("failed_steps", []),
+                    "skipped_steps": context.get("skipped_steps", []),
+                }
+                if execution.context_data is not None
+                else None
+            )
+        return data

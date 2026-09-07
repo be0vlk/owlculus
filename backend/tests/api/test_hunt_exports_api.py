@@ -47,6 +47,16 @@ def hunt_export_execution(session: Session, hunt_export_user: User) -> HuntExecu
         hunt_id=hunt.id,
         case_id=case.id,
         status="failed",
+        # These ordinary Plugin exports have verified, independent inputs.
+        definition_snapshot={
+            "steps": [
+                {
+                    "step_id": "lookup-person",
+                    "plugin_name": "PeopleData",
+                    "parameter_mapping": {"subject": "initial.subject"},
+                }
+            ]
+        },
         progress=0.5,
         initial_parameters={"subject": "José Москва"},
         context_data={"evidence_refs": [{"title": "Profile", "folder_path": "People"}]},
@@ -306,3 +316,46 @@ def test_hunt_execution_export_requires_authentication(
     )
 
     assert response.status_code == 401
+
+
+def test_correlation_pdf_keeps_all_authorized_rows_beyond_generic_output_limit(
+    client, session, hunt_export_user, hunt_export_execution
+):
+    step = session.exec(
+        select(HuntStep).where(HuntStep.execution_id == hunt_export_execution.id)
+    ).one()
+    step.plugin_name = "CorrelationScan"
+    step.output = {
+        "results": [
+            {
+                "case_id": hunt_export_execution.case_id,
+                "entity_id": 10,
+                "entity_type": "person",
+                "match_type": "domain",
+                "matches": [
+                    {
+                        "case_id": hunt_export_execution.case_id,
+                        "entity_id": index,
+                        "entity_name": f"Authorized mailbox {index}",
+                        "signal_rank": 2,
+                        "fields": [
+                            {"field": "email", "value": "a" * 1000 + "@example.com"}
+                        ],
+                    }
+                    for index in range(40)
+                ],
+            }
+        ],
+        "errors": [],
+    }
+    session.commit()
+    app.dependency_overrides[get_current_user] = lambda: hunt_export_user
+    response = client.get(
+        f"/api/hunts/executions/{hunt_export_execution.id}/export?format=pdf"
+    )
+    assert response.status_code == 200
+    text = "\n".join(
+        page.extract_text() for page in PdfReader(BytesIO(response.content)).pages
+    )
+    assert "Output truncated" not in text
+    assert "Authorized mailbox 39" in text

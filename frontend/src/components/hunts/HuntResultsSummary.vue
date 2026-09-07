@@ -85,6 +85,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { huntResultCount } from '@/utils/huntResults'
 import { formatMetadataValue } from '@/utils/huntDisplayUtils'
 
 const props = defineProps({
@@ -115,7 +116,7 @@ const failedSteps = computed(() => {
 
 const totalResults = computed(() => {
   return stepResults.value.reduce((total, step) => {
-    const count = step.output?.result_count || step.output?.results?.length || 0
+    const count = huntResultCount(step)
     return total + count
   }, 0)
 })
