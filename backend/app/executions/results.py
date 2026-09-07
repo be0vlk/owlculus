@@ -3,7 +3,14 @@
 from sqlmodel import Session, col, select
 
 from app.core.exceptions import ResourceNotFoundException
-from app.database.models import HuntExecution, HuntStep, HuntStepResult, User
+from app.database.models import (
+    ExecutionControl,
+    ExecutionEffect,
+    HuntExecution,
+    HuntStep,
+    HuntStepResult,
+    User,
+)
 from app.executions.correlation_visibility import (
     CORRELATION_ERROR,
     CORRELATION_PLUGIN,
@@ -11,6 +18,7 @@ from app.executions.correlation_visibility import (
     safe_error,
 )
 from app.hunts.correlation_scope import HuntCorrelationScope
+from app.plugins.plugin_types import ENTITY_SAVE_SKIPPED
 from app.services.case_access import CaseAccess
 
 
@@ -66,13 +74,45 @@ def _readable_execution(db: Session, step: HuntStep, user: User) -> HuntExecutio
     return execution
 
 
+def _skipped_entity_results(db: Session, step: HuntStep) -> list[dict]:
+    # Trust only a durable receipt, never a provider's notice payload or message.
+    receipt = db.exec(
+        select(ExecutionEffect)
+        .join(ExecutionControl, col(ExecutionControl.id) == ExecutionEffect.control_id)
+        .where(
+            ExecutionControl.hunt_execution_id == step.execution_id,
+            ExecutionEffect.skipped == True,
+            col(ExecutionEffect.operation_id).startswith(
+                f"{step.step_id}:entity:", autoescape=True
+            ),
+        )
+    ).first()
+    return (
+        [{"notice_type": "entity_save_skipped", "message": ENTITY_SAVE_SKIPPED}]
+        if receipt
+        else []
+    )
+
+
 def step_results(
     db: Session, step: HuntStep, user: User, cursor: int = 0, limit: int = 50
 ) -> dict:
     execution = _readable_execution(db, step, user)
     page = _step_results(db, step, cursor, limit)
     if not HuntCorrelationScope(db, execution).can_read(db, user, step.step_id):
-        page["items"] = []
+        has_notice = any(
+            event.get("type") == "data"
+            and event.get("data", {}).get("notice_type") == "entity_save_skipped"
+            for event in page["items"]
+        )
+        page["items"] = (
+            [
+                {"type": "data", "data": notice}
+                for notice in _skipped_entity_results(db, step)
+            ]
+            if cursor == 0 or has_notice
+            else []
+        )
     elif step.plugin_name == CORRELATION_PLUGIN:
         page["items"] = CorrelationVisibility(db, user, execution.case_id).events(
             page["items"]
@@ -83,9 +123,10 @@ def step_results(
 def step_output(db: Session, step: HuntStep, user: User) -> dict | None:
     execution = _readable_execution(db, step, user)
     if not HuntCorrelationScope(db, execution).can_read(db, user, step.step_id):
+        notices = _skipped_entity_results(db, step)
         return {
-            "results": [],
-            "result_count": 0,
+            "results": notices,
+            "result_count": len(notices),
             "plugin": step.plugin_name,
             "errors": [],
         }
@@ -115,7 +156,7 @@ def hunt_view(db: Session, execution: HuntExecution, user: User) -> dict:
     context = execution.context_data or {}
     outputs = context.get("step_outputs", {})
     correlation_ids = scope.roots
-    if correlation_ids:
+    if correlation_ids or any(not scope.can_read(db, user, key) for key in outputs):
         visibility = CorrelationVisibility(db, user, execution.case_id)
         data["error"] = safe_error(execution.error)
         # Legacy metadata/evidence_refs have no verifiable Case scope. Rebuild
