@@ -243,3 +243,20 @@ export const prototypeRuns = [
     error: { message: 'Provider timed out. These are sample results.' },
   },
 ].map((run) => ({ ...run, case_id: 1, progress: 1, version: 1 }))
+
+export const prototypeHuntExecutions = [
+  {
+    id: 501,
+    case_id: 1,
+    hunt_display_name: 'Domain infrastructure review',
+    hunt_category: 'domain',
+    initial_parameters: { domain: 'northstar.example' },
+    status: 'completed',
+    progress: 1,
+    created_at: '2026-09-06T14:30:00Z',
+    steps: [
+      { name: 'DNS Lookup', status: 'completed', summary: 'Public DNS records collected.' },
+      { name: 'WHOIS', status: 'completed', summary: 'Registration information retained.' },
+    ],
+  },
+]

@@ -219,32 +219,6 @@
       </div>
     </section>
 
-    <section v-show="tab === 'hunts'" aria-label="Hunts workspace">
-      <div class="content-heading">
-        <div>
-          <h2>Hunts</h2>
-          <p>Automated investigation workflows for this case.</p>
-        </div>
-        <v-btn
-          color="primary"
-          prepend-icon="mdi-target"
-          @click="$emit('notify', 'Browse Hunts would open the existing hunt catalog.')"
-          >Browse Hunts</v-btn
-        >
-      </div>
-      <div class="empty-content">
-        <v-icon icon="mdi-target" size="40" class="mb-3" />
-        <h3>No hunt executions yet</h3>
-        <p>Start a hunt to collect related information through a guided workflow.</p>
-        <v-btn
-          class="mt-4"
-          variant="outlined"
-          @click="$emit('notify', 'Hunt catalog preview — no execution started.')"
-          >Browse Available Hunts</v-btn
-        >
-      </div>
-    </section>
-
     <section v-show="tab === 'notes'" class="notes-workspace" aria-label="Notes workspace">
       <div class="content-heading">
         <div>
@@ -286,23 +260,39 @@
       </div>
     </section>
 
-    <section v-show="tab === 'plugin-runs'" aria-label="Plugin runs workspace">
+    <section v-show="tab === 'runs'" aria-label="Runs workspace">
       <div class="content-heading">
         <div>
-          <h2>Plugin runs</h2>
-          <p>Previous plugin executions and their retained results.</p>
+          <h2>Runs</h2>
+          <p>
+            {{
+              canViewHunts
+                ? 'Plugin and hunt history, together with their retained results.'
+                : 'Plugin history and retained results for this case.'
+            }}
+          </p>
         </div>
-        <v-btn
-          prepend-icon="mdi-refresh"
-          variant="outlined"
-          @click="$emit('notify', 'Sample history refreshed')"
-          >Refresh history</v-btn
-        >
+        <div class="run-actions">
+          <v-btn
+            prepend-icon="mdi-refresh"
+            variant="outlined"
+            @click="$emit('notify', 'Sample history refreshed')"
+            >Refresh history</v-btn
+          >
+          <v-btn
+            v-if="canViewHunts"
+            color="primary"
+            prepend-icon="mdi-target"
+            @click="$emit('notify', 'Browse Hunts would open the existing hunt catalog.')"
+            >Browse Hunts</v-btn
+          >
+        </div>
       </div>
       <v-table class="runs-table"
         ><thead>
           <tr>
-            <th>Plugin</th>
+            <th>Name</th>
+            <th>Type</th>
             <th>Input</th>
             <th>Status</th>
             <th>Started</th>
@@ -310,9 +300,17 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="run in runs" :key="run.id">
+          <tr v-for="run in runs" :key="run.key">
             <td>
-              <strong>{{ run.plugin_name }}</strong>
+              <strong>{{ run.display_name }}</strong>
+            </td>
+            <td>
+              <span class="entity-type"
+                ><v-icon
+                  size="17"
+                  :icon="run.run_type === 'Hunt' ? 'mdi-target' : 'mdi-puzzle-outline'"
+                />{{ run.run_type }}</span
+              >
             </td>
             <td>{{ run.parameters.domain }}</td>
             <td>
@@ -328,6 +326,8 @@
                 new Date(run.created_at).toLocaleDateString('en-GB', {
                   day: 'numeric',
                   month: 'short',
+                  hour: '2-digit',
+                  minute: '2-digit',
                 })
               }}
             </td>
@@ -337,7 +337,7 @@
           </tr>
         </tbody></v-table
       >
-      <div v-if="!runs.length" class="empty-content">No plugin runs for this case.</div>
+      <div v-if="!runs.length" class="empty-content">No runs for this case.</div>
       <p class="history-footer">{{ runs.length }} executions · History refreshes when requested</p>
     </section>
 
@@ -404,6 +404,7 @@ const props = defineProps({
   entities: { type: Array, default: () => [] },
   evidence: { type: Array, default: () => [] },
   runs: { type: Array, default: () => [] },
+  canViewHunts: { type: Boolean, default: false },
 })
 const emit = defineEmits(['action', 'inspect', 'notify', 'remove'])
 // Shared mutable state is intentional in this throwaway: switching layout keeps the comparison state.
@@ -836,6 +837,12 @@ function deleteSelected() {
 
 .runs-table {
   border-top: 1px solid rgb(var(--v-border-color), var(--v-border-opacity));
+}
+
+.run-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .runs-table :deep(table) {

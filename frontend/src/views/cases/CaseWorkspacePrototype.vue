@@ -1,7 +1,7 @@
 <!--
 THROWAWAY: Three structurally different case workspaces on /case/:id?variant=A|B|C.
 Question: how should case identity, navigation, and investigative content share the page?
-All mutations below are in memory. No winner selected; do not promote this code to production.
+Option A selected, with one Runs workspace for plugins and hunts. Mutations remain in memory.
 -->
 <template>
   <Sidebar />
@@ -59,8 +59,9 @@ All mutations below are in memory. No winner selected; do not promote this code 
         :entities="entities"
         :evidence="evidence"
         :runs="runs"
+        :can-view-hunts="canViewHunts"
         @action="openAction"
-        @inspect="selectedItem = $event"
+        @inspect="inspectItem"
         @notify="notify"
         @remove="entities = entities.filter((item) => item.id !== $event)"
       />
@@ -204,7 +205,7 @@ All mutations below are in memory. No winner selected; do not promote this code 
       <v-card v-if="selectedItem">
         <v-card-title class="d-flex align-center pa-5"
           ><span class="text-wrap">{{
-            selectedItem.title || selectedItem.plugin_name || entityName(selectedItem)
+            selectedItem.title || selectedItem.display_name || entityName(selectedItem)
           }}</span
           ><v-spacer /><v-btn
             icon="mdi-close"
@@ -223,7 +224,7 @@ All mutations below are in memory. No winner selected; do not promote this code 
               >
             </dl></template
           >
-          <template v-else-if="selectedItem.plugin_name"
+          <template v-else-if="selectedItem.run_type"
             ><v-chip
               :color="selectedItem.status === 'failed' ? 'error' : 'success'"
               variant="tonal"
@@ -241,12 +242,14 @@ All mutations below are in memory. No winner selected; do not promote this code 
                 {
                   input: selectedItem.parameters,
                   records:
-                    selectedItem.status === 'completed'
-                      ? [
-                          { type: 'A', value: '203.0.113.24' },
-                          { type: 'MX', value: 'mail.northstar.example' },
-                        ]
-                      : [],
+                    selectedItem.run_type === 'Hunt'
+                      ? selectedItem.steps
+                      : selectedItem.status === 'completed'
+                        ? [
+                            { type: 'A', value: '203.0.113.24' },
+                            { type: 'MX', value: 'mail.northstar.example' },
+                          ]
+                        : [],
                 },
                 null,
                 2,
@@ -296,6 +299,7 @@ import { useDialogFocusRestore } from '@/composables/useDialogFocusRestore'
 import { useAuthStore } from '@/stores/auth'
 import { entityService } from '@/services/entity'
 import { pluginService } from '@/services/plugin'
+import { huntService } from '@/services/hunt'
 import Sidebar from '@/components/Sidebar.vue'
 import VariantA from './CaseWorkspacePrototypeVariantA.vue'
 import VariantB from './CaseWorkspacePrototypeVariantB.vue'
@@ -306,6 +310,7 @@ const props = defineProps({
   caseData: { type: Object, required: true },
   client: { type: Object, default: null },
   evidence: { type: Array, default: () => [] },
+  huntExecutions: { type: Array, default: () => [] },
 })
 const emit = defineEmits(['state'])
 const route = useRoute()
@@ -313,6 +318,7 @@ const router = useRouter()
 const { width } = useDisplay()
 const { isDark } = useDarkMode()
 const auth = useAuthStore()
+const canViewHunts = computed(() => auth.user?.role !== 'Analyst')
 const layouts = { A: VariantA, B: VariantB, C: VariantC }
 const variant = computed(() =>
   ['A', 'B', 'C'].includes(route.query.variant) ? route.query.variant : 'A',
@@ -321,13 +327,15 @@ const tabs = computed(() => [
   { name: 'entities', label: 'Entities', icon: 'mdi-account-group-outline' },
   { name: 'evidence', label: 'Evidence', icon: 'mdi-folder-outline' },
   { name: 'tasks', label: 'Tasks', icon: 'mdi-checkbox-marked-circle-outline' },
-  ...(auth.user?.role !== 'Analyst' ? [{ name: 'hunts', label: 'Hunts', icon: 'mdi-target' }] : []),
+  { name: 'runs', label: 'Runs', icon: 'mdi-history' },
   { name: 'notes', label: 'Notes', icon: 'mdi-note-text-outline' },
-  { name: 'plugin-runs', label: 'Plugin runs', icon: 'mdi-history' },
 ])
 const activeTab = computed({
-  get: () =>
-    tabs.value.some((tab) => tab.name === route.query.tab) ? route.query.tab : 'entities',
+  get: () => {
+    if (route.query.tab === 'plugin-runs' || (route.query.tab === 'hunts' && canViewHunts.value))
+      return 'runs'
+    return tabs.value.some((tab) => tab.name === route.query.tab) ? route.query.tab : 'entities'
+  },
   set: (tab) => {
     const query = { ...route.query }
     if (tab === 'entities') delete query.tab
@@ -340,7 +348,26 @@ const localCase = reactive({
   users: props.caseData.users.map((user) => ({ ...user })),
 })
 const entities = ref([])
-const runs = ref([])
+const pluginRuns = ref([])
+const runs = computed(() =>
+  [
+    ...pluginRuns.value.map((run) => ({
+      ...run,
+      key: `plugin:${run.id}`,
+      run_type: 'Plugin',
+      display_name: run.plugin_name,
+    })),
+    ...(canViewHunts.value
+      ? props.huntExecutions.map((run) => ({
+          ...run,
+          key: `hunt:${run.id}`,
+          run_type: 'Hunt',
+          display_name: run.hunt_display_name,
+          parameters: run.initial_parameters,
+        }))
+      : []),
+  ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)),
+)
 const detailsOpen = ref(false)
 const actionOpen = ref(false)
 useDialogFocusRestore(detailsOpen)
@@ -350,6 +377,13 @@ const actionValue = ref('')
 const editStatus = ref('Open')
 const selectedMembers = ref([])
 const selectedItem = ref(null)
+async function inspectItem(item) {
+  selectedItem.value = item
+  if (item.run_type === 'Hunt') {
+    const details = await huntService.getExecution(item.id, true)
+    if (selectedItem.value?.key === item.key) selectedItem.value = { ...item, steps: details.steps }
+  }
+}
 const snackbar = ref(false)
 const message = ref('')
 const state = reactive({
@@ -441,7 +475,7 @@ onMounted(async () => {
     pluginService.getHistory(props.caseData.id),
   ])
   entities.value = caseEntities
-  runs.value = history.items
+  pluginRuns.value = history.items
 })
 watch(
   () => ({
@@ -454,6 +488,12 @@ watch(
     theme: isDark.value ? 'dark' : 'light',
     ...state,
     entityCount: entities.value.length,
+    visibleRuns: runs.value.map((run) => ({
+      key: run.key,
+      type: run.run_type,
+      name: run.display_name,
+      status: run.status,
+    })),
   }),
   (snapshot) => {
     emit('state', snapshot)
