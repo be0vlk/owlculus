@@ -136,6 +136,8 @@ it('reopens recovery waiting and then an uncertain failure without resubmitting'
   wrapper.unmount()
 })
 
+vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
+
 vi.mock('@/utils/download', () => ({ downloadBlob: vi.fn() }))
 
 it('follows an empty filtered page and rechecks authorization before exporting', async () => {
@@ -187,5 +189,79 @@ it('follows an empty filtered page and rechecks authorization before exporting',
     .vm.$emit('export', { pluginName: 'CorrelationScan', results: [visible] })
   await flushPromises()
   expect(downloadBlob).not.toHaveBeenCalled()
+  wrapper.unmount()
+})
+
+it('reopens and exports continued email matches after hidden-only pages without duplicate fields', async () => {
+  const { downloadBlob } = await import('@/utils/download')
+  const saved = {
+    id: 31,
+    plugin_name: 'CorrelationScan',
+    status: 'failed',
+    created_at: '2026-09-07T00:00:00Z',
+    error: { message: 'Available results are partial.' },
+  }
+  const part = (related, fields) => ({
+    type: 'data',
+    data: {
+      case_id: 7,
+      entity_id: 10,
+      entity_name: 'Ada',
+      entity_type: 'person',
+      match_type: 'email',
+      group_id: 'email-group',
+      continuation: 'merge',
+      matches: [
+        {
+          case_id: 8,
+          entity_id: related,
+          entity_name: `Related ${related}`,
+          signal: 'Exact email match',
+          signal_rank: 0,
+          fields,
+        },
+      ],
+    },
+  })
+  const first = part(21, [{ field: 'email', value: 'ada@example.com' }])
+  const second = part(22, [{ field: 'email', value: 'ada@example.com' }])
+  const repeated = part(21, [{ field: 'usernames[0]', value: 'ada@example.com' }])
+  pluginService.getHistory.mockResolvedValue({ items: [saved], next_cursor: null })
+  pluginService.getExecution.mockResolvedValue(saved)
+  pluginService.getResults.mockImplementation(async (_id, cursor) => {
+    if (cursor === 0) return { items: [], cursor: 1, next_cursor: 1 }
+    if (cursor === 1) return { items: [first], cursor: 2, next_cursor: 2 }
+    return { items: [second, repeated], cursor: 4, next_cursor: null }
+  })
+  const wrapper = mountWithVuetify(PluginExecutionHistory, { props: { caseId: 7 } })
+  await flushPromises()
+  await wrapper.get('.v-list-item').trigger('click')
+  await vi.waitFor(() =>
+    expect(wrapper.findComponent(PluginResultsModal).props('results')).toHaveLength(3),
+  )
+  await wrapper
+    .findAll('button')
+    .find((button) => button.text() === 'View retained results')
+    .trigger('click')
+  await vi.waitFor(() =>
+    expect(wrapper.findComponent(PluginResultsModal).props('results')).toHaveLength(3),
+  )
+  wrapper.findComponent(PluginResultsModal).vm.$emit('export', { pluginName: 'CorrelationScan' })
+  await flushPromises()
+  const blob = downloadBlob.mock.calls.at(-1)[0].blob
+  const text = await new Promise((resolve) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.readAsText(blob)
+  })
+  const exported = JSON.parse(text)
+  expect(exported.partial).toBe(true)
+  expect(exported.error).toBe(saved.error.message)
+  expect(exported.results).toHaveLength(1)
+  expect(exported.results[0].data.matches.map((match) => match.entity_id)).toEqual([21, 22])
+  expect(exported.results[0].data.matches[0].fields).toEqual([
+    { field: 'email', value: 'ada@example.com' },
+    { field: 'usernames[0]', value: 'ada@example.com' },
+  ])
   wrapper.unmount()
 })

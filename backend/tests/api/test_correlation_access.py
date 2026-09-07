@@ -501,6 +501,7 @@ async def test_new_explanations_and_warning_only_cases_remain_protected(
     report_url = f"/api/evidence/{report.id}/download"
     app.dependency_overrides[get_current_user] = lambda: test_user
     visible = client.get(url + "/results").json()["items"]
+    visible = [event for event in visible if "matches" in event["data"]]
     assert visible[0]["data"]["source_fields"] == [
         {"field": "email", "value": "ada@example.com"}
     ]
@@ -599,3 +600,47 @@ def test_hunt_consumers_inherit_verified_skipped_reference_scope(
     session.delete(related_link)
     session.commit()
     assert "Warning summary" not in client.get(url).text
+
+
+def test_continuation_metadata_and_new_signals_follow_each_parts_case_access(
+    client, session, test_case, test_admin, test_analyst
+):
+    hidden = Case(case_number="PRIVATE", title="PRIVATE")
+    visible = Case(case_number="PUBLIC", title="PUBLIC")
+    session.add_all([hidden, visible])
+    session.flush()
+    session.add_all(
+        [
+            CaseUserLink(case_id=test_case.id, user_id=test_analyst.id),
+            CaseUserLink(case_id=visible.id, user_id=test_analyst.id),
+        ]
+    )
+    parts = []
+    for case in (hidden, visible, visible):
+        event = group(test_case, case, "Source")
+        event["data"].update(
+            group_id="source-only-identity",
+            continuation="merge",
+            match_type="email",
+            normalized_value="source@example.com",
+            source_fields=[{"field": "email", "value": "source@example.com"}],
+        )
+        event["data"]["matches"][0].update(
+            signal="Exact email match",
+            signal_rank=0,
+            fields=[{"field": "email", "value": f"{case.title}@example.com"}],
+        )
+        parts.append(event)
+    url = retain(session, test_case, test_admin, parts)
+    app.dependency_overrides[get_current_user] = lambda: test_analyst
+    first = client.get(url + "/results?limit=1").json()
+    assert first["items"] == [] and first["next_cursor"] == 1
+    second = client.get(url + "/results?limit=1&cursor=1").json()
+    payload = second["items"][0]["data"]
+    assert payload["group_id"] == "source-only-identity"
+    assert payload["continuation"] == "merge"
+    assert payload["matches"][0]["signal_rank"] == 0
+    assert payload["matches"][0]["fields"][0]["value"] == "PUBLIC@example.com"
+    assert "PRIVATE" not in str(client.get(url + "/results").json())
+    app.dependency_overrides[get_current_user] = lambda: test_admin
+    assert "PRIVATE@example.com" in str(client.get(url + "/results").json())

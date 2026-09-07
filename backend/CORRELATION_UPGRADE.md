@@ -47,3 +47,44 @@ Case IDs in `case_scope`, without the malformed value. Evidence and dependent Hu
 steps include notice scopes even when that Case contributes no match. Reports use
 the recorded scan timestamp and count distinct source Entities separately from
 matching reasons. Older retained payloads remain renderable without these fields.
+
+Ticket 03 adds exact `email` and `phone` kinds. Email comparison trims surrounding
+whitespace and normalizes the domain without changing local-part case, dots, or
+plus tags. Phone comparison removes spaces, parentheses, dots, and hyphens; an
+explicit `+` remains significant. Unsupported extension/free-text syntax produces
+a scoped skipped-reference notice. Stored values are never rewritten.
+
+Each related match now carries `signal_rank`: 0 for exact email/phone/VIN, 1 for
+ordinary associations, and 2 for different email addresses sharing a common
+provider (including groups with additional profile references). This is an ordering tier, not a probability.
+Built-in providers are gmail.com, googlemail.com, outlook.com, hotmail.com,
+live.com, yahoo.com, icloud.com, aol.com, proton.me, and protonmail.com. Explicit
+Domain Entities and exact email matches at these providers are not downgraded.
+The rank belongs to the related Case, just like the signal explanation. Clients
+rank a group from its visible matches so hidden matches cannot affect prominence.
+Ties use source Entity ID, kind, normalized value, related Case ID, and Entity ID.
+
+New payloads carry `group_id` and `continuation: "merge"`. Every part is additive;
+there is no numbered-part count, final-part marker, or related-derived group
+metadata. The identifier hashes only source Case ID, source Entity ID, kind, and
+normalized source value. Clients merge parts by this identity and deduplicate
+related Entities by Case/Entity ID, retaining distinct field locations. A group
+can recur later in the stream when it contains both ordinary and low-signal
+matches. Legacy payloads without continuation metadata remain supported.
+Cards, freshly authorized browser exports, and Evidence assemble the same groups.
+Execution terminal state, rather than presence of a group part, establishes scan
+completion. Hidden-only pages still advance the scanned-event cursor.
+
+EntityCorrelation indexes normalized references with 256-Entity keyset fetches,
+retaining only candidate references sought by source Entities. Detached values
+survive worker read-transaction rollbacks without per-match ORM refreshes. The
+Plugin streams one bounded part at a time rather than collecting every match;
+its UTF-8 byte accounting includes the event envelope and repeated group metadata.
+Scoped progress is emitted between bounded fetch/comparison portions. Cancellation
+can run at progress and output boundaries. Per-event and per-operation limits
+remain unchanged; an indivisible oversized match fails without truncation. On
+failure, accepted output remains available as partial results, and no complete
+Evidence report is saved. Reports saved after successful scans retain the existing
+Case provenance, immutable bytes/hashes, and execution receipt protections.
+
+Measured performance and reproduction commands: [correlation benchmark](CORRELATION_BENCHMARK.md).

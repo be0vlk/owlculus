@@ -16,6 +16,8 @@ CORRELATION_ERROR = (
     "Correlation scan could not complete. Available results may be partial."
 )
 GROUP_FIELDS = {
+    "group_id",
+    "continuation",
     "case_id",
     "entity_id",
     "entity_name",
@@ -31,6 +33,7 @@ GROUP_FIELDS = {
     "matched_value",
 }
 MATCH_FIELDS = {
+    "signal_rank",
     "case_id",
     "case_number",
     "case_title",
@@ -48,14 +51,18 @@ MATCH_FIELDS = {
 def safe_error(error: dict | None) -> dict | None:
     if error is None:
         return None
-    result = {"message": CORRELATION_ERROR}
+    result: dict = {"message": CORRELATION_ERROR}
     if error.get("code") in {
         "output_limit_exceeded",
+        "event_size_limit",
+        "result_size_limit",
         "dispatch_failed",
         "worker_interrupted",
         "cancelled",
     }:
         result["code"] = error["code"]
+    if error.get("partial"):
+        result["partial"] = True
     return result
 
 

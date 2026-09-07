@@ -109,6 +109,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { assembleCorrelationResults } from '@/utils/correlationResults'
 import { useDisplay } from 'vuetify'
 import PluginResult from '@/components/plugins/PluginResult.vue'
 import { formatDate } from '@/composables/dateUtils.js'
@@ -206,7 +207,10 @@ const formatParameterValue = (value) => {
 const exportResults = () => {
   emit('export', {
     pluginName: props.pluginName,
-    results: props.results,
+    results:
+      props.pluginName === 'CorrelationScan'
+        ? assembleCorrelationResults(props.results)
+        : props.results,
     parameters: props.parameters,
     executionTime: props.executionTime,
     partial: Boolean(props.error),
