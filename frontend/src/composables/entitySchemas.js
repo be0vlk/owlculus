@@ -183,7 +183,7 @@ export const entitySchemas = {
           label: 'IP Address',
           type: 'text',
           required: true,
-          placeholder: '192.168.1.1',
+          placeholder: '192.0.2.1 or 2001:db8::1',
           hasSource: true,
         },
         {

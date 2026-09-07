@@ -8,9 +8,8 @@ and specialized search functions for OSINT investigation workflows.
 """
 
 from dataclasses import dataclass
-from typing import cast
+from typing import Literal, cast
 
-from sqlalchemy import func
 from sqlmodel import Session, col, or_, select
 
 from app import schemas
@@ -20,6 +19,7 @@ from app.core.exceptions import (
     ValidationException,
 )
 from app.core.hostname import canonical_hostname
+from app.core.ip_address import canonical_ip_address
 from app.core.utils import get_utc_now
 from app.database import models
 from app.database.db_utils import transaction
@@ -127,8 +127,13 @@ class EntityService:
         )
         if exclude_id is not None:
             query = query.where(models.Entity.id != exclude_id)
-        if entity_type == "domain":
-            candidate = self._find_domain(case_id, data["domain"], exclude_id)
+        if entity_type in {"domain", "ip_address"}:
+            identity_type: Literal["domain", "ip_address"] = (
+                "domain" if entity_type == "domain" else "ip_address"
+            )
+            candidate = self._find_canonical_entity(
+                case_id, identity_type, data[identity_type], exclude_id
+            )
             candidates = [candidate] if candidate else []
         else:
             candidates = list(self.db.exec(query))
@@ -180,7 +185,7 @@ class EntityService:
                 for policy in _DUPLICATE_POLICIES:
                     if policy.entity_type != entity_type:
                         continue
-                    if entity_type == "domain" or all(
+                    if entity_type in {"domain", "ip_address"} or all(
                         data.get(field)
                         and (
                             str(data[field]).strip()
@@ -338,15 +343,9 @@ class EntityService:
         self, case_id: int, ip_address: str, current_user: models.User
     ) -> models.Entity | None:
         """Find an existing IP address entity in the given case"""
-        case = self.case_access.readable(current_user, case_id)
+        self.case_access.readable(current_user, case_id)
 
-        query = select(models.Entity).where(
-            models.Entity.case_id == case.id,
-            models.Entity.entity_type == "ip_address",
-            func.trim(models.Entity.data["ip_address"].as_string()) == ip_address.strip(),
-        )
-        result = self.db.exec(query)
-        return result.first()
+        return self._find_canonical_entity(case_id, "ip_address", ip_address)
 
     async def find_entity_by_domain(
         self, case_id: int, domain: str, current_user: models.User
@@ -354,29 +353,36 @@ class EntityService:
         """Find an existing domain entity in the given case (case-insensitive)"""
         self.case_access.readable(current_user, case_id)
 
-        return self._find_domain(case_id, domain)
+        return self._find_canonical_entity(case_id, "domain", domain)
 
-    def _find_domain(
-        self, case_id: int, domain: str, exclude_id: int | None = None
+    def _find_canonical_entity(
+        self,
+        case_id: int,
+        entity_type: Literal["domain", "ip_address"],
+        value: str,
+        exclude_id: int | None = None,
     ) -> models.Entity | None:
-        """Compare new and historical Domain values without rewriting stored data."""
-        identity = canonical_hostname(domain)
+        """Compare canonical identifiers without rewriting historical records."""
+        canonicalize = (
+            canonical_hostname if entity_type == "domain" else canonical_ip_address
+        )
+        identity = canonicalize(value)
         query = (
             select(models.Entity)
             .where(
                 models.Entity.case_id == case_id,
-                models.Entity.entity_type == "domain",
+                models.Entity.entity_type == entity_type,
             )
             .order_by(col(models.Entity.id))
         )
         if exclude_id is not None:
             query = query.where(models.Entity.id != exclude_id)
         for candidate in self.db.exec(query):
-            raw = candidate.data.get("domain")
+            raw = candidate.data.get(entity_type)
             if not isinstance(raw, str):
                 continue
             try:
-                if canonical_hostname(raw) == identity:
+                if canonicalize(raw) == identity:
                     return candidate
             except ValueError:
                 continue

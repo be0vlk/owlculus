@@ -318,3 +318,73 @@ it('shows bounded progress while correlation output is still arriving', async ()
   expect(wrapper.find('[role="status"]').exists()).toBe(false)
   expect(wrapper.text()).toContain('Correlation scan complete')
 })
+
+it('presents and exports explicit IP connections with original fields alongside retained legacy reasons', async () => {
+  const results = [
+    {
+      type: 'data',
+      data: {
+        case_id: 1,
+        entity_id: 1,
+        entity_type: 'ip_address',
+        entity_name: '2001:db8::1',
+        match_type: 'ip_address',
+        normalized_value: '2001:db8::1',
+        source_fields: [{ field: 'ip_address', value: '2001:db8::1' }],
+        matches: [
+          {
+            case_id: 2,
+            case_title: 'Related',
+            case_number: 'IP-2',
+            entity_id: 2,
+            entity_type: 'ip_address',
+            entity_name: '2001:0DB8:0:0:0:0:0:1',
+            fields: [{ field: 'ip_address', value: '2001:0DB8:0:0:0:0:0:1' }],
+            signal: 'Exact IP address match',
+            signal_rank: 0,
+          },
+        ],
+      },
+    },
+    {
+      type: 'data',
+      data: {
+        case_id: 1,
+        entity_id: 3,
+        entity_type: 'ip_address',
+        entity_name: '192.0.2.1',
+        match_type: 'name',
+        matches: [
+          {
+            case_id: 2,
+            case_title: 'Legacy',
+            case_number: 'OLD',
+            entity_id: 4,
+            entity_type: 'ip_address',
+            entity_name: '192.0.2.1',
+          },
+        ],
+      },
+    },
+  ]
+  const wrapper = mountWithVuetify(PluginResultsModal, {
+    props: { modelValue: false, pluginName: 'CorrelationScan', results },
+    attachTo: document.body,
+  })
+  await wrapper.setProps({ modelValue: true })
+  await flushPromises()
+  const dialog = new DOMWrapper(document.querySelector('[role="dialog"]'))
+  expect(dialog.text()).toContain('IP Address Match')
+  expect(dialog.text()).toContain('Exact IP address match')
+  expect(dialog.text()).toContain('2001:0DB8:0:0:0:0:0:1')
+  expect(dialog.text()).toContain('Name Match')
+  await dialog
+    .findAll('button')
+    .find((button) => button.text().includes('Export'))
+    .trigger('click')
+  const exported = wrapper.emitted('export')[0][0].results
+  expect(exported).toHaveLength(2)
+  expect(exported[0]).toEqual(results[0])
+  expect(exported[1].data).toMatchObject(results[1].data)
+  wrapper.unmount()
+})

@@ -199,6 +199,7 @@ const getMatchTypeLabel = (matchType) => {
     vin: 'VIN Match',
     email: 'Email Match',
     phone: 'Phone Match',
+    ip_address: 'IP Address Match',
     license_plate: 'License Plate Match',
   }
   return labels[matchType] || 'Match'
@@ -212,6 +213,7 @@ const getMatchTypeColor = (matchType) => {
     vin: 'warning',
     email: 'success',
     phone: 'success',
+    ip_address: 'success',
     license_plate: 'warning',
   }
   return colors[matchType] || 'grey'
