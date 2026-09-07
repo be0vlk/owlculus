@@ -7,8 +7,10 @@ import { useAuthStore } from './auth'
 
 export const useTaskStore = defineStore('task', () => {
   const activeCase = useActiveCaseStore()
+  const authStore = useAuthStore()
   let listRequest = 0
   let detailRequest = 0
+  let contextGeneration = 0
   // State
   const templates = ref([])
   const tasks = ref([])
@@ -22,8 +24,9 @@ export const useTaskStore = defineStore('task', () => {
   })
 
   watch(
-    () => activeCase.activeCaseId,
+    [() => activeCase.activeCaseId, () => authStore.user?.id],
     () => {
+      contextGeneration++
       listRequest++
       detailRequest++
       tasks.value = []
@@ -36,7 +39,6 @@ export const useTaskStore = defineStore('task', () => {
   )
 
   // Getters
-  const authStore = useAuthStore()
   const currentUserId = computed(() => authStore.user?.id)
 
   const filteredTasks = computed(() => {
@@ -105,7 +107,7 @@ export const useTaskStore = defineStore('task', () => {
     }
   }
 
-  async function loadTasks(customFilters = null) {
+  async function loadTasks(customFilters = null, isCurrent = () => true) {
     const caseId = activeCase.activeCaseId
     if (!caseId) return
     const request = ++listRequest
@@ -134,9 +136,9 @@ export const useTaskStore = defineStore('task', () => {
       })
 
       const result = await taskService.getTasks(filterParams)
-      if (request === listRequest) tasks.value = result
+      if (request === listRequest && isCurrent()) tasks.value = result
     } catch (err) {
-      if (request !== listRequest) return
+      if (request !== listRequest || !isCurrent()) return
       error.value = err.response?.data?.detail || 'Failed to load tasks'
       throw err
     } finally {
@@ -284,50 +286,41 @@ export const useTaskStore = defineStore('task', () => {
     }
   }
 
-  async function bulkAssign(taskIds, userId) {
+  async function applyBulk(operation, taskIds, value, isCurrent = () => true) {
+    const generation = contextGeneration
+    const caseId = activeCase.activeCaseId
+    const ids = [...new Set(taskIds)]
+    if (!caseId || !ids.length) throw new Error('Select Tasks in an active case first')
+    const sameContext = () => generation === contextGeneration
     try {
       loading.value = true
       error.value = null
-      const updated = await taskService.bulkAssign(taskIds, userId)
-
-      // Update tasks in array
-      updated.forEach((updatedTask) => {
-        const index = tasks.value.findIndex((t) => t.id === updatedTask.id)
-        if (index !== -1) {
-          tasks.value[index] = updatedTask
-        }
-      })
-
+      const updated = await operation(ids, value)
+      if (sameContext() && isCurrent()) {
+        updated.forEach((task) => {
+          if (task.case_id !== caseId || !ids.includes(task.id)) return
+          const index = tasks.value.findIndex((item) => item.id === task.id)
+          if (index !== -1) tasks.value[index] = task
+          if (currentTask.value?.id === task.id) currentTask.value = task
+        })
+      }
       return updated
     } catch (err) {
-      error.value = err.response?.data?.detail || 'Failed to bulk assign tasks'
+      if (sameContext() && isCurrent()) {
+        error.value = err.response?.data?.detail || 'Unable to confirm bulk Task updates'
+      }
       throw err
     } finally {
-      loading.value = false
+      if (sameContext()) loading.value = false
     }
   }
 
-  async function bulkUpdateStatus(taskIds, status) {
-    try {
-      loading.value = true
-      error.value = null
-      const updated = await taskService.bulkUpdateStatus(taskIds, status)
+  function bulkAssign(taskIds, userId, isCurrent) {
+    return applyBulk(taskService.bulkAssign, taskIds, userId, isCurrent)
+  }
 
-      // Update tasks in array
-      updated.forEach((updatedTask) => {
-        const index = tasks.value.findIndex((t) => t.id === updatedTask.id)
-        if (index !== -1) {
-          tasks.value[index] = updatedTask
-        }
-      })
-
-      return updated
-    } catch (err) {
-      error.value = err.response?.data?.detail || 'Failed to bulk update status'
-      throw err
-    } finally {
-      loading.value = false
-    }
+  function bulkUpdateStatus(taskIds, status, isCurrent) {
+    return applyBulk(taskService.bulkUpdateStatus, taskIds, status, isCurrent)
   }
 
   function setFilters(newFilters) {

@@ -1,5 +1,9 @@
 <template>
   <BaseDashboard title="Tasks">
+    <v-alert v-if="usersError && !kind" type="error" class="mb-4">
+      {{ usersError }}
+      <v-btn :loading="usersLoading" @click="loadUsers">Retry users</v-btn>
+    </v-alert>
     <v-alert v-if="error" type="error" class="mb-4">{{ error }}</v-alert>
     <template #header-actions>
       <div class="d-flex align-center ga-2">
@@ -20,6 +24,8 @@
               v-bind="props"
               variant="outlined"
               aria-label="Refresh tasks"
+              :disabled="pending"
+              ref="refreshButton"
               @click="loadTasks"
             />
           </template>
@@ -144,10 +150,66 @@
     <!-- Bulk Actions -->
     <v-row v-if="selected.length > 0" class="mt-4">
       <v-col>
-        <v-btn :disabled="!canAssignTasks" @click="bulkAssign"> Bulk Assign </v-btn>
-        <v-btn class="ml-2" @click="bulkUpdateStatus"> Bulk Update Status </v-btn>
+        <span class="mr-3" role="status">{{ selected.length }} Tasks selected</span>
+        <v-btn :disabled="!canAssign || pending" @click="openBulk('assign', $event)"
+          >Bulk Assign</v-btn
+        >
+        <v-btn :disabled="!canUpdate || pending" class="ml-2" @click="openBulk('status', $event)"
+          >Bulk Update Status</v-btn
+        >
       </v-col>
     </v-row>
+
+    <v-dialog
+      :model-value="!!kind"
+      :aria-label="kind === 'assign' ? 'Bulk Assign' : 'Bulk Update Status'"
+      :persistent="pending"
+      max-width="480"
+      @update:model-value="
+        (visible) => {
+          if (!visible) close()
+        }
+      "
+      @after-leave="restoreBulkFocus"
+    >
+      <v-card v-if="kind">
+        <form @submit.prevent="submit">
+          <v-card-title>{{
+            kind === 'assign' ? 'Bulk Assign' : 'Bulk Update Status'
+          }}</v-card-title>
+          <v-card-text>
+            <p class="mb-4">{{ targetedCount }} Tasks targeted</p>
+            <v-alert v-if="feedback" type="warning" role="alert" class="mb-4">{{
+              feedback
+            }}</v-alert>
+            <v-alert v-if="kind === 'assign' && usersError" type="error" class="mb-4">
+              {{ usersError }}
+              <v-btn :loading="usersLoading" @click="loadUsers">Retry users</v-btn>
+            </v-alert>
+            <v-select
+              v-model="value"
+              :items="kind === 'assign' ? assigneeOptions : statusOptions"
+              :label="kind === 'assign' ? 'Assign To' : 'New Status'"
+              :disabled="pending || (kind === 'assign' && (usersLoading || !!usersError))"
+              :loading="kind === 'assign' && usersLoading"
+            />
+            <p v-if="pending" role="status">Applying Task updates…</p>
+            <v-btn v-if="needsRefresh" :disabled="pending" @click="refresh">Refresh Tasks</v-btn>
+          </v-card-text>
+          <v-card-actions>
+            <v-spacer />
+            <v-btn :disabled="pending" @click="close">Cancel</v-btn>
+            <v-btn type="submit" color="primary" :disabled="!canSubmit" :loading="pending"
+              >Apply</v-btn
+            >
+          </v-card-actions>
+        </form>
+      </v-card>
+    </v-dialog>
+    <v-snackbar v-model="snackbar.show" :color="snackbar.color" :timeout="snackbar.timeout">
+      {{ snackbar.text }}
+      <template #actions><v-btn @click="snackbar.show = false">Close</v-btn></template>
+    </v-snackbar>
 
     <!-- Create Task Dialog -->
     <v-dialog aria-label="Create Task" v-model="showCreateDialog" max-width="600">
@@ -158,6 +220,8 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { useBulkTaskActions } from '@/composables/useBulkTaskActions'
+import { useActiveCaseStore } from '@/stores/activeCase'
 import { useTaskStore } from '@/stores/taskStore'
 import { useAuthStore } from '@/stores/auth'
 import { useTaskTable } from '@/composables/useTaskTable'
@@ -167,11 +231,14 @@ import BaseDashboard from '@/components/BaseDashboard.vue'
 
 const taskStore = useTaskStore()
 const authStore = useAuthStore()
-const { canCreateTasks, canAssignTasks } = useTaskTable()
+const { canCreateTasks } = useTaskTable()
 
 // Data
 const showCreateDialog = ref(false)
-const selected = ref([])
+const context = useActiveCaseStore()
+const refreshButton = ref(null)
+let bulkActivator
+let bulkCaseId
 const searchQuery = ref('')
 const activeQuickFilter = ref('me')
 
@@ -181,7 +248,7 @@ const error = computed(() => taskStore.error)
 const stats = computed(() => taskStore.stats)
 
 const filteredAndSearchedTasks = computed(() => {
-  let result = taskStore.tasks || []
+  let result = taskStore.filteredTasks.filter((task) => task.case_id === context.activeCaseId)
 
   // Apply quick filter
   if (activeQuickFilter.value === 'me' && authStore.user) {
@@ -193,12 +260,49 @@ const filteredAndSearchedTasks = computed(() => {
     const query = searchQuery.value.toLowerCase()
     result = result.filter(
       (task) =>
-        task.title.toLowerCase().includes(query) || task.description.toLowerCase().includes(query),
+        task.title.toLowerCase().includes(query) ||
+        (task.description || '').toLowerCase().includes(query),
     )
   }
 
   return result
 })
+
+const {
+  selected,
+  targetedCount,
+  kind,
+  value,
+  pending,
+  feedback,
+  usersLoading,
+  usersError,
+  needsRefresh,
+  canAssign,
+  canUpdate,
+  canSubmit,
+  assigneeOptions,
+  statusOptions,
+  snackbar,
+  open,
+  close,
+  submit,
+  loadUsers,
+  refresh,
+} = useBulkTaskActions(filteredAndSearchedTasks)
+
+function openBulk(action, event) {
+  bulkCaseId = context.activeCaseId
+  bulkActivator = event.currentTarget
+  open(action)
+}
+
+function restoreBulkFocus() {
+  if (kind.value || bulkCaseId !== context.activeCaseId) return
+  const target =
+    bulkActivator?.isConnected && !bulkActivator.disabled ? bulkActivator : refreshButton.value?.$el
+  target?.focus()
+}
 
 // Methods
 async function loadTasks() {
@@ -215,16 +319,6 @@ async function handleCreateTask(taskData) {
     console.error('Failed to create task:', error)
     // Dialog remains open on error
   }
-}
-
-async function bulkAssign() {
-  // TODO: Implement bulk assign dialog
-  console.log('Bulk assign:', selected.value)
-}
-
-async function bulkUpdateStatus() {
-  // TODO: Implement bulk status update dialog
-  console.log('Bulk update status:', selected.value)
 }
 
 // Empty state helper functions
