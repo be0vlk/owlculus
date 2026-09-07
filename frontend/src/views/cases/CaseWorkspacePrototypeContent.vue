@@ -260,10 +260,10 @@
       </div>
     </section>
 
-    <section v-show="tab === 'runs'" aria-label="Runs workspace">
+    <section v-show="tab === 'runs'" aria-label="Plugins &amp; Hunts workspace">
       <div class="content-heading">
         <div>
-          <h2>Runs</h2>
+          <h2>Plugins &amp; Hunts</h2>
           <p>
             {{
               canViewHunts
@@ -337,7 +337,7 @@
           </tr>
         </tbody></v-table
       >
-      <div v-if="!runs.length" class="empty-content">No runs for this case.</div>
+      <div v-if="!runs.length" class="empty-content">No executions for this case.</div>
       <p class="history-footer">{{ runs.length }} executions · History refreshes when requested</p>
     </section>
 

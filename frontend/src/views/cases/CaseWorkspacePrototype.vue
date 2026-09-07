@@ -1,7 +1,7 @@
 <!--
 THROWAWAY: Three structurally different case workspaces on /case/:id?variant=A|B|C.
 Question: how should case identity, navigation, and investigative content share the page?
-Option A selected, with one Runs workspace for plugins and hunts. Mutations remain in memory.
+Option A selected, with alphabetized tabs and one Plugins & Hunts workspace. Mutations remain in memory.
 -->
 <template>
   <Sidebar />
@@ -326,9 +326,9 @@ const variant = computed(() =>
 const tabs = computed(() => [
   { name: 'entities', label: 'Entities', icon: 'mdi-account-group-outline' },
   { name: 'evidence', label: 'Evidence', icon: 'mdi-folder-outline' },
-  { name: 'tasks', label: 'Tasks', icon: 'mdi-checkbox-marked-circle-outline' },
-  { name: 'runs', label: 'Runs', icon: 'mdi-history' },
   { name: 'notes', label: 'Notes', icon: 'mdi-note-text-outline' },
+  { name: 'runs', label: 'Plugins & Hunts', icon: 'mdi-history' },
+  { name: 'tasks', label: 'Tasks', icon: 'mdi-checkbox-marked-circle-outline' },
 ])
 const activeTab = computed({
   get: () => {
