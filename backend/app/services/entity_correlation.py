@@ -6,10 +6,10 @@ import re
 from collections.abc import Iterator
 from dataclasses import dataclass
 from enum import StrEnum
-from urllib.parse import urlsplit
 
 from sqlmodel import Session, col, select
 
+from app.core.hostname import canonical_hostname, website_hostname
 from app.database.models import Case, Entity, User
 from app.schemas.entity_schema import entity_display_name
 from app.services.case_access import CaseAccess
@@ -296,34 +296,16 @@ def correlation_label(entity: Entity) -> str:
     )
 
 
-def _hostname(value: str) -> str:
-    host = value.strip().removesuffix(".").casefold()
-    # Reject malformed references locally without DNS or ownership inference.
-    labels = host.split(".")
-    if (
-        not host
-        or len(host) > 253
-        or any(
-            not re.fullmatch(r"[^\W_](?:[\w-]{0,61}[^\W_])?", label) for label in labels
-        )
-    ):
-        raise ValueError("Invalid hostname")
-    return host
-
-
 def _domain(value: str, *, bare: bool = False) -> str | None:
     text = value.strip()
     if text.lower().startswith(("http://", "https://")):
-        parsed = urlsplit(text)
-        # Accessing port also validates malformed port syntax.
-        _ = parsed.port
-        return _hostname(parsed.hostname or "")
+        return website_hostname(text)
     if "@" in text:
         local, host = text.rsplit("@", 1)
         if not local or any(char.isspace() for char in local) or "@" in local:
             raise ValueError("Invalid email reference")
-        return _hostname(host)
-    return _hostname(text) if bare else None
+        return canonical_hostname(host)
+    return canonical_hostname(text) if bare else None
 
 
 def _email(value: str) -> str:
@@ -339,7 +321,7 @@ def _email(value: str) -> str:
         or any(char.isspace() or char in '@:<>(),;\\[]"' for char in local)
     ):
         raise ValueError("Invalid email reference")
-    return f"{local}@{_hostname(host)}"
+    return f"{local}@{canonical_hostname(host)}"
 
 
 COMMON_EMAIL_PROVIDERS = frozenset(
@@ -411,7 +393,13 @@ def _references(entity: Entity, skipped: list[SkippedReference]) -> References:
             continue
         try:
             email = _email(raw) if field == "email" else None
-            domain = email.rsplit("@", 1)[1] if email else _domain(raw, bare=bare)
+            domain: str | None
+            if field == "website":
+                domain = website_hostname(raw)
+            elif field == "domain":
+                domain = canonical_hostname(raw)
+            else:
+                domain = email.rsplit("@", 1)[1] if email else _domain(raw, bare=bare)
         except ValueError:
             skipped.append(SkippedReference(entity.case_id, entity.id, field))
             continue

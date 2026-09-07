@@ -18,6 +18,7 @@ from app.core.exceptions import (
     ResourceNotFoundException,
     ValidationException,
 )
+from app.core.hostname import canonical_hostname
 from app.core.utils import get_utc_now
 from app.database import models
 from app.database.db_utils import transaction
@@ -91,6 +92,12 @@ class EntityService:
             if policy.entity_type != entity_type or not all(
                 entity.data.get(field) for field in policy.fields
             ):
+                continue
+            if entity_type == "domain":
+                if self._find_domain(case_id, entity.data["domain"], entity_id):
+                    raise DuplicateResourceException(
+                        policy.error_template.format(**entity.data)
+                    )
                 continue
             comparisons = []
             for field in policy.fields:
@@ -260,15 +267,35 @@ class EntityService:
         self, case_id: int, domain: str, current_user: models.User
     ) -> models.Entity | None:
         """Find an existing domain entity in the given case (case-insensitive)"""
-        case = self.case_access.readable(current_user, case_id)
+        self.case_access.readable(current_user, case_id)
 
-        query = select(models.Entity).where(
-            models.Entity.case_id == case.id,
-            models.Entity.entity_type == "domain",
-            models.Entity.data["domain"].as_string().ilike(domain),
+        return self._find_domain(case_id, domain)
+
+    def _find_domain(
+        self, case_id: int, domain: str, exclude_id: int | None = None
+    ) -> models.Entity | None:
+        """Compare new and historical Domain values without rewriting stored data."""
+        identity = canonical_hostname(domain)
+        query = (
+            select(models.Entity)
+            .where(
+                models.Entity.case_id == case_id,
+                models.Entity.entity_type == "domain",
+            )
+            .order_by(col(models.Entity.id))
         )
-        result = self.db.exec(query)
-        return result.first()
+        if exclude_id is not None:
+            query = query.where(models.Entity.id != exclude_id)
+        for candidate in self.db.exec(query):
+            raw = candidate.data.get("domain")
+            if not isinstance(raw, str):
+                continue
+            try:
+                if canonical_hostname(raw) == identity:
+                    return candidate
+            except ValueError:
+                continue
+        return None
 
     async def enrich_entity_description(
         self,

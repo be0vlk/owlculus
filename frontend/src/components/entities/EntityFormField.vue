@@ -18,6 +18,7 @@
         @update:model-value="$emit('update:field', $event)"
         :label="field.label"
         :type="field.type"
+        :rules="entity.entity_type === 'domain' && field.id === 'domain' ? [domainRule] : []"
         variant="outlined"
         density="comfortable"
         clearable
@@ -41,6 +42,7 @@
 </template>
 
 <script setup>
+import { useEntityValidation } from '../../composables/useEntityValidation.js'
 import { useEntityIcons } from '../../composables/useEntityIcons.js'
 
 const props = defineProps({
@@ -52,5 +54,6 @@ const props = defineProps({
 
 defineEmits(['update:field', 'update:source'])
 
+const { domainRule } = useEntityValidation()
 const { getFieldIcon } = useEntityIcons(props.entity)
 </script>

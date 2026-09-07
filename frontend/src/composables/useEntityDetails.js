@@ -5,6 +5,7 @@ import { cleanFormData } from '../utils/cleanFormData'
 import { getErrorMessage } from '../utils/errorMessage'
 import { useBaseNoteEditor } from './useBaseNoteEditor'
 import { useNoteSaveQueue } from './useNoteSaveQueue'
+import { useEntityValidation } from './useEntityValidation'
 import { useEntitySources } from './useEntitySources'
 
 // Entity transport data is JSON. Copy recursively, including arrays, to isolate Vue proxies too.
@@ -79,6 +80,10 @@ export function useEntityDetails(entity, caseId, emit) {
     try {
       updating.value = true
       error.value = ''
+      if (targetType === 'domain') {
+        const result = useEntityValidation().domainRule(formData.value.data.domain)
+        if (result !== true) throw new Error(result)
+      }
       const updatedEntity = await saveEntity({
         entity_type: targetType,
         data: draftData(cleanFormData(clone(formData.value.data))),

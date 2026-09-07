@@ -34,12 +34,12 @@
 </template>
 
 <script setup>
-import { usePluginValidation } from '@/composables/usePluginParams'
+import { useEntityValidation } from '@/composables/useEntityValidation'
 import { entityFormProps, entityFormEmits, useEntityFormField } from '@/composables/useEntityForm'
 
 const props = defineProps(entityFormProps)
 const emit = defineEmits(entityFormEmits)
 
-const { domainRule } = usePluginValidation()
+const { domainRule } = useEntityValidation()
 const { updateField } = useEntityFormField(props, emit)
 </script>

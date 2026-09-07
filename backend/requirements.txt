@@ -29,3 +29,5 @@ vt-py
 python-multipart
 celery[redis]
 redis
+
+idna==3.19
