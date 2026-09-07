@@ -22,6 +22,9 @@
     <p v-if="allowHunts && !huntLoading && !huntError && !hunts.length">
       No hunt executions for this case.
     </p>
+    <p v-if="historyRepositioned" role="status">
+      History updated. Returned to page 1 to include newly loaded executions.
+    </p>
     <v-table v-if="rows.length" density="comfortable" class="history-table">
       <template #default>
         <caption class="text-left text-body-small pa-2">
@@ -126,6 +129,7 @@ watch(
 )
 const page = ref(1)
 const pageSize = ref(25)
+const historyRepositioned = ref(false)
 let huntController
 
 async function loadHunts() {
@@ -154,6 +158,7 @@ const rows = computed(() =>
   [
     ...plugins.value.map((item) => ({
       key: `plugin:${item.id}`,
+      kind: 'plugin',
       type: 'Plugin',
       id: item.id,
       name: item.plugin_name,
@@ -162,6 +167,7 @@ const rows = computed(() =>
     })),
     ...(props.allowHunts ? hunts.value : []).map((item) => ({
       key: `hunt:${item.id}`,
+      kind: 'hunt',
       type: 'Hunt',
       id: item.id,
       name: formatHuntExecutionTitle(
@@ -179,7 +185,7 @@ const rows = computed(() =>
 )
 
 function open(row) {
-  if (row.type === 'Hunt') {
+  if (row.kind === 'hunt') {
     if (!props.allowHunts) return
     selected.value = null
     router.push(`/case/${props.caseId}/hunts/execution/${row.id}`)
@@ -193,10 +199,17 @@ const pageCount = computed(() => Math.max(1, Math.ceil(rows.value.length / pageS
 const visibleRows = computed(() =>
   rows.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value),
 )
-watch(pageCount, (count) => {
-  page.value = Math.min(page.value, count)
+// Source pages can interleave ahead of the current page. Restart traversal so
+// newly loaded executions cannot be silently skipped behind the reader.
+watch(rows, () => {
+  if (page.value > 1) historyRepositioned.value = true
+  page.value = 1
+})
+watch(page, (value) => {
+  if (value !== 1) historyRepositioned.value = false
 })
 watch(pageSize, () => {
+  historyRepositioned.value = false
   page.value = 1
 })
 
@@ -208,6 +221,7 @@ watch(
   () => props.caseId,
   () => {
     selected.value = null
+    historyRepositioned.value = false
     page.value = 1
   },
   { flush: 'sync' },
