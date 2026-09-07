@@ -157,7 +157,21 @@ class CorrelationScan(BasePlugin):
             f"Execution time: {first.get('executed_at', 'Not recorded')}",
             "",
         ]
-        for group in groups:
+        report_sections = [
+            {**group, "matches": selected, "weak": weak}
+            for weak in (False, True)
+            for group in groups
+            if (
+                selected := [
+                    match
+                    for match in group["matches"]
+                    if _weak_provider_match(match) == weak
+                ]
+            )
+        ]
+        for group in report_sections:
+            if group["weak"]:
+                lines.append(f"Weak provider matches ({len(group['matches'])})")
             lines.extend(
                 [
                     f"Entity: {group['entity_name']}; Entity ID: {group['entity_id']}",
@@ -185,6 +199,13 @@ class CorrelationScan(BasePlugin):
                     f"{notice['message']} Case ID: {notice['case_id']}; Entity ID: {notice['entity_id']}; field: {notice['field']}"
                 )
         return "\n".join(lines)
+
+
+def _weak_provider_match(match: dict[str, Any]) -> bool:
+    return match.get("signal_rank") == 2 or (
+        "signal_rank" not in match
+        and "low signal: common email provider" in match.get("signal", "").lower()
+    )
 
 
 def _format_fields(fields: list[dict[str, str]]) -> str:

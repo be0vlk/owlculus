@@ -73,13 +73,34 @@
             </v-card-text>
           </v-card>
 
-          <v-alert v-if="hasResults && error" type="warning" role="alert" class="mb-4">
+          <v-alert
+            v-if="hasResults && error && !executionStatus"
+            type="warning"
+            role="alert"
+            class="mb-4"
+          >
             <strong>Partial retained results</strong>
             <div>{{ error }}</div>
           </v-alert>
           <!-- Results Display -->
-          <div v-if="hasResults" class="results-container">
-            <PluginResult :plugin-name="pluginName" :result="results" class="modal-plugin-result" />
+          <div
+            v-if="
+              hasResults || executionStatus || retrievalError || retrievalLoading || exportError
+            "
+            class="results-container"
+          >
+            <PluginResult
+              :plugin-name="pluginName"
+              :result="results || []"
+              class="modal-plugin-result"
+              :execution-status="executionStatus"
+              :execution-error="error"
+              :retrieval-loading="retrievalLoading"
+              :retrieval-complete="retrievalComplete"
+              :retrieval-error="retrievalError"
+              :export-error="exportError"
+              @retry="$emit('retry')"
+            />
           </div>
 
           <!-- Error Display -->
@@ -115,6 +136,11 @@ import PluginResult from '@/components/plugins/PluginResult.vue'
 import { formatDate } from '@/composables/dateUtils.js'
 
 const props = defineProps({
+  executionStatus: { type: String, default: null },
+  retrievalLoading: { type: Boolean, default: false },
+  retrievalComplete: { type: Boolean, default: true },
+  retrievalError: { type: String, default: null },
+  exportError: { type: String, default: null },
   modelValue: {
     type: Boolean,
     default: false,
@@ -148,7 +174,7 @@ const hasResults = computed(() => {
   return true
 })
 
-const emit = defineEmits(['update:modelValue', 'export'])
+const emit = defineEmits(['update:modelValue', 'export', 'retry'])
 
 const { mdAndDown } = useDisplay()
 
@@ -213,7 +239,10 @@ const exportResults = () => {
         : props.results,
     parameters: props.parameters,
     executionTime: props.executionTime,
-    partial: Boolean(props.error),
+    partial:
+      Boolean(props.error) ||
+      !props.retrievalComplete ||
+      Boolean(props.executionStatus && props.executionStatus !== 'completed'),
     error: props.error || null,
   })
 }

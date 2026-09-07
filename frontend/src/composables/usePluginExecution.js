@@ -7,6 +7,10 @@ export function usePluginExecution() {
   const results = ref([])
   const error = ref(null)
   const cancelling = ref(false)
+  const retrievalLoading = ref(false)
+  const retrievalComplete = ref(false)
+  let cursor = 0
+  let selectedId
   let stopObservation
   let generation = 0
 
@@ -15,27 +19,51 @@ export function usePluginExecution() {
     stopObservation?.()
   }
 
-  function observe(id) {
+  function clearInaccessibleContent() {
+    stop()
+    results.value = []
+    retrievalComplete.value = false
+    retrievalLoading.value = false
+    if (execution.value) execution.value = { ...execution.value, parameters: {}, error: null }
+    error.value = 'Could not access investigation results. Check access and retry.'
+  }
+
+  function observe(id, resume = false) {
     stop()
     const current = generation
-    execution.value = null
-    results.value = []
+    selectedId = id
+    if (!resume) {
+      execution.value = null
+      results.value = []
+      cursor = 0
+    }
+    retrievalLoading.value = true
+    retrievalComplete.value = false
     error.value = null
-    let cursor = 0
     stopObservation = observeExecution({
       async refresh(signal) {
-        const state = await pluginService.getExecution(id, signal)
-        const page = await pluginService.getResults(id, cursor, signal)
-        if (current !== generation) return { terminal: true }
-        if ((state.revision ?? 0) >= (execution.value?.revision ?? 0)) execution.value = state
-        if (page.cursor > cursor) {
-          results.value.push(...page.items)
-          cursor = page.cursor
-        }
-        error.value = null
-        return {
-          terminal: ['completed', 'failed', 'cancelled'].includes(execution.value.status),
-          more: !!page.next_cursor,
+        try {
+          const state = await pluginService.getExecution(id, signal)
+          if (current !== generation) return { terminal: true }
+          if ((state.revision ?? 0) >= (execution.value?.revision ?? 0)) execution.value = state
+          const page = await pluginService.getResults(id, cursor, signal)
+          if (current !== generation) return { terminal: true }
+          if (page.cursor > cursor) {
+            results.value.push(...page.items)
+            cursor = page.cursor
+          }
+          const terminal = ['completed', 'failed', 'cancelled'].includes(execution.value.status)
+          retrievalComplete.value = terminal && page.next_cursor == null
+          retrievalLoading.value = page.next_cursor != null
+          error.value = null
+          return { terminal, more: page.next_cursor != null }
+        } catch (failure) {
+          if (current === generation) {
+            retrievalLoading.value = false
+            retrievalComplete.value = false
+            if ([401, 403, 404].includes(failure.response?.status)) clearInaccessibleContent()
+          }
+          throw failure
         }
       },
       openStream: pluginService.createExecutionStream
@@ -68,5 +96,17 @@ export function usePluginExecution() {
   }
 
   onScopeDispose(stop)
-  return { execution, results, error, observe, stop, cancel, cancelling }
+  return {
+    clearInaccessibleContent,
+    execution,
+    results,
+    error,
+    retrievalLoading,
+    retrievalComplete,
+    retry: () => observe(selectedId, true),
+    observe,
+    stop,
+    cancel,
+    cancelling,
+  }
 }

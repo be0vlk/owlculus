@@ -440,3 +440,74 @@ it('renders and exports recorded profile equality with every field and conservat
   expect(wrapper.emitted('export')[0][0].results).toEqual(results)
   wrapper.unmount()
 })
+
+it('qualifies retained counts until retrieval finishes despite a completed event', async () => {
+  const wrapper = mountWithVuetify(CorrelationScanPluginResult, {
+    props: {
+      result: [{ type: 'complete', data: {} }],
+      executionStatus: 'completed',
+      retrievalComplete: false,
+    },
+  })
+  expect(wrapper.text()).not.toContain('Correlation scan complete')
+  expect(wrapper.text()).toContain('Partial retained results')
+  await wrapper.setProps({ retrievalComplete: true })
+  expect(wrapper.text()).toContain('No correlations are available')
+  await wrapper.setProps({ executionStatus: 'cancelled' })
+  expect(wrapper.text()).not.toContain('Correlation scan complete')
+  expect(wrapper.text()).toContain('cancelled')
+})
+
+it('collapses readable weak matches in mixed groups and preserves expansion through continuation', async () => {
+  const group = (matches) => ({
+    type: 'data',
+    data: {
+      case_id: 1,
+      entity_id: 10,
+      entity_name: 'Mailbox owner',
+      entity_type: 'person',
+      group_id: 'mixed',
+      match_type: 'domain',
+      normalized_value: 'gmail.com',
+      source_fields: [{ field: 'email', value: 'ada@gmail.com' }],
+      matches,
+    },
+  })
+  const ordinary = { case_id: 2, entity_id: 20, entity_name: 'Explicit Domain', signal_rank: 1 }
+  const weak = (id) => ({
+    case_id: 2,
+    entity_id: id,
+    entity_name: `Mailbox ${id}`,
+    signal_rank: 2,
+    signal: 'Low signal: common email provider',
+  })
+  const wrapper = mountWithVuetify(CorrelationScanPluginResult, {
+    props: { result: [group([ordinary, weak(21), weak(22)])] },
+  })
+  expect(wrapper.get('details').element.open).toBe(false)
+  expect(wrapper.get('summary').text()).toBe('Weak provider matches (2)')
+  expect(wrapper.get('details').text()).not.toContain('Explicit Domain')
+  wrapper.get('details').element.open = true
+  await wrapper.setProps({
+    result: [group([ordinary, weak(21), weak(22)]), group([weak(22), weak(23)])],
+  })
+  expect(wrapper.get('details').element.open).toBe(true)
+  expect(wrapper.get('summary').text()).toBe('Weak provider matches (3)')
+  expect(wrapper.findAll('h4')).toHaveLength(4)
+  expect(wrapper.text()).toContain('Source email: ada@gmail.com')
+})
+
+it('shows the latest progress once without repeated status keys and hides it at durable termination', async () => {
+  const warn = vi.spyOn(console, 'warn')
+  const status = (count) => ({ type: 'status', data: { message: 'Indexed Entities', count } })
+  const wrapper = mountWithVuetify(CorrelationScanPluginResult, {
+    props: { result: [status(1), status(2), status(3)], executionStatus: 'running' },
+  })
+  expect(wrapper.findAll('[role="status"]')).toHaveLength(1)
+  expect(wrapper.text()).toContain('Indexed Entities: 3')
+  expect(wrapper.text()).not.toContain('Indexed Entities: 1')
+  await wrapper.setProps({ executionStatus: 'failed' })
+  expect(wrapper.find('[role="status"]').exists()).toBe(false)
+  expect(warn.mock.calls.flat().join(' ')).not.toContain('Duplicate keys')
+  warn.mockRestore()
+})

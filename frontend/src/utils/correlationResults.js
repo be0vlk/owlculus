@@ -3,13 +3,18 @@ export function assembleCorrelationResults(result) {
   const events = result ? (Array.isArray(result) ? result : [result]) : []
   const groups = new Map()
   const others = []
-  for (const [index, event] of events.entries()) {
+  for (const event of events) {
     const part = event.data
     if (event.type !== 'data' || !Array.isArray(part?.matches)) {
       others.push(event)
       continue
     }
-    const key = part.group_id || `legacy:${index}`
+    const key = JSON.stringify([
+      part.case_id,
+      part.entity_id,
+      part.match_type,
+      part.normalized_value ?? part.matched_value ?? part.domain ?? part.employer_name ?? '',
+    ])
     if (!groups.has(key)) groups.set(key, { ...part, source_fields: [], matches: new Map() })
     const group = groups.get(key)
     group.source_fields = mergeFields(group.source_fields, part.source_fields)
@@ -17,6 +22,7 @@ export function assembleCorrelationResults(result) {
       const identity = `${match.case_id}:${match.entity_id}`
       const previous = group.matches.get(identity)
       group.matches.set(identity, {
+        ...previous,
         ...match,
         ...(match.fields || previous?.fields
           ? { fields: mergeFields(previous?.fields, match.fields) }
@@ -52,3 +58,7 @@ const mergeFields = (first = [], second = []) => [
     [...first, ...second].map((field) => [JSON.stringify([field.field, field.value]), field]),
   ).values(),
 ]
+
+export const isWeakProviderMatch = (match) =>
+  match.signal_rank === 2 ||
+  (match.signal_rank == null && /low signal.*common email provider/i.test(match.signal || ''))
