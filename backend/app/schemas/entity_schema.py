@@ -6,18 +6,26 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import AnyHttpUrl, BaseModel, ConfigDict, EmailStr, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_validator,
+    model_validator,
+)
 
+from ..core.hostname import canonical_hostname, normalize_website
 from ..core.utils import get_utc_now
 
 
 class EntityData(BaseModel):
     """Base class for all entity data types"""
 
-    pass
+    model_config = ConfigDict(extra="allow")
 
 
-class Address(BaseModel):
+class Address(EntityData):
     street: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
@@ -25,7 +33,7 @@ class Address(BaseModel):
     postal_code: Optional[str] = None
 
 
-class SocialMedia(BaseModel):
+class SocialMedia(EntityData):
     bluesky: Optional[str] = None
     discord: Optional[str] = None
     facebook: Optional[str] = None
@@ -40,7 +48,7 @@ class SocialMedia(BaseModel):
     other: Optional[str] = None
 
 
-class NetworkAssets(BaseModel):
+class NetworkAssets(EntityData):
     domains: Optional[List[str]] = None
     ip_addresses: Optional[List[str]] = None
     subdomains: Optional[List[str]] = None
@@ -48,6 +56,8 @@ class NetworkAssets(BaseModel):
 
 class DomainData(EntityData):
     domain: str
+
+    _normalize_domain = field_validator("domain")(canonical_hostname)
     description: Optional[str] = None
     notes: Optional[str] = None
     sources: Optional[Dict[str, str]] = None
@@ -61,7 +71,7 @@ class IpAddressData(EntityData):
     sources: Optional[Dict[str, str]] = None
 
 
-class Associates(BaseModel):
+class Associates(EntityData):
     children: Optional[str] = None
     colleagues: Optional[str] = None
     father: Optional[str] = None
@@ -73,6 +83,14 @@ class Associates(BaseModel):
 
 
 class PersonData(EntityData):
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email_host(cls, value: Any) -> Any:
+        if isinstance(value, str) and "@" in value:
+            local, host = value.strip().rsplit("@", 1)
+            return f"{local}@{canonical_hostname(host)}"
+        return value
+
     first_name: Optional[str] = None
     last_name: Optional[str] = None
     dob: Optional[str] = None
@@ -89,7 +107,7 @@ class PersonData(EntityData):
     sources: Optional[Dict[str, str]] = None
 
 
-class Executives(BaseModel):
+class Executives(EntityData):
     ceo: Optional[str] = None
     cfo: Optional[str] = None
     cto: Optional[str] = None
@@ -98,7 +116,7 @@ class Executives(BaseModel):
     other: Optional[str] = None
 
 
-class Affiliates(BaseModel):
+class Affiliates(EntityData):
     affiliated_companies: Optional[str] = Field(None, alias="Affiliated Companies")
     subsidiaries: Optional[str] = None
     parent_company: Optional[str] = Field(None, alias="Parent Company")
@@ -107,7 +125,7 @@ class Affiliates(BaseModel):
 class CompanyData(EntityData):
     name: str
     address: Optional[Address] = None
-    website: Optional[AnyHttpUrl] = None
+    website: Optional[str] = None
     phone: Optional[str] = None
     social_media: Optional[SocialMedia] = None
     executives: Optional[Executives] = None
@@ -117,15 +135,10 @@ class CompanyData(EntityData):
     notes: Optional[str] = None
     sources: Optional[Dict[str, str]] = None
 
-    @model_validator(mode="before")
-    def validate_urls(cls, values):
-        if "website" in values and values["website"]:
-            # Skip if it's already None or already has a protocol
-            if isinstance(values["website"], str) and not values["website"].startswith(
-                ("https://")
-            ):
-                values["website"] = f"https://{values['website']}"
-        return values
+    @field_validator("website")
+    @classmethod
+    def validate_website(cls, value: str | None) -> str | None:
+        return normalize_website(value) if value is not None else None
 
 
 class VehicleData(EntityData):
@@ -184,6 +197,8 @@ def entity_display_name(entity_type: str, data: dict[str, Any]) -> str:
 
 
 class Entity(BaseModel):
+    """Return stored data faithfully, including historical values and unknown fields."""
+
     model_config = ConfigDict(from_attributes=True)
 
     case_id: int
@@ -193,18 +208,6 @@ class Entity(BaseModel):
     created_at: Optional[datetime] = Field(default_factory=get_utc_now)
     updated_at: Optional[datetime] = Field(default_factory=get_utc_now)
     created_by_id: Optional[int] = None
-
-    @model_validator(mode="after")
-    def validate_data(self) -> "Entity":
-        schema = ENTITY_TYPE_SCHEMAS.get(self.entity_type)
-        if schema:
-            try:
-                self.data = schema(**self.data).model_dump(mode="json")
-            except Exception as e:
-                raise ValueError(
-                    f"Invalid data for entity type '{self.entity_type}': {str(e)}"
-                )
-        return self
 
 
 class EntityCreate(BaseModel):
@@ -220,7 +223,7 @@ class EntityCreate(BaseModel):
         if not schema:
             raise ValueError(f"Invalid entity type: {self.entity_type}")
         try:
-            schema(**self.data)
+            self.data = schema(**self.data).model_dump(mode="json", by_alias=True)
         except Exception as e:
             raise ValueError(
                 f"Invalid data for entity type {self.entity_type}: {str(e)}"
@@ -241,7 +244,9 @@ class EntityUpdate(BaseModel):
             schema = ENTITY_TYPE_SCHEMAS.get(entity_type)
             if schema:
                 try:
-                    values["data"] = schema(**values["data"]).model_dump(mode="json")
+                    values["data"] = schema(**values["data"]).model_dump(
+                        mode="json", by_alias=True
+                    )
                 except Exception as e:
                     raise ValueError(
                         f"Invalid data for entity type '{entity_type}': {str(e)}"

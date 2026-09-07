@@ -1,7 +1,6 @@
 """Correlation behavior through accepted Entities and the PluginRunner boundary."""
 
 import pytest
-
 from app.database.models import Case
 from app.plugins.base_plugin import PluginRun
 from app.plugins.correlation_plugin import CorrelationScan
@@ -72,7 +71,7 @@ async def test_unnamed_person_and_domain_connect_in_both_directions(
         {"field": "email", "value": "ada@example.com"}
     ]
     assert forward[0]["matches"][0]["fields"] == [
-        {"field": "domain", "value": " Example.COM. "}
+        {"field": "domain", "value": "example.com"}
     ]
 
 
@@ -636,3 +635,92 @@ async def test_legacy_malformed_email_does_not_become_an_exact_identifier(
     warnings = [row for row in results if row.get("notice_type") == "skipped_reference"]
     assert len(warnings) == 2
     assert all(row["field"] == "email" for row in warnings)
+
+
+@pytest.mark.asyncio
+async def test_historical_hostname_identity_and_local_warnings(
+    session, test_admin, cases
+):
+    from app.database.models import Entity
+
+    source, other = cases
+    raw_entities = [
+        Entity(
+            created_by_id=test_admin.id,
+            case_id=source.id,
+            entity_type="company",
+            data={"name": "Historical", "website": " BÜCHER.example.:8080/path?q=1#f "},
+        ),
+        Entity(
+            created_by_id=test_admin.id,
+            case_id=other.id,
+            entity_type="domain",
+            data={"domain": " XN--BCHER-KVA.EXAMPLE. "},
+        ),
+        Entity(
+            created_by_id=test_admin.id,
+            case_id=other.id,
+            entity_type="person",
+            data={
+                "email": "Ada@bücher.example.",
+                "usernames": ["HTTPS://BÜCHER.example/profile"],
+            },
+        ),
+        Entity(
+            created_by_id=test_admin.id,
+            case_id=other.id,
+            entity_type="domain",
+            data={"domain": "shop.bücher.example"},
+        ),
+        Entity(
+            created_by_id=test_admin.id,
+            case_id=other.id,
+            entity_type="company",
+            data={"name": "Broken", "website": "https://http//private.example"},
+        ),
+        Entity(
+            created_by_id=test_admin.id,
+            case_id=other.id,
+            entity_type="domain",
+            data={"domain": "bad_label.example"},
+        ),
+    ]
+    session.add_all(raw_entities)
+    session.commit()
+    results = await scan(session, test_admin, source)
+    group = next(item for item in results if item.get("match_type") == "domain")
+    assert group["normalized_value"] == "xn--bcher-kva.example"
+    assert {item["entity_id"] for item in group["matches"]} == {
+        raw_entities[1].id,
+        raw_entities[2].id,
+    }
+    person_match = next(
+        item for item in group["matches"] if item["entity_id"] == raw_entities[2].id
+    )
+    assert {field["field"] for field in person_match["fields"]} == {
+        "email",
+        "usernames[0]",
+    }
+    notices = [
+        item for item in results if item.get("notice_type") == "skipped_reference"
+    ]
+    assert notices, results
+    assert len(notices) == 2
+    assert all(item["case_scope"] == [source.id, other.id] for item in notices)
+    assert "private.example" not in str(notices)
+    assert "bad_label.example" not in str(notices)
+
+
+@pytest.mark.asyncio
+async def test_accepted_email_hostname_identity_preserves_local_part(
+    session, test_admin, cases
+):
+    await entity(session, test_admin, cases[0], "person", email="Ada@BÜCHER.example.")
+    await entity(
+        session, test_admin, cases[1], "person", email="Ada@xn--bcher-kva.example"
+    )
+    await entity(session, test_admin, cases[1], "person", email="ada@bücher.example")
+    results = await scan(session, test_admin, cases[0])
+    exact = next(item for item in results if item.get("match_type") == "email")
+    assert exact["normalized_value"] == "Ada@xn--bcher-kva.example"
+    assert len(exact["matches"]) == 1

@@ -3,8 +3,6 @@ Comprehensive test suite for EntityService
 """
 
 import pytest
-from sqlmodel import Session
-
 from app.core.exceptions import (
     AuthorizationException,
     DuplicateResourceException,
@@ -13,6 +11,7 @@ from app.core.exceptions import (
 from app.database import models
 from app.schemas.entity_schema import EntityCreate, EntityUpdate
 from app.services.entity_service import EntityService
+from sqlmodel import Session
 
 
 @pytest.mark.asyncio
@@ -178,9 +177,7 @@ class TestEntityService:
         )
         assert entity.entity_type == "company"
         assert entity.data["name"] == "Tech Corp"
-        assert (
-            entity.data["website"] == "techcorp.com"
-        )  # No auto-prepending in current implementation
+        assert entity.data["website"] == "https://techcorp.com"
         assert entity.data["domains"] == ["techcorp.com", "techcorp.io"]
 
     async def test_create_entity_domain_success(self, test_case_with_users, test_user):
@@ -499,7 +496,7 @@ class TestEntityService:
 
         assert found_entity is not None
         assert found_entity.id == created_entity.id
-        assert found_entity.data["domain"] == "TestDomain.Com"
+        assert found_entity.data["domain"] == "testdomain.com"
 
     async def test_find_entity_by_domain_not_found(
         self, test_case_with_users, test_user
@@ -535,7 +532,7 @@ class TestEntityService:
         # Store original state
         original_created_at = created_entity.created_at
         assert (
-            "description" not in created_entity.data
+            created_entity.data.get("description") is None
         )  # Verify no description initially
 
         # Enrich with description

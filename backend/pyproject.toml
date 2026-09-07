@@ -15,6 +15,7 @@ dependencies = [
     "filetype==1.2.0",
     "fpdf2==2.8.8",
     "holehe==1.61",
+    "idna==3.19",
     "loguru==0.7.3",
     "openai==3.7.0",
     "peopledatalabs==6.4.13",
