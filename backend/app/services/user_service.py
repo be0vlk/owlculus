@@ -9,8 +9,9 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
+from sqlalchemy import update
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app import schemas
 from app.core import security, setup
@@ -28,7 +29,7 @@ from app.core.logging import get_security_logger
 from app.core.roles import UserRole
 from app.core.utils import get_utc_now
 from app.database.db_utils import transaction
-from app.database.models import User
+from app.database.models import CaseUserLink, User
 from app.services.case_access import CaseAccess
 
 _BOOTSTRAP_USERNAME_PATTERN = re.compile(r"[A-Za-z0-9_]{3,50}\Z")
@@ -162,6 +163,12 @@ class UserService:
             with transaction(self.db):
                 self.db.add(user)
                 self.db.flush()
+                if user.role == UserRole.ANALYST.value:
+                    self.db.execute(
+                        update(CaseUserLink)
+                        .where(col(CaseUserLink.user_id) == user.id)
+                        .values(is_lead=False)
+                    )
         except IntegrityError as error:
             duplicate_field = self._duplicate_field(identity)
             if duplicate_field:
@@ -306,6 +313,12 @@ class UserService:
                 "Only superadmin can promote users to superadmin"
             )
         final_role = updates.get("role", user.role)
+        if (
+            user.role == UserRole.ADMIN.value
+            and final_role != UserRole.ADMIN.value
+            and not current_user.is_superadmin
+        ):
+            raise AuthorizationException("Only superadmin can demote admin users")
         final_superadmin = updates.get("is_superadmin", user.is_superadmin)
         if final_superadmin and final_role != UserRole.ADMIN.value:
             raise ValidationException("Only users with Admin role can be superadmin")
@@ -339,10 +352,7 @@ class UserService:
             raise AuthorizationException("Not authorized")
         if not security.verify_password(current_password, user.password_hash):
             raise ValidationException("Invalid current password")
-        with transaction(self.db):
-            user.password_hash = security.get_password_hash(new_password)
-            user.updated_at = get_utc_now()
-            self.db.add(user)
+        self._replace_password(user, new_password, expected_hash=user.password_hash)
         return schemas.User.model_validate(user)
 
     @_audit_user_operation("admin_password_reset")
@@ -357,11 +367,30 @@ class UserService:
             raise AuthorizationException(
                 "Only superadmin can reset superadmin passwords"
             )
-        with transaction(self.db):
-            user.password_hash = security.get_password_hash(new_password)
-            user.updated_at = get_utc_now()
-            self.db.add(user)
+        self._replace_password(user, new_password)
         return schemas.User.model_validate(user)
+
+    def _replace_password(
+        self, user: User, new_password: str, *, expected_hash: str | None = None
+    ) -> None:
+        """Commit credentials and revocation together, without lost increments."""
+        statement = update(User).where(
+            col(User.id) == user.id, col(User.auth_identity) == user.auth_identity
+        )
+        if expected_hash is not None:
+            statement = statement.where(col(User.password_hash) == expected_hash)
+        with transaction(self.db):
+            changed = self.db.execute(
+                statement.values(
+                    password_hash=security.get_password_hash(new_password),
+                    session_version=col(User.session_version) + 1,
+                    updated_at=get_utc_now(),
+                ).returning(col(User.id)),
+                execution_options={"synchronize_session": False},
+            ).scalar_one_or_none()
+            if changed is None:
+                raise ValidationException("Password changed concurrently; try again")
+            self.db.refresh(user)
 
     @_audit_user_operation("user_deletion")
     async def delete_user(self, user_id: int, current_user: User) -> dict:

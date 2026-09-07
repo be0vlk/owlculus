@@ -39,12 +39,20 @@ class AuthService:
             raise AuthenticationException(INVALID_CREDENTIALS_ERROR)
 
         user = self.db.exec(select(User).where(User.username == username)).first()
-        if user is None or not security.verify_password(password, user.password_hash):
+        # Capture the version from the same row read as the password hash. A reset
+        # racing password verification can only make this token stale, never fresh.
+        identity = user.auth_identity if user else None
+        version = user.session_version if user else None
+        if (
+            user is None
+            or not user.is_active
+            or not security.verify_password(password, user.password_hash)
+        ):
             logger.bind(event_type="login_failed").warning("Authentication failed")
             raise AuthenticationException(INVALID_CREDENTIALS_ERROR)
 
         token = security.create_access_token(
-            data={"sub": user.username},
+            data={"sub": identity, "session_version": version},
             expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
         )
         logger.bind(user_id=user.id, role=user.role, event_type="login_success").info(
@@ -68,6 +76,7 @@ class AuthService:
 
         from app.executions.observation import readable_execution
 
+        identity, version = current_user.auth_identity, current_user.session_version
         execution = readable_execution(self.db, current_user.id, kind, execution_id)
         if current_user.id is None:
             raise AuthenticationException("Could not validate credentials")
@@ -77,6 +86,8 @@ class AuthService:
                 current_user.id,
                 execution_id,
                 kind,
+                identity,
+                version,
             )
         except Exception:  # noqa: BLE001 - never expose Redis credentials
             raise HTTPException(

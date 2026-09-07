@@ -28,9 +28,13 @@ optional_oauth2_scheme = OAuth2PasswordBearer(
 async def _resolve_current_user(db: Session, token: str) -> User:
     """Resolve and validate a bearer token into an active user."""
     credentials_exception = AuthenticationException("Could not validate credentials")
-    username = security.verify_access_token(token, credentials_exception)
-    user = db.exec(select(User).where(User.username == username)).first()
-    if user is None:
+    identity, version = security.verify_access_token(token, credentials_exception)
+    user = db.exec(
+        select(User)
+        .where(User.auth_identity == identity)
+        .execution_options(populate_existing=True)
+    ).first()
+    if user is None or user.session_version != version:
         raise credentials_exception
 
     if not user.is_active:

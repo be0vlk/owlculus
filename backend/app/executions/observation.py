@@ -36,8 +36,15 @@ def readable_execution(db, user_id, kind, execution_id):
     return execution
 
 
-def snapshot(database_engine, user_id, kind, execution_id):
+def snapshot(database_engine, user_id, kind, execution_id, identity, version):
     with Session(database_engine) as db:
+        user = db.get(User, user_id)
+        if (
+            user is None
+            or user.auth_identity != identity
+            or user.session_version != version
+        ):
+            raise HTTPException(403, "Observation access is no longer available")
         association = (
             ExecutionControl.hunt_execution_id
             if kind == "hunt"
@@ -94,13 +101,14 @@ async def observe(websocket: WebSocket, database_engine, kind: str, execution_id
             not cursor.endswith("-0") or not cursor[:-2].isdigit()
         ):
             raise ValueError("Invalid cursor")
-        user_id = await asyncio.to_thread(
+        capability = await asyncio.to_thread(
             ephemeral_token_manager.validate_token, token or "", execution_id, kind
         )
-        if user_id is None:
+        if capability is None:
             raise ValueError("Invalid token")
+        user_id, identity, version = capability
         initial = await asyncio.to_thread(
-            snapshot, database_engine, user_id, kind, execution_id
+            snapshot, database_engine, user_id, kind, execution_id, identity, version
         )
     except Exception:  # noqa: BLE001 - deny without token or transport details
         await websocket.close(code=1008, reason="Observation access unavailable")
@@ -114,7 +122,13 @@ async def observe(websocket: WebSocket, database_engine, kind: str, execution_id
         nonlocal authorized_at
         if time.monotonic() - authorized_at >= AUTH_SECONDS:
             await asyncio.to_thread(
-                snapshot, database_engine, user_id, kind, execution_id
+                snapshot,
+                database_engine,
+                user_id,
+                kind,
+                execution_id,
+                identity,
+                version,
             )
             authorized_at = time.monotonic()
         await asyncio.wait_for(
@@ -137,7 +151,13 @@ async def observe(websocket: WebSocket, database_engine, kind: str, execution_id
             # never consumer groups, so every API observer sees the same revisions.
             while True:
                 current = await asyncio.to_thread(
-                    snapshot, database_engine, user_id, kind, execution_id
+                    snapshot,
+                    database_engine,
+                    user_id,
+                    kind,
+                    execution_id,
+                    identity,
+                    version,
                 )
                 try:
                     valid = await asyncio.to_thread(retained, client, key, last_cursor)

@@ -107,6 +107,8 @@ class CaseAccess:
 
     def lead(self, user: User, case_id: int) -> Case:
         case, is_lead = self._case_membership(user, case_id, operation="lead")
+        if user.role == UserRole.ANALYST.value:
+            self._deny(user, case_id, "lead", "analyst_read_only")
         if user.role != UserRole.ADMIN.value and not is_lead:
             self._deny(user, case_id, "lead", "not_case_lead")
         return case

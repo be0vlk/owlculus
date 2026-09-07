@@ -14,7 +14,7 @@ import httpx
 import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
-from app.core.security import create_access_token, encrypt_api_key
+from app.core.security import create_access_token, encrypt_api_key, get_password_hash
 from app.database.models import Case, CaseUserLink, Client, SystemConfiguration, User
 from app.database.upgrade_executions import upgrade
 
@@ -232,7 +232,7 @@ def execution_system(tmp_path):
             user = User(
                 username="acceptance",
                 email="acceptance@example.com",
-                password_hash="unused",
+                password_hash=get_password_hash("acceptance-password"),
                 role="Investigator",
                 is_active=True,
             )
@@ -257,11 +257,15 @@ def execution_system(tmp_path):
             )
             db.commit()
             user_id, case_id = user.id, case.id
+            claims = {
+                "sub": user.auth_identity,
+                "session_version": user.session_version,
+            }
         system = ExecutionSystem(tmp_path, env)
         system.engine, system.user_id, system.case_id = engine, user_id, case_id
         system.db_container = names[0]
         system.redis_container = names[1]
-        system.token = create_access_token(data={"sub": "acceptance"})
+        system.token = create_access_token(data=claims)
         yield system
     finally:
         if system:

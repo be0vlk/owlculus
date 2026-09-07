@@ -11,6 +11,9 @@ from app.database.models import Client
 def initialize_database(database_engine: Engine = engine) -> None:
     """Create the schema and idempotently seed the default Personal client."""
     create_db_and_tables(database_engine)
+    from app.database.upgrade_authorization import upgrade as upgrade_authorization
+
+    upgrade_authorization(database_engine)
     if database_engine.dialect.name == "postgresql":
         from app.database.upgrade_executions import upgrade
 

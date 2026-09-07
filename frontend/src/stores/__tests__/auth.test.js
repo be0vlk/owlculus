@@ -75,3 +75,39 @@ describe('auth store setup initialization', () => {
     expect(authService.login).not.toHaveBeenCalled()
   })
 })
+
+vi.mock('../../services/api', () => ({ default: { put: vi.fn() } }))
+
+it.each([true, false])(
+  'clears session and case context only after successful password change: %s',
+  async (succeeds) => {
+    const { default: api } = await import('../../services/api')
+    const { useActiveCaseStore } = await import('../activeCase')
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    sessionStorage.clear()
+    const store = useAuthStore()
+    const cases = useActiveCaseStore()
+    store.user = { id: 1, role: 'Investigator' }
+    store.isAuthenticated = true
+    cases.accessibleCases = [{ id: 5 }]
+    cases.initialized = true
+    cases.resolve(5)
+    if (succeeds) {
+      api.put.mockResolvedValue({ data: { id: 1 } })
+      await store.changePassword({ current_password: 'old', new_password: 'new' })
+      expect(store.isAuthenticated).toBe(false)
+      expect(store.user).toBeNull()
+      expect(cases.accessibleCases).toEqual([])
+      expect(cases.activeCaseId).toBeNull()
+      expect(authService.logout).toHaveBeenCalledOnce()
+    } else {
+      api.put.mockRejectedValue(new Error('Rejected change'))
+      await expect(store.changePassword({})).rejects.toThrow('Rejected change')
+      expect(store.isAuthenticated).toBe(true)
+      expect(store.user.id).toBe(1)
+      expect(cases.activeCaseId).toBe(5)
+      expect(authService.logout).not.toHaveBeenCalled()
+    }
+  },
+)

@@ -147,6 +147,7 @@ export const useAuthStore = defineStore('auth', () => {
   async function changePassword(passwordData) {
     try {
       await api.put('/api/users/me/password', passwordData)
+      await logout()
     } catch (err) {
       console.error('Password change error:', err)
       throw err

@@ -191,7 +191,10 @@ def test_investigator_fixture(session):
 @pytest.fixture(name="admin_token")
 def admin_token_fixture(test_admin):
     access_token = create_access_token(
-        data={"sub": test_admin.username},
+        data={
+            "sub": test_admin.auth_identity,
+            "session_version": test_admin.session_version,
+        },
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
     )
     return access_token
@@ -200,7 +203,10 @@ def admin_token_fixture(test_admin):
 @pytest.fixture(name="user_token")
 def user_token_fixture(test_user):
     access_token = create_access_token(
-        data={"sub": test_user.username},
+        data={
+            "sub": test_user.auth_identity,
+            "session_version": test_user.session_version,
+        },
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
     )
     return access_token
@@ -209,7 +215,10 @@ def user_token_fixture(test_user):
 @pytest.fixture(name="analyst_token")
 def analyst_token_fixture(test_analyst):
     access_token = create_access_token(
-        data={"sub": test_analyst.username},
+        data={
+            "sub": test_analyst.auth_identity,
+            "session_version": test_analyst.session_version,
+        },
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
     )
     return access_token
@@ -223,9 +232,14 @@ def override_auth_fixture(session):
         if not token:
             raise HTTPException(status_code=401, detail="Not authenticated")
         try:
-            username = verify_access_token(token, HTTPException(status_code=401))
+            identity, version = verify_access_token(
+                token, HTTPException(status_code=401)
+            )
             user = session.exec(
-                select(models.User).where(models.User.username == username)
+                select(models.User).where(
+                    models.User.auth_identity == identity,
+                    models.User.session_version == version,
+                )
             ).first()
             if not user:
                 raise HTTPException(status_code=401)
