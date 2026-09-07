@@ -1,5 +1,6 @@
 <template>
   <v-app>
+    <Sidebar v-if="showSidebar" />
     <FullPageLoading v-if="!authStore.isInitialized" />
     <BaseDashboard
       v-else-if="caseContextBlocked"
@@ -40,6 +41,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import BaseDashboard from '@/components/BaseDashboard.vue'
+import Sidebar from '@/components/Sidebar.vue'
 import { useActiveCaseStore } from '@/stores/activeCase'
 import { routeCaseId } from '@/utils/caseNavigation'
 import { useDarkMode } from '@/composables/useDarkMode'
@@ -51,6 +53,9 @@ useDarkMode()
 const authStore = useAuthStore()
 const activeCase = useActiveCaseStore()
 const route = useRoute()
+const showSidebar = computed(
+  () => authStore.isInitialized && authStore.isAuthenticated && route?.meta.requiresAuth,
+)
 const workspaceKey = computed(() =>
   routeCaseId(route)
     ? `case-${routeCaseId(route)}-${route.name}-${route.params.id ?? ''}`

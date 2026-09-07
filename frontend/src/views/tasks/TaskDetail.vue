@@ -3,7 +3,6 @@
     :loading="loading"
     :error="error"
     :title="task ? `Task: ${task.title}` : 'Task Details'"
-    :show-sidebar="true"
   >
     <template #header-actions>
       <div v-if="task" class="d-flex align-center ga-2">

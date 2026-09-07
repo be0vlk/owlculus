@@ -1,8 +1,6 @@
 <!-- eslint-disable vue/multi-word-component-names -->
 <template>
   <div>
-    <Sidebar />
-
     <v-main>
       <v-container class="pa-6">
         <!-- Page Header -->
@@ -90,7 +88,6 @@
 <script setup>
 import { ref } from 'vue'
 import { useAuthStore } from '../stores/auth'
-import Sidebar from '../components/Sidebar.vue'
 
 const authStore = useAuthStore()
 
