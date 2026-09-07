@@ -26,30 +26,47 @@
     <ActiveCaseSwitcher v-if="!smAndDown" />
     <v-divider />
 
-    <!-- Navigation Items -->
-    <v-list nav density="comfortable" class="pt-4">
-      <v-list-item
-        v-for="item in navigationItems"
-        :key="item.name"
-        :to="item.disabled ? undefined : item.href"
-        :disabled="item.disabled"
-        :aria-disabled="item.disabled || undefined"
-        :prepend-icon="item.icon"
-        :aria-label="item.disabled ? `${item.name}: ${caseNavigationExplanation}` : item.name"
-        color="primary"
-        rounded="xl"
-        class="ma-1"
-        min-height="56"
-      >
-        <template #title>
-          <span class="sidebar-item-title">{{ item.name }}</span>
-        </template>
-      </v-list-item>
-    </v-list>
+    <nav aria-label="Main navigation">
+      <section v-for="section in navigationSections" :key="section.name" :aria-label="section.name">
+        <h2 v-if="!smAndDown" class="sidebar-section-title">{{ section.name }}</h2>
+        <v-divider v-else class="my-2" />
+        <v-list nav density="comfortable">
+          <v-list-item
+            v-for="item in section.items"
+            :key="item.name"
+            :to="item.disabled ? undefined : item.href"
+            :disabled="item.disabled"
+            :aria-disabled="item.disabled || undefined"
+            :prepend-icon="item.icon"
+            :aria-label="item.disabled ? `${item.name}: ${caseNavigationExplanation}` : item.name"
+            color="primary"
+            rounded="xl"
+            class="ma-1"
+            min-height="46"
+          >
+            <template #title>
+              <span class="sidebar-item-title">{{ item.name }}</span>
+            </template>
+          </v-list-item>
+        </v-list>
+      </section>
+    </nav>
 
     <!-- Actions Section -->
     <template #append>
       <v-divider />
+      <v-list v-if="settingsItem" nav density="compact" aria-label="Settings navigation">
+        <v-list-item
+          :to="settingsItem.href"
+          :prepend-icon="settingsItem.icon"
+          :aria-label="settingsItem.name"
+          :title="settingsItem.name"
+          color="primary"
+          rounded="xl"
+          class="ma-1"
+          min-height="46"
+        />
+      </v-list>
       <v-container class="pa-2">
         <v-btn
           :prepend-icon="isDark ? 'mdi-white-balance-sunny' : 'mdi-moon-waning-crescent'"
@@ -110,16 +127,16 @@ const caseNavigationExplanation = computed(() =>
 )
 const { isDark, toggleDark } = useDarkMode()
 
-const navigationItems = computed(() => {
+const navigationSections = computed(() => {
   // Don't show any items until auth is initialized
   if (!authStore.isInitialized) {
     return []
   }
 
+  const managementItems = [{ name: 'Cases', href: '/cases', icon: 'mdi-folder-outline' }]
   const items = [
-    { name: 'Cases', href: '/cases', icon: 'mdi-folder-outline' },
     {
-      name: 'Case overview',
+      name: 'Dashboard',
       href: `/case/${activeCase.activeCaseId}`,
       icon: 'mdi-briefcase-outline',
     },
@@ -127,7 +144,7 @@ const navigationItems = computed(() => {
 
   // Add Clients for admin users
   if (authStore.requiresAdmin()) {
-    items.push({ name: 'Clients', href: '/clients', icon: 'mdi-account-group-outline' })
+    managementItems.push({ name: 'Clients', href: '/clients', icon: 'mdi-account-group-outline' })
   }
 
   items.push(
@@ -158,18 +175,25 @@ const navigationItems = computed(() => {
     icon: 'mdi-robot',
   })
 
-  // Add Admin settings for admin users
-  if (authStore.requiresAdmin()) {
-    items.push({ name: 'Admin', href: '/admin', icon: 'mdi-shield-account-outline' })
-  } else {
-    // Add regular settings for non-admin users
-    items.push({ name: 'Settings', href: '/settings', icon: 'mdi-cog-outline' })
-  }
-
-  return items.map((item) => ({
-    ...item,
-    disabled: router.resolve(item.href).meta.requiresActiveCase && !activeCase.activeCaseId,
+  return [
+    { name: 'Case work', items },
+    { name: 'Management', items: managementItems },
+  ].map((section) => ({
+    ...section,
+    items: section.items
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((item) => ({
+        ...item,
+        disabled: router.resolve(item.href).meta.requiresActiveCase && !activeCase.activeCaseId,
+      })),
   }))
+})
+
+const settingsItem = computed(() => {
+  if (!authStore.isInitialized) return null
+  return authStore.requiresAdmin()
+    ? { name: 'Admin', href: '/admin', icon: 'mdi-shield-account-outline' }
+    : { name: 'Settings', href: '/settings', icon: 'mdi-cog-outline' }
 })
 
 const handleLogout = () => {
@@ -179,6 +203,15 @@ const handleLogout = () => {
 </script>
 
 <style scoped>
+.sidebar-section-title {
+  padding: 20px 20px 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  opacity: 0.65;
+}
+
 /* Fix text clipping in navigation items and increase font size */
 .sidebar-item-title {
   display: block;
