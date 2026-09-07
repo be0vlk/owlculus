@@ -16,6 +16,10 @@ def initialize_database(database_engine: Engine = engine) -> None:
 
         upgrade(database_engine)
 
+    from app.database.upgrade_case_relationships import upgrade as upgrade_relationships
+
+    upgrade_relationships(database_engine)
+
     with Session(database_engine) as session:
         personal_client = session.exec(
             select(Client).where(Client.name == "Personal")

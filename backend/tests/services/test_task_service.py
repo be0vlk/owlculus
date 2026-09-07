@@ -359,11 +359,17 @@ class TestTaskFiltering:
     async def test_get_tasks_by_assignee(
         self,
         task_service: TaskService,
+        session: Session,
+        test_case: models.Case,
         multiple_tasks: list,
         test_admin: models.User,
         test_investigator: models.User,
     ):
         """Test getting tasks filtered by assignee"""
+        session.add(
+            models.CaseUserLink(case_id=test_case.id, user_id=test_investigator.id)
+        )
+        session.commit()
         tasks = await task_service.get_tasks(
             current_user=test_admin, assigned_to_id=test_investigator.id
         )

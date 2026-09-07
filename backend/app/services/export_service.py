@@ -346,6 +346,9 @@ class ExportService:
                 exported = False
                 reason = f"Unsupported evidence type: {evidence.evidence_type}"
 
+            parent_id = self.case_access.eligible_evidence_parent_id(
+                evidence.case_id, evidence.parent_folder_id
+            )
             manifest_record = {
                 "id": evidence.id,
                 "title": evidence.title,
@@ -356,7 +359,7 @@ class ExportService:
                 "file_name": file_name,
                 "file_hash": evidence.file_hash,
                 "is_folder": evidence.is_folder,
-                "parent_folder_id": evidence.parent_folder_id,
+                "parent_folder_id": parent_id,
                 "created_by": creator_names.get(evidence.created_by_id, ""),
                 "created_at": _iso_utc(evidence.created_at),
                 "updated_at": _iso_utc(evidence.updated_at),
@@ -369,11 +372,16 @@ class ExportService:
         _write_zip_json(archive, f"{root}evidence/manifest.json", manifest)
 
     def _task_records(self, tasks: list[models.Task]) -> list[dict[str, Any]]:
+        assignees = {
+            task.id: self.case_access.eligible_assignee(
+                task.case_id, task.assigned_to_id
+            )
+            for task in tasks
+        }
         user_ids = {
             user_id
             for task in tasks
             for user_id in (
-                task.assigned_to_id,
                 task.assigned_by_id,
                 task.completed_by_id,
             )
@@ -404,9 +412,7 @@ class ExportService:
                 "status": task.status,
                 "priority": task.priority,
                 "assigned_to": (
-                    usernames.get(task.assigned_to_id)
-                    if task.assigned_to_id is not None
-                    else None
+                    assignee.username if (assignee := assignees[task.id]) else None
                 ),
                 "assigned_by": usernames.get(task.assigned_by_id),
                 "due_date": _optional_iso_utc(task.due_date),
