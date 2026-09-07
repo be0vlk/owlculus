@@ -18,7 +18,7 @@ from app.core.exceptions import (
 )
 from app.core.logging import get_security_logger
 from app.core.roles import UserRole
-from app.database.models import Case, CaseUserLink, User
+from app.database.models import Case, CaseUserLink, Evidence, User
 
 
 class CaseAccess:
@@ -42,6 +42,62 @@ class CaseAccess:
                 CaseUserLink.user_id == user.id
             )
         return [case_id for case_id in self.db.exec(statement).all() if case_id]
+
+    def evidence_parent(self, case_id: int, parent_id: int | None) -> Evidence | None:
+        """Resolve a folder only after checking its entire ancestry stays in the Case."""
+        if parent_id is None:
+            return None
+        if self.db is None:
+            raise RuntimeError("A database session is required for case authorization")
+        parent = self.db.get(Evidence, parent_id)
+        if parent is None:
+            raise ResourceNotFoundException("Parent folder not found")
+        ancestor: Evidence | None = parent
+        seen: set[int] = set()
+        while ancestor is not None:
+            if (
+                ancestor.case_id != case_id
+                or not ancestor.is_folder
+                or ancestor.id in seen
+            ):
+                raise ValidationException("Invalid parent folder")
+            if ancestor.id is not None:
+                seen.add(ancestor.id)
+            if ancestor.parent_folder_id is None:
+                break
+            ancestor = self.db.get(Evidence, ancestor.parent_folder_id)
+            if ancestor is None:
+                raise ValidationException("Invalid parent folder")
+        return parent
+
+    def eligible_evidence_parent_id(
+        self, case_id: int, parent_id: int | None
+    ) -> int | None:
+        """Suppress invalid historical parent references on reads and exports."""
+        try:
+            self.evidence_parent(case_id, parent_id)
+        except (ResourceNotFoundException, ValidationException):
+            return None
+        return parent_id
+
+    def assignee(self, case_id: int, user_id: int | None) -> User | None:
+        """Resolve an assignment using the same eligibility as Case readers."""
+        if user_id is None:
+            return None
+        if self.db is None:
+            raise RuntimeError("A database session is required for case authorization")
+        user = self.db.get(User, user_id)
+        if user is None:
+            raise ResourceNotFoundException("User not found")
+        self.readable(user, case_id)
+        return user
+
+    def eligible_assignee(self, case_id: int, user_id: int | None) -> User | None:
+        """Hide historical assignments that no longer satisfy the read policy."""
+        try:
+            return self.assignee(case_id, user_id)
+        except (ResourceNotFoundException, AuthorizationException):
+            return None
 
     def writable(self, user: User, case_id: int) -> Case:
         case, _ = self._case_membership(user, case_id, operation="write")

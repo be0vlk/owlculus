@@ -21,6 +21,7 @@ from app.core.exceptions import (
 from app.core.logging import get_security_logger
 from app.database import models
 from app.database.db_utils import transaction
+from app.schemas.task_schema import TaskResponse
 from app.services.case_access import CaseAccess
 
 
@@ -34,6 +35,19 @@ class TaskService:
         if not task:
             raise ResourceNotFoundException("Task not found")
         return task
+
+    def _response(self, task: models.Task) -> TaskResponse:
+        assignee = self.case_access.eligible_assignee(task.case_id, task.assigned_to_id)
+        return TaskResponse.model_validate(
+            {
+                **task.model_dump(),
+                "assigned_to_id": assignee.id if assignee else None,
+                "assigned_to": assignee,
+                "assigned_by": task.assigned_by,
+                "completed_by": task.completed_by,
+                "template": task.template,
+            }
+        )
 
     async def get_templates(
         self, include_inactive: bool = False, *, current_user: models.User
@@ -68,9 +82,10 @@ class TaskService:
 
     async def create_task(
         self, case_id: int, task_data: dict, *, current_user: models.User
-    ) -> models.Task:
+    ) -> TaskResponse:
         """Create a new task for a case"""
         self.case_access.lead(current_user, case_id)
+        self.case_access.assignee(case_id, task_data.get("assigned_to_id"))
         task = models.Task(case_id=case_id, assigned_by_id=current_user.id, **task_data)
 
         with transaction(self.db):
@@ -86,7 +101,7 @@ class TaskService:
         )
         logger.info(f"Task '{task.title}' created for case {case_id}")
 
-        return task
+        return self._response(task)
 
     async def get_tasks(
         self,
@@ -98,7 +113,7 @@ class TaskService:
         priority: Optional[str] = None,
         skip: int = 0,
         limit: int = 100,
-    ) -> List[models.Task]:
+    ) -> list[TaskResponse]:
         """Get tasks with filters"""
         query = select(models.Task)
 
@@ -129,17 +144,19 @@ class TaskService:
         query = query.offset(skip).limit(limit)
 
         tasks = self.db.exec(query).all()
-        return list(tasks)
+        return [self._response(task) for task in tasks]
 
-    async def get_task(self, task_id: int, *, current_user: models.User) -> models.Task:
+    async def get_task(
+        self, task_id: int, *, current_user: models.User
+    ) -> TaskResponse:
         """Get a specific task by ID"""
         task = self._get_task(task_id)
         self.case_access.readable(current_user, task.case_id)
-        return task
+        return self._response(task)
 
     async def update_task(
         self, task_id: int, updates: dict, *, current_user: models.User
-    ) -> models.Task:
+    ) -> TaskResponse:
         """Update a task"""
         task = self._get_task(task_id)
         is_assignee = task.assigned_to_id == current_user.id
@@ -148,6 +165,8 @@ class TaskService:
             self.case_access.writable(current_user, task.case_id)
         else:
             self.case_access.lead(current_user, task.case_id)
+
+        self.case_access.assignee(task.case_id, updates.get("assigned_to_id"))
 
         updated_fields = []
 
@@ -185,7 +204,7 @@ class TaskService:
         )
         logger.info(f"Task {task_id} updated - fields: {', '.join(updated_fields)}")
 
-        return task
+        return self._response(task)
 
     async def delete_task(self, task_id: int, *, current_user: models.User) -> bool:
         """Delete a task (Admin only)"""
@@ -207,16 +226,12 @@ class TaskService:
 
     async def assign_task(
         self, task_id: int, user_id: Optional[int], *, current_user: models.User
-    ) -> models.Task:
+    ) -> TaskResponse:
         """Assign or unassign a task to a user"""
         task = self._get_task(task_id)
         self.case_access.lead(current_user, task.case_id)
 
-        if user_id:
-            user = self.db.get(models.User, user_id)
-            if not user:
-                raise ResourceNotFoundException("User not found")
-            self.case_access.readable(user, task.case_id)
+        self.case_access.assignee(task.case_id, user_id)
 
         task.assigned_to_id = user_id
         task.updated_at = datetime.utcnow()
@@ -234,11 +249,11 @@ class TaskService:
         )
         logger.info(f"Task {task_id} assigned to user {user_id}")
 
-        return task
+        return self._response(task)
 
     async def update_status(
         self, task_id: int, status: str, *, current_user: models.User
-    ) -> models.Task:
+    ) -> TaskResponse:
         """Update task status"""
         if status not in [s.value for s in TaskStatus]:
             raise ValidationException("Invalid status")
@@ -269,11 +284,11 @@ class TaskService:
         )
         logger.info(f"Task {task_id} status updated to {status}")
 
-        return task
+        return self._response(task)
 
     async def bulk_assign(
         self, task_ids: List[int], user_id: Optional[int], *, current_user: models.User
-    ) -> List[models.Task]:
+    ) -> list[TaskResponse]:
         """Bulk assign tasks to a user"""
         updated_tasks = []
 
@@ -290,7 +305,7 @@ class TaskService:
 
     async def bulk_update_status(
         self, task_ids: List[int], status: str, *, current_user: models.User
-    ) -> List[models.Task]:
+    ) -> list[TaskResponse]:
         """Bulk update task status"""
         updated_tasks = []
 

@@ -40,6 +40,15 @@ class EvidenceService:
         self.db = db
         self.case_access = CaseAccess(db)
 
+    def _response(self, evidence: models.Evidence) -> models.Evidence:
+        parent_id = self.case_access.eligible_evidence_parent_id(
+            evidence.case_id, evidence.parent_folder_id
+        )
+        if parent_id != evidence.parent_folder_id:
+            # Keep the stored path and contents usable without expanding a foreign parent.
+            return evidence.model_copy(update={"parent_folder_id": parent_id})
+        return evidence
+
     def _raise_unexpected_error(
         self,
         *,
@@ -67,6 +76,7 @@ class EvidenceService:
         artifact_id: str | None = None,
     ) -> models.Evidence:
         self.case_access.writable(current_user, evidence.case_id)
+        self.case_access.evidence_parent(evidence.case_id, evidence.parent_folder_id)
         evidence_logger = get_security_logger(
             user_id=current_user.id,
             case_id=evidence.case_id,
@@ -152,7 +162,7 @@ class EvidenceService:
                 event_type="evidence_creation_success",
             ).info("Evidence created successfully")
 
-            return db_evidence
+            return self._response(db_evidence)
 
         except DomainException:
             raise
@@ -190,7 +200,7 @@ class EvidenceService:
             .offset(skip)
             .limit(limit)
         )
-        return list(self.db.exec(query))
+        return [self._response(evidence) for evidence in self.db.exec(query)]
 
     async def get_evidence(
         self, evidence_id: int, current_user: models.User
@@ -201,7 +211,7 @@ class EvidenceService:
 
         self.case_access.readable(current_user, evidence.case_id)
 
-        return evidence
+        return self._response(evidence)
 
     def update_evidence(
         self,
@@ -226,6 +236,9 @@ class EvidenceService:
                 raise ResourceNotFoundException("Evidence not found")
 
             self.case_access.writable(current_user, db_evidence.case_id)
+            self.case_access.evidence_parent(
+                db_evidence.case_id, evidence_update.parent_folder_id
+            )
 
             if evidence_update.title is not None:
                 db_evidence.title = evidence_update.title
@@ -260,7 +273,7 @@ class EvidenceService:
                 event_type="evidence_update_success",
             ).info("Evidence updated successfully")
 
-            return db_evidence
+            return self._response(db_evidence)
 
         except DomainException:
             raise
@@ -644,6 +657,9 @@ class EvidenceService:
     ) -> models.Evidence:
         """Create a new folder in the case directory."""
         self.case_access.writable(current_user, folder_data.case_id)
+        parent_folder = self.case_access.evidence_parent(
+            folder_data.case_id, folder_data.parent_folder_id
+        )
         folder_logger = get_security_logger(
             user_id=current_user.id,
             case_id=folder_data.case_id,
@@ -654,16 +670,7 @@ class EvidenceService:
 
         try:
             folder_path = folder_data.folder_path or ""
-            if folder_data.parent_folder_id:
-                parent_folder = self.db.get(
-                    models.Evidence, folder_data.parent_folder_id
-                )
-                if not parent_folder or not parent_folder.is_folder:
-                    folder_logger.bind(
-                        event_type="folder_creation_failed",
-                        failure_reason="parent_folder_not_found",
-                    ).warning("Folder creation failed: parent folder not found")
-                    raise ResourceNotFoundException("Parent folder not found")
+            if parent_folder is not None:
                 if parent_folder.folder_path:
                     folder_path = f"{parent_folder.folder_path}/{folder_data.title}"
                 else:
@@ -709,7 +716,7 @@ class EvidenceService:
                 event_type="folder_creation_success",
             ).info("Folder created successfully")
 
-            return db_folder
+            return self._response(db_folder)
 
         except DomainException:
             raise
@@ -734,7 +741,7 @@ class EvidenceService:
         self.case_access.readable(current_user, case_id)
 
         query = select(models.Evidence).where(models.Evidence.case_id == case_id)
-        return list(self.db.exec(query))
+        return [self._response(evidence) for evidence in self.db.exec(query)]
 
     async def update_folder(
         self,
@@ -759,6 +766,9 @@ class EvidenceService:
                 raise ResourceNotFoundException("Folder not found")
 
             self.case_access.writable(current_user, db_folder.case_id)
+            self.case_access.evidence_parent(
+                db_folder.case_id, folder_update.parent_folder_id
+            )
 
             if folder_update.title is not None:
                 db_folder.title = folder_update.title
@@ -779,7 +789,7 @@ class EvidenceService:
                 event_type="folder_update_success",
             ).info("Folder updated successfully")
 
-            return db_folder
+            return self._response(db_folder)
 
         except DomainException:
             raise
@@ -855,7 +865,7 @@ class EvidenceService:
                 event_type="folder_deletion_success",
             ).info("Folder deleted successfully")
 
-            return db_folder
+            return self._response(db_folder)
 
         except DomainException:
             raise
