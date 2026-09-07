@@ -11,7 +11,9 @@ import { caseService } from '../services/case'
 import { clientService } from '../services/client'
 
 vi.mock('../services/case', () => ({ caseService: { getCases: vi.fn() } }))
-vi.mock('../services/client', () => ({ clientService: { getClients: vi.fn() } }))
+vi.mock('../services/client', () => ({
+  clientService: { getClients: vi.fn(), deleteClient: vi.fn() },
+}))
 vi.mock('../services/auth', () => ({
   authService: {
     isAuthenticated: () => false,
@@ -156,4 +158,108 @@ it('keeps the mobile navigation rail and case switcher mounted during navigation
   expect(wrapper.get('.owlculus-sidebar').element).toBe(sidebar)
   expect(wrapper.get('.v-app-bar').element).toBe(caseSwitcherBar)
   expect(wrapper.findAll('.v-app-bar')).toHaveLength(1)
+})
+
+it.each([
+  ['/clients', 'Search clients...', 'Add Client'],
+  ['/cases', 'Search cases...', 'New Case'],
+])('keeps the %s table and controls mounted while loading', async (path, search, action) => {
+  const { wrapper, router } = await openApp('/settings')
+  let finishClients
+  clientService.getClients.mockReturnValueOnce(
+    new Promise((resolve) => {
+      finishClients = resolve
+    }),
+  )
+  await router.push(path)
+  await flushPromises()
+
+  expect(wrapper.find('.v-skeleton-loader').exists()).toBe(false)
+  const table = wrapper.get('.v-data-table').element
+  const searchInput = wrapper.get('input[type="text"]').element
+  expect(wrapper.text()).toContain(search)
+  expect(wrapper.text()).toContain(action)
+  expect(wrapper.find('.v-data-table-rows-loading').exists()).toBe(true)
+  expect(wrapper.find('.v-data-table-rows-no-data').exists()).toBe(false)
+
+  finishClients([])
+  await flushPromises()
+  expect(wrapper.get('.v-data-table').element).toBe(table)
+  expect(wrapper.get('input[type="text"]').element).toBe(searchInput)
+  expect(wrapper.find('.v-data-table-rows-loading').exists()).toBe(false)
+})
+
+it.each(['/clients', '/cases'])(
+  'retains cached rows and client names when returning to %s',
+  async (path) => {
+    caseService.getCases.mockResolvedValue([{ ...cases[0], client_id: 9 }])
+    clientService.getClients.mockResolvedValue([{ id: 9, name: 'Acme' }])
+    const { wrapper, router } = await openApp(path)
+    await router.push(path === '/clients' ? '/cases' : '/clients')
+    await flushPromises()
+
+    let finishClients
+    clientService.getClients.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishClients = resolve
+      }),
+    )
+    await router.push(path)
+    await flushPromises()
+    expect(wrapper.get('.v-data-table tbody').text()).toContain('Acme')
+    expect(wrapper.find('.v-data-table-rows-loading').exists()).toBe(false)
+
+    finishClients([{ id: 9, name: 'Updated Acme' }])
+    await flushPromises()
+    expect(wrapper.get('.v-data-table tbody').text()).toContain('Updated Acme')
+  },
+)
+
+it.each([
+  ['/clients', 'Refresh client list', clientService.getClients, 'Failed to load clients'],
+  ['/cases', 'Refresh case list', caseService.getCases, 'Failed to load dashboard data'],
+])(
+  'keeps %s rows and refresh controls available after a failed refresh',
+  async (path, refresh, service, message) => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    caseService.getCases.mockResolvedValue([{ ...cases[0], client_id: 9 }])
+    clientService.getClients.mockResolvedValue([{ id: 9, name: 'Acme' }])
+    const { wrapper } = await openApp(path)
+    const table = wrapper.get('.v-data-table').element
+    service.mockRejectedValueOnce(new Error('Unavailable'))
+
+    await wrapper.get(`button[aria-label="${refresh}"]`).trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain(message)
+    expect(wrapper.get('.v-data-table').element).toBe(table)
+    expect(wrapper.get('.v-data-table tbody').text()).toContain('Acme')
+
+    await wrapper.get(`button[aria-label="${refresh}"]`).trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).not.toContain(message)
+    expect(wrapper.get('.v-data-table').element).toBe(table)
+  },
+)
+
+it('does not restore a deleted client when a background refresh finishes', async () => {
+  vi.stubGlobal('confirm', () => true)
+  const oldRows = [{ id: 9, name: 'Acme' }]
+  clientService.getClients.mockResolvedValue(oldRows)
+  clientService.deleteClient.mockResolvedValue(undefined)
+  const { wrapper } = await openApp('/clients')
+
+  let finishClients
+  clientService.getClients.mockReturnValueOnce(
+    new Promise((resolve) => {
+      finishClients = resolve
+    }),
+  )
+  await wrapper.get('button[aria-label="Refresh client list"]').trigger('click')
+  await wrapper.get('button[aria-label="Delete Acme"]').trigger('click')
+  await flushPromises()
+  expect(clientService.deleteClient).toHaveBeenCalledWith(9)
+
+  finishClients(oldRows)
+  await flushPromises()
+  expect(wrapper.get('.v-data-table tbody').text()).not.toContain('Acme')
 })
