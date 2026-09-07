@@ -4,6 +4,7 @@
     :case-data="caseData"
     :client="client"
     :evidence="evidence"
+    :hunt-executions="caseHuntExecutions"
     @state="prototypeState = $event"
   />
   <BaseDashboard

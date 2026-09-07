@@ -7,6 +7,7 @@ import {
   prototypeEntities,
   prototypeEvidence,
   prototypeRuns,
+  prototypeHuntExecutions,
 } from '../src/views/cases/caseWorkspacePrototypeData.js'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
@@ -61,6 +62,10 @@ const server = await createServer({
               : prototypeEntities.slice(0, 3).map((item) => ({ ...item, case_id: 2 }))
           else if (path.startsWith('/api/clients/')) body = { id: 1, name: 'Northstar review team' }
           else if (path.includes('/folder-tree')) body = prototypeEvidence
+          else if (/^\/api\/hunts\/cases\/\d+\/executions$/.test(path))
+            body = path.includes('/cases/1/') ? prototypeHuntExecutions : []
+          else if (/^\/api\/hunts\/executions\/\d+$/.test(path))
+            body = prototypeHuntExecutions.find((item) => item.id === Number(path.split('/').pop()))
           else if (path.startsWith('/api/plugins/executions/case/'))
             body = { items: path.endsWith('/1') ? prototypeRuns : [], next_cursor: null }
           else if (/^\/api\/plugins\/executions\/\d+$/.test(path))
