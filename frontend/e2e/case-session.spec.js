@@ -193,7 +193,7 @@ test('membership loss rejects the next request and late data cannot restore the 
   const rejected = page.waitForResponse(
     (response) => caseRead(original)(response.request()) && response.status() === 403,
   )
-  await page.getByRole('link', { name: 'Case overview', exact: true }).click()
+  await page.getByRole('link', { name: 'Dashboard', exact: true }).click()
   await rejected
   await expect(page).toHaveURL(new RegExp(`/case/${other.id}$`))
   await expect(page.getByRole('combobox', { name: /^Active case:/ })).toHaveValue(

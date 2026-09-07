@@ -464,7 +464,7 @@ for (const [width, role, keyStatus] of [
       await expect(page).toHaveURL(new RegExp(`/case/2${suffix}$`))
       await expect(switcher).toBeVisible()
     }
-    await navigate('Case overview', '')
+    await navigate('Dashboard', '')
     await navigate('Tasks', '/tasks')
     await navigate('Plugins', '/plugins')
     await page.getByRole('button', { name: 'Configure Example', exact: true }).click()
@@ -499,7 +499,7 @@ for (const [width, role, keyStatus] of [
     expect(chatRequests[1]).toMatchObject({ case_id: 1 })
     expect(JSON.stringify(chatRequests[1])).not.toContain('Private question')
     for (const [name, suffix] of [
-      ['Case overview', ''],
+      ['Dashboard', ''],
       ['Tasks', '/tasks'],
       ['Plugins', '/plugins'],
       ['Hunts', '/hunts'],
