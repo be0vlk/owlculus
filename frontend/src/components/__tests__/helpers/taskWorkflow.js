@@ -44,6 +44,19 @@ export function deferred() {
   return { promise, resolve, reject }
 }
 
+async function responseData(response, config) {
+  const result = await response
+  if (result.status >= 400) {
+    throw new AxiosError('Request rejected', 'ERR_BAD_RESPONSE', config, null, {
+      status: result.status,
+      data: { detail: result.detail },
+      config,
+      headers: {},
+    })
+  }
+  return result.data
+}
+
 export async function taskWorkflow({ user = { id: 1, role: 'Admin' }, lead = false } = {}) {
   localStorage.clear()
   const pinia = createPinia()
@@ -62,6 +75,7 @@ export async function taskWorkflow({ user = { id: 1, role: 'Admin' }, lead = fal
   const records = [taskRecord(), taskRecord({ id: 43, title: 'Other task' })]
   const requests = []
   const mutations = []
+  const reads = new Map()
   api.defaults.adapter = async (config) => {
     const request = {
       method: config.method,
@@ -74,16 +88,9 @@ export async function taskWorkflow({ user = { id: 1, role: 'Admin' }, lead = fal
     if (config.method !== 'get') {
       const response = mutations.shift()
       if (!response) throw new Error(`Unexpected mutation ${config.method} ${config.url}`)
-      const result = await response
-      if (result.status >= 400) {
-        throw new AxiosError('Request rejected', 'ERR_BAD_RESPONSE', config, null, {
-          status: result.status,
-          data: { detail: result.detail },
-          config,
-          headers: {},
-        })
-      }
-      data = result.data
+      data = await responseData(response, config)
+    } else if (reads.get(config.url)?.length) {
+      data = await responseData(reads.get(config.url).shift(), config)
     } else if (config.url === '/api/cases/') data = cases
     else if (config.url === '/api/cases/7' || config.url === '/api/cases/8')
       data = cases.find((c) => config.url.endsWith(`/${c.id}`))
@@ -139,6 +146,9 @@ export async function taskWorkflow({ user = { id: 1, role: 'Admin' }, lead = fal
     router,
     requests,
     mutations,
+    reads,
+    records,
+    users,
     errors,
     mount,
     writes: () => requests.filter((request) => request.method !== 'get'),
