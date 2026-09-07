@@ -466,7 +466,10 @@ async def test_new_explanations_and_warning_only_cases_remain_protected(
     for case, data in (
         (test_case, {"email": "ada@example.com"}),
         (related, {"email": "charles@example.com"}),
-        (warning_case, {"usernames": ["https://[broken"]}),
+        (
+            warning_case,
+            {"first_name": "Warning only", "usernames": ["https://[broken"]},
+        ),
     ):
         await service.create_entity(
             case.id, EntityCreate(entity_type="person", data=data), test_admin
@@ -644,3 +647,112 @@ def test_continuation_metadata_and_new_signals_follow_each_parts_case_access(
     assert "PRIVATE" not in str(client.get(url + "/results").json())
     app.dependency_overrides[get_current_user] = lambda: test_admin
     assert "PRIVATE@example.com" in str(client.get(url + "/results").json())
+
+
+@pytest.mark.asyncio
+async def test_ip_scan_retention_export_and_evidence_follow_membership(
+    client, session, test_case, test_admin, test_user, monkeypatch
+):
+    from dataclasses import replace
+
+    from app.core import file_storage
+    from app.database.models import Entity
+    from app.plugins.base_plugin import PluginRun
+    from app.plugins.correlation_plugin import CorrelationScan
+    from app.plugins.plugin_context import ServiceEvidenceSink
+    from app.plugins.plugin_registry import PluginRegistry
+    from app.plugins.plugin_runner import PluginRunner
+    from app.services import evidence_service
+    from app.services.evidence_service import EvidenceService
+
+    monkeypatch.setattr(evidence_service, "UPLOAD_DIR", file_storage.UPLOAD_DIR)
+    related = Case(case_number="IP-RELATED", title="Related IP")
+    hidden = Case(case_number="IP-HIDDEN", title="Hidden IP")
+    session.add_all([related, hidden])
+    session.flush()
+    related_link = CaseUserLink(case_id=related.id, user_id=test_user.id)
+    session.add_all(
+        [CaseUserLink(case_id=test_case.id, user_id=test_user.id), related_link]
+    )
+    expanded = "2001:0db8:0000:0000:0000:0000:0000:0001"
+    for case, raw in (
+        (test_case, "2001:db8::1"),
+        (related, expanded),
+        (hidden, "2001:db8::1"),
+    ):
+        session.add(
+            Entity(
+                case_id=case.id,
+                entity_type="ip_address",
+                data={"ip_address": raw},
+                created_by_id=test_admin.id,
+            )
+        )
+    session.commit()
+    ctx = replace(
+        PluginRun.for_test(
+            session=session,
+            user=test_admin,
+            api_keys={},
+            evidence=[],
+            entities=[],
+            case_id=test_case.id,
+            save_to_case=True,
+        ),
+        evidence=ServiceEvidenceSink(session),
+    )
+    events = [
+        event
+        async for event in PluginRunner(
+            PluginRegistry.from_classes([CorrelationScan])
+        ).run("CorrelationScan", {}, ctx)
+    ]
+    assert not any(event.kind == "error" for event in events)
+    url = retain(session, test_case, test_admin, [event.to_wire() for event in events])
+    report = next(
+        item
+        for item in await EvidenceService(session).get_case_evidence(
+            test_case.id, test_admin
+        )
+        if not item.is_folder
+    )
+    report_url = f"/api/evidence/{report.id}/download"
+    app.dependency_overrides[get_current_user] = lambda: test_user
+    # The standalone export reads these same authorized result pages.
+    visible = client.get(url + "/results").json()["items"]
+    groups = [event["data"] for event in visible if "matches" in event["data"]]
+    assert len(groups) == 1
+    assert groups[0]["match_type"] == "ip_address"
+    assert groups[0]["source_fields"] == [
+        {"field": "ip_address", "value": "2001:db8::1"}
+    ]
+    assert groups[0]["matches"][0]["fields"] == [
+        {"field": "ip_address", "value": expanded}
+    ]
+    assert [match["case_id"] for match in groups[0]["matches"]] == [related.id]
+    assert "Hidden IP" not in str(visible)
+    assert client.get(report_url).status_code == 403
+    hidden_link = CaseUserLink(case_id=hidden.id, user_id=test_user.id)
+    session.add(hidden_link)
+    session.commit()
+    authorized = client.get(url + "/results").json()["items"]
+    assert sum(len(event["data"].get("matches", [])) for event in authorized) == 2
+    downloaded = client.get(report_url)
+    assert downloaded.is_success
+    for text in (
+        "Exact IP address match",
+        "Match Type: ip_address",
+        expanded,
+        "Hidden IP",
+        "Related IP",
+        "Total matches: 2",
+    ):
+        assert text in downloaded.text
+    session.delete(related_link)
+    session.commit()
+    after = client.get(url + "/results").json()["items"]
+    assert "Related IP" not in str(after)
+    assert expanded not in str(after)
+    assert client.get(report_url).status_code == 403
+    app.dependency_overrides[get_current_user] = lambda: test_admin
+    assert client.get(report_url).content == downloaded.content

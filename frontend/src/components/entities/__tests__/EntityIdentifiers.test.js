@@ -342,3 +342,62 @@ it('clears candidate summaries when a later advisory request is denied', async (
   expect(wrapper.text()).toContain('Access denied')
   expect(entityService.updateEntity).not.toHaveBeenCalled()
 })
+
+it.each(['192.0.2.1', '2001:db8::1', '2001:0DB8:0000:0000:0000:0000:0000:0001'])(
+  'submits %s through the create and edit IP forms',
+  async (ip_address) => {
+    wrapper = mount(NewEntityModal, {
+      props: { show: true, caseId: '7' },
+      attachTo: document.body,
+      global: {
+        plugins: [createVuetify({ components, directives, theme: false })],
+        stubs: { VDialog: { template: '<div><slot /></div>' } },
+      },
+    })
+    await flushPromises()
+    await tab('IP Address')
+    await input('IP Address').setValue(ip_address)
+    entityService.createEntity.mockResolvedValue({
+      id: 9,
+      entity_type: 'ip_address',
+      data: { ip_address },
+    })
+    await button('Add Entity').trigger('click')
+    await flushPromises()
+    expect(entityService.createEntity).toHaveBeenCalledWith(
+      '7',
+      expect.objectContaining({ data: expect.objectContaining({ ip_address }) }),
+    )
+    wrapper.unmount()
+    await openEntity({ id: 9, entity_type: 'ip_address', data: { ip_address: '192.0.2.2' } })
+    await button('Edit Entity').trigger('click')
+    await tab('IP Address Information')
+    await input('IP Address').setValue(ip_address)
+    entityService.updateEntity.mockResolvedValue({
+      id: 9,
+      entity_type: 'ip_address',
+      data: { ip_address },
+    })
+    await button('Save Changes').trigger('click')
+    await flushPromises()
+    expect(entityService.updateEntity).toHaveBeenCalledWith(
+      7,
+      9,
+      expect.objectContaining({ data: expect.objectContaining({ ip_address }) }),
+    )
+  },
+)
+
+it.each(['fe80::1%eth0', '2001:db8::/64', 'IP: 2001:db8::1', '192.168.001.1', '[::1]'])(
+  'rejects unsupported IP input %s in the edit form',
+  async (ip_address) => {
+    await openEntity({ id: 9, entity_type: 'ip_address', data: { ip_address: '192.0.2.1' } })
+    await button('Edit Entity').trigger('click')
+    await tab('IP Address Information')
+    await input('IP Address').setValue(ip_address)
+    await button('Save Changes').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Please enter a valid IPv4 or IPv6 address')
+    expect(entityService.updateEntity).not.toHaveBeenCalled()
+  },
+)

@@ -10,6 +10,7 @@ from enum import StrEnum
 from sqlmodel import Session, col, select
 
 from app.core.hostname import canonical_hostname, website_hostname
+from app.core.ip_address import canonical_ip_address
 from app.database.models import Case, Entity, User
 from app.schemas.entity_schema import entity_display_name
 from app.services.case_access import CaseAccess
@@ -23,12 +24,18 @@ class CorrelationKind(StrEnum):
     DOMAIN = "domain"
     EMAIL = "email"
     PHONE = "phone"
+    IP_ADDRESS = "ip_address"
     VIN = "vin"
     LICENSE_PLATE = "license_plate"
 
 
 EXACT_IDENTIFIER_KINDS = frozenset(
-    {CorrelationKind.EMAIL, CorrelationKind.PHONE, CorrelationKind.VIN}
+    {
+        CorrelationKind.EMAIL,
+        CorrelationKind.PHONE,
+        CorrelationKind.VIN,
+        CorrelationKind.IP_ADDRESS,
+    }
 )
 
 
@@ -344,7 +351,6 @@ _NAME_FIELDS = {
     "person": ("first_name", "last_name"),
     "company": ("name",),
     "domain": ("domain",),
-    "ip_address": ("ip_address",),
 }
 
 
@@ -370,6 +376,14 @@ def _references(entity: Entity, skipped: list[SkippedReference]) -> References:
     name = " ".join(field.value.strip() for field in name_fields).casefold()
     if entity.entity_type != "domain":
         add(CorrelationKind.NAME, name, name_fields)
+    if entity.entity_type == "ip_address":
+        raw = str(entity.data.get("ip_address") or "")
+        try:
+            address = canonical_ip_address(raw)
+        except ValueError:
+            skipped.append(SkippedReference(entity.case_id, entity.id, "ip_address"))
+        else:
+            add(CorrelationKind.IP_ADDRESS, address, (MatchField("ip_address", raw),))
     if entity.entity_type == "person":
         employer = str(entity.data.get("employer") or "")
         add(
@@ -465,4 +479,5 @@ def _match_qualification(
         CorrelationKind.VIN: "Exact VIN match",
         CorrelationKind.EMAIL: "Exact email match",
         CorrelationKind.PHONE: "Exact phone match",
+        CorrelationKind.IP_ADDRESS: "Exact IP address match",
     }[kind]

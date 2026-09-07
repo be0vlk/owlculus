@@ -83,8 +83,10 @@ export function useEntityDetails(entity, caseId, emit) {
     try {
       updating.value = true
       error.value = ''
-      if (targetType === 'domain') {
-        const result = useEntityValidation().domainRule(formData.value.data.domain)
+      if (['domain', 'ip_address'].includes(targetType)) {
+        const { domainRule, ipRule } = useEntityValidation()
+        const rule = targetType === 'domain' ? domainRule : ipRule
+        const result = rule(formData.value.data[targetType])
         if (result !== true) throw new Error(result)
       }
       if (

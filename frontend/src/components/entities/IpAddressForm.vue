@@ -14,7 +14,7 @@
         variant="outlined"
         density="comfortable"
         prepend-inner-icon="mdi-ip"
-        placeholder="192.168.1.1"
+        placeholder="192.0.2.1 or 2001:db8::1"
         required
         class="mb-4"
         :rules="[ipRule]"

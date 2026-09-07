@@ -743,3 +743,65 @@ async def test_accepted_email_hostname_identity_preserves_local_part(
     exact = next(item for item in results if item.get("match_type") == "email")
     assert exact["normalized_value"] == "Ada@xn--bcher-kva.example"
     assert len(exact["matches"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_canonical_ip_matches_preserve_fields_and_skip_unsupported(
+    session, test_admin, cases
+):
+    expanded = "2001:0DB8:0000:0000:0000:0000:0000:0001"
+    old = Entity(
+        case_id=cases[0].id,
+        entity_type="ip_address",
+        created_by_id=test_admin.id,
+        data={"ip_address": expanded},
+    )
+    session.add(old)
+    session.commit()
+    new = await entity(
+        session, test_admin, cases[1], "ip_address", ip_address="2001:db8::1"
+    )
+    for case in cases:
+        for raw in ("fe80::1%eth0", "address 2001:db8::1", "2001:db8::/64"):
+            session.add(
+                Entity(
+                    case_id=case.id,
+                    entity_type="ip_address",
+                    created_by_id=test_admin.id,
+                    data={"ip_address": raw},
+                )
+            )
+    session.commit()
+    await entity(session, test_admin, cases[0], "ip_address", ip_address="192.0.2.1")
+    await entity(
+        session, test_admin, cases[1], "ip_address", ip_address="::ffff:192.0.2.1"
+    )
+    await entity(session, test_admin, cases[1], "ip_address", ip_address="2001:db8::2")
+    for case, source, related, raw, other_raw in (
+        (cases[0], old, new, expanded, "2001:db8::1"),
+        (cases[1], new, old, "2001:db8::1", expanded),
+    ):
+        results = await scan(session, test_admin, case)
+        groups = [group for group in results if "matches" in group]
+        assert len(groups) == 1
+        group = groups[0]
+        assert group["match_type"] == "ip_address"
+        assert group["entity_id"] == source.id
+        assert group["normalized_value"] == "2001:db8::1"
+        assert group["source_fields"] == [{"field": "ip_address", "value": raw}]
+        assert group["matches"][0]["entity_id"] == related.id
+        assert group["matches"][0]["fields"] == [
+            {"field": "ip_address", "value": other_raw}
+        ]
+        assert group["matches"][0]["signal"] == "Exact IP address match"
+        assert group["matches"][0]["signal_rank"] == 0
+        notices = [
+            group
+            for group in results
+            if group.get("notice_type") == "skipped_reference"
+        ]
+        assert len(notices) == 6
+        assert all(
+            notice["field"] == "ip_address" and case.id in notice["case_scope"]
+            for notice in notices
+        )

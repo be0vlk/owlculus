@@ -1,3 +1,4 @@
+import { ipAddressRule } from '@/utils/ipAddress'
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 
 export function usePluginParams(initialParams = {}, emit) {
@@ -126,12 +127,7 @@ export function usePluginValidation() {
     return domainPattern.test(value) || 'Please enter a valid domain name'
   }
 
-  const ipRule = (value) => {
-    if (!value) return 'IP address is required'
-    const ipPattern =
-      /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/
-    return ipPattern.test(value) || 'Please enter a valid IP address'
-  }
+  const ipRule = ipAddressRule
 
   return {
     emailRule,

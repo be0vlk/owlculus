@@ -216,9 +216,12 @@ async def test_plugin_enrichment_uses_literal_and_historical_identity(
     )
     session.add_all([raw, wrong, exact])
     session.commit()
-    await ServiceEntitySink(session).write(
-        IpAddressWrite(address=f" {literal} ", description="enriched"), case_id, test_admin
-    )
+    with pytest.raises(ValueError, match="valid IPv4 or IPv6"):
+        await ServiceEntitySink(session).write(
+            IpAddressWrite(address=f" {literal} ", description="enriched"),
+            case_id,
+            test_admin,
+        )
     await ServiceEntitySink(session).write(
         DomainSubdomainsWrite(domain="example.com", subdomains=[]), case_id, test_admin
     )
@@ -226,5 +229,5 @@ async def test_plugin_enrichment_uses_literal_and_historical_identity(
     assert len(entities) == 3
     saved = {item["id"]: item["data"] for item in entities}
     assert saved[wrong.id]["description"] == "untouched"
-    assert "enriched" in saved[exact.id]["description"]
+    assert saved[exact.id]["description"] == "original"
     assert saved[raw.id]["domain"] == "example.com"

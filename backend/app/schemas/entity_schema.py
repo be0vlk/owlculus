@@ -17,6 +17,7 @@ from pydantic import (
 )
 
 from ..core.hostname import canonical_hostname, normalize_website
+from ..core.ip_address import canonical_ip_address
 from ..core.utils import get_utc_now
 
 
@@ -67,6 +68,8 @@ class DomainData(EntityData):
 
 class IpAddressData(EntityData):
     ip_address: str
+
+    _normalize_address = field_validator("ip_address")(canonical_ip_address)
     description: Optional[str] = None
     notes: Optional[str] = None
     sources: Optional[Dict[str, str]] = None

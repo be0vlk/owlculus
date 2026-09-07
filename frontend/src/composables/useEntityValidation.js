@@ -1,3 +1,4 @@
+import { ipAddressRule } from '@/utils/ipAddress'
 export const entityIdentityGuidance = {
   person: 'Provide a name, email, phone, employer, or HTTP(S) profile reference.',
   vehicle: 'Provide a VIN, license plate, or both make and model.',
@@ -45,12 +46,7 @@ export function useEntityValidation() {
     }
   }
 
-  const ipRule = (value) => {
-    if (!value) return 'IP address is required'
-    const ipPattern =
-      /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/
-    return ipPattern.test(value) || 'Please enter a valid IP address'
-  }
+  const ipRule = ipAddressRule
 
   const isFormValid = (entityType, data) => {
     if (!entityType) return false

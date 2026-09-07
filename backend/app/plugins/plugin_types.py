@@ -1,9 +1,10 @@
 """Typed values shared by plugin authors and runtime adapters."""
 
-import ipaddress
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Literal
+
+from app.core.ip_address import canonical_ip_address
 
 ENTITY_SAVE_SKIPPED = (
     "Entity save skipped: correlation provenance does not permit saving to this Case."
@@ -70,7 +71,7 @@ type EntityWrite = IpAddressWrite | DomainSubdomainsWrite
 def is_ip_address(value: str) -> bool:
     """Return whether a provider value is a syntactically valid IP address."""
     try:
-        ipaddress.ip_address(value)
+        canonical_ip_address(value)
     except ValueError:
         return False
     return True
