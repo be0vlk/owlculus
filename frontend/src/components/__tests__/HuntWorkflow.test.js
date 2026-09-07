@@ -321,3 +321,21 @@ it('counts assembled correlation groups in Hunt summaries and progress', async (
   const progress = mountWithVuetify(HuntStepProgress, { props: { step, stepNumber: 1 } })
   expect(progress.text()).toContain('1 correlation group(s)')
 })
+
+it('announces a correlation failure once when step and retained errors agree', async () => {
+  const { default: HuntStepResults } = await import('../hunts/HuntStepResults.vue')
+  const message = 'Correlation scan could not complete.'
+  const step = {
+    step_id: 'scan',
+    plugin_name: 'CorrelationScan',
+    status: 'failed',
+    error_details: message,
+    output: { results: [], errors: [] },
+  }
+  const wrapper = mountWithVuetify(HuntStepResults, { props: { step, stepNumber: 1 } })
+  await flushPromises()
+  expect(wrapper.text().split(message)).toHaveLength(2)
+  await wrapper.setProps({ step: { ...step, output: { results: [], errors: [{ message }] } } })
+  await flushPromises()
+  expect(wrapper.text().split(message)).toHaveLength(2)
+})

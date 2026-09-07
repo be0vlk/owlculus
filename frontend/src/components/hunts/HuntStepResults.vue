@@ -28,7 +28,12 @@
       </div>
 
       <!-- Error Details -->
-      <div v-if="step.status === 'failed' && step.error_details" class="mt-3">
+      <div
+        v-if="
+          step.plugin_name !== 'CorrelationScan' && step.status === 'failed' && step.error_details
+        "
+        class="mt-3"
+      >
         <v-alert type="error" variant="tonal" density="compact">
           {{ step.error_details }}
         </v-alert>
@@ -39,6 +44,7 @@
 
     <v-alert
       v-if="
+        step.plugin_name !== 'CorrelationScan' &&
         displayResults.length &&
         (step.status !== 'completed' || step.output?.partial || step.output?.errors?.length)
       "
@@ -55,7 +61,7 @@
         :result="correlationEvents"
         :execution-status="step.status"
         :execution-partial="!!step.output?.partial"
-        :execution-error="step.error_details"
+        :execution-error="correlationExecutionError"
         :retrieval-loading="retrievalLoading"
         :retrieval-complete="retrievalComplete && !retrievalLoading && !retrievalError"
         :retrieval-error="retrievalError"
@@ -132,6 +138,13 @@ const props = defineProps({
 })
 
 const correlationEvents = computed(() => huntCorrelationEvents(props.step))
+const correlationExecutionError = computed(() =>
+  correlationEvents.value.some(
+    (event) => event.type === 'error' && event.data?.message === props.step.error_details,
+  )
+    ? null
+    : props.step.error_details,
+)
 
 // Computed properties
 const displayResults = computed(() => {

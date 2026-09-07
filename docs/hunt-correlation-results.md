@@ -29,3 +29,9 @@ The regression also compares detail/export content and checks visible match coun
 The tradeoff is retaining small scope sets until response completion. Broad-reader peak memory is effectively unchanged because full response materialization dominates it. Complete correlation PDFs can grow larger than generic Plugin PDFs. No cross-request permission cache or timing threshold was introduced.
 
 Reproduce the bounded measurement from `backend/` with `uv run pytest tests/api/test_hunt_result_projection.py -q --capture=tee-sys` outside the restricted sandbox.
+
+## Verification and review
+
+Focused validation: 79 API tests, both isolated Docker worker provenance/effect variants, and 71 Vue tests passed. Backend typechecking and changed-file formatting/lint passed (existing FastAPI `Depends` B008 warnings excluded for the route module). No full suite was run.
+
+Standards review found one judgment call: duplicate correlation error/partial alerts between Hunt and shared Plugin wrappers. The follow-up delegates those alerts to the shared component and suppresses an execution error already present in retained events; a regression verifies one announcement. Re-review found it resolved. The separate spec review found no gaps.
