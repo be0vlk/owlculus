@@ -16,6 +16,13 @@
                 />
               </div>
 
+              <v-alert
+                v-if="route.query.passwordChanged === '1'"
+                type="success"
+                class="mb-4"
+                text="Password changed successfully. Sign in with your new password."
+              />
+
               <!-- Login Form -->
               <v-form ref="form" @submit.prevent="handleLogin">
                 <v-text-field
@@ -66,11 +73,12 @@
 
 <script setup>
 import { reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useDarkMode } from '../composables/useDarkMode'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 const { isDark } = useDarkMode()
 const isLoading = ref(false)

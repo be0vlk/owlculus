@@ -8,6 +8,7 @@ system configuration. All models include proper relationships and constraints.
 
 from datetime import datetime
 from typing import List, Optional
+from uuid import uuid4
 
 from pydantic import EmailStr
 from sqlalchemy import JSON, CheckConstraint, Column, UniqueConstraint
@@ -28,6 +29,16 @@ class CaseUserLink(SQLModel, table=True):
 
 
 class User(SQLModel, table=True):
+    __table_args__ = (
+        CheckConstraint(
+            "session_version >= 0", name="user_session_version_nonnegative"
+        ),
+    )
+
+    auth_identity: str = Field(
+        default_factory=lambda: str(uuid4()), unique=True, nullable=False
+    )
+    session_version: int = Field(default=0, nullable=False)
     id: Optional[int] = Field(default=None, primary_key=True)
     username: str = Field(index=True, unique=True)
     email: EmailStr = Field(index=True, unique=True)

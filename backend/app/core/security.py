@@ -11,7 +11,7 @@ import os
 import secrets
 from datetime import timedelta
 from pathlib import Path
-from typing import cast
+from uuid import UUID
 
 import bcrypt
 import filetype
@@ -52,16 +52,29 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     return encoded_jwt
 
 
-def verify_access_token(token: str, credentials_exception) -> str:
+def _valid_session_claims(identity: object, version: object) -> bool:
+    """Use one strict account/session contract for bearer and socket tokens."""
+    if not isinstance(identity, str) or type(version) is not int or version < 0:
+        return False
+    try:
+        return str(UUID(identity)) == identity
+    except ValueError:
+        return False
+
+
+def verify_access_token(token: str, credentials_exception) -> tuple[str, int]:
     try:
         payload = jwt.decode(
-            token, settings.SECRET_KEY.get_secret_value(), algorithms=[ALGORITHM]
+            token,
+            settings.SECRET_KEY.get_secret_value(),
+            algorithms=[ALGORITHM],
+            options={"require": ["sub", "session_version", "exp"]},
         )
-        username = cast(str | None, payload.get("sub"))
-        if username is None:
+        identity, version = payload["sub"], payload["session_version"]
+        if not _valid_session_claims(identity, version):
             raise credentials_exception
-        return username
-    except jwt.PyJWTError:
+        return identity, version
+    except (jwt.PyJWTError, ValueError, TypeError):
         raise credentials_exception
 
 
@@ -194,7 +207,14 @@ class EphemeralTokenManager:
     def __init__(self, token_ttl: int = 30):
         self.token_ttl = token_ttl
 
-    def create_token(self, user_id: int, execution_id: int, kind: str = "hunt") -> str:
+    def create_token(
+        self,
+        user_id: int,
+        execution_id: int,
+        kind: str,
+        auth_identity: str,
+        session_version: int,
+    ) -> str:
         import json
 
         from app.executions.events import redis_client
@@ -203,7 +223,9 @@ class EphemeralTokenManager:
         with redis_client() as client:
             client.set(
                 f"owlculus:tokens:{token}",
-                json.dumps([user_id, kind, execution_id]),
+                json.dumps(
+                    [user_id, kind, execution_id, auth_identity, session_version]
+                ),
                 ex=self.token_ttl,
                 nx=True,
             )
@@ -211,7 +233,7 @@ class EphemeralTokenManager:
 
     def validate_token(
         self, token: str, execution_id: int, kind: str = "hunt"
-    ) -> int | None:
+    ) -> tuple[int, str, int] | None:
         import json
 
         from app.executions.events import redis_client
@@ -220,8 +242,17 @@ class EphemeralTokenManager:
             value = client.getdel(f"owlculus:tokens:{token}")
         if value is None:
             return None
-        user_id, stored_kind, stored_id = json.loads(value)
-        return user_id if (stored_kind, stored_id) == (kind, execution_id) else None
+        try:
+            user_id, stored_kind, stored_id, identity, version = json.loads(value)
+            if type(user_id) is not int or not _valid_session_claims(identity, version):
+                return None
+        except (ValueError, TypeError):
+            return None
+        return (
+            (user_id, identity, version)
+            if (stored_kind, stored_id) == (kind, execution_id)
+            else None
+        )
 
 
 ephemeral_token_manager = EphemeralTokenManager()

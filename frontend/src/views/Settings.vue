@@ -87,9 +87,11 @@
 
 <script setup>
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
 const authStore = useAuthStore()
+const router = useRouter()
 
 const currentPassword = ref('')
 const newPassword = ref('')
@@ -117,6 +119,7 @@ const handlePasswordChange = async () => {
     currentPassword.value = ''
     newPassword.value = ''
     confirmPassword.value = ''
+    await router.replace({ path: '/login', query: { passwordChanged: '1' } })
   } catch (err) {
     error.value = err.response?.data?.detail || 'Failed to update password'
   } finally {

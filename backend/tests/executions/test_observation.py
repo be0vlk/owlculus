@@ -2,6 +2,7 @@
 
 import json
 
+import pytest
 from websockets.sync.client import connect
 
 from tests.executions.conftest import eventually
@@ -171,14 +172,14 @@ def test_tokens_expire_are_single_use_and_bind_kind_id_and_current_user(
     accepted = submit(first, system)
     hunt = submit_hunt(system, first, [step("first")])
     assert hunt["id"] == accepted["id"]
-    from app.core.security import create_access_token
+    from app.core.security import get_password_hash
 
     with Session(system.engine) as db:
         db.add(
             User(
                 username="outsider",
                 email="outsider@example.org",
-                password_hash="unused",
+                password_hash=get_password_hash("outsider-password"),
                 role="Investigator",
                 is_active=True,
             )
@@ -188,10 +189,26 @@ def test_tokens_expire_are_single_use_and_bind_kind_id_and_current_user(
         "/api/auth/websocket-token",
         json={"execution_id": accepted["id"], "kind": "plugin"},
         headers={
-            "Authorization": "Bearer " + create_access_token(data={"sub": "outsider"})
+            "Authorization": "Bearer "
+            + first.post(
+                "/api/auth/login",
+                data={"username": "outsider", "password": "outsider-password"},
+            ).json()["access_token"]
         },
     )
     assert denied.status_code == 403
+    redis = Redis.from_url(system.env["REDIS_URL"])
+    redis.set(
+        "owlculus:tokens:legacy-capability",
+        json.dumps([system.user_id, "plugin", accepted["id"]]),
+        ex=30,
+    )
+    legacy_url = (
+        str(first.base_url).replace("http:", "ws:").rstrip("/")
+        + f"/api/plugins/executions/{accepted['id']}/stream?token=legacy-capability"
+    )
+    with pytest.raises(InvalidStatus):
+        connect(legacy_url)
     url = stream(first, accepted)
     wrong_kind = url.replace("/plugins/", "/hunts/")
     with pytest.raises(InvalidStatus):
@@ -279,7 +296,6 @@ def test_slow_socket_has_bounded_sends_and_does_not_block_worker_or_other_api(
 ):
     import asyncio
 
-    from app.core.security import ephemeral_token_manager
     from app.executions import observation
 
     system = execution_system
@@ -287,9 +303,10 @@ def test_slow_socket_has_bounded_sends_and_does_not_block_worker_or_other_api(
     monkeypatch.setattr(observation, "SEND_TIMEOUT", 0.02)
     _, client = system.api()
     accepted = submit(client, system, barrier="release")
-    token = ephemeral_token_manager.create_token(
-        system.user_id, accepted["id"], "plugin"
-    )
+    token = client.post(
+        "/api/auth/websocket-token",
+        json={"execution_id": accepted["id"], "kind": "plugin"},
+    ).json()["token"]
 
     class SlowSocket:
         def __init__(self):
@@ -456,3 +473,72 @@ def test_lost_event_acknowledgment_retries_without_duplicate_revision(
     key = events.stream_key("plugin", accepted["id"])
     assert redis.xrange(key) == [("1-0", {"revision": "1"})]
     assert client.get(accepted["links"]["detail"]).json()["status"] == "queued"
+
+
+@pytest.mark.parametrize("kind", ["plugin", "hunt"])
+def test_password_change_revokes_capabilities_and_streams_across_apis(
+    execution_system, kind
+):
+    import pytest
+    from websockets.exceptions import ConnectionClosed, InvalidStatus
+
+    system = execution_system
+    system.env["EXECUTION_STREAM_AUTH_SECONDS"] = "0.1"
+    _, first = system.api()
+    _, second = system.api()
+    from tests.executions.test_hunt_execution_system import step, submit_hunt, terminal
+
+    accepted = (
+        submit(first, system)
+        if kind == "plugin"
+        else submit_hunt(system, first, [step("first")])
+    )
+    unused = stream(first, accepted, kind=kind).replace(
+        str(first.base_url.port), str(second.base_url.port)
+    )
+    with connect(stream(second, accepted, kind=kind)) as ws:
+        assert receive(ws)["state"]["status"] == (
+            "queued" if kind == "plugin" else "pending"
+        )
+        changed = first.put(
+            "/api/users/me/password",
+            json={
+                "current_password": "acceptance-password",
+                "new_password": "replacement-password",
+            },
+        )
+        assert changed.status_code == 200, changed.text
+        with pytest.raises(ConnectionClosed) as closed:
+            while True:
+                receive(ws)
+        assert closed.value.rcvd.code == 1008
+        assert closed.value.rcvd.reason == "Observation access revoked"
+    with pytest.raises(InvalidStatus):
+        connect(unused)
+    assert second.get("/api/users/me").status_code == 401
+    login = second.post(
+        "/api/auth/login",
+        data={"username": "acceptance", "password": "replacement-password"},
+    )
+    assert login.status_code == 200
+    second.headers["Authorization"] = "Bearer " + login.json()["access_token"]
+    with connect(stream(second, accepted, kind=kind)) as ws:
+        assert receive(ws)["state"]["status"] == (
+            "queued" if kind == "plugin" else "pending"
+        )
+    (
+        system.worker()
+        if kind == "plugin"
+        else system.start("-m", "tests.executions.runtime", "hunt-worker")
+    )
+    system.start("-m", "app.executions.dispatcher")
+    assert (
+        eventually(
+            lambda: (
+                finished(second, accepted)
+                if kind == "plugin"
+                else terminal(second, accepted)
+            )
+        )["status"]
+        == "completed"
+    )
