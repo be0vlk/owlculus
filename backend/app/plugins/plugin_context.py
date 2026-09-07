@@ -34,7 +34,7 @@ class EvidenceSink(Protocol):
 class EntitySink(Protocol):
     async def write(
         self, request: EntityWrite, case_id: int, user: models.User
-    ) -> None: ...
+    ) -> str | None: ...
 
 
 class ListEvidenceSink:

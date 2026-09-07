@@ -47,15 +47,15 @@ class HuntCorrelationScope:
                     for step in snapshot["steps"]
                     if step["plugin_name"] == CORRELATION_PLUGIN
                 )
-            except (KeyError, TypeError, ValueError):
+            except (AttributeError, KeyError, TypeError, ValueError):
                 self.dependencies = None
 
     def inherited(self, step_id: str) -> tuple[int, ...] | None:
         """None: unrelated; empty: unverified; otherwise every required Case ID."""
-        if not self.roots or step_id in self.roots:
+        if step_id in self.roots:
             return None
         if self.dependencies is None or step_id not in self.dependencies:
-            roots = self.roots
+            return ()
         else:
             pending, seen, roots = [step_id], set(), set()
             while pending:
@@ -66,7 +66,7 @@ class HuntCorrelationScope:
                 if current in self.roots:
                     roots.add(current)
                 elif current not in self.dependencies:
-                    roots.update(self.roots)
+                    return ()
                 else:
                     pending.extend(self.dependencies[current])
         if not roots:
@@ -83,6 +83,7 @@ class HuntCorrelationScope:
                 not isinstance(output, dict)
                 or not isinstance(output.get("results"), list)
                 or output.get("errors")
+                or output.get("partial")
             ):
                 return ()
             for group in output["results"]:

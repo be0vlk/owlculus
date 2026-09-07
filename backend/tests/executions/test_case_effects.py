@@ -23,6 +23,10 @@ def replay(system, accepted, window="success"):
 
 
 def test_effect_retries_races_and_independent_runs(execution_system):
+    from sqlalchemy import text
+
+    from app.database.upgrade_executions import upgrade
+
     system = execution_system
     _, client = system.api()
     system.worker()
@@ -53,6 +57,11 @@ def test_effect_retries_races_and_independent_runs(execution_system):
         eventually(lambda: first.poll() is not None and second.poll() is not None)
         assert first.returncode == second.returncode == 0
         assert len(contents(client, system)) == 2
+        # Simulate legacy receipts; a repeatable upgrade must preserve deduplication.
+        with system.engine.begin() as db:
+            db.execute(text("ALTER TABLE executioneffect DROP COLUMN skipped"))
+        upgrade(system.engine)
+        upgrade(system.engine)
         replay(system, accepted)
         assert len(contents(client, system)) == 2
         entities = client.get(f"/api/cases/{system.case_id}/entities").json()

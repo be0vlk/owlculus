@@ -186,6 +186,15 @@ def install():
         supervisor.claim = claim_at_boundary
         supervisor.finish_stopped = finish_at_boundary
 
+    if os.environ.get("EXECUTION_TEST_DNS"):
+        import dns.asyncresolver
+        import dns.rrset
+
+        async def resolve(self, name, rdtype, *args, **kwargs):
+            return dns.rrset.from_text(str(name), 60, "IN", "A", "192.0.2.55")
+
+        dns.asyncresolver.Resolver.resolve = resolve
+
     original = plugin_registry.get_shipped_plugin_registry
     registry = original()
     # Keep shipped definitions for startup hunt validation.

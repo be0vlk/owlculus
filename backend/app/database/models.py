@@ -349,6 +349,7 @@ class ExecutionEffect(SQLModel, table=True):
     control_id: int = Field(foreign_key="executioncontrol.id", index=True)
     operation_id: str
     artifact_id: str | None = Field(default=None, unique=True)
+    skipped: bool = Field(default=False)
     created_at: datetime = Field(default_factory=get_utc_now)
 
 

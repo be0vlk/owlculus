@@ -100,3 +100,32 @@ it.each(['failed', 'running', 'cancelled'])(
     expect(wrapper.text()).toContain('Retained finding')
   },
 )
+
+it('shows a skipped Entity save explanation in a completed Hunt step', async () => {
+  const { default: HuntStepResults } = await import('../hunts/HuntStepResults.vue')
+  const wrapper = mountWithVuetify(HuntStepResults, {
+    props: {
+      stepNumber: 2,
+      step: {
+        step_id: 'lookup',
+        plugin_name: 'DnsLookup',
+        status: 'completed',
+        output: {
+          results: [
+            {
+              notice_type: 'entity_save_skipped',
+              message:
+                'Entity save skipped: correlation provenance does not permit saving to this Case.',
+            },
+          ],
+          errors: [],
+          result_count: 1,
+        },
+      },
+    },
+  })
+  expect(wrapper.text()).toContain(
+    'Entity save skipped: correlation provenance does not permit saving to this Case.',
+  )
+  expect(wrapper.text()).not.toContain('This step has not completed successfully')
+})

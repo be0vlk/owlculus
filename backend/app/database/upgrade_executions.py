@@ -239,6 +239,11 @@ def upgrade(database_engine: Engine = engine) -> None:
         connection.execute(text("SELECT pg_advisory_xact_lock(827104001)"))
         connection.execute(
             text(
+                "ALTER TABLE executioneffect ADD COLUMN IF NOT EXISTS skipped BOOLEAN NOT NULL DEFAULT FALSE"
+            )
+        )
+        connection.execute(
+            text(
                 "ALTER TABLE executioncontrol ADD COLUMN IF NOT EXISTS deadline_at TIMESTAMP"
             )
         )

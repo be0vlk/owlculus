@@ -75,11 +75,11 @@ class WorkerEntitySink:
     def __init__(self, sink: CaseEffects, vault: WorkerVault, case_id: int):
         self.sink, self.vault, self.case_id = sink, vault, case_id
 
-    async def write(self, request: EntityWrite, case_id: int, user: User) -> None:
+    async def write(self, request: EntityWrite, case_id: int, user: User) -> str | None:
         if case_id != self.case_id:
             raise ValueError("Entities must belong to the execution case")
         sanitized = type(request)(**self.vault.redact(asdict(request)))
-        await self.sink.entity(sanitized)
+        return await self.sink.entity(sanitized)
 
 
 @contextmanager

@@ -1,6 +1,7 @@
 """Correlation confidentiality through real durable workers and artifact receipts."""
 
 import httpx
+import pytest
 from sqlmodel import Session, select
 
 from app.core.security import create_access_token, get_password_hash
@@ -9,10 +10,13 @@ from tests.executions.conftest import eventually
 from tests.executions.test_hunt_execution_system import step, submit_hunt, terminal
 
 
-def test_hunt_correlation_and_dependent_reports_keep_case_provenance(execution_system):
+@pytest.mark.parametrize("existing_ip", [False, True])
+def test_hunt_correlation_and_dependent_reports_keep_case_provenance(
+    execution_system, existing_ip
+):
     system = execution_system
     with Session(system.engine) as db:
-        related = Case(case_number="SECRET", title="SECRET")
+        related = Case(case_number="SECRET", title="SECRET.example.test")
         reader = User(
             username="reader",
             email="reader@example.test",
@@ -44,6 +48,18 @@ def test_hunt_correlation_and_dependent_reports_keep_case_provenance(execution_s
                 "session_version": reader.session_version,
             }
         )
+    if existing_ip:
+        with Session(system.engine) as db:
+            db.add(
+                Entity(
+                    case_id=system.case_id,
+                    entity_type="ip_address",
+                    data={"ip_address": "192.0.2.55", "description": "PUBLIC"},
+                    created_by_id=system.user_id,
+                )
+            )
+            db.commit()
+    system.env["EXECUTION_TEST_DNS"] = "1"
     _, client = system.api()
     system.start("-m", "tests.executions.runtime", "hunt-worker")
     system.start("-m", "app.executions.dispatcher")
@@ -55,9 +71,10 @@ def test_hunt_correlation_and_dependent_reports_keep_case_provenance(execution_s
                 step("scan", plugin_name="CorrelationScan", save_to_case=True),
                 step(
                     "copy",
+                    plugin_name="DnsLookup",
                     depends_on=["scan"],
                     parameter_mapping={
-                        "query": "scan.results[0].matches[0].case_title"
+                        "domain": "scan.results[0].matches[0].case_title"
                     },
                     save_to_case=True,
                 ),
@@ -66,6 +83,10 @@ def test_hunt_correlation_and_dependent_reports_keep_case_provenance(execution_s
         )
         state = eventually(lambda: terminal(client, accepted))
         assert state["status"] == "completed", state
+        assert (
+            "Entity save skipped: correlation provenance does not permit saving to this Case."
+            in str(state)
+        )
         reports = [
             row
             for row in client.get(f"/api/evidence/case/{system.case_id}").json()
@@ -80,6 +101,21 @@ def test_hunt_correlation_and_dependent_reports_keep_case_provenance(execution_s
         with httpx.Client(
             base_url=str(client.base_url), headers={"Authorization": f"Bearer {token}"}
         ) as observer:
+            entities = observer.get(f"/api/cases/{system.case_id}/entities").json()
+            ips = [row for row in entities if row["entity_type"] == "ip_address"]
+            assert len(ips) == int(existing_ip)
+            for row in entities:
+                response = observer.get(
+                    f"/api/cases/{system.case_id}/entities/{row['id']}"
+                )
+                assert response.status_code == 200
+                assert "SECRET" not in response.text
+            for format in ("json", "csv"):
+                response = observer.get(
+                    f"/api/cases/{system.case_id}/entities/export?format={format}"
+                )
+                assert response.status_code == 200
+                assert "SECRET" not in response.text
             for suffix in (
                 "?include_steps=true",
                 "/steps/copy/results",

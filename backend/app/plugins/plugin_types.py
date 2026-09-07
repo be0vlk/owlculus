@@ -5,6 +5,10 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+ENTITY_SAVE_SKIPPED = (
+    "Entity save skipped: correlation provenance does not permit saving to this Case."
+)
+
 Payload = dict[str, Any]
 ResultKind = Literal["data", "error", "status", "complete"]
 

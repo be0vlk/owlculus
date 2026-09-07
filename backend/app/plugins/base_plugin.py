@@ -102,7 +102,11 @@ class BasePlugin(ABC):
                     ctx.user,
                 )
         for request in self.entity_writes(payloads, params):
-            await ctx.entities.write(request, ctx.case_id, ctx.user)
+            warning = await ctx.entities.write(request, ctx.case_id, ctx.user)
+            if warning:
+                yield self.data(
+                    {"notice_type": "entity_save_skipped", "message": warning}
+                )
 
     def correlation_case_ids(
         self, payloads: list[Payload], case_id: int
