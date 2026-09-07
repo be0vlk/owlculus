@@ -1,5 +1,8 @@
 <template>
   <div class="d-flex flex-column ga-4">
+    <p v-if="latestProgress" role="status" class="text-body-medium">
+      {{ latestProgress.message }}: {{ latestProgress.count }} in this portion.
+    </p>
     <p v-if="hasCorrelations" class="text-body-medium">
       {{ counts.entities }} source Entities · {{ counts.matches }} matches ·
       {{ counts.cases }} related Cases
@@ -143,6 +146,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { assembleCorrelationResults } from '@/utils/correlationResults'
 import { useRouter } from 'vue-router'
 
 const props = defineProps({
@@ -154,9 +158,11 @@ const props = defineProps({
 
 const router = useRouter()
 
-const normalizedResult = computed(() => {
-  if (!props.result) return []
-  return Array.isArray(props.result) ? props.result : [props.result]
+const normalizedResult = computed(() => assembleCorrelationResults(props.result))
+
+const latestProgress = computed(() => {
+  if (normalizedResult.value.some((item) => ['complete', 'error'].includes(item.type))) return null
+  return normalizedResult.value.findLast((item) => item.type === 'status')?.data || null
 })
 
 const hasErrors = computed(() => normalizedResult.value.some((item) => item.type === 'error'))
@@ -191,6 +197,8 @@ const getMatchTypeLabel = (matchType) => {
     employer: 'Employer Match',
     domain: 'Domain Match',
     vin: 'VIN Match',
+    email: 'Email Match',
+    phone: 'Phone Match',
     license_plate: 'License Plate Match',
   }
   return labels[matchType] || 'Match'
@@ -202,6 +210,8 @@ const getMatchTypeColor = (matchType) => {
     employer: 'secondary',
     domain: 'info',
     vin: 'warning',
+    email: 'success',
+    phone: 'success',
     license_plate: 'warning',
   }
   return colors[matchType] || 'grey'

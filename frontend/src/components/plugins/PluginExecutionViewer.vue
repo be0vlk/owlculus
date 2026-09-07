@@ -28,6 +28,7 @@
 
 <script setup>
 import { ref, watch } from 'vue'
+import { assembleCorrelationResults } from '@/utils/correlationResults'
 import ExecutionWaiting from '@/components/ExecutionWaiting.vue'
 import { pluginService } from '@/services/plugin'
 import { downloadBlob } from '@/utils/download'
@@ -67,7 +68,7 @@ async function exportResults(data) {
       results.value = visible
       data = {
         ...data,
-        results: visible,
+        results: assembleCorrelationResults(visible),
         parameters: state.parameters,
         partial: state.status !== 'completed',
         error: state.error?.message || null,

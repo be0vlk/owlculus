@@ -253,7 +253,7 @@ async def test_saved_report_preserves_explanations_counts_time_and_warning_scope
         f"Entity ID: {ada.id}",
         f"Entity ID: {charles.id}",
         "incomplete",
-        events[0].payload["executed_at"],
+        next(event.payload["executed_at"] for event in events if event.kind == "data"),
     ):
         assert expected in text
     assert "[broken" not in text
@@ -335,3 +335,304 @@ async def test_persisted_legacy_network_assets_keep_their_name_connection(
     assert result[0]["source_fields"] == [
         {"field": "domains[0]", "value": "legacy.example.com"}
     ]
+
+
+@pytest.mark.asyncio
+async def test_exact_email_is_separate_from_domain_and_preserves_local_part(
+    session, test_admin, cases
+):
+    await entity(session, test_admin, cases[0], "person", email="Ada+tag@gmail.com")
+    exact = await entity(
+        session,
+        test_admin,
+        cases[1],
+        "person",
+        first_name="Other",
+        email="Ada+tag@GMAIL.COM",
+    )
+    for address in ("ada+tag@gmail.com", "Ada@gmail.com", "A.da+tag@gmail.com"):
+        await entity(session, test_admin, cases[1], "person", email=address)
+    results = await scan(session, test_admin, cases[0])
+    assert results[0]["match_type"] == "email"
+    assert [match["entity_id"] for match in results[0]["matches"]] == [exact.id]
+    assert results[0]["source_fields"] == [
+        {"field": "email", "value": "Ada+tag@gmail.com"}
+    ]
+    assert results[0]["matches"][0]["signal"] == "Exact email match"
+    domain = next(group for group in results if group.get("match_type") == "domain")
+    assert len(domain["matches"]) == 4
+    assert "low signal" in domain["matches"][-1]["signal"].lower()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "other_phone,connects,skipped",
+    [
+        ("+1 202.555-0123", True, False),
+        ("1 202 555 0123", False, False),
+        ("2025550123", False, False),
+        ("+1 202 555 0123 ext 4", False, True),
+        ("+1 202 555 0123#4", False, True),
+        ("call +1 202 555 0123", False, True),
+    ],
+)
+async def test_phone_matching_is_conservative_and_cross_type(
+    session, test_admin, cases, other_phone, connects, skipped
+):
+    await entity(session, test_admin, cases[0], "person", phone="+1 (202) 555-0123")
+    await entity(session, test_admin, cases[1], "company", name="", phone=other_phone)
+    for case in cases:
+        results = await scan(session, test_admin, case)
+        groups = [row for row in results if row.get("match_type") == "phone"]
+        assert bool(groups) is connects
+        assert (
+            any(row.get("notice_type") == "skipped_reference" for row in results)
+            is skipped
+        )
+        if connects:
+            assert groups[0]["normalized_value"] == "+12025550123"
+            assert groups[0]["matches"][0]["signal"] == "Exact phone match"
+            assert groups[0]["source_fields"][0]["value"] in (
+                other_phone,
+                "+1 (202) 555-0123",
+            )
+
+
+@pytest.mark.asyncio
+async def test_large_group_is_losslessly_continued_with_report_counts(
+    session, test_admin, cases, monkeypatch
+):
+    from app.plugins.output_limits import serialized_size
+
+    monkeypatch.setenv("EXECUTION_EVENT_LIMIT_BYTES", "2400")
+    await entity(session, test_admin, cases[0], "person", employer="Popular")
+    related = [
+        await entity(
+            session,
+            test_admin,
+            cases[1],
+            "person",
+            first_name=f"Person {index}",
+            employer="Popular",
+        )
+        for index in range(12)
+    ]
+    evidence = []
+    ctx = PluginRun.for_test(
+        session=session,
+        user=test_admin,
+        api_keys={},
+        evidence=evidence,
+        entities=[],
+        case_id=cases[0].id,
+        save_to_case=True,
+    )
+    events = [
+        event
+        async for event in PluginRunner(
+            PluginRegistry.from_classes([CorrelationScan])
+        ).run("CorrelationScan", {}, ctx)
+    ]
+    assert not [event for event in events if event.kind == "error"], events
+    parts = [
+        event.payload
+        for event in events
+        if event.kind == "data" and "matches" in event.payload
+    ]
+    assert len(parts) > 1
+    assert len({part["group_id"] for part in parts}) == 1
+    assert all(part["continuation"] == "merge" for part in parts)
+    assert all(serialized_size(event.to_wire()) <= 2400 for event in events)
+    assert [match["entity_id"] for part in parts for match in part["matches"]] == [
+        row.id for row in related
+    ]
+    assert "Total entities with matches: 1" in evidence[0].content
+    assert "Total matches: 12" in evidence[0].content
+    assert evidence[0].content.count("Match Type: employer") == 1
+
+
+@pytest.mark.asyncio
+async def test_common_provider_overlap_is_last_but_explicit_domain_is_not_downgraded(
+    session, test_admin, cases
+):
+    first = await entity(
+        session, test_admin, cases[0], "person", email="first@gmail.com"
+    )
+    await entity(session, test_admin, cases[0], "person", employer="Specific")
+    await entity(
+        session,
+        test_admin,
+        cases[1],
+        "person",
+        email="second@gmail.com",
+        employer="Specific",
+    )
+    groups = await scan(session, test_admin, cases[0])
+    assert [group["match_type"] for group in groups] == ["employer", "domain"]
+    domain = await entity(session, test_admin, cases[1], "domain", domain="gmail.com")
+    groups = await scan(session, test_admin, cases[0])
+    visible = [
+        match
+        for group in groups
+        if group.get("entity_id") == first.id
+        for match in group["matches"]
+    ]
+    assert visible[0]["entity_id"] == domain.id
+    assert visible[0]["signal_rank"] == 1
+    assert "Low signal" not in visible[0]["signal"]
+    assert visible[-1]["signal_rank"] == 2
+    reverse = await scan(session, test_admin, cases[1])
+    explicit = next(group for group in reverse if group.get("entity_id") == domain.id)
+    assert explicit["matches"][0]["signal_rank"] == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("operation_limit,huge_value", [(4200, False), (20000, True)])
+async def test_scan_limits_keep_accepted_prefix_and_never_save_a_complete_report(
+    session, test_admin, cases, monkeypatch, operation_limit, huge_value
+):
+    monkeypatch.setenv("EXECUTION_EVENT_LIMIT_BYTES", "2400")
+    monkeypatch.setenv("EXECUTION_RESULT_LIMIT_BYTES", str(operation_limit))
+    await entity(session, test_admin, cases[0], "person", employer="Popular")
+    for index in range(12):
+        await entity(
+            session,
+            test_admin,
+            cases[1],
+            "person",
+            first_name=(
+                "x" * 3000 if huge_value and index == 11 else f"Related {index}"
+            ),
+            employer="Popular",
+        )
+    evidence = []
+    ctx = PluginRun.for_test(
+        session=session,
+        user=test_admin,
+        api_keys={},
+        evidence=evidence,
+        entities=[],
+        case_id=cases[0].id,
+        save_to_case=True,
+    )
+    events = [
+        event
+        async for event in PluginRunner(
+            PluginRegistry.from_classes([CorrelationScan])
+        ).run("CorrelationScan", {}, ctx)
+    ]
+    retained = [
+        match
+        for event in events
+        if event.kind == "data"
+        for match in event.payload.get("matches", [])
+    ]
+    assert 0 < len(retained) < 12
+    assert len({match["entity_id"] for match in retained}) == len(retained)
+    assert events[-2].kind == "error"
+    assert events[-2].payload["partial"] is True
+    assert events[-2].payload["code"] == (
+        "event_size_limit" if huge_value else "result_size_limit"
+    )
+    assert events[-1].kind == "complete"
+    assert evidence == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stop", ["cancel", "deadline"])
+async def test_stop_during_continuation_retains_prefix_without_completion_or_evidence(
+    session, test_admin, cases, monkeypatch, stop
+):
+    import asyncio
+
+    monkeypatch.setenv("EXECUTION_EVENT_LIMIT_BYTES", "2400")
+    await entity(session, test_admin, cases[0], "person", employer="Popular")
+    for index in range(12):
+        await entity(
+            session,
+            test_admin,
+            cases[1],
+            "person",
+            first_name=f"Related {index}",
+            employer="Popular",
+        )
+    evidence, accepted = [], []
+    ctx = PluginRun.for_test(
+        session=session,
+        user=test_admin,
+        api_keys={},
+        evidence=evidence,
+        entities=[],
+        case_id=cases[0].id,
+        save_to_case=True,
+    )
+
+    async def consume():
+        async with asyncio.timeout(None) as deadline:
+            async for event in PluginRunner(
+                PluginRegistry.from_classes([CorrelationScan])
+            ).run("CorrelationScan", {}, ctx):
+                accepted.append(event)
+                if event.kind == "data":
+                    if stop == "cancel":
+                        asyncio.current_task().cancel()
+                    else:
+                        deadline.reschedule(asyncio.get_running_loop().time())
+
+    task = asyncio.create_task(consume())
+    with pytest.raises(asyncio.CancelledError if stop == "cancel" else TimeoutError):
+        await task
+    retained = [
+        match
+        for event in accepted
+        if event.kind == "data"
+        for match in event.payload["matches"]
+    ]
+    assert 0 < len(retained) < 12
+    assert not any(event.kind == "complete" for event in accepted)
+    assert not evidence
+
+
+@pytest.mark.asyncio
+async def test_provider_overlap_stays_low_signal_with_additional_profile_fields(
+    session, test_admin, cases
+):
+    for case, local in zip(cases, ("ada", "charles")):
+        await entity(
+            session,
+            test_admin,
+            case,
+            "person",
+            email=f"{local}@gmail.com",
+            usernames=[f"https://gmail.com/@{local}"],
+        )
+    results = await scan(session, test_admin, cases[0])
+    assert len(results) == 1
+    assert results[0]["matches"][0]["signal_rank"] == 2
+    assert "Low signal" in results[0]["matches"][0]["signal"]
+    assert len(results[0]["source_fields"]) == 2
+    assert len(results[0]["matches"][0]["fields"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_legacy_malformed_email_does_not_become_an_exact_identifier(
+    session, test_admin, cases
+):
+    from app.database.models import Entity
+
+    # Legacy stored data can predate current EmailStr input validation.
+    for case in cases:
+        session.add(
+            Entity(
+                case_id=case.id,
+                created_by_id=test_admin.id,
+                entity_type="person",
+                data={"email": "https://example.com/profile", "employer": "Shared"},
+            )
+        )
+    session.commit()
+    results = await scan(session, test_admin, cases[0])
+    assert [row["match_type"] for row in results if "matches" in row] == ["employer"]
+    warnings = [row for row in results if row.get("notice_type") == "skipped_reference"]
+    assert len(warnings) == 2
+    assert all(row["field"] == "email" for row in warnings)

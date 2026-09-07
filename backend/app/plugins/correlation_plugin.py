@@ -1,5 +1,8 @@
 """Plugin-catalogue adapter for the entity-correlation query."""
 
+import asyncio
+import hashlib
+import json
 from collections.abc import AsyncGenerator
 from dataclasses import asdict
 from typing import Any
@@ -11,10 +14,12 @@ from app.services.entity_correlation import (
     CorrelationKind,
     CorrelationMatch,
     EntityCorrelation,
+    ScanProgress,
     correlation_label,
 )
 
 from .base_plugin import BasePlugin, PluginRun, ResultEvent
+from .output_limits import OutputBudget, OutputLimitExceeded, serialized_size
 
 
 class CorrelationScan(BasePlugin):
@@ -44,22 +49,57 @@ class CorrelationScan(BasePlugin):
         if case is None:
             yield self.error("Case not found")
             return
+        executed_at = get_utc_now().isoformat()
+        metadata = {
+            "case_title": case.title,
+            "case_number": case.case_number,
+            "executed_at": executed_at,
+        }
+        event_limit = OutputBudget().event_limit
+        pending: dict[str, Any] | None = None
+        pending_size = 0
         try:
             correlation = EntityCorrelation(ctx.session)
-            matches = correlation.correlate(case, ctx.user)
+            for item in correlation.iter_correlations(case, ctx.user):
+                if isinstance(item, ScanProgress):
+                    # No related counts are published without their Case scope.
+                    await asyncio.sleep(0)
+                    yield ResultEvent(
+                        "status",
+                        {
+                            "message": item.message,
+                            "count": item.count,
+                            "case_scope": list(item.case_scope),
+                        },
+                    )
+                    continue
+                group = {**_group_payload(item, ctx.case_id), **metadata}
+                other = _other_entity_payload(item)
+                if pending is not None and pending["group_id"] != group["group_id"]:
+                    await asyncio.sleep(0)
+                    yield self.data(pending)
+                    pending = None
+                if pending is None:
+                    pending = group
+                    pending_size = serialized_size(self.data(pending).to_wire())
+                added_size = serialized_size(other) + bool(pending["matches"])
+                if pending_size + added_size > event_limit:
+                    if pending["matches"]:
+                        await asyncio.sleep(0)
+                        yield self.data(pending)
+                    pending = group
+                    pending_size = serialized_size(self.data(pending).to_wire())
+                    added_size = serialized_size(other)
+                    if pending_size + added_size > event_limit:
+                        raise OutputLimitExceeded("event_size_limit", event_limit)
+                pending["matches"].append(other)
+                pending_size += added_size
+            if pending is not None:
+                await asyncio.sleep(0)
+                yield self.data(pending)
         except DomainException as error:
             yield self.error(str(error))
             return
-        executed_at = get_utc_now().isoformat()
-        for payload in _result_payloads(matches, ctx.case_id):
-            yield self.data(
-                {
-                    **payload,
-                    "case_title": case.title,
-                    "case_number": case.case_number,
-                    "executed_at": executed_at,
-                }
-            )
         for warning in correlation.skipped_references:
             yield self.data(
                 {
@@ -70,8 +110,8 @@ class CorrelationScan(BasePlugin):
                     "entity_id": warning.entity_id,
                     "field": warning.field,
                     "source_case_id": ctx.case_id,
-                    "source_case_title": case.title,
-                    "source_case_number": case.case_number,
+                    "source_case_title": metadata["case_title"],
+                    "source_case_number": metadata["case_number"],
                     "executed_at": executed_at,
                 }
             )
@@ -102,7 +142,7 @@ class CorrelationScan(BasePlugin):
         del params
         if not results:
             return ""
-        groups = [result for result in results if "matches" in result]
+        groups = assemble_groups([result for result in results if "matches" in result])
         first = results[0]
         source_id = first.get("source_case_id", first.get("case_id"))
         source_title = first.get("source_case_title", first.get("case_title", ""))
@@ -151,19 +191,71 @@ def _format_fields(fields: list[dict[str, str]]) -> str:
     return "; ".join(f"{field['field']}: {field['value']}" for field in fields)
 
 
-def _result_payloads(
-    matches: list[CorrelationMatch], case_id: int
-) -> list[dict[str, Any]]:
-    groups: dict[tuple[int | None, CorrelationKind, str], dict[str, Any]] = {}
-    for match in matches:
-        key = (match.source_entity.id, match.kind, match.normalized_value)
-        payload = groups.setdefault(key, _group_payload(match, case_id))
-        payload["matches"].append(_other_entity_payload(match))
-    return list(groups.values())
+def assemble_groups(parts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Reassemble additive continuation payloads; legacy groups stay readable."""
+    groups: dict[str, dict[str, Any]] = {}
+    matches: dict[str, dict[tuple[int, int], dict[str, Any]]] = {}
+    for index, part in enumerate(parts):
+        key = part.get("group_id", f"legacy:{index}")
+        if key not in groups:
+            groups[key] = {**part, "source_fields": [], "matches": []}
+            matches[key] = {}
+        groups[key]["source_fields"] = _merge_fields(
+            groups[key]["source_fields"], part.get("source_fields", [])
+        )
+        for match in part["matches"]:
+            identity = (match["case_id"], match["entity_id"])
+            if identity not in matches[key]:
+                matches[key][identity] = dict(match)
+                groups[key]["matches"].append(matches[key][identity])
+            previous = matches[key][identity]
+            if "fields" in match:
+                previous["fields"] = _merge_fields(
+                    previous.get("fields", []), match["fields"]
+                )
+    for group in groups.values():
+        group["matches"].sort(
+            key=lambda match: (
+                match.get("signal_rank", 1),
+                match["case_id"],
+                match["entity_id"],
+            )
+        )
+    return sorted(
+        groups.values(),
+        key=lambda group: (
+            min((match.get("signal_rank", 1) for match in group["matches"]), default=1),
+            group["entity_id"],
+            group["match_type"],
+            group.get("normalized_value", ""),
+        ),
+    )
+
+
+def _merge_fields(
+    first: list[dict[str, str]], second: list[dict[str, str]]
+) -> list[dict[str, str]]:
+    return list(
+        {
+            (field["field"], field["value"]): field for field in (*first, *second)
+        }.values()
+    )
 
 
 def _group_payload(match: CorrelationMatch, case_id: int) -> dict[str, Any]:
     payload: dict[str, Any] = {
+        "group_id": hashlib.sha256(
+            json.dumps(
+                [
+                    case_id,
+                    match.source_entity.id,
+                    match.kind.value,
+                    match.normalized_value,
+                ],
+                ensure_ascii=False,
+            ).encode()
+        ).hexdigest(),
+        "continuation": "merge",
         "entity_id": match.source_entity.id,
         "entity_name": correlation_label(match.source_entity),
         "entity_type": match.source_entity.entity_type,
@@ -193,6 +285,7 @@ def _other_entity_payload(match: CorrelationMatch) -> dict[str, Any]:
         "found_in": match.found_in,
         "matched_value": match.other_fields[0].value,
         "signal": match.signal,
+        "signal_rank": match.signal_rank,
     }
     if match.kind is CorrelationKind.EMPLOYER:
         payload["person_name"] = payload["entity_name"]

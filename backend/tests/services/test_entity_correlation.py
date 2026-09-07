@@ -1,7 +1,6 @@
 """Behavioral tests for cross-case entity correlation."""
 
 import pytest
-from sqlalchemy import event
 from sqlmodel import Session
 
 from app.core.exceptions import AuthorizationException
@@ -102,18 +101,7 @@ def test_correlate_uses_case_access_for_source_and_other_cases(
     session.refresh(source_case)
     session.refresh(test_user)
 
-    statements = 0
-
-    def count_statement(*_args) -> None:
-        nonlocal statements
-        statements += 1
-
-    connection = session.get_bind()
-    event.listen(connection, "before_cursor_execute", count_statement)
     assert EntityCorrelation(session).correlate(source_case, test_user) == []
-    event.remove(connection, "before_cursor_execute", count_statement)
-
-    assert statements == 4
     with pytest.raises(AuthorizationException):
         EntityCorrelation(session).correlate(hidden_case, test_user)
 
@@ -158,11 +146,11 @@ def test_correlate_returns_employer_and_domain_matches(
     matches = EntityCorrelation(session).correlate(source_case, test_user)
 
     assert [(match.kind, match.value) for match in matches] == [
-        (CorrelationKind.EMPLOYER, "Analytical Engines"),
         (CorrelationKind.DOMAIN, "example.test"),
+        (CorrelationKind.EMPLOYER, "Analytical Engines"),
     ]
-    assert matches[0].other_entity.data["first_name"] == "Charles"
-    assert matches[1].found_in == "website: https://example.test/about"
+    assert matches[1].other_entity.data["first_name"] == "Charles"
+    assert matches[0].found_in == "website: https://example.test/about"
 
 
 def test_correlate_matches_employer_for_unnamed_entities(

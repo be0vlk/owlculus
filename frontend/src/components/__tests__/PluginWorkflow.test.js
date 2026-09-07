@@ -247,3 +247,74 @@ it('keeps legacy related names and explanations readable with stable navigation'
   await wrapper.get('button').trigger('click')
   expect(push).toHaveBeenCalledWith({ path: '/case/2', query: { entity: 20 } })
 })
+
+it('assembles continued groups and ranks exact identifiers before provider overlap in cards and exports', async () => {
+  const part = (kind, id, related, rank, signal) => ({
+    type: 'data',
+    data: {
+      case_id: 1,
+      entity_id: 10,
+      entity_name: 'Ada',
+      entity_type: 'person',
+      group_id: id,
+      continuation: 'merge',
+      match_type: kind,
+      normalized_value: kind,
+      source_fields: [{ field: kind, value: 'Original source' }],
+      matches: [
+        {
+          case_id: 2,
+          entity_id: related,
+          entity_name: `Related ${related}`,
+          entity_type: 'person',
+          fields: [{ field: kind, value: `Original ${related}` }],
+          signal_rank: rank,
+          signal,
+        },
+      ],
+    },
+  })
+  const low = part('domain', 'domain-group', 21, 2, 'Low signal: common email provider')
+  const email = part('email', 'email-group', 22, 0, 'Exact email match')
+  const phone = part('phone', 'phone-group', 23, 0, 'Exact phone match')
+  const continuation = part('email', 'email-group', 24, 0, 'Exact email match')
+  const wrapper = mountWithVuetify(PluginResultsModal, {
+    props: { modelValue: false, pluginName: 'CorrelationScan', results: [low, email, phone] },
+    attachTo: document.body,
+  })
+  await wrapper.setProps({ modelValue: true })
+  await flushPromises()
+  await wrapper.setProps({
+    results: [low, email, phone, continuation, email, { type: 'complete', data: {} }],
+  })
+  const dialog = new DOMWrapper(document.querySelector('[role="dialog"]'))
+  const cards = dialog.findAll('h3').map((heading) => heading.element.parentElement.textContent)
+  expect(cards).toHaveLength(3)
+  expect(cards[0]).toContain('Email Match')
+  expect(cards[1]).toContain('Phone Match')
+  expect(cards[2]).toContain('Domain Match')
+  expect(dialog.text()).toContain('1 source Entities · 4 matches · 1 related Cases')
+  expect(dialog.text()).toContain('Low signal: common email provider')
+  expect(dialog.text()).toContain('Original 24')
+  await dialog
+    .findAll('button')
+    .find((button) => button.text().includes('Export'))
+    .trigger('click')
+  const exported = wrapper.emitted('export')[0][0].results.filter((item) => item.data?.matches)
+  expect(exported.map((item) => item.data.match_type)).toEqual(['email', 'phone', 'domain'])
+  expect(exported[0].data.matches.map((match) => match.entity_id)).toEqual([22, 24])
+  wrapper.unmount()
+})
+
+it('shows bounded progress while correlation output is still arriving', async () => {
+  const progress = {
+    type: 'status',
+    data: { message: 'Indexed candidate Entities', count: 256, case_scope: [1, 2] },
+  }
+  const wrapper = mountWithVuetify(CorrelationScanPluginResult, { props: { result: [progress] } })
+  expect(wrapper.get('[role="status"]').text()).toContain('Indexed candidate Entities: 256')
+  expect(wrapper.text()).not.toContain('No correlations are available')
+  await wrapper.setProps({ result: [progress, { type: 'complete', data: {} }] })
+  expect(wrapper.find('[role="status"]').exists()).toBe(false)
+  expect(wrapper.text()).toContain('Correlation scan complete')
+})
