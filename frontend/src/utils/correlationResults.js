@@ -43,7 +43,8 @@ export function assembleCorrelationResults(result) {
 
 const compare = (a, b) => (a < b ? -1 : a > b ? 1 : 0)
 const rank = (match, group) =>
-  match.signal_rank ?? (['email', 'phone', 'vin', 'ip_address'].includes(group.match_type) ? 0 : 1)
+  match.signal_rank ??
+  (['email', 'phone', 'vin', 'ip_address', 'exact_profile'].includes(group.match_type) ? 0 : 1)
 const groupRank = (group) =>
   group.matches.reduce((best, match) => Math.min(best, rank(match, group)), 2)
 const mergeFields = (first = [], second = []) => [

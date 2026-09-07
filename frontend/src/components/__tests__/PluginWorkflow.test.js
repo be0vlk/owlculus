@@ -388,3 +388,55 @@ it('presents and exports explicit IP connections with original fields alongside 
   expect(exported[1].data).toMatchObject(results[1].data)
   wrapper.unmount()
 })
+
+it('renders and exports recorded profile equality with every field and conservative qualification', async () => {
+  const raw = ' HTTPS://EXAMPLE.COM./Ada?tag=One#Bio '
+  const results = [
+    {
+      type: 'data',
+      data: {
+        case_id: 1,
+        entity_id: 1,
+        entity_type: 'person',
+        entity_name: 'Ada',
+        match_type: 'exact_profile',
+        normalized_value: 'https://example.com/Ada?tag=One#Bio',
+        source_fields: [
+          { field: 'social_media.linkedin', value: raw },
+          { field: 'usernames[0]', value: raw },
+        ],
+        matches: [
+          {
+            case_id: 2,
+            case_title: 'Related',
+            case_number: 'PROFILE-2',
+            entity_id: 2,
+            entity_type: 'company',
+            entity_name: 'Engines',
+            fields: [{ field: 'social_media.other', value: 'https://example.com/Ada?tag=One#Bio' }],
+            signal:
+              'Equal recorded profile reference; personal identity and account ownership are not established',
+          },
+        ],
+      },
+    },
+  ]
+  const wrapper = mountWithVuetify(PluginResultsModal, {
+    props: { modelValue: false, pluginName: 'CorrelationScan', results },
+    attachTo: document.body,
+  })
+  await wrapper.setProps({ modelValue: true })
+  await flushPromises()
+  const dialog = new DOMWrapper(document.querySelector('[role="dialog"]'))
+  expect(dialog.text()).toContain('Exact Profile Reference')
+  expect(dialog.text()).toContain('personal identity and account ownership are not established')
+  for (const field of ['social_media.linkedin', 'usernames[0]', 'social_media.other'])
+    expect(dialog.text()).toContain(field)
+  expect(dialog.text()).toContain(raw.trim())
+  await dialog
+    .findAll('button')
+    .find((button) => button.text().includes('Export'))
+    .trigger('click')
+  expect(wrapper.emitted('export')[0][0].results).toEqual(results)
+  wrapper.unmount()
+})

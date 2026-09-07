@@ -650,8 +650,40 @@ def test_continuation_metadata_and_new_signals_follow_each_parts_case_access(
 
 
 @pytest.mark.asyncio
-async def test_ip_scan_retention_export_and_evidence_follow_membership(
-    client, session, test_case, test_admin, test_user, monkeypatch
+@pytest.mark.parametrize(
+    "kind, entity_type, field, canonical, expanded, signal",
+    [
+        (
+            "ip_address",
+            "ip_address",
+            "ip_address",
+            "2001:db8::1",
+            "2001:0db8:0000:0000:0000:0000:0000:0001",
+            "Exact IP address match",
+        ),
+        (
+            "exact_profile",
+            "person",
+            "social_media.linkedin",
+            "https://example.com/Ada?tag=One#Bio",
+            " HTTPS://EXAMPLE.COM./Ada?tag=One#Bio ",
+            "Equal recorded profile reference",
+        ),
+    ],
+)
+async def test_identifier_scan_retention_export_and_evidence_follow_membership(
+    client,
+    session,
+    test_case,
+    test_admin,
+    test_user,
+    monkeypatch,
+    kind,
+    entity_type,
+    field,
+    canonical,
+    expanded,
+    signal,
 ):
     from dataclasses import replace
 
@@ -674,17 +706,23 @@ async def test_ip_scan_retention_export_and_evidence_follow_membership(
     session.add_all(
         [CaseUserLink(case_id=test_case.id, user_id=test_user.id), related_link]
     )
-    expanded = "2001:0db8:0000:0000:0000:0000:0000:0001"
     for case, raw in (
-        (test_case, "2001:db8::1"),
+        (test_case, canonical),
         (related, expanded),
-        (hidden, "2001:db8::1"),
+        (hidden, canonical),
     ):
         session.add(
             Entity(
                 case_id=case.id,
-                entity_type="ip_address",
-                data={"ip_address": raw},
+                entity_type=entity_type,
+                data=(
+                    {"ip_address": raw}
+                    if kind == "ip_address"
+                    else {
+                        "first_name": f"Person {case.id}",
+                        "social_media": {"linkedin": raw},
+                    }
+                ),
                 created_by_id=test_admin.id,
             )
         )
@@ -722,13 +760,9 @@ async def test_ip_scan_retention_export_and_evidence_follow_membership(
     visible = client.get(url + "/results").json()["items"]
     groups = [event["data"] for event in visible if "matches" in event["data"]]
     assert len(groups) == 1
-    assert groups[0]["match_type"] == "ip_address"
-    assert groups[0]["source_fields"] == [
-        {"field": "ip_address", "value": "2001:db8::1"}
-    ]
-    assert groups[0]["matches"][0]["fields"] == [
-        {"field": "ip_address", "value": expanded}
-    ]
+    assert groups[0]["match_type"] == kind
+    assert groups[0]["source_fields"] == [{"field": field, "value": canonical}]
+    assert groups[0]["matches"][0]["fields"] == [{"field": field, "value": expanded}]
     assert [match["case_id"] for match in groups[0]["matches"]] == [related.id]
     assert "Hidden IP" not in str(visible)
     assert client.get(report_url).status_code == 403
@@ -740,8 +774,8 @@ async def test_ip_scan_retention_export_and_evidence_follow_membership(
     downloaded = client.get(report_url)
     assert downloaded.is_success
     for text in (
-        "Exact IP address match",
-        "Match Type: ip_address",
+        signal,
+        f"Match Type: {kind}",
         expanded,
         "Hidden IP",
         "Related IP",

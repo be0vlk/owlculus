@@ -200,6 +200,7 @@ const getMatchTypeLabel = (matchType) => {
     email: 'Email Match',
     phone: 'Phone Match',
     ip_address: 'IP Address Match',
+    exact_profile: 'Exact Profile Reference',
     license_plate: 'License Plate Match',
   }
   return labels[matchType] || 'Match'
@@ -214,6 +215,7 @@ const getMatchTypeColor = (matchType) => {
     email: 'success',
     phone: 'success',
     ip_address: 'success',
+    exact_profile: 'success',
     license_plate: 'warning',
   }
   return colors[matchType] || 'grey'
