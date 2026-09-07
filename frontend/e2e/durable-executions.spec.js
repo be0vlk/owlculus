@@ -29,7 +29,7 @@ for (const kind of ['plugin', 'hunt']) {
           })
           .click()
         await expect(page).toHaveURL(new RegExp(`/case/${other.id}/`))
-        await page.getByRole('link', { name: 'Case overview', exact: true }).click()
+        await page.getByRole('link', { name: 'Dashboard', exact: true }).click()
         await expect(page).toHaveURL(new RegExp(`/case/${other.id}$`))
         await page.reload()
         await expect(
