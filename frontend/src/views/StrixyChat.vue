@@ -1,6 +1,5 @@
 <template>
   <div>
-    <Sidebar />
     <v-main>
       <v-container fluid class="pa-6">
         <v-alert v-if="apiKeyError" class="mb-6" prominent type="warning" variant="tonal">
@@ -142,7 +141,6 @@
 <script setup>
 import { useActiveCaseStore } from '@/stores/activeCase'
 import { onMounted, computed, ref } from 'vue'
-import Sidebar from '@/components/Sidebar.vue'
 import ConfirmationDialog from '@/components/ConfirmationDialog.vue'
 import { useStrixyChat } from '@/composables/useStrixyChat'
 import MarkdownIt from 'markdown-it'

@@ -4,7 +4,6 @@ Question: how should case identity, navigation, and investigative content share 
 Option A selected, with alphabetized tabs and one Plugins & Hunts workspace. Mutations remain in memory.
 -->
 <template>
-  <Sidebar />
   <v-main class="case-workspace-prototype" :class="`prototype-${variant.toLowerCase()}`">
     <component :is="layouts[variant]">
       <template #identity>
@@ -300,7 +299,6 @@ import { useAuthStore } from '@/stores/auth'
 import { entityService } from '@/services/entity'
 import { pluginService } from '@/services/plugin'
 import { huntService } from '@/services/hunt'
-import Sidebar from '@/components/Sidebar.vue'
 import VariantA from './CaseWorkspacePrototypeVariantA.vue'
 import VariantB from './CaseWorkspacePrototypeVariantB.vue'
 import VariantC from './CaseWorkspacePrototypeVariantC.vue'

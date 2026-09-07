@@ -1,7 +1,5 @@
 <template>
   <div>
-    <Sidebar v-if="showSidebar" />
-
     <v-main>
       <v-container fluid :class="compact ? 'pa-4 pa-md-6' : 'pa-6'">
         <slot name="header">
@@ -52,8 +50,6 @@
 </template>
 
 <script setup>
-import Sidebar from './Sidebar.vue'
-
 defineProps({
   compact: Boolean,
   title: {
@@ -67,10 +63,6 @@ defineProps({
   error: {
     type: String,
     default: null,
-  },
-  showSidebar: {
-    type: Boolean,
-    default: true,
   },
 })
 </script>
