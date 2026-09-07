@@ -75,8 +75,6 @@
         </v-card-text>
       </v-card>
 
-      <PluginExecutionHistory :case-id="caseId" />
-
       <!-- Case Tabs Card -->
       <v-card variant="outlined">
         <!-- Header -->
@@ -149,96 +147,11 @@
               />
             </div>
 
-            <!-- Hunts Tab -->
-            <div v-else-if="activeTab === 'hunts'" class="pa-4">
-              <div class="d-flex align-center justify-space-between mb-4">
-                <div>
-                  <div class="text-title-large">Hunt Executions</div>
-                  <div class="text-body-medium text-medium-emphasis">
-                    View and manage automated investigation workflows for this case
-                  </div>
-                </div>
-                <v-btn
-                  color="primary"
-                  prepend-icon="mdi-target"
-                  @click="$router.push(`/case/${caseId}/hunts`)"
-                >
-                  Browse Hunts
-                </v-btn>
-              </div>
-
-              <!-- Hunt Executions Table -->
-              <div v-if="caseHuntExecutions.length > 0">
-                <v-data-table
-                  :headers="huntTableHeaders"
-                  :items="caseHuntExecutions"
-                  :items-per-page="10"
-                  class="elevation-1"
-                  hover
-                  @click:row="(event, { item }) => viewHuntExecution(item.id)"
-                >
-                  <template #[`item.title`]="{ item }">
-                    <div>
-                      <div class="font-weight-medium">{{ getFormattedHuntTitle(item) }}</div>
-                      <div class="text-body-small text-medium-emphasis">
-                        {{ item.hunt_category }}
-                      </div>
-                    </div>
-                  </template>
-
-                  <template #[`item.status`]="{ item }">
-                    <v-chip
-                      :color="getHuntStatusColor(item.status)"
-                      :prepend-icon="getHuntStatusIcon(item.status)"
-                      size="small"
-                      variant="flat"
-                    >
-                      {{ item.status }}
-                    </v-chip>
-                  </template>
-
-                  <template #[`item.progress`]="{ item }">
-                    <div class="d-flex align-center">
-                      <v-progress-linear
-                        :color="getHuntStatusColor(item.status)"
-                        :model-value="item.progress * 100"
-                        class="mr-2"
-                        height="6"
-                        rounded
-                        style="min-width: 60px"
-                      />
-                      <span class="text-body-small">{{ Math.round(item.progress * 100) }}%</span>
-                    </div>
-                  </template>
-
-                  <template #[`item.created_at`]="{ item }">
-                    {{ formatDateTime(item.created_at) }}
-                  </template>
-
-                  <template #[`item.actions`]="{ item }">
-                    <v-btn
-                      :aria-label="`View ${getFormattedHuntTitle(item)}`"
-                      icon="mdi-eye"
-                      size="small"
-                      variant="text"
-                      @click.stop="viewHuntExecution(item.id)"
-                    />
-                  </template>
-                </v-data-table>
-              </div>
-
-              <!-- Empty State -->
-              <div v-else class="text-center pa-8">
-                <v-icon class="mb-4" color="grey" icon="mdi-target" size="64" />
-                <div class="text-title-large mb-2">No Hunt Executions</div>
-                <div class="text-body-medium text-medium-emphasis mb-4">
-                  Start automated investigation workflows to gather evidence for this case
-                </div>
-                <v-btn color="primary" @click="$router.push(`/case/${caseId}/hunts`)">
-                  Browse Available Hunts
-                </v-btn>
-              </div>
-            </div>
+            <CaseExecutionHistory
+              v-else-if="activeTab === 'runs'"
+              :case-id="caseId"
+              :allow-hunts="userRole !== 'Analyst'"
+            />
 
             <!-- Tasks Tab -->
             <div v-else-if="activeTab === 'tasks'" class="pa-4">
@@ -426,7 +339,7 @@
 </template>
 
 <script setup>
-import PluginExecutionHistory from '@/components/plugins/PluginExecutionHistory.vue'
+import CaseExecutionHistory from '@/components/plugins/CaseExecutionHistory.vue'
 import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
@@ -454,7 +367,6 @@ import { evidenceService } from '../services/evidence'
 import { useHuntStore } from '../stores/huntStore.js'
 import { downloadBlob } from '../utils/download'
 import { getErrorMessage } from '../utils/errorMessage'
-import { formatHuntExecutionTitle } from '../utils/huntDisplayUtils'
 
 const route = useRoute()
 // THROWAWAY: enabled only by the isolated prototype task runner; absent from production.
@@ -518,39 +430,45 @@ const originalNotes = ref('')
 const entityServiceRef = entityService
 const exportingCase = ref(false)
 
-// Hunt-related reactive data
+// History supplied only to the isolated design prototype.
 const caseHuntExecutions = ref([])
-const loadingHuntExecutions = ref(false)
 
 const userRole = computed(() => authStore.user?.role || 'Analyst')
 
-const availableTabs = computed(() => {
-  const tabs = [
-    { name: 'entities', label: 'Entities' },
-    { name: 'evidence', label: 'Evidence' },
-    { name: 'tasks', label: 'Tasks' },
-  ]
+const availableTabs = [
+  { name: 'entities', label: 'Entities' },
+  { name: 'evidence', label: 'Evidence' },
+  { name: 'notes', label: 'Notes' },
+  { name: 'runs', label: 'Plugins & Hunts' },
+  { name: 'tasks', label: 'Tasks' },
+]
 
-  // Add Hunts tab for non-analyst users
-  if (userRole.value !== 'Analyst') {
-    tabs.push({ name: 'hunts', label: 'Hunts' })
-  }
-
-  tabs.push({ name: 'notes', label: 'Notes' })
-
-  return tabs
+const requestedCaseTab = computed(() => {
+  const tab = route.query.tab
+  return tab === 'plugin-runs' || (tab === 'hunts' && userRole.value !== 'Analyst') ? 'runs' : tab
 })
+
+// Canonicalize supported historical links without dropping unrelated query state.
+watch(
+  [requestedCaseTab, () => route.query.tab],
+  ([tab]) => {
+    if (tab === 'runs' && route.query.tab !== tab) {
+      router.replace({ query: { ...route.query, tab } })
+    }
+  },
+  { immediate: true },
+)
 
 const activeCaseTab = computed({
   get: () => {
-    const requestedTab = route.query.tab
-    return availableTabs.value.some((tab) => tab.name === requestedTab)
+    const requestedTab = requestedCaseTab.value
+    return availableTabs.some((tab) => tab.name === requestedTab)
       ? requestedTab
-      : availableTabs.value[0]?.name
+      : availableTabs[0]?.name
   },
   set: (tabName) => {
     const query = { ...route.query }
-    if (tabName === availableTabs.value[0]?.name) {
+    if (tabName === availableTabs[0]?.name) {
       delete query.tab
     } else {
       query.tab = tabName
@@ -811,73 +729,17 @@ const handleViewFileContent = async (evidenceItem) => {
   showFileContentModal.value = true
 }
 
-// Hunt-related methods
+// Preserve the isolated prototype fixture preview.
 const loadCaseHuntExecutions = async () => {
   if (!caseId.value) return
 
   try {
-    loadingHuntExecutions.value = true
     const executions = await huntStore.getCaseExecutions(caseId.value)
     caseHuntExecutions.value = executions
   } catch (error) {
     console.error('Failed to load hunt executions:', error)
     caseHuntExecutions.value = []
-  } finally {
-    loadingHuntExecutions.value = false
   }
-}
-
-// Define table headers for hunt executions
-const huntTableHeaders = [
-  { title: 'Hunt', key: 'title', sortable: false },
-  { title: 'Status', key: 'status', align: 'center' },
-  { title: 'Progress', key: 'progress', align: 'center' },
-  { title: 'Created', key: 'created_at' },
-  { title: 'Actions', key: 'actions', align: 'center', sortable: false },
-]
-
-const getHuntStatusColor = (status) => {
-  switch (status) {
-    case 'pending':
-      return 'grey'
-    case 'running':
-      return 'primary'
-    case 'completed':
-      return 'success'
-    case 'failed':
-      return 'error'
-    case 'cancelled':
-      return 'warning'
-    default:
-      return 'grey'
-  }
-}
-
-const getHuntStatusIcon = (status) => {
-  switch (status) {
-    case 'pending':
-      return 'mdi-clock-outline'
-    case 'running':
-      return 'mdi-play'
-    case 'completed':
-      return 'mdi-check'
-    case 'failed':
-      return 'mdi-close'
-    case 'cancelled':
-      return 'mdi-stop'
-    default:
-      return 'mdi-help'
-  }
-}
-
-const formatDateTime = (dateString) => {
-  if (!dateString) return 'N/A'
-  const date = new Date(dateString)
-  return date.toLocaleString()
-}
-
-const viewHuntExecution = (executionId) => {
-  router.push(`/case/${caseId.value}/hunts/execution/${executionId}`)
 }
 
 const getEntityDisplayName = (entity) => {
@@ -894,14 +756,6 @@ const getEntityDisplayName = (entity) => {
     return `${entity.data.make} ${entity.data.model}`.trim()
   }
   return 'Unknown Entity'
-}
-
-const getFormattedHuntTitle = (execution) => {
-  const baseName = execution.hunt_display_name || 'Hunt Execution'
-  const initialParams = execution.initial_parameters || {}
-  const huntCategory = execution.hunt_category || 'general'
-
-  return formatHuntExecutionTitle(baseName, initialParams, huntCategory)
 }
 
 // Watch for entity query parameter changes
@@ -929,7 +783,7 @@ onMounted(async () => {
   await loadCaseData()
   if (disposed || !caseId.value) return
   loadEvidence()
-  loadCaseHuntExecutions()
+  if (prototypeEnabled) loadCaseHuntExecutions()
 
   // Check if entity ID is provided in query params
   if (route.query.entity) {
