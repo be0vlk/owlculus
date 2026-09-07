@@ -6,12 +6,15 @@ import * as directives from 'vuetify/directives'
 import EntityDetailsModal from '../EntityDetailsModal.vue'
 import { entityService } from '@/services/entity'
 
-vi.mock('@/services/entity', () => ({ entityService: { updateEntity: vi.fn() } }))
+vi.mock('@/services/entity', () => ({
+  entityService: { getDuplicateAdvisories: vi.fn().mockResolvedValue([]), updateEntity: vi.fn() },
+}))
 let wrapper
 let warningSpy
 
 beforeEach(() => {
   vi.clearAllMocks()
+  entityService.updateEntity.mockReset()
   warningSpy = vi.spyOn(console, 'warn')
   vi.stubGlobal(
     'ResizeObserver',
@@ -93,6 +96,7 @@ describe('Entity notes with the real editor', () => {
       id: 9,
       entity_type: 'person',
       data: {
+        first_name: 'Ada',
         address: { city: 'Old', country: 'UK' },
         sources: { 'address.city': 'Old source' },
         notes: '<p>Initial</p>',
@@ -149,7 +153,7 @@ describe('Entity notes with the real editor', () => {
     await openNotes({
       id: 9,
       entity_type: 'person',
-      data: { address: { city: 'Old' }, notes: '<p>Initial</p>' },
+      data: { first_name: 'Ada', address: { city: 'Old' }, notes: '<p>Initial</p>' },
     })
     await button('Edit Entity').trigger('click')
     vi.useFakeTimers()
@@ -367,7 +371,12 @@ describe('Entity notes with the real editor', () => {
       const entity = {
         id: 9,
         entity_type,
-        data: { [field]: oldValue, notes: '', imported: [{ keep: true }] },
+        data: {
+          ...(entity_type === 'vehicle' ? { model: 'Known model' } : {}),
+          [field]: oldValue,
+          notes: '',
+          imported: [{ keep: true }],
+        },
       }
       await openNotes(entity)
       await button('Edit Entity').trigger('click')
@@ -392,7 +401,11 @@ describe('Entity notes with the real editor', () => {
   )
 
   it('retains nested fields and sources after a failed form save for retry', async () => {
-    await openNotes({ id: 9, entity_type: 'person', data: { address: { city: 'Old' }, notes: '' } })
+    await openNotes({
+      id: 9,
+      entity_type: 'person',
+      data: { first_name: 'Ada', address: { city: 'Old' }, notes: '' },
+    })
     await button('Edit Entity').trigger('click')
     await tab('Address')
     await input('City').setValue('New')
@@ -754,7 +767,7 @@ describe('Entity notes with the real editor', () => {
       id: 9,
       entity_type: 'person',
       updated_at: '2026-09-06T01:00:00Z',
-      data: { address: { city: 'Old' }, notes: '<p>Initial</p>' },
+      data: { first_name: 'Ada', address: { city: 'Old' }, notes: '<p>Initial</p>' },
     }
     await openNotes(entity)
     await button('Edit Entity').trigger('click')
@@ -835,7 +848,11 @@ describe('Entity notes with the real editor', () => {
   })
 
   it('shares an active Cancel save across repeated Close requests and reports one close', async () => {
-    await openNotes({ id: 9, entity_type: 'person', data: { notes: '<p>Initial</p>' } })
+    await openNotes({
+      id: 9,
+      entity_type: 'person',
+      data: { first_name: 'Ada', notes: '<p>Initial</p>' },
+    })
     await button('Edit Entity').trigger('click')
     vi.useFakeTimers()
     const writes = deferSaves()
@@ -940,7 +957,11 @@ describe('Entity notes with the real editor', () => {
   it.each(['notes', 'form'])(
     'does not retry a failed active %s save in a teardown loop',
     async (kind) => {
-      await openNotes({ id: 9, entity_type: 'person', data: { notes: '<p>Initial</p>' } })
+      await openNotes({
+        id: 9,
+        entity_type: 'person',
+        data: { first_name: 'Ada', notes: '<p>Initial</p>' },
+      })
       await button('Edit Entity').trigger('click')
       vi.useFakeTimers()
       const writes = deferSaves()
@@ -961,7 +982,7 @@ describe('Entity notes with the real editor', () => {
     await openNotes({
       id: 9,
       entity_type: 'person',
-      data: { address: { city: 'Old' }, notes: '<p>Initial</p>' },
+      data: { first_name: 'Ada', address: { city: 'Old' }, notes: '<p>Initial</p>' },
     })
     await button('Edit Entity').trigger('click')
     await tab('Address')

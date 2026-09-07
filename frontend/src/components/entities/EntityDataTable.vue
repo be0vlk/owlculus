@@ -252,6 +252,7 @@
 </template>
 
 <script setup>
+import { getEntityDisplayName } from '@/composables/useEntityDisplay'
 import { computed, onMounted, ref, watch } from 'vue'
 import { formatDate } from '@/composables/dateUtils'
 import { downloadBlob } from '@/utils/download'
@@ -403,28 +404,7 @@ const loadItems = async () => {
   }
 }
 
-const getEntityName = (entity) => {
-  switch (entity.entity_type) {
-    case 'person': {
-      const firstName = entity.data.first_name || ''
-      const lastName = entity.data.last_name || ''
-      return `${firstName} ${lastName}`.trim() || 'Unnamed Person'
-    }
-    case 'company':
-      return entity.data.name || 'Unnamed Company'
-    case 'domain':
-      return entity.data.domain || 'Unnamed Domain'
-    case 'ip_address':
-      return entity.data.ip_address || 'Unnamed IP'
-    case 'vehicle': {
-      const make = entity.data.make || ''
-      const model = entity.data.model || ''
-      return `${make} ${model}`.trim() || 'Unnamed Vehicle'
-    }
-    default:
-      return 'Unknown Entity'
-  }
-}
+const getEntityName = getEntityDisplayName
 
 const getEntitySubtitle = (entity) => {
   switch (entity.entity_type) {

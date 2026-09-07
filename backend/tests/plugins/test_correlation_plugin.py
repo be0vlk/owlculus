@@ -1,7 +1,8 @@
 """Correlation behavior through accepted Entities and the PluginRunner boundary."""
 
 import pytest
-from app.database.models import Case
+
+from app.database.models import Case, Entity
 from app.plugins.base_plugin import PluginRun
 from app.plugins.correlation_plugin import CorrelationScan
 from app.plugins.plugin_registry import PluginRegistry
@@ -59,7 +60,7 @@ async def test_unnamed_person_and_domain_connect_in_both_directions(
     backward = await scan(session, test_admin, other)
     assert len(forward) == len(backward) == 1
     assert forward[0]["entity_id"] == person.id
-    assert forward[0]["entity_name"] == f"Person #{person.id}"
+    assert forward[0]["entity_name"] == "ada@example.com"
     assert forward[0]["matches"][0]["entity_id"] == domain.id
     assert backward[0]["matches"][0]["entity_id"] == person.id
     assert (
@@ -268,8 +269,19 @@ async def test_names_blank_entities_and_identical_domains(session, test_admin, c
         await entity(
             session, test_admin, case, "person", first_name=first, last_name=last
         )
-        await entity(session, test_admin, case, "person")
-        await entity(session, test_admin, case, "vehicle")
+        # Historical blank records remain readable and harmless to correlation.
+        session.add_all(
+            [
+                Entity(
+                    case_id=case.id,
+                    entity_type=kind,
+                    data={},
+                    created_by_id=test_admin.id,
+                )
+                for kind in ("person", "vehicle")
+            ]
+        )
+        session.commit()
         await entity(session, test_admin, case, "domain", domain=domain)
     for case in cases:
         results = await scan(session, test_admin, case)
@@ -302,7 +314,14 @@ async def test_names_blank_entities_and_identical_domains(session, test_admin, c
 async def test_profile_hostname_parsing_is_conservative(
     session, test_admin, cases, reference, connects, skipped
 ):
-    await entity(session, test_admin, cases[0], "person", usernames=[reference])
+    await entity(
+        session,
+        test_admin,
+        cases[0],
+        "person",
+        first_name="Profile subject",
+        usernames=[reference],
+    )
     await entity(session, test_admin, cases[1], "domain", domain="example.com")
     results = await scan(session, test_admin, cases[0])
     assert any(group.get("match_type") == "domain" for group in results) is connects

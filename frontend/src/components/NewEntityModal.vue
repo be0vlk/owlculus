@@ -8,6 +8,16 @@
     <v-card prepend-icon="mdi-account-plus">
       <v-card-title id="new-entity-dialog-title">Add New Entity</v-card-title>
       <v-card-text>
+        <EntityDuplicateAdvisory
+          :candidates="entityForm.advisories.candidates.value"
+          :case-id="caseId"
+          :entity-type="entityForm.state.entityType"
+          :loading="entityForm.state.loading"
+          @continue="handleSubmit(true)"
+        />
+        <p v-if="!formValid" class="mb-4">
+          {{ entityIdentityGuidance[entityForm.state.entityType] }}
+        </p>
         <!-- Error Alert -->
         <v-alert v-if="entityForm.state.error" type="error" variant="tonal" class="mb-4">
           {{ entityForm.state.error }}
@@ -106,9 +116,10 @@
 </template>
 
 <script setup>
+import EntityDuplicateAdvisory from './entities/EntityDuplicateAdvisory.vue'
 import { watch, computed, ref } from 'vue'
 import { useEntityForm } from '../composables/useEntityForm'
-import { useEntityValidation } from '../composables/useEntityValidation'
+import { useEntityValidation, entityIdentityGuidance } from '../composables/useEntityValidation'
 import { useDialogFocusRestore } from '../composables/useDialogFocusRestore'
 import PersonForm from './entities/PersonForm.vue'
 import CompanyForm from './entities/CompanyForm.vue'
@@ -165,11 +176,12 @@ function handleTabChange(newTab) {
 }
 
 // Handle form submission
-async function handleSubmit() {
+async function handleSubmit(confirmed = false) {
   if (!formValid.value || entityForm.state.loading) return
 
   try {
-    const response = await entityForm.submitEntity()
+    const response = await entityForm.submitEntity(confirmed === true)
+    if (!response) return
     emit('created', response)
     emit('close')
   } catch {

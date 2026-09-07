@@ -6,7 +6,7 @@ import NewEntityModal from '../NewEntityModal.vue'
 import { entityService } from '@/services/entity'
 
 vi.mock('@/services/entity', () => ({
-  entityService: { createEntity: vi.fn() },
+  entityService: { getDuplicateAdvisories: vi.fn().mockResolvedValue([]), createEntity: vi.fn() },
 }))
 
 const DialogStub = defineComponent({

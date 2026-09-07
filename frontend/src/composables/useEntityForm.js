@@ -1,9 +1,11 @@
+import { useEntityAdvisories } from './useEntityAdvisories'
 import { reactive, watch } from 'vue'
 import { entityService } from '../services/entity'
 import { cleanFormData } from '../utils/cleanFormData'
 import { getErrorMessage } from '../utils/errorMessage'
 
 export function useEntityForm(caseId) {
+  const advisories = useEntityAdvisories(caseId)
   const state = reactive({
     entityType: 'person',
     data: {
@@ -25,7 +27,8 @@ export function useEntityForm(caseId) {
   })
 
   const resetFormData = (entityType) => {
-    const baseSocialMedia = state.data.social_media
+    advisories.clear()
+    const baseSocialMedia = {}
     state.data = {
       social_media: baseSocialMedia,
       ip_addresses: [],
@@ -82,7 +85,7 @@ export function useEntityForm(caseId) {
     state.data = { ...state.data, ...data }
   }
 
-  const submitEntity = async () => {
+  const submitEntity = async (confirmed = false) => {
     state.loading = true
     state.error = null
 
@@ -92,6 +95,7 @@ export function useEntityForm(caseId) {
         data: cleanFormData({ ...state.data }),
       }
 
+      if (!(await advisories.check(submitData, confirmed))) return null
       const response = await entityService.createEntity(caseId, submitData)
       return response
     } catch (error) {
@@ -103,6 +107,7 @@ export function useEntityForm(caseId) {
   }
 
   const reset = () => {
+    advisories.clear()
     state.entityType = 'person'
     resetFormData('person')
     state.error = null
@@ -118,6 +123,7 @@ export function useEntityForm(caseId) {
 
   return {
     state,
+    advisories,
     setEntityType,
     updateData,
     submitEntity,

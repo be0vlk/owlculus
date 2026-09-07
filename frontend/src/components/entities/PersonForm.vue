@@ -29,6 +29,36 @@
             prepend-inner-icon="mdi-account-outline"
           />
         </v-col>
+        <v-col cols="12" md="6"
+          ><v-text-field
+            :model-value="modelValue.email"
+            @update:model-value="updateField('email', $event)"
+            label="Email"
+            variant="outlined"
+        /></v-col>
+        <v-col cols="12" md="6"
+          ><v-text-field
+            :model-value="modelValue.phone"
+            @update:model-value="updateField('phone', $event)"
+            label="Phone"
+            variant="outlined"
+        /></v-col>
+        <v-col cols="12" md="6"
+          ><v-text-field
+            :model-value="modelValue.employer"
+            @update:model-value="updateField('employer', $event)"
+            label="Employer"
+            variant="outlined"
+        /></v-col>
+        <v-col cols="12"
+          ><v-text-field
+            :model-value="modelValue.social_media?.other"
+            @update:model-value="
+              updateField('social_media', { ...modelValue.social_media, other: $event })
+            "
+            label="Profile URL"
+            variant="outlined"
+        /></v-col>
       </v-row>
     </v-card-text>
   </v-card>

@@ -2,6 +2,7 @@
 Pydantic models for entities.
 """
 
+import re
 from collections.abc import Callable
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -82,7 +83,41 @@ class Associates(EntityData):
     other: Optional[str] = None
 
 
+def supported_profile(value: str) -> bool:
+    """Accept explicit HTTP(S) references without guessing a handle's URL."""
+    if not value.strip().lower().startswith(("http://", "https://")):
+        return False
+    try:
+        normalize_website(value)
+        return True
+    except ValueError:
+        return False
+
+
 class PersonData(EntityData):
+    @model_validator(mode="after")
+    def require_identity(self) -> "PersonData":
+        named = any(
+            value and value.strip()
+            for value in (self.first_name, self.last_name, self.email, self.employer)
+        )
+        phone = re.sub(r"[ ().\-]", "", (self.phone or "").strip())
+        profiles = list(
+            (self.social_media.model_dump() if self.social_media else {}).values()
+        ) + (self.usernames or [])
+        if not (
+            named
+            or re.fullmatch(r"\+?[0-9]+", phone)
+            or any(
+                isinstance(value, str) and supported_profile(value)
+                for value in profiles
+            )
+        ):
+            raise ValueError(
+                "Provide a name, usable email, phone, employer, or HTTP(S) profile reference"
+            )
+        return self
+
     @field_validator("email", mode="before")
     @classmethod
     def normalize_email_host(cls, value: Any) -> Any:
@@ -142,6 +177,20 @@ class CompanyData(EntityData):
 
 
 class VehicleData(EntityData):
+    @field_validator("registration_state")
+    @classmethod
+    def normalize_state(cls, value: str | None) -> str | None:
+        return value.strip().upper() if value else value
+
+    @model_validator(mode="after")
+    def require_identity(self) -> "VehicleData":
+        if not (
+            any(value and value.strip() for value in (self.vin, self.license_plate))
+            or (self.make and self.make.strip() and self.model and self.model.strip())
+        ):
+            raise ValueError("Provide a VIN, license plate, or both make and model")
+        return self
+
     make: Optional[str] = None
     model: Optional[str] = None
     year: Optional[int] = None
@@ -193,7 +242,23 @@ _DISPLAY_NAME_BY_ENTITY_TYPE: dict[str, Callable[[dict[str, Any]], str]] = {
 def entity_display_name(entity_type: str, data: dict[str, Any]) -> str:
     """Return the display label owned by an entity's schema vocabulary."""
     formatter = _DISPLAY_NAME_BY_ENTITY_TYPE.get(entity_type)
-    return formatter(data) if formatter else ""
+    label = formatter(data).strip() if formatter else ""
+    if label:
+        return label
+    fields = {
+        "person": ("email", "phone", "employer"),
+        "vehicle": ("vin", "license_plate"),
+    }.get(entity_type, ())
+    for field in fields:
+        if data.get(field) and str(data[field]).strip():
+            return str(data[field]).strip()
+    if entity_type == "person":
+        for value in list((data.get("social_media") or {}).values()) + (
+            data.get("usernames") or []
+        ):
+            if isinstance(value, str) and supported_profile(value):
+                return value.strip()
+    return ""
 
 
 class Entity(BaseModel):
@@ -208,6 +273,16 @@ class Entity(BaseModel):
     created_at: Optional[datetime] = Field(default_factory=get_utc_now)
     updated_at: Optional[datetime] = Field(default_factory=get_utc_now)
     created_by_id: Optional[int] = None
+
+
+class DuplicateAdvisory(BaseModel):
+    """Small same-Case candidate summary shared by duplicate checks and readers."""
+
+    id: int
+    label: str
+    identifiers: dict[str, Any]
+    reason: str
+    blocking: bool
 
 
 class EntityCreate(BaseModel):
