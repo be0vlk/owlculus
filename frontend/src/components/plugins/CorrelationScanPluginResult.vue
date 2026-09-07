@@ -173,6 +173,7 @@ import { useRouter } from 'vue-router'
 
 const props = defineProps({
   executionStatus: { type: String, default: null },
+  executionPartial: { type: Boolean, default: false },
   retrievalComplete: { type: Boolean, default: true },
   result: {
     type: [Object, Array],
@@ -199,6 +200,7 @@ const cardResults = computed(() => [
 const completedSuccessfully = computed(
   () =>
     props.retrievalComplete &&
+    !props.executionPartial &&
     !hasErrors.value &&
     (!props.executionStatus || props.executionStatus === 'completed'),
 )

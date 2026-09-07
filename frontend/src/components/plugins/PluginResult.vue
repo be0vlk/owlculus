@@ -4,6 +4,7 @@
       Plugin execution failed. {{ executionError }}
     </v-alert>
     <p v-else-if="executionStatus === 'failed'" role="status">Plugin execution failed.</p>
+    <p v-if="executionPartial" role="status">Partial retained output.</p>
     <p v-if="retrievalLoading" role="status">Loading retained results…</p>
     <v-alert v-if="retrievalError" type="warning" role="alert" class="mb-4">
       Partial retained results. {{ retrievalError }}
@@ -18,6 +19,7 @@
       v-if="pluginComponent"
       :result="result"
       :execution-status="executionStatus"
+      :execution-partial="executionPartial"
       :retrieval-complete="retrievalComplete"
     />
     <div v-else class="fallback-result">
@@ -61,6 +63,7 @@ import { shallowRef, watch, markRaw } from 'vue'
 
 const props = defineProps({
   executionStatus: { type: String, default: null },
+  executionPartial: { type: Boolean, default: false },
   executionError: { type: String, default: null },
   retrievalLoading: { type: Boolean, default: false },
   retrievalComplete: { type: Boolean, default: true },

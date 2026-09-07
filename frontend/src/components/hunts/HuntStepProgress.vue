@@ -122,7 +122,7 @@
         >
           <div class="text-body-small font-weight-medium">Step Completed</div>
           <div class="text-body-small">
-            {{ getOutputSummary(step.output) }}
+            {{ getOutputSummary(step) }}
           </div>
         </v-alert>
       </div>
@@ -131,6 +131,7 @@
 </template>
 
 <script setup>
+import { huntResultCount } from '@/utils/huntResults'
 import { computed } from 'vue'
 import { formatTimeOnly } from '@/composables/dateUtils'
 
@@ -249,7 +250,9 @@ const truncateError = (error) => {
   return error.length > 100 ? error.substring(0, 97) + '...' : error
 }
 
-const getOutputSummary = (output) => {
+const getOutputSummary = (step) => {
+  const output = step.output
+  if (step.plugin_name === 'CorrelationScan') return `${huntResultCount(step)} correlation group(s)`
   if (!output) return 'No output data'
 
   if (output.result_count !== undefined) {

@@ -369,12 +369,25 @@ it('retains results and accessible feedback on refresh failure and clears it on 
   wrapper.unmount()
 })
 
-it('reports export failure without discarding terminal results', async () => {
-  const wrapper = await mountExecution('completed')
+it('reports export failure inside active step results without discarding them', async () => {
+  const wrapper = await mountExecution('completed', 42, {
+    steps: [
+      {
+        id: 1,
+        step_id: 'scan',
+        plugin_name: 'CorrelationScan',
+        status: 'completed',
+        output: { results: [] },
+      },
+    ],
+  })
   mocks.exportExecution.mockRejectedValueOnce(new Error('offline'))
   await wrapper.get('[data-testid="export-json"]').trigger('click')
   await flushPromises()
   expect(mocks.showNotification).toHaveBeenCalledWith('Failed to export JSON', 'error')
+  expect(wrapper.getComponent({ name: 'HuntStepResults' }).props('exportError')).toBe(
+    'Failed to export JSON',
+  )
   expect(wrapper.find('[data-testid="export-menu"]').exists()).toBe(true)
   wrapper.unmount()
 })

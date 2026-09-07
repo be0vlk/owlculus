@@ -13,6 +13,8 @@ from fpdf import FPDF
 from fpdf.enums import WrapMode, XPos, YPos
 from pydantic import BaseModel
 
+from app.executions.correlation_visibility import CORRELATION_PLUGIN
+
 FONT_DIR = Path(__file__).resolve().parent.parent / "assets" / "fonts"
 HUNT_OUTPUT_LIMIT_BYTES = 32 * 1024
 HUNT_OUTPUT_TRUNCATION_NOTICE = (
@@ -238,7 +240,10 @@ def _render_step(pdf: FPDF, step: HuntStepSnapshot, index: int) -> None:
             pdf, "Partial retained results; this step has not completed successfully."
         )
     output_text = json.dumps(step.output, ensure_ascii=False, indent=2, default=str)
-    output_text, truncated = _truncate_utf8(output_text, HUNT_OUTPUT_LIMIT_BYTES)
+    # Correlation reports retain every authorized row, including weak matches.
+    truncated = False
+    if step.plugin_name != CORRELATION_PLUGIN:
+        output_text, truncated = _truncate_utf8(output_text, HUNT_OUTPUT_LIMIT_BYTES)
     if truncated:
         notice_size = len(HUNT_OUTPUT_TRUNCATION_NOTICE.encode("utf-8")) + 1
         output_text, _ = _truncate_utf8(

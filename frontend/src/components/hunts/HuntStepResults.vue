@@ -48,8 +48,23 @@
     >
       Partial retained results. This step has not completed successfully.
     </v-alert>
-    <!-- Display results based on plugin type -->
-    <div v-if="displayResults.length > 0">
+    <template v-if="step.plugin_name === 'CorrelationScan'">
+      <p role="status">Step {{ step.status }}.</p>
+      <PluginResult
+        plugin-name="CorrelationScan"
+        :result="correlationEvents"
+        :execution-status="step.status"
+        :execution-partial="!!step.output?.partial"
+        :execution-error="step.error_details"
+        :retrieval-loading="retrievalLoading"
+        :retrieval-complete="retrievalComplete && !retrievalLoading && !retrievalError"
+        :retrieval-error="retrievalError"
+        :export-error="exportError"
+        @retry="$emit('retry')"
+      />
+    </template>
+    <!-- Display other Plugins' results as before -->
+    <div v-else-if="displayResults.length > 0">
       <div v-for="(result, index) in displayResults" :key="index" class="result-item mb-3">
         <v-card variant="outlined" density="compact">
           <v-card-text class="pa-3">
@@ -97,8 +112,15 @@
 
 <script setup>
 import { computed } from 'vue'
+import PluginResult from '@/components/plugins/PluginResult.vue'
+import { huntCorrelationEvents } from '@/utils/huntResults'
 
+defineEmits(['retry'])
 const props = defineProps({
+  exportError: { type: String, default: null },
+  retrievalLoading: { type: Boolean, default: false },
+  retrievalComplete: { type: Boolean, default: true },
+  retrievalError: { type: String, default: null },
   step: {
     type: Object,
     required: true,
@@ -108,6 +130,8 @@ const props = defineProps({
     required: true,
   },
 })
+
+const correlationEvents = computed(() => huntCorrelationEvents(props.step))
 
 // Computed properties
 const displayResults = computed(() => {

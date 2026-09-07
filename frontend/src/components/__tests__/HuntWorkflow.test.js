@@ -129,3 +129,195 @@ it('shows a skipped Entity save explanation in a completed Hunt step', async () 
   )
   expect(wrapper.text()).not.toContain('This step has not completed successfully')
 })
+
+it('assembles Hunt correlation portions like standalone results and retains navigation and expansion', async () => {
+  const { default: HuntStepResults } = await import('../hunts/HuntStepResults.vue')
+  const { default: CorrelationScanPluginResult } = await import(
+    '../plugins/CorrelationScanPluginResult.vue'
+  )
+  const { createRouter, createMemoryHistory } = await import('vue-router')
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/:pathMatch(.*)*', component: { template: '<div />' } }],
+  })
+  const part = (matches) => ({
+    case_id: 1,
+    entity_id: 10,
+    entity_type: 'person',
+    match_type: 'domain',
+    normalized_value: 'gmail.com',
+    source_fields: [{ field: 'email', value: 'ada@gmail.com' }],
+    matches,
+  })
+  const ordinary = {
+    case_id: 2,
+    case_number: 'OTHER',
+    entity_id: 20,
+    entity_name: 'Explicit Domain',
+    signal_rank: 1,
+    fields: [{ field: 'domain', value: 'gmail.com' }],
+  }
+  const weak = { case_id: 2, entity_id: 21, entity_name: 'Mailbox', signal_rank: 2 }
+  const results = [part([ordinary, weak]), part([ordinary])]
+  const step = {
+    step_id: 'scan',
+    plugin_name: 'CorrelationScan',
+    status: 'running',
+    output: { results, errors: [], partial: true },
+  }
+  const wrapper = mountWithVuetify(HuntStepResults, {
+    props: { step, stepNumber: 1 },
+    global: { plugins: [router] },
+  })
+  await flushPromises()
+  expect(wrapper.text()).toContain('1 source Entities · 2 matches · 1 related Cases')
+  expect(wrapper.text()).toContain('person #10')
+  expect(wrapper.text()).toContain('Source email: ada@gmail.com')
+  expect(wrapper.text()).toContain('Related domain: gmail.com')
+  expect(wrapper.text()).toContain('Execution running')
+  const standalone = mountWithVuetify(CorrelationScanPluginResult, {
+    props: {
+      result: results.map((data) => ({ type: 'data', data })),
+      executionStatus: 'running',
+      executionPartial: true,
+    },
+    global: { plugins: [router] },
+  })
+  expect(wrapper.getComponent(CorrelationScanPluginResult).text()).toBe(standalone.text())
+  expect(wrapper.get('details').element.open).toBe(false)
+  wrapper.get('details').element.open = true
+  await wrapper.setProps({
+    step: {
+      ...step,
+      output: { ...step.output, results: [...results, part([{ ...weak, entity_id: 22 }])] },
+    },
+  })
+  await flushPromises()
+  expect(wrapper.get('details').element.open).toBe(true)
+  expect(wrapper.get('summary').text()).toBe('Weak provider matches (2)')
+  await wrapper
+    .findAll('button')
+    .find((button) => button.text().includes('View Entity'))
+    .trigger('click')
+  await flushPromises()
+  expect(router.currentRoute.value.query).toEqual({ entity: '20' })
+})
+
+it.each(['pending', 'running', 'failed', 'cancelled', 'skipped', 'completed'])(
+  'keeps %s correlation state separate from retrieval and partial output',
+  async (status) => {
+    const { default: HuntStepResults } = await import('../hunts/HuntStepResults.vue')
+    const wrapper = mountWithVuetify(HuntStepResults, {
+      props: {
+        stepNumber: 1,
+        step: {
+          step_id: 'scan',
+          plugin_name: 'CorrelationScan',
+          status,
+          output: { results: [], errors: [] },
+        },
+      },
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain(`Step ${status}`)
+    expect(wrapper.text().includes('No correlations are available')).toBe(status === 'completed')
+    await wrapper.setProps({
+      retrievalLoading: true,
+      retrievalComplete: false,
+      retrievalError: 'Retained read unavailable',
+    })
+    expect(wrapper.text()).toContain('Loading retained results')
+    expect(wrapper.text()).toContain('Retained read unavailable')
+    expect(wrapper.text()).not.toContain('No correlations are available')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text().includes('Retry retrieval'))
+      .trigger('click')
+    expect(wrapper.emitted('retry')).toHaveLength(1)
+    await wrapper.setProps({
+      retrievalLoading: false,
+      retrievalComplete: true,
+      retrievalError: null,
+      step: { ...wrapper.props('step'), output: { results: [], partial: true, errors: [] } },
+    })
+    await flushPromises()
+    expect(wrapper.text()).toContain('Partial retained output')
+    expect(wrapper.text()).not.toContain('counts reflect loaded matches')
+    expect(wrapper.text()).not.toContain('No correlations are available')
+  },
+)
+
+it.each(['ip_address', 'exact_profile', 'employer', 'name'])(
+  'presents legacy and new %s Hunt groups, skipped references, and retained errors',
+  async (kind) => {
+    const { default: HuntStepResults } = await import('../hunts/HuntStepResults.vue')
+    const { default: CorrelationScanPluginResult } = await import(
+      '../plugins/CorrelationScanPluginResult.vue'
+    )
+    const results = [
+      {
+        case_id: 1,
+        entity_id: 10,
+        entity_type: 'person',
+        match_type: kind,
+        matches: [{ case_id: 2, entity_id: 20, found_in: 'Legacy field explanation' }],
+      },
+      {
+        notice_type: 'skipped_reference',
+        message: 'Reference coverage is incomplete.',
+        field: 'email',
+      },
+    ]
+    const error = {
+      message: 'Correlation scan could not complete. Available results may be partial.',
+    }
+    const step = {
+      step_id: 'scan',
+      plugin_name: 'CorrelationScan',
+      status: 'failed',
+      output: { results, errors: [error], partial: true },
+    }
+    const wrapper = mountWithVuetify(HuntStepResults, { props: { step, stepNumber: 1 } })
+    await flushPromises()
+    const standalone = mountWithVuetify(CorrelationScanPluginResult, {
+      props: {
+        result: [
+          ...results.map((data) => ({ type: 'data', data })),
+          { type: 'error', data: error },
+        ],
+        executionStatus: 'failed',
+        executionPartial: true,
+      },
+    })
+    expect(wrapper.getComponent(CorrelationScanPluginResult).text()).toBe(standalone.text())
+    expect(wrapper.text()).toContain('1 source Entities · 1 matches · 1 related Cases')
+    expect(wrapper.text()).toContain('Legacy field explanation')
+    expect(wrapper.text()).toContain('Reference coverage is incomplete')
+    expect(wrapper.text()).toContain(error.message)
+    expect(wrapper.text()).not.toContain('Correlation scan complete')
+  },
+)
+
+it('counts assembled correlation groups in Hunt summaries and progress', async () => {
+  const { default: HuntResultsSummary } = await import('../hunts/HuntResultsSummary.vue')
+  const { default: HuntStepProgress } = await import('../hunts/HuntStepProgress.vue')
+  const group = {
+    case_id: 1,
+    entity_id: 10,
+    match_type: 'email',
+    matches: [{ case_id: 2, entity_id: 20 }],
+  }
+  const step = {
+    step_id: 'scan',
+    plugin_name: 'CorrelationScan',
+    status: 'completed',
+    output: {
+      results: [group, group, { notice_type: 'skipped_reference', message: 'Skipped' }],
+      result_count: 3,
+    },
+  }
+  const summary = mountWithVuetify(HuntResultsSummary, { props: { execution: { steps: [step] } } })
+  expect(summary.text()).toContain('1Total Results')
+  const progress = mountWithVuetify(HuntStepProgress, { props: { step, stepNumber: 1 } })
+  expect(progress.text()).toContain('1 correlation group(s)')
+})

@@ -1,24 +1,36 @@
 """Case provenance inherited by Hunt steps that consume correlation output."""
 
+from collections.abc import Sequence
+
 from sqlmodel import Session, select
 
-from app.database.models import HuntExecution, HuntStep, User
+from app.database.models import HuntExecution, HuntStep
 from app.executions.correlation_visibility import CORRELATION_PLUGIN
 from app.hunts.step_input_resolver import parse_input_expression
-from app.services.case_access import CaseAccess
 
 
 class HuntCorrelationScope:
     """Use the accepted dependency graph; unverified legacy copies fail closed."""
 
-    def __init__(self, db: Session, execution: HuntExecution):
+    def __init__(
+        self,
+        db: Session,
+        execution: HuntExecution,
+        steps: Sequence[HuntStep] | None = None,
+    ):
         self.source_case_id = execution.case_id
         self.steps = {
             step.step_id: step
-            for step in db.exec(
-                select(HuntStep).where(HuntStep.execution_id == execution.id)
+            for step in (
+                steps
+                if steps is not None
+                else db.exec(
+                    select(HuntStep).where(HuntStep.execution_id == execution.id)
+                ).all()
             )
         }
+        self._inherited: dict[str, tuple[int, ...] | None] = {}
+        self._root_scopes: dict[str, tuple[int, ...]] = {}
         self.outputs = (execution.context_data or {}).get("step_outputs", {})
         self.roots = {
             key
@@ -52,6 +64,11 @@ class HuntCorrelationScope:
 
     def inherited(self, step_id: str) -> tuple[int, ...] | None:
         """None: unrelated; empty: unverified; otherwise every required Case ID."""
+        if step_id not in self._inherited:
+            self._inherited[step_id] = self._resolve_inherited(step_id)
+        return self._inherited[step_id]
+
+    def _resolve_inherited(self, step_id: str) -> tuple[int, ...] | None:
         if step_id in self.roots:
             return None
         if self.dependencies is None or step_id not in self.dependencies:
@@ -73,57 +90,53 @@ class HuntCorrelationScope:
             return None
         case_ids = {self.source_case_id}
         for root in roots:
-            step = self.steps.get(root)
-            output = (
-                step.output
-                if step and step.output is not None
-                else self.outputs.get(root)
-            )
-            if (
-                not isinstance(output, dict)
-                or not isinstance(output.get("results"), list)
-                or output.get("errors")
-                or output.get("partial")
-            ):
+            if root not in self._root_scopes:
+                self._root_scopes[root] = self._root_scope(root)
+            scope = self._root_scopes[root]
+            if not scope:
                 return ()
-            for group in output["results"]:
-                if (
-                    isinstance(group, dict)
-                    and group.get("notice_type") == "skipped_reference"
-                ):
-                    scope = group.get("case_scope")
-                    if (
-                        not isinstance(scope, list)
-                        or not scope
-                        or any(
-                            type(case_id) is not int or case_id <= 0
-                            for case_id in scope
-                        )
-                        or self.source_case_id not in scope
-                        or group.get("case_id") not in scope
-                    ):
-                        return ()
-                    case_ids.update(scope)
-                    continue
-                if (
-                    not isinstance(group, dict)
-                    or group.get("case_id") != self.source_case_id
-                    or not isinstance(group.get("matches"), list)
-                ):
-                    return ()
-                for match in group["matches"]:
-                    if (
-                        not isinstance(match, dict)
-                        or type(match.get("case_id")) is not int
-                    ):
-                        return ()
-                    case_ids.add(match["case_id"])
+            case_ids.update(scope)
         return tuple(sorted(case_ids))
 
-    def can_read(self, db: Session, user: User, step_id: str) -> bool:
-        scope = self.inherited(step_id)
-        return (
-            scope is None
-            or CaseAccess.is_admin(user)
-            or bool(scope and set(scope) <= set(CaseAccess(db).readable_case_ids(user)))
+    def _root_scope(self, root: str) -> tuple[int, ...]:
+        case_ids = {self.source_case_id}
+        step = self.steps.get(root)
+        output = (
+            step.output if step and step.output is not None else self.outputs.get(root)
         )
+        if (
+            not isinstance(output, dict)
+            or not isinstance(output.get("results"), list)
+            or output.get("errors")
+            or output.get("partial")
+        ):
+            return ()
+        for group in output["results"]:
+            if (
+                isinstance(group, dict)
+                and group.get("notice_type") == "skipped_reference"
+            ):
+                scope = group.get("case_scope")
+                if (
+                    not isinstance(scope, list)
+                    or not scope
+                    or any(
+                        type(case_id) is not int or case_id <= 0 for case_id in scope
+                    )
+                    or self.source_case_id not in scope
+                    or group.get("case_id") not in scope
+                ):
+                    return ()
+                case_ids.update(scope)
+                continue
+            if (
+                not isinstance(group, dict)
+                or group.get("case_id") != self.source_case_id
+                or not isinstance(group.get("matches"), list)
+            ):
+                return ()
+            for match in group["matches"]:
+                if not isinstance(match, dict) or type(match.get("case_id")) is not int:
+                    return ()
+                case_ids.add(match["case_id"])
+        return tuple(sorted(case_ids))

@@ -24,7 +24,7 @@ from app.core.exceptions import ResourceNotFoundException
 from app.core.logging import get_security_logger
 from app.core.utils import get_utc_now
 from app.database import models
-from app.executions.results import hunt_view, step_view
+from app.executions.results import HuntResultReader
 from app.schemas.entity_schema import ENTITY_TYPE_SCHEMAS, NetworkAssets
 from app.schemas.entity_schema import entity_display_name as entity_data_display_name
 from app.services.case_access import CaseAccess
@@ -551,6 +551,7 @@ class ExportService:
         if hunt is None or creator is None:
             raise ResourceNotFoundException("Hunt execution related data not found")
 
+        reader = HuntResultReader(self.db, execution, current_user, steps)
         return HuntExecutionSnapshot(
             id=cast(int, execution.id),
             hunt_id=execution.hunt_id,
@@ -558,7 +559,7 @@ class ExportService:
             status=execution.status,
             progress=execution.progress,
             initial_parameters=execution.initial_parameters,
-            context_data=hunt_view(self.db, execution, current_user)["context_data"],
+            context_data=reader.hunt_view()["context_data"],
             started_at=execution.started_at,
             completed_at=execution.completed_at,
             created_at=execution.created_at,
@@ -576,10 +577,7 @@ class ExportService:
                 created_at=hunt.created_at,
                 updated_at=hunt.updated_at,
             ),
-            steps=[
-                HuntStepSnapshot(**step_view(self.db, step, current_user))
-                for step in steps
-            ],
+            steps=[HuntStepSnapshot(**reader.step_view(step)) for step in steps],
             case=HuntCaseSnapshot(
                 id=cast(int, case.id),
                 title=case.title,
