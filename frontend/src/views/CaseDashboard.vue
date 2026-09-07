@@ -1,5 +1,13 @@
 <template>
+  <CaseWorkspacePrototype
+    v-if="prototypeVariant && caseData"
+    :case-data="caseData"
+    :client="client"
+    :evidence="evidence"
+    @state="prototypeState = $event"
+  />
   <BaseDashboard
+    v-else
     :title="caseData ? `Case: ${caseData.case_number}` : 'Case Details'"
     :loading="loading"
     :error="error"
@@ -300,6 +308,8 @@
     </div>
   </BaseDashboard>
 
+  <PrototypeSwitcher v-if="prototypeEnabled" :state="prototypeState" />
+
   <v-snackbar
     v-model="snackbar.show"
     :color="snackbar.color"
@@ -416,7 +426,7 @@
 
 <script setup>
 import PluginExecutionHistory from '@/components/plugins/PluginExecutionHistory.vue'
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useActiveCaseStore } from '../stores/activeCase'
@@ -446,6 +456,17 @@ import { getErrorMessage } from '../utils/errorMessage'
 import { formatHuntExecutionTitle } from '../utils/huntDisplayUtils'
 
 const route = useRoute()
+// THROWAWAY: enabled only by the isolated prototype task runner; absent from production.
+const prototypeEnabled =
+  import.meta.env.DEV && import.meta.env.VITE_CASE_WORKSPACE_PROTOTYPE === true
+const CaseWorkspacePrototype = prototypeEnabled
+  ? defineAsyncComponent(() => import('./cases/CaseWorkspacePrototype.vue'))
+  : null
+const PrototypeSwitcher = prototypeEnabled
+  ? defineAsyncComponent(() => import('@/components/PrototypeSwitcher.vue'))
+  : null
+const prototypeVariant = computed(() => prototypeEnabled && route.query.variant !== 'original')
+const prototypeState = ref({})
 const router = useRouter()
 const authStore = useAuthStore()
 const activeCase = useActiveCaseStore()
