@@ -13,11 +13,12 @@ from typing import Any, List, NoReturn, Optional, cast
 from sqlmodel import Session, col, select
 
 from app.core.exceptions import (
-    BaseException as DomainException,
-)
-from app.core.exceptions import (
+    AuthorizationException,
     ResourceNotFoundException,
     ValidationException,
+)
+from app.core.exceptions import (
+    BaseException as DomainException,
 )
 from app.core.file_storage import (
     UPLOAD_DIR,
@@ -39,6 +40,26 @@ class EvidenceService:
     def __init__(self, db: Session):
         self.db = db
         self.case_access = CaseAccess(db)
+
+    def can_read(self, evidence: models.Evidence, user: models.User) -> bool:
+        """Shared listing/export boundary, including protected report metadata."""
+        try:
+            self.require_read(evidence, user)
+        except (AuthorizationException, ResourceNotFoundException):
+            return False
+        return True
+
+    def require_read(self, evidence: models.Evidence, user: models.User) -> None:
+        """Authorize immutable reports against every Case represented in them."""
+        from app.database.correlation_provenance import report_provenance
+
+        self.case_access.readable(user, evidence.case_id)
+        provenance = report_provenance(self.db, evidence)
+        if provenance is None or self.case_access.is_admin(user):
+            return
+        readable = set(self.case_access.readable_case_ids(user))
+        if not provenance.case_ids or not set(provenance.case_ids) <= readable:
+            raise AuthorizationException("Not authorized to access this evidence")
 
     def _response(self, evidence: models.Evidence) -> models.Evidence:
         parent_id = self.case_access.eligible_evidence_parent_id(
@@ -74,6 +95,7 @@ class EvidenceService:
         file: Optional[Any] = None,
         *,
         artifact_id: str | None = None,
+        correlation_case_ids: tuple[int, ...] | None = None,
     ) -> models.Evidence:
         self.case_access.writable(current_user, evidence.case_id)
         self.case_access.evidence_parent(evidence.case_id, evidence.parent_folder_id)
@@ -153,6 +175,18 @@ class EvidenceService:
 
             with transaction(self.db):
                 self.db.add(db_evidence)
+                if correlation_case_ids is not None:
+                    self.db.flush()
+                    self.db.add(
+                        models.CorrelationEvidence(
+                            evidence_id=cast(int, db_evidence.id),
+                            case_ids=(
+                                sorted({evidence.case_id, *correlation_case_ids})
+                                if correlation_case_ids
+                                else None
+                            ),
+                        )
+                    )
             self.db.refresh(db_evidence)
 
             evidence_logger.bind(
@@ -200,7 +234,11 @@ class EvidenceService:
             .offset(skip)
             .limit(limit)
         )
-        return [self._response(evidence) for evidence in self.db.exec(query)]
+        return [
+            self._response(evidence)
+            for evidence in self.db.exec(query)
+            if self.can_read(evidence, current_user)
+        ]
 
     async def get_evidence(
         self, evidence_id: int, current_user: models.User
@@ -209,7 +247,7 @@ class EvidenceService:
         if not evidence:
             raise ResourceNotFoundException("Evidence not found")
 
-        self.case_access.readable(current_user, evidence.case_id)
+        self.require_read(evidence, current_user)
 
         return self._response(evidence)
 
@@ -235,10 +273,17 @@ class EvidenceService:
                 ).warning("Evidence update failed: evidence not found")
                 raise ResourceNotFoundException("Evidence not found")
 
+            self.require_read(db_evidence, current_user)
             self.case_access.writable(current_user, db_evidence.case_id)
             self.case_access.evidence_parent(
                 db_evidence.case_id, evidence_update.parent_folder_id
             )
+
+            from app.database.correlation_provenance import report_provenance
+
+            provenance = report_provenance(self.db, db_evidence)
+            if provenance is not None:
+                self.db.merge(provenance)
 
             if evidence_update.title is not None:
                 db_evidence.title = evidence_update.title
@@ -306,6 +351,7 @@ class EvidenceService:
                 ).info("Evidence already deleted or not found")
                 return None
 
+            self.require_read(evidence, current_user)
             self.case_access.writable(current_user, evidence.case_id)
 
             if evidence.evidence_type == "file" and evidence.content:
@@ -321,6 +367,9 @@ class EvidenceService:
                     raise DomainException("Error deleting file") from e
 
             with transaction(self.db):
+                provenance = self.db.get(models.CorrelationEvidence, evidence.id)
+                if provenance is not None:
+                    self.db.delete(provenance)
                 self.db.delete(evidence)
 
             evidence_logger.bind(
@@ -367,7 +416,7 @@ class EvidenceService:
                 ).warning("Evidence download failed: evidence not found")
                 raise ResourceNotFoundException("Evidence not found")
 
-            self.case_access.readable(current_user, evidence.case_id)
+            self.require_read(evidence, current_user)
 
             if evidence.evidence_type == "file":
                 file_path = UPLOAD_DIR / evidence.content
@@ -741,7 +790,11 @@ class EvidenceService:
         self.case_access.readable(current_user, case_id)
 
         query = select(models.Evidence).where(models.Evidence.case_id == case_id)
-        return [self._response(evidence) for evidence in self.db.exec(query)]
+        return [
+            self._response(evidence)
+            for evidence in self.db.exec(query)
+            if self.can_read(evidence, current_user)
+        ]
 
     async def update_folder(
         self,
@@ -854,6 +907,9 @@ class EvidenceService:
 
             with transaction(self.db):
                 for evidence in subfolder_evidence:
+                    provenance = self.db.get(models.CorrelationEvidence, evidence.id)
+                    if provenance is not None:
+                        self.db.delete(provenance)
                     self.db.delete(evidence)
 
                 self.db.delete(db_folder)

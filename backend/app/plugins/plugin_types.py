@@ -44,6 +44,7 @@ class EvidenceWrite:
     case_id: int
     content: str
     filename: str
+    correlation_case_ids: tuple[int, ...] | None = None
 
 
 @dataclass(frozen=True)

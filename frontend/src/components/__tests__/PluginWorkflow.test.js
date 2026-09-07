@@ -69,7 +69,7 @@ it('explains a completed correlation scan with no matches', () => {
     props: { result: [{ type: 'complete', data: {} }] },
   })
   expect(wrapper.get('[role="alert"]').text()).toBe(
-    'Correlation scan complete. No correlations found.',
+    'Correlation scan complete. No correlations are available in accessible Cases.',
   )
 })
 

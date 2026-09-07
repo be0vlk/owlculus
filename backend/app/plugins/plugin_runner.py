@@ -4,6 +4,11 @@ from collections.abc import AsyncGenerator
 from typing import Any
 
 from app.core.exceptions import ResourceNotFoundException
+from app.executions.correlation_visibility import (
+    CORRELATION_ERROR,
+    CORRELATION_PLUGIN,
+    safe_error,
+)
 
 from .output_limits import OutputBudget, OutputLimitExceeded, serialized_size
 from .plugin_context import PluginRun
@@ -28,6 +33,8 @@ class PluginRunner:
             plugin = self.registry.create(name)
             budget = OutputBudget()
             async for event in plugin.execute_with_evidence_collection(params, context):
+                if name == CORRELATION_PLUGIN and event.kind == "error":
+                    event = ResultEvent("error", safe_error(event.payload) or {})
                 budget.accept(event, size=self.event_size(event))
                 if event.kind != "complete":
                     yield event
@@ -36,5 +43,9 @@ class PluginRunner:
         except ResourceNotFoundException as error:
             yield ResultEvent.error(str(error))
         except Exception as error:  # noqa: BLE001 - provider failures become events
-            yield ResultEvent.error(f"Plugin execution error: {str(error)[:1024]}")
+            yield ResultEvent.error(
+                CORRELATION_ERROR
+                if name == CORRELATION_PLUGIN
+                else f"Plugin execution error: {str(error)[:1024]}"
+            )
         yield ResultEvent.complete()

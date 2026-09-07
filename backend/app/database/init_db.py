@@ -23,6 +23,10 @@ def initialize_database(database_engine: Engine = engine) -> None:
 
     upgrade_relationships(database_engine)
 
+    from app.database.upgrade_correlation import upgrade as upgrade_correlation
+
+    upgrade_correlation(database_engine)
+
     with Session(database_engine) as session:
         personal_client = session.exec(
             select(Client).where(Client.name == "Personal")

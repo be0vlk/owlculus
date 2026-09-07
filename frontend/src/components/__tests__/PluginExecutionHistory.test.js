@@ -135,3 +135,57 @@ it('reopens recovery waiting and then an uncertain failure without resubmitting'
   expect(pluginService.executePlugin).not.toHaveBeenCalled()
   wrapper.unmount()
 })
+
+vi.mock('@/utils/download', () => ({ downloadBlob: vi.fn() }))
+
+it('follows an empty filtered page and rechecks authorization before exporting', async () => {
+  const { downloadBlob } = await import('@/utils/download')
+  const saved = {
+    id: 21,
+    plugin_name: 'CorrelationScan',
+    status: 'completed',
+    created_at: '2026-09-05T00:00:00Z',
+  }
+  const visible = { type: 'data', data: { entity_name: 'Readable', matches: [] } }
+  pluginService.getHistory.mockResolvedValue({ items: [saved], next_cursor: null })
+  pluginService.getExecution.mockResolvedValue(saved)
+  pluginService.getResults.mockImplementation(async (_id, cursor) =>
+    cursor === 0
+      ? { items: [], cursor: 1, next_cursor: 1 }
+      : { items: [visible], cursor: 2, next_cursor: null },
+  )
+  const wrapper = mountWithVuetify(PluginExecutionHistory, { props: { caseId: 7 } })
+  await flushPromises()
+  await wrapper.get('.v-list-item').trigger('click')
+  await vi.waitFor(() =>
+    expect(wrapper.findComponent(PluginResultsModal).props('results')).toEqual([visible]),
+  )
+  // Membership changed after the visible page was loaded.
+  pluginService.getResults.mockResolvedValue({
+    items: [{ type: 'complete', data: {} }],
+    cursor: 2,
+    next_cursor: null,
+  })
+  wrapper
+    .findComponent(PluginResultsModal)
+    .vm.$emit('export', { pluginName: 'CorrelationScan', results: [visible] })
+  await flushPromises()
+  const blob = downloadBlob.mock.calls.at(-1)[0].blob
+  const text = await new Promise((resolve) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.readAsText(blob)
+  })
+  expect(text).not.toContain('Readable')
+  expect(text).toContain('complete')
+  downloadBlob.mockClear()
+  pluginService.getExecution.mockRejectedValue({
+    response: { status: 403, data: { detail: 'Not authorized' } },
+  })
+  wrapper
+    .findComponent(PluginResultsModal)
+    .vm.$emit('export', { pluginName: 'CorrelationScan', results: [visible] })
+  await flushPromises()
+  expect(downloadBlob).not.toHaveBeenCalled()
+  wrapper.unmount()
+})
