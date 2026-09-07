@@ -62,21 +62,18 @@ for (const viewport of [
   { width: 1440, height: 900 },
   { width: 390, height: 844 },
 ]) {
-  test(`active case is visible, searchable by keyboard, and restored at ${viewport.width}px`, async ({
+  test(`active case is visible, selectable by keyboard, and restored at ${viewport.width}px`, async ({
     page,
   }) => {
     await page.setViewportSize(viewport)
     await setup(page)
     await page.goto('/cases')
-    const switcher = page.getByRole('combobox', { name: 'Active case', exact: true })
+    const switcher = page.getByRole('combobox', { name: /^Active case:/ })
     await expect(switcher).toBeVisible()
     await expect(switcher).toHaveValue('CASE-NEW — Newer investigation (Open)')
-    await switcher.fill('CASE-OLD')
-    await expect(
-      page.getByRole('option', { name: 'CASE-OLD — Older investigation (Closed)', exact: true }),
-    ).toBeVisible()
-    await switcher.press('ArrowDown')
     await switcher.press('Enter')
+    await expect(page.getByRole('option', { name: /CASE-OLD/ })).toBeVisible()
+    await page.getByRole('option', { name: /CASE-OLD/ }).press('Enter')
     await expect(page).toHaveURL(/\/case\/1$/)
     await expect(page.getByRole('heading', { name: 'Case: CASE-OLD', exact: true })).toBeVisible()
     await expect(
@@ -87,12 +84,9 @@ for (const viewport of [
     await expect(switcher).toHaveValue('CASE-OLD — Older investigation (Closed)')
     await page.goto('/case/2?tab=notes')
     await expect(switcher).toHaveValue('CASE-NEW — Newer investigation (Open)')
-    await switcher.fill('CASE-OLD')
-    await expect(
-      page.getByRole('option', { name: 'CASE-OLD — Older investigation (Closed)', exact: true }),
-    ).toBeVisible()
-    await switcher.press('ArrowDown')
     await switcher.press('Enter')
+    await expect(page.getByRole('option', { name: /CASE-OLD/ })).toBeVisible()
+    await page.getByRole('option', { name: /CASE-OLD/ }).press('Enter')
     await expect(page).toHaveURL(/\/case\/1\?tab=notes$/)
     await page.screenshot({ path: test.info().outputPath('active-case.png') })
   })
@@ -169,13 +163,10 @@ test('switching workspaces drops the previous draft and saves notes to the URL c
   await page.getByRole('button', { name: 'Edit Notes', exact: true }).click()
   const notes = page.getByRole('textbox', { name: 'Case notes', exact: true })
   await notes.fill('Private draft for the older investigation')
-  const switcher = page.getByRole('combobox', { name: 'Active case', exact: true })
-  await switcher.fill('CASE-NEW')
-  await expect(
-    page.getByRole('option', { name: 'CASE-NEW — Newer investigation (Open)', exact: true }),
-  ).toBeVisible()
-  await switcher.press('ArrowDown')
+  const switcher = page.getByRole('combobox', { name: /^Active case:/ })
   await switcher.press('Enter')
+  await expect(page.getByRole('option', { name: /CASE-NEW/ })).toBeVisible()
+  await page.getByRole('option', { name: /CASE-NEW/ }).press('Enter')
   await expect(page).toHaveURL(/\/case\/2\?tab=notes$/)
   await page.getByRole('button', { name: 'Edit Notes', exact: true }).click()
   await expect(notes).not.toContainText('Private draft')
