@@ -4,7 +4,7 @@ Question: how should compact case identity, workspace navigation, and investigat
 
 Branch: `codex/prototype-case-workspace-polish`, based on `ui-refresh`.
 Spec: `.scratch/case-workspace-polish/spec.md`.
-Verdict: **option A selected on 2026-09-07**, with one Runs workspace combining plugin and hunt history. The prototype now reflects that refinement. Production implementation remains separate from this throwaway source.
+Verdict: **option A selected on 2026-09-07**, with one Plugins & Hunts workspace combining plugin and hunt history. The prototype now reflects that refinement. Production implementation remains separate from this throwaway source.
 
 Run from the repository root:
 
@@ -23,7 +23,7 @@ Use the floating bottom bar, its menu, or left/right arrow keys outside editing 
 | `C` | Workspace rail | Is persistent vertical workspace navigation worth the table width it costs? |
 | `original` | Current design | How does the existing stacked layout compare with identical case data? |
 
-C deliberately departs from the spec's horizontal navigation direction and was not selected. Its workspace rail becomes horizontal on narrow screens. All three keep Case details off the landing surface and now share one Runs workspace, with a chronological list and Type column for plugin and hunt history. The accepted order is Entities, Evidence, Tasks, Runs, Notes. Existing hunt role restrictions still apply within Runs.
+C deliberately departs from the spec's horizontal navigation direction and was not selected. Its workspace rail becomes horizontal on narrow screens. All three keep Case details off the landing surface and now share one Plugins & Hunts workspace, with a chronological list and Type column for plugin and hunt history. The accepted alphabetical order is Entities, Evidence, Notes, Plugins & Hunts, Tasks. Existing `tab=runs` links remain valid; only the visible name changed. Existing hunt role restrictions still apply within Plugins & Hunts.
 
 Try entity search, type filters, sorting, pagination, selection, record previews, adding/removing sample entities, evidence folders and rename, upload placement, task completion, Notes editing/save/cancel, the details panel, and its nested edit/membership dialogs. Use the real sidebar theme toggle and the second active case to inspect a long title and many assigned users. Drafts and working state survive switches among A/B/C. Switching case or visiting the original baseline resets preview state.
 
@@ -35,4 +35,4 @@ The preview mounts only when the dedicated runner sets a development flag. The r
 
 Browser inspection covered all layouts at 1440×900, 1366×768, 3440×1440, and 390×844, plus light/dark themes, details, a long case title, and draft retention across tab/layout switches. No new test suite was added. Targeted ESLint/Stylelint and the regular production build were used as runnable-code checks.
 
-The selected direction is recorded in the local spec and prototype issue. Rewrite the validated option A layout and combined Runs history for production. Retain this branch as the primary source; do not merge the throwaway components into the implementation branch. Original alternatives remain available at commit `4e4f384`.
+The selected direction is recorded in the local spec and prototype issue. Rewrite the validated option A layout and combined Plugins & Hunts history for production. Retain this branch as the primary source; do not merge the throwaway components into the implementation branch. Original alternatives remain available at commit `4e4f384`.

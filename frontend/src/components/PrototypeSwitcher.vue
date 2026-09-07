@@ -3,7 +3,10 @@
   <aside v-if="isDev" class="prototype-controls" aria-label="Prototype comparison controls">
     <section v-if="showState" class="prototype-state">
       <strong>{{ current.description }}</strong>
-      <p>Option A selected, with a shared Runs tab. Fictional data; actions stay in memory.</p>
+      <p>
+        Option A selected, with alphabetized tabs and a shared Plugins &amp; Hunts tab. Fictional
+        data; actions stay in memory.
+      </p>
       <pre>{{
         JSON.stringify(
           {
