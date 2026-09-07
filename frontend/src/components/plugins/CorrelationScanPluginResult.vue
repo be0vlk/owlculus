@@ -3,11 +3,17 @@
     <p v-if="latestProgress" role="status" class="text-body-medium">
       {{ latestProgress.message }}: {{ latestProgress.count }} in this portion.
     </p>
+    <p v-if="!retrievalComplete" class="text-body-medium">
+      Partial retained results — counts reflect loaded matches.
+    </p>
+    <p v-if="executionStatus === 'cancelled'" role="status">
+      Execution cancelled. Retained output may be partial.
+    </p>
     <p v-if="hasCorrelations" class="text-body-medium">
       {{ counts.entities }} source Entities · {{ counts.matches }} matches ·
       {{ counts.cases }} related Cases
     </p>
-    <template v-for="resultItem in normalizedResult" :key="resultKey(resultItem)">
+    <template v-for="resultItem in cardResults" :key="resultKey(resultItem)">
       <!-- Entity Match Card -->
       <v-card v-if="isGroup(resultItem)" elevation="1" rounded="lg">
         <!-- Entity Header -->
@@ -51,9 +57,17 @@
 
         <!-- Matches List -->
         <v-card-text>
-          <div class="d-flex flex-column ga-3">
+          <component
+            v-for="section in matchSections(resultItem.data.matches)"
+            :key="section.weak ? 'weak' : 'ordinary'"
+            :is="section.weak ? 'details' : 'div'"
+            class="d-flex flex-column ga-3"
+          >
+            <summary v-if="section.weak" class="text-body-large">
+              Weak provider matches ({{ section.matches.length }})
+            </summary>
             <v-card
-              v-for="match in resultItem.data.matches"
+              v-for="match in section.matches"
               :key="`${match.case_id}:${match.entity_id}`"
               elevation="1"
               rounded="lg"
@@ -96,7 +110,7 @@
                 </div>
               </v-card-text>
             </v-card>
-          </div>
+          </component>
         </v-card-text>
       </v-card>
 
@@ -117,7 +131,7 @@
 
       <!-- Completion Message -->
       <v-alert
-        v-else-if="resultItem.type === 'complete' && !hasErrors"
+        v-else-if="resultItem.type === 'complete' && completedSuccessfully"
         type="success"
         density="comfortable"
         variant="tonal"
@@ -133,7 +147,11 @@
     </template>
 
     <!-- No Results -->
-    <v-card v-if="!result || normalizedResult.length === 0" elevation="1" rounded="lg">
+    <v-card
+      v-if="normalizedResult.length === 0 && completedSuccessfully"
+      elevation="1"
+      rounded="lg"
+    >
       <v-card-text class="text-center pa-8">
         <v-icon icon="mdi-magnify" size="48" color="grey-darken-1" class="mb-3" />
         <p class="text-body-medium text-medium-emphasis">
@@ -146,10 +164,12 @@
 
 <script setup>
 import { computed } from 'vue'
-import { assembleCorrelationResults } from '@/utils/correlationResults'
+import { assembleCorrelationResults, isWeakProviderMatch } from '@/utils/correlationResults'
 import { useRouter } from 'vue-router'
 
 const props = defineProps({
+  executionStatus: { type: String, default: null },
+  retrievalComplete: { type: Boolean, default: true },
   result: {
     type: [Object, Array],
     required: true,
@@ -157,10 +177,30 @@ const props = defineProps({
 })
 
 const router = useRouter()
+const matchSections = (matches) =>
+  [
+    { weak: false, matches: matches.filter((match) => !isWeakProviderMatch(match)) },
+    { weak: true, matches: matches.filter(isWeakProviderMatch) },
+  ].filter((section) => section.matches.length)
 
 const normalizedResult = computed(() => assembleCorrelationResults(props.result))
 
+const cardResults = computed(() => [
+  ...new Map(
+    normalizedResult.value
+      .filter((item) => item.type !== 'status')
+      .map((item) => [resultKey(item), item]),
+  ).values(),
+])
+const completedSuccessfully = computed(
+  () =>
+    props.retrievalComplete &&
+    !hasErrors.value &&
+    (!props.executionStatus || props.executionStatus === 'completed'),
+)
+
 const latestProgress = computed(() => {
+  if (['completed', 'failed', 'cancelled'].includes(props.executionStatus)) return null
   if (normalizedResult.value.some((item) => ['complete', 'error'].includes(item.type))) return null
   return normalizedResult.value.findLast((item) => item.type === 'status')?.data || null
 })
@@ -180,7 +220,7 @@ const resultKey = (item) => {
   const data = item.data || {}
   return isGroup(item)
     ? `${data.case_id}:${data.entity_id}:${data.match_type}:${data.normalized_value || data.matched_value || data.domain || data.employer_name || ''}`
-    : `${item.type}:${data.notice_type || ''}:${data.case_id || ''}:${data.entity_id || ''}:${data.field || ''}`
+    : `${item.type}:${data.notice_type || ''}:${data.case_id || ''}:${data.entity_id || ''}:${data.field || ''}:${data.message || ''}`
 }
 const counts = computed(() => {
   const groups = normalizedResult.value.filter(isGroup).map((item) => item.data)

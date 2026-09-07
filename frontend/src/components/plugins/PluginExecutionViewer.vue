@@ -20,6 +20,12 @@
     :plugin-name="execution.plugin_name"
     :results="results"
     :parameters="execution.parameters"
+    :execution-status="execution.status"
+    :retrieval-loading="retrievalLoading"
+    :retrieval-complete="retrievalComplete"
+    :retrieval-error="error"
+    :export-error="exportError"
+    @retry="retry"
     :error="execution.error?.message"
     :execution-time="new Date(execution.created_at)"
     @export="exportResults"
@@ -27,7 +33,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, onScopeDispose } from 'vue'
 import { assembleCorrelationResults } from '@/utils/correlationResults'
 import ExecutionWaiting from '@/components/ExecutionWaiting.vue'
 import { pluginService } from '@/services/plugin'
@@ -37,10 +43,26 @@ import PluginResultsModal from './PluginResultsModal.vue'
 
 const props = defineProps({ executionId: { type: Number, required: true } })
 const showResults = ref(false)
-const { execution, results, error, observe, cancel, cancelling } = usePluginExecution()
+const exportError = ref(null)
+let selection = 0
+onScopeDispose(() => selection++)
+const {
+  clearInaccessibleContent,
+  execution,
+  results,
+  error,
+  retrievalLoading,
+  retrievalComplete,
+  retry,
+  observe,
+  cancel,
+  cancelling,
+} = usePluginExecution()
 watch(
   () => props.executionId,
   (id) => {
+    selection++
+    exportError.value = null
     showResults.value = false
     observe(id)
   },
@@ -48,40 +70,47 @@ watch(
 )
 
 function reopenResults() {
+  selection++
+  exportError.value = null
   observe(props.executionId)
   showResults.value = true
 }
 
 async function exportResults(data) {
   const id = props.executionId
-  if (execution.value?.plugin_name === 'CorrelationScan') {
-    try {
-      const state = await pluginService.getExecution(id)
-      const visible = []
-      let cursor = 0
-      do {
-        const page = await pluginService.getResults(id, cursor)
-        visible.push(...page.items)
-        cursor = page.next_cursor
-      } while (cursor != null)
-      if (id !== props.executionId) return
-      results.value = visible
-      data = {
-        ...data,
-        results: assembleCorrelationResults(visible),
-        parameters: state.parameters,
-        partial: state.status !== 'completed',
-        error: state.error?.message || null,
-      }
-    } catch {
-      results.value = []
-      error.value = 'Could not export current results. Reopen the execution to check access.'
-      return
+  const current = selection
+  exportError.value = null
+  try {
+    const state = await pluginService.getExecution(id)
+    const visible = []
+    let cursor = 0
+    do {
+      if (current !== selection) return
+      const page = await pluginService.getResults(id, cursor)
+      if (current !== selection) return
+      visible.push(...page.items)
+      cursor = page.next_cursor
+    } while (cursor != null)
+    if (current !== selection) return
+    data = {
+      ...data,
+      results:
+        state.plugin_name === 'CorrelationScan' ? assembleCorrelationResults(visible) : visible,
+      parameters: state.parameters,
+      partial: state.status !== 'completed',
+      error: state.error?.message || null,
     }
+    downloadBlob(
+      { blob: new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }) },
+      `${data.pluginName}_results.json`,
+    )
+  } catch (failure) {
+    if (current !== selection) return
+    if ([401, 403, 404].includes(failure.response?.status)) {
+      clearInaccessibleContent()
+    }
+    exportError.value =
+      'Could not export current results. Retry export or reopen the execution to check access.'
   }
-  downloadBlob(
-    { blob: new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }) },
-    `${data.pluginName}_results.json`,
-  )
 }
 </script>

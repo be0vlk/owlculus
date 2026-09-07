@@ -265,3 +265,58 @@ it('reopens and exports continued email matches after hidden-only pages without 
   ])
   wrapper.unmount()
 })
+
+it('keeps a loaded prefix and an in-dialog retry after a later page fails', async () => {
+  const { DOMWrapper } = await import('@vue/test-utils')
+  const { default: PluginExecutionViewer } = await import('../plugins/PluginExecutionViewer.vue')
+  const saved = {
+    id: 41,
+    plugin_name: 'CorrelationScan',
+    status: 'completed',
+    created_at: '2026-09-07T00:00:00Z',
+  }
+  const visible = {
+    type: 'data',
+    data: {
+      case_id: 1,
+      entity_id: 10,
+      entity_name: 'Readable prefix',
+      match_type: 'email',
+      matches: [{ case_id: 2, entity_id: 20, entity_name: 'Related' }],
+    },
+  }
+  pluginService.getExecution.mockResolvedValue(saved)
+  pluginService.getResults.mockImplementation(async (_id, cursor) => {
+    if (!cursor) return { items: [visible], cursor: 1, next_cursor: 1 }
+    throw new Error('network')
+  })
+  const wrapper = mountWithVuetify(PluginExecutionViewer, {
+    props: { executionId: 41 },
+    attachTo: document.body,
+  })
+  await flushPromises()
+  await wrapper
+    .findAll('button')
+    .find((b) => b.text() === 'View retained results')
+    .trigger('click')
+  await vi.waitFor(() =>
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Retry retrieval'),
+  )
+  const dialog = new DOMWrapper(document.querySelector('[role="dialog"]'))
+  expect(dialog.text()).toContain('Readable prefix')
+  expect(dialog.text()).toContain('Partial retained results')
+  expect(dialog.text()).not.toContain('Correlation scan complete')
+  pluginService.getResults.mockImplementation(async (_id, cursor) =>
+    cursor === 0
+      ? { items: [visible], cursor: 1, next_cursor: 1 }
+      : { items: [{ type: 'complete', data: {} }], cursor: 2, next_cursor: null },
+  )
+  await dialog
+    .findAll('button')
+    .find((b) => b.text() === 'Retry retrieval')
+    .trigger('click')
+  await vi.waitFor(() => expect(dialog.text()).toContain('Correlation scan complete'))
+  expect(dialog.findAll('h3').filter((h) => h.text() === 'Readable prefix')).toHaveLength(1)
+  expect(dialog.text()).not.toContain('Retry retrieval')
+  wrapper.unmount()
+})

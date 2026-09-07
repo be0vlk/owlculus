@@ -1044,3 +1044,41 @@ async def test_profiles_do_not_equate_handles_or_discard_url_components(
     results = await scan(session, test_admin, cases[0])
     assert not any(g.get("match_type") == "exact_profile" for g in results)
     assert not any(g.get("notice_type") == "skipped_reference" for g in results)
+
+
+@pytest.mark.asyncio
+async def test_saved_mixed_provider_report_puts_all_useful_findings_before_weak_rows(
+    session, test_admin, cases
+):
+    source, other = cases
+    await entity(session, test_admin, source, "person", email="ada@gmail.com")
+    await entity(session, test_admin, other, "domain", domain="gmail.com")
+    await entity(session, test_admin, source, "person", employer="Useful Engines")
+    await entity(session, test_admin, other, "company", name="Useful Engines")
+    for index in range(8):
+        await entity(
+            session, test_admin, other, "person", email=f"weak{index}@gmail.com"
+        )
+    evidence = []
+    ctx = PluginRun.for_test(
+        session=session,
+        user=test_admin,
+        api_keys={},
+        evidence=evidence,
+        entities=[],
+        case_id=source.id,
+        save_to_case=True,
+    )
+    events = [
+        event
+        async for event in PluginRunner(
+            PluginRegistry.from_classes([CorrelationScan])
+        ).run("CorrelationScan", {"save_to_case": True}, ctx)
+    ]
+    assert not [event for event in events if event.kind == "error"]
+    report = evidence[0].content
+    assert report.index("Useful Engines") < report.index("weak0@gmail.com")
+    assert "Total matches: 10" in report
+    for index in range(8):
+        assert f"weak{index}@gmail.com" in report
+    assert "Weak provider matches" in report
