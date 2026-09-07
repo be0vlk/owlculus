@@ -9,12 +9,7 @@ export function assembleCorrelationResults(result) {
       others.push(event)
       continue
     }
-    const key = JSON.stringify([
-      part.case_id,
-      part.entity_id,
-      part.match_type,
-      part.normalized_value ?? part.matched_value ?? part.domain ?? part.employer_name ?? '',
-    ])
+    const key = correlationGroupKey(part)
     if (!groups.has(key)) groups.set(key, { ...part, source_fields: [], matches: new Map() })
     const group = groups.get(key)
     group.source_fields = mergeFields(group.source_fields, part.source_fields)
@@ -50,7 +45,11 @@ export function assembleCorrelationResults(result) {
 const compare = (a, b) => (a < b ? -1 : a > b ? 1 : 0)
 const rank = (match, group) =>
   match.signal_rank ??
-  (['email', 'phone', 'vin', 'ip_address', 'exact_profile'].includes(group.match_type) ? 0 : 1)
+  (isWeakProviderMatch(match)
+    ? 2
+    : ['email', 'phone', 'vin', 'ip_address', 'exact_profile'].includes(group.match_type)
+      ? 0
+      : 1)
 const groupRank = (group) =>
   group.matches.reduce((best, match) => Math.min(best, rank(match, group)), 2)
 const mergeFields = (first = [], second = []) => [
@@ -62,3 +61,11 @@ const mergeFields = (first = [], second = []) => [
 export const isWeakProviderMatch = (match) =>
   match.signal_rank === 2 ||
   (match.signal_rank == null && /low signal.*common email provider/i.test(match.signal || ''))
+
+export const correlationGroupKey = (group) =>
+  JSON.stringify([
+    group.case_id,
+    group.entity_id,
+    group.match_type,
+    group.normalized_value ?? group.matched_value ?? group.domain ?? group.employer_name ?? '',
+  ])

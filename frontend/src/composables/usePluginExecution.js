@@ -21,6 +21,7 @@ export function usePluginExecution() {
 
   function clearInaccessibleContent() {
     stop()
+    cursor = 0
     results.value = []
     retrievalComplete.value = false
     retrievalLoading.value = false
@@ -31,12 +32,12 @@ export function usePluginExecution() {
   function observe(id, resume = false) {
     stop()
     const current = generation
-    selectedId = id
     if (!resume) {
-      execution.value = null
+      if (selectedId !== id) execution.value = null
       results.value = []
       cursor = 0
     }
+    selectedId = id
     retrievalLoading.value = true
     retrievalComplete.value = false
     error.value = null
