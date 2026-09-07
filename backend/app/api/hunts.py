@@ -18,7 +18,7 @@ from sqlmodel import Session
 from app.core.dependencies import get_current_user
 from app.database import models
 from app.database.connection import get_db
-from app.executions.results import step_output, step_results
+from app.executions.results import hunt_view, step_results, step_view
 from app.executions.service import hunt_observation
 from app.schemas import hunt_schema as schemas
 from app.services.export_service import ExportService
@@ -125,7 +125,7 @@ async def execute_hunt(
     response.headers["Location"] = f"/api/hunts/executions/{execution.id}"
     return schemas.HuntExecutionResponse(
         **hunt_observation(db, execution),
-        **execution.model_dump(),
+        **hunt_view(db, execution, current_user),
         hunt=(
             schemas.HuntResponse(
                 **hunt.__dict__,
@@ -165,7 +165,7 @@ async def get_execution_status(
 
     response = schemas.HuntExecutionResponse(
         **hunt_observation(db, execution),
-        **execution.model_dump(),
+        **hunt_view(db, execution, current_user),
         hunt=(
             schemas.HuntResponse(
                 **hunt.__dict__,
@@ -176,9 +176,7 @@ async def get_execution_status(
         ),
         steps=(
             [
-                schemas.HuntStepResponse(
-                    **{**step.model_dump(), "output": step_output(db, step)}
-                )
+                schemas.HuntStepResponse(**step_view(db, step, current_user))
                 for step in steps
             ]
             if steps
@@ -278,4 +276,4 @@ async def get_step_results(
     step = next((step for step in steps if step.step_id == step_id), None)
     if step is None:
         raise ResourceNotFoundException("Hunt step not found")
-    return step_results(db, step, cursor, limit)
+    return step_results(db, step, current_user, cursor, limit)

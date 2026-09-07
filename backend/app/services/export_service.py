@@ -24,10 +24,11 @@ from app.core.exceptions import ResourceNotFoundException
 from app.core.logging import get_security_logger
 from app.core.utils import get_utc_now
 from app.database import models
-from app.executions.results import step_output
+from app.executions.results import hunt_view, step_view
 from app.schemas.entity_schema import ENTITY_TYPE_SCHEMAS, NetworkAssets
 from app.schemas.entity_schema import entity_display_name as entity_data_display_name
 from app.services.case_access import CaseAccess
+from app.services.evidence_service import EvidenceService
 from app.services.hunt_execution_export import (
     HuntCaseSnapshot,
     HuntCreatorSnapshot,
@@ -179,7 +180,7 @@ class ExportService:
                             f"{root}entities/{entity_type}.csv",
                             self.write_entity_csv(typed_entities),
                         )
-                self._write_evidence(archive, root, persisted_case_id)
+                self._write_evidence(archive, root, persisted_case_id, current_user)
                 tasks = list(
                     self.db.exec(
                         select(models.Task)
@@ -197,7 +198,7 @@ class ExportService:
                     f"{root}tasks/tasks.csv",
                     self.write_task_csv(tasks),
                 )
-                self._write_hunts(archive, root, case, exported_at)
+                self._write_hunts(archive, root, case, exported_at, current_user)
         except Exception:
             temporary_path.unlink(missing_ok=True)
             export_logger.bind(event_type="export_generation_failed").exception(
@@ -286,7 +287,11 @@ class ExportService:
         return output.getvalue().encode("utf-8")
 
     def _write_evidence(
-        self, archive: zipfile.ZipFile, root: str, case_id: int
+        self,
+        archive: zipfile.ZipFile,
+        root: str,
+        case_id: int,
+        current_user: models.User,
     ) -> None:
         evidence_records = list(
             self.db.exec(
@@ -302,6 +307,8 @@ class ExportService:
         upload_root = file_storage.UPLOAD_DIR.resolve()
 
         for evidence in evidence_records:
+            if not EvidenceService(self.db).can_read(evidence, current_user):
+                continue
             folder_path = _safe_archive_path(evidence.folder_path)
             evidence_root = f"{root}evidence/"
             destination_folder = (
@@ -436,6 +443,7 @@ class ExportService:
         root: str,
         case: models.Case,
         exported_at: datetime,
+        current_user: models.User,
     ) -> None:
         executions = list(
             self.db.exec(
@@ -445,7 +453,8 @@ class ExportService:
             )
         )
         snapshots = [
-            self._hunt_execution_snapshot(execution, case) for execution in executions
+            self._hunt_execution_snapshot(execution, case, current_user)
+            for execution in executions
         ]
         _write_zip_json(
             archive,
@@ -494,7 +503,7 @@ class ExportService:
             raise ResourceNotFoundException("Hunt execution not found")
 
         case = self.case_access.readable(current_user, execution.case_id)
-        snapshot = self._hunt_execution_snapshot(execution, case)
+        snapshot = self._hunt_execution_snapshot(execution, case, current_user)
         hunt_name = filesystem_safe_name(snapshot.hunt.name)
         exported_at = get_utc_now()
         export_logger = get_security_logger(
@@ -525,7 +534,10 @@ class ExportService:
         )
 
     def _hunt_execution_snapshot(
-        self, execution: models.HuntExecution, case: models.Case
+        self,
+        execution: models.HuntExecution,
+        case: models.Case,
+        current_user: models.User,
     ) -> HuntExecutionSnapshot:
         hunt = self.db.get(models.Hunt, execution.hunt_id)
         creator = self.db.get(models.User, execution.created_by_id)
@@ -546,7 +558,7 @@ class ExportService:
             status=execution.status,
             progress=execution.progress,
             initial_parameters=execution.initial_parameters,
-            context_data=execution.context_data,
+            context_data=hunt_view(self.db, execution, current_user)["context_data"],
             started_at=execution.started_at,
             completed_at=execution.completed_at,
             created_at=execution.created_at,
@@ -565,18 +577,7 @@ class ExportService:
                 updated_at=hunt.updated_at,
             ),
             steps=[
-                HuntStepSnapshot(
-                    id=cast(int, step.id),
-                    execution_id=step.execution_id,
-                    step_id=step.step_id,
-                    plugin_name=step.plugin_name,
-                    status=step.status,
-                    parameters=step.parameters,
-                    output=step_output(self.db, step),
-                    error_details=step.error_details,
-                    started_at=step.started_at,
-                    completed_at=step.completed_at,
-                )
+                HuntStepSnapshot(**step_view(self.db, step, current_user))
                 for step in steps
             ],
             case=HuntCaseSnapshot(

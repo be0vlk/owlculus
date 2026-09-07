@@ -38,8 +38,10 @@ class CaseAccess:
         if self.is_admin(user):
             statement = select(Case.id)
         else:
-            statement = select(CaseUserLink.case_id).where(
-                CaseUserLink.user_id == user.id
+            statement = (
+                select(CaseUserLink.case_id)
+                .join(Case)
+                .where(CaseUserLink.user_id == user.id)
             )
         return [case_id for case_id in self.db.exec(statement).all() if case_id]
 

@@ -98,6 +98,17 @@ class Evidence(SQLModel, table=True):
     subfolders: List["Evidence"] = Relationship(back_populates="parent_folder")
 
 
+class CorrelationEvidence(SQLModel, table=True):
+    """Server-owned report provenance; null scope means legacy and unverified.
+
+    Case identifiers deliberately survive deletion so a removed Case never
+    silently broadens the audience of an immutable historical report.
+    """
+
+    evidence_id: int = Field(foreign_key="evidence.id", primary_key=True)
+    case_ids: list[int] | None = Field(default=None, sa_column=Column(JSON))
+
+
 class Entity(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     case_id: int = Field(foreign_key="case.id")

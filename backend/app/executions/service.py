@@ -19,6 +19,11 @@ from app.database.models import (
     User,
 )
 from app.executions import admission
+from app.executions.correlation_visibility import (
+    CORRELATION_PLUGIN,
+    CorrelationVisibility,
+    safe_error,
+)
 from app.plugins.plugin_registry import PluginRegistry
 from app.services.case_access import CaseAccess
 
@@ -196,6 +201,11 @@ def representation(
     base = f"/api/plugins/executions/{execution.id}"
     return {
         **execution.model_dump(),
+        "error": (
+            safe_error(execution.error)
+            if execution.plugin_name == CORRELATION_PLUGIN
+            else execution.error
+        ),
         "kind": "plugin",
         "revision": control.revision,
         **dispatch_observation(execution, outbox, control),
@@ -264,7 +274,13 @@ def results(
     ).all()
     page = rows[:limit]
     return {
-        "items": [row.payload for row in page],
+        "items": (
+            CorrelationVisibility(db, user, state["case_id"]).events(
+                [row.payload for row in page]
+            )
+            if state["plugin_name"] == CORRELATION_PLUGIN
+            else [row.payload for row in page]
+        ),
         "cursor": page[-1].sequence if page else cursor,
         "next_cursor": page[-1].sequence if len(rows) > limit else None,
         "revision": state["revision"],

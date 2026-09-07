@@ -95,11 +95,19 @@ class BasePlugin(ABC):
                         ctx.case_id,
                         content[offset : offset + part_size],
                         f"{self.name}_results_{timestamp}{suffix}.txt",
+                        correlation_case_ids=self.correlation_case_ids(
+                            payloads, ctx.case_id
+                        ),
                     ),
                     ctx.user,
                 )
         for request in self.entity_writes(payloads, params):
             await ctx.entities.write(request, ctx.case_id, ctx.user)
+
+    def correlation_case_ids(
+        self, payloads: list[Payload], case_id: int
+    ) -> tuple[int, ...] | None:
+        return None
 
     def format_evidence(self, payloads: list[Payload], params: dict[str, Any]) -> str:
         lines = [

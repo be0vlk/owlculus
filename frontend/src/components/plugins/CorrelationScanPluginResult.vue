@@ -110,7 +110,7 @@
           resultItem.data.message ||
           (hasCorrelations
             ? 'Correlation scan complete'
-            : 'Correlation scan complete. No correlations found.')
+            : 'Correlation scan complete. No correlations are available in accessible Cases.')
         }}
       </v-alert>
     </template>
@@ -119,7 +119,9 @@
     <v-card v-if="!result || normalizedResult.length === 0" elevation="1" rounded="lg">
       <v-card-text class="text-center pa-8">
         <v-icon icon="mdi-magnify" size="48" color="grey-darken-1" class="mb-3" />
-        <p class="text-body-medium text-medium-emphasis">No correlations found</p>
+        <p class="text-body-medium text-medium-emphasis">
+          No correlations are available in accessible Cases.
+        </p>
       </v-card-text>
     </v-card>
   </div>

@@ -134,7 +134,15 @@ async def request_info_middleware(request: Request, call_next):
     user_agent = get_user_agent(request)
     client_ip_context.set(client_ip)
     user_agent_context.set(user_agent)
-    return await call_next(request)
+    response = await call_next(request)
+    path = request.url.path
+    if path.startswith(
+        ("/api/plugins/executions/", "/api/hunts/executions/", "/api/evidence/")
+    ) or (path.startswith("/api/cases/") and path.endswith("/export")):
+        # FileResponse otherwise advertises validators for immutable report bytes;
+        # authorization can change independently of those bytes or revisions.
+        response.headers["Cache-Control"] = "private, no-store"
+    return response
 
 
 app.include_router(api_router, prefix=settings.API_V1_STR)

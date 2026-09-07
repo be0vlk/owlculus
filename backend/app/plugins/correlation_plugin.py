@@ -51,6 +51,16 @@ class CorrelationScan(BasePlugin):
         for payload in _result_payloads(matches, ctx.case_id):
             yield self.data(payload)
 
+    def correlation_case_ids(
+        self, payloads: list[dict[str, Any]], case_id: int
+    ) -> tuple[int, ...]:
+        return tuple(
+            sorted(
+                {case_id}
+                | {match["case_id"] for group in payloads for match in group["matches"]}
+            )
+        )
+
     def format_evidence(
         self, results: list[dict[str, Any]], params: dict[str, Any]
     ) -> str:

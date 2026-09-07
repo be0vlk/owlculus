@@ -1,12 +1,13 @@
 """Atomic, generation-fenced case effects through existing domain services."""
 
 from contextlib import contextmanager
+from dataclasses import replace
 from uuid import NAMESPACE_URL, uuid5
 
 from sqlmodel import select
 
 from app.database.db_utils import transaction
-from app.database.models import Case, ExecutionEffect
+from app.database.models import Case, ExecutionEffect, HuntExecution
 from app.executions.service import authorize_execution
 from app.plugins.plugin_context import ServiceEntitySink, ServiceEvidenceSink
 
@@ -66,6 +67,15 @@ class CaseEffects:
         with self.operation("evidence") as operation:
             if operation is not None:
                 db, artifact_id = operation
+                from app.hunts.correlation_scope import HuntCorrelationScope
+
+                _, execution = self.ownership.lock(db)
+                if isinstance(execution, HuntExecution):
+                    scope = HuntCorrelationScope(db, execution).inherited(
+                        self.operation_id
+                    )
+                    if scope is not None:
+                        request = replace(request, correlation_case_ids=scope)
                 await ServiceEvidenceSink(db, artifact_id).write(request, self.user)
 
     async def entity(self, request):

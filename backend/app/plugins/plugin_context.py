@@ -95,6 +95,11 @@ class ServiceEvidenceSink:
                 ),
                 current_user=user,
                 artifact_id=self.artifact_id,
+                correlation_case_ids=(
+                    (request.correlation_case_ids or ())
+                    if request.plugin_name == "CorrelationScan"
+                    else request.correlation_case_ids
+                ),
                 file=UploadFile(
                     filename=request.filename,
                     file=cast(BinaryIO, temporary_file),
