@@ -60,7 +60,11 @@ vi.mock('@/services/client', () => ({
 }))
 
 vi.mock('@/services/entity', () => ({
-  entityService: { getEntity: vi.fn(), updateEntity: mocks.updateEntity },
+  entityService: {
+    getDuplicateAdvisories: vi.fn().mockResolvedValue([]),
+    getEntity: vi.fn(),
+    updateEntity: mocks.updateEntity,
+  },
 }))
 
 vi.mock('@/services/evidence', () => ({

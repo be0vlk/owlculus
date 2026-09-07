@@ -3,6 +3,8 @@ Comprehensive test suite for EntityService
 """
 
 import pytest
+from sqlmodel import Session
+
 from app.core.exceptions import (
     AuthorizationException,
     DuplicateResourceException,
@@ -11,7 +13,6 @@ from app.core.exceptions import (
 from app.database import models
 from app.schemas.entity_schema import EntityCreate, EntityUpdate
 from app.services.entity_service import EntityService
-from sqlmodel import Session
 
 
 @pytest.mark.asyncio
@@ -224,12 +225,11 @@ class TestEntityService:
             test_case_with_users.id, entity_data, current_user=test_user
         )
 
-        # Try to create duplicate
-        with pytest.raises(DuplicateResourceException) as exc_info:
-            await self.service.create_entity(
-                test_case_with_users.id, entity_data, current_user=test_user
-            )
-        assert "already exists" in str(exc_info.value)
+        # A shared name is an advisory, and intentional separation is permitted.
+        separate = await self.service.create_entity(
+            test_case_with_users.id, entity_data, current_user=test_user
+        )
+        assert separate.id is not None
 
     async def test_create_entity_duplicate_company(
         self, test_case_with_users, test_user

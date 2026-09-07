@@ -23,6 +23,13 @@
 
       <v-card-text class="pa-0">
         <!-- Error Alert -->
+        <EntityDuplicateAdvisory
+          :candidates="advisories.candidates.value"
+          :case-id="caseId"
+          :entity-type="entity.entity_type"
+          :loading="updating"
+          @continue="handleSubmit(true)"
+        />
         <v-alert v-if="error" type="error" variant="tonal" class="ma-4">
           {{ error }}
         </v-alert>
@@ -94,6 +101,7 @@
 </template>
 
 <script setup>
+import EntityDuplicateAdvisory from './EntityDuplicateAdvisory.vue'
 import { ref, computed, toRef, watch } from 'vue'
 import EntityTabContent from './EntityTabContent.vue'
 import EntityModalActions from './EntityModalActions.vue'
@@ -140,6 +148,7 @@ const caseId = toRef(props, 'caseId')
 const existingEntities = toRef(props, 'existingEntities')
 
 const {
+  advisories,
   error,
   isEditing,
   updating,
@@ -191,9 +200,9 @@ async function handleClose() {
   }
 }
 
-async function handleSubmit() {
+async function handleSubmit(confirmed = false) {
   try {
-    await updateEntity()
+    await updateEntity(confirmed === true)
   } catch {
     // Error handled in composable
   }

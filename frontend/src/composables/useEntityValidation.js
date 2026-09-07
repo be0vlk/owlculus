@@ -1,3 +1,22 @@
+export const entityIdentityGuidance = {
+  person: 'Provide a name, email, phone, employer, or HTTP(S) profile reference.',
+  vehicle: 'Provide a VIN, license plate, or both make and model.',
+}
+
+export const supportedProfile = (value) => {
+  if (
+    typeof value !== 'string' ||
+    !/^https?:\/\//i.test(value.trim()) ||
+    /[\s\\]/u.test(value.trim())
+  )
+    return false
+  try {
+    return Boolean(new URL(value.trim()).hostname)
+  } catch {
+    return false
+  }
+}
+const nonblank = (value) => typeof value === 'string' && value.trim().length > 0
 export function useEntityValidation() {
   const domainRule = (value) => {
     if (!value) return 'Domain is required'
@@ -38,7 +57,13 @@ export function useEntityValidation() {
 
     switch (entityType) {
       case 'person':
-        return data.first_name || data.last_name
+        return (
+          [data.first_name, data.last_name, data.email, data.employer].some(nonblank) ||
+          /^\+?[0-9]+$/.test((data.phone || '').trim().replace(/[ ().-]/g, '')) ||
+          [...Object.values(data.social_media || {}), ...(data.usernames || [])].some(
+            supportedProfile,
+          )
+        )
       case 'company':
         return data.name
       case 'domain':
@@ -46,7 +71,11 @@ export function useEntityValidation() {
       case 'ip_address':
         return data.ip_address && ipRule(data.ip_address) === true
       case 'vehicle':
-        return data.make && data.model
+        return (
+          nonblank(data.vin) ||
+          nonblank(data.license_plate) ||
+          (nonblank(data.make) && nonblank(data.model))
+        )
       default:
         return false
     }

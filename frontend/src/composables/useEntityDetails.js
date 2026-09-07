@@ -1,3 +1,4 @@
+import { useEntityAdvisories } from './useEntityAdvisories'
 import { ref, computed, watch } from 'vue'
 import { entityService } from '../services/entity'
 import { entitySchemas } from './entitySchemas'
@@ -5,7 +6,7 @@ import { cleanFormData } from '../utils/cleanFormData'
 import { getErrorMessage } from '../utils/errorMessage'
 import { useBaseNoteEditor } from './useBaseNoteEditor'
 import { useNoteSaveQueue } from './useNoteSaveQueue'
-import { useEntityValidation } from './useEntityValidation'
+import { useEntityValidation, entityIdentityGuidance } from './useEntityValidation'
 import { useEntitySources } from './useEntitySources'
 
 // Entity transport data is JSON. Copy recursively, including arrays, to isolate Vue proxies too.
@@ -30,6 +31,7 @@ export function useEntityDetails(entity, caseId, emit) {
   const targetCaseId = caseId.value
   const targetId = entity.value.id
   const targetType = entity.value.entity_type
+  const advisories = useEntityAdvisories(targetCaseId, targetId)
   const error = ref('')
   const isEditing = ref(false)
   const updating = ref(false)
@@ -50,6 +52,7 @@ export function useEntityDetails(entity, caseId, emit) {
   }
 
   const cancelEdit = () => {
+    advisories.clear()
     formData.value = { data: draftData(acknowledgedEntity.value.data) }
     isEditing.value = false
     error.value = ''
@@ -76,7 +79,7 @@ export function useEntityDetails(entity, caseId, emit) {
     isEditing,
   )
 
-  const updateEntity = async () => {
+  const updateEntity = async (confirmed = false) => {
     try {
       updating.value = true
       error.value = ''
@@ -84,9 +87,16 @@ export function useEntityDetails(entity, caseId, emit) {
         const result = useEntityValidation().domainRule(formData.value.data.domain)
         if (result !== true) throw new Error(result)
       }
+      if (
+        ['person', 'vehicle'].includes(targetType) &&
+        !useEntityValidation().isFormValid(targetType, formData.value.data)
+      )
+        throw new Error(entityIdentityGuidance[targetType])
+      const payload = { entity_type: targetType, data: cleanFormData(clone(formData.value.data)) }
+      if (!(await advisories.check(payload, confirmed))) return null
       const updatedEntity = await saveEntity({
         entity_type: targetType,
-        data: draftData(cleanFormData(clone(formData.value.data))),
+        data: draftData(payload.data),
       })
       isEditing.value = false
       emit?.('edit', updatedEntity)
@@ -227,6 +237,7 @@ export function useEntityDetails(entity, caseId, emit) {
   )
 
   return {
+    advisories,
     error,
     isEditing,
     updating,

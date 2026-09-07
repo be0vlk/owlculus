@@ -225,8 +225,8 @@ export const entitySchemas = {
     basicInfo: {
       title: 'Vehicle Information',
       fields: [
-        { id: 'make', label: 'Make', type: 'text', required: true, hasSource: true },
-        { id: 'model', label: 'Model', type: 'text', required: true, hasSource: true },
+        { id: 'make', label: 'Make', type: 'text', hasSource: true },
+        { id: 'model', label: 'Model', type: 'text', hasSource: true },
         { id: 'year', label: 'Year', type: 'number', hasSource: true },
         { id: 'vin', label: 'VIN', type: 'text', hasSource: true },
         { id: 'license_plate', label: 'License Plate', type: 'text', hasSource: true },

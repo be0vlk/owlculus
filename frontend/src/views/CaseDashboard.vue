@@ -330,6 +330,7 @@
 </template>
 
 <script setup>
+import { getEntityDisplayName } from '@/composables/useEntityDisplay'
 import CaseExecutionHistory from '@/components/plugins/CaseExecutionHistory.vue'
 import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -750,22 +751,6 @@ const loadCaseHuntExecutions = async () => {
     console.error('Failed to load hunt executions:', error)
     caseHuntExecutions.value = []
   }
-}
-
-const getEntityDisplayName = (entity) => {
-  if (!entity) return ''
-  if (entity.entity_type === 'person') {
-    return `${entity.data.first_name} ${entity.data.last_name}`.trim()
-  } else if (entity.entity_type === 'company') {
-    return entity.data.name
-  } else if (entity.entity_type === 'domain') {
-    return entity.data.domain
-  } else if (entity.entity_type === 'ip_address') {
-    return entity.data.ip_address
-  } else if (entity.entity_type === 'vehicle') {
-    return `${entity.data.make} ${entity.data.model}`.trim()
-  }
-  return 'Unknown Entity'
 }
 
 // Watch for entity query parameter changes

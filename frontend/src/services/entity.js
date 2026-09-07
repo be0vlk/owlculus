@@ -53,6 +53,13 @@ export const entityService = {
     }
   },
 
+  async getDuplicateAdvisories(caseId, payload, excludeId) {
+    const response = await api.post(`/api/cases/${caseId}/entities/duplicate-advisories`, payload, {
+      params: { exclude_id: excludeId },
+    })
+    return response.data
+  },
+
   async createEntity(caseId, entityData) {
     const response = await api.post(`/api/cases/${caseId}/entities`, entityData)
     return response.data

@@ -30,6 +30,27 @@
             placeholder="Camry"
           />
         </v-col>
+        <v-col cols="12" md="6"
+          ><v-text-field
+            :model-value="modelValue.vin"
+            @update:model-value="updateField('vin', $event)"
+            label="VIN"
+            variant="outlined"
+        /></v-col>
+        <v-col cols="12" md="6"
+          ><v-text-field
+            :model-value="modelValue.license_plate"
+            @update:model-value="updateField('license_plate', $event)"
+            label="License Plate"
+            variant="outlined"
+        /></v-col>
+        <v-col cols="12" md="6"
+          ><v-text-field
+            :model-value="modelValue.registration_state"
+            @update:model-value="updateField('registration_state', $event)"
+            label="Registration State"
+            variant="outlined"
+        /></v-col>
       </v-row>
     </v-card-text>
   </v-card>

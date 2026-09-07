@@ -10,6 +10,7 @@ and specialized search functions for OSINT investigation workflows.
 from dataclasses import dataclass
 from typing import cast
 
+from sqlalchemy import func
 from sqlmodel import Session, col, or_, select
 
 from app import schemas
@@ -22,6 +23,7 @@ from app.core.hostname import canonical_hostname
 from app.core.utils import get_utc_now
 from app.database import models
 from app.database.db_utils import transaction
+from app.schemas.entity_schema import DuplicateAdvisory, entity_display_name
 from app.services.case_access import CaseAccess
 
 
@@ -42,11 +44,6 @@ _DUPLICATE_POLICIES = (
         "A company with the name '{name}' already exists in this case",
     ),
     DuplicatePolicy(
-        "person",
-        ("first_name", "last_name"),
-        "A person with the name '{first_name} {last_name}' already exists in this case",
-    ),
-    DuplicatePolicy(
         "ip_address",
         ("ip_address",),
         "An IP address '{ip_address}' already exists in this case",
@@ -54,14 +51,6 @@ _DUPLICATE_POLICIES = (
     ),
     DuplicatePolicy(
         "domain", ("domain",), "A domain '{domain}' already exists in this case"
-    ),
-    DuplicatePolicy(
-        "vehicle", ("vin",), "A vehicle with VIN '{vin}' already exists in this case"
-    ),
-    DuplicatePolicy(
-        "vehicle",
-        ("license_plate",),
-        "A vehicle with license plate '{license_plate}' already exists in this case",
     ),
 )
 
@@ -88,37 +77,11 @@ class EntityService:
         if entity_type is None:
             return
 
-        for policy in _DUPLICATE_POLICIES:
-            if policy.entity_type != entity_type or not all(
-                entity.data.get(field) for field in policy.fields
-            ):
-                continue
-            if entity_type == "domain":
-                if self._find_domain(case_id, entity.data["domain"], entity_id):
-                    raise DuplicateResourceException(
-                        policy.error_template.format(**entity.data)
-                    )
-                continue
-            comparisons = []
-            for field in policy.fields:
-                value = entity.data[field]
-                expression = models.Entity.data[field].as_string()
-                comparisons.append(
-                    expression == value
-                    if policy.case_sensitive
-                    else expression.ilike(value)
-                )
-            query = select(models.Entity).where(
-                models.Entity.case_id == case_id,
-                models.Entity.entity_type == policy.entity_type,
-                *comparisons,
-            )
-            if entity_id is not None:
-                query = query.where(models.Entity.id != entity_id)
-            if self.db.exec(query).first():
-                raise DuplicateResourceException(
-                    policy.error_template.format(**entity.data)
-                )
+        for decision in self._duplicate_decisions(
+            case_id, entity_type, entity.data, entity_id
+        ):
+            if decision.blocking:
+                raise DuplicateResourceException(decision.reason)
 
         if entity_type == "network_assets":
             conditions = []
@@ -145,6 +108,128 @@ class EntityService:
                     raise DuplicateResourceException(
                         "Network assets with overlapping domains, IP addresses, or subdomains already exist in this case"
                     )
+
+    def _duplicate_decisions(
+        self, case_id: int, entity_type: str, data: dict, exclude_id: int | None = None
+    ) -> list[DuplicateAdvisory]:
+        """One literal identity policy for advisory reads and final writes."""
+
+        def normalized(value: object) -> str:
+            return str(value or "").strip().casefold()
+
+        query = (
+            select(models.Entity)
+            .where(
+                models.Entity.case_id == case_id,
+                models.Entity.entity_type == entity_type,
+            )
+            .order_by(col(models.Entity.id))
+        )
+        if exclude_id is not None:
+            query = query.where(models.Entity.id != exclude_id)
+        if entity_type == "domain":
+            candidate = self._find_domain(case_id, data["domain"], exclude_id)
+            candidates = [candidate] if candidate else []
+        else:
+            candidates = list(self.db.exec(query))
+        decisions = []
+        for candidate in candidates:
+            reason = ""
+            blocking = True
+            if entity_type == "person":
+                name = tuple(
+                    normalized(data.get(field)) for field in ("first_name", "last_name")
+                )
+                other = tuple(
+                    normalized(candidate.data.get(field))
+                    for field in ("first_name", "last_name")
+                )
+                if any(name) and name == other:
+                    reason = "Same name; this may be a different Person."
+                    blocking = False
+            elif entity_type == "vehicle":
+                vin, other_vin = normalized(data.get("vin")), normalized(
+                    candidate.data.get("vin")
+                )
+                plate, other_plate = normalized(data.get("license_plate")), normalized(
+                    candidate.data.get("license_plate")
+                )
+                state, other_state = normalized(
+                    data.get("registration_state")
+                ), normalized(candidate.data.get("registration_state"))
+                if vin and vin == other_vin:
+                    reason = "A vehicle with this VIN already exists in this case"
+                elif plate and plate == other_plate:
+                    conflicting_vins = bool(vin and other_vin and vin != other_vin)
+                    if (
+                        state
+                        and other_state
+                        and state != other_state
+                        and not conflicting_vins
+                    ):
+                        continue
+                    blocking = bool(
+                        state and state == other_state and not conflicting_vins
+                    )
+                    reason = (
+                        "A vehicle with this license plate and registration state already exists in this case"
+                        if blocking
+                        else "Same plate with missing/different jurisdiction or conflicting VINs; inspect before keeping a separate Vehicle."
+                    )
+            else:
+                for policy in _DUPLICATE_POLICIES:
+                    if policy.entity_type != entity_type:
+                        continue
+                    if entity_type == "domain" or all(
+                        data.get(field)
+                        and (
+                            str(data[field]).strip()
+                            == str(candidate.data.get(field) or "").strip()
+                            if policy.case_sensitive
+                            else normalized(data[field])
+                            == normalized(candidate.data.get(field))
+                        )
+                        for field in policy.fields
+                    ):
+                        reason = policy.error_template.format(**data)
+                        break
+            if reason:
+                summary_fields = (
+                    ("email", "dob", "phone", "employer")
+                    if entity_type == "person"
+                    else ("vin", "license_plate", "registration_state")
+                )
+                decisions.append(
+                    DuplicateAdvisory(
+                        id=cast(int, candidate.id),
+                        label=entity_display_name(entity_type, candidate.data)
+                        or f"{entity_type} #{candidate.id}",
+                        identifiers={
+                            field: candidate.data[field]
+                            for field in summary_fields
+                            if candidate.data.get(field)
+                        },
+                        reason=reason,
+                        blocking=blocking,
+                    )
+                )
+        return decisions
+
+    async def duplicate_advisories(
+        self,
+        case_id: int,
+        entity: schemas.EntityCreate,
+        current_user: models.User,
+        exclude_id: int | None = None,
+    ) -> list[DuplicateAdvisory]:
+        self.case_access.readable(current_user, case_id)
+        if exclude_id is not None:
+            existing = await self.get_entity(case_id, exclude_id, current_user)
+            if existing.entity_type != entity.entity_type:
+                raise ValidationException("Entity type cannot change")
+        return self._duplicate_decisions(
+            case_id, entity.entity_type, entity.data, exclude_id
+        )[:20]
 
     async def get_case_entities(
         self,
@@ -258,7 +343,7 @@ class EntityService:
         query = select(models.Entity).where(
             models.Entity.case_id == case.id,
             models.Entity.entity_type == "ip_address",
-            models.Entity.data["ip_address"].as_string() == ip_address,
+            func.trim(models.Entity.data["ip_address"].as_string()) == ip_address.strip(),
         )
         result = self.db.exec(query)
         return result.first()

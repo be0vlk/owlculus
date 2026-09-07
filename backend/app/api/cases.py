@@ -5,7 +5,7 @@ This module provides comprehensive case management endpoints for digital investi
 supporting the complete lifecycle of OSINT cases from creation to completion.
 """
 
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 from fastapi import APIRouter, Depends, Query, Response, status
 from fastapi.responses import FileResponse
@@ -16,6 +16,7 @@ from app import schemas
 from app.core.dependencies import get_current_user
 from app.database import models
 from app.database.connection import get_db
+from app.schemas.entity_schema import DuplicateAdvisory
 from app.services.case_service import CaseService
 from app.services.entity_service import EntityService
 from app.services.export_service import EntityExportFormat, ExportService
@@ -206,6 +207,23 @@ async def create_entity(
     entity_service = EntityService(db)
     return await entity_service.create_entity(
         case_id=case_id, entity=entity, current_user=current_user
+    )
+
+
+@router.post(
+    "/{case_id}/entities/duplicate-advisories",
+    tags=["entities"],
+    response_model=list[DuplicateAdvisory],
+)
+async def entity_duplicate_advisories(
+    case_id: int,
+    entity: schemas.EntityCreate,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[models.User, Depends(get_current_user)],
+    exclude_id: int | None = None,
+):
+    return await EntityService(db).duplicate_advisories(
+        case_id, entity, current_user, exclude_id
     )
 
 
