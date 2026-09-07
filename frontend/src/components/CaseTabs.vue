@@ -45,7 +45,7 @@ const activeTab = computed({
 
 <style scoped>
 :deep(.v-tab:focus-visible) {
-  outline: 2px solid currentColor;
+  outline: 2px solid currentcolor;
   outline-offset: -3px;
 }
 

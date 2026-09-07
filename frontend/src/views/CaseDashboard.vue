@@ -143,7 +143,7 @@
                 <span><v-icon start>mdi-note-text</v-icon>Case Notes</span>
                 <v-spacer />
                 <v-chip
-                  :color="isEditingNotes ? 'warning' : 'primary'"
+                  :color="isEditingNotes ? 'warning' : undefined"
                   class="me-3"
                   size="small"
                   variant="tonal"
