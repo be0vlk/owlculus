@@ -1,14 +1,18 @@
 <template>
   <div class="d-flex flex-column ga-4">
-    <template v-for="(resultItem, index) in normalizedResult" :key="index">
+    <p v-if="hasCorrelations" class="text-body-medium">
+      {{ counts.entities }} source Entities · {{ counts.matches }} matches ·
+      {{ counts.cases }} related Cases
+    </p>
+    <template v-for="resultItem in normalizedResult" :key="resultKey(resultItem)">
       <!-- Entity Match Card -->
-      <v-card v-if="resultItem.type === 'data'" elevation="1" rounded="lg">
+      <v-card v-if="isGroup(resultItem)" elevation="1" rounded="lg">
         <!-- Entity Header -->
         <v-card-text class="border-b">
           <div class="d-flex align-center">
             <v-icon icon="mdi-link" class="mr-2" color="grey-darken-1" />
             <h3 class="text-title-large font-weight-medium">
-              {{ resultItem.data.entity_name }}
+              {{ entityLabel(resultItem.data) }}
             </h3>
             <v-chip class="ml-2" color="primary" size="small" variant="tonal">
               {{ resultItem.data.entity_type }}
@@ -25,34 +29,20 @@
 
           <!-- Correlation Context -->
           <div class="mt-2 text-body-medium text-medium-emphasis">
-            <template v-if="resultItem.data.match_type === 'employer'">
-              Found multiple people who work at
-              <span class="font-weight-medium">{{ resultItem.data.employer_name }}</span
-              >. This employer connection may indicate a relationship between these cases.
-            </template>
-            <template v-else-if="resultItem.data.match_type === 'domain'">
-              Found multiple entities associated with the domain
-              <span class="font-weight-medium">{{ resultItem.data.domain }}</span
-              >. This domain connection may indicate a relationship between these cases or entities.
-            </template>
-            <template v-else-if="resultItem.data.match_type === 'vin'">
-              Found multiple vehicles with the same VIN
-              <span class="font-weight-medium">{{ resultItem.data.matched_value }}</span
-              >. This indicates the same vehicle appears in multiple cases, which strongly suggests
-              a connection between these investigations.
-            </template>
-            <template v-else-if="resultItem.data.match_type === 'license_plate'">
-              Found multiple vehicles with the same license plate
-              <span class="font-weight-medium">{{ resultItem.data.matched_value }}</span
-              >. This indicates the same vehicle appears in multiple cases, suggesting a connection
-              between these investigations.
-            </template>
-            <template v-else>
-              Found an entity named
-              <span class="font-weight-medium">{{ resultItem.data.entity_name }}</span> that appears
-              in multiple cases. This may indicate the same {{ resultItem.data.entity_type }} is
-              involved in different investigations.
-            </template>
+            Shared {{ getMatchTypeLabel(resultItem.data.match_type).toLowerCase() }} value:
+            <span class="font-weight-medium">{{
+              resultItem.data.matched_value ||
+              resultItem.data.domain ||
+              resultItem.data.employer_name ||
+              entityLabel(resultItem.data)
+            }}</span
+            >. This connection is an investigative lead; it does not establish identity.
+            <p
+              v-for="field in resultItem.data.source_fields || []"
+              :key="field.field + field.value"
+            >
+              Source {{ field.field }}: {{ field.value }}
+            </p>
           </div>
         </v-card-text>
 
@@ -60,8 +50,8 @@
         <v-card-text>
           <div class="d-flex flex-column ga-3">
             <v-card
-              v-for="(match, matchIndex) in resultItem.data.matches"
-              :key="matchIndex"
+              v-for="match in resultItem.data.matches"
+              :key="`${match.case_id}:${match.entity_id}`"
               elevation="1"
               rounded="lg"
             >
@@ -74,9 +64,22 @@
                     <p class="text-body-medium text-medium-emphasis">
                       {{ match.case_title }}
                     </p>
-                    <template v-if="resultItem.data.match_type === 'employer' && match.person_name">
-                      <p class="text-body-medium text-secondary">Person: {{ match.person_name }}</p>
-                    </template>
+                    <p class="text-body-medium text-secondary">
+                      {{ entityLabel(match) }} ({{
+                        match.entity_type || resultItem.data.entity_type
+                      }})
+                    </p>
+                    <p
+                      v-for="field in match.fields || []"
+                      :key="field.field + field.value"
+                      class="text-body-medium"
+                    >
+                      Related {{ field.field }}: {{ field.value }}
+                    </p>
+                    <p v-if="!match.fields?.length && match.found_in" class="text-body-medium">
+                      {{ match.found_in }}
+                    </p>
+                    <p v-if="match.signal" class="text-body-medium">{{ match.signal }}</p>
                   </div>
                   <v-btn
                     color="primary"
@@ -94,6 +97,16 @@
         </v-card-text>
       </v-card>
 
+      <v-alert
+        v-else-if="resultItem.data?.notice_type === 'skipped_reference'"
+        type="warning"
+        variant="tonal"
+      >
+        {{ resultItem.data.message }} Case #{{ resultItem.data.case_id }}, Entity #{{
+          resultItem.data.entity_id
+        }}, {{ resultItem.data.field }}
+      </v-alert>
+
       <!-- Error Message -->
       <v-alert v-else-if="resultItem.type === 'error'" border="start" elevation="1" type="error">
         {{ resultItem.data.message }}
@@ -107,10 +120,11 @@
         variant="tonal"
       >
         {{
-          resultItem.data.message ||
-          (hasCorrelations
-            ? 'Correlation scan complete'
-            : 'Correlation scan complete. No correlations are available in accessible Cases.')
+          hasWarnings
+            ? 'Correlation scan completed with skipped references; reference coverage is incomplete.'
+            : hasCorrelations
+              ? 'Correlation scan complete'
+              : 'Correlation scan complete. No correlations are available in accessible Cases.'
         }}
       </v-alert>
     </template>
@@ -147,7 +161,29 @@ const normalizedResult = computed(() => {
 
 const hasErrors = computed(() => normalizedResult.value.some((item) => item.type === 'error'))
 
-const hasCorrelations = computed(() => normalizedResult.value.some((item) => item.type === 'data'))
+const isGroup = (item) => item.type === 'data' && Array.isArray(item.data?.matches)
+const hasCorrelations = computed(() => normalizedResult.value.some(isGroup))
+const hasWarnings = computed(() =>
+  normalizedResult.value.some((item) => item.data?.notice_type === 'skipped_reference'),
+)
+const entityLabel = (entity) =>
+  entity.entity_name?.trim() ||
+  entity.person_name?.trim() ||
+  `${entity.entity_type || 'Entity'} #${entity.entity_id}`
+const resultKey = (item) => {
+  const data = item.data || {}
+  return isGroup(item)
+    ? `${data.case_id}:${data.entity_id}:${data.match_type}:${data.normalized_value || data.matched_value || data.domain || data.employer_name || ''}`
+    : `${item.type}:${data.notice_type || ''}:${data.case_id || ''}:${data.entity_id || ''}:${data.field || ''}`
+}
+const counts = computed(() => {
+  const groups = normalizedResult.value.filter(isGroup).map((item) => item.data)
+  return {
+    entities: new Set(groups.map((group) => group.entity_id)).size,
+    matches: groups.reduce((total, group) => total + group.matches.length, 0),
+    cases: new Set(groups.flatMap((group) => group.matches.map((match) => match.case_id))).size,
+  }
+})
 
 const getMatchTypeLabel = (matchType) => {
   const labels = {

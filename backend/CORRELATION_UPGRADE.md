@@ -37,3 +37,13 @@ retain ordinary behavior.
 Plugin/Hunt reads, Evidence reads, and exports use `private, no-store` responses.
 Browser correlation exports reload retained results before downloading. Filtering
 preserves cursors based on inspected rows, including pages with no visible events.
+
+Ticket 02 adds source `source_fields`, `normalized_value`, Case title/number, and
+`executed_at` to each group. Related `fields` and `signal` remain inside the match
+protected by its Case ID. Fields retain their original values; the normalized
+value is the comparison key. Groups are identified by source Entity ID, kind,
+and normalized value. `skipped_reference` data notices carry source and originating
+Case IDs in `case_scope`, without the malformed value. Evidence and dependent Hunt
+steps include notice scopes even when that Case contributes no match. Reports use
+the recorded scan timestamp and count distinct source Entities separately from
+matching reasons. Older retained payloads remain renderable without these fields.

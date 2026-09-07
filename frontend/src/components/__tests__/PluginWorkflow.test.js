@@ -140,3 +140,110 @@ it('labels retained partial output and preserves its failure in exports', async 
     error: 'Output exceeds the operation limit',
   })
 })
+
+it('renders field explanations and tentative vehicle qualifications', () => {
+  const wrapper = mountWithVuetify(CorrelationScanPluginResult, {
+    props: {
+      result: [
+        {
+          type: 'data',
+          data: {
+            case_id: 1,
+            entity_id: 10,
+            entity_type: 'vehicle',
+            entity_name: '',
+            match_type: 'license_plate',
+            normalized_value: 'OWL123',
+            matched_value: 'OWL-123',
+            source_fields: [{ field: 'license_plate', value: 'OWL-123' }],
+            matches: [
+              {
+                case_id: 2,
+                case_number: 'B',
+                case_title: 'Related',
+                entity_id: 20,
+                entity_type: 'vehicle',
+                entity_name: 'Blue van',
+                fields: [{ field: 'license_plate', value: 'owl 123' }],
+                signal:
+                  'Tentative license plate association: registration state unknown; conflicting VINs',
+              },
+            ],
+          },
+        },
+      ],
+    },
+  })
+  for (const text of [
+    'vehicle #10',
+    'Blue van',
+    'license_plate: OWL-123',
+    'license_plate: owl 123',
+    'registration state unknown',
+    'conflicting VINs',
+  ]) {
+    expect(wrapper.text()).toContain(text)
+  }
+  expect(wrapper.text()).not.toContain('This indicates the same vehicle')
+})
+
+it('qualifies completed scans containing skipped references without rendering a match card', () => {
+  const wrapper = mountWithVuetify(CorrelationScanPluginResult, {
+    props: {
+      result: [
+        {
+          type: 'data',
+          data: {
+            notice_type: 'skipped_reference',
+            case_scope: [1],
+            case_id: 1,
+            entity_id: 10,
+            field: 'usernames[0]',
+            message: 'A malformed reference was skipped; reference coverage is incomplete.',
+          },
+        },
+        { type: 'complete', data: {} },
+      ],
+    },
+  })
+  expect(wrapper.text()).toContain('reference coverage is incomplete')
+  expect(wrapper.text()).toContain('completed with skipped references')
+  expect(wrapper.text()).not.toContain('Found an entity')
+})
+
+it('keeps legacy related names and explanations readable with stable navigation', async () => {
+  const push = vi.fn()
+  vi.spyOn(await import('vue-router'), 'useRouter').mockReturnValue({ push })
+  const wrapper = mountWithVuetify(CorrelationScanPluginResult, {
+    props: {
+      result: [
+        {
+          type: 'data',
+          data: {
+            case_id: 1,
+            entity_id: 10,
+            entity_type: 'person',
+            entity_name: 'Ada',
+            match_type: 'employer',
+            employer_name: 'Engines',
+            matches: [
+              {
+                case_id: 2,
+                case_number: 'B',
+                case_title: 'Related',
+                entity_id: 20,
+                entity_type: 'person',
+                person_name: 'Charles',
+                found_in: 'employer: Engines',
+              },
+            ],
+          },
+        },
+      ],
+    },
+  })
+  expect(wrapper.text()).toContain('Charles (person)')
+  expect(wrapper.text()).toContain('employer: Engines')
+  await wrapper.get('button').trigger('click')
+  expect(push).toHaveBeenCalledWith({ path: '/case/2', query: { entity: 20 } })
+})

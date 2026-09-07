@@ -1,9 +1,8 @@
-"""Cross-case correlation query for persisted entities."""
+"""Cross-case correlation query with field-aware, explainable connections."""
 
-from collections.abc import Callable
+import re
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
 from urllib.parse import urlsplit
 
 from sqlmodel import Session, col, select
@@ -24,6 +23,12 @@ class CorrelationKind(StrEnum):
 
 
 @dataclass(frozen=True)
+class MatchField:
+    field: str
+    value: str
+
+
+@dataclass(frozen=True)
 class CorrelationMatch:
     """One source entity matched to an entity in another readable case."""
 
@@ -32,7 +37,24 @@ class CorrelationMatch:
     source_entity: Entity
     other_entity: Entity
     other_case: Case
-    found_in: str | None = None
+    normalized_value: str
+    source_fields: tuple[MatchField, ...]
+    other_fields: tuple[MatchField, ...]
+    signal: str
+
+    @property
+    def found_in(self) -> str:
+        return ", ".join(f"{item.field}: {item.value}" for item in self.other_fields)
+
+
+@dataclass(frozen=True)
+class SkippedReference:
+    case_id: int
+    entity_id: int | None
+    field: str
+
+
+References = dict[tuple[CorrelationKind, str], tuple[MatchField, ...]]
 
 
 class EntityCorrelation:
@@ -41,14 +63,18 @@ class EntityCorrelation:
     def __init__(self, db: Session):
         self.db = db
         self.case_access = CaseAccess(db)
+        self.skipped_references: list[SkippedReference] = []
 
     def correlate(self, case: Case, user: User) -> list[CorrelationMatch]:
-        """Return correlations between one readable case and other readable cases."""
+        """Return matches; record individually skipped references with Case scope."""
+        self.skipped_references = []
         if case.id is None:
             return []
         source_case = self.case_access.readable(user, case.id)
         sources = self.db.exec(
-            select(Entity).where(Entity.case_id == source_case.id)
+            select(Entity)
+            .where(Entity.case_id == source_case.id)
+            .order_by(col(Entity.id))
         ).all()
         readable_case_ids = self.case_access.readable_case_ids(user)
         candidates = self.db.exec(
@@ -58,150 +84,198 @@ class EntityCorrelation:
                 Entity.case_id != source_case.id,
                 col(Entity.case_id).in_(readable_case_ids),
             )
+            .order_by(col(Entity.case_id), col(Entity.id))
         ).all()
-
-        matches: list[CorrelationMatch] = []
+        references = {
+            entity.id: _references(entity, self.skipped_references)
+            for entity in [*sources, *(entity for entity, _ in candidates)]
+        }
+        matches = []
         for source in sources:
-            source_name = entity_display_name(source.entity_type, source.data)
-            if not source_name:
-                continue
             for candidate, other_case in candidates:
-                other_name = entity_display_name(candidate.entity_type, candidate.data)
-                if (
-                    source.entity_type != "vehicle"
-                    and candidate.entity_type == source.entity_type
-                    and source_name
-                    and other_name.casefold() == source_name.casefold()
-                ):
-                    matches.append(
-                        CorrelationMatch(
-                            CorrelationKind.NAME,
-                            source_name,
-                            source,
-                            candidate,
-                            other_case,
-                        )
-                    )
-                employer = str(source.data.get("employer") or "")
-                if (
-                    source.entity_type == "person"
-                    and candidate.entity_type == "person"
-                    and employer
-                    and str(candidate.data.get("employer") or "").casefold()
-                    == employer.casefold()
-                ):
-                    matches.append(
-                        CorrelationMatch(
-                            CorrelationKind.EMPLOYER,
-                            employer,
-                            source,
-                            candidate,
-                            other_case,
-                        )
-                    )
-                candidate_domains = {
-                    reference.value: reference
-                    for reference in _domain_references(candidate)
-                }
-                source_domains = (
-                    [] if source.entity_type == "domain" else _domain_references(source)
-                )
-                for reference in source_domains:
-                    candidate_reference = candidate_domains.get(reference.value)
-                    if candidate_reference:
-                        matches.append(
-                            CorrelationMatch(
-                                CorrelationKind.DOMAIN,
-                                reference.value,
-                                source,
-                                candidate,
-                                other_case,
-                                candidate_reference.location,
-                            )
-                        )
-                if source.entity_type == candidate.entity_type == "vehicle":
-                    source_identifiers = _vehicle_identifiers(source)
-                    candidate_identifiers = _vehicle_identifiers(candidate)
-                    for kind in (
-                        CorrelationKind.VIN,
-                        CorrelationKind.LICENSE_PLATE,
+                for (kind, normalized), fields in references[source.id].items():
+                    other_fields = references[candidate.id].get((kind, normalized))
+                    if not other_fields:
+                        continue
+                    if (
+                        kind is CorrelationKind.NAME
+                        and source.entity_type != candidate.entity_type
                     ):
-                        normalized = source_identifiers.get(kind)
-                        if normalized and normalized == candidate_identifiers.get(kind):
-                            value = str(source.data.get(kind.value) or normalized)
-                            matches.append(
-                                CorrelationMatch(
-                                    kind,
-                                    value.upper(),
-                                    source,
-                                    candidate,
-                                    other_case,
-                                )
-                            )
+                        continue
+                    if (
+                        kind is CorrelationKind.DOMAIN
+                        and source.entity_type == candidate.entity_type == "domain"
+                    ):
+                        continue  # Identical Domain Entities already have a name reason.
+                    qualification = _match_qualification(kind, source, candidate)
+                    if qualification is None:
+                        continue
+                    value = (
+                        normalized
+                        if kind is CorrelationKind.DOMAIN
+                        else fields[0].value
+                    )
+                    if kind is CorrelationKind.NAME:
+                        value = entity_display_name(source.entity_type, source.data)
+                    if kind in {CorrelationKind.VIN, CorrelationKind.LICENSE_PLATE}:
+                        value = value.upper()
+                    matches.append(
+                        CorrelationMatch(
+                            kind,
+                            value,
+                            source,
+                            candidate,
+                            other_case,
+                            normalized,
+                            fields,
+                            other_fields,
+                            qualification,
+                        )
+                    )
         return matches
 
 
-def _domain(value: object) -> str | None:
-    text = str(value or "").strip()
+def correlation_label(entity: Entity) -> str:
+    return (
+        entity_display_name(entity.entity_type, entity.data).strip()
+        or f"{entity.entity_type.replace('_', ' ').title()} #{entity.id}"
+    )
+
+
+def _hostname(value: str) -> str:
+    host = value.strip().removesuffix(".").casefold()
+    # Reject malformed references locally without DNS or ownership inference.
+    labels = host.split(".")
+    if (
+        not host
+        or len(host) > 253
+        or any(
+            not re.fullmatch(r"[^\W_](?:[\w-]{0,61}[^\W_])?", label) for label in labels
+        )
+    ):
+        raise ValueError("Invalid hostname")
+    return host
+
+
+def _domain(value: str, *, bare: bool = False) -> str | None:
+    text = value.strip()
+    if text.lower().startswith(("http://", "https://")):
+        parsed = urlsplit(text)
+        # Accessing port also validates malformed port syntax.
+        _ = parsed.port
+        return _hostname(parsed.hostname or "")
     if "@" in text:
-        return text.rsplit("@", 1)[-1].casefold() or None
-    if text.startswith(("http://", "https://")):
-        hostname = urlsplit(text).hostname
-        return hostname.casefold() if hostname else None
-    return None
+        local, host = text.rsplit("@", 1)
+        if not local or any(char.isspace() for char in local) or "@" in local:
+            raise ValueError("Invalid email reference")
+        return _hostname(host)
+    return _hostname(text) if bare else None
 
 
-@dataclass(frozen=True)
-class _DomainReference:
-    value: str
-    location: str
-
-
-def _domain_entity_references(data: dict[str, Any]) -> list[_DomainReference]:
-    value = str(data.get("domain") or "").casefold()
-    return [_DomainReference(value, "domain field")] if value else []
-
-
-def _person_domain_references(data: dict[str, Any]) -> list[_DomainReference]:
-    references: dict[str, list[str]] = {}
-    values = [("email", data.get("email"))]
-    values.extend(("username", username) for username in data.get("usernames") or [])
-    for field, raw_value in values:
-        if domain := _domain(raw_value):
-            references.setdefault(domain, []).append(f"{field}: {raw_value}")
-    return [
-        _DomainReference(domain, ", ".join(locations))
-        for domain, locations in references.items()
-    ]
-
-
-def _company_domain_references(data: dict[str, Any]) -> list[_DomainReference]:
-    website = data.get("website")
-    domain = _domain(website)
-    return [_DomainReference(domain, f"website: {website}")] if domain else []
-
-
-_DOMAIN_REFERENCES_BY_ENTITY_TYPE: dict[
-    str, Callable[[dict[str, Any]], list[_DomainReference]]
-] = {
-    "domain": _domain_entity_references,
-    "person": _person_domain_references,
-    "company": _company_domain_references,
+_NAME_FIELDS = {
+    "person": ("first_name", "last_name"),
+    "company": ("name",),
+    "domain": ("domain",),
+    "ip_address": ("ip_address",),
 }
 
 
-def _domain_references(entity: Entity) -> list[_DomainReference]:
-    extractor = _DOMAIN_REFERENCES_BY_ENTITY_TYPE.get(entity.entity_type)
-    return extractor(entity.data) if extractor else []
+def _references(entity: Entity, skipped: list[SkippedReference]) -> References:
+    reasons: References = {}
+
+    def add(kind: CorrelationKind, normalized: str, fields: tuple[MatchField, ...]):
+        if normalized:
+            existing = reasons.get((kind, normalized), ())
+            reasons[kind, normalized] = tuple(dict.fromkeys((*existing, *fields)))
+
+    name_fields = tuple(
+        MatchField(field, str(entity.data[field]))
+        for field in _NAME_FIELDS.get(entity.entity_type, ())
+        if str(entity.data.get(field) or "").strip()
+    )
+    if entity.entity_type == "network_assets":
+        # Older persisted Entities still use the first domain/subdomain as a name.
+        for field in ("domains", "subdomains"):
+            if assets := entity.data.get(field):
+                name_fields = (MatchField(f"{field}[0]", str(assets[0])),)
+                break
+    name = " ".join(field.value.strip() for field in name_fields).casefold()
+    if entity.entity_type != "domain":
+        add(CorrelationKind.NAME, name, name_fields)
+    if entity.entity_type == "person":
+        employer = str(entity.data.get("employer") or "")
+        add(
+            CorrelationKind.EMPLOYER,
+            employer.strip().casefold(),
+            (MatchField("employer", employer),),
+        )
+    values: list[tuple[str, str, bool]] = []
+    if entity.entity_type == "domain":
+        values = [("domain", str(entity.data.get("domain") or ""), True)]
+    elif entity.entity_type == "company":
+        values = [("website", str(entity.data.get("website") or ""), True)]
+    elif entity.entity_type == "person":
+        values = [("email", str(entity.data.get("email") or ""), False)]
+        values.extend(
+            (f"usernames[{index}]", str(value), False)
+            for index, value in enumerate(entity.data.get("usernames") or [])
+        )
+    for field, raw, bare in values:
+        if not raw.strip():
+            continue
+        try:
+            domain = _domain(raw, bare=bare)
+        except ValueError:
+            skipped.append(SkippedReference(entity.case_id, entity.id, field))
+            continue
+        if domain:
+            fields = (MatchField(field, raw),)
+            add(CorrelationKind.DOMAIN, domain, fields)
+            if entity.entity_type == "domain":
+                add(CorrelationKind.NAME, domain, fields)
+    if entity.entity_type == "vehicle":
+        for kind in (CorrelationKind.VIN, CorrelationKind.LICENSE_PLATE):
+            raw = str(entity.data.get(kind.value) or "")
+            normalized = raw.strip().upper()
+            if kind is CorrelationKind.LICENSE_PLATE:
+                normalized = normalized.replace(" ", "").replace("-", "")
+            vehicle_fields: tuple[MatchField, ...] = (MatchField(kind.value, raw),)
+            if kind is CorrelationKind.LICENSE_PLATE:
+                vehicle_fields += tuple(
+                    MatchField(field, str(entity.data[field]))
+                    for field in ("registration_state", "vin")
+                    if str(entity.data.get(field) or "").strip()
+                )
+            add(kind, normalized, vehicle_fields)
+    return reasons
 
 
-def _vehicle_identifiers(entity: Entity) -> dict[CorrelationKind, str]:
-    values: dict[CorrelationKind, str] = {}
-    vin = str(entity.data.get("vin") or "").strip().upper()
-    if vin:
-        values[CorrelationKind.VIN] = vin
-    plate = str(entity.data.get("license_plate") or "")
-    normalized_plate = plate.replace(" ", "").replace("-", "").upper()
-    if normalized_plate:
-        values[CorrelationKind.LICENSE_PLATE] = normalized_plate
-    return values
+def _match_qualification(
+    kind: CorrelationKind, source: Entity, other: Entity
+) -> str | None:
+    """Explain the connection, or return None when identifiers exclude it."""
+    if kind is CorrelationKind.LICENSE_PLATE:
+        states = [
+            str(entity.data.get("registration_state") or "").strip().casefold()
+            for entity in (source, other)
+        ]
+        if all(states) and states[0] != states[1]:
+            return None
+        label = "License plate association"
+        if not all(states):
+            label = "Tentative license plate association: registration state unknown"
+        vins = [
+            str(entity.data.get("vin") or "").strip().upper()
+            for entity in (source, other)
+        ]
+        if all(vins) and vins[0] != vins[1]:
+            label += "; conflicting VINs; vehicle identity is not established"
+        else:
+            label += "; a shared plate does not establish vehicle identity"
+        return label
+    return {
+        CorrelationKind.NAME: "Shared name association",
+        CorrelationKind.EMPLOYER: "Shared employer association",
+        CorrelationKind.DOMAIN: "Shared domain association",
+        CorrelationKind.VIN: "Exact VIN match",
+    }[kind]

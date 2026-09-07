@@ -87,6 +87,24 @@ class HuntCorrelationScope:
                 return ()
             for group in output["results"]:
                 if (
+                    isinstance(group, dict)
+                    and group.get("notice_type") == "skipped_reference"
+                ):
+                    scope = group.get("case_scope")
+                    if (
+                        not isinstance(scope, list)
+                        or not scope
+                        or any(
+                            type(case_id) is not int or case_id <= 0
+                            for case_id in scope
+                        )
+                        or self.source_case_id not in scope
+                        or group.get("case_id") not in scope
+                    ):
+                        return ()
+                    case_ids.update(scope)
+                    continue
+                if (
                     not isinstance(group, dict)
                     or group.get("case_id") != self.source_case_id
                     or not isinstance(group.get("matches"), list)
