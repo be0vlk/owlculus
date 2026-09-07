@@ -426,3 +426,176 @@ def test_notices_errors_missing_cases_and_legacy_summaries_do_not_disclose(
     assert "SECRET" not in response.text
     assert "Source reference skipped" in response.text
     assert "partial" in response.text
+
+
+@pytest.mark.asyncio
+async def test_new_explanations_and_warning_only_cases_remain_protected(
+    client,
+    session,
+    test_case,
+    test_admin,
+    test_user,
+    monkeypatch,
+):
+    from dataclasses import replace
+
+    from app.core import file_storage
+    from app.plugins.base_plugin import PluginRun
+    from app.plugins.correlation_plugin import CorrelationScan
+    from app.plugins.plugin_context import ServiceEvidenceSink
+    from app.plugins.plugin_registry import PluginRegistry
+    from app.plugins.plugin_runner import PluginRunner
+    from app.schemas.entity_schema import EntityCreate
+    from app.services import evidence_service
+    from app.services.entity_service import EntityService
+    from app.services.evidence_service import EvidenceService
+
+    monkeypatch.setattr(evidence_service, "UPLOAD_DIR", file_storage.UPLOAD_DIR)
+    related = Case(case_number="RELATED", title="Related")
+    warning_case = Case(case_number="WARNING", title="Warning only")
+    session.add_all([related, warning_case])
+    session.flush()
+    session.add_all(
+        [
+            CaseUserLink(case_id=case.id, user_id=test_user.id)
+            for case in (test_case, related)
+        ]
+    )
+    session.commit()
+    service = EntityService(session)
+    for case, data in (
+        (test_case, {"email": "ada@example.com"}),
+        (related, {"email": "charles@example.com"}),
+        (warning_case, {"usernames": ["https://[broken"]}),
+    ):
+        await service.create_entity(
+            case.id, EntityCreate(entity_type="person", data=data), test_admin
+        )
+    ctx = replace(
+        PluginRun.for_test(
+            session=session,
+            user=test_admin,
+            api_keys={},
+            evidence=[],
+            entities=[],
+            case_id=test_case.id,
+            save_to_case=True,
+        ),
+        evidence=ServiceEvidenceSink(session),
+    )
+    events = [
+        event
+        async for event in PluginRunner(
+            PluginRegistry.from_classes([CorrelationScan])
+        ).run("CorrelationScan", {}, ctx)
+    ]
+    assert not any(event.kind == "error" for event in events)
+    url = retain(session, test_case, test_admin, [event.to_wire() for event in events])
+    report = next(
+        item
+        for item in await EvidenceService(session).get_case_evidence(
+            test_case.id, test_admin
+        )
+        if not item.is_folder
+    )
+    report_url = f"/api/evidence/{report.id}/download"
+    app.dependency_overrides[get_current_user] = lambda: test_user
+    visible = client.get(url + "/results").json()["items"]
+    assert visible[0]["data"]["source_fields"] == [
+        {"field": "email", "value": "ada@example.com"}
+    ]
+    assert visible[0]["data"]["matches"][0]["fields"] == [
+        {"field": "email", "value": "charles@example.com"}
+    ]
+    assert visible[0]["data"]["matches"][0]["signal"] == "Shared domain association"
+    assert "skipped_reference" not in str(visible)
+    assert client.get(report_url).status_code == 403
+    warning_link = CaseUserLink(case_id=warning_case.id, user_id=test_user.id)
+    session.add(warning_link)
+    session.commit()
+    assert "skipped_reference" in str(client.get(url + "/results").json())
+    original = client.get(report_url)
+    assert original.status_code == 200
+    assert b"coverage is incomplete" in original.content
+    session.delete(warning_link)
+    session.commit()
+    assert client.get(report_url).status_code == 403
+
+
+def test_hunt_consumers_inherit_verified_skipped_reference_scope(
+    client, session, test_case, test_admin, test_user
+):
+    from app.database.models import Hunt, HuntExecution, HuntStep
+
+    related = Case(case_number="WARNING", title="Warning only")
+    session.add(related)
+    session.flush()
+    related_link = CaseUserLink(case_id=related.id, user_id=test_user.id)
+    session.add_all(
+        [related_link, CaseUserLink(case_id=test_case.id, user_id=test_user.id)]
+    )
+    hunt = Hunt(
+        name="warning-scope",
+        display_name="Warning scope",
+        description="Scan",
+        category="Other",
+        definition_json={"steps": []},
+    )
+    session.add(hunt)
+    session.flush()
+    execution = HuntExecution(
+        hunt_id=hunt.id,
+        case_id=test_case.id,
+        created_by_id=test_admin.id,
+        initial_parameters={},
+        status="completed",
+        definition_snapshot={
+            "steps": [
+                {"step_id": "scan", "plugin_name": "CorrelationScan"},
+                {
+                    "step_id": "report",
+                    "plugin_name": "OtherPlugin",
+                    "parameter_mapping": {"input": "scan.results"},
+                },
+            ]
+        },
+    )
+    session.add(execution)
+    session.flush()
+    session.add_all(
+        [
+            HuntStep(
+                execution_id=execution.id,
+                step_id="scan",
+                plugin_name="CorrelationScan",
+                parameters={},
+                status="completed",
+                output={
+                    "results": [
+                        {
+                            "notice_type": "skipped_reference",
+                            "case_id": related.id,
+                            "case_scope": [test_case.id, related.id],
+                            "message": "Reference coverage is incomplete.",
+                        }
+                    ],
+                    "plugin": "CorrelationScan",
+                },
+            ),
+            HuntStep(
+                execution_id=execution.id,
+                step_id="report",
+                plugin_name="OtherPlugin",
+                parameters={},
+                status="completed",
+                output={"results": [{"copied": "Warning summary"}]},
+            ),
+        ]
+    )
+    session.commit()
+    app.dependency_overrides[get_current_user] = lambda: test_user
+    url = f"/api/hunts/executions/{execution.id}?include_steps=true"
+    assert "Warning summary" in client.get(url).text
+    session.delete(related_link)
+    session.commit()
+    assert "Warning summary" not in client.get(url).text

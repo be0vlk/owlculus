@@ -165,7 +165,7 @@ def test_correlate_returns_employer_and_domain_matches(
     assert matches[1].found_in == "website: https://example.test/about"
 
 
-def test_correlate_preserves_legacy_eligibility_for_unnamed_entities(
+def test_correlate_matches_employer_for_unnamed_entities(
     session: Session, test_user: User
 ) -> None:
     source_case = _case(
@@ -182,7 +182,8 @@ def test_correlate_preserves_legacy_eligibility_for_unnamed_entities(
         )
     session.commit()
 
-    assert EntityCorrelation(session).correlate(source_case, test_user) == []
+    matches = EntityCorrelation(session).correlate(source_case, test_user)
+    assert [match.kind for match in matches] == [CorrelationKind.EMPLOYER]
 
 
 def test_correlate_normalizes_vehicle_identifiers(
