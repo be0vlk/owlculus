@@ -805,3 +805,242 @@ async def test_canonical_ip_matches_preserve_fields_and_skip_unsupported(
             notice["field"] == "ip_address" and case.id in notice["case_scope"]
             for notice in notices
         )
+
+
+@pytest.mark.asyncio
+async def test_employer_to_company_is_bidirectional_without_company_employer_reason(
+    session, test_admin, cases
+):
+    person = await entity(
+        session,
+        test_admin,
+        cases[0],
+        "person",
+        first_name="Ada",
+        employer="  Analytical   Engines ",
+    )
+    company = await entity(
+        session, test_admin, cases[1], "company", name="analytical engines"
+    )
+    colleague = await entity(
+        session,
+        test_admin,
+        cases[1],
+        "person",
+        first_name="Charles",
+        employer="ANALYTICAL ENGINES",
+    )
+    await entity(session, test_admin, cases[0], "company", name="analytical engines")
+    forward = await scan(session, test_admin, cases[0])
+    employers = [g for g in forward if g.get("match_type") == "employer"]
+    group = next(g for g in employers if g["entity_id"] == person.id)
+    assert {m["entity_id"] for m in group["matches"]} == {company.id, colleague.id}
+    assert group["source_fields"] == [
+        {"field": "employer", "value": "  Analytical   Engines "}
+    ]
+    match = next(m for m in group["matches"] if m["entity_id"] == company.id)
+    assert match["fields"] == [{"field": "name", "value": "analytical engines"}]
+    assert "not verified" in match["signal"]
+    for g in employers:
+        if g["entity_type"] == "company":
+            assert all(m["entity_type"] == "person" for m in g["matches"])
+    reverse = await scan(session, test_admin, cases[1])
+    group = next(
+        g
+        for g in reverse
+        if g.get("match_type") == "employer" and g["entity_id"] == company.id
+    )
+    assert [m["entity_id"] for m in group["matches"]] == [person.id]
+    assert group["source_fields"] == match["fields"]
+
+
+@pytest.mark.asyncio
+async def test_exact_profiles_preserve_locations_values_and_rank(
+    session, test_admin, cases
+):
+    raw = " HTTPS://BÜCHER.example.:8080/Ada?tag=One#Bio "
+    canonical = "https://xn--bcher-kva.example:8080/Ada?tag=One#Bio"
+    person = await entity(
+        session,
+        test_admin,
+        cases[0],
+        "person",
+        first_name="Ada",
+        social_media={"linkedin": raw, "other": canonical},
+        usernames=[canonical, canonical],
+    )
+    company = await entity(
+        session,
+        test_admin,
+        cases[1],
+        "company",
+        name="Engines",
+        social_media={"linkedin": canonical, "other": raw},
+    )
+    account = await entity(
+        session,
+        test_admin,
+        cases[1],
+        "person",
+        first_name="Account",
+        usernames=[canonical, canonical],
+    )
+    await entity(session, test_admin, cases[1], "domain", domain="bücher.example")
+    for case, source_id, related_ids in (
+        (cases[0], person.id, {company.id, account.id}),
+        (cases[1], company.id, {person.id}),
+    ):
+        results = await scan(session, test_admin, case)
+        assert results[0]["match_type"] == "exact_profile"
+        group = next(
+            g
+            for g in results
+            if g.get("match_type") == "exact_profile" and g["entity_id"] == source_id
+        )
+        assert group["normalized_value"] == canonical
+        assert {m["entity_id"] for m in group["matches"]} == related_ids
+        assert len(group["matches"]) == len(related_ids)
+        assert all(
+            m["signal_rank"] == 0
+            and "recorded profile reference" in m["signal"]
+            and "ownership" in m["signal"]
+            for m in group["matches"]
+        )
+        fields = (
+            group["source_fields"]
+            if case == cases[0]
+            else group["matches"][0]["fields"]
+        )
+        assert {f["field"] for f in fields} == {
+            "social_media.linkedin",
+            "social_media.other",
+            "usernames[0]",
+            "usernames[1]",
+        }
+        assert {f["value"] for f in fields} == {raw, canonical}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "other",
+    [
+        "http://example.com/Ada?q=One#Bio",
+        "https://example.com/ada?q=One#Bio",
+        "https://example.com/Other?q=One#Bio",
+        "https://example.com/Ada?q=Two#Bio",
+        "https://example.com/Ada?q=One#Other",
+        "https://example.com/Ada?q=One",
+        "https://example.com/Ada",
+        "Ada",
+        "ftp://example.com/Ada?q=One#Bio",
+        "https://example.com:bad/Ada?q=One#Bio",
+        "https://[broken",
+    ],
+)
+async def test_dedicated_profiles_do_not_infer_equivalence_or_host_matches(
+    session, test_admin, cases, other
+):
+    await entity(
+        session,
+        test_admin,
+        cases[0],
+        "person",
+        first_name="Source",
+        social_media={"linkedin": "https://example.com/Ada?q=One#Bio"},
+    )
+    await entity(
+        session,
+        test_admin,
+        cases[1],
+        "company",
+        name="Related",
+        social_media={"linkedin": other},
+    )
+    results = await scan(session, test_admin, cases[0])
+    assert not any("matches" in g for g in results)
+    if other in {"https://[broken", "https://example.com:bad/Ada?q=One#Bio"}:
+        assert any(g.get("field") == "social_media.linkedin" for g in results)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("source_kind", ["empty", "unusable", "malformed"])
+async def test_empty_scan_completes_with_only_source_warnings_and_provenance(
+    session, test_admin, cases, source_kind
+):
+    if source_kind != "empty":
+        session.add(
+            Entity(
+                case_id=cases[0].id,
+                created_by_id=test_admin.id,
+                entity_type="person",
+                data={
+                    "usernames": [
+                        "https://[broken" if source_kind == "malformed" else "handle"
+                    ]
+                },
+            )
+        )
+        session.commit()
+    await entity(
+        session,
+        test_admin,
+        cases[1],
+        "person",
+        first_name="Candidate",
+        usernames=["https://[broken"],
+    )
+    ctx = PluginRun.for_test(
+        session=session,
+        user=test_admin,
+        api_keys={},
+        evidence=[],
+        entities=[],
+        case_id=cases[0].id,
+    )
+    events = [
+        event
+        async for event in PluginRunner(
+            PluginRegistry.from_classes([CorrelationScan])
+        ).run("CorrelationScan", {}, ctx)
+    ]
+    assert events[-1].kind == "complete"
+    assert not any(e.kind == "error" or "matches" in e.payload for e in events)
+    notices = [e.payload for e in events if e.kind == "data"]
+    assert len(notices) == (1 if source_kind == "malformed" else 0)
+    assert all(
+        n["field"] == "usernames[0]" and n["case_scope"] == [cases[0].id]
+        for n in notices
+    )
+    assert all(cases[1].id not in e.payload.get("case_scope", []) for e in events)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "source_profile,related_profile",
+    [
+        ("same-handle", "same-handle"),
+        ("https://example.com/Ada?", "https://example.com/Ada"),
+        ("https://example.com/Ada#", "https://example.com/Ada"),
+        ("https://example.com/Ada?tag=One", "https://example.com/Ada?tag=one"),
+        ("https://example.com/Ada#Bio", "https://example.com/Ada#bio"),
+    ],
+)
+async def test_profiles_do_not_equate_handles_or_discard_url_components(
+    session, test_admin, cases, source_profile, related_profile
+):
+    for case, name, profile in (
+        (cases[0], "Source", source_profile),
+        (cases[1], "Related", related_profile),
+    ):
+        await entity(
+            session,
+            test_admin,
+            case,
+            "person",
+            first_name=name,
+            social_media={"other": profile},
+            usernames=[profile],
+        )
+    results = await scan(session, test_admin, cases[0])
+    assert not any(g.get("match_type") == "exact_profile" for g in results)
+    assert not any(g.get("notice_type") == "skipped_reference" for g in results)

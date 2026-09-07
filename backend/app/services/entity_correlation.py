@@ -6,13 +6,14 @@ import re
 from collections.abc import Iterator
 from dataclasses import dataclass
 from enum import StrEnum
+from urllib.parse import urlsplit
 
 from sqlmodel import Session, col, select
 
-from app.core.hostname import canonical_hostname, website_hostname
+from app.core.hostname import canonical_hostname, normalize_website, website_hostname
 from app.core.ip_address import canonical_ip_address
 from app.database.models import Case, Entity, User
-from app.schemas.entity_schema import entity_display_name
+from app.schemas.entity_schema import SocialMedia, entity_display_name
 from app.services.case_access import CaseAccess
 
 
@@ -23,6 +24,7 @@ class CorrelationKind(StrEnum):
     EMPLOYER = "employer"
     DOMAIN = "domain"
     EMAIL = "email"
+    EXACT_PROFILE = "exact_profile"
     PHONE = "phone"
     IP_ADDRESS = "ip_address"
     VIN = "vin"
@@ -32,6 +34,7 @@ class CorrelationKind(StrEnum):
 EXACT_IDENTIFIER_KINDS = frozenset(
     {
         CorrelationKind.EMAIL,
+        CorrelationKind.EXACT_PROFILE,
         CorrelationKind.PHONE,
         CorrelationKind.VIN,
         CorrelationKind.IP_ADDRESS,
@@ -127,6 +130,8 @@ class EntityCorrelation:
                 wanted.update(_index_key(source, key) for key in refs)
             cursor = sources[-1].id or cursor
             yield ScanProgress("Indexed source Entities", len(sources), (case.id,))
+        if not wanted:
+            return
         readable_case_ids = self.case_access.readable_case_ids(user)
         index: dict[
             tuple[CorrelationKind, str, str],
@@ -315,6 +320,18 @@ def _domain(value: str, *, bare: bool = False) -> str | None:
     return canonical_hostname(text) if bare else None
 
 
+def _profile(value: str) -> str | None:
+    text = value.strip()
+    if not text.lower().startswith(("http://", "https://")):
+        return None
+    parsed = urlsplit(normalize_website(text))
+    # Keep even empty query/fragment delimiters: no resource-equivalence rules
+    # beyond the shared scheme/hostname representation are implied here.
+    authority_and_suffix = text.split("://", 1)[1]
+    authority = re.split(r"[/\?#]", authority_and_suffix, maxsplit=1)[0]
+    return f"{parsed.scheme}://{parsed.netloc}{authority_and_suffix[len(authority):]}"
+
+
 def _email(value: str) -> str:
     """Conservative unquoted mailbox syntax, including older persisted references."""
     text = value.strip()
@@ -384,12 +401,13 @@ def _references(entity: Entity, skipped: list[SkippedReference]) -> References:
             skipped.append(SkippedReference(entity.case_id, entity.id, "ip_address"))
         else:
             add(CorrelationKind.IP_ADDRESS, address, (MatchField("ip_address", raw),))
-    if entity.entity_type == "person":
-        employer = str(entity.data.get("employer") or "")
+    if entity.entity_type in {"person", "company"}:
+        field = "employer" if entity.entity_type == "person" else "name"
+        employer = str(entity.data.get(field) or "")
         add(
             CorrelationKind.EMPLOYER,
-            employer.strip().casefold(),
-            (MatchField("employer", employer),),
+            " ".join(employer.split()).casefold(),
+            (MatchField(field, employer),),
         )
     values: list[tuple[str, str, bool]] = []
     if entity.entity_type == "domain":
@@ -425,6 +443,30 @@ def _references(entity: Entity, skipped: list[SkippedReference]) -> References:
             if entity.entity_type == "domain":
                 add(CorrelationKind.NAME, domain, fields)
     if entity.entity_type in {"person", "company"}:
+        profiles = [
+            (f"social_media.{field}", str(raw))
+            for field, raw in (entity.data.get("social_media") or {}).items()
+            if field in SocialMedia.model_fields and raw
+        ]
+        if entity.entity_type == "person":
+            profiles.extend(
+                (f"usernames[{index}]", str(raw))
+                for index, raw in enumerate(entity.data.get("usernames") or [])
+            )
+        for field, raw in profiles:
+            try:
+                profile = _profile(raw)
+            except ValueError:
+                warning = SkippedReference(entity.case_id, entity.id, field)
+                if warning not in skipped:
+                    skipped.append(warning)
+            else:
+                if profile:
+                    add(
+                        CorrelationKind.EXACT_PROFILE,
+                        profile,
+                        (MatchField(field, raw),),
+                    )
         raw = str(entity.data.get("phone") or "")
         if raw.strip():
             normalized = re.sub(r"[ ().\-]", "", raw.strip())
@@ -453,6 +495,11 @@ def _match_qualification(
     kind: CorrelationKind, source: Entity, other: Entity
 ) -> str | None:
     """Explain the connection, or return None when identifiers exclude it."""
+    if kind is CorrelationKind.EMPLOYER:
+        if source.entity_type == other.entity_type == "company":
+            return None
+        if "company" in {source.entity_type, other.entity_type}:
+            return "Recorded employer/name association; employment is not verified"
     if kind is CorrelationKind.LICENSE_PLATE:
         states = [
             str(entity.data.get("registration_state") or "").strip().casefold()
@@ -478,6 +525,7 @@ def _match_qualification(
         CorrelationKind.DOMAIN: "Shared domain association",
         CorrelationKind.VIN: "Exact VIN match",
         CorrelationKind.EMAIL: "Exact email match",
+        CorrelationKind.EXACT_PROFILE: "Equal recorded profile reference; personal identity and account ownership are not established",
         CorrelationKind.PHONE: "Exact phone match",
         CorrelationKind.IP_ADDRESS: "Exact IP address match",
     }[kind]
