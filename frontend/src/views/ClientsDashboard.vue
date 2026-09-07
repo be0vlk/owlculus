@@ -1,5 +1,8 @@
 <template>
-  <BaseDashboard :error="error" :loading="loading" title="Clients">
+  <BaseDashboard title="Clients">
+    <v-alert v-if="error" type="error" variant="tonal" class="mb-6" role="alert">
+      {{ error }}
+    </v-alert>
     <!-- Clients Data Table -->
     <v-card variant="outlined">
       <!-- Header -->
@@ -67,6 +70,7 @@
         :items="sortedAndFilteredClients"
         :loading="loading"
         class="elevation-0 clients-dashboard-table"
+        :hide-no-data="!!error"
         hover
         item-value="id"
         @dblclick:row="handleRowDoubleClick"
@@ -171,9 +175,11 @@ import NewClientModal from '../components/NewClientModal.vue'
 import EditClientModal from '../components/EditClientModal.vue'
 import { useClients } from '../composables/useClients'
 import { clientService } from '../services/client'
+import { useClientsStore } from '../stores/clients'
 
 const { loading, error, searchQuery, clients, loadData, formatDate, sortedAndFilteredClients } =
   useClients()
+const clientsStore = useClientsStore()
 
 // Vuetify table headers
 const vuetifyHeaders = [
@@ -206,7 +212,7 @@ const closeNewClientModal = () => {
 }
 
 const handleClientCreated = (newClient) => {
-  clients.value.push(newClient)
+  clientsStore.upsert(newClient)
   showNotification(`Client "${newClient.name}" created successfully`, 'success')
 }
 
@@ -221,11 +227,8 @@ const closeEditClientModal = () => {
 }
 
 const handleClientUpdated = (updatedClient) => {
-  const index = clients.value.findIndex((c) => c.id === updatedClient.id)
-  if (index !== -1) {
-    clients.value[index] = updatedClient
-    showNotification(`Client "${updatedClient.name}" updated successfully`, 'success')
-  }
+  clientsStore.upsert(updatedClient)
+  showNotification(`Client "${updatedClient.name}" updated successfully`, 'success')
 }
 
 const handleRowDoubleClick = (event, { item }) => {
@@ -237,7 +240,7 @@ const handleDelete = async (client) => {
 
   try {
     await clientService.deleteClient(client.id)
-    clients.value = clients.value.filter((c) => c.id !== client.id)
+    clientsStore.remove(client.id)
     showNotification(`Client "${client.name}" deleted successfully`, 'success')
   } catch (error) {
     console.error('Error deleting client:', error)

@@ -1,22 +1,8 @@
 <template>
-  <BaseDashboard :error="error" :loading="loading" title="Cases">
-    <template #loading>
-      <v-card variant="outlined">
-        <v-card-title class="d-flex align-center pa-4 bg-surface">
-          <v-skeleton-loader type="text" width="200" />
-          <v-spacer />
-          <div class="d-flex ga-2">
-            <v-skeleton-loader type="button" width="80" />
-            <v-skeleton-loader type="button" width="90" />
-            <v-skeleton-loader type="button" width="100" />
-          </div>
-          <v-skeleton-loader type="button" width="120" class="ml-4" />
-          <v-skeleton-loader type="text" width="200" class="ml-2" />
-        </v-card-title>
-        <v-divider />
-        <v-skeleton-loader type="table" class="pa-4" />
-      </v-card>
-    </template>
+  <BaseDashboard title="Cases">
+    <v-alert v-if="error" type="error" variant="tonal" class="mb-6" role="alert">
+      {{ error }}
+    </v-alert>
 
     <!-- Cases data table -->
     <v-card variant="outlined">
@@ -115,6 +101,7 @@
         :items="enhancedFilteredCases"
         :loading="loading"
         class="elevation-0 case-dashboard-table"
+        :hide-no-data="!!error"
         hover
         item-key="id"
         @click:row="handleRowClick"

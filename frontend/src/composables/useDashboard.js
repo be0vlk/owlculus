@@ -2,7 +2,7 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useActiveCaseStore } from '../stores/activeCase'
-import { clientService } from '../services/client'
+import { useClientsStore } from '../stores/clients'
 import { formatDate } from '@/composables/dateUtils'
 
 export const columns = [
@@ -20,7 +20,10 @@ export function useDashboard() {
 
   const activeCase = useActiveCaseStore()
   const cases = computed(() => activeCase.accessibleCases)
-  const clients = ref({})
+  const clientsStore = useClientsStore()
+  const clients = computed(() =>
+    Object.fromEntries(clientsStore.clients.map((client) => [client.id, client])),
+  )
   const loading = ref(true)
   const error = ref(null)
   const searchQuery = ref('')
@@ -42,11 +45,7 @@ export function useDashboard() {
 
       // Load clients for all authenticated users since read ops are not sensitive
       try {
-        const clientsData = await clientService.getClients()
-        clients.value = clientsData.reduce((acc, client) => {
-          acc[client.id] = client
-          return acc
-        }, {})
+        await clientsStore.refresh()
       } catch (err) {
         console.error('Failed to load clients:', err)
         // Don't set error state for client loading failures
