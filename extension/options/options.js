@@ -1,5 +1,14 @@
-import {api} from "../utils/api.js";
-import {CONFIG_KEYS, storage} from "../utils/storage.js";
+import { OwlculusAPI } from "../utils/api.js";
+import {
+    readSession,
+    selectEndpoint,
+    updateSession,
+    assertCurrent,
+    watchSession,
+    endSession,
+} from "../utils/session.js";
+
+let settingsGeneration = 0;
 
 document.addEventListener("DOMContentLoaded", async () => {
     await loadSettings();
@@ -7,73 +16,43 @@ document.addEventListener("DOMContentLoaded", async () => {
 });
 
 async function loadSettings() {
-    const config = await storage.get([
-        CONFIG_KEYS.API_ENDPOINT,
-        CONFIG_KEYS.AUTH_TOKEN,
-        CONFIG_KEYS.USER_DATA,
-    ]);
-
-    if (config[CONFIG_KEYS.API_ENDPOINT]) {
-        document.getElementById("api-endpoint").value =
-            config[CONFIG_KEYS.API_ENDPOINT];
-    }
-
-    if (config[CONFIG_KEYS.AUTH_TOKEN] && config[CONFIG_KEYS.USER_DATA]) {
-        showAuthStatus(config[CONFIG_KEYS.USER_DATA]);
+    const started = ++settingsGeneration;
+    const snapshot = await readSession();
+    if (started !== settingsGeneration) return;
+    document.getElementById("api-endpoint").value = snapshot.endpoint;
+    if (snapshot.session?.token && snapshot.session.user) {
+        showAuthStatus(snapshot.session.user);
     } else {
         showLoginForm();
     }
 }
 
+watchSession(() => {
+    showLoginForm();
+    void loadSettings();
+});
+
 function setupEventListeners() {
     document
         .getElementById("api-endpoint")
         .addEventListener("blur", async (e) => {
-            const endpoint = e.target.value.trim();
-            if (endpoint) {
-                if (
-                    !endpoint.startsWith("http://") &&
-                    !endpoint.startsWith("https://")
-                ) {
-                    showMessage(
-                        "API endpoint must start with http:// or https://",
-                        "error",
-                    );
-                    return;
-                }
-
-                // Request permission for the new origin
-                const urlPattern = `${endpoint.endsWith('/') ? endpoint : endpoint + '/'}*`;
-
-                try {
-                    const granted = await chrome.permissions.request({
-                        origins: [urlPattern],
-                    });
-
-                    if (granted) {
-                        await storage.set({[CONFIG_KEYS.API_ENDPOINT]: endpoint});
-                        showMessage("API endpoint saved and permission granted!", "success");
-                    } else {
-                        showMessage("Permission was not granted. The extension may not be able to connect to the server.", "error");
-                        return;
-                    }
-                } catch (err) {
-                    console.error("Permission request error:", err);
-                    showMessage("Error requesting permission. Make sure the URL is valid.", "error");
-                    return;
-                }
-
-                const hasToken = (await storage.get(CONFIG_KEYS.AUTH_TOKEN))[
-                    CONFIG_KEYS.AUTH_TOKEN
-                    ];
-                if (!hasToken) {
-                    showLoginForm();
-                }
+            try {
+                await selectEndpoint(e.target.value);
+                await loadSettings();
+                showMessage(
+                    "API endpoint saved and permission granted!",
+                    "success",
+                );
+            } catch (error) {
+                await loadSettings();
+                showMessage(error.message, "error");
             }
         });
 
     document.getElementById("login-btn").addEventListener("click", handleLogin);
-    document.getElementById("logout-btn").addEventListener("click", handleLogout);
+    document
+        .getElementById("logout-btn")
+        .addEventListener("click", handleLogout);
 
     document.getElementById("password").addEventListener("keypress", (e) => {
         if (e.key === "Enter") {
@@ -102,20 +81,22 @@ async function handleLogin() {
     loginBtn.textContent = "Logging in...";
 
     try {
-        await storage.set({[CONFIG_KEYS.API_ENDPOINT]: endpoint});
-        await api.initialize();
+        const api = new OwlculusAPI(await selectEndpoint(endpoint));
 
         const response = await api.login(username, password);
 
         if (response.access_token) {
+            const loginGeneration = settingsGeneration;
             const user = await api.getCurrentUser();
             const userData = {
                 username: user.username,
                 role: user.role,
             };
 
-            await storage.set({[CONFIG_KEYS.USER_DATA]: userData});
+            await updateSession(api.snapshot, { user: userData });
+            await assertCurrent(api.snapshot);
 
+            if (loginGeneration !== settingsGeneration) return;
             showAuthStatus(userData);
             showMessage("Login successful!", "success");
 
@@ -133,7 +114,7 @@ async function handleLogin() {
 
 async function handleLogout() {
     try {
-        await api.logout();
+        await endSession();
         showLoginForm();
         showMessage("Logged out successfully", "info");
     } catch (error) {
@@ -143,6 +124,8 @@ async function handleLogout() {
 }
 
 function showLoginForm() {
+    document.getElementById("current-user").textContent = "";
+    document.getElementById("user-role").textContent = "";
     document.getElementById("login-form").classList.remove("hidden");
     document.getElementById("auth-status").classList.add("hidden");
 }
