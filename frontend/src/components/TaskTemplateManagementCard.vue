@@ -1,5 +1,9 @@
 <template>
-  <v-card :class="embedded ? 'admin-embedded' : 'mb-6'" :variant="embedded ? 'flat' : 'outlined'">
+  <v-card
+    :elevation="embedded ? 0 : undefined"
+    :class="embedded ? 'admin-embedded' : 'mb-6'"
+    :variant="embedded ? 'flat' : 'outlined'"
+  >
     <v-card-title class="operations-heading d-flex flex-wrap ga-3 align-center pa-4 bg-surface">
       <v-icon
         v-if="!embedded"
@@ -94,7 +98,7 @@
             <td class="operations-cell">
               <div class="d-flex align-center" style="gap: 8px">
                 <v-btn
-                  color="primary"
+                  :color="embedded ? undefined : 'primary'"
                   size="small"
                   variant="outlined"
                   icon

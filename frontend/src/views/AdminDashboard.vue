@@ -216,9 +216,11 @@ onMounted(async () => {
 .admin-workspace {
   min-width: 0;
 }
+
 .admin-workspace :deep(.v-card-title) {
   white-space: normal;
 }
+
 .admin-workspace :deep(.admin-dashboard-table) {
   max-width: 100%;
 }

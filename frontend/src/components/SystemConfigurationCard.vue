@@ -1,5 +1,6 @@
 <template>
   <v-card
+    :elevation="embedded ? 0 : undefined"
     :class="[embedded ? 'admin-embedded' : 'mb-6', { 'configuration-workspace': embedded }]"
     :variant="embedded ? 'flat' : 'outlined'"
   >
@@ -64,7 +65,7 @@
 
         <v-row v-if="exampleCaseNumber">
           <v-col cols="12">
-            <v-card variant="outlined" class="pa-4">
+            <v-card :elevation="embedded ? 0 : undefined" variant="outlined" class="pa-4">
               <div class="d-flex align-center">
                 <v-icon icon="mdi-eye" color="info" class="me-3" />
                 <div>
@@ -100,7 +101,7 @@
         variant="flat"
         prepend-icon="mdi-content-save"
         :loading="configLoading"
-        :disabled="!isConfigChanged || !isConfigValid"
+        :disabled="!isConfigChanged || !isConfigValid || configLoading || !!loadError"
         @click="handleSave"
       >
         Save Configuration
