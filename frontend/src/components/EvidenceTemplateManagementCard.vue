@@ -1,5 +1,9 @@
 <template>
-  <v-card :class="embedded ? 'admin-embedded' : 'mb-6'" :variant="embedded ? 'flat' : 'outlined'">
+  <v-card
+    :elevation="embedded ? 0 : undefined"
+    :class="embedded ? 'admin-embedded' : 'mb-6'"
+    :variant="embedded ? 'flat' : 'outlined'"
+  >
     <v-card-title v-if="embedded" class="d-flex flex-wrap align-center ga-3 pa-4">
       <div class="flex-grow-1">
         <h2 class="text-title-large font-weight-bold">Evidence folders</h2>
@@ -90,7 +94,7 @@
                     <div class="d-flex align-center justify-space-between mb-4">
                       <div class="text-title-large font-weight-bold">Folder Structure</div>
                       <v-btn
-                        color="primary"
+                        :color="embedded ? undefined : 'primary'"
                         prepend-icon="mdi-folder-plus"
                         size="small"
                         variant="outlined"

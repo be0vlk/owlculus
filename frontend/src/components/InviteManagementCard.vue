@@ -1,5 +1,5 @@
 <template>
-  <v-card :variant="embedded ? 'flat' : 'outlined'">
+  <v-card :elevation="embedded ? 0 : undefined" :variant="embedded ? 'flat' : 'outlined'">
     <!-- Header -->
     <v-card-title class="operations-heading d-flex flex-wrap ga-3 align-center pa-4 bg-surface">
       <v-icon v-if="!embedded" icon="mdi-email" color="primary" size="large" class="me-3" />
@@ -13,10 +13,11 @@
       </div>
       <div class="d-flex align-center ga-2">
         <v-btn
+          ref="inviteAction"
           color="primary"
           variant="flat"
           prepend-icon="mdi-email-plus"
-          @click="showNewInviteModal = true"
+          @click="openCreateDialog"
         >
           {{ embedded ? 'Invite user' : 'Generate Invite' }}
         </v-btn>
@@ -179,7 +180,7 @@
             v-if="shouldShowCreateInviteButton()"
             color="primary"
             prepend-icon="mdi-email-plus"
-            @click="showNewInviteModal = true"
+            @click="openCreateDialog"
           >
             {{ embedded ? 'Invite user' : 'Generate Invite' }}
           </v-btn>
@@ -197,7 +198,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useInvites } from '@/composables/useInvites'
 import NewInviteModal from './NewInviteModal.vue'
 
@@ -261,9 +262,18 @@ watch([loading, error, pendingCount], () => {
   if (!loading.value) emit('count', error.value ? null : pendingCount.value)
 })
 
-const openCreateDialog = () => {
+const inviteAction = ref(null)
+let inviteOrigin = null
+const openCreateDialog = (event) => {
+  inviteOrigin = event?.currentTarget || inviteAction.value?.$el
   showNewInviteModal.value = true
 }
+watch(showNewInviteModal, async (show, wasOpen) => {
+  if (!show && wasOpen) {
+    await nextTick()
+    inviteOrigin?.focus()
+  }
+})
 defineExpose({ openCreateDialog })
 
 const handleCopyInviteLink = async (invite) => {
