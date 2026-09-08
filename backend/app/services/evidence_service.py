@@ -10,7 +10,7 @@ template-based folder structures, and role-based access control for OSINT invest
 from pathlib import Path
 from typing import Any, List, NoReturn, Optional, cast
 
-from sqlmodel import Session, col, select
+from sqlmodel import Session, select
 
 from app.core.exceptions import (
     AuthorizationException,
@@ -885,6 +885,27 @@ class EvidenceService:
 
             self.case_access.writable(current_user, db_folder.case_id)
 
+            # Storage normalizes paths, so aliases must share a deletion scope.
+            folder_path = normalize_folder_path(db_folder.folder_path or "")
+            affected_evidence = [db_folder]
+            if folder_path:
+                case_evidence = self.db.exec(
+                    select(models.Evidence).where(
+                        models.Evidence.case_id == db_folder.case_id,
+                        models.Evidence.id != db_folder.id,
+                    )
+                ).all()
+                for evidence in case_evidence:
+                    evidence_path = normalize_folder_path(evidence.folder_path or "")
+                    if evidence_path == folder_path or evidence_path.startswith(
+                        f"{folder_path}/"
+                    ):
+                        affected_evidence.append(evidence)
+
+            # Authorize the entire deletion set before touching files or records.
+            for evidence in affected_evidence:
+                self.require_read(evidence, current_user)
+
             if db_folder.folder_path:
                 try:
                     delete_folder(db_folder.case_id, db_folder.folder_path)
@@ -897,27 +918,17 @@ class EvidenceService:
                     )
                     raise DomainException("Error deleting folder") from e
 
-            # Remove all evidence records within this folder hierarchy
-            subfolder_evidence = self.db.exec(
-                select(models.Evidence).where(
-                    models.Evidence.case_id == db_folder.case_id,
-                    col(models.Evidence.folder_path).like(f"{db_folder.folder_path}%"),
-                )
-            ).all()
-
             with transaction(self.db):
-                for evidence in subfolder_evidence:
+                for evidence in affected_evidence:
                     provenance = self.db.get(models.CorrelationEvidence, evidence.id)
                     if provenance is not None:
                         self.db.delete(provenance)
                     self.db.delete(evidence)
 
-                self.db.delete(db_folder)
-
             folder_logger.bind(
                 case_id=db_folder.case_id,
                 folder_title=db_folder.title,
-                subfolder_count=len(subfolder_evidence),
+                subfolder_count=len(affected_evidence),
                 event_type="folder_deletion_success",
             ).info("Folder deleted successfully")
 
