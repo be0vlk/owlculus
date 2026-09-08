@@ -1,8 +1,8 @@
 """Durable hunt behavior through independent API, dispatcher and worker processes."""
 
-from app.database.models import Hunt
 from sqlmodel import Session
 
+from app.database.models import Hunt
 from tests.executions.conftest import eventually
 
 
@@ -235,9 +235,10 @@ def test_hunt_incompatible_worker_fails_before_provider(execution_system):
 def test_hunt_cutover_preserves_historical_output_and_interrupts_legacy_work(
     execution_system,
 ):
-    from app.database.models import HuntExecution, HuntStep
-    from app.database.upgrade_executions import upgrade
     from sqlalchemy import text
+
+    from app.database.models import HuntExecution, HuntStep, User
+    from app.database.upgrade_executions import upgrade
 
     system = execution_system
     with Session(system.engine) as db:
@@ -319,6 +320,15 @@ def test_hunt_cutover_preserves_historical_output_and_interrupts_legacy_work(
         assert original["context_data"] == {"kept": True}
         assert original["steps"][0]["id"] == step_id
         assert len(original["steps"]) == 2
+        # Legacy definitions have no accepted dependency snapshot. Current Case
+        # protection hides unverified copied output from ordinary members.
+        assert all(s["output"]["results"] == [] for s in original["steps"])
+        with Session(system.engine) as db:
+            db.get(User, system.user_id).role = "Admin"
+            db.commit()
+        original = client.get(
+            f"/api/hunts/executions/{completed_id}?include_steps=true"
+        ).json()
         assert all(
             s["output"]["results"] == [{"retained": True}] for s in original["steps"]
         )
@@ -385,9 +395,10 @@ def test_hunt_effects_are_sanitized_and_redelivery_preserves_terminal_output(
 def test_stale_hunt_owner_cannot_write_output_or_effects(execution_system):
     from datetime import timedelta
 
+    from sqlmodel import select
+
     from app.core.utils import get_utc_now
     from app.database.models import ExecutionControl
-    from sqlmodel import select
 
     system = execution_system
     _, client = system.api()

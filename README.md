@@ -86,6 +86,10 @@ is created, the token is consumed: use the normal login page on this and subsequ
 upgraded installation already has users, setup is skipped and no setup token is
 created.
 
+Before updating an existing installation, follow the
+[database migration and deployment procedure](backend/MIGRATION.md). It covers
+backups, the required initialization step, preserved data, and session changes.
+
 The default gateway listens on port 80 without restricting the hostname, so the site
 also works through `127.0.0.1`, a LAN address, or another local hostname. Browser API
 and WebSocket requests remain same-origin through Caddy. To use a public hostname,

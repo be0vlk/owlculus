@@ -123,14 +123,29 @@ def upgrade_hunts(database_engine: Engine = engine) -> None:
                 (SELECT 1 FROM executioncontrol WHERE hunt_execution_id=huntexecution.id)
         """))
         # Preserve numeric identities and all output. Give duplicate historical
-        # associations an explicit label before enforcing uniqueness.
+        # associations an explicit, unused label before enforcing uniqueness.
         connection.execute(text("""
-            WITH duplicates AS (
-                SELECT id, row_number() OVER (PARTITION BY execution_id, step_id ORDER BY id) AS occurrence
-                FROM huntstep
-            )
-            UPDATE huntstep SET step_id=step_id || '__legacy_duplicate_' || huntstep.id
-            FROM duplicates WHERE huntstep.id=duplicates.id AND duplicates.occurrence > 1
+            DO $$ DECLARE
+                duplicate_step RECORD;
+                replacement TEXT;
+            BEGIN
+                FOR duplicate_step IN
+                    SELECT id, execution_id, step_id FROM (
+                        SELECT id, execution_id, step_id,
+                            row_number() OVER (PARTITION BY execution_id, step_id ORDER BY id) AS occurrence
+                        FROM huntstep
+                    ) AS duplicates WHERE occurrence > 1 ORDER BY id
+                LOOP
+                    replacement := duplicate_step.step_id || '__legacy_duplicate_' || duplicate_step.id;
+                    WHILE EXISTS (
+                        SELECT 1 FROM huntstep
+                        WHERE execution_id = duplicate_step.execution_id AND step_id = replacement
+                    ) LOOP
+                        replacement := replacement || '_';
+                    END LOOP;
+                    UPDATE huntstep SET step_id = replacement WHERE id = duplicate_step.id;
+                END LOOP;
+            END $$
         """))
         connection.execute(
             text(
@@ -306,6 +321,24 @@ def upgrade(database_engine: Engine = engine) -> None:
                     "INSERT INTO schema_upgrade(version) VALUES ('007_shared_observation')"
                 )
             )
+
+        # main stored retries in a required column with only an ORM-side default.
+        # New workers omit it. Keep historical values while allowing new inserts,
+        # including installations that have already applied execution versions 1-7.
+        connection.execute(text("""DO $$ BEGIN
+            IF EXISTS (
+                SELECT 1 FROM pg_attribute
+                WHERE attrelid = 'huntstep'::regclass
+                    AND attname = 'retry_count' AND NOT attisdropped
+            ) THEN
+                ALTER TABLE huntstep ALTER COLUMN retry_count SET DEFAULT 0;
+            END IF;
+        END $$"""))
+        connection.execute(
+            text(
+                "INSERT INTO schema_upgrade(version) VALUES ('008_legacy_hunt_retries') ON CONFLICT DO NOTHING"
+            )
+        )
 
 
 if __name__ == "__main__":
