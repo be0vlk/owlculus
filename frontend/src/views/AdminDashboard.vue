@@ -1,63 +1,113 @@
 <template>
-  <BaseDashboard :error="error" :loading="loading" title="Admin">
-    <!-- Main Content -->
-    <!-- User and Invite Management -->
-    <v-card class="mb-6" variant="outlined">
-      <!-- Header -->
-      <v-card-title class="operations-heading d-flex flex-wrap ga-3 align-center pa-4 bg-surface">
-        <v-icon class="me-3" color="primary" icon="mdi-account-group" size="large" />
-        <div class="flex-grow-1">
-          <h2 class="text-title-large font-weight-bold">User Management</h2>
-          <div class="text-body-medium text-medium-emphasis">
-            Manage system users and their permissions
+  <BaseDashboard compact :loading="loading" title="Admin">
+    <template #header>
+      <header class="d-flex flex-wrap align-center ga-4 mb-6">
+        <div class="d-flex align-center ga-3">
+          <v-icon icon="mdi-shield-account-outline" color="primary" size="28" />
+          <div>
+            <h1 class="text-headline-small font-weight-bold">Admin</h1>
+            <p class="text-body-medium text-medium-emphasis mb-0">
+              Manage workspace access and defaults
+            </p>
           </div>
         </div>
-      </v-card-title>
+        <v-spacer />
+        <p class="text-body-medium text-medium-emphasis mb-0" aria-live="polite">
+          <span>{{ userCount === null ? 'Users unavailable' : `${userCount} users` }}</span>
+          <span aria-hidden="true" class="mx-3">·</span>
+          <span>{{
+            inviteCount === null ? 'Pending invites unavailable' : `${inviteCount} pending invites`
+          }}</span>
+        </p>
+      </header>
+    </template>
 
-      <v-divider />
+    <v-tabs v-model="activeTab" aria-label="Administration sections" show-arrows>
+      <v-tab
+        v-for="tab in tabs"
+        :id="`admin-tab-${tab.value}`"
+        :key="tab.value"
+        :value="tab.value"
+        :aria-controls="`admin-panel-${tab.value}`"
+        >{{ tab.label }}</v-tab
+      >
+    </v-tabs>
+    <v-divider />
 
-      <!-- Tabs -->
-      <v-tabs v-model="activeTab" bg-color="surface" class="px-4">
-        <v-tab prepend-icon="mdi-account" value="users">Users</v-tab>
-        <v-tab prepend-icon="mdi-email" value="invites">Invites</v-tab>
-      </v-tabs>
-
-      <v-divider />
-
-      <!-- Tab Content -->
-      <v-tabs-window v-model="activeTab">
-        <!-- Users Tab -->
-        <v-tabs-window-item value="users">
+    <div class="admin-workspace pt-6">
+      <section
+        v-for="tab in tabs"
+        v-show="activeTab === tab.value"
+        :id="`admin-panel-${tab.value}`"
+        :key="tab.value"
+        role="tabpanel"
+        :aria-labelledby="`admin-tab-${tab.value}`"
+        tabindex="0"
+      >
+        <template v-if="visited.has(tab.value)">
           <UserManagementCard
+            v-if="tab.value === 'users'"
+            embedded
+            @count="userCount = $event"
+            @invite="inviteUser"
             @confirmDelete="handleConfirmDelete"
             @notification="handleNotification"
           />
-        </v-tabs-window-item>
-
-        <!-- Invites Tab -->
-        <v-tabs-window-item value="invites">
           <InviteManagementCard
+            v-else-if="tab.value === 'invites'"
+            ref="inviteCard"
+            embedded
+            @count="inviteCount = $event"
             @confirmDelete="handleConfirmDelete"
             @notification="handleNotification"
           />
-        </v-tabs-window-item>
-      </v-tabs-window>
-    </v-card>
-
-    <!-- API Key Management -->
-    <ApiKeyManagementCard @confirmDelete="handleConfirmDelete" @notification="handleNotification" />
-
-    <!-- System Configuration -->
-    <SystemConfigurationCard @notification="handleNotification" />
-
-    <!-- Evidence Template Management -->
-    <EvidenceTemplateManagementCard @notification="handleNotification" />
-
-    <!-- Task Template Management -->
-    <TaskTemplateManagementCard
-      @notification="handleNotification"
-      @confirmDelete="handleConfirmDelete"
-    />
+          <ApiKeyManagementCard
+            v-else-if="tab.value === 'keys'"
+            embedded
+            @confirmDelete="handleConfirmDelete"
+            @notification="handleNotification"
+          />
+          <template v-else-if="tab.value === 'templates'">
+            <v-tabs v-model="templateTab" aria-label="Template types" show-arrows class="mb-4">
+              <v-tab
+                id="template-tab-evidence"
+                value="evidence"
+                aria-controls="template-panel-evidence"
+                >Evidence folders</v-tab
+              >
+              <v-tab id="template-tab-tasks" value="tasks" aria-controls="template-panel-tasks"
+                >Task templates</v-tab
+              >
+            </v-tabs>
+            <section
+              id="template-panel-evidence"
+              v-show="templateTab === 'evidence'"
+              role="tabpanel"
+              aria-labelledby="template-tab-evidence"
+            >
+              <EvidenceTemplateManagementCard embedded @notification="handleNotification" />
+            </section>
+            <section
+              id="template-panel-tasks"
+              v-show="templateTab === 'tasks'"
+              role="tabpanel"
+              aria-labelledby="template-tab-tasks"
+            >
+              <TaskTemplateManagementCard
+                embedded
+                @notification="handleNotification"
+                @confirmDelete="handleConfirmDelete"
+              />
+            </section>
+          </template>
+          <SystemConfigurationCard
+            v-else-if="tab.value === 'configuration'"
+            embedded
+            @notification="handleNotification"
+          />
+        </template>
+      </section>
+    </div>
   </BaseDashboard>
 
   <!-- Confirmation Dialog -->
@@ -78,8 +128,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, watch, nextTick, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useNotifications } from '@/composables/useNotifications'
 import BaseDashboard from '@/components/BaseDashboard.vue'
@@ -96,8 +146,30 @@ const authStore = useAuthStore()
 
 // State
 const loading = ref(true)
-const error = ref(null)
-const activeTab = ref('users')
+const route = useRoute()
+const tabs = [
+  { value: 'users', label: 'Users' },
+  { value: 'invites', label: 'Invites' },
+  { value: 'keys', label: 'API keys' },
+  { value: 'templates', label: 'Templates' },
+  { value: 'configuration', label: 'Case numbering' },
+]
+const activeTab = computed({
+  get: () => (tabs.some((tab) => tab.value === route.query.tab) ? route.query.tab : 'users'),
+  set: (tab) => router.replace({ query: { ...route.query, tab } }),
+})
+// Access lists also supply the summary. Other workspaces initialize on first visit.
+const visited = ref(new Set(['users', 'invites']))
+watch(activeTab, (tab) => visited.value.add(tab), { immediate: true })
+const templateTab = ref('evidence')
+const userCount = ref(null)
+const inviteCount = ref(null)
+const inviteCard = ref([])
+const inviteUser = async () => {
+  await router.replace({ query: { ...route.query, tab: 'invites' } })
+  await nextTick()
+  inviteCard.value[0]?.openCreateDialog()
+}
 
 // Notifications
 const { snackbar, showNotification, closeNotification } = useNotifications()
@@ -139,3 +211,15 @@ onMounted(async () => {
   loading.value = false
 })
 </script>
+
+<style scoped>
+.admin-workspace {
+  min-width: 0;
+}
+.admin-workspace :deep(.v-card-title) {
+  white-space: normal;
+}
+.admin-workspace :deep(.admin-dashboard-table) {
+  max-width: 100%;
+}
+</style>

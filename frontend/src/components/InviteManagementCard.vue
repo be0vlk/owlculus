@@ -1,11 +1,15 @@
 <template>
-  <v-card variant="outlined">
+  <v-card :variant="embedded ? 'flat' : 'outlined'">
     <!-- Header -->
     <v-card-title class="operations-heading d-flex flex-wrap ga-3 align-center pa-4 bg-surface">
-      <v-icon icon="mdi-email" color="primary" size="large" class="me-3" />
+      <v-icon v-if="!embedded" icon="mdi-email" color="primary" size="large" class="me-3" />
       <div class="flex-grow-1">
-        <h2 class="text-title-large font-weight-bold">Invite Management</h2>
-        <div class="text-body-medium text-medium-emphasis">Manage user invitation links</div>
+        <h2 class="text-title-large font-weight-bold">
+          {{ embedded ? 'Invites' : 'Invite Management' }}
+        </h2>
+        <div v-if="!embedded" class="text-body-medium text-medium-emphasis">
+          Manage user invitation links
+        </div>
       </div>
       <div class="d-flex align-center ga-2">
         <v-btn
@@ -14,7 +18,7 @@
           prepend-icon="mdi-email-plus"
           @click="showNewInviteModal = true"
         >
-          Generate Invite
+          {{ embedded ? 'Invite user' : 'Generate Invite' }}
         </v-btn>
         <v-tooltip text="Refresh invite list" location="bottom">
           <template #activator="{ props }">
@@ -36,7 +40,7 @@
     <!-- Search Toolbar -->
     <v-card-text class="pa-4">
       <v-row class="mb-0 align-center">
-        <v-col cols="12" md="8">
+        <v-col cols="12" md="4">
           <div class="d-flex align-center ga-2">
             <v-btn
               color="error"
@@ -49,6 +53,17 @@
               Cleanup Expired
             </v-btn>
           </div>
+        </v-col>
+
+        <v-col cols="12" md="4">
+          <v-select
+            v-model="statusFilter"
+            :items="statusOptions"
+            label="Invitation status"
+            variant="outlined"
+            density="comfortable"
+            hide-details
+          />
         </v-col>
 
         <!-- Search Controls -->
@@ -72,11 +87,17 @@
 
     <v-divider />
 
+    <v-alert v-if="error" type="error" variant="tonal" class="ma-4">
+      {{ error }}
+      <v-btn variant="text" @click="loadInvites">Retry</v-btn>
+    </v-alert>
+
     <v-data-table
+      v-else
       :cell-props="{ class: 'operations-cell' }"
       :header-props="{ class: 'operations-column' }"
       :headers="inviteHeaders"
-      :items="sortedAndFilteredInvites"
+      :items="filteredInvites"
       :loading="loading"
       item-value="id"
       class="elevation-0 admin-dashboard-table"
@@ -92,7 +113,7 @@
       <!-- Status column -->
       <template #[`item.status`]="{ item }">
         <v-chip :color="getInviteStatusColor(item)" size="small" variant="tonal">
-          {{ getInviteStatus(item) }}
+          {{ getInviteStatus(item) === 'Active' ? 'Pending' : getInviteStatus(item) }}
         </v-chip>
       </template>
 
@@ -145,10 +166,14 @@
         <div class="text-center pa-12">
           <v-icon class="mb-4" color="grey-lighten-1" icon="mdi-email-outline" size="64" />
           <h3 class="text-title-large font-weight-medium mb-2">
-            {{ getInviteEmptyStateTitle() }}
+            {{ statusFilter === 'all' ? getInviteEmptyStateTitle() : `No ${statusFilter} invites` }}
           </h3>
           <p class="text-body-medium text-medium-emphasis mb-4">
-            {{ getInviteEmptyStateMessage() }}
+            {{
+              statusFilter === 'all'
+                ? getInviteEmptyStateMessage()
+                : 'Try another status or search term, or invite someone new.'
+            }}
           </p>
           <v-btn
             v-if="shouldShowCreateInviteButton()"
@@ -156,7 +181,7 @@
             prepend-icon="mdi-email-plus"
             @click="showNewInviteModal = true"
           >
-            Generate Invite
+            {{ embedded ? 'Invite user' : 'Generate Invite' }}
           </v-btn>
         </div>
       </template>
@@ -172,15 +197,18 @@
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useInvites } from '@/composables/useInvites'
 import NewInviteModal from './NewInviteModal.vue'
 
-const emit = defineEmits(['notification', 'confirmDelete'])
+defineProps({ embedded: Boolean })
+const emit = defineEmits(['notification', 'confirmDelete', 'count'])
 
 const {
   // State
+  invites,
   loading,
+  error,
   inviteSearchQuery,
   cleanupLoading,
 
@@ -212,6 +240,31 @@ const {
   closeInviteModal,
   handleInviteCreated,
 } = useInvites()
+
+const statusFilter = ref('pending')
+const statusOptions = [
+  { title: 'Pending', value: 'pending' },
+  { title: 'Expired', value: 'expired' },
+  { title: 'All invitations', value: 'all' },
+]
+const pendingCount = computed(
+  () => invites.value.filter((invite) => !invite.is_used && !invite.is_expired).length,
+)
+const filteredInvites = computed(() =>
+  sortedAndFilteredInvites.value.filter((invite) => {
+    if (statusFilter.value === 'pending') return !invite.is_used && !invite.is_expired
+    if (statusFilter.value === 'expired') return !invite.is_used && invite.is_expired
+    return true
+  }),
+)
+watch([loading, error, pendingCount], () => {
+  if (!loading.value) emit('count', error.value ? null : pendingCount.value)
+})
+
+const openCreateDialog = () => {
+  showNewInviteModal.value = true
+}
+defineExpose({ openCreateDialog })
 
 const handleCopyInviteLink = async (invite) => {
   try {
