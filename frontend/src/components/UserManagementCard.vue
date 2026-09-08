@@ -1,5 +1,5 @@
 <template>
-  <v-card :variant="embedded ? 'flat' : 'outlined'">
+  <v-card :elevation="embedded ? 0 : undefined" :variant="embedded ? 'flat' : 'outlined'">
     <!-- Header -->
     <v-card-title class="operations-heading d-flex flex-wrap ga-3 align-center pa-4 bg-surface">
       <v-icon v-if="!embedded" icon="mdi-account-cog" color="primary" size="large" class="me-3" />
@@ -22,7 +22,7 @@
           Invite user
         </v-btn>
         <v-btn
-          color="primary"
+          :color="embedded ? undefined : 'primary'"
           :variant="embedded ? 'outlined' : 'flat'"
           prepend-icon="mdi-account-plus"
           @click="showNewUserModal = true"
@@ -98,7 +98,7 @@
       hover
     >
       <template #[`item.username`]="{ item }">
-        <div class="py-2" style="overflow-wrap: anywhere">
+        <div class="py-2" style="min-width: 220px; overflow-wrap: anywhere">
           <div class="font-weight-medium">{{ item.username }}</div>
           <div v-if="embedded" class="text-body-small text-medium-emphasis">{{ item.email }}</div>
         </div>
