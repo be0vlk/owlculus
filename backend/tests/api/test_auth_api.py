@@ -1,8 +1,13 @@
 """Tests for authentication API endpoints."""
 
+import asyncio
+import threading
+
+import bcrypt
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
 from sqlmodel import Session
 
 from app.core import security
@@ -91,6 +96,77 @@ def test_login_rejects_invalid_credentials(
 def test_login_requires_both_form_fields(client: TestClient, data: dict[str, str]):
     response = client.post("/api/auth/login", data=data)
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+
+@pytest.mark.parametrize("account_state", ["active", "inactive", "missing"])
+@pytest.mark.parametrize("password", ["a" * 73, "é" * 37, "a" * 200, "a" * 201])
+def test_login_rejects_oversized_passwords_consistently(
+    session: Session,
+    test_user_with_password: tuple[User, str],
+    client: TestClient,
+    account_state: str,
+    password: str,
+):
+    user, _ = test_user_with_password
+    if account_state == "inactive":
+        user.is_active = False
+        session.add(user)
+        session.commit()
+    username = "missing" if account_state == "missing" else user.username
+    response = client.post(
+        "/api/auth/login", data={"username": username, "password": password}
+    )
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert response.json() == {"detail": "Incorrect username or password"}
+
+
+@pytest.mark.asyncio
+async def test_login_verification_allows_unrelated_api_work(
+    session: Session, test_user_with_password: tuple[User, str], monkeypatch
+):
+    user, password = test_user_with_password
+    started = threading.Event()
+    release = threading.Event()
+    event_loop_thread = threading.get_ident()
+    checkpw = bcrypt.checkpw
+
+    def held_checkpw(plain: bytes, hashed: bytes) -> bool:
+        assert threading.get_ident() != event_loop_thread
+        started.set()
+        assert release.wait(10), "Verification was not released"
+        return checkpw(plain, hashed)
+
+    async def get_session():
+        return session
+
+    monkeypatch.setattr(bcrypt, "checkpw", held_checkpw)
+    app.dependency_overrides[get_db] = get_session
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as api:
+        login = asyncio.create_task(
+            api.post(
+                "/api/auth/login",
+                data={"username": user.username, "password": password},
+            )
+        )
+        try:
+            assert await asyncio.to_thread(started.wait, 3)
+            health = await asyncio.wait_for(api.get("/health/live"), timeout=3)
+            setup = await asyncio.wait_for(api.get("/api/auth/setup-status"), timeout=3)
+            assert health.json() == {"status": "healthy"}
+            assert setup.json() == {"setup_required": False}
+            assert not login.done()
+        finally:
+            release.set()
+            response = await login
+        assert response.status_code == status.HTTP_200_OK
+        profile = await api.get(
+            "/api/users/me",
+            headers={"Authorization": f"Bearer {response.json()['access_token']}"},
+        )
+        assert profile.status_code == status.HTTP_200_OK
+        assert profile.json()["username"] == user.username
 
 
 def _execution(session: Session, user: User) -> HuntExecution:

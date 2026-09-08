@@ -2,6 +2,7 @@
 
 from datetime import timedelta
 
+from anyio import CapacityLimiter, to_thread
 from sqlmodel import Session, select
 
 from app.core import security
@@ -17,6 +18,11 @@ from app.services.case_access import CaseAccess
 TOKEN_TYPE_BEARER = "bearer"
 WEBSOCKET_TOKEN_TTL_SECONDS = 30
 INVALID_CREDENTIALS_ERROR = "Incorrect username or password"
+BCRYPT_MAX_PASSWORD_BYTES = 72
+# Keep login CPU work bounded without consuming the default limiter used by
+# synchronous API endpoints and dependencies. Shared abuse limits are separate.
+LOGIN_PASSWORD_WORKERS = 4
+_password_verification_limiter = CapacityLimiter(LOGIN_PASSWORD_WORKERS)
 EXECUTION_NOT_FOUND_ERROR = "Execution not found"
 
 
@@ -32,7 +38,13 @@ class AuthService:
         logger = get_security_logger(
             username=username, action="authenticate", event_type="login_attempt"
         )
-        if not username or not password or len(username) > 100 or len(password) > 200:
+        if (
+            not username
+            or not password
+            or len(username) > 100
+            or len(password) > 200
+            or len(password.encode("utf-8")) > BCRYPT_MAX_PASSWORD_BYTES
+        ):
             logger.bind(
                 event_type="login_failed", failure_reason="invalid_credentials"
             ).warning("Authentication failed")
@@ -46,7 +58,12 @@ class AuthService:
         if (
             user is None
             or not user.is_active
-            or not security.verify_password(password, user.password_hash)
+            or not await to_thread.run_sync(
+                security.verify_password,
+                password,
+                user.password_hash,
+                limiter=_password_verification_limiter,
+            )
         ):
             logger.bind(event_type="login_failed").warning("Authentication failed")
             raise AuthenticationException(INVALID_CREDENTIALS_ERROR)
