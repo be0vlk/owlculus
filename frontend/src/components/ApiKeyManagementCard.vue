@@ -1,9 +1,11 @@
 <template>
-  <v-card class="mb-6" variant="outlined">
+  <v-card :class="embedded ? 'admin-embedded' : 'mb-6'" :variant="embedded ? 'flat' : 'outlined'">
     <v-card-title class="operations-heading d-flex flex-wrap ga-3 align-center pa-4 bg-surface">
-      <v-icon icon="mdi-key" color="primary" size="large" class="me-3" />
+      <v-icon v-if="!embedded" icon="mdi-key" color="primary" size="large" class="me-3" />
       <div class="flex-grow-1">
-        <h2 class="text-title-large font-weight-bold">API Key Management</h2>
+        <h2 class="text-title-large font-weight-bold">
+          {{ embedded ? 'API keys' : 'API Key Management' }}
+        </h2>
         <div class="text-body-medium text-medium-emphasis">
           Manage API keys for external services and plugins
         </div>
@@ -303,6 +305,7 @@
 </template>
 
 <script setup>
+defineProps({ embedded: Boolean })
 import { onMounted, ref, useId } from 'vue'
 import { useApiKeys } from '@/composables/useApiKeys'
 

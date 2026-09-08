@@ -1,8 +1,25 @@
 <template>
-  <v-card class="mb-6" variant="outlined">
+  <v-card :class="embedded ? 'admin-embedded' : 'mb-6'" :variant="embedded ? 'flat' : 'outlined'">
+    <v-card-title v-if="embedded" class="d-flex flex-wrap align-center ga-3 pa-4">
+      <div class="flex-grow-1">
+        <h2 class="text-title-large font-weight-bold">Evidence folders</h2>
+        <p class="text-body-medium text-medium-emphasis mb-0">
+          Configure folder structures for each investigation type
+        </p>
+      </div>
+      <v-btn
+        color="primary"
+        variant="flat"
+        prepend-icon="mdi-content-save"
+        :loading="saving"
+        :disabled="saving || loading || !!error"
+        @click="saveTemplates"
+        >Save Changes</v-btn
+      >
+    </v-card-title>
     <v-expansion-panels v-model="expansionPanel" variant="accordion">
-      <v-expansion-panel>
-        <v-expansion-panel-title class="pa-4 bg-surface">
+      <v-expansion-panel :elevation="embedded ? 0 : undefined" :static="embedded">
+        <v-expansion-panel-title v-if="!embedded" class="pa-4 bg-surface">
           <div class="d-flex align-center w-100">
             <v-icon icon="mdi-folder-multiple" color="primary" size="large" class="me-3" />
             <div class="flex-grow-1">
@@ -124,6 +141,7 @@
 </template>
 
 <script setup>
+const props = defineProps({ embedded: Boolean })
 import { ref, onMounted } from 'vue'
 import { systemService } from '@/services/system'
 import FolderEditor from './FolderEditor.vue'
@@ -134,7 +152,7 @@ const error = ref('')
 const saveSuccess = ref(false)
 const activeTab = ref('Company')
 const templates = ref({})
-const expansionPanel = ref() // Start collapsed (undefined means collapsed)
+const expansionPanel = ref(props.embedded ? 0 : undefined)
 
 const loadTemplates = async () => {
   loading.value = true

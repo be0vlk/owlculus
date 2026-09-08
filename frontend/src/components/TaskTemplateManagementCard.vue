@@ -1,9 +1,17 @@
 <template>
-  <v-card class="mb-6" variant="outlined">
+  <v-card :class="embedded ? 'admin-embedded' : 'mb-6'" :variant="embedded ? 'flat' : 'outlined'">
     <v-card-title class="operations-heading d-flex flex-wrap ga-3 align-center pa-4 bg-surface">
-      <v-icon icon="mdi-clipboard-text" color="primary" size="large" class="me-3" />
+      <v-icon
+        v-if="!embedded"
+        icon="mdi-clipboard-text"
+        color="primary"
+        size="large"
+        class="me-3"
+      />
       <div class="flex-grow-1">
-        <h2 class="text-title-large font-weight-bold">Task Templates</h2>
+        <h2 class="text-title-large font-weight-bold">
+          {{ embedded ? 'Task templates' : 'Task Templates' }}
+        </h2>
         <div class="text-body-medium text-medium-emphasis">
           Manage reusable task templates for standardized workflows
         </div>
@@ -196,6 +204,7 @@
 </template>
 
 <script setup>
+defineProps({ embedded: Boolean })
 import { onMounted, ref, useId } from 'vue'
 import { useTaskTemplates } from '@/composables/useTaskTemplates'
 import TaskTemplateForm from './TaskTemplateForm.vue'
