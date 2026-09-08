@@ -9,9 +9,11 @@ from app.api import auth, cases, evidence, tasks, users
 from app.core import file_storage
 from app.core.exception_handler import handle_domain_exception
 from app.core.exceptions import BaseException as DomainException
+from app.core.login_rate_limiting import get_login_rate_limiter
 from app.core.security import get_password_hash
 from app.database.connection import get_db
 from app.database.models import Case, CaseUserLink, User
+from tests.login_admission import admitted_login
 
 
 @pytest.fixture
@@ -58,6 +60,7 @@ def relationship_api(engine, tmp_path, monkeypatch):
             yield db
 
     api = FastAPI()
+    api.dependency_overrides[get_login_rate_limiter] = admitted_login
     api.add_exception_handler(DomainException, handle_domain_exception)
     for module, prefix in [
         (auth, "auth"),

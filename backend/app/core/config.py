@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     FORWARDED_ALLOW_IPS: str = os.environ.get("FORWARDED_ALLOW_IPS", "127.0.0.1,::1")
     REDIS_URL: str = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
     ALGORITHM: str = "HS256"
+    LOGIN_IP_MAX_ATTEMPTS: int = Field(default=30, ge=1, le=10000)
+    LOGIN_ACCOUNT_MAX_ATTEMPTS: int = Field(default=10, ge=1, le=10000)
+    LOGIN_LIMIT_WINDOW_SECONDS: int = Field(default=300, ge=1, le=86400)
 
     def get_database_url(self) -> str:
         return self.DATABASE_URI

@@ -32,3 +32,18 @@ def test_missing_required_setting_is_rejected(monkeypatch) -> None:
 
     with pytest.raises(ValidationError, match="SECRET_KEY"):
         Settings(_env_file=None)
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "LOGIN_IP_MAX_ATTEMPTS",
+        "LOGIN_ACCOUNT_MAX_ATTEMPTS",
+        "LOGIN_LIMIT_WINDOW_SECONDS",
+    ],
+)
+@pytest.mark.parametrize("value", ["0", "-1", "invalid", "100000"])
+def test_login_limits_require_finite_positive_configuration(monkeypatch, name, value):
+    monkeypatch.setenv(name, value)
+    with pytest.raises(ValidationError, match=name):
+        Settings(_env_file=None)

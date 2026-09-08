@@ -29,6 +29,7 @@ from app import main as main_module
 from app.core import file_storage
 from app.core.config import settings
 from app.core.dependencies import get_current_user
+from app.core.login_rate_limiting import get_login_rate_limiter
 from app.core.security import (
     create_access_token,
     get_password_hash,
@@ -37,6 +38,7 @@ from app.core.security import (
 from app.database import models
 from app.database.connection import get_db
 from app.plugins.base_plugin import BasePlugin, PluginRun, ResultEvent
+from tests.login_admission import admitted_login
 
 app = main_module.app
 
@@ -103,6 +105,7 @@ def isolate_application_test_state():
     """Restore mutable FastAPI test state even when a test fails."""
     original_overrides = app.dependency_overrides.copy()
     original_application_state = app.state._state.copy()
+    app.dependency_overrides[get_login_rate_limiter] = admitted_login
     yield
     app.dependency_overrides.clear()
     app.dependency_overrides.update(original_overrides)

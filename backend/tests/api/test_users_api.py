@@ -302,7 +302,7 @@ class TestUsersAPI:
         assert {call.args[2] for call in eval_calls} == {
             "owlculus:bootstrap-rate-limit:198.51.100.12"
         }
-        assert {call.args[3:5] for call in eval_calls} == {(3_600_000, 3)}
+        assert {call.args[3:5] for call in eval_calls} == {("3600000", "3")}
         assert len({call.args[5] for call in eval_calls}) == 4
 
     @pytest.mark.asyncio
