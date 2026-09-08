@@ -58,6 +58,7 @@
       show-select
       return-object
       @update:options="loadItems"
+      @click:row="(event, { item }) => emit('view', item, event)"
     >
       <!-- Toolbar -->
       <template v-slot:top>
@@ -162,7 +163,7 @@
           icon="mdi-eye"
           size="small"
           variant="text"
-          @click="$emit('view', item, $event)"
+          @click.stop="$emit('view', item, $event)"
         />
         <v-btn
           :aria-label="`Delete ${getEntityName(item)}`"
@@ -170,7 +171,7 @@
           size="small"
           variant="text"
           color="error"
-          @click="confirmDelete(item)"
+          @click.stop="confirmDelete(item)"
         />
       </template>
 

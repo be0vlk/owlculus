@@ -15,11 +15,11 @@ const DataTableStub = defineComponent({
     loading: Boolean,
     sortBy: { type: Array, default: () => [] },
   },
-  emits: ['update:modelValue', 'update:options', 'update:sortBy'],
+  emits: ['update:modelValue', 'update:options', 'update:sortBy', 'click:row'],
   template: `<section aria-label="Entities">
     <slot name="top" />
     <div v-if="loading" role="status">Loading entities</div>
-    <div v-else-if="items[0]">
+    <div v-else-if="items[0]" data-testid="entity-row" @click="$emit('click:row', $event, { item: items[0] })">
       <span>{{ items[0].data.first_name || items[0].data.name }}</span>
       <slot name="item.actions" :item="items[0]" />
     </div>
@@ -32,7 +32,7 @@ const MenuStub = defineComponent({
 const ButtonStub = defineComponent({
   props: { disabled: Boolean },
   emits: ['click'],
-  template: '<button :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
+  template: '<button :disabled="disabled" @click="$emit(\'click\', $event)"><slot /></button>',
 })
 const ListItemStub = defineComponent({
   props: { title: String },
@@ -181,11 +181,18 @@ describe('EntityDataTable workflow', () => {
     vi.restoreAllMocks()
   })
 
-  it('exposes named row actions and an accessible safe-delete confirmation', async () => {
+  it('opens rows and keeps named row actions separate from safe-delete confirmation', async () => {
     const { wrapper } = await mountTable()
 
-    expect(wrapper.get('[aria-label="View Needle Person"]')).toBeTruthy()
+    await wrapper.get('[data-testid="entity-row"]').trigger('click')
+    expect(wrapper.emitted('view')).toEqual([[matchingEntity, expect.any(MouseEvent)]])
+
+    await wrapper.get('[aria-label="View Needle Person"]').trigger('click')
+    expect(wrapper.emitted('view')).toHaveLength(2)
+    expect(wrapper.emitted('view')[1]).toEqual([matchingEntity, expect.any(MouseEvent)])
+
     await wrapper.get('[aria-label="Delete Needle Person"]').trigger('click')
+    expect(wrapper.emitted('view')).toHaveLength(2)
 
     const dialog = wrapper.get('[role="dialog"]')
     expect(dialog.attributes('aria-label')).toBe('Confirm Delete')
