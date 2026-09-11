@@ -13,6 +13,7 @@
       </div>
       <div class="d-flex align-center ga-2">
         <v-btn
+          size="small"
           ref="inviteAction"
           color="primary"
           variant="flat"
@@ -24,6 +25,7 @@
         <v-tooltip text="Refresh invite list" location="bottom">
           <template #activator="{ props }">
             <v-btn
+              size="small"
               v-bind="props"
               icon="mdi-refresh"
               variant="outlined"

@@ -15,12 +15,19 @@
           </div>
         </div>
         <div class="d-flex align-center ga-2">
-          <v-btn color="primary" prepend-icon="mdi-plus" variant="flat" @click="openNewClientModal">
+          <v-btn
+            size="small"
+            color="primary"
+            prepend-icon="mdi-plus"
+            variant="flat"
+            @click="openNewClientModal"
+          >
             Add Client
           </v-btn>
           <v-tooltip location="bottom" text="Refresh client list">
             <template #activator="{ props }">
               <v-btn
+                size="small"
                 :loading="loading"
                 icon="mdi-refresh"
                 v-bind="props"

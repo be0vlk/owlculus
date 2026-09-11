@@ -263,3 +263,20 @@ it('does not restore a deleted client when a background refresh finishes', async
   await flushPromises()
   expect(wrapper.get('.v-data-table tbody').text()).not.toContain('Acme')
 })
+
+it('automatically dismisses case notifications after four seconds', async () => {
+  const { wrapper } = await openApp('/cases')
+  const activeCase = useActiveCaseStore()
+  vi.useFakeTimers()
+  try {
+    activeCase.notification = 'Case "2609-01" created successfully'
+    await wrapper.vm.$nextTick()
+    await vi.advanceTimersByTimeAsync(3500)
+    expect(activeCase.notification).toContain('created successfully')
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(activeCase.notification).toBe('')
+    expect(wrapper.findAllComponents({ name: 'VSnackbar' })[0].props('modelValue')).toBe(false)
+  } finally {
+    vi.useRealTimers()
+  }
+})

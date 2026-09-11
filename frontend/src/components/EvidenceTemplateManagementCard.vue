@@ -12,6 +12,7 @@
         </p>
       </div>
       <v-btn
+        size="small"
         color="primary"
         variant="flat"
         prepend-icon="mdi-content-save"
@@ -33,6 +34,7 @@
               </div>
             </div>
             <v-btn
+              size="small"
               v-if="expansionPanel === 0"
               @click.stop="saveTemplates"
               color="primary"

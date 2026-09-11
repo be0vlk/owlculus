@@ -31,6 +31,7 @@
           <v-tooltip location="bottom" text="Refresh plugins list">
             <template #activator="{ props }">
               <v-btn
+                size="small"
                 :loading="loading"
                 icon="mdi-refresh"
                 aria-label="Refresh plugins"

@@ -17,6 +17,7 @@
         </div>
         <div class="d-flex align-center ga-2">
           <v-btn
+            size="small"
             v-if="authStore.requiresAdmin()"
             color="primary"
             prepend-icon="mdi-plus"
@@ -28,6 +29,7 @@
           <v-tooltip location="bottom" text="Refresh case list">
             <template #activator="{ props }">
               <v-btn
+                size="small"
                 aria-label="Refresh case list"
                 :loading="loading"
                 icon="mdi-refresh"

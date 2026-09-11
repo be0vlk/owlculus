@@ -12,7 +12,8 @@
 
     <v-snackbar
       :model-value="!!activeCase.notification"
-      :timeout="-1"
+      :timeout="4000"
+      @update:model-value="!$event && (activeCase.notification = '')"
       role="status"
       location="top center"
     >

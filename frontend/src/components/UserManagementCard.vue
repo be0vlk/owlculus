@@ -13,6 +13,7 @@
       </div>
       <div class="d-flex flex-wrap align-center ga-2">
         <v-btn
+          size="small"
           v-if="embedded"
           color="primary"
           variant="flat"
@@ -22,6 +23,7 @@
           Invite user
         </v-btn>
         <v-btn
+          size="small"
           :color="embedded ? undefined : 'primary'"
           :variant="embedded ? 'outlined' : 'flat'"
           prepend-icon="mdi-account-plus"
@@ -32,6 +34,7 @@
         <v-tooltip text="Refresh user list" location="bottom">
           <template #activator="{ props }">
             <v-btn
+              size="small"
               v-bind="props"
               icon="mdi-refresh"
               variant="outlined"
