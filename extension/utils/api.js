@@ -1,40 +1,45 @@
-import {CONFIG_KEYS, storage} from "./storage.js";
+import {
+    readSession,
+    assertCurrent,
+    establishSession,
+    endSession,
+} from "./session.js";
 
-class OwlculusAPI {
-    constructor() {
-        this.baseURL = null;
-        this.token = null;
-        this.tokenType = "bearer";
-    }
-
-    async initialize() {
-        const config = await storage.get([
-            CONFIG_KEYS.API_ENDPOINT,
-            CONFIG_KEYS.AUTH_TOKEN,
-            CONFIG_KEYS.TOKEN_TYPE,
-        ]);
-
-        this.baseURL = config[CONFIG_KEYS.API_ENDPOINT] || "http://localhost:8000";
-        this.token = config[CONFIG_KEYS.AUTH_TOKEN];
-        this.tokenType = config[CONFIG_KEYS.TOKEN_TYPE] || "bearer";
+export class OwlculusAPI {
+    constructor(snapshot = null) {
+        this.snapshot = snapshot;
     }
 
     async request(endpoint, options = {}) {
-        await this.initialize();
+        const snapshot = this.snapshot
+            ? await assertCurrent(this.snapshot)
+            : await readSession();
+        return this.#requestWithSession(snapshot, endpoint, options);
+    }
 
-        const url = `${this.baseURL}${endpoint}`;
-        const headers = {
-            ...options.headers,
-        };
-
-        if (this.token && !options.skipAuth) {
-            headers["Authorization"] = `${this.tokenType} ${this.token}`;
+    async #requestWithSession(snapshot, endpoint, options = {}) {
+        const url = new URL(`${snapshot.endpoint}${endpoint}`);
+        if (
+            !endpoint.startsWith("/api/") ||
+            !url.href.startsWith(`${snapshot.endpoint}/api/`)
+        ) {
+            throw new Error("Invalid API request path");
         }
-
+        const headers = new Headers(options.headers);
+        headers.delete("Authorization");
+        if (!options.skipAuth) {
+            if (!snapshot.session?.token)
+                throw new Error("Please sign in to this instance.");
+            headers.set(
+                "Authorization",
+                `${snapshot.session.tokenType} ${snapshot.session.token}`,
+            );
+        }
         try {
             const response = await fetch(url, {
                 ...options,
                 headers,
+                redirect: "error",
             });
 
             if (!response.ok) {
@@ -46,7 +51,8 @@ class OwlculusAPI {
                 } catch {
                     error = {
                         detail:
-                            responseText || `HTTP ${response.status}: ${response.statusText}`,
+                            responseText ||
+                            `HTTP ${response.status}: ${response.statusText}`,
                     };
                 }
 
@@ -58,11 +64,14 @@ class OwlculusAPI {
                 }
 
                 throw new Error(
-                    error.detail || `HTTP ${response.status}: ${response.statusText}`,
+                    error.detail ||
+                        `HTTP ${response.status}: ${response.statusText}`,
                 );
             }
 
-            return response.json();
+            const result = await response.json();
+            await assertCurrent(snapshot);
+            return result;
         } catch (error) {
             console.error("API request failed:", error);
             throw error;
@@ -74,20 +83,21 @@ class OwlculusAPI {
         formData.append("username", username);
         formData.append("password", password);
 
-        const response = await this.request("/api/auth/login", {
-            method: "POST",
-            body: formData,
-            skipAuth: true,
-        });
+        const snapshot = this.snapshot
+            ? await assertCurrent(this.snapshot)
+            : await readSession();
+        const response = await this.#requestWithSession(
+            snapshot,
+            "/api/auth/login",
+            {
+                method: "POST",
+                body: formData,
+                skipAuth: true,
+            },
+        );
 
         if (response.access_token) {
-            await storage.set({
-                [CONFIG_KEYS.AUTH_TOKEN]: response.access_token,
-                [CONFIG_KEYS.TOKEN_TYPE]: response.token_type || "bearer",
-            });
-
-            this.token = response.access_token;
-            this.tokenType = response.token_type || "bearer";
+            this.snapshot = await establishSession(snapshot, response);
         }
 
         return response;
@@ -124,16 +134,15 @@ class OwlculusAPI {
         htmlContent,
         pageUrl,
         folderPath = null,
-        parentFolderId = null
+        parentFolderId = null,
     ) {
-
         const formData = new FormData();
 
-        const htmlBlob = new Blob([htmlContent], {type: "text/html"});
+        const htmlBlob = new Blob([htmlContent], { type: "text/html" });
         const filename = `${title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}_${Date.now()}.html`;
 
         // Create a File object from the Blob (Files are Blobs with additional properties)
-        const file = new File([htmlBlob], filename, {type: "text/html"});
+        const file = new File([htmlBlob], filename, { type: "text/html" });
 
         formData.append("files", file);
 
@@ -169,13 +178,12 @@ class OwlculusAPI {
         imageBlob,
         pageUrl,
         folderPath = null,
-        parentFolderId = null
+        parentFolderId = null,
     ) {
-
         const formData = new FormData();
 
         const filename = `${title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}_${Date.now()}.png`;
-        const file = new File([imageBlob], filename, {type: "image/png"});
+        const file = new File([imageBlob], filename, { type: "image/png" });
 
         formData.append("files", file);
 
@@ -205,15 +213,7 @@ class OwlculusAPI {
     }
 
     async logout() {
-        await storage.remove([
-            CONFIG_KEYS.AUTH_TOKEN,
-            CONFIG_KEYS.TOKEN_TYPE,
-            CONFIG_KEYS.USER_DATA,
-        ]);
-
-        this.token = null;
-        this.tokenType = "bearer";
+        await endSession();
+        this.snapshot = null;
     }
 }
-
-export const api = new OwlculusAPI();

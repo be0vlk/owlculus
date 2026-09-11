@@ -2,9 +2,9 @@
 <template>
   <v-main>
     <v-container class="fill-height d-flex align-center justify-center" fluid>
-      <v-row align="center" class="fill-height" justify="center">
+      <v-row class="fill-height align-center justify-center">
         <v-col cols="12" lg="4" md="6" sm="8" xl="3">
-          <v-card class="rounded-xl" elevation="8">
+          <v-card class="rounded-xl" elevation="3">
             <v-card-text class="pa-8">
               <!-- Logo -->
               <div class="text-center mb-8">
@@ -12,10 +12,16 @@
                   :src="isDark ? '/owl_logo_white.png' : '/owl_logo.png'"
                   alt="Owlculus Logo"
                   class="mx-auto"
-                  contain
                   max-height="200"
                 />
               </div>
+
+              <v-alert
+                v-if="route.query.passwordChanged === '1'"
+                type="success"
+                class="mb-4"
+                text="Password changed successfully. Sign in with your new password."
+              />
 
               <!-- Login Form -->
               <v-form ref="form" @submit.prevent="handleLogin">
@@ -67,11 +73,12 @@
 
 <script setup>
 import { reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useDarkMode } from '../composables/useDarkMode'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 const { isDark } = useDarkMode()
 const isLoading = ref(false)

@@ -1,7 +1,20 @@
+# Docker counts the active file in max-file; approximately 30 MiB per container.
+x-container-logging: &container-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-backend-build: &backend-build
+  context: ./backend
+  dockerfile: Dockerfile
+  target: production
+
 services:
   # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
+    logging: *container-logging
     restart: unless-stopped
     deploy:
       resources:
@@ -15,7 +28,7 @@ services:
       - no-new-privileges:true
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-owlculus}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-owlculus_secure_password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
       POSTGRES_DB: ${POSTGRES_DB:-owlculus}
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -29,11 +42,43 @@ services:
     networks:
       - backend-network
 
+  # Execution broker and event storage (retain the existing volume)
+  redis:
+    image: redis:7-alpine
+    logging: *container-logging
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "${REDIS_MAXMEMORY:-256mb}", "--maxmemory-policy", "noeviction"]
+    mem_limit: 384m
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --raw EVAL \"redis.call('LPUSH', KEYS[1], 'probe'); redis.call('EXPIRE', KEYS[1], 5); redis.call('DEL', KEYS[1]); return 1\" 1 owlculus:health:container | grep -qx 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - backend-network
+
+  auth-redis:
+    image: redis:7-alpine
+    logging: *container-logging
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "${AUTH_REDIS_MAXMEMORY:-32mb}", "--maxmemory-policy", "noeviction"]
+    mem_limit: 128m
+    volumes:
+      - auth_redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --raw EVAL \"redis.call('ZADD', KEYS[1], 1, 'probe'); redis.call('EXPIRE', KEYS[1], 5); redis.call('DEL', KEYS[1]); return 1\" 1 owlculus:health:container | grep -qx 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - auth-network
+
   # Backend API
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    build: *backend-build
+    logging: *container-logging
     restart: unless-stopped
     deploy:
       resources:
@@ -46,23 +91,40 @@ services:
     security_opt:
       - no-new-privileges:true
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-owlculus}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-owlculus_secure_password}
+      POSTGRES_USER: ${RUNTIME_POSTGRES_USER:-owlculus_runtime}
+      POSTGRES_PASSWORD: ${RUNTIME_POSTGRES_PASSWORD:-}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-owlculus}
-      SECRET_KEY: ${SECRET_KEY:-development_key_not_secure}
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
-      BACKEND_URL: ${BACKEND_URL:-http://localhost:8000}
+      OWLCULUS_ENV: production
+      SECRET_KEY: ${SECRET_KEY:-}
+      AUTH_REDIS_URL: ${AUTH_REDIS_URL:-redis://auth-redis:6379/0}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      EXECUTION_BROKER_URL: ${EXECUTION_BROKER_URL:-${REDIS_URL:-redis://redis:6379/0}}
+      EXECUTION_EVENT_REDIS_URL: ${EXECUTION_EVENT_REDIS_URL:-${REDIS_URL:-redis://redis:6379/0}}
+      API_WORKERS: ${API_WORKERS:-1}
+      API_DATABASE_CONCURRENCY: ${API_DATABASE_CONCURRENCY:-8}
+      DATABASE_POOL_SIZE: ${API_DATABASE_POOL_SIZE:-5}
+      DATABASE_MAX_OVERFLOW: ${API_DATABASE_MAX_OVERFLOW:-5}
+      EXECUTION_LIMIT_GLOBAL: ${EXECUTION_LIMIT_GLOBAL:-1000}
+      EXECUTION_LIMIT_CASE: ${EXECUTION_LIMIT_CASE:-100}
+      EXECUTION_LIMIT_USER: ${EXECUTION_LIMIT_USER:-25}
+      LOGIN_IP_MAX_ATTEMPTS: ${LOGIN_IP_MAX_ATTEMPTS:-30}
+      LOGIN_ACCOUNT_MAX_ATTEMPTS: ${LOGIN_ACCOUNT_MAX_ATTEMPTS:-10}
+      LOGIN_LIMIT_WINDOW_SECONDS: ${LOGIN_LIMIT_WINDOW_SECONDS:-300}
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-172.29.0.254}
     volumes:
       - uploads_data:/app/uploads
-    ports:
-      - "${BACKEND_PORT:-8000}:8000"
+      - setup_data:/app/data/setup
+    expose:
+      - "8000"
     depends_on:
-      postgres:
-        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
+      auth-redis:
+        condition: service_started
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/ready"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -70,38 +132,127 @@ services:
     networks:
       - frontend-network
       - backend-network
+      - auth-network
 
-  # Database Initialization
-  db-init:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-owlculus}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-owlculus_secure_password}
+  plugin-worker:
+    mem_limit: ${PLUGIN_WORKER_MEMORY:-1g}
+    stop_grace_period: 75s
+    build: *backend-build
+    logging: *container-logging
+    restart: unless-stopped
+    command: ["celery", "-A", "app.executions.celery_app:app", "worker", "--pool=prefork", "--concurrency=${PLUGIN_CONCURRENCY:-2}", "--prefetch-multiplier=1", "--queues=owlculus.plugins", "--hostname=plugins@%h", "--loglevel=WARNING"]
+    environment: &execution-environment
+      DATABASE_POOL_SIZE: ${WORKER_DATABASE_POOL_SIZE:-2}
+      DATABASE_MAX_OVERFLOW: ${WORKER_DATABASE_MAX_OVERFLOW:-0}
+      WORKER_MAX_TASKS_PER_CHILD: ${WORKER_MAX_TASKS_PER_CHILD:-100}
+      WORKER_MAX_MEMORY_KB: ${WORKER_MAX_MEMORY_KB:-262144}
+      PLUGIN_EXECUTION_SECONDS: ${PLUGIN_EXECUTION_SECONDS:-900}
+      HUNT_STEP_SECONDS: ${HUNT_STEP_SECONDS:-900}
+      HUNT_EXECUTION_SECONDS: ${HUNT_EXECUTION_SECONDS:-7200}
+      EXECUTION_EVENT_LIMIT_BYTES: ${EXECUTION_EVENT_LIMIT_BYTES:-1048576}
+      EXECUTION_RESULT_LIMIT_BYTES: ${EXECUTION_RESULT_LIMIT_BYTES:-26214400}
+      EXECUTION_DISPATCH_POLL_SECONDS: ${EXECUTION_DISPATCH_POLL_SECONDS:-0.2}
+      EXECUTION_REDISPATCH_SECONDS: ${EXECUTION_REDISPATCH_SECONDS:-30}
+      POSTGRES_USER: ${RUNTIME_POSTGRES_USER:-owlculus_runtime}
+      POSTGRES_PASSWORD: ${RUNTIME_POSTGRES_PASSWORD:-}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-owlculus}
-      SECRET_KEY: ${SECRET_KEY:-development_key_not_secure}
-      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@owlculus.local}
-    command: python3 /app/init_db_auto.py
+      OWLCULUS_ENV: production
+      SECRET_KEY: ${SECRET_KEY:-}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      EXECUTION_BROKER_URL: ${EXECUTION_BROKER_URL:-${REDIS_URL:-redis://redis:6379/0}}
+      EXECUTION_EVENT_REDIS_URL: ${EXECUTION_EVENT_REDIS_URL:-${REDIS_URL:-redis://redis:6379/0}}
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.executions.celery_app:app inspect ping --destination plugins@$$HOSTNAME --timeout 5"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - backend-network
+      - worker-egress
+
+  hunt-worker:
+    mem_limit: ${HUNT_WORKER_MEMORY:-1g}
+    stop_grace_period: 75s
+    build: *backend-build
+    logging: *container-logging
+    restart: unless-stopped
+    command: ["celery", "-A", "app.executions.celery_app:app", "worker", "--pool=prefork", "--concurrency=${HUNT_CONCURRENCY:-2}", "--prefetch-multiplier=1", "--queues=owlculus.hunts", "--hostname=hunts@%h", "--loglevel=WARNING"]
+    environment: *execution-environment
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.executions.celery_app:app inspect ping --destination hunts@$$HOSTNAME --timeout 5"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - backend-network
+      - worker-egress
+
+  execution-dispatcher:
+    build: *backend-build
+    logging: *container-logging
+    restart: unless-stopped
+    command: ["python", "-m", "app.executions.dispatcher"]
+    environment: *execution-environment
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,time; assert time.time()-os.stat('/tmp/owlculus-dispatcher-heartbeat').st_mtime < 30"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - backend-network
+
+  # Database Initialization
+  db-init:
+    build: *backend-build
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-owlculus}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-owlculus}
+      RUNTIME_POSTGRES_USER: ${RUNTIME_POSTGRES_USER:-owlculus_runtime}
+      RUNTIME_POSTGRES_PASSWORD: ${RUNTIME_POSTGRES_PASSWORD:-}
+      OWLCULUS_ENV: production
+      SECRET_KEY: ${SECRET_KEY:-}
+    command: python3 -m app.database.init_db
     depends_on:
       postgres:
         condition: service_healthy
-    volumes:
-      - ./scripts/init_db_auto.py:/app/init_db_auto.py
     networks:
       - backend-network
+    logging: *container-logging
     restart: "no"
 
-  # Frontend
+  # Browser-facing Caddy gateway and compiled SPA
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: frontend/Dockerfile
       target: production
+    logging: *container-logging
     restart: unless-stopped
     deploy:
       resources:
@@ -113,27 +264,53 @@ services:
           cpus: '0.1'
     security_opt:
       - no-new-privileges:true
+    environment:
+      DOMAIN: ${DOMAIN:-:80}
     ports:
       - "${FRONTEND_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8080/health/ready"]
       interval: 30s
       timeout: 10s
       retries: 3
     networks:
-      - frontend-network
+      frontend-network:
+        ipv4_address: 172.29.0.254
 
 volumes:
   postgres_data:
     driver: local
   uploads_data:
     driver: local
+  setup_data:
+    driver: local
+  auth_redis_data:
+    driver: local
+  redis_data:
+    driver: local
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local
 
 networks:
+  auth-network:
+    driver: bridge
+    internal: true
+  worker-egress:
+    driver: bridge
   frontend-network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.29.0.0/24
   backend-network:
     driver: bridge
     internal: true

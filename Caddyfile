@@ -1,0 +1,68 @@
+(backendProxy) {
+	@evidenceUpload {
+		method POST
+		path /api/evidence /api/evidence/
+	}
+	request_body @evidenceUpload {
+		max_size {$EVIDENCE_BODY_LIMIT:158334976}
+	}
+	@otherRequest not {
+		method POST
+		path /api/evidence /api/evidence/
+	}
+	request_body @otherRequest {
+		max_size {$API_BODY_LIMIT:2097152}
+	}
+	reverse_proxy backend:8000 {
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Real-IP {remote_host}
+		health_uri /health/live
+		health_interval 15s
+		health_timeout 3s
+		lb_try_duration 5s
+		lb_try_interval 250ms
+	}
+}
+
+{$DOMAIN::80} {
+	@backend path /api/* /health /health/*
+	handle @backend {
+		import backendProxy
+	}
+
+	@fingerprintedAssets path_regexp fingerprinted ^/assets/.*-[A-Za-z0-9_-]{8,}\.(css|js|png|jpg|jpeg|gif|svg|webp|avif|ico|woff|woff2|ttf|eot)$
+	header @fingerprintedAssets Cache-Control "public, max-age=31536000, immutable"
+
+	@entrypoint path /index.html
+	header @entrypoint -Cache-Control
+
+	handle {
+		root * /srv/frontend
+		try_files {path} /index.html
+		file_server
+	}
+
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' ws://{http.request.host} wss://{http.request.host}; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		Permissions-Policy "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
+		-Server
+	}
+
+	handle_errors {
+		header {
+			defer
+			-Server
+		}
+		respond "" {http.error.status_code}
+	}
+
+	encode gzip zstd
+}
+
+http://127.0.0.1:8080 {
+	import backendProxy
+}

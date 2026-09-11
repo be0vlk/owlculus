@@ -1,4 +1,5 @@
 import api from './api'
+import { createDownloadArtifact } from '@/utils/download'
 
 export const evidenceService = {
   async getEvidenceForCase(caseId) {
@@ -27,7 +28,7 @@ export const evidenceService = {
       formData.append('parent_folder_id', parentFolderId)
     }
 
-    const response = await api.post(`/api/evidence?${queryParams}`, formData, {
+    const response = await api.post(`/api/evidence/?${queryParams}`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -39,7 +40,7 @@ export const evidenceService = {
     const response = await api.get(`/api/evidence/${evidenceId}/download`, {
       responseType: 'blob',
     })
-    return response.data
+    return createDownloadArtifact(response.data, response.headers)
   },
 
   async deleteEvidence(evidenceId) {

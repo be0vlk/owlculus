@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Owlculus Docker Setup Script
-# Interactive setup with customizable defaults
+# Interactive deployment setup
 
 # Colors for output
 CYAN='\033[0;36m'
@@ -42,7 +42,7 @@ else
     print_success "Docker is already installed"
 fi
 
-if command_exists docker-compose || command docker compose version &>/dev/null; then
+if docker compose version &>/dev/null; then
     print_success "Docker Compose is already installed"
 else
     print_status "Docker Compose not found. Installing..."
@@ -50,7 +50,7 @@ else
     sudo apt-get update
     sudo apt-get install -qq -y docker-compose-v2
     
-    if command_exists docker-compose || command docker compose version &>/dev/null; then
+    if docker compose version &>/dev/null; then
         print_success "Docker Compose installed successfully"
     else
         print_error "Failed to install Docker Compose v2"
@@ -70,25 +70,25 @@ fi
 
 
 # Default configuration values
-DEFAULT_FRONTEND_PORT=8081
+DEFAULT_FRONTEND_PORT=80
 DEFAULT_BACKEND_PORT=8000
 DEFAULT_DB_PORT=5432
 DEFAULT_DOMAIN="localhost"
-DEFAULT_ADMIN_USERNAME="admin"
-DEFAULT_ADMIN_EMAIL="admin@example.com"
 
 # Configuration variables
 FRONTEND_PORT=""
 BACKEND_PORT=""
 DB_PORT=""
 DOMAIN=""
-ADMIN_USERNAME=""
-ADMIN_EMAIL=""
-ADMIN_PASSWORD=""
+CADDY_DOMAIN=""
 USE_REVERSE_PROXY="false"
 USE_HTTPS="false"
 INTERACTIVE_MODE="true"
 DEPLOYMENT_TYPE=""
+COMPOSE_SCRIPT="./scripts/compose.sh"
+DIRECT_TOPOLOGY="direct"
+DEV_TOPOLOGY="development"
+REVERSE_PROXY_TOPOLOGY="reverse-proxy"
 
 # Function to check if command exists
 command_exists() {
@@ -102,8 +102,8 @@ generate_secret_key() {
     elif command_exists python3; then
         python3 -c "import secrets; print(secrets.token_hex(32))"
     else
-        # Fallback to a basic method
-        date +%s | sha256sum | base64 | head -c 32
+        print_error "A cryptographic random generator (openssl or python3) is required" >&2
+        return 1
     fi
 }
 
@@ -129,6 +129,52 @@ validate_port() {
         return 0
     else
         return 1
+    fi
+}
+
+# Derive operator-facing URLs without changing the browser's same-origin contract.
+configure_service_urls() {
+    if [ "$DEPLOYMENT_TYPE" = "local_dev" ]; then
+        # Compose resolves .env and shell overrides; never source .env as shell code.
+        local DEV_CONFIGURATION
+        if ! DEV_CONFIGURATION=$(
+            set -o pipefail
+            "$COMPOSE_SCRIPT" "$DEV_TOPOLOGY" config --format json | python3 -c '
+import json
+import sys
+
+services = json.load(sys.stdin)["services"]
+frontend = services["frontend"]
+def published_port(service, target):
+    return next(str(port["published"]) for port in service["ports"] if port["target"] == target)
+
+print(frontend["environment"]["__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS"])
+print(published_port(frontend, 5173))
+print(published_port(services["backend"], 8000))
+'
+        ); then
+            print_error "Could not read the development configuration. Check .env and Compose diagnostics above."
+            return 1
+        fi
+        local -a DEV_VALUES
+        mapfile -t DEV_VALUES <<< "$DEV_CONFIGURATION"
+        DOMAIN="${DEV_VALUES[0]}"
+        FRONTEND_PORT="${DEV_VALUES[1]}"
+        BACKEND_PORT="${DEV_VALUES[2]}"
+    fi
+    if [ "$DEPLOYMENT_TYPE" = "remote" ]; then
+        FRONTEND_URL="https://$DOMAIN"
+    elif [ "$USE_REVERSE_PROXY" = "true" ]; then
+        if [ "$USE_HTTPS" = "true" ]; then
+            FRONTEND_URL="https://$DOMAIN"
+        else
+            FRONTEND_URL="http://$DOMAIN"
+        fi
+    else
+        FRONTEND_URL="http://$DOMAIN:$FRONTEND_PORT"
+        if [ "$FRONTEND_PORT" = "80" ]; then
+            FRONTEND_URL="http://$DOMAIN"
+        fi
     fi
 }
 
@@ -185,6 +231,7 @@ interactive_config() {
         while true; do
             DOMAIN=$(prompt_with_default "Domain name (e.g., owlculus.example.com)" "owlculus.example.com")
             if [ -n "$DOMAIN" ] && [[ "$DOMAIN" != "localhost" ]]; then
+                CADDY_DOMAIN="$DOMAIN"
                 break
             fi
             print_error "Please enter a valid domain name (not localhost)"
@@ -211,74 +258,18 @@ interactive_config() {
         
         # Use localhost defaults for local deployments
         DOMAIN="$DEFAULT_DOMAIN"
+        CADDY_DOMAIN=""
         FRONTEND_PORT="$DEFAULT_FE_PORT"
         BACKEND_PORT="$DEFAULT_BACKEND_PORT"
         
         # Database port is not exposed for security
         DB_PORT="5432"
         
-        print_status "Using localhost defaults:"
-        print_status "  Domain: $DOMAIN"
-        print_status "  Frontend port: $FRONTEND_PORT"
-        print_status "  Backend port: $BACKEND_PORT"
-        print_status "  Database: Internal port 5432 (not exposed to host for security)"
-        
         USE_REVERSE_PROXY="false"
         USE_HTTPS="false"
     fi
     
-    echo ""
-    echo "Admin Account Configuration:"
-    echo "---------------------------"
-    
-    while true; do
-        ADMIN_USERNAME=$(prompt_with_default "Admin username" "$DEFAULT_ADMIN_USERNAME")
-        if [ -n "$ADMIN_USERNAME" ]; then
-            break
-        fi
-        print_error "Username cannot be empty"
-    done
-    
-    echo -n "Admin password (leave empty for auto-generated): "
-    read -s ADMIN_PASSWORD
-    echo ""
-    
-    if [ -z "$ADMIN_PASSWORD" ]; then
-        ADMIN_PASSWORD=$(openssl rand -base64 24 | tr -d /=+ | cut -c -12)
-        print_status "Auto-generated secure admin password"
-    fi
-    
-    while true; do
-        ADMIN_EMAIL=$(prompt_with_default "Admin email" "$DEFAULT_ADMIN_EMAIL")
-        if [[ "$ADMIN_EMAIL" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
-            break
-        fi
-        print_error "Please enter a valid email address"
-    done
-    
-    # Construct URLs based on deployment type
-    if [ "$DEPLOYMENT_TYPE" = "remote" ]; then
-        # Remote deployments always use HTTPS
-        FRONTEND_URL="https://$DOMAIN"
-        BACKEND_API_URL="https://$DOMAIN/api"
-    elif [ "$USE_REVERSE_PROXY" = "true" ]; then
-        if [ "$USE_HTTPS" = "true" ]; then
-            FRONTEND_URL="https://$DOMAIN"
-            BACKEND_API_URL="https://$DOMAIN/api"
-        else
-            FRONTEND_URL="http://$DOMAIN"
-            BACKEND_API_URL="http://$DOMAIN/api"
-        fi
-    else
-        # Direct access URLs with ports
-        FRONTEND_URL="http://$DOMAIN:$FRONTEND_PORT"
-        BACKEND_API_URL="http://$DOMAIN:$BACKEND_PORT"
-        
-        # Clean up URLs if using standard ports
-        if [ "$FRONTEND_PORT" = "80" ]; then
-            FRONTEND_URL="http://$DOMAIN"
-        fi
-    fi
+    configure_service_urls || return 1
     
     echo ""
     echo "Configuration Summary:"
@@ -304,14 +295,12 @@ interactive_config() {
     else
         echo "Domain: $DOMAIN"
         echo "Frontend URL: $FRONTEND_URL"
-        echo "Backend API URL: $BACKEND_API_URL"
         echo "Frontend Port: $FRONTEND_PORT"
-        echo "Backend Port: $BACKEND_PORT"
+        if [ "$DEPLOYMENT_TYPE" = "local_dev" ]; then
+            echo "Backend Port: $BACKEND_PORT (development only)"
+        fi
     fi
     echo "Database: Internal only (not exposed)"
-    echo "Admin Username: $ADMIN_USERNAME"
-    echo "Admin Email: $ADMIN_EMAIL"
-    echo "Admin Password: [set]"
     echo ""
     
     while true; do
@@ -343,7 +332,6 @@ show_usage() {
     echo "  --verbose       Show all Docker build/start output"
     echo "  --non-interactive  Use default values without prompting"
     echo "  --clean         Remove all Owlculus Docker containers, images, and volumes before setup"
-    echo "  --testdata      Create test data after setup (Test Case 1, users, etc.)"
     echo
     echo "Interactive Setup Options:"
     echo "  1. Local development - Hot-reload enabled for development"
@@ -356,7 +344,6 @@ show_usage() {
     echo "  $0 --non-interactive        # Non-interactive local production setup"
     echo "  $0 dev --verbose            # Development setup with full Docker output"
     echo "  $0 --clean                  # Clean setup (removes Owlculus Docker artifacts)"
-    echo "  $0 dev --testdata           # Development setup with test data"
     echo
     echo "Requirements:"
     echo "  - Docker"
@@ -369,14 +356,14 @@ clean_docker_artifacts() {
     print_warning "Cleaning up Owlculus Docker artifacts..."
     
     # Stop and remove containers for both production and dev
-    if docker compose -f docker-compose.yml ps -q 2>/dev/null | grep -q .; then
+    if "$COMPOSE_SCRIPT" "$DIRECT_TOPOLOGY" ps -q 2>/dev/null | grep -q .; then
         print_status "Stopping production containers..."
-        docker compose -f docker-compose.yml down 2>/dev/null || true
+        "$COMPOSE_SCRIPT" "$DIRECT_TOPOLOGY" down 2>/dev/null || true
     fi
     
-    if docker compose -f docker-compose.dev.yml ps -q 2>/dev/null | grep -q .; then
+    if "$COMPOSE_SCRIPT" "$DEV_TOPOLOGY" ps -q 2>/dev/null | grep -q .; then
         print_status "Stopping development containers..."
-        docker compose -f docker-compose.dev.yml down 2>/dev/null || true
+        "$COMPOSE_SCRIPT" "$DEV_TOPOLOGY" down 2>/dev/null || true
     fi
     
     # Remove Owlculus volumes
@@ -414,45 +401,6 @@ clean_docker_artifacts() {
     echo
 }
 
-# Function to create test data
-create_test_data() {
-    local MODE="$1"
-    local COMPOSE_FILES="$2"
-    
-    print_status "Creating test data..."
-    
-    # Wait a bit longer for services to be fully ready
-    sleep 5
-    
-    # Copy and run the test data script inside the backend container
-    # Pass the admin password from the environment
-    local ADMIN_PASS=$(grep "^ADMIN_PASSWORD=" .env | cut -d'=' -f2)
-    
-    if [ "$MODE" = "dev" ] || [ "$MODE" = "development" ]; then
-        $DOCKER_COMPOSE_CMD $COMPOSE_FILES cp scripts/create_test_data.py backend:/tmp/create_test_data.py
-        $DOCKER_COMPOSE_CMD $COMPOSE_FILES exec -w /app backend python3 /tmp/create_test_data.py --password "$ADMIN_PASS"
-    else
-        $DOCKER_COMPOSE_CMD $COMPOSE_FILES cp scripts/create_test_data.py backend:/tmp/create_test_data.py
-        $DOCKER_COMPOSE_CMD $COMPOSE_FILES exec -w /app backend python3 /tmp/create_test_data.py --password "$ADMIN_PASS"
-    fi
-    
-    if [ $? -eq 0 ]; then
-        print_success "Test data created successfully!"
-        echo ""
-        echo "Test data includes:"
-        echo "   • Test Case 1 with Personal client"
-        echo "   • John Doe person entity"
-        echo "   • Person evidence template folders"
-        echo "   • Additional test users:"
-        echo "     - analyst / anapassword1 (Analyst role)"
-        echo "     - investigator / invpassword1 (Investigator role)"
-        echo ""
-    else
-        print_error "Test data creation failed. Check the output above."
-        return 1
-    fi
-}
-
 # Function to set defaults for non-interactive mode
 set_defaults() {
     local MODE="$1"
@@ -469,24 +417,15 @@ set_defaults() {
     fi
     
     DOMAIN="$DEFAULT_DOMAIN"
+    CADDY_DOMAIN=""
     FRONTEND_PORT="$DEFAULT_FE_PORT"
     BACKEND_PORT="$DEFAULT_BACKEND_PORT"
     DB_PORT="$DEFAULT_DB_PORT"
     USE_REVERSE_PROXY="false"
     USE_HTTPS="false"
     
-    # Construct URLs
-    BACKEND_API_URL="http://$DOMAIN:$BACKEND_PORT"
-    FRONTEND_URL="http://$DOMAIN:$FRONTEND_PORT"
+    configure_service_urls || return 1
     
-    # Clean up frontend URL if using standard port
-    if [ "$FRONTEND_PORT" = "80" ]; then
-        FRONTEND_URL="http://$DOMAIN"
-    fi
-    
-    ADMIN_USERNAME="$DEFAULT_ADMIN_USERNAME"
-    ADMIN_EMAIL="$DEFAULT_ADMIN_EMAIL"
-    ADMIN_PASSWORD=$(openssl rand -base64 16 | tr -d /=+ | cut -c -12)
 }
 
 # Main setup function
@@ -494,8 +433,6 @@ setup_owlculus() {
     local MODE="${1:-production}"
     local VERBOSE="${2:-false}"
     local CLEAN="${3:-false}"
-    local CREATE_TESTDATA="${4:-false}"
-    local ADMIN_PASSWORD_TO_DISPLAY=""
     
     # Run cleanup if requested
     if [ "$CLEAN" = "true" ]; then
@@ -517,23 +454,18 @@ setup_owlculus() {
     fi
     
     # Check if Docker Compose is available
-    if ! docker compose version >/dev/null 2>&1 && ! command_exists docker-compose; then
-        print_error "Docker Compose is not available. Please install Docker Compose."
+    if ! docker compose version >/dev/null 2>&1; then
+        print_error "Docker Compose v2 is not available. Please install the Docker Compose plugin."
         exit 1
     fi
-    
-    # Use docker compose if available, fallback to docker-compose
-    if docker compose version >/dev/null 2>&1; then
-        DOCKER_COMPOSE_CMD="docker compose"
-    else
-        DOCKER_COMPOSE_CMD="docker-compose"
-    fi
+
+    DOCKER_COMPOSE_CMD="$COMPOSE_SCRIPT"
     
     print_status "Docker and Docker Compose are available"
     
     # Run interactive configuration or use defaults
     if [ "$INTERACTIVE_MODE" = "true" ]; then
-        interactive_config "$MODE"
+        interactive_config "$MODE" || return 1
         # MODE might have been changed by interactive_config
         if [ "$DEPLOYMENT_TYPE" = "local_dev" ]; then
             MODE="dev"
@@ -541,7 +473,7 @@ setup_owlculus() {
             MODE="production"
         fi
     else
-        set_defaults "$MODE"
+        set_defaults "$MODE" || return 1
         print_status "Using default configuration values"
     fi
     
@@ -551,8 +483,9 @@ setup_owlculus() {
         
         # Generate secure credentials
         print_status "Generating secure credentials..."
-        SECRET_KEY=$(generate_secret_key)
-        DB_PASSWORD=$(openssl rand -base64 32 | tr -d /=+ | cut -c -25)
+        SECRET_KEY=$(generate_secret_key) || return 1
+        DB_PASSWORD=$(generate_secret_key) || return 1
+        RUNTIME_DB_PASSWORD=$(generate_secret_key) || return 1
 
 		# Set DB port comment depending on deployment type
 		if [ "$DEPLOYMENT_TYPE" = "local_dev" ]; then
@@ -561,127 +494,115 @@ setup_owlculus() {
 			DB_PORT_COMMENT="# Database port is internal only for security"
 		fi
 
+        local PRODUCTION_FRONTEND_PORT="$FRONTEND_PORT"
+        local DEVELOPMENT_FRONTEND_PORT="5173"
+        local DEVELOPMENT_HOST="localhost"
+        if [ "$DEPLOYMENT_TYPE" = "local_dev" ]; then
+            PRODUCTION_FRONTEND_PORT="$DEFAULT_FRONTEND_PORT"
+            DEVELOPMENT_FRONTEND_PORT="$FRONTEND_PORT"
+            DEVELOPMENT_HOST="$DOMAIN"
+        fi
+
         # Create .env file directly with all values
-        cat > .env << EOF
+        (umask 077; cat > .env << EOF
 SECRET_KEY=$SECRET_KEY
 POSTGRES_USER=owlculus
 POSTGRES_PASSWORD=$DB_PASSWORD
+RUNTIME_POSTGRES_USER=owlculus_runtime
+RUNTIME_POSTGRES_PASSWORD=$RUNTIME_DB_PASSWORD
 POSTGRES_DB=owlculus
-ADMIN_USERNAME=$ADMIN_USERNAME
-ADMIN_PASSWORD=$ADMIN_PASSWORD
-ADMIN_EMAIL=$ADMIN_EMAIL
+DOMAIN=$CADDY_DOMAIN
 
 # Port Configuration
-FRONTEND_PORT=$FRONTEND_PORT
+FRONTEND_PORT=$PRODUCTION_FRONTEND_PORT
+DEV_FRONTEND_PORT=$DEVELOPMENT_FRONTEND_PORT
+DEV_HOST=$DEVELOPMENT_HOST
 BACKEND_PORT=$BACKEND_PORT
 $DB_PORT_COMMENT
 DB_PORT=5432
-
-# URL Configuration  
-FRONTEND_URL=$FRONTEND_URL
-BACKEND_URL=$BACKEND_API_URL
 
 # Reverse Proxy Configuration
 USE_REVERSE_PROXY=$USE_REVERSE_PROXY
 USE_HTTPS=$USE_HTTPS
 EOF
+        )
         
         print_success ".env file created with configuration"
-        ADMIN_PASSWORD_TO_DISPLAY="$ADMIN_PASSWORD"
     else
         print_status ".env file already exists, using existing configuration"
-    fi
-    
-    # Create frontend .env file with API URL
-    print_status "Creating frontend environment configuration..."
-    
-    if [ "$DEPLOYMENT_TYPE" = "remote" ]; then
-        # For remote deployments, use relative paths (empty VITE_API_BASE_URL)
-        cat > frontend/.env << EOF
-VITE_API_BASE_URL=
-EOF
-        print_success "Frontend configured to use relative API paths for reverse proxy"
-    else
-        # For local deployments, use full URL
-        cat > frontend/.env << EOF
-VITE_API_BASE_URL=$BACKEND_API_URL
-EOF
-        print_success "Frontend configuration created with API URL: $BACKEND_API_URL"
-    fi
-    
-    # Create Caddyfile if using reverse proxy
-    if [ "$USE_REVERSE_PROXY" = "true" ]; then
-        print_status "Creating Caddyfile from template..."
-        
-        if [ -f "examples/Caddyfile" ]; then
-            # Replace the domain placeholder in the template
-            sed "s/owlculus\.example\.com/$DOMAIN/g" examples/Caddyfile > Caddyfile
-            print_success "Caddyfile created for domain: $DOMAIN"
-        else
-            print_error "Caddyfile template not found in examples/Caddyfile"
-            exit 1
-        fi
     fi
     
     # Determine compose files based on deployment type
     if [ "$DEPLOYMENT_TYPE" = "remote" ]; then
         print_status "Starting Owlculus for remote deployment..."
-        COMPOSE_FILES="-f docker-compose.reverse-proxy.yml"
-        print_status "Using all-in-one configuration with Caddy reverse proxy"
+        COMPOSE_TOPOLOGY="$REVERSE_PROXY_TOPOLOGY"
+        print_status "Using the shared configuration with the Caddy reverse-proxy overlay"
     elif [ "$MODE" = "dev" ] || [ "$MODE" = "development" ]; then
         print_status "Starting Owlculus in development mode..."
-        COMPOSE_FILES="-f docker-compose.dev.yml"
+        COMPOSE_TOPOLOGY="$DEV_TOPOLOGY"
     else
         print_status "Starting Owlculus in production mode..."
-        COMPOSE_FILES="-f docker-compose.yml"
+        COMPOSE_TOPOLOGY="$DIRECT_TOPOLOGY"
     fi
     
-    # Build Docker images
+    # Validate the fully merged configuration without printing secret values.
+    if ! (set -o pipefail
+        "$DOCKER_COMPOSE_CMD" "$COMPOSE_TOPOLOGY" config --format json |
+            python3 scripts/validate-deployment.py
+    ); then
+        print_error "Deployment credentials are invalid. Follow the instructions above, then rerun make setup (or make setup-dev for development)."
+        return 1
+    fi
+
+    # Keep Docker diagnostics visible and stop before claiming a failed install works.
     print_status "Building Docker images..."
-    if [ "$VERBOSE" = "true" ]; then
-        $DOCKER_COMPOSE_CMD $COMPOSE_FILES build
-    else
-        $DOCKER_COMPOSE_CMD $COMPOSE_FILES build > /dev/null 2>&1
+    if ! "$DOCKER_COMPOSE_CMD" "$COMPOSE_TOPOLOGY" build; then
+        print_error "Docker image build failed. See the error above."
+        return 1
     fi
-    
-    # Start services
-    print_status "Starting services..."
-    if [ "$VERBOSE" = "true" ]; then
-        $DOCKER_COMPOSE_CMD $COMPOSE_FILES up -d
-    else
-        $DOCKER_COMPOSE_CMD $COMPOSE_FILES up -d > /dev/null 2>&1
+
+    print_status "Starting services and waiting for readiness..."
+    if ! "$DOCKER_COMPOSE_CMD" "$COMPOSE_TOPOLOGY" up -d --wait --wait-timeout 120; then
+        print_error "Services failed to become ready. Inspect: $DOCKER_COMPOSE_CMD $COMPOSE_TOPOLOGY logs"
+        return 1
     fi
-    
-    # Wait for services to be healthy
-    print_status "Waiting for services to start..."
-    sleep 10
-    
-    # Check service health
+
     print_status "Checking service health..."
-    sleep 5
-    
+    local SERVICES_READY="true"
     # Test services based on deployment type
     if [ "$USE_REVERSE_PROXY" = "true" ]; then
         print_status "Caddy reverse proxy is handling requests"
         print_success "Frontend URL: $FRONTEND_URL"
-        print_success "Backend API URL: $BACKEND_API_URL"
         print_status "Note: HTTPS certificates will be automatically obtained on first access"
-    else
-        # Test backend
-        if curl -f -s "$BACKEND_API_URL/" > /dev/null; then
-            print_success "Backend is running at $BACKEND_API_URL"
+    elif [ "$DEPLOYMENT_TYPE" = "local_dev" ]; then
+        # The development backend remains directly reachable for local tooling.
+        if curl --connect-timeout 2 --max-time 5 --retry 10 --retry-delay 2 --retry-connrefused -f -s "http://localhost:$BACKEND_PORT/health/ready" > /dev/null; then
+            print_success "Development backend is ready"
         else
-            print_warning "Backend may still be starting up at $BACKEND_API_URL"
+            print_error "Development backend did not become ready"
+            SERVICES_READY="false"
         fi
-        
-        # Test frontend
-        if curl -f -s "$FRONTEND_URL/" > /dev/null; then
+
+        if curl --connect-timeout 2 --max-time 5 --retry 10 --retry-delay 2 --retry-connrefused -f -s -H "Host: $DOMAIN:$FRONTEND_PORT" "http://localhost:$FRONTEND_PORT/" > /dev/null; then
             print_success "Frontend is running at $FRONTEND_URL"
         else
-            print_warning "Frontend may still be starting up at $FRONTEND_URL"
+            print_error "Frontend did not become ready at $FRONTEND_URL"
+            SERVICES_READY="false"
+        fi
+    else
+        if curl --connect-timeout 2 --max-time 5 --retry 10 --retry-delay 2 --retry-connrefused -f -s "$FRONTEND_URL/health/ready" > /dev/null; then
+            print_success "Caddy gateway is ready at $FRONTEND_URL"
+        else
+            print_error "Caddy gateway did not become ready at $FRONTEND_URL"
+            SERVICES_READY="false"
         fi
     fi
     
+    if [ "$SERVICES_READY" != "true" ]; then
+        print_error "Startup checks failed. Inspect: $DOCKER_COMPOSE_CMD $COMPOSE_TOPOLOGY logs"
+        return 1
+    fi
+
     # Success message
     echo ""
     print_success "Owlculus setup completed!"
@@ -695,46 +616,69 @@ EOF
         echo "   • Automatic HTTPS with Let's Encrypt certificates"
         echo "   • All services accessible through single endpoint"
         echo "   • Frontend: https://$DOMAIN"
-        echo "   • Backend API: https://$DOMAIN/api"
         echo "   • No exposed ports except 80/443"
         echo ""
         print_warning "Important: Ensure DNS for $DOMAIN points to this server!"
     else
         echo "   Frontend: $FRONTEND_URL"
-        echo "   Backend API: $BACKEND_API_URL"
+    fi
+
+    echo ""
+    # Read the current token from persistent storage, including on setup reruns.
+    local SETUP_TOKEN=""
+    local SETUP_TOKEN_READ="false"
+    local attempt
+    for attempt in {1..10}; do
+        if SETUP_TOKEN=$("$DOCKER_COMPOSE_CMD" "$COMPOSE_TOPOLOGY" exec -T backend python -c '
+import sys
+from sqlmodel import Session
+from app.core.setup import get_setup_token, is_setup_required
+from app.database.connection import engine
+
+with Session(engine) as session:
+    if is_setup_required(session):
+        token = get_setup_token()
+        if not token:
+            sys.exit(1)
+        print(token)
+' 2>/dev/null); then
+            SETUP_TOKEN_READ="true"
+            break
+        fi
+        if [ "$attempt" -lt 10 ]; then
+            sleep 2
+        fi
+    done
+
+    if [ "$SETUP_TOKEN_READ" = "true" ] && [ -z "$SETUP_TOKEN" ]; then
+        echo "Administrator setup is already complete. Log in at $FRONTEND_URL"
+    else
+        echo "Complete first-run setup:"
+        if [ "$SETUP_TOKEN_READ" = "true" ]; then
+            printf '   Setup token: %s\n' "$SETUP_TOKEN"
+        else
+            print_warning "Could not retrieve the setup token; the backend may still be starting."
+            echo "   Retrieve it with: $DOCKER_COMPOSE_CMD $COMPOSE_TOPOLOGY logs backend"
+        fi
+        echo "   Open $FRONTEND_URL/setup"
+        echo "   Enter the token and choose your administrator username and password"
     fi
     
     echo ""
     echo "Useful commands:"
-    echo "   Show credentials: cat .env"
-    echo "   Stop services:    $DOCKER_COMPOSE_CMD $COMPOSE_FILES down"
-    echo "   View logs:        $DOCKER_COMPOSE_CMD $COMPOSE_FILES logs -f"
-    echo "   Restart services: $DOCKER_COMPOSE_CMD $COMPOSE_FILES restart"
-    echo "   Shell access:     $DOCKER_COMPOSE_CMD $COMPOSE_FILES exec backend bash"
+    echo "   Review config:    cat .env"
+    echo "   Stop services:    $DOCKER_COMPOSE_CMD $COMPOSE_TOPOLOGY down"
+    echo "   View logs:        $DOCKER_COMPOSE_CMD $COMPOSE_TOPOLOGY logs -f"
+    echo "   Restart services: $DOCKER_COMPOSE_CMD $COMPOSE_TOPOLOGY restart"
+    echo "   Shell access:     $DOCKER_COMPOSE_CMD $COMPOSE_TOPOLOGY exec backend bash"
     echo ""
     
-    # Create test data if requested
-    if [ "$CREATE_TESTDATA" = "true" ]; then
-        echo ""
-        create_test_data "$MODE" "$COMPOSE_FILES"
-    fi
-    
-    # Display admin credentials at the very end if they were generated
-    if [ -n "$ADMIN_PASSWORD_TO_DISPLAY" ]; then
-        echo "Generated admin credentials:"
-        echo "   Username: $ADMIN_USERNAME"
-        echo "   Password: $ADMIN_PASSWORD_TO_DISPLAY"
-        echo ""
-        print_warning "Save the admin password above - you'll need it to log in!"
-        echo ""
-    fi
 }
 
 # Parse arguments
 MODE="production"
 VERBOSE="false"
 CLEAN="false"
-CREATE_TESTDATA="false"
 
 # Parse arguments in order
 for arg in "$@"; do
@@ -747,9 +691,6 @@ for arg in "$@"; do
             ;;
         --clean)
             CLEAN="true"
-            ;;
-        --testdata)
-            CREATE_TESTDATA="true"
             ;;
         production|prod|dev|development|help)
             MODE="$arg"
@@ -765,10 +706,10 @@ fi
 # Main script logic
 case "$MODE" in
     production|prod)
-        setup_owlculus "production" "$VERBOSE" "$CLEAN" "$CREATE_TESTDATA"
+        setup_owlculus "production" "$VERBOSE" "$CLEAN"
         ;;
     development|dev)
-        setup_owlculus "dev" "$VERBOSE" "$CLEAN" "$CREATE_TESTDATA"
+        setup_owlculus "dev" "$VERBOSE" "$CLEAN"
         ;;
     help|--help|-h)
         show_usage

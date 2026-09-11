@@ -3,7 +3,7 @@
     <!-- Search and Filter Bar -->
     <v-card variant="outlined" class="mb-4">
       <v-card-text>
-        <v-row align="center">
+        <v-row class="align-center">
           <v-col cols="12" md="4">
             <v-text-field
               v-model="searchQuery"
@@ -49,14 +49,14 @@
     <!-- Loading State -->
     <div v-if="loading" class="text-center pa-8">
       <v-progress-circular indeterminate size="64" />
-      <div class="text-h6 mt-4">Loading execution history...</div>
+      <div class="text-title-large mt-4">Loading execution history...</div>
     </div>
 
     <!-- Empty State -->
     <v-card v-else-if="filteredExecutions.length === 0" variant="outlined" class="text-center pa-8">
       <v-icon icon="mdi-history" size="64" color="grey" class="mb-4" />
-      <div class="text-h6 mb-2">No executions found</div>
-      <div class="text-body-2 text-medium-emphasis">
+      <div class="text-title-large mb-2">No executions found</div>
+      <div class="text-body-medium text-medium-emphasis">
         {{
           hasActiveFilters
             ? 'Try adjusting your search or filter criteria'
@@ -73,7 +73,7 @@
         :items-per-page="itemsPerPage"
         :items-per-page-options="[10, 25, 50, 100]"
         :sort-by="[{ key: 'created_at', order: 'desc' }]"
-        class="execution-history-table"
+        density="comfortable"
         item-value="id"
       >
         <!-- Hunt Name Column -->
@@ -87,13 +87,13 @@
             >
               <v-icon :icon="getCategoryIcon(item.hunt_category)" size="small" />
             </v-avatar>
-            <div class="text-body-2 font-weight-medium">{{ item.hunt_display_name }}</div>
+            <div class="text-body-medium font-weight-medium">{{ item.hunt_display_name }}</div>
           </div>
         </template>
 
         <!-- Target Column -->
         <template #[`item.target`]="{ item }">
-          <div class="text-body-2">
+          <div class="text-body-medium">
             {{ getTargetDisplay(item) }}
           </div>
         </template>
@@ -121,24 +121,25 @@
               class="flex-grow-1 me-2"
               style="max-width: 100px"
             />
-            <span class="text-caption">{{ Math.round(item.progress * 100) }}%</span>
+            <span class="text-body-small">{{ Math.round(item.progress * 100) }}%</span>
           </div>
         </template>
 
         <!-- Created At Column -->
         <template #[`item.created_at`]="{ item }">
-          <div class="text-body-2">{{ formatDate(item.created_at) }}</div>
+          <div class="text-body-medium">{{ formatDate(item.created_at) }}</div>
         </template>
 
         <!-- Duration Column -->
         <template #[`item.duration`]="{ item }">
-          <span class="text-body-2">{{ calculateDuration(item) }}</span>
+          <span class="text-body-medium">{{ calculateDuration(item) }}</span>
         </template>
 
         <!-- Actions Column -->
         <template #[`item.actions`]="{ item }">
           <v-btn
             icon="mdi-eye"
+            :aria-label="`View ${item.hunt_display_name} execution`"
             size="small"
             variant="text"
             @click="$emit('view-details', item.id)"
@@ -151,7 +152,12 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import { getHuntTargetSummary, getCategoryColor, getCategoryIcon } from '@/utils/huntDisplayUtils'
+import {
+  getHuntTargetSummary,
+  getCategoryColor,
+  getCategoryIcon,
+  getStatusText as formatStatusText,
+} from '@/utils/huntDisplayUtils'
 import { formatDate } from '@/composables/dateUtils'
 
 const props = defineProps({
@@ -185,14 +191,9 @@ const headers = [
 ]
 
 // Filter options
-const statusOptions = [
-  { title: 'Completed', value: 'completed' },
-  { title: 'Failed', value: 'failed' },
-  { title: 'Partial', value: 'partial' },
-  { title: 'Cancelled', value: 'cancelled' },
-  { title: 'Running', value: 'running' },
-  { title: 'Pending', value: 'pending' },
-]
+const statusOptions = ['completed', 'failed', 'partial', 'cancelled', 'running', 'pending'].map(
+  (value) => ({ title: formatStatusText(value, true), value }),
+)
 
 const categoryOptions = computed(() => {
   const categories = [
@@ -286,24 +287,7 @@ const getStatusIcon = (status) => {
   }
 }
 
-const getStatusText = (status) => {
-  switch (status) {
-    case 'pending':
-      return 'Pending'
-    case 'running':
-      return 'Running'
-    case 'completed':
-      return 'Completed'
-    case 'partial':
-      return 'Partial'
-    case 'failed':
-      return 'Failed'
-    case 'cancelled':
-      return 'Cancelled'
-    default:
-      return 'Unknown'
-  }
-}
+const getStatusText = (status) => formatStatusText(status, true)
 
 // formatDate and formatTimeOnly are now imported from dateUtils
 
@@ -363,14 +347,3 @@ const getTargetDisplay = (execution) => {
   return 'N/A'
 }
 </script>
-
-<style scoped>
-.execution-history-table :deep(.v-data-table__td) {
-  padding: 8px 16px;
-}
-
-.execution-history-table :deep(.v-data-table__th) {
-  padding: 8px 16px;
-  font-weight: 600;
-}
-</style>

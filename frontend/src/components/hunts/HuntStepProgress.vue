@@ -13,8 +13,10 @@
       <div class="flex-grow-1">
         <div class="d-flex align-center justify-space-between mb-2">
           <div>
-            <div class="text-h6 font-weight-medium">Step {{ stepNumber }}: {{ step.step_id }}</div>
-            <div class="text-body-2 text-medium-emphasis">
+            <div class="text-title-large font-weight-medium">
+              Step {{ stepNumber }}: {{ step.step_id }}
+            </div>
+            <div class="text-body-medium text-medium-emphasis">
               {{ step.plugin_name }}
             </div>
           </div>
@@ -27,19 +29,19 @@
         <div class="d-flex align-center mb-2">
           <div v-if="step.started_at" class="me-4">
             <v-icon icon="mdi-clock-start" size="small" class="me-1" />
-            <span class="text-caption">Started: {{ formatTimeOnly(step.started_at) }}</span>
+            <span class="text-body-small">Started: {{ formatTimeOnly(step.started_at) }}</span>
           </div>
           <div v-if="step.completed_at" class="me-4">
             <v-icon icon="mdi-clock-end" size="small" class="me-1" />
-            <span class="text-caption">Completed: {{ formatTimeOnly(step.completed_at) }}</span>
+            <span class="text-body-small">Completed: {{ formatTimeOnly(step.completed_at) }}</span>
           </div>
           <div v-if="duration" class="me-4">
             <v-icon icon="mdi-timer" size="small" class="me-1" />
-            <span class="text-caption">Duration: {{ duration }}</span>
+            <span class="text-body-small">Duration: {{ duration }}</span>
           </div>
           <div v-if="step.retry_count > 0">
             <v-icon icon="mdi-refresh" size="small" class="me-1" />
-            <span class="text-caption">Retries: {{ step.retry_count }}</span>
+            <span class="text-body-small">Retries: {{ step.retry_count }}</span>
           </div>
         </div>
 
@@ -47,16 +49,16 @@
         <div v-if="step.parameters && Object.keys(step.parameters).length > 0" class="mb-2">
           <v-expansion-panels variant="accordion" class="step-parameters">
             <v-expansion-panel>
-              <v-expansion-panel-title class="text-caption">
+              <v-expansion-panel-title class="text-body-small">
                 <v-icon icon="mdi-cog" size="small" class="me-2" />
                 Step Parameters
               </v-expansion-panel-title>
               <v-expansion-panel-text>
-                <v-table density="compact">
+                <v-table density="compact" class="bg-transparent">
                   <tbody>
                     <tr v-for="(value, key) in step.parameters" :key="key">
-                      <td class="text-caption font-weight-medium">{{ key }}</td>
-                      <td class="text-caption">{{ formatParameterValue(value) }}</td>
+                      <td class="text-body-small font-weight-medium">{{ key }}</td>
+                      <td class="text-body-small">{{ formatParameterValue(value) }}</td>
                     </tr>
                   </tbody>
                 </v-table>
@@ -96,8 +98,8 @@
           class="mt-3"
           density="compact"
         >
-          <div class="text-caption font-weight-medium">Step Failed</div>
-          <div class="text-caption">{{ truncateError(step.error_details) }}</div>
+          <div class="text-body-small font-weight-medium">Step Failed</div>
+          <div class="text-body-small">{{ truncateError(step.error_details) }}</div>
           <v-btn
             v-if="step.error_details.length > 100"
             size="x-small"
@@ -118,9 +120,9 @@
           class="mt-3"
           density="compact"
         >
-          <div class="text-caption font-weight-medium">Step Completed</div>
-          <div class="text-caption">
-            {{ getOutputSummary(step.output) }}
+          <div class="text-body-small font-weight-medium">Step Completed</div>
+          <div class="text-body-small">
+            {{ getOutputSummary(step) }}
           </div>
         </v-alert>
       </div>
@@ -129,6 +131,7 @@
 </template>
 
 <script setup>
+import { huntResultCount } from '@/utils/huntResults'
 import { computed } from 'vue'
 import { formatTimeOnly } from '@/composables/dateUtils'
 
@@ -247,7 +250,9 @@ const truncateError = (error) => {
   return error.length > 100 ? error.substring(0, 97) + '...' : error
 }
 
-const getOutputSummary = (output) => {
+const getOutputSummary = (step) => {
+  const output = step.output
+  if (step.plugin_name === 'CorrelationScan') return `${huntResultCount(step)} correlation group(s)`
   if (!output) return 'No output data'
 
   if (output.result_count !== undefined) {
@@ -269,7 +274,7 @@ const getOutputSummary = (output) => {
 
 <style scoped>
 .hunt-step-progress {
-  border-bottom: 1px solid rgba(var(--v-theme-outline), 0.1);
+  border-bottom: 1px solid rgb(var(--v-theme-outline), 0.1);
 }
 
 .hunt-step-progress.step-last {
@@ -287,7 +292,7 @@ const getOutputSummary = (output) => {
   width: 2px;
   height: 60px;
   margin-top: 8px;
-  background-color: rgba(var(--v-theme-outline), 0.3);
+  background-color: rgb(var(--v-theme-outline), 0.3);
   border-radius: 1px;
 }
 
@@ -309,23 +314,5 @@ const getOutputSummary = (output) => {
 
 .step-parameters {
   max-width: 500px;
-}
-
-.step-parameters :deep(.v-expansion-panel-title) {
-  min-height: 36px !important;
-  padding: 8px 16px !important;
-}
-
-.step-parameters :deep(.v-expansion-panel-text__wrapper) {
-  padding: 8px 16px !important;
-}
-
-.step-parameters .v-table {
-  background-color: transparent;
-}
-
-.step-parameters .v-table td {
-  padding: 4px 8px;
-  border-bottom: 1px solid rgba(var(--v-theme-outline), 0.1);
 }
 </style>

@@ -1,25 +1,38 @@
 <template>
-  <BaseDashboard :error="error" :loading="loading" title="Clients">
+  <BaseDashboard title="Clients">
+    <v-alert v-if="error" type="error" variant="tonal" class="mb-6" role="alert">
+      {{ error }}
+    </v-alert>
     <!-- Clients Data Table -->
     <v-card variant="outlined">
       <!-- Header -->
-      <v-card-title class="d-flex align-center pa-4 bg-surface">
+      <v-card-title class="operations-heading d-flex flex-wrap ga-3 align-center pa-4 bg-surface">
         <v-icon class="me-3" color="primary" icon="mdi-account-group" size="large" />
         <div class="flex-grow-1">
-          <div class="text-h6 font-weight-bold">Client Management</div>
-          <div class="text-body-2 text-medium-emphasis">Manage client accounts and information</div>
+          <h2 class="text-title-large font-weight-bold">Client Management</h2>
+          <div class="text-body-medium text-medium-emphasis">
+            Manage client accounts and information
+          </div>
         </div>
         <div class="d-flex align-center ga-2">
-          <v-btn color="primary" prepend-icon="mdi-plus" variant="flat" @click="openNewClientModal">
+          <v-btn
+            size="small"
+            color="primary"
+            prepend-icon="mdi-plus"
+            variant="flat"
+            @click="openNewClientModal"
+          >
             Add Client
           </v-btn>
           <v-tooltip location="bottom" text="Refresh client list">
             <template #activator="{ props }">
               <v-btn
+                size="small"
                 :loading="loading"
                 icon="mdi-refresh"
                 v-bind="props"
                 variant="outlined"
+                aria-label="Refresh client list"
                 @click="loadData"
               />
             </template>
@@ -31,7 +44,7 @@
 
       <!-- Search Toolbar -->
       <v-card-text class="pa-4">
-        <v-row align="center" class="mb-0">
+        <v-row class="mb-0 align-center">
           <v-col cols="12" md="8">
             <!-- Could add filters here in the future -->
           </v-col>
@@ -47,7 +60,7 @@
                 hide-details
                 label="Search clients..."
                 prepend-inner-icon="mdi-magnify"
-                style="min-width: 280px"
+                class="operations-search"
                 variant="outlined"
               />
             </div>
@@ -58,17 +71,20 @@
       <v-divider />
 
       <v-data-table
+        :cell-props="{ class: 'operations-cell' }"
+        :header-props="{ class: 'operations-column' }"
         :headers="vuetifyHeaders"
         :items="sortedAndFilteredClients"
         :loading="loading"
         class="elevation-0 clients-dashboard-table"
+        :hide-no-data="!!error"
         hover
-        item-key="id"
+        item-value="id"
         @dblclick:row="handleRowDoubleClick"
       >
         <!-- Created date -->
         <template #[`item.created_at`]="{ item }">
-          <span class="text-body-2">
+          <span class="text-body-medium">
             {{ formatDate(item.created_at) }}
           </span>
         </template>
@@ -81,12 +97,20 @@
               icon
               size="small"
               variant="outlined"
+              :aria-label="`Edit ${item.name}`"
               @click="openEditClientModal(item)"
             >
               <v-icon>mdi-pencil</v-icon>
               <v-tooltip activator="parent" location="top"> Edit {{ item.name }} </v-tooltip>
             </v-btn>
-            <v-btn color="error" icon size="small" variant="outlined" @click="handleDelete(item)">
+            <v-btn
+              color="error"
+              icon
+              size="small"
+              variant="outlined"
+              @click="handleDelete(item)"
+              :aria-label="`Delete ${item.name}`"
+            >
               <v-icon>mdi-delete</v-icon>
               <v-tooltip activator="parent" location="top"> Delete {{ item.name }} </v-tooltip>
             </v-btn>
@@ -102,10 +126,10 @@
               icon="mdi-account-group-outline"
               size="64"
             />
-            <h3 class="text-h6 font-weight-medium mb-2">
+            <h3 class="text-title-large font-weight-medium mb-2">
               {{ getEmptyStateTitle() }}
             </h3>
-            <p class="text-body-2 text-medium-emphasis mb-4">
+            <p class="text-body-medium text-medium-emphasis mb-4">
               {{ getEmptyStateMessage() }}
             </p>
             <v-btn
@@ -158,9 +182,11 @@ import NewClientModal from '../components/NewClientModal.vue'
 import EditClientModal from '../components/EditClientModal.vue'
 import { useClients } from '../composables/useClients'
 import { clientService } from '../services/client'
+import { useClientsStore } from '../stores/clients'
 
 const { loading, error, searchQuery, clients, loadData, formatDate, sortedAndFilteredClients } =
   useClients()
+const clientsStore = useClientsStore()
 
 // Vuetify table headers
 const vuetifyHeaders = [
@@ -193,7 +219,7 @@ const closeNewClientModal = () => {
 }
 
 const handleClientCreated = (newClient) => {
-  clients.value.push(newClient)
+  clientsStore.upsert(newClient)
   showNotification(`Client "${newClient.name}" created successfully`, 'success')
 }
 
@@ -208,11 +234,8 @@ const closeEditClientModal = () => {
 }
 
 const handleClientUpdated = (updatedClient) => {
-  const index = clients.value.findIndex((c) => c.id === updatedClient.id)
-  if (index !== -1) {
-    clients.value[index] = updatedClient
-    showNotification(`Client "${updatedClient.name}" updated successfully`, 'success')
-  }
+  clientsStore.upsert(updatedClient)
+  showNotification(`Client "${updatedClient.name}" updated successfully`, 'success')
 }
 
 const handleRowDoubleClick = (event, { item }) => {
@@ -224,7 +247,7 @@ const handleDelete = async (client) => {
 
   try {
     await clientService.deleteClient(client.id)
-    clients.value = clients.value.filter((c) => c.id !== client.id)
+    clientsStore.remove(client.id)
     showNotification(`Client "${client.name}" deleted successfully`, 'success')
   } catch (error) {
     console.error('Error deleting client:', error)
@@ -268,26 +291,3 @@ onMounted(() => {
   loadData()
 })
 </script>
-
-<style scoped>
-.clients-dashboard-table :deep(.v-data-table__tr:hover) {
-  background-color: rgb(var(--v-theme-primary), 0.04) !important;
-  cursor: pointer;
-}
-
-.clients-dashboard-table :deep(.v-data-table__td) {
-  padding: 12px 16px !important;
-  border-bottom: 1px solid rgb(var(--v-theme-on-surface), 0.08) !important;
-}
-
-.clients-dashboard-table :deep(.v-data-table__th) {
-  padding: 16px !important;
-  font-weight: 600 !important;
-  color: rgb(var(--v-theme-on-surface), 0.87) !important;
-  border-bottom: 2px solid rgb(var(--v-theme-on-surface), 0.12) !important;
-}
-
-.clients-dashboard-table :deep(.v-data-table-rows-no-data) {
-  padding: 48px 16px !important;
-}
-</style>

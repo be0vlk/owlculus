@@ -1,13 +1,13 @@
 <template>
-  <v-card class="hunt-progress-card" elevation="2" rounded="lg">
+  <v-card class="hunt-progress-card" elevation="1" rounded="lg">
     <!-- Header -->
-    <v-card-title class="d-flex align-center pa-4 text-no-wrap">
+    <v-card-title class="d-flex align-center pa-3 pa-sm-4 text-no-wrap">
       <v-avatar :color="statusColor" size="40" class="me-3">
         <v-icon :icon="statusIcon" color="white" />
       </v-avatar>
       <div class="flex-grow-1 text-truncate">
-        <div class="text-h6 font-weight-bold text-truncate">{{ huntDisplayTitle }}</div>
-        <div class="text-caption text-medium-emphasis text-truncate">
+        <div class="text-title-large font-weight-bold text-truncate">{{ huntDisplayTitle }}</div>
+        <div class="text-body-small text-medium-emphasis text-truncate">
           Execution #{{ execution.id }}
           <span v-if="execution.hunt">• {{ execution.hunt.category }}</span>
         </div>
@@ -20,28 +20,29 @@
     <v-divider />
 
     <!-- Progress Section -->
-    <v-card-text class="pa-4">
+    <v-card-text class="pa-3 pa-sm-4">
+      <ExecutionWaiting :execution="execution" />
       <!-- Timing Information -->
       <div class="timing-info mb-4">
         <div class="d-flex align-center flex-wrap">
           <div class="d-flex align-center me-4 mb-1">
             <v-icon icon="mdi-clock-start" size="small" class="me-1" />
-            <span class="text-caption">Started: {{ formatDate(execution.started_at) }}</span>
+            <span class="text-body-small">Started: {{ formatDate(execution.started_at) }}</span>
           </div>
           <div v-if="execution.completed_at" class="d-flex align-center mb-1">
             <v-icon icon="mdi-clock-end" size="small" class="me-1" />
-            <span class="text-caption">Completed: {{ formatDate(execution.completed_at) }}</span>
+            <span class="text-body-small">Completed: {{ formatDate(execution.completed_at) }}</span>
           </div>
           <div v-else-if="execution.status === 'running'" class="d-flex align-center mb-1">
             <v-icon icon="mdi-clock" size="small" class="me-1" />
-            <span class="text-caption">{{ elapsedTime }}</span>
+            <span class="text-body-small">{{ elapsedTime }}</span>
           </div>
         </div>
       </div>
 
       <!-- Step Progress -->
       <div v-if="execution.steps && execution.steps.length > 0" class="mb-4">
-        <div class="text-body-2 font-weight-medium mb-3">Hunt Steps</div>
+        <div class="text-body-medium font-weight-medium mb-3">Hunt Steps</div>
         <div class="step-list">
           <div
             v-for="(step, index) in execution.steps"
@@ -55,8 +56,10 @@
 
             <!-- Step Info -->
             <div class="flex-grow-1 text-truncate">
-              <div class="text-body-2 text-truncate">{{ step.step_id || `Step ${index + 1}` }}</div>
-              <div class="text-caption text-medium-emphasis text-truncate">
+              <div class="text-body-medium text-truncate">
+                {{ step.step_id || `Step ${index + 1}` }}
+              </div>
+              <div class="text-body-small text-medium-emphasis text-truncate">
                 {{ step.plugin_name }}
               </div>
             </div>
@@ -76,39 +79,40 @@
         variant="tonal"
         class="mb-4"
       >
-        <div class="text-body-2 font-weight-medium mb-1">
+        <div class="text-body-medium font-weight-medium mb-1">
           {{ execution.status === 'failed' ? 'Hunt Failed' : 'Some Steps Failed' }}
         </div>
-        <div v-if="failedSteps.length > 0" class="text-caption">
+        <div v-if="failedSteps.length > 0" class="text-body-small">
           Failed steps: {{ failedSteps.map((s) => s.step_id).join(', ') }}
         </div>
       </v-alert>
 
       <!-- Results Summary -->
       <div v-if="execution.status === 'completed' || execution.status === 'partial'" class="mb-4">
-        <div class="text-body-2 font-weight-medium mb-2">Results Summary</div>
+        <div class="text-body-medium font-weight-medium mb-2">Results Summary</div>
         <div class="d-flex align-center flex-wrap">
           <div class="d-flex align-center me-4 mb-1">
             <v-icon icon="mdi-check-circle" color="success" size="small" class="me-1" />
-            <span class="text-caption">{{ completedSteps.length }} steps completed</span>
+            <span class="text-body-small">{{ completedSteps.length }} steps completed</span>
           </div>
           <div v-if="failedSteps.length > 0" class="d-flex align-center mb-1">
             <v-icon icon="mdi-alert-circle" color="error" size="small" class="me-1" />
-            <span class="text-caption">{{ failedSteps.length }} steps failed</span>
+            <span class="text-body-small">{{ failedSteps.length }} steps failed</span>
           </div>
         </div>
       </div>
     </v-card-text>
 
     <!-- Actions -->
-    <v-card-actions class="pa-4 pt-0 flex-wrap">
+    <v-card-actions class="pa-3 pa-sm-4 pt-0 flex-wrap">
       <v-btn
-        v-if="execution.status === 'running'"
+        v-if="['pending', 'running'].includes(execution.status)"
         color="error"
         variant="outlined"
         size="small"
         @click="$emit('cancel', execution.id)"
         :loading="cancelling"
+        :disabled="cancelling"
         class="mb-2 mb-sm-0"
       >
         <v-icon icon="mdi-stop" start />
@@ -148,8 +152,14 @@
 </template>
 
 <script setup>
+import ExecutionWaiting from '@/components/ExecutionWaiting.vue'
 import { computed, ref, onMounted, onUnmounted } from 'vue'
-import { formatHuntExecutionTitle } from '@/utils/huntDisplayUtils'
+import {
+  formatHuntExecutionTitle,
+  getStatusText,
+  getStatusColor,
+  getStatusIcon,
+} from '@/utils/huntDisplayUtils'
 import { formatDate } from '@/composables/dateUtils'
 
 const props = defineProps({
@@ -170,62 +180,10 @@ const elapsedTime = ref('')
 let elapsedInterval = null
 
 // Computed properties
-const statusColor = computed(() => {
-  switch (props.execution.status) {
-    case 'pending':
-      return 'grey'
-    case 'running':
-      return 'primary'
-    case 'completed':
-      return 'success'
-    case 'partial':
-      return 'warning'
-    case 'failed':
-      return 'error'
-    case 'cancelled':
-      return 'grey'
-    default:
-      return 'grey'
-  }
-})
+const statusColor = computed(() => getStatusColor(props.execution.status))
+const statusIcon = computed(() => getStatusIcon(props.execution.status))
 
-const statusIcon = computed(() => {
-  switch (props.execution.status) {
-    case 'pending':
-      return 'mdi-clock-outline'
-    case 'running':
-      return 'mdi-play'
-    case 'completed':
-      return 'mdi-check'
-    case 'partial':
-      return 'mdi-alert'
-    case 'failed':
-      return 'mdi-close'
-    case 'cancelled':
-      return 'mdi-stop'
-    default:
-      return 'mdi-help'
-  }
-})
-
-const statusText = computed(() => {
-  switch (props.execution.status) {
-    case 'pending':
-      return 'Pending'
-    case 'running':
-      return 'Running'
-    case 'completed':
-      return 'Completed'
-    case 'partial':
-      return 'Partial'
-    case 'failed':
-      return 'Failed'
-    case 'cancelled':
-      return 'Cancelled'
-    default:
-      return 'Unknown'
-  }
-})
+const statusText = computed(() => getStatusText(props.execution.status, true))
 
 const completedSteps = computed(() => {
   if (!props.execution.steps) return []
@@ -281,6 +239,8 @@ const getStepStatusIcon = (status) => {
       return 'mdi-close'
     case 'skipped':
       return 'mdi-skip-next'
+    case 'cancelling':
+      return 'mdi-timer-sand'
     case 'cancelled':
       return 'mdi-stop'
     default:
@@ -366,8 +326,7 @@ watch(
 
 .step-list {
   max-height: 200px;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden auto;
 }
 
 .step-item {
@@ -378,7 +337,7 @@ watch(
 }
 
 .step-item:hover {
-  background-color: rgba(var(--v-theme-surface-variant), 0.1);
+  background-color: rgb(var(--v-theme-surface-variant), 0.1);
 }
 
 /* Ensure proper text truncation */
@@ -389,22 +348,9 @@ watch(
 }
 
 /* Responsive adjustments */
-@media (max-width: 600px) {
+@media (width <= 600px) {
   .hunt-progress-card {
     min-height: 280px;
-  }
-
-  .hunt-progress-card .v-card-title {
-    padding: 12px !important;
-  }
-
-  .hunt-progress-card .v-card-text {
-    padding: 12px !important;
-  }
-
-  .hunt-progress-card .v-card-actions {
-    padding: 12px !important;
-    padding-top: 0 !important;
   }
 }
 

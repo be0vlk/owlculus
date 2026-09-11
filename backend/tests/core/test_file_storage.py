@@ -8,8 +8,11 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
+from fastapi import UploadFile
+
 from app.core import file_storage
-from fastapi import HTTPException, UploadFile
+from app.core.exceptions import BaseException as DomainException
+from app.core.exceptions import ValidationException
 
 
 @pytest.fixture
@@ -139,45 +142,35 @@ class TestCreateFolder:
 
     def test_create_folder_invalid_case_id_zero(self, temp_upload_dir):
         """Test that invalid case ID (0) raises HTTPException."""
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ValidationException) as exc_info:
             file_storage.create_folder(0, "test_folder")
-
-        assert exc_info.value.status_code == 400
-        assert "Invalid case ID" in exc_info.value.detail
+        assert "Invalid case ID" in str(exc_info.value)
 
     def test_create_folder_invalid_case_id_negative(self, temp_upload_dir):
         """Test that negative case ID raises HTTPException."""
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ValidationException) as exc_info:
             file_storage.create_folder(-1, "test_folder")
-
-        assert exc_info.value.status_code == 400
-        assert "Invalid case ID" in exc_info.value.detail
+        assert "Invalid case ID" in str(exc_info.value)
 
     def test_create_folder_invalid_case_id_string(self, temp_upload_dir):
         """Test that string case ID raises HTTPException."""
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ValidationException) as exc_info:
             file_storage.create_folder("invalid", "test_folder")
-
-        assert exc_info.value.status_code == 400
-        assert "Invalid case ID" in exc_info.value.detail
+        assert "Invalid case ID" in str(exc_info.value)
 
     def test_create_folder_empty_path(self, temp_upload_dir, case_id):
         """Test that empty folder path raises HTTPException."""
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ValidationException) as exc_info:
             file_storage.create_folder(case_id, "")
-
-        assert exc_info.value.status_code == 400
-        assert "Folder path is required" in exc_info.value.detail
+        assert "Folder path is required" in str(exc_info.value)
 
     def test_create_folder_invalid_path_after_normalization(
         self, temp_upload_dir, case_id
     ):
         """Test that path invalid after normalization raises HTTPException."""
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ValidationException) as exc_info:
             file_storage.create_folder(case_id, "../../../")
-
-        assert exc_info.value.status_code == 400
-        assert "Invalid folder path" in exc_info.value.detail
+        assert "Invalid folder path" in str(exc_info.value)
 
     def test_create_folder_nested_path(self, temp_upload_dir, case_id):
         """Test creating nested folder structure."""
@@ -251,19 +244,15 @@ class TestDeleteFolder:
 
     def test_delete_folder_invalid_case_id(self, temp_upload_dir):
         """Test that invalid case ID raises HTTPException."""
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ValidationException) as exc_info:
             file_storage.delete_folder(0, "test_folder")
-
-        assert exc_info.value.status_code == 400
-        assert "Invalid case ID" in exc_info.value.detail
+        assert "Invalid case ID" in str(exc_info.value)
 
     def test_delete_folder_invalid_path(self, temp_upload_dir, case_id):
         """Test that invalid path raises HTTPException."""
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ValidationException) as exc_info:
             file_storage.delete_folder(case_id, "../../../")
-
-        assert exc_info.value.status_code == 400
-        assert "Invalid folder path" in exc_info.value.detail
+        assert "Invalid folder path" in str(exc_info.value)
 
     def test_delete_folder_nonexistent_folder(self, temp_upload_dir, case_id):
         """Test deleting non-existent folder doesn't raise error."""
@@ -330,31 +319,25 @@ class TestSaveUploadFile:
         self, temp_upload_dir, sample_upload_file
     ):
         """Test that None case ID raises HTTPException."""
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ValidationException) as exc_info:
             await file_storage.save_upload_file(sample_upload_file, None)
-
-        assert exc_info.value.status_code == 400
-        assert "Case ID is required" in exc_info.value.detail
+        assert "Case ID is required" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_save_upload_file_invalid_case_id(
         self, temp_upload_dir, sample_upload_file
     ):
         """Test that invalid case ID raises HTTPException."""
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ValidationException) as exc_info:
             await file_storage.save_upload_file(sample_upload_file, 0)
-
-        assert exc_info.value.status_code == 400
-        assert "Invalid case ID" in exc_info.value.detail
+        assert "Invalid case ID" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_save_upload_file_none_file(self, temp_upload_dir, case_id):
         """Test that None file raises HTTPException."""
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ValidationException) as exc_info:
             await file_storage.save_upload_file(None, case_id)
-
-        assert exc_info.value.status_code == 400
-        assert "No file was provided" in exc_info.value.detail
+        assert "No file was provided" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_save_upload_file_validation_fails(
@@ -362,15 +345,11 @@ class TestSaveUploadFile:
     ):
         """Test that file validation failure is propagated."""
         with patch("app.core.file_storage.validate_file_security") as mock_validate:
-            mock_validate.side_effect = HTTPException(
-                status_code=400, detail="File not allowed"
-            )
+            mock_validate.side_effect = ValidationException("File not allowed")
 
-            with pytest.raises(HTTPException) as exc_info:
+            with pytest.raises(ValidationException) as exc_info:
                 await file_storage.save_upload_file(sample_upload_file, case_id)
-
-            assert exc_info.value.status_code == 400
-            assert "File not allowed" in exc_info.value.detail
+            assert "File not allowed" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_save_upload_file_generic_exception_handling(
@@ -386,11 +365,9 @@ class TestSaveUploadFile:
             mock_validate.return_value = None
             mock_secure.side_effect = Exception("Unexpected error")
 
-            with pytest.raises(HTTPException) as exc_info:
+            with pytest.raises(DomainException) as exc_info:
                 await file_storage.save_upload_file(sample_upload_file, case_id)
-
-            assert exc_info.value.status_code == 500
-            assert "Could not save file" in exc_info.value.detail
+            assert "Could not save file" in str(exc_info.value)
 
 
 class TestDeleteFile:
@@ -411,47 +388,37 @@ class TestDeleteFile:
     @pytest.mark.asyncio
     async def test_delete_file_path_traversal_attack(self, temp_upload_dir):
         """Test that path traversal attacks are blocked."""
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ValidationException) as exc_info:
             await file_storage.delete_file("../../etc/passwd")
-
-        assert exc_info.value.status_code == 400
-        assert "Invalid file path" in exc_info.value.detail
+        assert "Invalid file path" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_delete_file_path_traversal_with_dots(self, temp_upload_dir):
         """Test that paths with .. are blocked."""
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ValidationException) as exc_info:
             await file_storage.delete_file("test/../../../sensitive_file")
-
-        assert exc_info.value.status_code == 400
-        assert "Invalid file path" in exc_info.value.detail
+        assert "Invalid file path" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_delete_file_absolute_path_attack(self, temp_upload_dir):
         """Test that absolute paths are blocked."""
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ValidationException) as exc_info:
             await file_storage.delete_file("/etc/passwd")
-
-        assert exc_info.value.status_code == 400
-        assert "Invalid file path" in exc_info.value.detail
+        assert "Invalid file path" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_delete_file_empty_path(self, temp_upload_dir):
         """Test that empty path is blocked."""
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ValidationException) as exc_info:
             await file_storage.delete_file("")
-
-        assert exc_info.value.status_code == 400
-        assert "Invalid file path" in exc_info.value.detail
+        assert "Invalid file path" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_delete_file_root_directory_attempt(self, temp_upload_dir):
         """Test that attempting to delete upload directory itself is blocked."""
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ValidationException) as exc_info:
             await file_storage.delete_file(".")
-
-        assert exc_info.value.status_code == 400
-        assert "Invalid file path" in exc_info.value.detail
+        assert "Invalid file path" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_delete_file_nonexistent_file(self, temp_upload_dir):
@@ -507,11 +474,9 @@ class TestDeleteFile:
         """Test that symlink-based attacks are prevented by path resolution."""
         # This test verifies that symlinks can't be used to escape the upload directory
         # The normalize_folder_path and path resolution should handle this
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ValidationException) as exc_info:
             await file_storage.delete_file("test_case/../../../etc/passwd")
-
-        assert exc_info.value.status_code == 400
-        assert "Invalid file path" in exc_info.value.detail
+        assert "Invalid file path" in str(exc_info.value)
 
 
 class TestCreateCaseDirectory:
@@ -528,11 +493,9 @@ class TestCreateCaseDirectory:
 
     def test_create_case_directory_invalid_id(self, temp_upload_dir):
         """Test that invalid case ID raises HTTPException."""
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ValidationException) as exc_info:
             file_storage.create_case_directory(0)
-
-        assert exc_info.value.status_code == 400
-        assert "Invalid case ID" in exc_info.value.detail
+        assert "Invalid case ID" in str(exc_info.value)
 
     def test_create_case_directory_existing_directory(self, temp_upload_dir, case_id):
         """Test that creating existing directory doesn't fail."""
@@ -564,11 +527,9 @@ class TestSecurityIntegration:
         ]
 
         for attack_vector in attack_vectors:
-            with pytest.raises(HTTPException) as exc_info:
+            with pytest.raises(ValidationException) as exc_info:
                 await file_storage.delete_file(attack_vector)
-
-            assert exc_info.value.status_code == 400
-            assert "Invalid file path" in exc_info.value.detail
+            assert "Invalid file path" in str(exc_info.value)
 
     def test_normalize_path_security_comprehensive(self):
         """Comprehensive test of path normalization security."""

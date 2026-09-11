@@ -1,5 +1,5 @@
 <template>
-  <v-col :cols="field.gridCols === 2 || (field.type === 'array' && field.isArray) ? 12 : 6">
+  <v-col cols="12" :md="field.gridCols === 2 || (field.type === 'array' && field.isArray) ? 12 : 6">
     <v-card variant="outlined" class="pa-3">
       <v-card-subtitle class="pa-0 pb-2">
         <v-icon
@@ -16,17 +16,7 @@
 
       <!-- Associates Section -->
       <div v-if="section.parentField === 'associates'">
-        <div v-if="getAssociateEntities(field.id).length > 0" class="mb-2">
-          <EntityTag
-            v-for="associate in getAssociateEntities(field.id)"
-            :key="associate.id"
-            @click="$emit('viewEntity', associate)"
-            class="ma-1"
-          >
-            {{ getEntityDisplayName(associate) }}
-          </EntityTag>
-        </div>
-        <v-chip v-else variant="text" color="grey" size="small">
+        <v-chip variant="text" color="grey" size="small">
           {{ getFieldValue(entity.data, section.parentField, field.id) || 'Not specified' }}
         </v-chip>
       </div>
@@ -92,15 +82,15 @@
             <template #[`item.subdomain`]="{ item }">
               <div class="d-flex align-center">
                 <v-icon size="small" class="me-2">mdi-subdirectory-arrow-right</v-icon>
-                <span class="text-body-2 font-weight-medium">{{ item.subdomain }}</span>
+                <span class="text-body-medium font-weight-medium">{{ item.subdomain }}</span>
               </div>
             </template>
             <template #[`item.ip`]="{ item }">
               <div v-if="item.ip" class="d-flex align-center">
                 <v-icon size="x-small" class="me-1">mdi-ip-network</v-icon>
-                <span class="text-body-2">{{ item.ip }}</span>
+                <span class="text-body-medium">{{ item.ip }}</span>
               </div>
-              <span v-else class="text-body-2 text-medium-emphasis">-</span>
+              <span v-else class="text-body-medium text-medium-emphasis">-</span>
             </template>
             <template #[`item.resolved`]="{ item }">
               <v-chip
@@ -115,9 +105,9 @@
             <template #[`item.source`]="{ item }">
               <div v-if="item.source" class="d-flex align-center">
                 <v-icon size="x-small" class="me-1">mdi-source-branch</v-icon>
-                <span class="text-body-2">{{ item.source }}</span>
+                <span class="text-body-medium">{{ item.source }}</span>
               </div>
-              <span v-else class="text-body-2 text-medium-emphasis">-</span>
+              <span v-else class="text-body-medium text-medium-emphasis">-</span>
             </template>
           </v-data-table>
         </div>
@@ -125,7 +115,7 @@
       </div>
 
       <!-- Regular Fields -->
-      <div v-else class="text-body-1">
+      <div v-else class="text-body-large">
         <span v-if="regularValue">
           {{ regularValue }}
         </span>
@@ -144,7 +134,6 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import EntityTag from './EntityTag.vue'
 import { useEntityIcons } from '../../composables/useEntityIcons.js'
 import { useEntityDisplay } from '../../composables/useEntityDisplay.js'
 import { ensureProtocol } from '../../utils/urlHelpers.js'
@@ -154,14 +143,13 @@ const props = defineProps({
   section: { type: Object, required: true },
   entity: { type: Object, required: true },
   sourceValue: { type: String, default: '' },
-  getAssociateEntities: { type: Function, required: true },
   existingEntities: { type: Array, required: true },
 })
 
 defineEmits(['viewEntity'])
 
 const { getFieldIcon, getSocialMediaIcon } = useEntityIcons(props.entity)
-const { getEntityDisplayName, getFieldValue } = useEntityDisplay(props.entity)
+const { getFieldValue } = useEntityDisplay(props.entity)
 
 const regularValue = computed(() =>
   getFieldValue(props.entity.data, props.section.parentField, props.field.id),
@@ -221,14 +209,3 @@ const exportSubdomains = () => {
   }
 }
 </script>
-
-<style scoped>
-.subdomain-table :deep(.v-data-table__td) {
-  padding: 8px 16px;
-}
-
-.subdomain-table :deep(.v-data-table__th) {
-  padding: 8px 16px;
-  font-weight: 600;
-}
-</style>

@@ -18,8 +18,28 @@
       </v-col>
     </v-row>
 
+    <v-alert
+      v-if="loadErrorMessage"
+      data-testid="entity-load-error"
+      class="mb-4"
+      type="error"
+      variant="tonal"
+    >
+      {{ loadErrorMessage }}
+      <v-btn
+        data-testid="retry-entity-load"
+        class="ml-2"
+        size="small"
+        variant="text"
+        @click="loadItems"
+      >
+        Retry
+      </v-btn>
+    </v-alert>
+
     <!-- Data Table -->
     <v-data-table-server
+      v-if="!loadErrorMessage"
       v-model:items-per-page="itemsPerPage"
       v-model:page="page"
       v-model:sort-by="sortBy"
@@ -32,28 +52,28 @@
       density="compact"
       item-value="id"
       class="elevation-1"
+      rounded="lg"
       :items-per-page-options="itemsPerPageOptions"
       :hover="true"
       show-select
       return-object
       @update:options="loadItems"
+      @click:row="(event, { item }) => emit('view', item, event)"
     >
       <!-- Toolbar -->
       <template v-slot:top>
-        <v-toolbar flat>
+        <div class="entity-table-toolbar d-flex flex-wrap align-center ga-2 pa-2">
           <v-text-field
             v-model="search"
+            data-testid="entity-search"
             prepend-inner-icon="mdi-magnify"
             label="Search entities"
             single-line
             hide-details
             clearable
             density="compact"
-            class="mr-4"
-            style="max-width: 300px"
+            class="entity-search flex-grow-1"
           />
-
-          <v-spacer />
 
           <!-- Bulk Actions -->
           <v-btn
@@ -69,15 +89,36 @@
           </v-btn>
 
           <!-- Export Button -->
-          <v-btn
-            variant="outlined"
-            size="small"
-            prepend-icon="mdi-download"
-            @click="exportEntities"
-          >
-            Export
-          </v-btn>
-        </v-toolbar>
+          <v-menu>
+            <template #activator="{ props: menuProps }">
+              <v-btn
+                v-bind="menuProps"
+                data-testid="entity-export-button"
+                variant="outlined"
+                size="small"
+                prepend-icon="mdi-download"
+                :disabled="totalItems === 0 || exporting"
+                :loading="exporting"
+              >
+                Export
+              </v-btn>
+            </template>
+            <v-list density="compact">
+              <v-list-item
+                data-testid="export-csv"
+                prepend-icon="mdi-file-delimited"
+                title="Export as CSV"
+                @click="exportEntities('csv')"
+              />
+              <v-list-item
+                data-testid="export-json"
+                prepend-icon="mdi-code-json"
+                title="Export as JSON"
+                @click="exportEntities('json')"
+              />
+            </v-list>
+          </v-menu>
+        </div>
       </template>
 
       <!-- Type Column -->
@@ -93,7 +134,7 @@
         <div class="d-flex align-center">
           <div>
             <div class="font-weight-medium">{{ getEntityName(item) }}</div>
-            <div v-if="getEntitySubtitle(item)" class="text-caption text-medium-emphasis">
+            <div v-if="getEntitySubtitle(item)" class="text-body-small text-medium-emphasis">
               {{ getEntitySubtitle(item) }}
             </div>
           </div>
@@ -102,27 +143,35 @@
 
       <!-- Description Column -->
       <template #[`item.description`]="{ item }">
-        <span class="text-body-2">
+        <span class="text-body-medium">
           {{ item.data.description || '' }}
         </span>
       </template>
 
       <!-- Created Date Column -->
       <template #[`item.created_at`]="{ item }">
-        <span class="text-body-2">
+        <span class="text-body-medium">
           {{ formatDate(item.created_at) }}
         </span>
       </template>
 
       <!-- Actions Column -->
       <template #[`item.actions`]="{ item }">
-        <v-btn icon="mdi-eye" size="small" variant="text" @click="$emit('view', item)" />
         <v-btn
+          :aria-label="`View ${getEntityName(item)}`"
+          :data-entity-view-id="item.id"
+          icon="mdi-eye"
+          size="small"
+          variant="text"
+          @click.stop="$emit('view', item, $event)"
+        />
+        <v-btn
+          :aria-label="`Delete ${getEntityName(item)}`"
           icon="mdi-delete"
           size="small"
           variant="text"
           color="error"
-          @click="confirmDelete(item)"
+          @click.stop="confirmDelete(item)"
         />
       </template>
 
@@ -130,11 +179,16 @@
       <template v-slot:no-data>
         <v-container class="text-center pa-8">
           <v-icon class="mb-4" color="grey-lighten-1" size="64"> mdi-account-group-outline </v-icon>
-          <h3 class="text-h6 font-weight-medium mb-2">No Entities Found</h3>
-          <p class="text-body-2 text-medium-emphasis">
+          <h3 class="text-title-large font-weight-medium mb-2">No Entities Found</h3>
+          <p class="text-body-medium text-medium-emphasis">
             {{ getNoDataMessage() }}
           </p>
-          <v-btn class="mt-4" color="primary" prepend-icon="mdi-plus" @click="$emit('create')">
+          <v-btn
+            class="mt-4"
+            color="primary"
+            prepend-icon="mdi-plus"
+            @click="$emit('create', $event)"
+          >
             Add First Entity
           </v-btn>
         </v-container>
@@ -147,9 +201,9 @@
     </v-data-table-server>
 
     <!-- Delete Confirmation Dialog -->
-    <v-dialog v-model="deleteDialog" max-width="500">
+    <v-dialog v-model="deleteDialog" aria-label="Confirm Delete" max-width="500">
       <v-card>
-        <v-card-title>
+        <v-card-title id="delete-entities-dialog-title">
           <v-icon start color="error">mdi-alert</v-icon>
           Confirm Delete
         </v-card-title>
@@ -169,12 +223,42 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <v-snackbar
+      v-model="showDeleteError"
+      data-testid="entity-delete-error"
+      color="error"
+      role="alert"
+      :timeout="6000"
+    >
+      {{ deleteErrorMessage }}
+      <template #actions>
+        <v-btn variant="text" @click="showDeleteError = false">Close</v-btn>
+      </template>
+    </v-snackbar>
+
+    <v-snackbar
+      v-model="showExportError"
+      data-testid="entity-export-error"
+      color="error"
+      role="alert"
+      :timeout="6000"
+    >
+      {{ exportErrorMessage }}
+      <template #actions>
+        <v-btn variant="text" @click="showExportError = false">Close</v-btn>
+      </template>
+    </v-snackbar>
   </div>
 </template>
 
 <script setup>
+import { getEntityDisplayName } from '@/composables/useEntityDisplay'
 import { computed, onMounted, ref, watch } from 'vue'
 import { formatDate } from '@/composables/dateUtils'
+import { downloadBlob } from '@/utils/download'
+import { getErrorMessage } from '@/utils/errorMessage'
+import { useDialogFocusRestore } from '@/composables/useDialogFocusRestore'
 
 const props = defineProps({
   caseId: {
@@ -197,6 +281,7 @@ const page = ref(1)
 const itemsPerPage = ref(25)
 const sortBy = ref([])
 const search = ref('')
+const loadErrorMessage = ref('')
 
 // Filter state
 const selectedTypes = ref([])
@@ -208,6 +293,13 @@ const selected = ref([])
 const deleteDialog = ref(false)
 const itemsToDelete = ref([])
 const deleting = ref(false)
+const exporting = ref(false)
+const showExportError = ref(false)
+const exportErrorMessage = ref('')
+const showDeleteError = ref(false)
+const deleteErrorMessage = ref('')
+
+useDialogFocusRestore(deleteDialog)
 
 // Configuration
 const itemsPerPageOptions = [
@@ -243,6 +335,7 @@ watch([selectedTypes, search], () => {
 // Methods
 const loadItems = async () => {
   loading.value = true
+  loadErrorMessage.value = ''
 
   try {
     // For now, use the existing API and implement client-side filtering
@@ -306,33 +399,13 @@ const loadItems = async () => {
     console.error('Error loading entities:', error)
     entities.value = []
     totalItems.value = 0
+    loadErrorMessage.value = getErrorMessage(error, 'Failed to load entities')
   } finally {
     loading.value = false
   }
 }
 
-const getEntityName = (entity) => {
-  switch (entity.entity_type) {
-    case 'person': {
-      const firstName = entity.data.first_name || ''
-      const lastName = entity.data.last_name || ''
-      return `${firstName} ${lastName}`.trim() || 'Unnamed Person'
-    }
-    case 'company':
-      return entity.data.name || 'Unnamed Company'
-    case 'domain':
-      return entity.data.domain || 'Unnamed Domain'
-    case 'ip_address':
-      return entity.data.ip_address || 'Unnamed IP'
-    case 'vehicle': {
-      const make = entity.data.make || ''
-      const model = entity.data.model || ''
-      return `${make} ${model}`.trim() || 'Unnamed Vehicle'
-    }
-    default:
-      return 'Unknown Entity'
-  }
-}
+const getEntityName = getEntityDisplayName
 
 const getEntitySubtitle = (entity) => {
   switch (entity.entity_type) {
@@ -404,57 +477,54 @@ const cancelDelete = () => {
 
 const performDelete = async () => {
   deleting.value = true
+  showDeleteError.value = false
 
-  try {
-    for (const item of itemsToDelete.value) {
-      await props.entityService.deleteEntity(props.caseId, item.id)
-    }
+  const targets = [...itemsToDelete.value]
+  const results = await Promise.allSettled(
+    targets.map((item) => props.entityService.deleteEntity(props.caseId, item.id)),
+  )
+  const deletedItems = targets.filter((_, index) => results[index].status === 'fulfilled')
+  const failedItems = targets.filter((_, index) => results[index].status === 'rejected')
 
-    emit('deleted', itemsToDelete.value)
-    deleteDialog.value = false
-    itemsToDelete.value = []
-    selected.value = [] // Clear selection after successful deletion
-    await loadItems()
-  } catch (error) {
-    console.error('Error deleting entities:', error)
-  } finally {
-    deleting.value = false
+  if (deletedItems.length > 0) {
+    emit('deleted', deletedItems)
   }
+
+  selected.value = selected.value.filter((item) => failedItems.some(({ id }) => id === item.id))
+  itemsToDelete.value = failedItems
+  await loadItems()
+
+  if (failedItems.length > 0) {
+    const firstFailure = results.find((result) => result.status === 'rejected')
+    console.error('Error deleting entities:', firstFailure.reason)
+    deleteErrorMessage.value = `${failedItems.length} ${failedItems.length === 1 ? 'entity' : 'entities'} could not be deleted: ${getErrorMessage(firstFailure.reason, 'deletion service unavailable')}`
+    showDeleteError.value = true
+  } else {
+    deleteDialog.value = false
+    selected.value = []
+  }
+
+  deleting.value = false
 }
 
-const exportEntities = () => {
+const exportEntities = async (format) => {
+  if (totalItems.value === 0 || exporting.value) return
+
+  exporting.value = true
   try {
-    const filteredEntities = entities.value || []
-
-    if (filteredEntities.length === 0) {
-      return
-    }
-
-    const headers = ['Type', 'Name', 'Description', 'Created']
-    const csvData = [
-      headers.join(','),
-      ...filteredEntities.map((entity) =>
-        [
-          getTypeLabel(entity.entity_type),
-          `"${getEntityName(entity).replace(/"/g, '""')}"`,
-          `"${(entity.data.description || '').replace(/"/g, '""')}"`,
-          formatDate(entity.created_at),
-        ].join(','),
-      ),
-    ].join('\n')
-
-    const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' })
-    const link = document.createElement('a')
-    const url = URL.createObjectURL(blob)
-    link.setAttribute('href', url)
-    link.setAttribute('download', `entities-${new Date().toISOString().split('T')[0]}.csv`)
-    link.style.visibility = 'hidden'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
+    const download = await props.entityService.exportEntities(props.caseId, {
+      format,
+      entityTypes: selectedTypes.value,
+      search: search.value,
+    })
+    const date = new Date().toISOString().split('T')[0]
+    downloadBlob(download, `case-${props.caseId}-entities-${date}.${format}`)
   } catch (error) {
     console.error('Error exporting entities:', error)
+    exportErrorMessage.value = getErrorMessage(error, 'Failed to export entities')
+    showExportError.value = true
+  } finally {
+    exporting.value = false
   }
 }
 
@@ -470,11 +540,8 @@ onMounted(() => {
 </script>
 
 <style scoped>
-:deep(.v-data-table-footer) {
-  padding: 12px;
-}
-
-:deep(.v-data-table) {
-  border-radius: 8px;
+.entity-search {
+  min-width: min(100%, 16rem);
+  max-width: 18.75rem;
 }
 </style>

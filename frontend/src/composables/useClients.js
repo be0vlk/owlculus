@@ -1,7 +1,8 @@
 import { ref, computed } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import { clientService } from '../services/client'
+import { useClientsStore } from '../stores/clients'
 import { formatDate } from './dateUtils'
 
 export const columns = [
@@ -16,7 +17,8 @@ export function useClients() {
   const router = useRouter()
   const authStore = useAuthStore()
 
-  const clients = ref([])
+  const clientsStore = useClientsStore()
+  const { clients } = storeToRefs(clientsStore)
   const loading = ref(true)
   const error = ref(null)
   const searchQuery = ref('')
@@ -30,8 +32,9 @@ export function useClients() {
     }
 
     try {
-      const clientsData = await clientService.getClients()
-      clients.value = clientsData
+      loading.value = true
+      error.value = null
+      await clientsStore.refresh()
     } catch (err) {
       error.value = 'Failed to load clients. Please try again later.'
       console.error('Error loading clients:', err)

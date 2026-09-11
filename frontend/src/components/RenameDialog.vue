@@ -1,5 +1,5 @@
 <template>
-  <v-dialog v-model="dialog" max-width="500px" persistent>
+  <v-dialog v-model="dialog" max-width="500px" aria-label="Rename evidence" :persistent="loading">
     <v-card>
       <v-card-title class="d-flex align-center">
         <v-icon :icon="item?.is_folder ? 'mdi-folder-edit' : 'mdi-file-edit'" class="mr-2"></v-icon>
@@ -7,8 +7,9 @@
       </v-card-title>
 
       <v-card-text>
-        <v-form ref="form" v-model="valid" lazy-validation>
+        <v-form ref="form" v-model="valid" validate-on="lazy" @submit.prevent="rename">
           <v-text-field
+            autofocus
             v-model="newName"
             label="Name"
             :rules="nameRules"
@@ -16,7 +17,6 @@
             variant="outlined"
             density="comfortable"
             :prepend-inner-icon="item?.is_folder ? 'mdi-folder' : 'mdi-file'"
-            @keyup.enter="rename"
           ></v-text-field>
 
           <v-alert v-if="error" class="mb-0" type="error" variant="tonal">
@@ -38,6 +38,7 @@
 </template>
 
 <script setup>
+import { useDialogFocusRestore } from '@/composables/useDialogFocusRestore'
 import { ref, computed, watch } from 'vue'
 import { evidenceService } from '../services/evidence'
 import ModalActions from './ModalActions.vue'
@@ -80,7 +81,9 @@ const nameRules = [
 
 // Methods
 const rename = async () => {
-  if (!form.value.validate()) {
+  if (loading.value) return
+  const { valid: isValid } = await form.value.validate()
+  if (!isValid || !newName.value.trim()) {
     return
   }
 
@@ -129,4 +132,5 @@ watch(
     }
   },
 )
+useDialogFocusRestore(() => dialog.value)
 </script>

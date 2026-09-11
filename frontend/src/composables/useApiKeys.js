@@ -114,7 +114,7 @@ export function useApiKeys() {
       return true
     } catch (err) {
       console.error('Error adding API key:', err)
-      throw new Error(err.response?.data?.detail || 'Failed to add API key')
+      throw new Error(err.response?.data?.detail || 'Failed to add API key', { cause: err })
     } finally {
       saving.value = false
     }
@@ -142,7 +142,7 @@ export function useApiKeys() {
       return true
     } catch (err) {
       console.error('Error updating API key:', err)
-      throw new Error(err.response?.data?.detail || 'Failed to update API key')
+      throw new Error(err.response?.data?.detail || 'Failed to update API key', { cause: err })
     } finally {
       saving.value = false
     }
@@ -156,7 +156,7 @@ export function useApiKeys() {
       return true
     } catch (err) {
       console.error('Error deleting API key:', err)
-      throw new Error(err.response?.data?.detail || 'Failed to delete API key')
+      throw new Error(err.response?.data?.detail || 'Failed to delete API key', { cause: err })
     } finally {
       deleting.value = false
     }

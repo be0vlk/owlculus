@@ -9,19 +9,19 @@ and ephemeral token management for WebSocket authentication.
 import base64
 import os
 import secrets
-import time
 from datetime import timedelta
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from uuid import UUID
 
 import bcrypt
 import filetype
 import jwt
 from cryptography.fernet import Fernet
-from fastapi import HTTPException, UploadFile
+from fastapi import UploadFile
 from werkzeug.utils import secure_filename
 
 from .config import settings
+from .exceptions import ValidationException
 from .utils import get_utc_now
 
 
@@ -52,16 +52,29 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
     return encoded_jwt
 
 
-def verify_access_token(token: str, credentials_exception) -> str:
+def _valid_session_claims(identity: object, version: object) -> bool:
+    """Use one strict account/session contract for bearer and socket tokens."""
+    if not isinstance(identity, str) or type(version) is not int or version < 0:
+        return False
+    try:
+        return str(UUID(identity)) == identity
+    except ValueError:
+        return False
+
+
+def verify_access_token(token: str, credentials_exception) -> tuple[str, int]:
     try:
         payload = jwt.decode(
-            token, settings.SECRET_KEY.get_secret_value(), algorithms=[ALGORITHM]
+            token,
+            settings.SECRET_KEY.get_secret_value(),
+            algorithms=[ALGORITHM],
+            options={"require": ["sub", "session_version", "exp"]},
         )
-        username: str = payload.get("sub")
-        if username is None:
+        identity, version = payload["sub"], payload["session_version"]
+        if not _valid_session_claims(identity, version):
             raise credentials_exception
-        return username
-    except jwt.PyJWTError:
+        return identity, version
+    except (jwt.PyJWTError, ValueError, TypeError):
         raise credentials_exception
 
 
@@ -93,7 +106,7 @@ async def validate_file_security(file: UploadFile) -> None:
     Uses filetype for proper file type detection, with special handling for text files.
     """
     if not file.filename:
-        raise HTTPException(status_code=400, detail="No file name provided")
+        raise ValidationException("No file name provided")
 
     file_size = 0
     chunk_size = 1024 * 1024  # 1MB chunks
@@ -108,9 +121,8 @@ async def validate_file_security(file: UploadFile) -> None:
         file_size += len(chunk)
         if file_size > MAX_FILE_SIZE:
             await file.seek(0)
-            raise HTTPException(
-                status_code=400,
-                detail=f"File too large. Maximum size is {MAX_FILE_SIZE / (1024 * 1024)}MB",
+            raise ValidationException(
+                f"File too large. Maximum size is {MAX_FILE_SIZE / (1024 * 1024):g} MiB"
             )
 
     await file.seek(0)
@@ -130,7 +142,7 @@ async def validate_file_security(file: UploadFile) -> None:
         except UnicodeDecodeError:
             pass
 
-    raise HTTPException(status_code=400, detail="File type not allowed")
+    raise ValidationException("File type not allowed")
 
 
 def secure_filename_with_path(filename: str, base_path: Path) -> str:
@@ -155,7 +167,7 @@ def secure_filename_with_path(filename: str, base_path: Path) -> str:
     # Create full path and verify it's within base_path
     full_path = (abs_base / final_name).resolve()
     if not str(full_path).startswith(str(abs_base)):
-        raise HTTPException(status_code=400, detail="Invalid file path")
+        raise ValidationException("Invalid file path")
 
     return final_name
 
@@ -183,92 +195,64 @@ def decrypt_api_key(encrypted_key: str) -> str:
     if not encrypted_key:
         return ""
 
-    try:
-        fernet = Fernet(_get_encryption_key())
-        decrypted = fernet.decrypt(encrypted_key.encode())
-        return decrypted.decode()
-    except Exception:
-        return ""
+    fernet = Fernet(_get_encryption_key())
+    decrypted = fernet.decrypt(encrypted_key.encode())
+    return decrypted.decode()
 
 
 # Ephemeral Token Management for WebSocket Authentication
 class EphemeralTokenManager:
-    """Manages single-use ephemeral tokens for WebSocket connections"""
+    """Redis-backed, atomic single-use capabilities scoped to execution kind."""
 
     def __init__(self, token_ttl: int = 30):
-        """
-        Initialize the token manager
-
-        Args:
-            token_ttl: Token time-to-live in seconds (default: 30)
-        """
         self.token_ttl = token_ttl
-        # Store tokens with their associated data and expiration
-        # Format: {token: (user_id, execution_id, expiration_timestamp)}
-        self._tokens: Dict[str, Tuple[int, int, float]] = {}
 
-    def create_token(self, user_id: int, execution_id: int) -> str:
-        """
-        Create a single-use ephemeral token for WebSocket authentication
+    def create_token(
+        self,
+        user_id: int,
+        execution_id: int,
+        kind: str,
+        auth_identity: str,
+        session_version: int,
+    ) -> str:
+        import json
 
-        Args:
-            user_id: The authenticated user's ID
-            execution_id: The hunt execution ID
+        from app.executions.events import redis_client
 
-        Returns:
-            A secure random token string
-        """
-        # Generate a secure random token
         token = secrets.token_urlsafe(32)
-
-        # Store token with expiration
-        expiration = time.time() + self.token_ttl
-        self._tokens[token] = (user_id, execution_id, expiration)
-
-        # Clean up expired tokens periodically
-        self._cleanup_expired_tokens()
-
+        with redis_client() as client:
+            client.set(
+                f"owlculus:tokens:{token}",
+                json.dumps(
+                    [user_id, kind, execution_id, auth_identity, session_version]
+                ),
+                ex=self.token_ttl,
+                nx=True,
+            )
         return token
 
-    def validate_token(self, token: str, execution_id: int) -> Optional[int]:
-        """
-        Validate and consume a single-use token
+    def validate_token(
+        self, token: str, execution_id: int, kind: str = "hunt"
+    ) -> tuple[int, str, int] | None:
+        import json
 
-        Args:
-            token: The token to validate
-            execution_id: The execution ID to match against
+        from app.executions.events import redis_client
 
-        Returns:
-            The user_id if valid, None otherwise
-        """
-        if token not in self._tokens:
+        with redis_client() as client:
+            value = client.getdel(f"owlculus:tokens:{token}")
+        if value is None:
             return None
-
-        user_id, stored_execution_id, expiration = self._tokens[token]
-
-        # Check if token is expired
-        if time.time() > expiration:
-            del self._tokens[token]
+        try:
+            user_id, stored_kind, stored_id, identity, version = json.loads(value)
+            if type(user_id) is not int or not _valid_session_claims(identity, version):
+                return None
+        except (ValueError, TypeError):
             return None
-
-        # Check if execution_id matches
-        if execution_id != stored_execution_id:
-            return None
-
-        # Token is valid - consume it (single-use)
-        del self._tokens[token]
-
-        return user_id
-
-    def _cleanup_expired_tokens(self):
-        """Remove expired tokens from storage"""
-        current_time = time.time()
-        expired_tokens = [
-            token for token, (_, _, exp) in self._tokens.items() if current_time > exp
-        ]
-        for token in expired_tokens:
-            del self._tokens[token]
+        return (
+            (user_id, identity, version)
+            if (stored_kind, stored_id) == (kind, execution_id)
+            else None
+        )
 
 
-# Global ephemeral token manager instance
 ephemeral_token_manager = EphemeralTokenManager()

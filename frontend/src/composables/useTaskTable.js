@@ -17,7 +17,7 @@ export function useTaskTable() {
   const router = useRouter()
   const taskStore = useTaskStore()
   const authStore = useAuthStore()
-  const { showError, showSuccess } = useNotifications()
+  const { snackbar, showError, showSuccess } = useNotifications()
 
   // Dialog states
   const showAssignDialog = ref(false)
@@ -81,7 +81,7 @@ export function useTaskTable() {
   }
 
   function handleRowClick(event, { item }) {
-    router.push(`/tasks/${item.id}`)
+    router.push(`/case/${item.case_id}/tasks/${item.id}`)
   }
 
   function openAssignDialog(task) {
@@ -104,7 +104,9 @@ export function useTaskTable() {
     } catch (error) {
       console.error('Failed to assign task:', error)
       if (error.response?.status === 403) {
-        showError('You do not have permission to assign this task. Only admins and case leads can assign tasks.')
+        showError(
+          'You do not have permission to assign this task. Only admins and case leads can assign tasks.',
+        )
       } else {
         showError(error.response?.data?.detail || 'Failed to assign task')
       }
@@ -144,6 +146,7 @@ export function useTaskTable() {
   }
 
   return {
+    snackbar,
     // State
     showAssignDialog,
     showStatusDialog,

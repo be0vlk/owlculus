@@ -1,26 +1,21 @@
-import { watch } from 'vue'
+import { ref, watch } from 'vue'
 import { caseService } from '../services/case'
 import { useBaseNoteEditor } from './useBaseNoteEditor'
+import { useNoteSaveQueue } from './useNoteSaveQueue'
 
 export function useCaseNoteSave(props, emit, options = {}) {
+  const saveError = ref('')
   const { saveMode = 'auto', saveDelay = 1000 } = options
 
   const saveNotes = async () => {
     if (!editor.value || saveMode !== 'auto') return
 
+    cancelPendingSave()
     const content = editor.value.getHTML()
-    if (content === lastSaved.value) return
-
-    try {
-      saving.value = true
-      await caseService.updateCase(props.caseId, { notes: content })
-      lastSaved.value = content
-      lastSavedTime.value = new Date()
-    } catch (error) {
-      console.error('Failed to save notes:', error)
-    } finally {
-      saving.value = false
-    }
+    const caseId = props.caseId
+    await saveQueue
+      .save(content, () => caseService.updateCase(caseId, { notes: content }))
+      .catch(() => {})
   }
 
   const {
@@ -33,13 +28,16 @@ export function useCaseNoteSave(props, emit, options = {}) {
     updateContent,
     cleanup,
     triggerSave,
+    cancelPendingSave,
   } = useBaseNoteEditor({
+    label: 'Case notes',
     initialContent: props.modelValue || '',
     placeholder:
       props.isEditing !== false
         ? 'Write your case notes here... Use / for commands.'
         : 'Notes (read-only)',
     editable: props.isEditing !== false,
+    onExit: saveMode === 'auto' ? saveNotes : null,
     onUpdate: (editor) => {
       const content = editor.getHTML()
       if (props.isEditing !== false) {
@@ -51,6 +49,8 @@ export function useCaseNoteSave(props, emit, options = {}) {
     },
     saveDelay: saveMode === 'auto' ? saveDelay : null,
   })
+
+  const saveQueue = useNoteSaveQueue({ saving, saveError, lastSaved, lastSavedTime })
 
   // Watch for prop changes
   watch(
@@ -66,7 +66,8 @@ export function useCaseNoteSave(props, emit, options = {}) {
       () => props.isEditing,
       (newEditingState) => {
         if (editor.value) {
-          editor.value.setEditable(newEditingState)
+          if (!newEditingState) saveNotes()
+          editor.value.setEditable(newEditingState, false)
         }
       },
     )
@@ -85,6 +86,7 @@ export function useCaseNoteSave(props, emit, options = {}) {
     editor,
     editorActions,
     saving,
+    saveError,
     lastSavedTime,
     formatLastSaved,
     updateContent,

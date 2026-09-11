@@ -1,15 +1,25 @@
 <template>
-  <v-dialog v-model="dialogVisible" max-width="800px" persistent>
+  <v-dialog
+    v-model="dialogVisible"
+    aria-label="New Case"
+    max-width="800px"
+    :persistent="isSubmitting"
+  >
     <v-card>
-      <v-card-title class="d-flex align-center">
+      <v-card-title id="new-case-dialog-title" class="d-flex align-center">
         <v-icon start>mdi-folder-plus</v-icon>
         New Case
       </v-card-title>
 
       <v-card-text>
+        <v-alert v-if="submissionError" class="mb-4" type="error" variant="tonal">
+          {{ submissionError }}
+        </v-alert>
+
         <v-form ref="form" v-model="isFormValid" @submit.prevent="handleSubmit">
           <v-text-field
             v-model="formData.title"
+            autofocus
             label="Title"
             variant="outlined"
             density="comfortable"
@@ -33,7 +43,7 @@
 
           <!-- Add Users Section -->
           <v-card variant="outlined" class="mb-4">
-            <v-card-title class="text-subtitle-1 pb-2">
+            <v-card-title class="text-body-large pb-2">
               <v-icon start>mdi-account-group</v-icon>
               Assign Users
             </v-card-title>
@@ -70,6 +80,7 @@
                       <v-tooltip :text="getLeadButtonTooltip(user)" location="top">
                         <template #activator="{ props }">
                           <v-btn
+                            :aria-label="`${getLeadButtonTooltip(user)} for ${user.email}`"
                             :color="user.is_lead ? 'primary' : 'default'"
                             :icon="user.is_lead ? 'mdi-star' : 'mdi-star-outline'"
                             :disabled="user.role === 'Analyst' && !user.is_lead"
@@ -84,6 +95,7 @@
                       <v-tooltip location="top" text="Remove from selection">
                         <template #activator="{ props }">
                           <v-btn
+                            :aria-label="`Remove ${user.email} from selection`"
                             color="error"
                             icon="mdi-close"
                             size="small"
@@ -99,7 +111,7 @@
               </v-list>
 
               <!-- Add User Form -->
-              <v-row align="center">
+              <v-row class="align-center">
                 <v-col cols="12" md="6">
                   <v-select
                     v-model="userToAdd"
@@ -157,7 +169,7 @@
         submit-icon="mdi-folder-plus"
         :submit-disabled="!isFormValid"
         :loading="isSubmitting"
-        @cancel="closeModal"
+        @cancel="cancelModal"
         @submit="handleSubmit"
       />
     </v-card>
@@ -170,6 +182,8 @@ import { clientService } from '../services/client'
 import { caseService } from '../services/case'
 import { userService } from '../services/user'
 import { useAuthStore } from '../stores/auth'
+import { useDialogFocusRestore } from '../composables/useDialogFocusRestore'
+import { getErrorMessage } from '../utils/errorMessage'
 import ModalActions from './ModalActions.vue'
 
 const props = defineProps({
@@ -178,6 +192,8 @@ const props = defineProps({
     required: true,
   },
 })
+
+useDialogFocusRestore(() => props.isOpen)
 
 const dialogVisible = computed({
   get: () => props.isOpen,
@@ -197,6 +213,7 @@ const selectedUsers = ref([])
 const userToAdd = ref(null)
 const isLeadToAdd = ref(false)
 const isSubmitting = ref(false)
+const submissionError = ref('')
 const isFormValid = ref(false)
 const form = ref(null)
 const formData = reactive({
@@ -305,30 +322,43 @@ const closeModal = () => {
   selectedUsers.value = []
   userToAdd.value = null
   isLeadToAdd.value = false
+  submissionError.value = ''
   if (form.value) {
     form.value.reset()
   }
   emit('close')
 }
 
+const cancelModal = () => {
+  if (!isSubmitting.value) closeModal()
+}
+
 const handleSubmit = async () => {
+  if (!form.value || isSubmitting.value) return
+
   const { valid } = await form.value.validate()
   if (!valid) return
 
+  isSubmitting.value = true
+  submissionError.value = ''
+
   try {
-    isSubmitting.value = true
     const newCase = await caseService.createCase(formData)
+    const assignmentResults = await Promise.allSettled(
+      selectedUsers.value.map((user) =>
+        caseService.addUserToCase(newCase.id, user.id, user.is_lead),
+      ),
+    )
+    const failedAssignments = assignmentResults.filter((result) => result.status === 'rejected')
+    const assignmentWarning = failedAssignments.length
+      ? `${failedAssignments.length} user assignment${failedAssignments.length === 1 ? '' : 's'} failed: ${getErrorMessage(failedAssignments[0].reason, 'assignment service unavailable')}`
+      : null
 
-    // Add users to the case
-    for (const user of selectedUsers.value) {
-      await caseService.addUserToCase(newCase.id, user.id, user.is_lead)
-    }
-
-    emit('created', newCase)
+    emit('created', newCase, { assignmentWarning })
     closeModal()
   } catch (error) {
     console.error('Error creating case:', error)
-    // TODO: Add proper error handling UI
+    submissionError.value = getErrorMessage(error, 'Failed to create case')
   } finally {
     isSubmitting.value = false
   }

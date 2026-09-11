@@ -1,18 +1,31 @@
 <template>
-  <v-card variant="outlined">
+  <v-card :elevation="embedded ? 0 : undefined" :variant="embedded ? 'flat' : 'outlined'">
     <!-- Header -->
-    <v-card-title class="d-flex align-center pa-4 bg-surface">
-      <v-icon icon="mdi-account-cog" color="primary" size="large" class="me-3" />
+    <v-card-title class="operations-heading d-flex flex-wrap ga-3 align-center pa-4 bg-surface">
+      <v-icon v-if="!embedded" icon="mdi-account-cog" color="primary" size="large" class="me-3" />
       <div class="flex-grow-1">
-        <div class="text-h6 font-weight-bold">User Management</div>
-        <div class="text-body-2 text-medium-emphasis">
+        <h2 class="text-title-large font-weight-bold">
+          {{ embedded ? 'Users' : 'User Management' }}
+        </h2>
+        <div v-if="!embedded" class="text-body-medium text-medium-emphasis">
           Manage system users and their permissions
         </div>
       </div>
-      <div class="d-flex align-center ga-2">
+      <div class="d-flex flex-wrap align-center ga-2">
         <v-btn
+          size="small"
+          v-if="embedded"
           color="primary"
           variant="flat"
+          prepend-icon="mdi-email-plus"
+          @click="emit('invite')"
+        >
+          Invite user
+        </v-btn>
+        <v-btn
+          size="small"
+          :color="embedded ? undefined : 'primary'"
+          :variant="embedded ? 'outlined' : 'flat'"
           prepend-icon="mdi-account-plus"
           @click="showNewUserModal = true"
         >
@@ -21,9 +34,11 @@
         <v-tooltip text="Refresh user list" location="bottom">
           <template #activator="{ props }">
             <v-btn
+              size="small"
               v-bind="props"
               icon="mdi-refresh"
               variant="outlined"
+              aria-label="Refresh user list"
               @click="loadUsers"
               :loading="loading"
             />
@@ -36,13 +51,20 @@
 
     <!-- Search Toolbar -->
     <v-card-text class="pa-4">
-      <v-row align="center" class="mb-0">
-        <v-col cols="12" md="8">
-          <!-- Could add user role filters here in the future -->
+      <v-row class="mb-0 align-center">
+        <v-col cols="12" md="4">
+          <v-select
+            v-model="roleFilter"
+            :items="roleOptions"
+            label="Filter by role"
+            variant="outlined"
+            density="comfortable"
+            hide-details
+          />
         </v-col>
 
         <!-- Search Controls -->
-        <v-col cols="12" md="4">
+        <v-col cols="12" md="8">
           <div class="d-flex align-center ga-4 justify-end">
             <!-- Search Field -->
             <v-text-field
@@ -52,7 +74,7 @@
               variant="outlined"
               density="comfortable"
               hide-details
-              style="min-width: 280px"
+              class="operations-search"
               clearable
             />
           </div>
@@ -62,14 +84,29 @@
 
     <v-divider />
 
+    <v-alert v-if="error" type="error" variant="tonal" class="ma-4">
+      {{ error }}
+      <v-btn variant="text" @click="loadUsers">Retry</v-btn>
+    </v-alert>
+
     <v-data-table
-      :headers="vuetifyHeaders"
-      :items="sortedAndFilteredUsers"
+      v-else
+      :cell-props="{ class: 'operations-cell' }"
+      :header-props="{ class: 'operations-column' }"
+      :headers="tableHeaders"
+      :items="filteredUsers"
       :loading="loading"
-      item-key="id"
+      item-value="id"
       class="elevation-0 admin-dashboard-table"
       hover
     >
+      <template #[`item.username`]="{ item }">
+        <div class="py-2" style="min-width: 220px; overflow-wrap: anywhere">
+          <div class="font-weight-medium">{{ item.username }}</div>
+          <div v-if="embedded" class="text-body-small text-medium-emphasis">{{ item.email }}</div>
+        </div>
+      </template>
+
       <!-- Role column -->
       <template #[`item.role`]="{ item }">
         <div class="d-flex align-center ga-2">
@@ -85,7 +122,7 @@
 
       <!-- Created date -->
       <template #[`item.created_at`]="{ item }">
-        <span class="text-body-2">
+        <span class="text-body-medium">
           {{ formatDate(item.created_at) }}
         </span>
       </template>
@@ -99,35 +136,37 @@
             size="small"
             variant="outlined"
             icon
+            :aria-label="`Edit ${item.username}`"
             @click="editUser(item)"
           >
             <v-icon>mdi-pencil</v-icon>
             <v-tooltip activator="parent" location="top"> Edit {{ item.username }} </v-tooltip>
           </v-btn>
-          <v-btn
-            v-if="canResetPassword(item)"
-            color="amber-darken-1"
-            size="small"
-            variant="outlined"
-            icon
-            @click="resetPassword(item)"
-          >
-            <v-icon>mdi-key</v-icon>
-            <v-tooltip activator="parent" location="top">
-              Reset password for {{ item.username }}
-            </v-tooltip>
-          </v-btn>
-          <v-btn
-            v-if="canDeleteUser(item)"
-            color="error"
-            size="small"
-            variant="outlined"
-            icon
-            @click="handleDeleteUser(item)"
-          >
-            <v-icon>mdi-delete</v-icon>
-            <v-tooltip activator="parent" location="top"> Delete {{ item.username }} </v-tooltip>
-          </v-btn>
+          <v-menu v-if="canResetPassword(item) || canDeleteUser(item)">
+            <template #activator="{ props: menuProps }">
+              <v-btn
+                v-bind="menuProps"
+                icon="mdi-dots-vertical"
+                size="small"
+                variant="text"
+                :aria-label="`More actions for ${item.username}`"
+              />
+            </template>
+            <v-list>
+              <v-list-item
+                v-if="canResetPassword(item)"
+                prepend-icon="mdi-key"
+                :title="`Reset password for ${item.username}`"
+                @click="resetPassword(item)"
+              />
+              <v-list-item
+                v-if="canDeleteUser(item)"
+                prepend-icon="mdi-delete"
+                :title="`Delete ${item.username}`"
+                @click="handleDeleteUser(item)"
+              />
+            </v-list>
+          </v-menu>
         </div>
       </template>
 
@@ -135,11 +174,11 @@
       <template #no-data>
         <div class="text-center pa-12">
           <v-icon class="mb-4" color="grey-lighten-1" icon="mdi-account-group-outline" size="64" />
-          <h3 class="text-h6 font-weight-medium mb-2">
-            {{ getEmptyStateTitle() }}
+          <h3 class="text-title-large font-weight-medium mb-2">
+            {{ roleFilter ? 'No users match your filters' : getEmptyStateTitle() }}
           </h3>
-          <p class="text-body-2 text-medium-emphasis mb-4">
-            {{ getEmptyStateMessage() }}
+          <p class="text-body-medium text-medium-emphasis mb-4">
+            {{ roleFilter ? 'Try another role or search term.' : getEmptyStateMessage() }}
           </p>
           <v-btn
             v-if="shouldShowCreateButton()"
@@ -158,7 +197,7 @@
       :show="showNewUserModal"
       :user="editingUser"
       @close="closeUserModal"
-      @saved="handleUserSaved"
+      @saved="handleUserSavedWithNotification"
     />
 
     <!-- Password Reset Modal -->
@@ -172,16 +211,19 @@
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useUsers } from '@/composables/useUsers'
 import UserModal from './UserModal.vue'
 import PasswordResetModal from './PasswordResetModal.vue'
 
-const emit = defineEmits(['notification', 'confirmDelete'])
+const props = defineProps({ embedded: Boolean })
+const emit = defineEmits(['notification', 'confirmDelete', 'invite', 'count'])
 
 const {
   // State
+  users,
   loading,
+  error,
   searchQuery,
 
   // Modal state
@@ -221,6 +263,29 @@ const {
   handlePasswordResetSaved,
 } = useUsers()
 
+const roleFilter = ref('')
+const roleOptions = [
+  { title: 'All roles', value: '' },
+  { title: 'Admin', value: 'Admin' },
+  { title: 'Investigator', value: 'Investigator' },
+  { title: 'Analyst', value: 'Analyst' },
+]
+const filteredUsers = computed(() =>
+  sortedAndFilteredUsers.value.filter(
+    (user) => !roleFilter.value || user.role === roleFilter.value,
+  ),
+)
+const tableHeaders = computed(() =>
+  props.embedded
+    ? vuetifyHeaders
+        .filter((header) => header.key !== 'email')
+        .map((header) => (header.key === 'username' ? { ...header, title: 'User' } : header))
+    : vuetifyHeaders,
+)
+watch([loading, error, () => users.value.length], () => {
+  if (!loading.value) emit('count', error.value ? null : users.value.length)
+})
+
 const handleDeleteUser = (user) => {
   emit('confirmDelete', {
     title: 'Confirm Deletion',
@@ -243,6 +308,11 @@ const handleDeleteUser = (user) => {
   })
 }
 
+const handleUserSavedWithNotification = (user) => {
+  handleUserSaved(user)
+  emit('notification', { text: `User '${user.username}' saved successfully`, color: 'success' })
+}
+
 const handlePasswordResetSavedWithNotification = () => {
   handlePasswordResetSaved()
   emit('notification', { text: 'Password has been reset successfully', color: 'success' })
@@ -252,7 +322,3 @@ onMounted(async () => {
   await loadUsers()
 })
 </script>
-
-<style scoped>
-@import '@/styles/admin-dashboard-table.css';
-</style>

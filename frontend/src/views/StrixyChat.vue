@@ -1,6 +1,5 @@
 <template>
   <div>
-    <Sidebar />
     <v-main>
       <v-container fluid class="pa-6">
         <v-alert v-if="apiKeyError" class="mb-6" prominent type="warning" variant="tonal">
@@ -23,8 +22,11 @@
               size="large"
             />
             <div class="flex-grow-1">
-              <div :class="{ 'text-disabled': apiKeyError }" class="text-h6 font-weight-bold">
-                Chat Interface
+              <div
+                :class="{ 'text-disabled': apiKeyError }"
+                class="text-title-large font-weight-bold"
+              >
+                Strixy · {{ activeCase.activeCase?.case_number }}
               </div>
             </div>
 
@@ -79,11 +81,11 @@
                         size="small"
                         class="me-2"
                       />
-                      <span class="text-caption font-weight-medium">
+                      <span class="text-body-small font-weight-medium">
                         {{ message.role === 'user' ? 'You' : 'Strixy' }}
                       </span>
                       <v-spacer />
-                      <span class="text-caption text-medium-emphasis">
+                      <span class="text-body-small text-medium-emphasis">
                         {{ formatTime(message.timestamp) }}
                       </span>
                     </div>
@@ -94,14 +96,14 @@
 
               <div v-if="loading" class="d-flex justify-center my-4">
                 <v-progress-circular class="me-2" color="primary" indeterminate size="24" />
-                <span class="text-caption">Strixy is thinking...</span>
+                <span class="text-body-small">Strixy is thinking...</span>
               </div>
             </div>
 
             <v-divider />
 
             <div class="pa-4">
-              <v-row no-gutters align="center">
+              <v-row class="align-center" no-gutters>
                 <v-col>
                   <v-text-field
                     v-model="currentMessage"
@@ -109,7 +111,7 @@
                     variant="outlined"
                     density="comfortable"
                     hide-details
-                    :disabled="loading || apiKeyError"
+                    :disabled="!contextReady || loading || apiKeyError"
                     @keydown.enter="sendMessage"
                     aria-label="Message input"
                   />
@@ -119,7 +121,7 @@
                     color="primary"
                     icon="mdi-send"
                     :loading="loading"
-                    :disabled="!currentMessage.trim() || loading || apiKeyError"
+                    :disabled="!contextReady || !currentMessage.trim() || loading || apiKeyError"
                     @click="sendMessage"
                     aria-label="Send message"
                   />
@@ -137,8 +139,8 @@
 </template>
 
 <script setup>
+import { useActiveCaseStore } from '@/stores/activeCase'
 import { onMounted, computed, ref } from 'vue'
-import Sidebar from '@/components/Sidebar.vue'
 import ConfirmationDialog from '@/components/ConfirmationDialog.vue'
 import { useStrixyChat } from '@/composables/useStrixyChat'
 import MarkdownIt from 'markdown-it'
@@ -150,8 +152,17 @@ const md = new MarkdownIt({
   breaks: true,
 })
 
-const { messages, loading, currentMessage, apiKeyError, sendMessage, initializeChat, clearChat } =
-  useStrixyChat()
+const activeCase = useActiveCaseStore()
+const {
+  contextReady,
+  messages,
+  loading,
+  currentMessage,
+  apiKeyError,
+  sendMessage,
+  initializeChat,
+  clearChat,
+} = useStrixyChat()
 
 const confirmDialog = ref(null)
 
@@ -190,6 +201,7 @@ const exportChat = () => {
 
   const exportData = {
     title: 'Strixy Chat Export',
+    case_id: activeCase.activeCaseId,
     exportTime: new Date().toISOString(),
     messages: messages.value.map((msg) => ({
       role: msg.role,
@@ -234,17 +246,14 @@ onMounted(async () => {
 .chat-disabled::after {
   content: '';
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(var(--v-theme-surface), 0.3);
+  inset: 0;
+  background-color: rgb(var(--v-theme-surface), 0.3);
   z-index: 1;
   pointer-events: none;
 }
 
 .text-disabled {
-  color: rgb(var(--v-theme-on-surface-variant)) !important;
+  color: rgb(var(--v-theme-on-surface-variant));
   opacity: 0.6;
 }
 
@@ -289,16 +298,18 @@ onMounted(async () => {
 .message-content :deep(h4),
 .message-content :deep(h5),
 .message-content :deep(h6) {
-  margin: 0.5em 0 0.3em 0;
+  margin: 0.5em 0 0.3em;
   font-weight: 600;
 }
 
 .message-content :deep(h1) {
   font-size: 1.5em;
 }
+
 .message-content :deep(h2) {
   font-size: 1.3em;
 }
+
 .message-content :deep(h3) {
   font-size: 1.1em;
 }
@@ -321,12 +332,12 @@ onMounted(async () => {
   border-left: 4px solid rgb(var(--v-theme-primary));
   margin: 0.5em 0;
   padding: 0.5em 0 0.5em 1em;
-  background-color: rgba(var(--v-theme-surface-variant), 0.3);
+  background-color: rgb(var(--v-theme-surface-variant), 0.3);
   border-radius: 4px;
 }
 
 .message-content :deep(code) {
-  background-color: rgba(var(--v-theme-surface-variant), 0.8);
+  background-color: rgb(var(--v-theme-surface-variant), 0.8);
   padding: 0.1em 0.3em;
   border-radius: 3px;
   font-family: 'Courier New', Courier, monospace;
@@ -334,7 +345,7 @@ onMounted(async () => {
 }
 
 .message-content :deep(pre) {
-  background-color: rgba(var(--v-theme-surface-variant), 0.8);
+  background-color: rgb(var(--v-theme-surface-variant), 0.8);
   border-radius: 6px;
   padding: 1em;
   overflow-x: auto;
@@ -367,23 +378,23 @@ onMounted(async () => {
 
 .message-content :deep(th),
 .message-content :deep(td) {
-  border: 1px solid rgba(var(--v-theme-outline), 0.3);
+  border: 1px solid rgb(var(--v-theme-outline), 0.3);
   padding: 0.5em;
   text-align: left;
 }
 
 .message-content :deep(th) {
-  background-color: rgba(var(--v-theme-surface-variant), 0.5);
+  background-color: rgb(var(--v-theme-surface-variant), 0.5);
   font-weight: 600;
 }
 
-@media (max-width: 600px) {
+@media (width <= 600px) {
   .message-bubble {
     max-width: 95%;
   }
 
   .chat-messages {
-    height: 400px !important;
+    height: 400px;
   }
 }
 </style>

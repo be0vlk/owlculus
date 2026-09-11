@@ -7,7 +7,7 @@
     <v-card-subtitle>{{ task.title }}</v-card-subtitle>
     <v-divider />
     <v-card-text class="pa-4">
-      <v-form ref="form" v-model="valid">
+      <v-form ref="form" :id="formId" v-model="valid" :disabled="loading" @submit.prevent="save">
         <!-- Status Update -->
         <v-select
           v-model="formData.status"
@@ -33,7 +33,7 @@
         <!-- Custom Fields -->
         <div v-if="customFields.length > 0">
           <v-divider class="mb-4" />
-          <div class="text-subtitle-2 text-medium-emphasis mb-3">Additional Fields</div>
+          <div class="text-title-small text-medium-emphasis mb-3">Additional Fields</div>
           <CustomFieldInput
             v-for="field in customFields"
             :key="field.name"
@@ -47,13 +47,14 @@
     <v-divider />
     <v-card-actions class="pa-4">
       <v-spacer />
-      <v-btn variant="text" @click="$emit('cancel')">Cancel</v-btn>
+      <v-btn :disabled="loading" variant="text" @click="$emit('cancel')">Cancel</v-btn>
       <v-btn
         :disabled="!valid || !hasChanges"
         :loading="loading"
         color="primary"
         variant="flat"
-        @click="save"
+        type="submit"
+        :form="formId"
       >
         Save Changes
       </v-btn>
@@ -62,12 +63,13 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { useId, ref, computed, watch } from 'vue'
 import { TASK_STATUS_LABELS } from '@/constants/tasks'
 import CustomFieldInput from './CustomFieldInput.vue'
 import { useAuthStore } from '@/stores/auth'
 
 const props = defineProps({
+  saving: { type: Boolean, default: false },
   task: {
     type: Object,
     required: true,
@@ -85,9 +87,11 @@ const props = defineProps({
 const emit = defineEmits(['save', 'cancel'])
 
 const authStore = useAuthStore()
+const formId = useId()
 const form = ref(null)
 const valid = ref(false)
-const loading = ref(false)
+const validating = ref(false)
+const loading = computed(() => validating.value || props.saving)
 
 // Check if user can edit due date (admin or lead)
 const canEditDueDate = computed(() => {
@@ -139,10 +143,11 @@ const hasChanges = computed(() => {
 })
 
 async function save() {
-  if (!valid.value || !hasChanges.value) return
-
-  loading.value = true
+  if (loading.value) return
+  validating.value = true
   try {
+    const result = await form.value.validate()
+    if (!result.valid || !hasChanges.value || props.saving) return
     // Only send changed fields
     const updates = {}
 
@@ -188,7 +193,7 @@ async function save() {
 
     emit('save', updates)
   } finally {
-    loading.value = false
+    validating.value = false
   }
 }
 

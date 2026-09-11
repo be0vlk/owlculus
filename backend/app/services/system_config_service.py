@@ -6,17 +6,20 @@ case number templates, API key management, evidence folder templates, and
 administrative system configuration functionality.
 """
 
-import os
-from typing import Dict, List, Optional, Tuple
+from collections.abc import Callable
+from datetime import datetime
 
 from sqlmodel import Session, select
 
-from ..core.dependencies import admin_only
 from ..core.evidence_templates import DEFAULT_TEMPLATES
+from ..core.exceptions import ValidationException
 from ..core.logging import get_security_logger
-from ..core.security import decrypt_api_key, encrypt_api_key
+from ..core.security import encrypt_api_key
 from ..core.utils import get_utc_now
 from ..database import models
+from ..database.db_utils import transaction
+from .api_key_vault import Provider, StoredApiKey
+from .case_access import CaseAccess
 
 CASE_NUMBER_TEMPLATE_MONTHLY = "YYMM-NN"
 CASE_NUMBER_TEMPLATE_PREFIX = "PREFIX-YYMM-NN"
@@ -33,30 +36,6 @@ TEMPLATE_DISPLAY_NAMES = {
 }
 
 
-class SystemConfigError(Exception):
-    """Base exception for system configuration errors"""
-
-    pass
-
-
-class CaseNumberTemplateError(SystemConfigError):
-    """Raised when case number template is invalid"""
-
-    pass
-
-
-class ApiKeyError(SystemConfigError):
-    """Raised when API key operations fail"""
-
-    pass
-
-
-class EvidenceTemplateError(SystemConfigError):
-    """Raised when evidence template operations fail"""
-
-    pass
-
-
 class SystemConfigValidator:
     """Handles validation logic for system configuration"""
 
@@ -64,24 +43,24 @@ class SystemConfigValidator:
     def validate_case_number_template(template: str) -> None:
         """Validate case number template format"""
         if template not in VALID_CASE_NUMBER_TEMPLATES:
-            raise CaseNumberTemplateError(f"Invalid case number template: {template}")
+            raise ValidationException(f"Invalid case number template: {template}")
 
     @staticmethod
-    def validate_case_number_prefix(prefix: Optional[str], template: str) -> None:
+    def validate_case_number_prefix(prefix: str | None, template: str) -> None:
         """Validate case number prefix based on template"""
         if template == CASE_NUMBER_TEMPLATE_PREFIX:
             if not prefix:
-                raise CaseNumberTemplateError(
+                raise ValidationException(
                     "Prefix is required for PREFIX-YYMM-NN template"
                 )
 
             if not prefix.isalnum():
-                raise CaseNumberTemplateError(
+                raise ValidationException(
                     "Prefix must contain only alphanumeric characters"
                 )
 
             if len(prefix) < PREFIX_MIN_LENGTH or len(prefix) > PREFIX_MAX_LENGTH:
-                raise CaseNumberTemplateError(
+                raise ValidationException(
                     f"Prefix must be {PREFIX_MIN_LENGTH}-{PREFIX_MAX_LENGTH} characters"
                 )
 
@@ -89,29 +68,39 @@ class SystemConfigValidator:
     def validate_evidence_template(template_data: dict, template_key: str) -> None:
         """Validate evidence folder template structure"""
         if not isinstance(template_data, dict):
-            raise EvidenceTemplateError(
-                f"Invalid template structure for {template_key}"
-            )
+            raise ValidationException(f"Invalid template structure for {template_key}")
 
         required_fields = ["name", "description", "folders"]
         for field in required_fields:
             if field not in template_data:
-                raise EvidenceTemplateError(
-                    f"Template {template_key} must have {field}"
-                )
+                raise ValidationException(f"Template {template_key} must have {field}")
 
         if not isinstance(template_data["folders"], list):
-            raise EvidenceTemplateError(
+            raise ValidationException(
                 f"Template {template_key} must have folders array"
             )
 
 
 class SystemConfigService:
-    def __init__(self, db: Session) -> None:
+    def __init__(
+        self, db: Session, *, clock: Callable[[], datetime] = get_utc_now
+    ) -> None:
         self.db = db
+        self._clock = clock
+        self.case_access = CaseAccess(db)
+
+    def _persist_configuration(
+        self, config: models.SystemConfiguration
+    ) -> models.SystemConfiguration:
+        """Persist an administrative configuration change."""
+        config.updated_at = self._clock()
+        with transaction(self.db):
+            self.db.add(config)
+        self.db.refresh(config)
+        return config
 
     async def get_configuration(
-        self, current_user: Optional[models.User] = None
+        self, current_user: models.User | None = None
     ) -> models.SystemConfiguration:
         stmt = select(models.SystemConfiguration)
         config = self.db.exec(stmt).first()
@@ -121,48 +110,29 @@ class SystemConfigService:
                 case_number_template="YYMM-NN",
                 case_number_prefix=None,
                 api_keys={},
-                evidence_folder_templates=self._get_default_templates(),
+                evidence_folder_templates=DEFAULT_TEMPLATES.copy(),
             )
             self.db.add(config)
-            self.db.commit()
-            self.db.refresh(config)
+            self.db.flush()
 
         return config
 
-    @admin_only()
     async def get_configuration_admin(
         self, current_user: models.User
     ) -> models.SystemConfiguration:
         """Admin-only method to get configuration."""
+        self.case_access.require_admin(current_user)
         return await self.get_configuration()
 
-    def _create_config_logger(self, user_id: int, action: str, **kwargs) -> any:
-        """Create a security logger with common parameters"""
-        return get_security_logger(admin_user_id=user_id, action=action, **kwargs)
-
-    def _normalize_prefix(self, template: str, prefix: Optional[str]) -> Optional[str]:
-        """Normalize prefix based on template type"""
-        return None if template != CASE_NUMBER_TEMPLATE_PREFIX else prefix
-
-    def _save_configuration(
-        self, config: models.SystemConfiguration
-    ) -> models.SystemConfiguration:
-        """Save configuration changes to database"""
-        config.updated_at = get_utc_now()
-        self.db.add(config)
-        self.db.commit()
-        self.db.refresh(config)
-        return config
-
-    @admin_only()
     async def update_configuration(
         self,
         case_number_template: str,
         current_user: models.User,
-        case_number_prefix: Optional[str] = None,
+        case_number_prefix: str | None = None,
     ) -> models.SystemConfiguration:
-        config_logger = self._create_config_logger(
-            user_id=current_user.id,
+        self.case_access.require_admin(current_user)
+        config_logger = get_security_logger(
+            admin_user_id=current_user.id,
             action="update_system_config",
             template=case_number_template,
             event_type="system_config_update_attempt",
@@ -174,9 +144,8 @@ class SystemConfigService:
                 case_number_prefix, case_number_template
             )
 
-            case_number_prefix = self._normalize_prefix(
-                case_number_template, case_number_prefix
-            )
+            if case_number_template != CASE_NUMBER_TEMPLATE_PREFIX:
+                case_number_prefix = None
 
             config = await self.get_configuration()
             old_template = config.case_number_template
@@ -185,7 +154,7 @@ class SystemConfigService:
             config.case_number_template = case_number_template
             config.case_number_prefix = case_number_prefix
 
-            config = self._save_configuration(config)
+            config = self._persist_configuration(config)
             config_logger.bind(
                 old_template=old_template,
                 new_template=case_number_template,
@@ -196,19 +165,19 @@ class SystemConfigService:
 
             return config
 
-        except CaseNumberTemplateError as e:
+        except ValidationException as e:
             config_logger.bind(
                 event_type="system_config_update_failed",
                 failure_reason="validation_error",
                 error_message=str(e),
-            ).warning(f"System config update failed: {str(e)}")
+            ).warning(f"System config update failed: {e!s}")
             raise
         except Exception as e:
             config_logger.bind(
                 event_type="system_config_update_error",
                 error_type="system_error",
                 error_message=str(e),
-            ).error(f"System config update error: {str(e)}")
+            ).error(f"System config update error: {e!s}")
             raise
 
     def get_template_display_name(self, template: str) -> str:
@@ -216,10 +185,10 @@ class SystemConfigService:
         return TEMPLATE_DISPLAY_NAMES.get(template, template)
 
     def generate_example_case_number(
-        self, template: str, prefix: Optional[str] = None
+        self, template: str, prefix: str | None = None
     ) -> str:
         """Generate an example case number based on template"""
-        current_time = get_utc_now()
+        current_time = self._clock()
         year = str(current_time.year)[2:]
         month = str(current_time.month).zfill(2)
 
@@ -227,68 +196,22 @@ class SystemConfigService:
             return f"{prefix}-{year}{month}-01"
         return f"{year}{month}-01"
 
-    def _create_api_key_data(
-        self, api_key: Optional[str], name: str, created_at: Optional[str] = None
-    ) -> dict:
-        """Create API key data structure"""
-        return {
-            "api_key": encrypt_api_key(api_key) if api_key else None,
-            "name": name,
-            "is_active": True,
-            "created_at": created_at or get_utc_now().isoformat(),
-        }
-
-    def _update_existing_api_key(
-        self, current_keys: dict, provider: str, api_key: Optional[str], name: str
-    ) -> Tuple[dict, dict]:
-        """Update existing API key and return updated keys and metadata"""
-        existing_data = current_keys[provider].copy()
-        old_name = existing_data.get("name", "Unknown")
-        key_being_updated = api_key is not None
-
-        updated_data = self._create_api_key_data(
-            api_key if api_key else None, name, existing_data.get("created_at")
-        )
-
-        if not key_being_updated:
-            updated_data["api_key"] = existing_data.get("api_key")
-
-        current_keys[provider] = updated_data
-
-        metadata = {
-            "old_name": old_name,
-            "new_name": name,
-            "key_updated": key_being_updated,
-            "metadata_only": not key_being_updated,
-        }
-
-        return current_keys, metadata
-
-    def _add_new_api_key(
-        self, current_keys: dict, provider: str, api_key: str, name: str
-    ) -> dict:
-        """Add new API key"""
-        if not api_key:
-            raise ApiKeyError("API key is required for new providers")
-
-        current_keys[provider] = self._create_api_key_data(api_key, name)
-        return current_keys
-
-    @admin_only()
     async def set_api_key(
         self,
-        provider: str,
-        api_key: Optional[str],
+        provider: Provider,
+        api_key: str | None,
         name: str,
         current_user: models.User,
     ) -> models.SystemConfiguration:
+        self.case_access.require_admin(current_user)
         config = await self.get_configuration()
         current_keys = config.api_keys.copy() if config.api_keys else {}
-        is_new_key = provider not in current_keys
+        provider_name = provider.value
+        is_new_key = provider_name not in current_keys
         operation_type = "add" if is_new_key else "update"
 
-        config_logger = self._create_config_logger(
-            user_id=current_user.id,
+        config_logger = get_security_logger(
+            admin_user_id=current_user.id,
             action=f"{operation_type}_api_key",
             provider=provider,
             key_name=name,
@@ -298,47 +221,69 @@ class SystemConfigService:
 
         try:
             if is_new_key:
-                current_keys = self._add_new_api_key(
-                    current_keys, provider, api_key, name
-                )
+                if not api_key:
+                    raise ValidationException("API key is required for new providers")
+                current_keys[provider_name] = StoredApiKey(
+                    encrypted_key=encrypt_api_key(api_key),
+                    name=name,
+                    is_active=True,
+                    created_at=self._clock().isoformat(),
+                ).to_mapping()
             else:
-                current_keys, metadata = self._update_existing_api_key(
-                    current_keys, provider, api_key, name
+                existing_key = StoredApiKey.from_mapping(
+                    provider_name, current_keys[provider_name]
                 )
-                config_logger = config_logger.bind(**metadata)
+                key_being_updated = api_key is not None
+                current_keys[provider_name] = StoredApiKey(
+                    encrypted_key=(
+                        encrypt_api_key(api_key)
+                        if api_key
+                        else existing_key.encrypted_key
+                    ),
+                    name=name,
+                    is_active=True,
+                    created_at=existing_key.created_at or self._clock().isoformat(),
+                ).to_mapping()
+                config_logger = config_logger.bind(
+                    old_name=existing_key.name,
+                    new_name=name,
+                    key_updated=key_being_updated,
+                    metadata_only=not key_being_updated,
+                )
 
             config.api_keys = current_keys
-            config = self._save_configuration(config)
+            config = self._persist_configuration(config)
             config_logger.bind(event_type=f"api_key_{operation_type}_success").info(
                 f"API key {operation_type}d successfully for provider: {provider}"
             )
 
             return config
 
-        except ApiKeyError as e:
+        except ValidationException as e:
             config_logger.bind(
                 event_type=f"api_key_{operation_type}_failed",
                 failure_reason="validation_error",
                 error_message=str(e),
-            ).warning(f"API key {operation_type} failed for {provider}: {str(e)}")
+            ).warning(f"API key {operation_type} failed for {provider}: {e!s}")
             raise
         except Exception as e:
             config_logger.bind(
                 event_type=f"api_key_{operation_type}_error",
                 error_type="system_error",
                 error_message=str(e),
-            ).error(f"API key {operation_type} error for {provider}: {str(e)}")
+            ).error(f"API key {operation_type} error for {provider}: {e!s}")
             raise
 
-    @admin_only()
     async def remove_api_key(
-        self, provider: str, current_user: models.User
+        self, provider: Provider, current_user: models.User
     ) -> models.SystemConfiguration:
+        self.case_access.require_admin(current_user)
         config = await self.get_configuration()
 
         existing_key_data = None
-        if config.api_keys and provider in config.api_keys:
-            existing_key_data = config.api_keys[provider]
+        provider_name = provider.value
+        if config.api_keys and provider_name in config.api_keys:
+            existing_key_data = config.api_keys[provider_name]
 
         config_logger = get_security_logger(
             admin_user_id=current_user.id,
@@ -350,16 +295,12 @@ class SystemConfigService:
         )
 
         try:
-            if config.api_keys and provider in config.api_keys:
+            if config.api_keys and provider_name in config.api_keys:
                 current_keys = config.api_keys.copy()
-                removed_key_data = current_keys[provider]
-                del current_keys[provider]
+                removed_key_data = current_keys[provider_name]
+                del current_keys[provider_name]
                 config.api_keys = current_keys
-                config.updated_at = get_utc_now()
-
-                self.db.add(config)
-                self.db.commit()
-                self.db.refresh(config)
+                config = self._persist_configuration(config)
 
                 config_logger.bind(
                     removed_key_name=removed_key_data.get("name"),
@@ -381,35 +322,12 @@ class SystemConfigService:
                 event_type="api_key_remove_error",
                 error_type="system_error",
                 error_message=str(e),
-            ).error(f"API key remove error for {provider}: {str(e)}")
+            ).error(f"API key remove error for {provider}: {e!s}")
             raise
 
-    def _get_env_api_key(self, provider: str) -> Optional[str]:
-        """Get API key from environment variable"""
-        env_var = f"{provider.upper()}_API_KEY"
-        return os.environ.get(env_var)
-
-    def get_api_key(self, provider: str) -> Optional[str]:
-        """Get decrypted API key for a provider"""
-        try:
-            stmt = select(models.SystemConfiguration)
-            config = self.db.exec(stmt).first()
-
-            if not config or not config.api_keys or provider not in config.api_keys:
-                return self._get_env_api_key(provider)
-
-            encrypted_key = config.api_keys[provider].get("api_key")
-            if encrypted_key:
-                return decrypt_api_key(encrypted_key)
-
-            return None
-
-        except Exception:
-            return self._get_env_api_key(provider)
-
-    @admin_only()
-    async def list_api_keys(self, current_user: models.User) -> Dict[str, dict]:
+    async def list_api_keys(self, current_user: models.User) -> dict[str, dict]:
         """List all configured API keys (admin only)"""
+        self.case_access.require_admin(current_user)
         try:
             config = await self.get_configuration()
 
@@ -418,11 +336,12 @@ class SystemConfigService:
 
             result = {}
             for provider, key_data in config.api_keys.items():
-                if key_data.get("is_active", True):
+                stored_key = StoredApiKey.from_mapping(provider, key_data)
+                if stored_key.is_active:
                     result[provider] = {
-                        "name": key_data.get("name", provider),
+                        "name": stored_key.name,
                         "is_configured": True,
-                        "created_at": key_data.get("created_at"),
+                        "created_at": stored_key.created_at,
                     }
 
             return result
@@ -430,35 +349,35 @@ class SystemConfigService:
         except Exception:
             return {}
 
-    def is_provider_configured(self, provider: str) -> bool:
-        """Check if a provider has a configured API key"""
-        api_key = self.get_api_key(provider)
-        return bool(api_key)
-
-    async def get_configured_providers(self, current_user: models.User) -> List[str]:
+    async def get_configured_providers(self, current_user: models.User) -> list[str]:
         """Get list of configured providers (requires admin access)"""
         api_keys = await self.list_api_keys(current_user=current_user)
         return list(api_keys.keys())
 
-    def _get_default_templates(self) -> dict:
-        return DEFAULT_TEMPLATES.copy()
+    def preview_case_number_template(
+        self, template: str, prefix: str | None, current_user: models.User
+    ) -> tuple[str, str]:
+        """Authorize and render an administrative case-number preview."""
+        self.case_access.require_admin(current_user)
+        SystemConfigValidator.validate_case_number_template(template)
+        return (
+            self.generate_example_case_number(template, prefix),
+            self.get_template_display_name(template),
+        )
 
     async def get_evidence_folder_templates(self) -> dict:
         config = await self.get_configuration()
         if not config.evidence_folder_templates:
-            config.evidence_folder_templates = self._get_default_templates()
-            config.updated_at = get_utc_now()
-            self.db.add(config)
-            self.db.commit()
-            self.db.refresh(config)
-        return config.evidence_folder_templates
+            config.evidence_folder_templates = DEFAULT_TEMPLATES.copy()
+            config = self._persist_configuration(config)
+        return config.evidence_folder_templates or {}
 
-    @admin_only()
     async def update_evidence_folder_templates(
         self, templates: dict, current_user: models.User
     ) -> models.SystemConfiguration:
-        config_logger = self._create_config_logger(
-            user_id=current_user.id,
+        self.case_access.require_admin(current_user)
+        config_logger = get_security_logger(
+            admin_user_id=current_user.id,
             action="update_evidence_templates",
             event_type="evidence_templates_update_attempt",
         )
@@ -473,7 +392,7 @@ class SystemConfigService:
             old_template_count = len(config.evidence_folder_templates or {})
 
             config.evidence_folder_templates = templates
-            config = self._save_configuration(config)
+            config = self._persist_configuration(config)
             config_logger.bind(
                 template_count=len(templates),
                 old_template_count=old_template_count,
@@ -482,17 +401,17 @@ class SystemConfigService:
 
             return config
 
-        except EvidenceTemplateError as e:
+        except ValidationException as e:
             config_logger.bind(
                 event_type="evidence_templates_update_failed",
                 failure_reason="validation_error",
                 error_message=str(e),
-            ).warning(f"Evidence templates update failed: {str(e)}")
+            ).warning(f"Evidence templates update failed: {e!s}")
             raise
         except Exception as e:
             config_logger.bind(
                 event_type="evidence_templates_update_error",
                 error_type="system_error",
                 error_message=str(e),
-            ).error(f"Evidence templates update error: {str(e)}")
+            ).error(f"Evidence templates update error: {e!s}")
             raise

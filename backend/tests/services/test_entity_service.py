@@ -3,14 +3,16 @@ Comprehensive test suite for EntityService
 """
 
 import pytest
+from sqlmodel import Session
+
 from app.core.exceptions import (
+    AuthorizationException,
     DuplicateResourceException,
     ResourceNotFoundException,
 )
 from app.database import models
 from app.schemas.entity_schema import EntityCreate, EntityUpdate
 from app.services.entity_service import EntityService
-from sqlmodel import Session
 
 
 @pytest.mark.asyncio
@@ -176,9 +178,7 @@ class TestEntityService:
         )
         assert entity.entity_type == "company"
         assert entity.data["name"] == "Tech Corp"
-        assert (
-            entity.data["website"] == "techcorp.com"
-        )  # No auto-prepending in current implementation
+        assert entity.data["website"] == "https://techcorp.com"
         assert entity.data["domains"] == ["techcorp.com", "techcorp.io"]
 
     async def test_create_entity_domain_success(self, test_case_with_users, test_user):
@@ -225,12 +225,11 @@ class TestEntityService:
             test_case_with_users.id, entity_data, current_user=test_user
         )
 
-        # Try to create duplicate
-        with pytest.raises(DuplicateResourceException) as exc_info:
-            await self.service.create_entity(
-                test_case_with_users.id, entity_data, current_user=test_user
-            )
-        assert "already exists" in str(exc_info.value)
+        # A shared name is an advisory, and intentional separation is permitted.
+        separate = await self.service.create_entity(
+            test_case_with_users.id, entity_data, current_user=test_user
+        )
+        assert separate.id is not None
 
     async def test_create_entity_duplicate_company(
         self, test_case_with_users, test_user
@@ -254,25 +253,23 @@ class TestEntityService:
             )
         assert "already exists" in str(exc_info.value)
 
-    async def test_create_entity_analyst_can_read_but_api_prevents_write(
+    async def test_create_entity_rejects_analyst_write(
         self, test_case_with_users, test_analyst
     ):
-        """Test that service layer allows analyst to create (API layer will block)"""
+        """Analyst read-only policy is enforced in the service."""
         entity_data = EntityCreate(
             entity_type="person", data={"first_name": "Test", "last_name": "User"}
         )
 
-        # Service layer should not block analysts - that's the API's job
-        entity = await self.service.create_entity(
-            test_case_with_users.id, entity_data, current_user=test_analyst
-        )
-        assert entity.entity_type == "person"
-        assert entity.data["first_name"] == "Test"
+        with pytest.raises(AuthorizationException):
+            await self.service.create_entity(
+                test_case_with_users.id, entity_data, current_user=test_analyst
+            )
 
-    async def test_update_entity_analyst_can_read_but_api_prevents_write(
+    async def test_update_entity_rejects_analyst_write(
         self, test_case_with_users, test_analyst
     ):
-        """Test that service layer allows analyst to update (API layer will block)"""
+        """Analysts cannot update assigned-case entities."""
         # Create entity
         entity = models.Entity(
             case_id=test_case_with_users.id,
@@ -285,16 +282,18 @@ class TestEntityService:
 
         update_data = EntityUpdate(data={"first_name": "Updated", "last_name": "User"})
 
-        # Service layer should not block analysts - that's the API's job
-        updated = await self.service.update_entity(
-            entity.id, update_data, current_user=test_analyst
-        )
-        assert updated.data["first_name"] == "Updated"
+        with pytest.raises(AuthorizationException):
+            await self.service.update_entity(
+                test_case_with_users.id,
+                entity.id,
+                update_data,
+                current_user=test_analyst,
+            )
 
-    async def test_delete_entity_analyst_can_read_but_api_prevents_write(
+    async def test_delete_entity_rejects_analyst_write(
         self, test_case_with_users, test_analyst
     ):
-        """Test that service layer allows analyst to delete (API layer will block)"""
+        """Analysts cannot delete assigned-case entities."""
         # Create entity
         entity = models.Entity(
             case_id=test_case_with_users.id,
@@ -306,12 +305,11 @@ class TestEntityService:
         self.db.commit()
         entity_id = entity.id
 
-        # Service layer should not block analysts - that's the API's job
-        await self.service.delete_entity(entity_id, current_user=test_analyst)
-
-        # Verify entity was deleted
-        deleted_entity = self.db.get(models.Entity, entity_id)
-        assert deleted_entity is None
+        with pytest.raises(AuthorizationException):
+            await self.service.delete_entity(
+                test_case_with_users.id, entity_id, current_user=test_analyst
+            )
+        assert self.db.get(models.Entity, entity_id) is not None
 
     async def test_delete_entity_multiple_in_case(
         self, test_case_with_users, test_user
@@ -335,7 +333,9 @@ class TestEntityService:
         self.db.commit()
 
         # Delete only entity1
-        await self.service.delete_entity(entity1.id, current_user=test_user)
+        await self.service.delete_entity(
+            test_case_with_users.id, entity1.id, current_user=test_user
+        )
 
         # Verify entity2 still exists
         remaining = self.db.get(models.Entity, entity2.id)
@@ -496,7 +496,7 @@ class TestEntityService:
 
         assert found_entity is not None
         assert found_entity.id == created_entity.id
-        assert found_entity.data["domain"] == "TestDomain.Com"
+        assert found_entity.data["domain"] == "testdomain.com"
 
     async def test_find_entity_by_domain_not_found(
         self, test_case_with_users, test_user
@@ -532,11 +532,12 @@ class TestEntityService:
         # Store original state
         original_created_at = created_entity.created_at
         assert (
-            "description" not in created_entity.data
+            created_entity.data.get("description") is None
         )  # Verify no description initially
 
         # Enrich with description
         enriched_entity = await self.service.enrich_entity_description(
+            test_case_with_users.id,
             created_entity.id,
             "Discovered via Shodan: Apache server on port 80",
             current_user=test_user,
@@ -572,6 +573,7 @@ class TestEntityService:
 
         # Enrich with additional description
         enriched_entity = await self.service.enrich_entity_description(
+            test_case_with_users.id,
             created_entity.id,
             "Additional info from Shodan scan",
             current_user=test_user,
@@ -580,18 +582,23 @@ class TestEntityService:
         expected_description = "Original description from manual entry\n\n--- Additional Info ---\nAdditional info from Shodan scan"
         assert enriched_entity.data["description"] == expected_description
 
-    async def test_enrich_entity_description_not_found(self, test_user):
+    async def test_enrich_entity_description_not_found(
+        self, test_case_with_users, test_user
+    ):
         """Test enriching non-existent entity"""
         with pytest.raises(ResourceNotFoundException) as exc_info:
             await self.service.enrich_entity_description(
-                99999, "Some description", current_user=test_user
+                test_case_with_users.id,
+                99999,
+                "Some description",
+                current_user=test_user,
             )
         assert "Entity not found" in str(exc_info.value)
 
-    async def test_enrich_entity_description_analyst_can_read_but_api_prevents_write(
+    async def test_enrich_entity_description_rejects_analyst_write(
         self, test_case_with_users, test_analyst
     ):
-        """Test that service layer allows analyst to enrich (API layer will block)"""
+        """Analysts cannot enrich assigned-case entities."""
         # Create entity
         entity = models.Entity(
             case_id=test_case_with_users.id,
@@ -602,8 +609,10 @@ class TestEntityService:
         self.db.add(entity)
         self.db.commit()
 
-        # Service layer should not block analysts - that's the API's job
-        enriched = await self.service.enrich_entity_description(
-            entity.id, "Some enrichment", current_user=test_analyst
-        )
-        assert enriched.data["description"] == "Some enrichment"
+        with pytest.raises(AuthorizationException):
+            await self.service.enrich_entity_description(
+                test_case_with_users.id,
+                entity.id,
+                "Some enrichment",
+                current_user=test_analyst,
+            )

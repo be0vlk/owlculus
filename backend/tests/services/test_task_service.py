@@ -5,11 +5,16 @@ Comprehensive tests for TaskService
 from datetime import datetime, timedelta
 
 import pytest
+from sqlmodel import Session
+
 from app.core.enums import TaskPriority, TaskStatus
-from app.core.exceptions import ResourceNotFoundException, ValidationException
+from app.core.exceptions import (
+    AuthorizationException,
+    ResourceNotFoundException,
+    ValidationException,
+)
 from app.database import models
 from app.services.task_service import TaskService
-from sqlmodel import Session
 
 
 @pytest.fixture(name="task_service")
@@ -207,13 +212,13 @@ class TestTaskTemplateOperations:
             "definition_json": {"fields": []},
         }
 
-        template = await task_service.create_custom_template(template_data, current_user=test_admin)
+        template = await task_service.create_custom_template(
+            template_data, current_user=test_admin
+        )
 
         assert template.name == "custom_test"
         assert template.display_name == "Custom Test Template"
-        assert template.is_custom is True
         assert template.created_by_id == test_admin.id
-        assert template.version == "2.0.0"
 
 
 class TestTaskCRUDOperations:
@@ -243,7 +248,9 @@ class TestTaskCRUDOperations:
             "custom_fields": {"field1": "test"},
         }
 
-        task = await task_service.create_task(test_case.id, task_data, current_user=test_admin)
+        task = await task_service.create_task(
+            test_case.id, task_data, current_user=test_admin
+        )
 
         assert task.title == "New Test Task"
         assert task.case_id == test_case.id
@@ -259,17 +266,17 @@ class TestTaskCRUDOperations:
         test_case: models.Case,
         test_investigator: models.User,
     ):
-        """Test creating task without case access - service layer accepts all users"""
+        """The task service owns lead authorization."""
         task_data = {
             "title": "Unauthorized Task",
-            "description": "Should succeed at service layer",
+            "description": "Should be rejected at the service boundary",
             "priority": TaskPriority.LOW.value,
         }
 
-        # Service layer should accept the request (authorization happens at API layer)
-        task = await task_service.create_task(test_case.id, task_data, current_user=test_investigator)
-        assert task.title == "Unauthorized Task"
-        assert task.assigned_by_id == test_investigator.id
+        with pytest.raises(AuthorizationException):
+            await task_service.create_task(
+                test_case.id, task_data, current_user=test_investigator
+            )
 
     @pytest.mark.asyncio
     async def test_get_task(
@@ -352,11 +359,17 @@ class TestTaskFiltering:
     async def test_get_tasks_by_assignee(
         self,
         task_service: TaskService,
+        session: Session,
+        test_case: models.Case,
         multiple_tasks: list,
         test_admin: models.User,
         test_investigator: models.User,
     ):
         """Test getting tasks filtered by assignee"""
+        session.add(
+            models.CaseUserLink(case_id=test_case.id, user_id=test_investigator.id)
+        )
+        session.commit()
         tasks = await task_service.get_tasks(
             current_user=test_admin, assigned_to_id=test_investigator.id
         )
@@ -412,10 +425,9 @@ class TestTaskFiltering:
     async def test_get_tasks_non_admin_no_case_access(
         self, task_service: TaskService, multiple_tasks: list, test_analyst: models.User
     ):
-        """Test non-admin user with no case access - service layer returns all tasks"""
-        # Service layer doesn't filter by access (done at API layer)
+        """Test non-admin user with no case access sees no tasks."""
         tasks = await task_service.get_tasks(current_user=test_analyst)
-        assert len(tasks) == 4  # All tasks are returned
+        assert tasks == []
 
 
 class TestTaskAssignment:
@@ -451,7 +463,9 @@ class TestTaskAssignment:
         test_admin: models.User,
     ):
         """Test unassigning a task"""
-        task = await task_service.assign_task(sample_task.id, None, current_user=test_admin)
+        task = await task_service.assign_task(
+            sample_task.id, None, current_user=test_admin
+        )
         assert task.assigned_to_id is None
 
     @pytest.mark.asyncio
@@ -462,10 +476,11 @@ class TestTaskAssignment:
         test_admin: models.User,
         test_analyst: models.User,
     ):
-        """Test assigning task to user without case access - service layer accepts all users"""
-        # Service layer should accept the request (authorization happens at API layer)
-        task = await task_service.assign_task(sample_task.id, test_analyst.id, current_user=test_admin)
-        assert task.assigned_to_id == test_analyst.id
+        """The task service rejects assignees without case access."""
+        with pytest.raises(AuthorizationException):
+            await task_service.assign_task(
+                sample_task.id, test_analyst.id, current_user=test_admin
+            )
 
     @pytest.mark.asyncio
     async def test_bulk_assign_tasks(
@@ -606,7 +621,7 @@ class TestTaskAccessControl:
         """Test investigator can create and modify tasks"""
         # Give investigator access to the case
         case_link = models.CaseUserLink(
-            case_id=test_case.id, user_id=test_investigator.id
+            case_id=test_case.id, user_id=test_investigator.id, is_lead=True
         )
         task_service.db.add(case_link)
         task_service.db.commit()
@@ -660,7 +675,9 @@ class TestTaskWithCustomFields:
             },
         }
 
-        task = await task_service.create_task(test_case.id, task_data, current_user=test_admin)
+        task = await task_service.create_task(
+            test_case.id, task_data, current_user=test_admin
+        )
 
         assert task.template_id == task_template.id
         assert task.custom_fields["field1"] == "custom value"
@@ -706,7 +723,9 @@ class TestTaskDueDates:
             "due_date": due_date,
         }
 
-        task = await task_service.create_task(test_case.id, task_data, current_user=test_admin)
+        task = await task_service.create_task(
+            test_case.id, task_data, current_user=test_admin
+        )
 
         assert task.due_date is not None
         assert abs((task.due_date - due_date).total_seconds()) < 1

@@ -12,28 +12,31 @@ Key features:
 """
 
 from datetime import UTC, datetime
-from typing import List
+from typing import List, cast
 
-from app.schemas.strixy_schema import ChatMessage, ChatResponse
-from app.services.system_config_service import SystemConfigService
-from fastapi import HTTPException, status
 from openai import OpenAI
+from openai.types.chat import ChatCompletionMessageParam
 from sqlmodel import Session
+
+from app.core.exceptions import BaseException as DomainException
+from app.core.exceptions import ValidationException
+from app.schemas.strixy_schema import ChatMessage, ChatResponse
+from app.services.api_key_vault import ApiKeyVault, ConfigurationApiKeyVault, Provider
 
 
 class StrixyService:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, api_key_vault: ApiKeyVault | None = None):
         self.db = db
-        self.config_service = SystemConfigService(db)
-        self._client = None
+        self.api_key_vault = api_key_vault or ConfigurationApiKeyVault(db)
+        self._client: OpenAI | None = None
 
     def _get_openai_client(self) -> OpenAI:
         if self._client is None:
-            api_key = self.config_service.get_api_key("openai")
+            api_key = self.api_key_vault.get_key(Provider.OPENAI)
             if not api_key:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="OpenAI API key not configured. Please contact administrator to configure the OpenAI API key.",
+                raise ValidationException(
+                    "OpenAI API key not configured. Please contact administrator to "
+                    "configure the OpenAI API key."
                 )
             self._client = OpenAI(api_key=api_key)
         return self._client
@@ -74,9 +77,17 @@ You are Strixy, an expert AI assistant specialized in OSINT investigations withi
 Maintain professional objectivity.""",
             }
 
-            openai_messages = [system_message]
+            openai_messages: list[ChatCompletionMessageParam] = [
+                cast(ChatCompletionMessageParam, system_message)
+            ]
             openai_messages.extend(
-                [{"role": msg.role, "content": msg.content} for msg in messages]
+                [
+                    cast(
+                        ChatCompletionMessageParam,
+                        {"role": msg.role, "content": msg.content},
+                    )
+                    for msg in messages
+                ]
             )
 
             completion = client.chat.completions.create(
@@ -86,16 +97,13 @@ Maintain professional objectivity.""",
                 temperature=0.7,
             )
 
-            response_content = completion.choices[0].message.content
+            response_content = cast(str, completion.choices[0].message.content)
 
             return ChatResponse(
                 message=response_content, role="assistant", timestamp=datetime.now(UTC)
             )
 
+        except ValidationException:
+            raise
         except Exception as e:
-            if isinstance(e, HTTPException):
-                raise e
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error communicating with OpenAI: {str(e)}",
-            )
+            raise DomainException(f"Error communicating with OpenAI: {str(e)}") from e

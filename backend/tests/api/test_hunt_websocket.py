@@ -5,7 +5,9 @@ Tests for hunt WebSocket functionality
 from unittest.mock import AsyncMock
 
 import pytest
+
 from app.core.websocket_manager import websocket_manager
+from app.hunts.hunt_event import HuntEvent
 
 
 class TestHuntWebSocket:
@@ -23,7 +25,7 @@ class TestHuntWebSocket:
         await websocket_manager.connect(execution_id, mock_websocket)
 
         # Send progress update
-        await websocket_manager.send_progress_update(execution_id, 0.5)
+        await websocket_manager.broadcast(HuntEvent.progress(execution_id, 0.5))
 
         # Verify the WebSocket received the message
         mock_websocket.send_json.assert_called_once_with(
@@ -46,7 +48,9 @@ class TestHuntWebSocket:
         await websocket_manager.connect(execution_id, mock_websocket)
 
         # Send step completion
-        await websocket_manager.send_step_complete(execution_id, step_id, 0.33)
+        await websocket_manager.broadcast(
+            HuntEvent.step_complete(execution_id, step_id, 0.33)
+        )
 
         # Verify the WebSocket received the message
         mock_websocket.send_json.assert_called_once_with(
@@ -75,7 +79,7 @@ class TestHuntWebSocket:
         await websocket_manager.connect(execution_id, mock_ws2)
 
         # Send progress update
-        await websocket_manager.send_progress_update(execution_id, 0.75)
+        await websocket_manager.broadcast(HuntEvent.progress(execution_id, 0.75))
 
         # Verify both WebSockets received the message
         expected_message = {
@@ -105,7 +109,7 @@ class TestHuntWebSocket:
         assert execution_id in websocket_manager.connections
 
         # Send completion notification
-        await websocket_manager.send_execution_complete(execution_id)
+        await websocket_manager.broadcast(HuntEvent.complete(execution_id))
 
         # Verify the WebSocket received the message
         mock_websocket.send_json.assert_called_once_with(
@@ -128,7 +132,7 @@ class TestHuntWebSocket:
         await websocket_manager.connect(execution_id, mock_websocket)
 
         # Send progress update - should not raise
-        await websocket_manager.send_progress_update(execution_id, 0.5)
+        await websocket_manager.broadcast(HuntEvent.progress(execution_id, 0.5))
 
         # Verify the failed WebSocket was removed
         assert (

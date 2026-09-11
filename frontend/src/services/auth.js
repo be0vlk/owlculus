@@ -1,22 +1,26 @@
 import axios from 'axios'
-
-// Use relative URLs when VITE_API_BASE_URL is empty (for reverse proxy setups)
-// Only fall back to localhost:8000 if the env var is not defined at all
-const baseURL =
-  import.meta.env.VITE_API_BASE_URL !== undefined
-    ? import.meta.env.VITE_API_BASE_URL
-    : 'http://localhost:8000'
+import { apiBaseURL } from './config'
 
 // Create a separate axios instance for auth that doesn't have interceptors
 // to avoid circular dependencies with the main api instance
 const authApi = axios.create({
-  baseURL,
+  baseURL: apiBaseURL,
   headers: {
     'Content-Type': 'application/json',
   },
 })
 
 export const authService = {
+  async getSetupStatus() {
+    const response = await authApi.get('/api/auth/setup-status')
+    return response.data
+  },
+
+  async createAdministrator(userData) {
+    const response = await authApi.post('/api/users/', userData)
+    return response.data
+  },
+
   async login(username, password) {
     const formData = new FormData()
     formData.append('username', username)

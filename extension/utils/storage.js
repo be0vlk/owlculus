@@ -1,7 +1,7 @@
-import {cryptoHelper} from './crypto.js';
+import { cryptoHelper } from "./crypto.js";
 
-const ENCRYPTION_KEY_NAME = '_owlculus_encryption_key';
-const ENCRYPTED_PREFIX = 'enc_';
+const ENCRYPTION_KEY_NAME = "_owlculus_encryption_key";
+const ENCRYPTED_PREFIX = "enc_";
 
 class EncryptedStorage {
     constructor() {
@@ -16,11 +16,17 @@ class EncryptedStorage {
         return new Promise((resolve) => {
             chrome.storage.local.get([ENCRYPTION_KEY_NAME], async (result) => {
                 if (result[ENCRYPTION_KEY_NAME]) {
-                    this.encryptionKey = await cryptoHelper.importKey(result[ENCRYPTION_KEY_NAME]);
+                    this.encryptionKey = await cryptoHelper.importKey(
+                        result[ENCRYPTION_KEY_NAME],
+                    );
                 } else {
                     this.encryptionKey = await cryptoHelper.generateKey();
-                    const exportedKey = await cryptoHelper.exportKey(this.encryptionKey);
-                    chrome.storage.local.set({[ENCRYPTION_KEY_NAME]: exportedKey});
+                    const exportedKey = await cryptoHelper.exportKey(
+                        this.encryptionKey,
+                    );
+                    chrome.storage.local.set({
+                        [ENCRYPTION_KEY_NAME]: exportedKey,
+                    });
                 }
                 resolve(this.encryptionKey);
             });
@@ -32,7 +38,7 @@ class EncryptedStorage {
 
         return new Promise((resolve) => {
             const encryptedKeys = Array.isArray(keys)
-                ? keys.map(k => ENCRYPTED_PREFIX + k)
+                ? keys.map((k) => ENCRYPTED_PREFIX + k)
                 : [ENCRYPTED_PREFIX + keys];
 
             chrome.storage.local.get(encryptedKeys, async (result) => {
@@ -40,13 +46,19 @@ class EncryptedStorage {
 
                 for (const [encKey, encValue] of Object.entries(result)) {
                     if (encValue) {
-                        const originalKey = encKey.substring(ENCRYPTED_PREFIX.length);
+                        const originalKey = encKey.substring(
+                            ENCRYPTED_PREFIX.length,
+                        );
                         try {
                             decryptedResult[originalKey] = JSON.parse(
-                                await cryptoHelper.decrypt(encValue, key)
+                                await cryptoHelper.decrypt(encValue, key),
                             );
                         } catch (e) {
-                            console.error('Failed to decrypt value for', originalKey, e);
+                            console.error(
+                                "Failed to decrypt value for",
+                                originalKey,
+                                e,
+                            );
                         }
                     }
                 }
@@ -62,10 +74,13 @@ class EncryptedStorage {
 
         for (const [itemKey, value] of Object.entries(items)) {
             try {
-                const encrypted = await cryptoHelper.encrypt(JSON.stringify(value), key);
+                const encrypted = await cryptoHelper.encrypt(
+                    JSON.stringify(value),
+                    key,
+                );
                 encryptedItems[ENCRYPTED_PREFIX + itemKey] = encrypted;
             } catch (e) {
-                console.error('Failed to encrypt value for', itemKey, e);
+                console.error("Failed to encrypt value for", itemKey, e);
             }
         }
 
@@ -78,7 +93,7 @@ class EncryptedStorage {
 
     async remove(keys) {
         const encryptedKeys = Array.isArray(keys)
-            ? keys.map(k => ENCRYPTED_PREFIX + k)
+            ? keys.map((k) => ENCRYPTED_PREFIX + k)
             : [ENCRYPTED_PREFIX + keys];
 
         return new Promise((resolve) => {
@@ -88,11 +103,22 @@ class EncryptedStorage {
         });
     }
 
+    watch(keys, callback) {
+        chrome.storage.onChanged.addListener((changes, area) => {
+            if (
+                area === "local" &&
+                keys.some((key) => changes[ENCRYPTED_PREFIX + key])
+            ) {
+                callback();
+            }
+        });
+    }
+
     async clear() {
         return new Promise((resolve) => {
             chrome.storage.local.get(null, (allItems) => {
-                const keysToRemove = Object.keys(allItems).filter(
-                    key => key.startsWith(ENCRYPTED_PREFIX)
+                const keysToRemove = Object.keys(allItems).filter((key) =>
+                    key.startsWith(ENCRYPTED_PREFIX),
                 );
                 chrome.storage.local.remove(keysToRemove, () => {
                     resolve();
@@ -106,6 +132,8 @@ export const storage = new EncryptedStorage();
 
 export const CONFIG_KEYS = {
     API_ENDPOINT: "apiEndpoint",
+    SESSION: "session",
+    SESSION_REVISION: "sessionRevision",
     AUTH_TOKEN: "authToken",
     TOKEN_TYPE: "tokenType",
     LAST_CASE_ID: "lastCaseId",

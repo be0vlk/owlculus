@@ -28,6 +28,13 @@ class UserCreate(UserBase):
     password: str
 
 
+class BootstrapUserCreate(BaseModel):
+    username: str
+    email: EmailStr
+    password: str
+    setup_token: str | None = None
+
+
 class UserUpdate(BaseModel):
     username: Optional[str] = None
     email: Optional[EmailStr] = None
@@ -52,5 +59,6 @@ class User(UserBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    email: str
     created_at: datetime = Field(default_factory=get_utc_now)
     updated_at: datetime = Field(default_factory=get_utc_now)

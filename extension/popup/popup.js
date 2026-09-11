@@ -1,5 +1,18 @@
-import {api} from "../utils/api.js";
-import {CONFIG_KEYS, storage} from "../utils/storage.js";
+import { OwlculusAPI } from "../utils/api.js";
+import {
+    readSession,
+    updateSession,
+    assertCurrent,
+    watchSession,
+} from "../utils/session.js";
+
+let api;
+let generation = 0;
+watchSession(() => {
+    generation++;
+    showLoginSection();
+    updateStatus("Instance or session changed. Reopen the popup.");
+});
 
 let currentUser = null;
 let cases = [];
@@ -10,37 +23,29 @@ document.addEventListener("DOMContentLoaded", async () => {
 });
 
 async function initializePopup() {
+    const started = generation;
     try {
-        const config = await storage.get([
-            CONFIG_KEYS.API_ENDPOINT,
-            CONFIG_KEYS.AUTH_TOKEN,
-        ]);
-
-        if (!config[CONFIG_KEYS.API_ENDPOINT]) {
-            showLoginSection();
-            updateStatus("No API endpoint configured");
-            return;
-        }
-
-        if (!config[CONFIG_KEYS.AUTH_TOKEN]) {
+        const snapshot = await readSession();
+        if (!snapshot.session?.token) {
             showLoginSection();
             updateStatus("Not logged in");
             return;
         }
-
-        await api.initialize();
-
+        api = new OwlculusAPI(snapshot);
         try {
             currentUser = await api.getCurrentUser();
             const userData = {
                 username: currentUser.username,
                 role: currentUser.role,
             };
-            await storage.set({[CONFIG_KEYS.USER_DATA]: userData});
+            await updateSession(snapshot, { user: userData });
+            await assertCurrent(snapshot);
 
+            if (started !== generation) return;
             showCaptureSection();
-            updateStatus(`Connected to ${config[CONFIG_KEYS.API_ENDPOINT]}`);
-            document.getElementById("username").textContent = currentUser.username;
+            updateStatus(`Connected to ${snapshot.endpoint}`);
+            document.getElementById("username").textContent =
+                currentUser.username;
 
             await loadCases();
             await setDefaultTitle();
@@ -48,7 +53,6 @@ async function initializePopup() {
             console.error("Auth check failed:", error);
             showLoginSection();
             updateStatus("Authentication failed");
-            await api.logout();
         }
     } catch (error) {
         console.error("Initialization error:", error);
@@ -79,17 +83,27 @@ function setupEventListeners() {
         .getElementById("case-select")
         .addEventListener("change", async (e) => {
             if (e.target.value) {
-                await storage.set({[CONFIG_KEYS.LAST_CASE_ID]: e.target.value});
+                await updateSession(api.snapshot, {
+                    lastCaseId: e.target.value,
+                });
                 await loadFolders(e.target.value);
             } else {
                 // Clear folders if no case selected
                 const folderSelect = document.getElementById("folder-select");
-                folderSelect.innerHTML = '<option value="">Select a case first</option>';
+                folderSelect.innerHTML =
+                    '<option value="">Select a case first</option>';
             }
         });
 }
 
 function showLoginSection() {
+    currentUser = null;
+    cases = [];
+    document.getElementById("username").textContent = "";
+    document.getElementById("case-select").innerHTML =
+        '<option value="">Select a case...</option>';
+    document.getElementById("folder-select").innerHTML =
+        '<option value="">Select a case first</option>';
     document.getElementById("login-section").classList.remove("hidden");
     document.getElementById("capture-section").classList.add("hidden");
 }
@@ -104,14 +118,18 @@ function updateStatus(message) {
 }
 
 async function loadCases() {
+    const started = generation;
     try {
         const caseSelect = document.getElementById("case-select");
         caseSelect.innerHTML = '<option value="">Loading cases...</option>';
 
-        cases = await api.getCases();
+        const result = await api.getCases();
+        if (started !== generation) return;
+        cases = result;
 
         if (cases.length === 0) {
-            caseSelect.innerHTML = '<option value="">No cases available</option>';
+            caseSelect.innerHTML =
+                '<option value="">No cases available</option>';
             return;
         }
 
@@ -123,9 +141,9 @@ async function loadCases() {
             caseSelect.appendChild(option);
         });
 
-        const lastCaseId = (await storage.get(CONFIG_KEYS.LAST_CASE_ID))[
-            CONFIG_KEYS.LAST_CASE_ID
-            ];
+        const current = await assertCurrent(api.snapshot);
+        const lastCaseId = current.session.lastCaseId;
+        if (started !== generation) return;
         if (lastCaseId && cases.find((c) => c.id == lastCaseId)) {
             caseSelect.value = lastCaseId;
             await loadFolders(lastCaseId);
@@ -138,17 +156,23 @@ async function loadCases() {
 }
 
 async function loadFolders(caseId) {
+    const started = generation;
     try {
         const folderSelect = document.getElementById("folder-select");
         folderSelect.innerHTML = '<option value="">Loading folders...</option>';
 
         const evidenceItems = await api.getFolderTree(caseId);
 
+        if (started !== generation) return;
+
         // Filter to only get folders (not files)
-        const folders = evidenceItems ? evidenceItems.filter(item => item.is_folder) : [];
+        const folders = evidenceItems
+            ? evidenceItems.filter((item) => item.is_folder)
+            : [];
 
         if (folders.length === 0) {
-            folderSelect.innerHTML = '<option value="">No folders available (will save to root)</option>';
+            folderSelect.innerHTML =
+                '<option value="">No folders available (will save to root)</option>';
             return;
         }
 
@@ -157,19 +181,19 @@ async function loadFolders(caseId) {
         const rootItems = [];
 
         // First pass: create all folder items
-        folders.forEach(folder => {
+        folders.forEach((folder) => {
             const item = {
                 id: folder.id,
                 title: folder.title,
                 folder_path: folder.folder_path,
                 parent_folder_id: folder.parent_folder_id,
-                children: []
+                children: [],
             };
             itemMap.set(folder.id, item);
         });
 
         // Second pass: build hierarchy
-        itemMap.forEach(item => {
+        itemMap.forEach((item) => {
             if (item.parent_folder_id && itemMap.has(item.parent_folder_id)) {
                 const parent = itemMap.get(item.parent_folder_id);
                 parent.children.push(item);
@@ -180,23 +204,28 @@ async function loadFolders(caseId) {
 
         // Sort items: by title
         const sortItems = (items) => {
-            return items.sort((a, b) => a.title.localeCompare(b.title)).map(item => ({
-                ...item,
-                children: item.children ? sortItems(item.children) : item.children
-            }));
+            return items
+                .sort((a, b) => a.title.localeCompare(b.title))
+                .map((item) => ({
+                    ...item,
+                    children: item.children
+                        ? sortItems(item.children)
+                        : item.children,
+                }));
         };
 
         const sortedItems = sortItems(rootItems);
 
         // Build folder options with proper hierarchy
-        folderSelect.innerHTML = '<option value="">Select a folder (or save to root)</option>';
+        folderSelect.innerHTML =
+            '<option value="">Select a folder (or save to root)</option>';
 
         function addFolderOptions(folderList, level = 0, parentPrefix = "") {
             folderList.forEach((folder, index) => {
                 const option = document.createElement("option");
                 option.value = JSON.stringify({
                     id: folder.id,
-                    folder_path: folder.folder_path
+                    folder_path: folder.folder_path,
                 });
 
                 // Build visual hierarchy with proper indentation and tree lines
@@ -213,7 +242,9 @@ async function loadFolders(caseId) {
 
                 // Recursively add children with updated parent prefix
                 if (folder.children && folder.children.length > 0) {
-                    const childPrefix = parentPrefix + (level > 0 ? (isLast ? "   " : "│  ") : "");
+                    const childPrefix =
+                        parentPrefix +
+                        (level > 0 ? (isLast ? "   " : "│  ") : "");
                     addFolderOptions(folder.children, level + 1, childPrefix);
                 }
             });
@@ -272,7 +303,7 @@ async function captureCurrentPage() {
         } catch (error) {
             if (error.message.includes("Could not establish connection")) {
                 await chrome.scripting.executeScript({
-                    target: {tabId: tab.id},
+                    target: { tabId: tab.id },
                     files: ["content/content.js"],
                 });
 
@@ -296,7 +327,8 @@ async function captureCurrentPage() {
             "Captured Page";
 
         // Get selected folder information
-        const folderSelectValue = document.getElementById("folder-select").value;
+        const folderSelectValue =
+            document.getElementById("folder-select").value;
         let folderPath = null;
         let parentFolderId = null;
 
@@ -316,7 +348,7 @@ async function captureCurrentPage() {
             captureResult.html,
             tab.url,
             folderPath,
-            parentFolderId
+            parentFolderId,
         );
 
         if (uploadResult && uploadResult.length > 0) {
@@ -373,7 +405,8 @@ async function captureScreenshot() {
             `Screenshot - ${tab.title || "Unknown Page"}`;
 
         // Get selected folder information
-        const folderSelectValue = document.getElementById("folder-select").value;
+        const folderSelectValue =
+            document.getElementById("folder-select").value;
         let folderPath = null;
         let parentFolderId = null;
 
@@ -396,7 +429,7 @@ async function captureScreenshot() {
             blob,
             tab.url,
             folderPath,
-            parentFolderId
+            parentFolderId,
         );
 
         if (uploadResult && uploadResult.length > 0) {

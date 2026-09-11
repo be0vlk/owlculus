@@ -1,5 +1,10 @@
 <template>
-  <BaseDashboard :error="error" :loading="loading" title="Tasks">
+  <BaseDashboard title="Tasks">
+    <v-alert v-if="usersError && !kind" type="error" class="mb-4">
+      {{ usersError }}
+      <v-btn :loading="usersLoading" @click="loadUsers">Retry users</v-btn>
+    </v-alert>
+    <v-alert v-if="error" type="error" class="mb-4">{{ error }}</v-alert>
     <template #header-actions>
       <div class="d-flex align-center ga-2">
         <v-btn
@@ -18,6 +23,9 @@
               icon="mdi-refresh"
               v-bind="props"
               variant="outlined"
+              aria-label="Refresh tasks"
+              :disabled="pending"
+              ref="refreshButton"
               @click="loadTasks"
             />
           </template>
@@ -30,32 +38,34 @@
       <v-col cols="12" md="3" sm="6">
         <v-card variant="outlined">
           <v-card-text class="text-center pa-4">
-            <div class="text-h4 font-weight-bold">{{ stats.total }}</div>
-            <div class="text-body-2 text-medium-emphasis">Total Tasks</div>
+            <div class="text-headline-large font-weight-bold">{{ stats.total }}</div>
+            <div class="text-body-medium text-medium-emphasis">Total Tasks</div>
           </v-card-text>
         </v-card>
       </v-col>
       <v-col cols="12" md="3" sm="6">
         <v-card variant="outlined">
           <v-card-text class="text-center pa-4">
-            <div class="text-h4 font-weight-bold text-primary">{{ stats.myTasks }}</div>
-            <div class="text-body-2 text-medium-emphasis">My Tasks</div>
+            <div class="text-headline-large font-weight-bold text-primary">{{ stats.myTasks }}</div>
+            <div class="text-body-medium text-medium-emphasis">My Tasks</div>
           </v-card-text>
         </v-card>
       </v-col>
       <v-col cols="12" md="3" sm="6">
         <v-card variant="outlined">
           <v-card-text class="text-center pa-4">
-            <div class="text-h4 font-weight-bold text-warning">{{ stats.overdue }}</div>
-            <div class="text-body-2 text-medium-emphasis">Overdue</div>
+            <div class="text-headline-large font-weight-bold text-warning">{{ stats.overdue }}</div>
+            <div class="text-body-medium text-medium-emphasis">Overdue</div>
           </v-card-text>
         </v-card>
       </v-col>
       <v-col cols="12" md="3" sm="6">
         <v-card variant="outlined">
           <v-card-text class="text-center pa-4">
-            <div class="text-h4 font-weight-bold text-success">{{ stats.completed }}</div>
-            <div class="text-body-2 text-medium-emphasis">Completed</div>
+            <div class="text-headline-large font-weight-bold text-success">
+              {{ stats.completed }}
+            </div>
+            <div class="text-body-medium text-medium-emphasis">Completed</div>
           </v-card-text>
         </v-card>
       </v-col>
@@ -64,12 +74,12 @@
     <!-- Tasks Table Card -->
     <v-card variant="outlined">
       <!-- Header -->
-      <v-card-title class="d-flex align-center pa-4 bg-surface">
+      <v-card-title class="operations-heading d-flex flex-wrap ga-3 align-center pa-4 bg-surface">
         <v-icon class="me-3" color="primary" icon="mdi-format-list-checks" size="large" />
         <div class="flex-grow-1">
-          <div class="text-h6 font-weight-bold">Task Management</div>
-          <div class="text-body-2 text-medium-emphasis">
-            Track and manage tasks across all cases
+          <h2 class="text-title-large font-weight-bold">Task Management</h2>
+          <div class="text-body-medium text-medium-emphasis">
+            Track and manage tasks for the active case
           </div>
         </div>
       </v-card-title>
@@ -78,11 +88,11 @@
 
       <!-- Filters and Search Toolbar -->
       <v-card-text class="pa-4">
-        <v-row align="center" class="mb-0">
+        <v-row class="mb-0 align-center">
           <!-- Quick Filter Chips -->
           <v-col cols="12" md="8">
             <div class="d-flex align-center ga-2 flex-wrap">
-              <span class="text-body-2 font-weight-medium me-2">Filter:</span>
+              <span class="text-body-medium font-weight-medium me-2">Filter:</span>
               <v-chip-group
                 v-model="activeQuickFilter"
                 color="primary"
@@ -105,7 +115,7 @@
                 hide-details
                 label="Search tasks..."
                 prepend-inner-icon="mdi-magnify"
-                style="min-width: 200px; max-width: 280px"
+                class="operations-search"
                 variant="outlined"
               />
             </div>
@@ -116,7 +126,7 @@
       <v-divider />
       <TaskTable
         v-model="selected"
-        :show-case="true"
+        :show-case="false"
         :loading="loading"
         :show-select="true"
         :tasks="filteredAndSearchedTasks"
@@ -140,20 +150,78 @@
     <!-- Bulk Actions -->
     <v-row v-if="selected.length > 0" class="mt-4">
       <v-col>
-        <v-btn :disabled="!canAssignTasks" @click="bulkAssign"> Bulk Assign </v-btn>
-        <v-btn class="ml-2" @click="bulkUpdateStatus"> Bulk Update Status </v-btn>
+        <span class="mr-3" role="status">{{ selected.length }} Tasks selected</span>
+        <v-btn :disabled="!canAssign || pending" @click="openBulk('assign', $event)"
+          >Bulk Assign</v-btn
+        >
+        <v-btn :disabled="!canUpdate || pending" class="ml-2" @click="openBulk('status', $event)"
+          >Bulk Update Status</v-btn
+        >
       </v-col>
     </v-row>
 
+    <v-dialog
+      :model-value="!!kind"
+      :aria-label="kind === 'assign' ? 'Bulk Assign' : 'Bulk Update Status'"
+      :persistent="pending"
+      max-width="480"
+      @update:model-value="
+        (visible) => {
+          if (!visible) close()
+        }
+      "
+      @after-leave="restoreBulkFocus"
+    >
+      <v-card v-if="kind">
+        <form @submit.prevent="submit">
+          <v-card-title>{{
+            kind === 'assign' ? 'Bulk Assign' : 'Bulk Update Status'
+          }}</v-card-title>
+          <v-card-text>
+            <p class="mb-4">{{ targetedCount }} Tasks targeted</p>
+            <v-alert v-if="feedback" type="warning" role="alert" class="mb-4">{{
+              feedback
+            }}</v-alert>
+            <v-alert v-if="kind === 'assign' && usersError" type="error" class="mb-4">
+              {{ usersError }}
+              <v-btn :loading="usersLoading" @click="loadUsers">Retry users</v-btn>
+            </v-alert>
+            <v-select
+              v-model="value"
+              :items="kind === 'assign' ? assigneeOptions : statusOptions"
+              :label="kind === 'assign' ? 'Assign To' : 'New Status'"
+              :disabled="pending || (kind === 'assign' && (usersLoading || !!usersError))"
+              :loading="kind === 'assign' && usersLoading"
+            />
+            <p v-if="pending" role="status">Applying Task updates…</p>
+            <v-btn v-if="needsRefresh" :disabled="pending" @click="refresh">Refresh Tasks</v-btn>
+          </v-card-text>
+          <v-card-actions>
+            <v-spacer />
+            <v-btn :disabled="pending" @click="close">Cancel</v-btn>
+            <v-btn type="submit" color="primary" :disabled="!canSubmit" :loading="pending"
+              >Apply</v-btn
+            >
+          </v-card-actions>
+        </form>
+      </v-card>
+    </v-dialog>
+    <v-snackbar v-model="snackbar.show" :color="snackbar.color" :timeout="snackbar.timeout">
+      {{ snackbar.text }}
+      <template #actions><v-btn @click="snackbar.show = false">Close</v-btn></template>
+    </v-snackbar>
+
     <!-- Create Task Dialog -->
-    <v-dialog v-model="showCreateDialog" max-width="600">
-      <TaskForm @cancel="showCreateDialog = false" @save="handleCreateTask" />
+    <v-dialog aria-label="Create Task" v-model="showCreateDialog" max-width="600">
+      <TaskForm :saving="loading" @cancel="showCreateDialog = false" @save="handleCreateTask" />
     </v-dialog>
   </BaseDashboard>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { useBulkTaskActions } from '@/composables/useBulkTaskActions'
+import { useActiveCaseStore } from '@/stores/activeCase'
 import { useTaskStore } from '@/stores/taskStore'
 import { useAuthStore } from '@/stores/auth'
 import { useTaskTable } from '@/composables/useTaskTable'
@@ -163,11 +231,14 @@ import BaseDashboard from '@/components/BaseDashboard.vue'
 
 const taskStore = useTaskStore()
 const authStore = useAuthStore()
-const { canCreateTasks, canAssignTasks } = useTaskTable()
+const { canCreateTasks } = useTaskTable()
 
 // Data
 const showCreateDialog = ref(false)
-const selected = ref([])
+const context = useActiveCaseStore()
+const refreshButton = ref(null)
+let bulkActivator
+let bulkCaseId
 const searchQuery = ref('')
 const activeQuickFilter = ref('me')
 
@@ -177,7 +248,7 @@ const error = computed(() => taskStore.error)
 const stats = computed(() => taskStore.stats)
 
 const filteredAndSearchedTasks = computed(() => {
-  let result = taskStore.tasks || []
+  let result = taskStore.filteredTasks.filter((task) => task.case_id === context.activeCaseId)
 
   // Apply quick filter
   if (activeQuickFilter.value === 'me' && authStore.user) {
@@ -189,12 +260,49 @@ const filteredAndSearchedTasks = computed(() => {
     const query = searchQuery.value.toLowerCase()
     result = result.filter(
       (task) =>
-        task.title.toLowerCase().includes(query) || task.description.toLowerCase().includes(query),
+        task.title.toLowerCase().includes(query) ||
+        (task.description || '').toLowerCase().includes(query),
     )
   }
 
   return result
 })
+
+const {
+  selected,
+  targetedCount,
+  kind,
+  value,
+  pending,
+  feedback,
+  usersLoading,
+  usersError,
+  needsRefresh,
+  canAssign,
+  canUpdate,
+  canSubmit,
+  assigneeOptions,
+  statusOptions,
+  snackbar,
+  open,
+  close,
+  submit,
+  loadUsers,
+  refresh,
+} = useBulkTaskActions(filteredAndSearchedTasks)
+
+function openBulk(action, event) {
+  bulkCaseId = context.activeCaseId
+  bulkActivator = event.currentTarget
+  open(action)
+}
+
+function restoreBulkFocus() {
+  if (kind.value || bulkCaseId !== context.activeCaseId) return
+  const target =
+    bulkActivator?.isConnected && !bulkActivator.disabled ? bulkActivator : refreshButton.value?.$el
+  target?.focus()
+}
 
 // Methods
 async function loadTasks() {
@@ -202,6 +310,7 @@ async function loadTasks() {
 }
 
 async function handleCreateTask(taskData) {
+  if (loading.value) return
   try {
     await taskStore.createTask(taskData)
     showCreateDialog.value = false
@@ -210,16 +319,6 @@ async function handleCreateTask(taskData) {
     console.error('Failed to create task:', error)
     // Dialog remains open on error
   }
-}
-
-async function bulkAssign() {
-  // TODO: Implement bulk assign dialog
-  console.log('Bulk assign:', selected.value)
-}
-
-async function bulkUpdateStatus() {
-  // TODO: Implement bulk status update dialog
-  console.log('Bulk update status:', selected.value)
 }
 
 // Empty state helper functions
@@ -239,7 +338,7 @@ const getEmptyStateMessage = () => {
   } else if (activeQuickFilter.value === 'me') {
     return "You don't have any tasks assigned. Check 'All Tasks' to see unassigned tasks."
   } else {
-    return 'Get started by creating your first task to track work across cases.'
+    return 'Get started by creating your first task to track work in this case.'
   }
 }
 

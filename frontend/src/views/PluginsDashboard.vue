@@ -2,7 +2,7 @@
   <BaseDashboard :error="error" :loading="loading" title="Plugins">
     <template #loading>
       <v-card variant="outlined">
-        <v-card-title class="d-flex align-center pa-4 bg-surface">
+        <v-card-title class="d-flex flex-wrap ga-2 align-center pa-4 bg-surface text-wrap">
           <v-skeleton-loader type="text" width="200" />
           <v-spacer />
           <v-skeleton-loader type="button" width="120" />
@@ -10,7 +10,7 @@
         <v-divider />
         <v-card-text class="text-center pa-16">
           <v-progress-circular color="primary" indeterminate size="64" width="4" />
-          <div class="text-h6 mt-4">Loading plugins...</div>
+          <div class="text-title-large mt-4">Loading plugins...</div>
         </v-card-text>
       </v-card>
     </template>
@@ -19,11 +19,11 @@
     <!-- Plugin Management Card -->
     <v-card variant="outlined">
       <!-- Header -->
-      <v-card-title class="d-flex align-center pa-4 bg-surface">
+      <v-card-title class="d-flex flex-wrap ga-2 align-center pa-4 bg-surface text-wrap">
         <v-icon class="me-3" color="primary" icon="mdi-tools" size="large" />
         <div class="flex-grow-1">
-          <div class="text-h6 font-weight-bold">Plugin Management</div>
-          <div class="text-body-2 text-medium-emphasis">
+          <div class="text-title-large font-weight-bold">Plugin Management</div>
+          <div class="text-body-medium text-medium-emphasis">
             Execute OSINT plugins and analyze results
           </div>
         </div>
@@ -31,8 +31,10 @@
           <v-tooltip location="bottom" text="Refresh plugins list">
             <template #activator="{ props }">
               <v-btn
+                size="small"
                 :loading="loading"
                 icon="mdi-refresh"
+                aria-label="Refresh plugins"
                 v-bind="props"
                 variant="outlined"
                 @click="loadPlugins"
@@ -60,19 +62,12 @@
       <v-card-text class="pa-4">
         <v-row v-if="Object.keys(filteredPlugins).length">
           <v-col v-for="(plugin, name) in filteredPlugins" :key="name" cols="12" lg="4" md="6">
-            <v-card
-              :class="{ 'h-100': expandedCards[name] }"
-              :ripple="false"
-              hover
-              style="cursor: pointer"
-              variant="outlined"
-              @click="toggleCard(name)"
-            >
+            <v-card :class="{ 'h-100': expandedCards[name] }" :ripple="false" variant="outlined">
               <v-card-text class="pa-4">
-                <div class="d-flex justify-space-between align-start mb-3">
+                <div class="d-flex flex-wrap ga-2 justify-space-between align-start mb-3">
                   <div class="d-flex align-center">
                     <v-icon class="me-2" color="primary" icon="mdi-puzzle-outline" />
-                    <div class="text-h6 font-weight-bold">
+                    <div class="text-title-large font-weight-bold">
                       {{ plugin.display_name || name }}
                     </div>
                   </div>
@@ -117,6 +112,8 @@
                       {{ plugin.enabled ? 'Enabled' : 'Disabled' }}
                     </v-chip>
                     <v-btn
+                      :aria-label="`${expandedCards[name] ? 'Collapse' : 'Configure'} ${plugin.display_name || name}`"
+                      :aria-expanded="!!expandedCards[name]"
                       :icon="expandedCards[name] ? 'mdi-chevron-up' : 'mdi-chevron-down'"
                       size="small"
                       variant="text"
@@ -128,14 +125,20 @@
                 <!-- Plugin description preview -->
                 <div
                   v-if="plugin.description && !expandedCards[name]"
-                  class="text-body-2 text-medium-emphasis mb-3"
+                  class="text-body-medium text-medium-emphasis mb-3"
                 >
                   {{ plugin.description.substring(0, 100)
                   }}{{ plugin.description.length > 100 ? '...' : '' }}
                 </div>
 
                 <v-expand-transition>
-                  <div v-if="expandedCards[name]" class="mt-4">
+                  <v-form
+                    v-if="expandedCards[name]"
+                    :ref="(form) => (pluginForms[name] = form)"
+                    class="mt-4"
+                    :disabled="executing[name] || !plugin.enabled"
+                    @submit.prevent="executePlugin(name)"
+                  >
                     <!-- Parameters Section -->
                     <div
                       v-if="plugin.parameters && Object.keys(plugin.parameters).length"
@@ -151,62 +154,20 @@
                         />
 
                         <!-- Default Parameter Rendering -->
-                        <template v-else>
-                          <div
-                            v-for="(param, paramName) in plugin.parameters"
-                            :key="paramName"
-                            class="mb-3"
-                          >
-                            <!-- Boolean type - Switch -->
-                            <div v-if="param.type === 'boolean'">
-                              <v-switch
-                                v-model="pluginParams[name][paramName]"
-                                :hint="param.description"
-                                :label="paramName"
-                                color="primary"
-                                density="comfortable"
-                                persistent-hint
-                              />
-                            </div>
-
-                            <!-- List type -->
-                            <div v-else-if="param.type === 'list'">
-                              <v-combobox
-                                v-model="pluginParams[name][paramName]"
-                                :label="paramName"
-                                :placeholder="param.description"
-                                chips
-                                density="comfortable"
-                                multiple
-                                variant="outlined"
-                                @keydown.enter="handleEnterKey($event, name)"
-                              />
-                            </div>
-
-                            <!-- Default text/number field -->
-                            <div v-else>
-                              <v-text-field
-                                v-model="pluginParams[name][paramName]"
-                                :label="paramName"
-                                :placeholder="param.description"
-                                :type="
-                                  param.type === 'number' || param.type === 'float'
-                                    ? 'number'
-                                    : 'text'
-                                "
-                                density="comfortable"
-                                variant="outlined"
-                                @keydown.enter="handleEnterKey($event, name)"
-                              />
-                            </div>
-                          </div>
-                        </template>
+                        <GenericPluginParams
+                          v-else
+                          v-model="pluginParams[name]"
+                          :parameters="plugin.parameters"
+                          :plugin-name="name"
+                        />
                       </div>
                     </div>
 
                     <!-- Execute Button -->
                     <v-btn
                       :disabled="
+                        !activeCase.ready ||
+                        !activeCase.activeCaseId ||
                         !plugin.enabled ||
                         executing[name] ||
                         (plugin.api_key_requirements &&
@@ -220,7 +181,7 @@
                       color="primary"
                       prepend-icon="mdi-play"
                       variant="flat"
-                      @click.stop="executePlugin(name)"
+                      type="submit"
                     >
                       <template
                         v-if="
@@ -238,7 +199,7 @@
                     </v-btn>
 
                     <!-- Results Available Indicator -->
-                    <div v-if="results[name] || pluginErrors[name]" class="mb-4" @click.stop>
+                    <div v-if="pluginErrors[name]" class="mb-4" @click.stop>
                       <v-alert
                         v-if="pluginErrors[name]"
                         :text="pluginErrors[name]"
@@ -246,19 +207,8 @@
                         type="error"
                         variant="tonal"
                       />
-
-                      <v-btn
-                        v-else
-                        block
-                        color="success"
-                        prepend-icon="mdi-eye"
-                        variant="outlined"
-                        @click="openResultsModal(name)"
-                      >
-                        View Results
-                      </v-btn>
                     </div>
-                  </div>
+                  </v-form>
                 </v-expand-transition>
               </v-card-text>
             </v-card>
@@ -268,8 +218,8 @@
         <!-- Empty state -->
         <div v-else class="text-center pa-12">
           <v-icon class="mb-4" color="grey-lighten-1" icon="mdi-puzzle-outline" size="64" />
-          <h3 class="text-h6 font-weight-medium mb-2">No plugins available</h3>
-          <p class="text-body-2 text-medium-emphasis mb-4">
+          <h3 class="text-title-large font-weight-medium mb-2">No plugins available</h3>
+          <p class="text-body-medium text-medium-emphasis mb-4">
             Try selecting a different category or check your plugin configuration.
           </p>
           <v-btn color="primary" prepend-icon="mdi-refresh" @click="loadPlugins">
@@ -278,47 +228,33 @@
         </div>
       </v-card-text>
     </v-card>
+    <PluginExecutionHistory
+      v-if="activeCase.activeCaseId"
+      :case-id="activeCase.activeCaseId"
+      :execution-id="acceptedExecutionId"
+    />
   </BaseDashboard>
-
-  <!-- Results Modal -->
-  <PluginResultsModal
-    v-model="modalState.isOpen"
-    :error="modalState.error"
-    :execution-time="modalState.executionTime"
-    :parameters="modalState.parameters"
-    :plugin-name="modalState.pluginName"
-    :results="modalState.results"
-    @export="handleExportResults"
-  />
 </template>
 
 <script setup>
+import { useActiveCaseStore } from '@/stores/activeCase'
+import PluginExecutionHistory from '@/components/plugins/PluginExecutionHistory.vue'
+import GenericPluginParams from '@/components/plugins/GenericPluginParams.vue'
 import { ref, onMounted, reactive, computed, markRaw } from 'vue'
 import { pluginService } from '@/services/plugin'
 import { usePluginApiKeys } from '@/composables/usePluginApiKeys'
-import PluginResultsModal from '@/components/plugins/PluginResultsModal.vue'
 import BaseDashboard from '@/components/BaseDashboard.vue'
 
+const acceptedExecutionId = ref(null)
+const activeCase = useActiveCaseStore()
 const plugins = ref({})
 const loading = ref(true)
 const error = ref(null)
 const expandedCards = ref({})
 const executing = reactive({})
-const results = reactive({})
 const pluginParams = reactive({})
 const pluginErrors = reactive({})
 const pluginParamComponents = ref({})
-const executionTimes = reactive({})
-
-// Modal state
-const modalState = reactive({
-  isOpen: false,
-  pluginName: '',
-  results: null,
-  error: null,
-  parameters: {},
-  executionTime: new Date(),
-})
 
 const categories = ['Person', 'Network', 'Company', 'Other']
 const selectedTab = ref('all')
@@ -413,12 +349,13 @@ const loadPlugins = async () => {
       pluginParams[name] = {}
       if (plugins.value[name].parameters) {
         Object.keys(plugins.value[name].parameters).forEach((paramName) => {
+          if (paramName === 'case_id') return
           const param = plugins.value[name].parameters[paramName]
           // Set default value based on type
           if (param.type === 'boolean') {
             pluginParams[name][paramName] = param.default !== undefined ? param.default : true
           } else {
-            pluginParams[name][paramName] = param.default || ''
+            pluginParams[name][paramName] = param.default ?? (param.type === 'list' ? [] : '')
           }
         })
       }
@@ -432,7 +369,12 @@ const loadPlugins = async () => {
   }
 }
 
+const pluginForms = {}
+
 const executePlugin = async (name) => {
+  const caseId = activeCase.activeCaseId
+  if (!activeCase.ready || !caseId || !plugins.value[name].enabled || executing[name]) return
+  if (pluginForms[name] && !(await pluginForms[name].validate()).valid) return
   // Check API key requirements first
   const plugin = plugins.value[name]
   if (plugin.api_key_requirements && plugin.api_key_requirements.length > 0) {
@@ -444,32 +386,14 @@ const executePlugin = async (name) => {
     }
   }
 
+  if (!activeCase.ready || activeCase.activeCaseId !== caseId) return
+
   executing[name] = true
   pluginErrors[name] = null
-  results[name] = null // Clear previous results
-  executionTimes[name] = new Date() // Track execution time
 
   try {
-    const result = await pluginService.executePlugin(name, pluginParams[name])
-
-    // Handle async generator result
-    if (result && typeof result[Symbol.asyncIterator] === 'function') {
-      for await (const data of result) {
-        try {
-          results[name] = JSON.parse(data)
-        } catch (parseError) {
-          console.error('Failed to parse plugin response:', parseError)
-          results[name] = data
-        }
-      }
-    } else {
-      results[name] = result
-    }
-
-    // Auto-open modal when execution completes
-    if (results[name]) {
-      openResultsModal(name)
-    }
+    const accepted = await pluginService.executePlugin(name, pluginParams[name], caseId)
+    if (activeCase.activeCaseId === caseId) acceptedExecutionId.value = accepted.id
   } catch (err) {
     console.error('Plugin error:', err)
     pluginErrors[name] = err.message
@@ -478,39 +402,7 @@ const executePlugin = async (name) => {
   }
 }
 
-const openResultsModal = (pluginName) => {
-  modalState.pluginName = pluginName
-  modalState.results = results[pluginName]
-  modalState.error = pluginErrors[pluginName]
-  modalState.parameters = { ...pluginParams[pluginName] }
-  modalState.executionTime = executionTimes[pluginName] || new Date()
-  modalState.isOpen = true
-}
-
-const handleExportResults = (exportData) => {
-  // Create downloadable JSON file
-  const dataStr = JSON.stringify(exportData, null, 2)
-  const dataBlob = new Blob([dataStr], { type: 'application/json' })
-  const url = URL.createObjectURL(dataBlob)
-
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `${exportData.pluginName}_results_${Date.now()}.json`
-  link.click()
-
-  URL.revokeObjectURL(url)
-}
-
-const handleEnterKey = (event, pluginName) => {
-  if (plugins.value[pluginName].enabled && !executing[pluginName]) {
-    event.preventDefault()
-    executePlugin(pluginName)
-  }
-}
-
 onMounted(() => {
   loadPlugins()
 })
 </script>
-
-<style scoped></style>

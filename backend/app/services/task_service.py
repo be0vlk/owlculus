@@ -10,21 +10,44 @@ audit logging for OSINT investigation case management.
 from datetime import datetime
 from typing import List, Optional
 
+from sqlmodel import Session, col, select
+
 from app.core.enums import TaskStatus
 from app.core.exceptions import (
-	BaseException,
-	ResourceNotFoundException,
-	ValidationException,
+    BaseException,
+    ResourceNotFoundException,
+    ValidationException,
 )
 from app.core.logging import get_security_logger
-from app.core.roles import UserRole
 from app.database import models
-from sqlmodel import Session, select
+from app.database.db_utils import transaction
+from app.schemas.task_schema import TaskResponse
+from app.services.case_access import CaseAccess
 
 
 class TaskService:
     def __init__(self, db: Session):
         self.db = db
+        self.case_access = CaseAccess(db)
+
+    def _get_task(self, task_id: int) -> models.Task:
+        task = self.db.get(models.Task, task_id)
+        if not task:
+            raise ResourceNotFoundException("Task not found")
+        return task
+
+    def _response(self, task: models.Task) -> TaskResponse:
+        assignee = self.case_access.eligible_assignee(task.case_id, task.assigned_to_id)
+        return TaskResponse.model_validate(
+            {
+                **task.model_dump(),
+                "assigned_to_id": assignee.id if assignee else None,
+                "assigned_to": assignee,
+                "assigned_by": task.assigned_by,
+                "completed_by": task.completed_by,
+                "template": task.template,
+            }
+        )
 
     async def get_templates(
         self, include_inactive: bool = False, *, current_user: models.User
@@ -35,15 +58,16 @@ class TaskService:
             query = query.where(models.TaskTemplate.is_active)
 
         templates = self.db.exec(query).all()
-        return templates
+        return list(templates)
 
     async def create_custom_template(
         self, template_data: dict, *, current_user: models.User
     ) -> models.TaskTemplate:
         """Create a custom task template (Admin only)"""
+        self.case_access.require_admin(current_user)
         template = models.TaskTemplate(**template_data, created_by_id=current_user.id)
-        self.db.add(template)
-        self.db.commit()
+        with transaction(self.db):
+            self.db.add(template)
         self.db.refresh(template)
 
         logger = get_security_logger(
@@ -58,12 +82,14 @@ class TaskService:
 
     async def create_task(
         self, case_id: int, task_data: dict, *, current_user: models.User
-    ) -> models.Task:
+    ) -> TaskResponse:
         """Create a new task for a case"""
+        self.case_access.lead(current_user, case_id)
+        self.case_access.assignee(case_id, task_data.get("assigned_to_id"))
         task = models.Task(case_id=case_id, assigned_by_id=current_user.id, **task_data)
 
-        self.db.add(task)
-        self.db.commit()
+        with transaction(self.db):
+            self.db.add(task)
         self.db.refresh(task)
 
         logger = get_security_logger(
@@ -75,7 +101,7 @@ class TaskService:
         )
         logger.info(f"Task '{task.title}' created for case {case_id}")
 
-        return task
+        return self._response(task)
 
     async def get_tasks(
         self,
@@ -87,15 +113,16 @@ class TaskService:
         priority: Optional[str] = None,
         skip: int = 0,
         limit: int = 100,
-    ) -> List[models.Task]:
+    ) -> list[TaskResponse]:
         """Get tasks with filters"""
         query = select(models.Task)
 
         if case_id:
+            self.case_access.readable(current_user, case_id)
             query = query.where(models.Task.case_id == case_id)
         else:
             # Filter to only show tasks from cases the user has access to for non-admin users
-            if current_user.role != UserRole.ADMIN.value:
+            if not self.case_access.is_admin(current_user):
                 user_case_ids = self.db.exec(
                     select(models.CaseUserLink.case_id).where(
                         models.CaseUserLink.user_id == current_user.id
@@ -103,7 +130,7 @@ class TaskService:
                 ).all()
 
                 if user_case_ids:
-                    query = query.where(models.Task.case_id.in_(user_case_ids))
+                    query = query.where(col(models.Task.case_id).in_(user_case_ids))
                 else:
                     return []
 
@@ -117,21 +144,29 @@ class TaskService:
         query = query.offset(skip).limit(limit)
 
         tasks = self.db.exec(query).all()
-        return tasks
+        return [self._response(task) for task in tasks]
 
-    async def get_task(self, task_id: int, *, current_user: models.User) -> models.Task:
+    async def get_task(
+        self, task_id: int, *, current_user: models.User
+    ) -> TaskResponse:
         """Get a specific task by ID"""
-        task = self.db.get(models.Task, task_id)
-        if not task:
-            raise ResourceNotFoundException("Task not found")
-
-        return task
+        task = self._get_task(task_id)
+        self.case_access.readable(current_user, task.case_id)
+        return self._response(task)
 
     async def update_task(
         self, task_id: int, updates: dict, *, current_user: models.User
-    ) -> models.Task:
+    ) -> TaskResponse:
         """Update a task"""
-        task = await self.get_task(task_id, current_user=current_user)
+        task = self._get_task(task_id)
+        is_assignee = task.assigned_to_id == current_user.id
+        assignee_fields = {"status", "custom_fields"}
+        if is_assignee and all(field in assignee_fields for field in updates):
+            self.case_access.writable(current_user, task.case_id)
+        else:
+            self.case_access.lead(current_user, task.case_id)
+
+        self.case_access.assignee(task.case_id, updates.get("assigned_to_id"))
 
         updated_fields = []
 
@@ -155,8 +190,8 @@ class TaskService:
 
         task.updated_at = datetime.utcnow()
 
-        self.db.add(task)
-        self.db.commit()
+        with transaction(self.db):
+            self.db.add(task)
         self.db.refresh(task)
 
         logger = get_security_logger(
@@ -169,14 +204,15 @@ class TaskService:
         )
         logger.info(f"Task {task_id} updated - fields: {', '.join(updated_fields)}")
 
-        return task
+        return self._response(task)
 
     async def delete_task(self, task_id: int, *, current_user: models.User) -> bool:
         """Delete a task (Admin only)"""
-        task = await self.get_task(task_id, current_user=current_user)
+        self.case_access.require_admin(current_user)
+        task = self._get_task(task_id)
 
-        self.db.delete(task)
-        self.db.commit()
+        with transaction(self.db):
+            self.db.delete(task)
 
         logger = get_security_logger(
             admin_user_id=current_user.id,
@@ -190,20 +226,18 @@ class TaskService:
 
     async def assign_task(
         self, task_id: int, user_id: Optional[int], *, current_user: models.User
-    ) -> models.Task:
+    ) -> TaskResponse:
         """Assign or unassign a task to a user"""
-        task = await self.get_task(task_id, current_user=current_user)
+        task = self._get_task(task_id)
+        self.case_access.lead(current_user, task.case_id)
 
-        if user_id:
-            user = self.db.get(models.User, user_id)
-            if not user:
-                raise ResourceNotFoundException("User not found")
+        self.case_access.assignee(task.case_id, user_id)
 
         task.assigned_to_id = user_id
         task.updated_at = datetime.utcnow()
 
-        self.db.add(task)
-        self.db.commit()
+        with transaction(self.db):
+            self.db.add(task)
         self.db.refresh(task)
 
         logger = get_security_logger(
@@ -215,16 +249,17 @@ class TaskService:
         )
         logger.info(f"Task {task_id} assigned to user {user_id}")
 
-        return task
+        return self._response(task)
 
     async def update_status(
         self, task_id: int, status: str, *, current_user: models.User
-    ) -> models.Task:
+    ) -> TaskResponse:
         """Update task status"""
         if status not in [s.value for s in TaskStatus]:
             raise ValidationException("Invalid status")
 
-        task = await self.get_task(task_id, current_user=current_user)
+        task = self._get_task(task_id)
+        self.case_access.writable(current_user, task.case_id)
 
         task.status = status
         task.updated_at = datetime.utcnow()
@@ -236,8 +271,8 @@ class TaskService:
             task.completed_at = None
             task.completed_by_id = None
 
-        self.db.add(task)
-        self.db.commit()
+        with transaction(self.db):
+            self.db.add(task)
         self.db.refresh(task)
 
         logger = get_security_logger(
@@ -249,23 +284,16 @@ class TaskService:
         )
         logger.info(f"Task {task_id} status updated to {status}")
 
-        return task
+        return self._response(task)
 
     async def bulk_assign(
         self, task_ids: List[int], user_id: Optional[int], *, current_user: models.User
-    ) -> List[models.Task]:
+    ) -> list[TaskResponse]:
         """Bulk assign tasks to a user"""
-        from app.core.dependencies import is_case_lead
-
         updated_tasks = []
 
         for task_id in task_ids:
             try:
-                task = await self.get_task(task_id, current_user=current_user)
-
-                if not is_case_lead(self.db, task.case_id, current_user):
-                    continue
-
                 task = await self.assign_task(
                     task_id, user_id, current_user=current_user
                 )
@@ -277,7 +305,7 @@ class TaskService:
 
     async def bulk_update_status(
         self, task_ids: List[int], status: str, *, current_user: models.User
-    ) -> List[models.Task]:
+    ) -> list[TaskResponse]:
         """Bulk update task status"""
         updated_tasks = []
 
@@ -296,9 +324,10 @@ class TaskService:
         self, template_id: int, updates: dict, *, current_user: models.User
     ) -> models.TaskTemplate:
         """Update a task template"""
+        self.case_access.require_admin(current_user)
         template = (
             self.db.query(models.TaskTemplate)
-            .filter(models.TaskTemplate.id == template_id)
+            .filter(col(models.TaskTemplate.id) == template_id)
             .first()
         )
 
@@ -317,8 +346,8 @@ class TaskService:
 
         template.updated_at = datetime.utcnow()
 
-        self.db.add(template)
-        self.db.commit()
+        with transaction(self.db):
+            self.db.add(template)
         self.db.refresh(template)
 
         logger = get_security_logger(
@@ -335,9 +364,10 @@ class TaskService:
         self, template_id: int, *, current_user: models.User
     ) -> bool:
         """Delete a task template"""
+        self.case_access.require_admin(current_user)
         template = (
             self.db.query(models.TaskTemplate)
-            .filter(models.TaskTemplate.id == template_id)
+            .filter(col(models.TaskTemplate.id) == template_id)
             .first()
         )
 
@@ -346,7 +376,7 @@ class TaskService:
 
         tasks_using_template = (
             self.db.query(models.Task)
-            .filter(models.Task.template_id == template_id)
+            .filter(col(models.Task.template_id) == template_id)
             .count()
         )
 
@@ -355,8 +385,8 @@ class TaskService:
                 f"Cannot delete template. It is used by {tasks_using_template} task(s)"
             )
 
-        self.db.delete(template)
-        self.db.commit()
+        with transaction(self.db):
+            self.db.delete(template)
 
         logger = get_security_logger(
             user_id=current_user.id,

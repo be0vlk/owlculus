@@ -3,12 +3,14 @@ File storage utilities for handling evidence uploads
 """
 
 import hashlib
+import os
 import urllib.parse
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
+from uuid import UUID
 
-from fastapi import HTTPException, UploadFile
-
+from .exceptions import BaseException as DomainException
+from .exceptions import ValidationException
 from .logging import get_security_logger
 from .security import secure_filename_with_path, validate_file_security
 
@@ -63,23 +65,14 @@ def create_folder(case_id: int, folder_path: str) -> Path:
     Returns the path to the created folder.
     """
     if not isinstance(case_id, int) or case_id <= 0:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid case ID: {case_id}",
-        )
+        raise ValidationException(f"Invalid case ID: {case_id}")
 
     if not folder_path:
-        raise HTTPException(
-            status_code=400,
-            detail="Folder path is required",
-        )
+        raise ValidationException("Folder path is required")
 
     normalized_path = normalize_folder_path(folder_path)
     if not normalized_path:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid folder path",
-        )
+        raise ValidationException("Invalid folder path")
 
     case_dir = UPLOAD_DIR / str(case_id)
     folder_dir = case_dir / normalized_path
@@ -92,17 +85,11 @@ def delete_folder(case_id: int, folder_path: str) -> None:
     Delete a folder and all its contents from a case directory.
     """
     if not isinstance(case_id, int) or case_id <= 0:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid case ID: {case_id}",
-        )
+        raise ValidationException(f"Invalid case ID: {case_id}")
 
     normalized_path = normalize_folder_path(folder_path)
     if not normalized_path:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid folder path",
-        )
+        raise ValidationException("Invalid folder path")
 
     case_dir = UPLOAD_DIR / str(case_id)
     folder_dir = case_dir / normalized_path
@@ -119,29 +106,26 @@ def delete_folder(case_id: int, folder_path: str) -> None:
 
 
 async def save_upload_file(
-    upload_file: UploadFile, case_id: int, folder_path: Optional[str] = None
+    upload_file: Any,
+    case_id: int,
+    folder_path: Optional[str] = None,
+    *,
+    artifact_id: str | None = None,
 ) -> Tuple[str, str]:
     """
     Save an uploaded file to the uploads directory.
     Returns a tuple of (relative_path, file_hash).
     """
     if case_id is None:
-        raise HTTPException(
-            status_code=400,
-            detail="Case ID is required but was not provided",
-        )
+        raise ValidationException("Case ID is required but was not provided")
 
     if not isinstance(case_id, int) or case_id <= 0:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid case ID: {case_id}. Please ensure you're uploading to a valid case.",
+        raise ValidationException(
+            f"Invalid case ID: {case_id}. Please ensure you're uploading to a valid case."
         )
 
     if upload_file is None:
-        raise HTTPException(
-            status_code=400,
-            detail="No file was provided for upload",
-        )
+        raise ValidationException("No file was provided for upload")
 
     await validate_file_security(upload_file)
 
@@ -160,20 +144,40 @@ async def save_upload_file(
             case_dir = case_dir / normalized_path
         case_dir.mkdir(parents=True, exist_ok=True)
 
-        safe_filename = secure_filename_with_path(upload_file.filename, case_dir)
+        if artifact_id is not None:
+            # Only internal effect adapters supply this UUID. A reserved directory
+            # keeps reconciliation separate from ordinary uploaded evidence.
+            control_id, _, identity = artifact_id.partition("-")
+            if not control_id.isdigit() or int(control_id) <= 0:
+                raise ValidationException("Invalid execution artifact identity")
+            artifact_id = f"{int(control_id)}-{UUID(identity)}"
+            case_dir = UPLOAD_DIR / str(case_id) / ".execution-artifacts"
+            case_dir.mkdir(parents=True, exist_ok=True)
+            safe_filename = f"{artifact_id}.txt"
+        else:
+            safe_filename = secure_filename_with_path(upload_file.filename, case_dir)
         file_path = case_dir / safe_filename
 
         content = await upload_file.read()
 
-        if len(content) > 15 * 1024 * 1024:  # 15MB limit
-            raise HTTPException(
-                status_code=400, detail="File too large. Maximum size is 15MB"
-            )
+        if len(content) > 15 * 1024 * 1024:  # 15 MiB limit
+            raise ValidationException("File too large. Maximum size is 15 MiB")
 
         file_hash = calculate_file_hash(content)
 
-        with open(file_path, "wb") as buffer:
+        staging_path = file_path.with_suffix(".staging") if artifact_id else file_path
+        with open(staging_path, "wb") as buffer:
             buffer.write(content)
+            if artifact_id:
+                buffer.flush()
+                os.fsync(buffer.fileno())
+        if artifact_id:
+            os.replace(staging_path, file_path)
+            directory_fd = os.open(case_dir, os.O_RDONLY)
+            try:
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
 
         relative_path = str(file_path.relative_to(UPLOAD_DIR))
 
@@ -189,7 +193,7 @@ async def save_upload_file(
         )
 
         return relative_path, file_hash
-    except HTTPException:
+    except DomainException:
         raise
     except Exception as e:
         try:
@@ -213,10 +217,9 @@ async def save_upload_file(
         )
         security_logger.error(f"Failed to save file {upload_file.filename}: {str(e)}")
 
-        raise HTTPException(
-            status_code=500,
-            detail="Could not save file. Please try again or contact support.",
-        )
+        raise DomainException(
+            "Could not save file. Please try again or contact support."
+        ) from e
 
 
 def create_case_directory(case_id: int) -> Path:
@@ -225,10 +228,7 @@ def create_case_directory(case_id: int) -> Path:
     Returns the path to the created case directory.
     """
     if not isinstance(case_id, int) or case_id <= 0:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid case ID: {case_id}",
-        )
+        raise ValidationException(f"Invalid case ID: {case_id}")
 
     case_dir = UPLOAD_DIR / str(case_id)
     case_dir.mkdir(parents=True, exist_ok=True)
@@ -239,7 +239,7 @@ async def delete_file(relative_path: str) -> None:
     """Delete a file from the uploads directory."""
     try:
         if not relative_path:
-            raise HTTPException(status_code=400, detail="Invalid file path")
+            raise ValidationException("Invalid file path")
 
         decoded_path = urllib.parse.unquote(relative_path)
 
@@ -249,11 +249,11 @@ async def delete_file(relative_path: str) -> None:
             or "\x00" in decoded_path
             or "..." in decoded_path
         ):
-            raise HTTPException(status_code=400, detail="Invalid file path")
+            raise ValidationException("Invalid file path")
 
         normalized_path = normalize_folder_path(relative_path)
         if not normalized_path:
-            raise HTTPException(status_code=400, detail="Invalid file path")
+            raise ValidationException("Invalid file path")
 
         base_dir = UPLOAD_DIR.resolve()
         file_path = (base_dir / normalized_path).resolve()
@@ -261,10 +261,10 @@ async def delete_file(relative_path: str) -> None:
         try:
             file_path.relative_to(base_dir)
         except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid file path")
+            raise ValidationException("Invalid file path")
 
         if file_path == base_dir:
-            raise HTTPException(status_code=400, detail="Invalid file path")
+            raise ValidationException("Invalid file path")
         if file_path.exists() and file_path.is_file():
             file_path.unlink()
 
@@ -281,7 +281,7 @@ async def delete_file(relative_path: str) -> None:
             parent_dir.rmdir()
             parent_dir = parent_dir.parent
 
-    except HTTPException:
+    except DomainException:
         raise
     except Exception as e:
         security_logger = get_security_logger(
@@ -289,4 +289,4 @@ async def delete_file(relative_path: str) -> None:
         )
         security_logger.error(f"Failed to delete file {relative_path}: {str(e)}")
 
-        raise HTTPException(status_code=500, detail="Could not delete file")
+        raise DomainException("Could not delete file") from e

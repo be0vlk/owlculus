@@ -5,32 +5,32 @@
       <v-col cols="6" md="3">
         <v-card variant="tonal" color="success">
           <v-card-text class="text-center pa-3">
-            <div class="text-h4 font-weight-bold">{{ completedSteps }}</div>
-            <div class="text-caption">Completed Steps</div>
+            <div class="text-headline-large font-weight-bold">{{ completedSteps }}</div>
+            <div class="text-body-small">Completed Steps</div>
           </v-card-text>
         </v-card>
       </v-col>
       <v-col cols="6" md="3">
         <v-card variant="tonal" color="error">
           <v-card-text class="text-center pa-3">
-            <div class="text-h4 font-weight-bold">{{ failedSteps }}</div>
-            <div class="text-caption">Failed Steps</div>
+            <div class="text-headline-large font-weight-bold">{{ failedSteps }}</div>
+            <div class="text-body-small">Failed Steps</div>
           </v-card-text>
         </v-card>
       </v-col>
       <v-col cols="6" md="3">
         <v-card variant="tonal" color="primary">
           <v-card-text class="text-center pa-3">
-            <div class="text-h4 font-weight-bold">{{ totalResults }}</div>
-            <div class="text-caption">Total Results</div>
+            <div class="text-headline-large font-weight-bold">{{ totalResults }}</div>
+            <div class="text-body-small">Total Results</div>
           </v-card-text>
         </v-card>
       </v-col>
       <v-col cols="6" md="3">
         <v-card variant="tonal" color="info">
           <v-card-text class="text-center pa-3">
-            <div class="text-h4 font-weight-bold">{{ evidenceCount }}</div>
-            <div class="text-caption">Evidence Created</div>
+            <div class="text-headline-large font-weight-bold">{{ evidenceCount }}</div>
+            <div class="text-body-small">Evidence Created</div>
           </v-card-text>
         </v-card>
       </v-col>
@@ -38,7 +38,7 @@
 
     <!-- Evidence References -->
     <div v-if="evidenceRefs.length > 0" class="mb-4">
-      <div class="text-h6 mb-3">Created Evidence</div>
+      <div class="text-title-large mb-3">Created Evidence</div>
       <v-list density="compact">
         <v-list-item
           v-for="evidenceRef in evidenceRefs"
@@ -61,8 +61,8 @@
 
     <!-- Context Metadata -->
     <div v-if="contextMetadata && Object.keys(contextMetadata).length > 0" class="mb-4">
-      <div class="text-h6 mb-3">Hunt Metadata</div>
-      <v-table density="compact">
+      <div class="text-title-large mb-3">Hunt Metadata</div>
+      <v-table class="hunt-table" density="compact">
         <tbody>
           <tr v-for="(value, key) in contextMetadata" :key="key">
             <td class="font-weight-medium">{{ formatMetadataKey(key) }}</td>
@@ -75,8 +75,8 @@
     <!-- Empty State -->
     <div v-if="stepResults.length === 0" class="text-center pa-8">
       <v-icon icon="mdi-information" size="64" color="grey" class="mb-4" />
-      <div class="text-h6 mb-2">No Results Available</div>
-      <div class="text-body-2 text-medium-emphasis">
+      <div class="text-title-large mb-2">No Results Available</div>
+      <div class="text-body-medium text-medium-emphasis">
         This hunt execution did not generate any detailed results.
       </div>
     </div>
@@ -85,6 +85,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { huntResultCount } from '@/utils/huntResults'
 import { formatMetadataValue } from '@/utils/huntDisplayUtils'
 
 const props = defineProps({
@@ -115,7 +116,7 @@ const failedSteps = computed(() => {
 
 const totalResults = computed(() => {
   return stepResults.value.reduce((total, step) => {
-    const count = step.output?.result_count || step.output?.results?.length || 0
+    const count = huntResultCount(step)
     return total + count
   }, 0)
 })
@@ -151,7 +152,7 @@ const viewEvidence = (evidenceRef) => {
 </script>
 
 <style scoped>
-.v-table tbody td {
+.hunt-table tbody td {
   padding: 8px 12px;
 }
 </style>

@@ -13,7 +13,7 @@
     "*://*/*"
   ],
   "host_permissions": [
-    "http://localhost:8000/*"
+    "http://localhost/*"
   ],
   "action": {
     "default_popup": "popup/popup.html",

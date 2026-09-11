@@ -2,14 +2,19 @@
 Tests for HuntService
 """
 
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, patch
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock
 
 import pytest
-from app.database.models import Case, Client, Hunt, HuntExecution, HuntStep, User
-from app.hunts import BaseHunt
-from app.services.hunt_service import HuntService
 from sqlmodel import Session, select
+
+from app.core.exceptions import (
+    AuthorizationException,
+    ResourceNotFoundException,
+    ValidationException,
+)
+from app.database.models import Case, Client, Hunt, HuntExecution, HuntStep, User
+from app.services.hunt_service import HuntService
 
 
 @pytest.fixture(name="hunt_service")
@@ -112,7 +117,10 @@ def test_hunt_fixture(session: Session):
         description="Test Hunt Description",
         category="test",
         version="1.0",
-        definition_json={"steps": [{"name": "step1", "description": "Test step"}]},
+        definition_json={
+            "steps": [],
+            "initial_parameters": {"param1": {"type": "string"}},
+        },
         is_active=True,
     )
     session.add(hunt)
@@ -142,57 +150,11 @@ def test_hunt_execution_fixture(
 class TestHuntService:
     """Test suite for HuntService."""
 
-    @patch("app.services.hunt_service.HuntService._load_hunt_definitions")
-    def test_init(self, mock_load_definitions, session: Session):
-        """Test HuntService initialization."""
+    def test_init_does_not_sync_definitions_per_request(self, session: Session):
         service = HuntService(session)
-        mock_load_definitions.assert_called_once()
+
         assert service.db is session
-
-    def test_load_hunt_definitions(self, hunt_service: HuntService, session: Session):
-        """Test loading hunt definitions from modules."""
-        # Verify that hunt definitions were loaded during service initialization
-        assert len(hunt_service._hunt_classes) > 0
-
-        # Check that expected hunts are loaded (based on the logs we saw)
-        assert "DomainHunt" in hunt_service._hunt_classes
-        assert "PersonHunt" in hunt_service._hunt_classes
-
-        # Verify that the loaded classes have the expected attributes
-        for hunt_class in hunt_service._hunt_classes.values():
-            assert hasattr(hunt_class, "__name__")
-
-    def test_sync_hunts_to_db(self, hunt_service: HuntService, session: Session):
-        """Test syncing hunt definitions to database."""
-
-        # Setup a mock hunt class
-        class MockHunt(BaseHunt):
-            def __init__(self):
-                super().__init__()
-                self.name = "mock_hunt"
-                self.display_name = "Mock Hunt"
-                self.description = "Mock Hunt Description"
-                self.category = "test"
-                self.version = "1.0"
-
-            def get_steps(self):
-                return []
-
-            def to_definition(self):
-                return {"steps": []}
-
-        # Add the mock hunt to the service
-        hunt_service._hunt_classes = {"MockHunt": MockHunt}
-
-        # Sync to DB
-        hunt_service._sync_hunts_to_db()
-
-        # Verify the hunt was created in the database using the service's session
-        # The method uses the key name from _hunt_classes, which is "MockHunt"
-        hunt = hunt_service.db.exec(select(Hunt).where(Hunt.name == "MockHunt")).first()
-        assert hunt is not None
-        assert hunt.display_name == "Mock Hunt"
-        assert hunt.is_active is True
+        assert session.exec(select(Hunt)).all() == []
 
     @pytest.mark.asyncio
     async def test_list_hunts(
@@ -200,7 +162,6 @@ class TestHuntService:
     ):
         """Test listing available hunts."""
         hunts = await hunt_service.list_hunts(current_user=test_user)
-        # The service loads DomainHunt and PersonHunt from definitions, plus our test hunt
         assert len(hunts) >= 1
         # Check that our test hunt is in the list
         hunt_names = [hunt.name for hunt in hunts]
@@ -219,14 +180,12 @@ class TestHuntService:
     @pytest.mark.asyncio
     async def test_get_hunt_not_found(self, hunt_service: HuntService, test_user: User):
         """Test getting a non-existent hunt."""
-        hunt = await hunt_service.get_hunt(9999, current_user=test_user)
-        assert hunt is None
+        with pytest.raises(ResourceNotFoundException, match="Hunt not found"):
+            await hunt_service.get_hunt(9999, current_user=test_user)
 
     @pytest.mark.asyncio
-    @patch("app.services.hunt_service.HuntService._run_hunt_async")
     async def test_create_execution(
         self,
-        mock_run_hunt_async,
         hunt_service: HuntService,
         test_hunt: Hunt,
         test_case: Case,
@@ -247,34 +206,8 @@ class TestHuntService:
         assert execution.initial_parameters == initial_params
         assert execution.status == "pending"
         assert execution.created_by_id == test_user.id
-        mock_run_hunt_async.assert_called_once()
-
-    @pytest.mark.asyncio
-    @patch("app.core.dependencies.get_db")
-    @patch("app.services.hunt_service.HuntExecutor")
-    async def test_run_hunt_async(
-        self,
-        mock_executor_class,
-        mock_get_db,
-        hunt_service: HuntService,
-        test_hunt_execution: HuntExecution,
-        test_user: User,
-        test_hunt: Hunt,
-    ):
-        """Test running a hunt asynchronously."""
-        # Mock the database session generator
-        mock_get_db.return_value = iter([hunt_service.db])
-
-        # Setup mock executor
-        mock_executor = AsyncMock()
-        mock_executor_class.return_value = mock_executor
-
-        # Run the async method
-        await hunt_service._run_hunt_async(test_hunt_execution.id, test_user.id)
-
-        # Verify the executor was called with the correct parameters
-        mock_executor.execute_hunt.assert_awaited_once()
-        assert mock_executor.execute_hunt.call_args[0][0].id == test_hunt_execution.id
+        assert execution.definition_snapshot == test_hunt.definition_json
+        assert execution.implementation_build
 
     @pytest.mark.asyncio
     async def test_get_execution(
@@ -306,10 +239,8 @@ class TestHuntService:
         assert executions[0].id == test_hunt_execution.id
 
     @pytest.mark.asyncio
-    @patch("app.services.hunt_service.HuntExecutor")
     async def test_cancel_execution(
         self,
-        mock_executor_class,
         hunt_service: HuntService,
         test_hunt_execution: HuntExecution,
         test_user: User,
@@ -320,27 +251,17 @@ class TestHuntService:
         hunt_service.db.add(test_hunt_execution)
         hunt_service.db.commit()
 
-        # Setup mock executor
-        mock_executor = AsyncMock()
-        mock_executor.cancel_execution = AsyncMock()
+        from app.database.models import ExecutionControl
 
-        # Mock the cancel_execution to update the status
-        async def mock_cancel(exec_id):
-            test_hunt_execution.status = "canceled"
-            hunt_service.db.add(test_hunt_execution)
-            hunt_service.db.commit()
-
-        mock_executor.cancel_execution.side_effect = mock_cancel
-        mock_executor_class.return_value = mock_executor
-
-        # Test cancelation
+        hunt_service.db.add(
+            ExecutionControl(hunt_execution_id=test_hunt_execution.id, owner="active")
+        )
+        hunt_service.db.commit()
         execution = await hunt_service.cancel_execution(
             test_hunt_execution.id, current_user=test_user
         )
-
-        # Verify the executor was called
-        mock_executor.cancel_execution.assert_awaited_once_with(test_hunt_execution.id)
-        assert execution.status == "canceled"
+        assert execution.status == "cancelling"
+        assert execution.completed_at is None
 
     @pytest.mark.asyncio
     async def test_get_execution_steps(
@@ -359,8 +280,8 @@ class TestHuntService:
             parameters={},
             status="completed",
             output={"result": "success"},
-            started_at=datetime.now(timezone.utc),
-            completed_at=datetime.now(timezone.utc),
+            started_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
         )
         session.add(step1)
         session.commit()
@@ -380,7 +301,9 @@ class TestHuntService:
         self, hunt_service: HuntService, test_case: Case, test_user: User
     ):
         """Test creating an execution for a non-existent hunt."""
-        with pytest.raises(ValueError, match="Hunt not found or inactive"):
+        with pytest.raises(
+            ResourceNotFoundException, match="Hunt not found or inactive"
+        ):
             await hunt_service.create_execution(
                 hunt_id=9999,
                 case_id=test_case.id,
@@ -393,7 +316,7 @@ class TestHuntService:
         self, hunt_service: HuntService, test_user: User
     ):
         """Test canceling a non-existent execution."""
-        with pytest.raises(ValueError, match="Hunt execution not found"):
+        with pytest.raises(ResourceNotFoundException, match="Hunt execution not found"):
             await hunt_service.cancel_execution(9999, current_user=test_user)
 
     @pytest.mark.asyncio
@@ -408,12 +331,10 @@ class TestHuntService:
         hunt_service.db.add(test_hunt_execution)
         hunt_service.db.commit()
 
-        with pytest.raises(
-            ValueError, match="Only running executions can be cancelled"
-        ):
-            await hunt_service.cancel_execution(
-                test_hunt_execution.id, current_user=test_user
-            )
+        execution = await hunt_service.cancel_execution(
+            test_hunt_execution.id, current_user=test_user
+        )
+        assert execution.status == "completed"
 
     @pytest.mark.asyncio
     async def test_analyst_cannot_create_execution(
@@ -432,62 +353,10 @@ class TestHuntService:
         session.add(case_user_link)
         session.commit()
 
-        # The @no_analyst decorator raises HTTPException, not PermissionError
-        from fastapi import HTTPException
-
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(AuthorizationException, match="Not authorized"):
             await hunt_service.create_execution(
                 hunt_id=test_hunt.id,
                 case_id=test_case.id,
                 initial_parameters={},
                 current_user=test_analyst,
             )
-        assert exc_info.value.status_code == 403
-
-    @pytest.mark.asyncio
-    async def test_run_hunt_async_error_handling(self, hunt_service: HuntService):
-        """Test error handling in _run_hunt_async."""
-        # Test with non-existent execution ID - should not raise an exception
-        try:
-            await hunt_service._run_hunt_async(9999, 1)
-            # If we get here, the method handled the error gracefully
-            assert True
-        except Exception as e:
-            # The method should handle errors gracefully and not let exceptions propagate
-            pytest.fail(
-                f"_run_hunt_async should handle errors gracefully, but got: {e}"
-            )
-
-    @pytest.mark.asyncio
-    @patch("app.core.dependencies.get_db")
-    @patch("app.services.hunt_service.HuntExecutor")
-    async def test_run_hunt_async_execution_error(
-        self,
-        mock_executor_class,
-        mock_get_db,
-        hunt_service: HuntService,
-        test_hunt_execution: HuntExecution,
-        test_user: User,
-        test_hunt: Hunt,
-    ):
-        """Test error handling during hunt execution."""
-        # Mock the database session generator
-        mock_get_db.return_value = iter([hunt_service.db])
-
-        # Setup mock executor to raise an exception
-        mock_executor = AsyncMock()
-        mock_executor.execute_hunt.side_effect = Exception("Test error")
-        mock_executor_class.return_value = mock_executor
-
-        # Save the execution ID before calling async method
-        execution_id = test_hunt_execution.id
-
-        # Run the async method
-        await hunt_service._run_hunt_async(execution_id, test_user.id)
-
-        # Get the execution from the current session since _run_hunt_async uses its own session
-        execution = hunt_service.db.get(HuntExecution, execution_id)
-
-        # Verify the execution was marked as failed
-        assert execution.status == "failed"
-        assert execution.completed_at is not None

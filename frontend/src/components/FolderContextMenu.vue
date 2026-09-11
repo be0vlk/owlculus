@@ -1,5 +1,11 @@
 <template>
-  <v-menu v-model="menu" :activator="activator" location="bottom start" offset="2">
+  <v-menu
+    v-model="menu"
+    :activator="activator"
+    :open-on-click="false"
+    location="bottom start"
+    offset="2"
+  >
     <v-list density="compact" min-width="180">
       <v-list-item
         v-if="canCreateSubfolder"

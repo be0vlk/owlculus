@@ -1,6 +1,6 @@
 <template>
   <v-card variant="outlined">
-    <v-card-title class="text-subtitle-1">
+    <v-card-title class="text-body-large">
       <v-icon start>mdi-ip</v-icon>
       Details
     </v-card-title>
@@ -8,12 +8,13 @@
     <v-card-text>
       <v-text-field
         :model-value="modelValue.ip_address"
+        autofocus
         @update:model-value="updateField('ip_address', $event)"
         label="IP Address"
         variant="outlined"
         density="comfortable"
         prepend-inner-icon="mdi-ip"
-        placeholder="192.168.1.1"
+        placeholder="192.0.2.1 or 2001:db8::1"
         required
         class="mb-4"
         :rules="[ipRule]"

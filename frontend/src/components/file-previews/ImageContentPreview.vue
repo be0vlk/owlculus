@@ -2,26 +2,26 @@
   <div class="d-flex flex-column h-100">
     <v-card v-if="fileInfo" class="ma-4 mb-2 flex-shrink-0" variant="outlined">
       <v-card-text class="py-3">
-        <v-row dense align="center">
+        <v-row class="align-center" density="compact">
           <v-col cols="12" sm="6" md="3">
-            <div class="text-caption text-medium-emphasis">File</div>
-            <div class="text-body-2 font-weight-medium">
+            <div class="text-body-small text-medium-emphasis">File</div>
+            <div class="text-body-medium font-weight-medium">
               {{ fileInfo.filename || evidenceItem?.title }}
             </div>
           </v-col>
           <v-col cols="12" sm="6" md="2">
-            <div class="text-caption text-medium-emphasis">Size</div>
-            <div class="text-body-2 font-weight-medium">
+            <div class="text-body-small text-medium-emphasis">Size</div>
+            <div class="text-body-medium font-weight-medium">
               {{ formatFileSize(fileInfo.file_size) }}
             </div>
           </v-col>
           <v-col cols="12" sm="6" md="2">
-            <div class="text-caption text-medium-emphasis">Dimensions</div>
-            <div class="text-body-2 font-weight-medium">{{ imageDimensions }}</div>
+            <div class="text-body-small text-medium-emphasis">Dimensions</div>
+            <div class="text-body-medium font-weight-medium">{{ imageDimensions }}</div>
           </v-col>
           <v-col cols="12" sm="6" md="2">
-            <div class="text-caption text-medium-emphasis">Format</div>
-            <div class="text-body-2 font-weight-medium">{{ imageFormat }}</div>
+            <div class="text-body-small text-medium-emphasis">Format</div>
+            <div class="text-body-medium font-weight-medium">{{ imageFormat }}</div>
           </v-col>
           <v-col cols="12" md="3" class="d-flex justify-end ga-2">
             <v-btn
@@ -45,10 +45,11 @@
       </v-card-text>
     </v-card>
 
-    <div class="mx-4 mb-2 flex-shrink-0 d-flex align-center ga-2">
+    <div class="mx-4 mb-2 flex-shrink-0 d-flex flex-wrap align-center ga-2">
       <v-btn
         size="small"
         icon="mdi-magnify-minus"
+        aria-label="Zoom out"
         variant="outlined"
         @click="zoomOut"
         :disabled="zoomLevel <= 0.25"
@@ -57,6 +58,7 @@
       <v-btn
         size="small"
         icon="mdi-magnify-plus"
+        aria-label="Zoom in"
         variant="outlined"
         @click="zoomIn"
         :disabled="zoomLevel >= 3"
@@ -64,22 +66,18 @@
       <v-btn size="small" variant="outlined" @click="resetZoom"> Reset </v-btn>
       <v-spacer />
       <v-btn-toggle v-model="fitMode" density="compact" mandatory variant="outlined">
-        <v-btn value="contain" size="small">
+        <v-btn aria-label="Fit to screen" value="contain" size="small">
           <v-icon>mdi-fit-to-screen-outline</v-icon>
           <v-tooltip activator="parent" location="top">Fit to screen</v-tooltip>
         </v-btn>
-        <v-btn value="actual" size="small">
+        <v-btn aria-label="Actual size" value="actual" size="small">
           <v-icon>mdi-image-size-select-actual</v-icon>
           <v-tooltip activator="parent" location="top">Actual size</v-tooltip>
         </v-btn>
       </v-btn-toggle>
     </div>
 
-    <div
-      ref="imageContainer"
-      class="image-container flex-grow-1"
-      @wheel.prevent="handleWheel"
-    >
+    <div ref="imageContainer" class="image-container flex-grow-1" @wheel.prevent="handleWheel">
       <div :style="imageWrapperStyle" class="image-wrapper">
         <img
           ref="imageElement"
@@ -98,6 +96,7 @@
 <script setup>
 import { computed, ref, watch, onUnmounted } from 'vue'
 import { evidenceService } from '@/services/evidence.js'
+import { downloadBlob } from '@/utils/download'
 
 const props = defineProps({
   evidenceItem: {
@@ -120,7 +119,7 @@ const props = defineProps({
   imageDataUrl: {
     type: String,
     default: '',
-  }
+  },
 })
 
 const imageUrl = ref('')
@@ -227,15 +226,8 @@ const downloadImage = async () => {
   if (!props.evidenceItem) return
 
   try {
-    const blob = await evidenceService.downloadEvidence(props.evidenceItem.id)
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = props.evidenceItem.title
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    window.URL.revokeObjectURL(url)
+    const download = await evidenceService.downloadEvidence(props.evidenceItem.id)
+    downloadBlob(download, props.evidenceItem.title)
   } catch (err) {
     console.error('Failed to download image:', err)
   }
@@ -258,44 +250,45 @@ watch(
   () => props.imageDataUrl,
   (newUrl) => {
     if (imageUrl.value && imageUrl.value.startsWith('blob:') && imageUrl.value !== newUrl) {
-      URL.revokeObjectURL(imageUrl.value);
+      URL.revokeObjectURL(imageUrl.value)
     }
-    imageUrl.value = newUrl;
+    imageUrl.value = newUrl
   },
-  { immediate: true }
-);
+  { immediate: true },
+)
 
 const reset = () => {
   if (imageUrl.value && imageUrl.value.startsWith('blob:')) {
     URL.revokeObjectURL(imageUrl.value)
   }
-  imageUrl.value = '';
-  zoomLevel.value = 1;
-  fitMode.value = 'contain';
-  imageDimensions.value = '';
-  imageFormat.value = '';
-};
+  imageUrl.value = ''
+  zoomLevel.value = 1
+  fitMode.value = 'contain'
+  imageDimensions.value = ''
+  imageFormat.value = ''
+}
 
-defineExpose({ reset });
+defineExpose({ reset })
 
 onUnmounted(() => {
   if (imageUrl.value && imageUrl.value.startsWith('blob:')) {
-    URL.revokeObjectURL(imageUrl.value);
+    URL.revokeObjectURL(imageUrl.value)
   }
-});
+})
 </script>
 
 <style scoped>
 .h-100 {
   height: 100%;
 }
+
 .image-container {
   max-height: 70vh;
   min-height: 400px;
-  border: 1px solid rgba(var(--v-theme-outline), 0.2);
+  border: 1px solid rgb(var(--v-theme-outline), 0.2);
   margin: 0 16px 16px;
   border-radius: 8px;
-  background-color: rgba(var(--v-theme-surface-variant), 0.05);
+  background-color: rgb(var(--v-theme-surface-variant), 0.05);
   overflow: hidden;
   position: relative;
 }
@@ -325,7 +318,7 @@ onUnmounted(() => {
   height: 100vh;
 }
 
-@media (max-width: 599px) {
+@media (width <= 599px) {
   .image-container {
     max-height: 50vh;
     min-height: 300px;
@@ -333,7 +326,7 @@ onUnmounted(() => {
   }
 }
 
-@media (min-width: 1280px) {
+@media (width >= 1280px) {
   .image-container {
     max-height: 80vh;
   }
@@ -345,16 +338,16 @@ onUnmounted(() => {
 }
 
 .image-wrapper::-webkit-scrollbar-track {
-  background: rgba(var(--v-theme-surface-variant), 0.1);
+  background: rgb(var(--v-theme-surface-variant), 0.1);
   border-radius: 4px;
 }
 
 .image-wrapper::-webkit-scrollbar-thumb {
-  background: rgba(var(--v-theme-outline), 0.3);
+  background: rgb(var(--v-theme-outline), 0.3);
   border-radius: 4px;
 }
 
 .image-wrapper::-webkit-scrollbar-thumb:hover {
-  background: rgba(var(--v-theme-outline), 0.5);
+  background: rgb(var(--v-theme-outline), 0.5);
 }
 </style>

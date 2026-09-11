@@ -47,7 +47,6 @@ class HuntStepResponse(BaseModel):
     parameters: Dict[str, Any]
     output: Optional[Dict[str, Any]] = None
     error_details: Optional[str] = None
-    retry_count: int
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 
@@ -69,6 +68,16 @@ class HuntExecutionResponse(BaseModel):
     completed_at: Optional[datetime] = None
     created_at: datetime
     created_by_id: int
+
+    kind: str = "hunt"
+    revision: int = 0
+    dispatch_state: str = "legacy"
+    waiting_reason: str | None = None
+    dispatch_attempts: int = 0
+    last_dispatch_at: datetime | None = None
+    next_dispatch_at: datetime | None = None
+    links: dict[str, str] = Field(default_factory=dict)
+    error: dict[str, Any] | None = None
 
     # Related data
     hunt: Optional[HuntResponse] = None
@@ -100,15 +109,3 @@ class HuntExecutionListResponse(BaseModel):
 
     class Config:
         orm_mode = True
-
-
-class HuntProgressEvent(BaseModel):
-    """WebSocket event for hunt progress updates"""
-
-    execution_id: int
-    event_type: str  # started, step_complete, step_failed, complete, error
-    step_id: Optional[str] = None
-    progress: float
-    message: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
-    data: Optional[Dict[str, Any]] = None

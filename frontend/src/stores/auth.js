@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import api from '../services/api'
 import { authService } from '../services/auth'
+import { useActiveCaseStore } from './activeCase'
 
 // Development-only state persistence to handle HMR reloads
 const DEV_STATE_KEY = '__owlculus_dev_auth_state__'
@@ -35,8 +36,20 @@ export const useAuthStore = defineStore('auth', () => {
   const user = ref(persistedState?.user || null)
   const isAuthenticated = ref(persistedState?.isAuthenticated ?? authService.isAuthenticated())
   const error = ref(persistedState?.error || null)
-  const isInitialized = ref(persistedState?.isInitialized || false)
+  // Setup status is always rechecked on page load, including development reloads.
+  const isInitialized = ref(false)
+  const setupRequired = ref(null)
   const initPromise = ref(null)
+
+  const persistCurrentDevState = () => {
+    saveDevState({
+      user: user.value,
+      isAuthenticated: isAuthenticated.value,
+      isInitialized: isInitialized.value,
+      setupRequired: setupRequired.value,
+      error: error.value,
+    })
+  }
 
   // Initialize user data if already authenticated
   async function init() {
@@ -53,6 +66,21 @@ export const useAuthStore = defineStore('auth', () => {
     // Start initialization
     initPromise.value = (async () => {
       try {
+        try {
+          const setupStatus = await authService.getSetupStatus()
+          setupRequired.value = setupStatus.setup_required
+        } catch (err) {
+          console.error('Failed to retrieve setup status:', err)
+          setupRequired.value = false
+        }
+
+        if (setupRequired.value) {
+          authService.logout()
+          user.value = null
+          isAuthenticated.value = false
+          return
+        }
+
         // Refresh authentication status from localStorage
         const authStatus = authService.isAuthenticated()
         isAuthenticated.value = authStatus
@@ -69,17 +97,11 @@ export const useAuthStore = defineStore('auth', () => {
         user.value = null
         isAuthenticated.value = false
         authService.logout()
+      } finally {
+        isInitialized.value = true
+
+        persistCurrentDevState()
       }
-
-      isInitialized.value = true
-
-      // Save state for development HMR persistence
-      saveDevState({
-        user: user.value,
-        isAuthenticated: isAuthenticated.value,
-        isInitialized: isInitialized.value,
-        error: error.value,
-      })
     })()
 
     return initPromise.value
@@ -89,16 +111,11 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       error.value = null
       const data = await authService.login(username, password)
+      useActiveCaseStore().reset()
       isAuthenticated.value = true
       user.value = data.user
 
-      // Save state for development HMR persistence
-      saveDevState({
-        user: user.value,
-        isAuthenticated: isAuthenticated.value,
-        isInitialized: isInitialized.value,
-        error: error.value,
-      })
+      persistCurrentDevState()
 
       return data
     } catch (err) {
@@ -108,6 +125,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function logout() {
+    useActiveCaseStore().reset()
     authService.logout()
     user.value = null
     isAuthenticated.value = false
@@ -129,10 +147,17 @@ export const useAuthStore = defineStore('auth', () => {
   async function changePassword(passwordData) {
     try {
       await api.put('/api/users/me/password', passwordData)
+      await logout()
     } catch (err) {
       console.error('Password change error:', err)
       throw err
     }
+  }
+
+  function completeSetup() {
+    setupRequired.value = false
+    user.value = null
+    isAuthenticated.value = false
   }
 
   // Helper function to check if user is admin
@@ -151,7 +176,9 @@ export const useAuthStore = defineStore('auth', () => {
     init,
     isInitialized,
     initPromise,
+    setupRequired,
     requiresAdmin,
     changePassword,
+    completeSetup,
   }
 })

@@ -7,23 +7,30 @@ within the case service layer.
 """
 
 from datetime import datetime
+from unittest.mock import patch
 
 import pytest
+from sqlmodel import Session
+
 from app import schemas
+from app.core import file_storage
 from app.core.exceptions import (
     AuthorizationException,
-    DuplicateResourceException,
     ResourceNotFoundException,
     ValidationException,
 )
 from app.database import models
 from app.services import case_service
-from sqlmodel import Session
 
 
 @pytest.fixture(name="case_service_instance")
 def case_service_fixture(session: Session):
     return case_service.CaseService(session)
+
+
+@pytest.fixture(autouse=True)
+def isolate_case_uploads(tmp_path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(file_storage, "UPLOAD_DIR", tmp_path / "uploads")
 
 
 @pytest.fixture(name="sample_case")
@@ -80,6 +87,31 @@ async def test_create_case_admin(
 
 
 @pytest.mark.asyncio
+async def test_create_case_commits_once(
+    case_service_instance: case_service.CaseService,
+    test_admin: models.User,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    client = models.Client(name="Test Client", contact_email="test@example.com")
+    case_service_instance.db.add(client)
+    case_service_instance.db.commit()
+    case_service_instance.db.refresh(client)
+    case_data = schemas.CaseCreate(
+        client_id=client.id, title="Test Case", status="Open", notes="Test Notes"
+    )
+    monkeypatch.setattr(case_service, "create_case_directory", lambda _case_id: None)
+
+    with patch.object(
+        case_service_instance.db,
+        "commit",
+        wraps=case_service_instance.db.commit,
+    ) as commit:
+        await case_service_instance.create_case(case_data, current_user=test_admin)
+
+    commit.assert_called_once_with()
+
+
+@pytest.mark.asyncio
 async def test_create_case_non_admin(
     case_service_instance: case_service.CaseService, test_user: models.User
 ):
@@ -91,12 +123,8 @@ async def test_create_case_non_admin(
     case_data = schemas.CaseCreate(
         client_id=client.id, title="Test Case", status="Open", notes="Test Notes"
     )
-    # Service layer no longer checks for admin role - that's handled at API layer
-    created_case = await case_service_instance.create_case(
-        case_data, current_user=test_user
-    )
-    assert created_case.title == "Test Case"
-    assert created_case.status == "Open"
+    with pytest.raises(AuthorizationException):
+        await case_service_instance.create_case(case_data, current_user=test_user)
 
 
 @pytest.mark.asyncio
@@ -111,12 +139,8 @@ async def test_create_case_analyst(
     case_data = schemas.CaseCreate(
         client_id=client.id, title="Test Case", status="Open", notes="Test Notes"
     )
-    # Service layer no longer checks for admin role - that's handled at API layer
-    created_case = await case_service_instance.create_case(
-        case_data, current_user=test_analyst
-    )
-    assert created_case.title == "Test Case"
-    assert created_case.status == "Open"
+    with pytest.raises(AuthorizationException):
+        await case_service_instance.create_case(case_data, current_user=test_analyst)
 
 
 @pytest.mark.asyncio

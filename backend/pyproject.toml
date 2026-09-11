@@ -1,0 +1,79 @@
+[project]
+name = "owlculus-backend"
+version = "0.1.0"
+description = "Backend API for the Owlculus OSINT case management platform"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "aiohttp==3.14.3",
+    "bcrypt==5.0.0",
+    "beautifulsoup4==4.15.0",
+    "celery[redis]==5.6.3",
+    "chardet==7.6.0",
+    "cryptography==50.0.1",
+    "dnspython==2.8.0",
+    "fastapi[standard]==0.115.6",
+    "filetype==1.2.0",
+    "fpdf2==2.8.8",
+    "holehe==1.61",
+    "idna==3.19",
+    "loguru==0.7.3",
+    "openai==3.7.0",
+    "peopledatalabs==6.4.13",
+    "psycopg2-binary==2.9.12",
+    "pydantic-settings==2.15.0",
+    "pyexiftool==0.5.6",
+    "pyjwt==2.13.0",
+    "python-dotenv==1.2.3",
+    "python-multipart==0.0.32",
+    "python-whois==0.9.6",
+    "redis==6.4.0",
+    "selenium==4.48.0",
+    "shodan==1.31.0",
+    "sqlalchemy-utils==0.42.1",
+    "sqlmodel==0.0.42",
+    "uvicorn==0.52.4",
+    "vt-py==0.22.0",
+    "werkzeug==3.1.8",
+]
+
+[dependency-groups]
+dev = [
+    "black==26.5.1",
+    "mypy>=1.17,<2",
+    "pypdf==6.16.2",
+    "pytest==9.1.1",
+    "pytest-asyncio==1.4.0",
+    "ruff==0.16.5",
+]
+
+[tool.uv]
+package = false
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+# Application imports must be followed and checked; untyped third-party packages are
+# handled only by the narrow module overrides below.
+follow_imports = "normal"
+# This baseline checks untyped bodies and high-signal correctness warnings without
+# claiming full `strict` coverage for the backend's remaining annotation backlog.
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unreachable = true
+warn_unused_configs = true
+
+# These installed runtime dependencies do not publish stubs or a py.typed marker.
+[[tool.mypy.overrides]]
+module = [
+    "exiftool",
+    "filetype",
+    "holehe.*",
+    "peopledatalabs.*",
+    "psycopg2.*",
+    "shodan.*",
+    "sqlalchemy_utils.*",
+    "vt.*",
+    "whois.*",
+]
+ignore_missing_imports = true

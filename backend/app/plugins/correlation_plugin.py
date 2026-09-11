@@ -1,720 +1,313 @@
-"""
-Plugin for scanning and correlating entity names across cases
-"""
+"""Plugin-catalogue adapter for the entity-correlation query."""
 
-from typing import Any, AsyncGenerator, Dict, List, Optional, get_origin
+import asyncio
+import hashlib
+import json
+from collections.abc import AsyncGenerator
+from dataclasses import asdict
+from typing import Any
 
-from sqlmodel import Session, select
+from app.core.exceptions import BaseException as DomainException
+from app.core.utils import get_utc_now
+from app.database.models import Case
+from app.services.entity_correlation import (
+    CorrelationKind,
+    CorrelationMatch,
+    EntityCorrelation,
+    ScanProgress,
+    correlation_label,
+)
 
-from .base_plugin import BasePlugin
-from ..core.dependencies import get_db
-from ..core.roles import UserRole
-from ..core.utils import get_utc_now
-from ..database.models import Case, CaseUserLink, Entity
-from ..schemas.entity_schema import ENTITY_TYPE_SCHEMAS
+from .base_plugin import BasePlugin, PluginRun, ResultEvent
+from .output_limits import OutputBudget, OutputLimitExceeded, serialized_size
 
 
 class CorrelationScan(BasePlugin):
-    """Plugin for finding matching entities across cases"""
+    """Keep cross-case correlation available in the plugin catalogue."""
 
-    def __init__(self, db_session: Session = None):
-        super().__init__(display_name="Correlation Scan", db_session=db_session)
+    def __init__(self):
+        super().__init__(display_name="Correlation Scan")
         self.description = "Finds matching entities and relationships across cases"
         self.category = "Other"
         self.evidence_category = "Documents"
-        self.save_to_case = False
         self.parameters = {
             "case_id": {
                 "type": "integer",
                 "description": "ID of the case to scan",
                 "required": True,
-            },
+            }
         }
-
-    def _is_admin(self) -> bool:
-        """Check if current user is an admin"""
-        return self._current_user and self._current_user.role == UserRole.ADMIN
-
-    def _build_accessible_entities_query(
-        self,
-        db: Session,
-        exclude_entity_id: Optional[int] = None,
-        entity_type_filter: Optional[str] = None,
-    ):
-        """Build a query for entities accessible to the current user"""
-        # Base query
-        query = select(Entity, Case).join(Case)
-
-        # Add filters
-        filters = []
-        if exclude_entity_id:
-            filters.append(Entity.id != exclude_entity_id)
-        if entity_type_filter:
-            filters.append(Entity.entity_type == entity_type_filter)
-
-        # Apply access control
-        if not self._is_admin():
-            # Non-admins only see cases they're assigned to
-            query = query.join(CaseUserLink, Case.id == CaseUserLink.case_id)
-            filters.append(CaseUserLink.user_id == self._current_user.id)
-
-        if filters:
-            query = query.where(*filters)
-
-        return query
-
-    def _parse_domain_from_string(self, input_string: str) -> Optional[str]:
-        """Extract domain from email or URL string"""
-        if not input_string:
-            return None
-
-        # Handle email addresses
-        if "@" in input_string:
-            domain = input_string.split("@")[-1].lower()
-            return domain if domain else None
-
-        # Handle URLs
-        if input_string.startswith(("http://", "https://")):
-            domain = input_string.replace("https://", "").replace("http://", "")
-            domain = domain.split("/")[0].lower()
-            return domain if domain else None
-
-        return None
-
-    def _extract_domains_from_entity(self, entity: Entity) -> List[str]:
-        """Extract all domains associated with an entity"""
-        domains = []
-
-        if not entity.data:
-            return domains
-
-        if entity.entity_type == "domain":
-            domain = entity.data.get("domain", "")
-            if domain:
-                domains.append(domain.lower())
-
-        elif entity.entity_type == "person":
-            # Check usernames for email addresses
-            usernames = entity.data.get("usernames", [])
-            for username in usernames:
-                domain = self._parse_domain_from_string(username)
-                if domain:
-                    domains.append(domain)
-
-            # Check email field
-            email = entity.data.get("email", "")
-            domain = self._parse_domain_from_string(email)
-            if domain:
-                domains.append(domain)
-
-        elif entity.entity_type == "company":
-            # Check website
-            website = entity.data.get("website", "")
-            domain = self._parse_domain_from_string(website)
-            if domain:
-                domains.append(domain)
-
-        # Remove duplicates and return
-        return list(set(domains))
-
-    def _extract_vehicle_identifiers(self, entity: Entity) -> Dict[str, str]:
-        """Extract VIN and license plate from a vehicle entity"""
-        identifiers = {}
-
-        if not entity.data or entity.entity_type != "vehicle":
-            return identifiers
-
-        # Extract VIN
-        vin = entity.data.get("vin", "")
-        if vin:
-            identifiers["vin"] = vin.upper()  # Normalize to uppercase
-
-        # Extract license plate
-        license_plate = entity.data.get("license_plate", "")
-        if license_plate:
-            # Normalize: remove spaces and dashes, convert to uppercase
-            normalized_plate = license_plate.replace(" ", "").replace("-", "").upper()
-            identifiers["license_plate"] = normalized_plate
-
-        return identifiers
-
-    def _create_match_dict(
-        self, entity: Entity, case: Case, entity_name: Optional[str] = None, **kwargs
-    ) -> Dict[str, Any]:
-        """Create a standardized match dictionary"""
-        match_dict = {
-            "entity_id": entity.id,
-            "entity_type": entity.entity_type,
-            "case_id": entity.case_id,
-            "case_number": case.case_number,
-            "case_title": case.title,
-        }
-
-        if entity_name:
-            match_dict["entity_name"] = entity_name
-
-        # Add any additional fields
-        match_dict.update(kwargs)
-
-        return match_dict
-
-    def parse_output(self, line: str) -> Optional[Dict[str, Any]]:
-        """Not used as database queries are handled directly"""
-        return None
 
     async def run(
-        self, params: Optional[Dict[str, Any]] = None
-    ) -> AsyncGenerator[Dict[str, Any], None]:
-        if not params:
-            yield {"type": "error", "data": {"message": "Parameters are required"}}
+        self, params: dict[str, Any], ctx: PluginRun
+    ) -> AsyncGenerator[ResultEvent, None]:
+        del params
+        if ctx.case_id is None:
+            yield self.error("Case ID is required")
             return
-
-        # Use injected session if available, otherwise get a new one
-        if self._db_session:
-            db = self._db_session
-            close_session = False
-        else:
-            db = next(get_db())
-            close_session = True
-
+        case = ctx.session.get(Case, ctx.case_id)
+        if case is None:
+            yield self.error("Case not found")
+            return
+        executed_at = get_utc_now().isoformat()
+        metadata = {
+            "case_title": case.title,
+            "case_number": case.case_number,
+            "executed_at": executed_at,
+        }
+        event_limit = OutputBudget().event_limit
+        pending: dict[str, Any] | None = None
+        pending_size = 0
         try:
-            async for result in self.execute(params, db):
-                yield result
-        finally:
-            # Only close if we created the session
-            if close_session:
-                db.close()
-
-    async def execute(
-        self, params: Dict[str, Any], db: Session
-    ) -> AsyncGenerator[Dict[str, Any], None]:
-        try:
-            if not self._current_user:
-                yield {"type": "error", "data": {"message": "Current user not found"}}
-                return
-
-            case_id = params.get("case_id")
-            if not case_id:
-                yield {"type": "error", "data": {"message": "Case ID is required"}}
-                return
-
-            # Verify user has access to this case (admins have access to all cases)
-            if not self._is_admin():
-                stmt = select(CaseUserLink).where(
-                    CaseUserLink.case_id == case_id,
-                    CaseUserLink.user_id == self._current_user.id,
-                )
-                result = db.execute(stmt)
-                if not result.first():
-                    yield {
-                        "type": "error",
-                        "data": {"message": "You do not have access to this case"},
-                    }
-                    return
-
-            # Get all entities from the specified case
-            case_entities = await self._get_case_entities(db, case_id)
-
-            # Track what we've already reported to avoid duplicates
-            reported_matches = set()
-
-            for entity in case_entities:
-                # Extract and normalize entity name based on type
-                entity_name = self._get_display_name(entity.data, entity.entity_type)
-                employer_name = None
-
-                if entity.entity_type == "person" and entity.data:
-                    employer_name = entity.data.get("employer", "")
-
-                if not entity_name:
+            correlation = EntityCorrelation(ctx.session)
+            for item in correlation.iter_correlations(case, ctx.user):
+                if isinstance(item, ScanProgress):
+                    # No related counts are published without their Case scope.
+                    await asyncio.sleep(0)
+                    yield ResultEvent(
+                        "status",
+                        {
+                            "message": item.message,
+                            "count": item.count,
+                            "case_scope": list(item.case_scope),
+                        },
+                    )
                     continue
+                group = {**_group_payload(item, ctx.case_id), **metadata}
+                other = _other_entity_payload(item)
+                if pending is not None and pending["group_id"] != group["group_id"]:
+                    await asyncio.sleep(0)
+                    yield self.data(pending)
+                    pending = None
+                if pending is None:
+                    pending = group
+                    pending_size = serialized_size(self.data(pending).to_wire())
+                added_size = serialized_size(other) + bool(pending["matches"])
+                if pending_size + added_size > event_limit:
+                    if pending["matches"]:
+                        await asyncio.sleep(0)
+                        yield self.data(pending)
+                    pending = group
+                    pending_size = serialized_size(self.data(pending).to_wire())
+                    added_size = serialized_size(other)
+                    if pending_size + added_size > event_limit:
+                        raise OutputLimitExceeded("event_size_limit", event_limit)
+                pending["matches"].append(other)
+                pending_size += added_size
+            if pending is not None:
+                await asyncio.sleep(0)
+                yield self.data(pending)
+        except DomainException as error:
+            yield self.error(str(error))
+            return
+        for warning in correlation.skipped_references:
+            yield self.data(
+                {
+                    "notice_type": "skipped_reference",
+                    "message": "A malformed reference was skipped; reference coverage is incomplete.",
+                    "case_scope": sorted({ctx.case_id, warning.case_id}),
+                    "case_id": warning.case_id,
+                    "entity_id": warning.entity_id,
+                    "field": warning.field,
+                    "source_case_id": ctx.case_id,
+                    "source_case_title": metadata["case_title"],
+                    "source_case_number": metadata["case_number"],
+                    "executed_at": executed_at,
+                }
+            )
 
-                # Find name matches (skip for vehicles to avoid duplicates with VIN/license plate matching)
-                name_matches = []
-                if entity.entity_type != "vehicle":
-                    name_matches = await self._find_name_matches(
-                        db, entity, entity_name
-                    )
-
-                if name_matches:
-                    # Create a unique key for this match group
-                    match_key = f"name:{entity.entity_type}:{entity_name.lower()}"
-                    if match_key not in reported_matches:
-                        reported_matches.add(match_key)
-                        match_data = {
-                            "entity_id": entity.id,
-                            "entity_name": entity_name,
-                            "entity_type": entity.entity_type,
-                            "match_type": "name",
-                            "case_id": case_id,
-                            "matches": name_matches,
-                        }
-                        yield {"type": "data", "data": match_data}
-
-                # If this is a person entity with an employer, check for employer matches
-                if employer_name:
-                    employer_matches = await self._find_employer_matches(
-                        db, entity, employer_name
-                    )
-
-                    if employer_matches:
-                        match_key = f"employer:{employer_name.lower()}"
-                        if match_key not in reported_matches:
-                            reported_matches.add(match_key)
-                            match_data = {
-                                "entity_id": entity.id,
-                                "entity_name": entity_name,
-                                "entity_type": entity.entity_type,
-                                "match_type": "employer",
-                                "employer_name": employer_name,
-                                "case_id": case_id,
-                                "matches": employer_matches,
-                            }
-                            yield {"type": "data", "data": match_data}
-
-                # Check for domain-related matches
-                # Skip domain matching for domain entities (they're already covered by name matching)
-                if entity.entity_type != "domain":
-                    domain_matches = await self._find_domain_matches(db, entity)
-                    if domain_matches:
-                        for domain, matches in domain_matches.items():
-                            match_key = f"domain:{domain.lower()}"
-                            if match_key not in reported_matches:
-                                reported_matches.add(match_key)
-                                match_data = {
-                                    "entity_id": entity.id,
-                                    "entity_name": entity_name,
-                                    "entity_type": entity.entity_type,
-                                    "match_type": "domain",
-                                    "domain": domain,
-                                    "case_id": case_id,
-                                    "matches": matches,
-                                }
-                                yield {"type": "data", "data": match_data}
-
-                # Check for vehicle identifier matches (VIN or license plate)
-                if entity.entity_type == "vehicle":
-                    vehicle_matches = await self._find_vehicle_matches(db, entity)
-                    if vehicle_matches:
-                        for identifier_type, matches in vehicle_matches.items():
-                            # Create match key based on identifier type and value
-                            matched_value = matches[0].get("matched_value", "")
-                            match_key = f"{identifier_type}:{matched_value.lower()}"
-
-                            if match_key not in reported_matches:
-                                reported_matches.add(match_key)
-                                match_data = {
-                                    "entity_id": entity.id,
-                                    "entity_name": entity_name,
-                                    "entity_type": entity.entity_type,
-                                    "match_type": identifier_type,
-                                    "matched_value": matched_value,
-                                    "case_id": case_id,
-                                    "matches": matches,
-                                }
-                                yield {"type": "data", "data": match_data}
-
-        except Exception as e:
-            yield {
-                "type": "error",
-                "data": {"message": f"Error during correlation scan: {str(e)}"},
-            }
-
-    async def _get_case_entities(self, db: Session, case_id: int) -> List[Entity]:
-        """Get all entities for a specific case"""
-        stmt = select(Entity).where(Entity.case_id == case_id)
-        result = db.execute(stmt)
-        return result.scalars().all()
-
-    async def _find_name_matches(
-        self, db: Session, source_entity: Entity, entity_name: str
-    ) -> List[Dict[str, Any]]:
-        """Find entities with matching names across all cases assigned to the current user"""
-        # Get all accessible entities of the same type
-        stmt = self._build_accessible_entities_query(
-            db,
-            exclude_entity_id=source_entity.id,
-            entity_type_filter=source_entity.entity_type,
+    def correlation_case_ids(
+        self, payloads: list[dict[str, Any]], case_id: int
+    ) -> tuple[int, ...]:
+        return tuple(
+            sorted(
+                {case_id}
+                | {
+                    match["case_id"]
+                    for group in payloads
+                    for match in group.get("matches", [])
+                }
+                | {
+                    scope
+                    for payload in payloads
+                    for scope in payload.get("case_scope", [])
+                }
+            )
         )
-        result = db.execute(stmt)
 
-        matches = []
-        normalized_source_name = entity_name.lower()
-
-        for entity, case in result:
-            # Check if names match based on entity type
-            match_name = self._get_display_name(entity.data, entity.entity_type)
-            if match_name and match_name.lower() == normalized_source_name:
-                matches.append(self._create_match_dict(entity, case))
-
-        return matches
-
-    async def _find_employer_matches(
-        self, db: Session, source_entity: Entity, employer_name: str
-    ) -> List[Dict[str, Any]]:
-        """Find entities with matching employer names across all cases assigned to the current user"""
-        stmt = self._build_accessible_entities_query(
-            db, exclude_entity_id=source_entity.id, entity_type_filter="person"
-        )
-        result = db.execute(stmt)
-
-        matches = []
-        normalized_employer = employer_name.lower()
-
-        for entity, case in result:
-            if (
-                entity.data
-                and entity.data.get("employer", "").lower() == normalized_employer
-            ):
-                person_name = self._get_display_name(entity.data, "person")
-                matches.append(
-                    self._create_match_dict(entity, case, person_name=person_name)
-                )
-
-        return matches
-
-    async def _find_domain_matches(
-        self, db: Session, source_entity: Entity
-    ) -> Dict[str, List[Dict[str, Any]]]:
-        """Find entities with matching domains across all cases assigned to the current user"""
-        domains_to_check = self._extract_domains_from_entity(source_entity)
-
-        if not domains_to_check:
-            return {}
-
-        # Find matches for each domain
-        all_matches = {}
-        for domain in domains_to_check:
-            matches = await self._find_entities_with_domain(db, source_entity, domain)
-            if matches:
-                all_matches[domain] = matches
-
-        return all_matches
-
-    async def _find_entities_with_domain(
-        self, db: Session, source_entity: Entity, domain: str
-    ) -> List[Dict[str, Any]]:
-        """Find all entities that contain the specified domain"""
-        # Get all accessible entities
-        stmt = self._build_accessible_entities_query(
-            db, exclude_entity_id=source_entity.id
-        )
-        result = db.execute(stmt)
-
-        matches = []
-        normalized_domain = domain.lower()
-
-        for entity, case in result:
-            found_in = []
-            entity_domains = self._extract_domains_from_entity(entity)
-
-            # Check if this entity contains the domain we're looking for
-            if normalized_domain in entity_domains:
-                # Determine where the domain was found
-                if entity.entity_type == "domain" and entity.data:
-                    if entity.data.get("domain", "").lower() == normalized_domain:
-                        found_in.append("domain field")
-
-                elif entity.entity_type == "person" and entity.data:
-                    # Check usernames
-                    usernames = entity.data.get("usernames", [])
-                    for username in usernames:
-                        if (
-                            "@" in username
-                            and username.split("@")[-1].lower() == normalized_domain
-                        ):
-                            found_in.append(f"username: {username}")
-
-                    # Check email
-                    email = entity.data.get("email", "")
-                    if (
-                        email
-                        and "@" in email
-                        and email.split("@")[-1].lower() == normalized_domain
-                    ):
-                        found_in.append(f"email: {email}")
-
-                elif entity.entity_type == "company" and entity.data:
-                    # Check website
-                    website = entity.data.get("website", "")
-                    if website:
-                        parsed_domain = self._parse_domain_from_string(website)
-                        if parsed_domain == normalized_domain:
-                            found_in.append(f"website: {website}")
-
-                if found_in:
-                    entity_name = self._get_display_name(
-                        entity.data, entity.entity_type
-                    )
-                    matches.append(
-                        self._create_match_dict(
-                            entity,
-                            case,
-                            entity_name=entity_name,
-                            found_in=", ".join(found_in),
-                        )
-                    )
-
-        return matches
-
-    async def _find_vehicle_matches(
-        self, db: Session, source_entity: Entity
-    ) -> Dict[str, List[Dict[str, Any]]]:
-        """Find entities with matching VIN or license plate across all cases assigned to the current user"""
-        identifiers = self._extract_vehicle_identifiers(source_entity)
-
-        if not identifiers:
-            return {}
-
-        # Get all accessible vehicle entities
-        stmt = self._build_accessible_entities_query(
-            db, exclude_entity_id=source_entity.id, entity_type_filter="vehicle"
-        )
-        result = db.execute(stmt)
-
-        # Track matches by identifier type
-        all_matches = {}
-
-        for entity, case in result:
-            entity_identifiers = self._extract_vehicle_identifiers(entity)
-
-            # Check VIN match
-            if "vin" in identifiers and "vin" in entity_identifiers:
-                if identifiers["vin"] == entity_identifiers["vin"]:
-                    if "vin" not in all_matches:
-                        all_matches["vin"] = []
-
-                    vehicle_name = self._get_display_name(entity.data, "vehicle")
-                    all_matches["vin"].append(
-                        self._create_match_dict(
-                            entity,
-                            case,
-                            entity_name=vehicle_name,
-                            matched_value=identifiers["vin"],
-                        )
-                    )
-
-            # Check license plate match
-            if "license_plate" in identifiers and "license_plate" in entity_identifiers:
-                if identifiers["license_plate"] == entity_identifiers["license_plate"]:
-                    if "license_plate" not in all_matches:
-                        all_matches["license_plate"] = []
-
-                    vehicle_name = self._get_display_name(entity.data, "vehicle")
-                    all_matches["license_plate"].append(
-                        self._create_match_dict(
-                            entity,
-                            case,
-                            entity_name=vehicle_name,
-                            matched_value=entity.data.get(
-                                "license_plate", ""
-                            ),  # Original value for display
-                        )
-                    )
-
-        return all_matches
-
-    def _get_primary_fields_for_entity(self, entity_type: str) -> List[str]:
-        """Dynamically determine primary identifier fields for an entity type"""
-        if entity_type not in ENTITY_TYPE_SCHEMAS:
-            return []
-
-        schema_class = ENTITY_TYPE_SCHEMAS[entity_type]
-        annotations = getattr(schema_class, "__annotations__", {})
-
-        # Look for required fields (non-Optional)
-        required_fields = []
-        name_like_fields = []
-
-        for field_name, field_type in annotations.items():
-            # Skip complex types, focus on simple identifiers
-            if get_origin(field_type) is not None:
-                # This is a generic type like Optional[str], List[str], etc.
-                if get_origin(field_type) is type(
-                    Optional[str]
-                ):  # Union type (Optional)
-                    continue
-
-            # Check if it's a simple string type (likely identifier)
-            if field_type == str:
-                required_fields.append(field_name)
-
-            # Collect name-like fields for fallback
-            if any(
-                keyword in field_name.lower()
-                for keyword in ["name", "domain", "ip", "address"]
-            ):
-                name_like_fields.append(field_name)
-
-        # Special handling for person entities (combine first_name + last_name)
-        if entity_type == "person":
-            if "first_name" in annotations and "last_name" in annotations:
-                return ["first_name", "last_name"]
-
-        # Special handling for vehicle entities (make model year format)
-        if entity_type == "vehicle":
-            return ["year", "make", "model"]
-
-        # Use required fields if available
-        if required_fields:
-            return required_fields
-
-        # Fallback to name-like fields
-        if name_like_fields:
-            return name_like_fields[:1]  # Take first name-like field
-
-        # Final fallback: look for common identifier patterns
-        common_patterns = [entity_type, "name", "title", "identifier"]
-        for pattern in common_patterns:
-            if pattern in annotations:
-                return [pattern]
-
-        return []
-
-    def _get_display_name(self, data: dict, entity_type: str) -> str:
-        """Extract display name from entity data based on type"""
-        if not data:
-            return ""
-
-        # Check if entity type is supported in schemas
-        if entity_type not in ENTITY_TYPE_SCHEMAS:
-            # Fallback for unknown entity types
-            return data.get("Name", "")
-
-        # Dynamically get primary fields for this entity type
-        primary_fields = self._get_primary_fields_for_entity(entity_type)
-
-        if not primary_fields:
-            # Fallback: try to use a field that matches the entity type name
-            return data.get(entity_type, data.get("name", ""))
-
-        # Extract values for primary fields
-        field_values = []
-        for field in primary_fields:
-            value = data.get(field, "")
-            if value:
-                field_values.append(str(value))
-
-        # Combine multiple fields with space (e.g., first_name + last_name)
-        return " ".join(field_values).strip()
-
-    def _format_evidence_content(
-        self, results: List[Dict[str, Any]], params: Dict[str, Any]
+    def format_evidence(
+        self, results: list[dict[str, Any]], params: dict[str, Any]
     ) -> str:
-        """Custom formatting for correlation scan evidence"""
+        """Render browser-shaped correlation payloads as saved evidence."""
+        del params
         if not results:
             return ""
-
-        # Format the evidence content
-        content_lines = [
+        groups = assemble_groups([result for result in results if "matches" in result])
+        first = results[0]
+        source_id = first.get("source_case_id", first.get("case_id"))
+        source_title = first.get("source_case_title", first.get("case_title", ""))
+        source_number = first.get("source_case_number", first.get("case_number", ""))
+        lines = [
             "Correlation Scan Results",
             "=" * 50,
-            "",
-            f"Total entities with matches: {len(results)}",
-            f"Case ID: {params.get('case_id', 'Unknown')}",
-            f"Execution time: {get_utc_now().strftime('%Y-%m-%d %H:%M:%S UTC')}",
+            f"Total entities with matches: {len({group['entity_id'] for group in groups})}",
+            f"Total matches: {sum(len(group['matches']) for group in groups)}",
+            f"Related Cases: {len({match['case_id'] for group in groups for match in group['matches']})}",
+            f"Source Case: {source_title} (#{source_number}); Case ID: {source_id}",
+            f"Execution time: {first.get('executed_at', 'Not recorded')}",
             "",
         ]
-
-        for match_group in results:
-            entity_name = match_group["entity_name"]
-            entity_type = match_group["entity_type"]
-            match_type = match_group.get("match_type", "name")
-            matches = match_group["matches"]
-
-            # Create correlation context based on match type
-            if match_type == "name":
-                correlation_context = (
-                    f"Found an entity named '{entity_name}' that appears in multiple cases. "
-                    f"This may indicate the same {entity_type} is involved in different investigations."
-                )
-            elif match_type == "employer":
-                correlation_context = (
-                    f"Found multiple people who work at '{match_group.get('employer_name', '')}'. "
-                    f"This employer connection may indicate a relationship between these cases."
-                )
-            elif match_type == "domain":
-                correlation_context = (
-                    f"Found multiple entities associated with the domain '{match_group.get('domain', '')}'. "
-                    f"This domain connection may indicate a relationship between these cases or entities."
-                )
-            elif match_type == "vin":
-                correlation_context = (
-                    f"Found multiple vehicles with the same VIN '{match_group.get('matched_value', '')}'. "
-                    f"This indicates the same vehicle appears in multiple cases, which strongly suggests "
-                    f"a connection between these investigations."
-                )
-            elif match_type == "license_plate":
-                correlation_context = (
-                    f"Found multiple vehicles with the same license plate '{match_group.get('matched_value', '')}'. "
-                    f"This indicates the same vehicle appears in multiple cases, suggesting "
-                    f"a connection between these investigations."
-                )
-
-            content_lines.extend(
-                [
-                    f"Entity: {entity_name}",
-                    f"Type: {entity_type}",
-                    f"Match Type: {match_type}",
-                    "",
-                    "Correlation Context:",
-                    correlation_context,
-                    "",
+        report_sections = [
+            {**group, "matches": selected, "weak": weak}
+            for weak in (False, True)
+            for group in groups
+            if (
+                selected := [
+                    match
+                    for match in group["matches"]
+                    if _weak_provider_match(match) == weak
                 ]
             )
-
-            if match_type == "employer":
-                content_lines.append(
-                    f"Employer: {match_group.get('employer_name', '')}"
-                )
-            elif match_type == "domain":
-                content_lines.append(f"Domain: {match_group.get('domain', '')}")
-            elif match_type in ["vin", "license_plate"]:
-                content_lines.append(
-                    f"{'VIN' if match_type == 'vin' else 'License Plate'}: {match_group.get('matched_value', '')}"
-                )
-
-            content_lines.extend(
+        ]
+        for group in report_sections:
+            if group["weak"]:
+                lines.append(f"Weak provider matches ({len(group['matches'])})")
+            lines.extend(
                 [
-                    "-" * 30,
-                    "",
-                    "Related Cases and Details:",
-                    "",
+                    f"Entity: {group['entity_name']}; Entity ID: {group['entity_id']}",
+                    f"Type: {group['entity_type']}",
+                    f"Match Type: {group['match_type']}",
+                    f"Matched value: {group.get('matched_value', group.get('domain', group.get('employer_name', '')))}",
+                    f"Normalized value: {group.get('normalized_value', '')}",
+                    "Source fields: " + _format_fields(group.get("source_fields", [])),
                 ]
             )
+            for match in group["matches"]:
+                lines.extend(
+                    [
+                        f"Case: {match['case_title']} (#{match['case_number']}); Case ID: {match['case_id']}",
+                        f"Entity: {match.get('entity_name', match.get('person_name', 'Unnamed'))}; Entity ID: {match['entity_id']}",
+                        f"Type: {match['entity_type']}",
+                        "Related fields: " + _format_fields(match.get("fields", [])),
+                        f"Qualification: {match.get('signal', 'Shared value association')}",
+                    ]
+                )
+            lines.extend(["", "=" * 50, ""])
+        for notice in results:
+            if notice.get("notice_type") == "skipped_reference":
+                lines.append(
+                    f"{notice['message']} Case ID: {notice['case_id']}; Entity ID: {notice['entity_id']}; field: {notice['field']}"
+                )
+        return "\n".join(lines)
 
-            for match in matches:
-                match_info = [
-                    f"Case: {match['case_title']} (#{match['case_number']})",
-                    f"Case ID: {match['case_id']}",
-                ]
 
-                if match_type == "employer":
-                    match_info.extend(
-                        [
-                            f"Person: {match.get('person_name', '')}",
-                            "Relationship: Works at the same employer",
-                        ]
-                    )
-                elif match_type == "domain":
-                    match_info.extend(
-                        [
-                            f"Found in: {match.get('found_in', '')}",
-                            f"Relationship: Domain association ({match.get('entity_type', '')})",
-                        ]
-                    )
-                elif match_type == "vin":
-                    match_info.append(f"Relationship: Same vehicle (VIN match)")
-                elif match_type == "license_plate":
-                    match_info.append(
-                        f"Relationship: Same vehicle (license plate match)"
-                    )
-                else:
-                    match_info.append(f"Relationship: Same {entity_type} name match")
+def _weak_provider_match(match: dict[str, Any]) -> bool:
+    return match.get("signal_rank") == 2 or (
+        "signal_rank" not in match
+        and "low signal: common email provider" in match.get("signal", "").lower()
+    )
 
-                match_info.append("")
-                content_lines.extend(match_info)
 
-            content_lines.append("=" * 50 + "\n")
+def _format_fields(fields: list[dict[str, str]]) -> str:
+    return "; ".join(f"{field['field']}: {field['value']}" for field in fields)
 
-        return "\n".join(content_lines)
+
+def assemble_groups(parts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Reassemble additive continuation payloads; legacy groups stay readable."""
+    groups: dict[str, dict[str, Any]] = {}
+    matches: dict[str, dict[tuple[int, int], dict[str, Any]]] = {}
+    for index, part in enumerate(parts):
+        key = part.get("group_id", f"legacy:{index}")
+        if key not in groups:
+            groups[key] = {**part, "source_fields": [], "matches": []}
+            matches[key] = {}
+        groups[key]["source_fields"] = _merge_fields(
+            groups[key]["source_fields"], part.get("source_fields", [])
+        )
+        for match in part["matches"]:
+            identity = (match["case_id"], match["entity_id"])
+            if identity not in matches[key]:
+                matches[key][identity] = dict(match)
+                groups[key]["matches"].append(matches[key][identity])
+            previous = matches[key][identity]
+            if "fields" in match:
+                previous["fields"] = _merge_fields(
+                    previous.get("fields", []), match["fields"]
+                )
+    for group in groups.values():
+        group["matches"].sort(
+            key=lambda match: (
+                match.get("signal_rank", 1),
+                match["case_id"],
+                match["entity_id"],
+            )
+        )
+    return sorted(
+        groups.values(),
+        key=lambda group: (
+            min((match.get("signal_rank", 1) for match in group["matches"]), default=1),
+            group["entity_id"],
+            group["match_type"],
+            group.get("normalized_value", ""),
+        ),
+    )
+
+
+def _merge_fields(
+    first: list[dict[str, str]], second: list[dict[str, str]]
+) -> list[dict[str, str]]:
+    return list(
+        {
+            (field["field"], field["value"]): field for field in (*first, *second)
+        }.values()
+    )
+
+
+def _group_payload(match: CorrelationMatch, case_id: int) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "group_id": hashlib.sha256(
+            json.dumps(
+                [
+                    case_id,
+                    match.source_entity.id,
+                    match.kind.value,
+                    match.normalized_value,
+                ],
+                ensure_ascii=False,
+            ).encode()
+        ).hexdigest(),
+        "continuation": "merge",
+        "entity_id": match.source_entity.id,
+        "entity_name": correlation_label(match.source_entity),
+        "entity_type": match.source_entity.entity_type,
+        "match_type": match.kind.value,
+        "case_id": case_id,
+        "normalized_value": match.normalized_value,
+        "matched_value": match.value,
+        "source_fields": [asdict(field) for field in match.source_fields],
+        "matches": [],
+    }
+    if match.kind is CorrelationKind.EMPLOYER:
+        payload["employer_name"] = match.value
+    elif match.kind is CorrelationKind.DOMAIN:
+        payload["domain"] = match.value
+    return payload
+
+
+def _other_entity_payload(match: CorrelationMatch) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "entity_id": match.other_entity.id,
+        "entity_type": match.other_entity.entity_type,
+        "entity_name": correlation_label(match.other_entity),
+        "case_id": match.other_case.id,
+        "case_number": match.other_case.case_number,
+        "case_title": match.other_case.title,
+        "fields": [asdict(field) for field in match.other_fields],
+        "found_in": match.found_in,
+        "matched_value": match.other_fields[0].value,
+        "signal": match.signal,
+        "signal_rank": match.signal_rank,
+    }
+    if match.kind is CorrelationKind.EMPLOYER:
+        payload["person_name"] = payload["entity_name"]
+    return payload

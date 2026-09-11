@@ -1,10 +1,16 @@
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import taskService from '@/services/task'
 import { TASK_STATUS } from '@/constants/tasks'
+import { useActiveCaseStore } from './activeCase'
 import { useAuthStore } from './auth'
 
 export const useTaskStore = defineStore('task', () => {
+  const activeCase = useActiveCaseStore()
+  const authStore = useAuthStore()
+  let listRequest = 0
+  let detailRequest = 0
+  let contextGeneration = 0
   // State
   const templates = ref([])
   const tasks = ref([])
@@ -15,11 +21,24 @@ export const useTaskStore = defineStore('task', () => {
     status: 'all',
     priority: 'all',
     assignee: 'all',
-    case_id: null,
   })
 
+  watch(
+    [() => activeCase.activeCaseId, () => authStore.user?.id],
+    () => {
+      contextGeneration++
+      listRequest++
+      detailRequest++
+      tasks.value = []
+      currentTask.value = null
+      loading.value = false
+      error.value = null
+      resetFilters()
+    },
+    { flush: 'sync' },
+  )
+
   // Getters
-  const authStore = useAuthStore()
   const currentUserId = computed(() => authStore.user?.id)
 
   const filteredTasks = computed(() => {
@@ -41,10 +60,6 @@ export const useTaskStore = defineStore('task', () => {
       } else {
         result = result.filter((t) => t.assigned_to_id === parseInt(filters.value.assignee))
       }
-    }
-
-    if (filters.value.case_id) {
-      result = result.filter((t) => t.case_id === filters.value.case_id)
     }
 
     return result
@@ -92,13 +107,15 @@ export const useTaskStore = defineStore('task', () => {
     }
   }
 
-  async function loadTasks(customFilters = null) {
+  async function loadTasks(customFilters = null, isCurrent = () => true) {
+    const caseId = activeCase.activeCaseId
+    if (!caseId) return
+    const request = ++listRequest
     try {
       loading.value = true
       error.value = null
 
       const filterParams = customFilters || {
-        case_id: filters.value.case_id,
         status: filters.value.status !== 'all' ? filters.value.status : undefined,
         priority: filters.value.priority !== 'all' ? filters.value.priority : undefined,
         assigned_to_id:
@@ -109,6 +126,8 @@ export const useTaskStore = defineStore('task', () => {
             : undefined,
       }
 
+      filterParams.case_id = caseId
+
       // Remove undefined values
       Object.keys(filterParams).forEach((key) => {
         if (filterParams[key] === undefined) {
@@ -116,35 +135,49 @@ export const useTaskStore = defineStore('task', () => {
         }
       })
 
-      tasks.value = await taskService.getTasks(filterParams)
+      const result = await taskService.getTasks(filterParams)
+      if (request === listRequest && isCurrent()) tasks.value = result
     } catch (err) {
+      if (request !== listRequest || !isCurrent()) return
       error.value = err.response?.data?.detail || 'Failed to load tasks'
       throw err
     } finally {
-      loading.value = false
+      if (request === listRequest) loading.value = false
     }
   }
 
   async function loadTask(taskId) {
+    const caseId = activeCase.activeCaseId
+    if (!caseId) return
+    const request = ++detailRequest
+    currentTask.value = null
     try {
       loading.value = true
       error.value = null
-      currentTask.value = await taskService.getTask(taskId)
+      const task = await taskService.getTask(taskId)
+      if (request !== detailRequest) return
+      if (task.case_id !== caseId) throw new Error('Task does not belong to the active case')
+      currentTask.value = task
       return currentTask.value
     } catch (err) {
+      if (request !== detailRequest) return
       error.value = err.response?.data?.detail || 'Failed to load task'
       throw err
     } finally {
-      loading.value = false
+      if (request === detailRequest) loading.value = false
     }
   }
 
   async function createTask(taskData) {
+    const caseId = activeCase.activeCaseId
+    if (!caseId || (taskData.case_id != null && taskData.case_id !== caseId)) {
+      throw new Error('An active case matching the task is required')
+    }
     try {
       loading.value = true
       error.value = null
-      const newTask = await taskService.createTask(taskData)
-      tasks.value.push(newTask)
+      const newTask = await taskService.createTask({ ...taskData, case_id: caseId })
+      if (activeCase.activeCaseId === caseId) tasks.value.push(newTask)
       return newTask
     } catch (err) {
       error.value = err.response?.data?.detail || 'Failed to create task'
@@ -253,50 +286,41 @@ export const useTaskStore = defineStore('task', () => {
     }
   }
 
-  async function bulkAssign(taskIds, userId) {
+  async function applyBulk(operation, taskIds, value, isCurrent = () => true) {
+    const generation = contextGeneration
+    const caseId = activeCase.activeCaseId
+    const ids = [...new Set(taskIds)]
+    if (!caseId || !ids.length) throw new Error('Select Tasks in an active case first')
+    const sameContext = () => generation === contextGeneration
     try {
       loading.value = true
       error.value = null
-      const updated = await taskService.bulkAssign(taskIds, userId)
-
-      // Update tasks in array
-      updated.forEach((updatedTask) => {
-        const index = tasks.value.findIndex((t) => t.id === updatedTask.id)
-        if (index !== -1) {
-          tasks.value[index] = updatedTask
-        }
-      })
-
+      const updated = await operation(ids, value)
+      if (sameContext() && isCurrent()) {
+        updated.forEach((task) => {
+          if (task.case_id !== caseId || !ids.includes(task.id)) return
+          const index = tasks.value.findIndex((item) => item.id === task.id)
+          if (index !== -1) tasks.value[index] = task
+          if (currentTask.value?.id === task.id) currentTask.value = task
+        })
+      }
       return updated
     } catch (err) {
-      error.value = err.response?.data?.detail || 'Failed to bulk assign tasks'
+      if (sameContext() && isCurrent()) {
+        error.value = err.response?.data?.detail || 'Unable to confirm bulk Task updates'
+      }
       throw err
     } finally {
-      loading.value = false
+      if (sameContext()) loading.value = false
     }
   }
 
-  async function bulkUpdateStatus(taskIds, status) {
-    try {
-      loading.value = true
-      error.value = null
-      const updated = await taskService.bulkUpdateStatus(taskIds, status)
+  function bulkAssign(taskIds, userId, isCurrent) {
+    return applyBulk(taskService.bulkAssign, taskIds, userId, isCurrent)
+  }
 
-      // Update tasks in array
-      updated.forEach((updatedTask) => {
-        const index = tasks.value.findIndex((t) => t.id === updatedTask.id)
-        if (index !== -1) {
-          tasks.value[index] = updatedTask
-        }
-      })
-
-      return updated
-    } catch (err) {
-      error.value = err.response?.data?.detail || 'Failed to bulk update status'
-      throw err
-    } finally {
-      loading.value = false
-    }
+  function bulkUpdateStatus(taskIds, status, isCurrent) {
+    return applyBulk(taskService.bulkUpdateStatus, taskIds, status, isCurrent)
   }
 
   function setFilters(newFilters) {
@@ -308,7 +332,6 @@ export const useTaskStore = defineStore('task', () => {
       status: 'all',
       priority: 'all',
       assignee: 'all',
-      case_id: null,
     }
   }
 

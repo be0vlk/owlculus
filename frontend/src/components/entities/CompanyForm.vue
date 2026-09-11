@@ -1,6 +1,6 @@
 <template>
   <v-card variant="outlined">
-    <v-card-title class="text-subtitle-1">
+    <v-card-title class="text-body-large">
       <v-icon start>mdi-domain</v-icon>
       Details
     </v-card-title>
@@ -8,6 +8,7 @@
     <v-card-text>
       <v-text-field
         :model-value="modelValue.name"
+        autofocus
         @update:model-value="updateField('name', $event)"
         label="Company Name"
         variant="outlined"

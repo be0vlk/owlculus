@@ -1,19 +1,18 @@
 import { useEditor } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
-import Underline from '@tiptap/extension-underline'
-import Link from '@tiptap/extension-link'
 import Highlight from '@tiptap/extension-highlight'
-import TaskList from '@tiptap/extension-task-list'
-import TaskItem from '@tiptap/extension-task-item'
-import Placeholder from '@tiptap/extension-placeholder'
-import { ref, computed, onBeforeUnmount } from 'vue'
+import { TaskList, TaskItem } from '@tiptap/extension-list'
+import { Placeholder } from '@tiptap/extensions'
+import { ref, computed, onBeforeUnmount, onMounted } from 'vue'
 import { formatDistanceToNow } from 'date-fns'
 
 export function useBaseNoteEditor({
   initialContent = '',
   placeholder = 'Write your notes here... Use / for commands.',
   editable = true,
+  label = 'Notes',
   onUpdate = null,
+  onExit = null,
   saveDelay = 1000,
 }) {
   const lastSaved = ref(null)
@@ -26,6 +25,7 @@ export function useBaseNoteEditor({
   })
 
   let saveTimeout
+  const cancelPendingSave = () => clearTimeout(saveTimeout)
   const triggerSave = (saveCallback) => {
     clearTimeout(saveTimeout)
     if (saveCallback) {
@@ -33,15 +33,18 @@ export function useBaseNoteEditor({
     }
   }
 
+  // Capture pending notes before Tiptap's own unmount hook destroys the editor.
+  onBeforeUnmount(() => cleanup(onExit))
+
   const editor = useEditor({
     content: initialContent,
     editable,
     extensions: [
       StarterKit.configure({
-        taskList: false,
+        // Preserve v2 editing behavior without the new v3 defaults.
+        trailingNode: false,
+        listKeymap: false,
       }),
-      Underline,
-      Link,
       Highlight.configure({
         multicolor: true,
       }),
@@ -65,7 +68,7 @@ export function useBaseNoteEditor({
         },
       }),
     ],
-    shouldRerenderOnTransaction: false,
+    shouldRerenderOnTransaction: true,
     onUpdate: ({ editor }) => {
       if (onUpdate) {
         onUpdate(editor)
@@ -73,7 +76,10 @@ export function useBaseNoteEditor({
     },
     editorProps: {
       attributes: {
-        class: 'tiptap-editor focus:outline-none',
+        class: 'tiptap-editor',
+        role: 'textbox',
+        'aria-label': label,
+        'aria-multiline': 'true',
         style: 'min-height: 150px;',
       },
     },
@@ -136,25 +142,28 @@ export function useBaseNoteEditor({
     },
   ])
 
+  onMounted(() => {
+    lastSaved.value = editor.value.getHTML()
+  })
+
   const updateContent = (newVal) => {
     const currentContent = editor.value?.getHTML()
     if (newVal !== currentContent && editor.value) {
-      editor.value.commands.setContent(newVal || '', false)
+      editor.value.commands.setContent(newVal || '', { emitUpdate: false })
+      lastSaved.value = editor.value.getHTML()
     }
   }
 
   const cleanup = (saveCallback) => {
     clearTimeout(saveTimeout)
-    if (editor.value) {
+    if (editor.value && !editor.value.isDestroyed) {
       const content = editor.value.getHTML()
-      if (content !== lastSaved.value && saveCallback) {
+      if ((content !== lastSaved.value || saving.value) && saveCallback) {
         saveCallback()
       }
       editor.value.destroy()
     }
   }
-
-  onBeforeUnmount(() => cleanup())
 
   return {
     editor,
@@ -165,6 +174,7 @@ export function useBaseNoteEditor({
     formatLastSaved,
     updateContent,
     cleanup,
+    cancelPendingSave,
     triggerSave,
   }
 }

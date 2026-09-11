@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { reactive, nextTick } from 'vue'
 import { useCaseNoteSave } from '../useCaseNoteSave'
 import { caseService } from '../../services/case'
 
@@ -42,6 +43,7 @@ describe('useCaseNoteSave', () => {
       updateContent: vi.fn(),
       cleanup: vi.fn(),
       triggerSave: vi.fn(),
+      cancelPendingSave: vi.fn(),
     }
 
     mockUseBaseNoteEditor.mockReturnValue(mockBaseReturn)
@@ -64,10 +66,12 @@ describe('useCaseNoteSave', () => {
       useCaseNoteSave(props, emit, { saveMode: 'auto' })
 
       expect(mockUseBaseNoteEditor).toHaveBeenCalledWith({
+        label: 'Case notes',
         initialContent: props.modelValue,
         placeholder: 'Write your case notes here... Use / for commands.',
         editable: true,
         onUpdate: expect.any(Function),
+        onExit: expect.any(Function),
         saveDelay: 1000,
       })
     })
@@ -134,22 +138,23 @@ describe('useCaseNoteSave', () => {
       useCaseNoteSave(props, emit, { saveMode: 'manual' })
 
       expect(mockUseBaseNoteEditor).toHaveBeenCalledWith({
+        label: 'Case notes',
         initialContent: props.modelValue,
         placeholder: 'Notes (read-only)',
         editable: false,
         onUpdate: expect.any(Function),
+        onExit: null,
         saveDelay: null,
       })
     })
 
-    it('updates editor editability when isEditing changes', () => {
-      props.isEditing = true
+    it('updates editor editability silently when the prop changes', async () => {
+      props = reactive({ ...props, isEditing: true })
       useCaseNoteSave(props, emit, { saveMode: 'manual' })
-
-      // Simulate the watch callback
-      mockEditor.setEditable(false)
-
-      expect(mockEditor.setEditable).toHaveBeenCalledWith(false)
+      props.isEditing = false
+      await nextTick()
+      expect(mockEditor.setEditable).toHaveBeenCalledWith(false, false)
+      expect(emit).not.toHaveBeenCalled()
     })
   })
 

@@ -1,5 +1,5 @@
 <template>
-  <v-dialog v-model="dialog" max-width="500px" persistent>
+  <v-dialog v-model="dialog" max-width="500px" aria-label="Create New Folder" :persistent="loading">
     <v-card>
       <v-card-title class="d-flex align-center">
         <v-icon icon="mdi-folder-plus" class="mr-2"></v-icon>
@@ -7,8 +7,9 @@
       </v-card-title>
 
       <v-card-text>
-        <v-form ref="form" v-model="valid" lazy-validation @submit.prevent>
+        <v-form ref="form" v-model="valid" validate-on="lazy" @submit.prevent="createFolder">
           <v-text-field
+            autofocus
             v-model="folderName"
             label="Folder Name"
             :rules="folderNameRules"
@@ -46,6 +47,7 @@
 </template>
 
 <script setup>
+import { useDialogFocusRestore } from '@/composables/useDialogFocusRestore'
 import { ref, computed, watch } from 'vue'
 import { evidenceService } from '../services/evidence'
 import ModalActions from './ModalActions.vue'
@@ -93,6 +95,7 @@ const folderNameRules = [
 
 // Methods
 const createFolder = async () => {
+  if (loading.value) return
   // Trigger validation and wait for it to complete
   const isValid = await form.value.validate()
   if (!isValid.valid) {
@@ -145,4 +148,5 @@ watch(dialog, (newVal) => {
     resetForm()
   }
 })
+useDialogFocusRestore(() => dialog.value)
 </script>

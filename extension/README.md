@@ -22,7 +22,7 @@ A browser extension that allows you to capture web pages and send them as eviden
 ## Configuration
 
 1. Click the extension icon and then "Open Settings"
-2. Configure your Owlculus API endpoint (e.g., `http://localhost:8000`)
+2. Configure your Owlculus site endpoint (e.g., `http://localhost`)
 3. Login with your Owlculus credentials
 4. The extension will remember your authentication
 
@@ -73,3 +73,29 @@ The extension integrates with Owlculus API endpoints:
 - Ensure your Owlculus backend is running and accessible
 - Check browser console for detailed error messages
 - Make sure you have at least one case created in Owlculus
+
+### Instance-bound sessions
+
+Credentials, cached user details, and the last selected Case belong to the endpoint
+that issued the login response. Switching instances clears that session and requires
+sign-in. Existing installations with unbound legacy credentials must sign in again.
+Denied host permission and invalid URLs retain the previous selection and session.
+An already open popup clears its instance data on a session change; reopen it to
+load the newly selected instance.
+
+Endpoint identity uses the browser URL parser: scheme/hostname case, default ports
+(`:80` for HTTP, `:443` for HTTPS), dot segments, and trailing slashes are normalized.
+Scheme, non-default port, and base path (including path case) remain significant.
+For example, `https://EXAMPLE.com:443/team/` equals `https://example.com/team`,
+but differs from `http://example.com/team` and `https://example.com/other`.
+Credentials, queries, and fragments in endpoint URLs are rejected. Authenticated
+requests cannot follow redirects; configure the final instance URL directly.
+
+Session mutations use Web Locks across extension contexts. Each request retains
+one endpoint/session snapshot, and responses from an obsolete session are rejected.
+The focused memory-only regressions run with:
+
+```sh
+cd frontend
+npm run test:unit -- --run src/__tests__/extensionSession.test.js
+```

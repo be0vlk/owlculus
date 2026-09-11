@@ -11,6 +11,7 @@ filetype
 chardet
 selenium
 beautifulsoup4
+fpdf2
 python-dotenv
 holehe
 pyexiftool
@@ -28,3 +29,5 @@ vt-py
 python-multipart
 celery[redis]
 redis
+
+idna==3.19

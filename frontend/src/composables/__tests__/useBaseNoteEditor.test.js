@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { mount } from '@vue/test-utils'
 import { useBaseNoteEditor } from '../useBaseNoteEditor'
 import { useEditor } from '@tiptap/vue-3'
 
@@ -140,7 +141,7 @@ describe('useBaseNoteEditor', () => {
 
     result.updateContent(newContent)
 
-    expect(mockEditor.commands.setContent).toHaveBeenCalledWith(newContent, false)
+    expect(mockEditor.commands.setContent).toHaveBeenCalledWith(newContent, { emitUpdate: false })
   })
 
   it('should not update content when same as current', () => {
@@ -161,7 +162,7 @@ describe('useBaseNoteEditor', () => {
 
     result.updateContent(null)
 
-    expect(mockEditor.commands.setContent).toHaveBeenCalledWith('', false)
+    expect(mockEditor.commands.setContent).toHaveBeenCalledWith('', { emitUpdate: false })
   })
 
   it('should cleanup on unmount', () => {
@@ -189,6 +190,21 @@ describe('useBaseNoteEditor', () => {
 
     expect(saveCallback).not.toHaveBeenCalled()
     expect(mockEditor.destroy).toHaveBeenCalled()
+  })
+
+  it('cancels the timer and destroys the editor on actual component unmount', () => {
+    const save = vi.fn()
+    const host = mount({
+      setup() {
+        const notes = useBaseNoteEditor({})
+        notes.triggerSave(save)
+        return () => null
+      },
+    })
+    host.unmount()
+    vi.advanceTimersByTime(2000)
+    expect(save).not.toHaveBeenCalled()
+    expect(mockEditor.destroy).toHaveBeenCalledTimes(1)
   })
 
   it('should format last saved time', () => {

@@ -1,17 +1,17 @@
 <template>
   <div>
-    <Sidebar v-if="showSidebar" />
-
     <v-main>
-      <v-container fluid class="pa-6">
-        <!-- Page Header Card -->
-        <v-card class="mb-6 header-gradient">
-          <v-card-title class="d-flex align-center pa-6 text-white">
-            <div class="text-h4 font-weight-bold">{{ title }}</div>
-            <v-spacer />
-            <slot name="header-actions" />
-          </v-card-title>
-        </v-card>
+      <v-container fluid :class="compact ? 'pa-4 pa-md-6' : 'pa-6'">
+        <slot name="header">
+          <!-- Page Header Card -->
+          <v-card class="mb-6 header-gradient">
+            <v-card-title class="d-flex flex-wrap ga-3 align-center pa-6 text-white">
+              <h1 class="text-headline-large font-weight-bold text-wrap">{{ title }}</h1>
+              <v-spacer />
+              <slot name="header-actions" />
+            </v-card-title>
+          </v-card>
+        </slot>
 
         <!-- Loading State -->
         <slot name="loading" v-if="loading">
@@ -50,9 +50,8 @@
 </template>
 
 <script setup>
-import Sidebar from './Sidebar.vue'
-
 defineProps({
+  compact: Boolean,
   title: {
     type: String,
     required: true,
@@ -64,10 +63,6 @@ defineProps({
   error: {
     type: String,
     default: null,
-  },
-  showSidebar: {
-    type: Boolean,
-    default: true,
   },
 })
 </script>

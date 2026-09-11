@@ -2,27 +2,28 @@
 Hunt context for managing data flow between hunt steps
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .base_hunt import HuntStepDefinition
+from .step_input_resolver import ABSENT, resolve_step_input
 
 
 class HuntContext:
     """Manages data flow and state between hunt steps"""
 
-    def __init__(self, initial_parameters: Dict[str, Any]):
+    def __init__(self, initial_parameters: dict[str, Any]):
         self.initial_parameters = initial_parameters
-        self.step_outputs: Dict[str, Any] = {}
-        self.metadata: Dict[str, Any] = {}
-        self.evidence_refs: List[str] = []
-        self.failed_steps: List[str] = []
-        self.skipped_steps: List[str] = []
+        self.step_outputs: dict[str, Any] = {}
+        self.metadata: dict[str, Any] = {}
+        self.evidence_refs: list[str] = []
+        self.failed_steps: list[str] = []
+        self.skipped_steps: list[str] = []
 
     def set_step_output(self, step_id: str, output: Any):
         """Store output from a completed step"""
         self.step_outputs[step_id] = output
 
-    def get_step_output(self, step_id: str) -> Optional[Any]:
+    def get_step_output(self, step_id: str) -> Any | None:
         """Retrieve output from a previous step"""
         return self.step_outputs.get(step_id)
 
@@ -41,7 +42,7 @@ class HuntContext:
         if step_id not in self.skipped_steps:
             self.skipped_steps.append(step_id)
 
-    def resolve_parameters(self, step_def: HuntStepDefinition) -> Dict[str, Any]:
+    def resolve_parameters(self, step_def: HuntStepDefinition) -> dict[str, Any]:
         """
         Resolve parameters for a step using mapping rules
 
@@ -53,46 +54,13 @@ class HuntContext:
         resolved = step_def.static_parameters.copy()
 
         for param_name, mapping_expr in step_def.parameter_mapping.items():
-            value = self._resolve_mapping(mapping_expr)
-            if value is not None:
+            value = resolve_step_input(
+                mapping_expr, self.initial_parameters, self.step_outputs
+            )
+            if value is not ABSENT:
                 resolved[param_name] = value
 
         return resolved
-
-    def _resolve_mapping(self, mapping_expr: str) -> Optional[Any]:
-        """Resolve a single mapping expression"""
-        if not mapping_expr:
-            return None
-
-        parts = mapping_expr.split(".")
-
-        if parts[0] == "initial":
-            # Get from initial parameters
-            return self._get_nested_value(self.initial_parameters, parts[1:])
-
-        elif parts[0] in self.step_outputs:
-            # Get from step output
-            step_output = self.step_outputs[parts[0]]
-            if len(parts) == 1:
-                return step_output
-            else:
-                return self._get_nested_value(step_output, parts[1:])
-
-        return None
-
-    def _get_nested_value(self, data: Any, keys: List[str]) -> Optional[Any]:
-        """Get nested value from dict or object"""
-        current = data
-
-        for key in keys:
-            if isinstance(current, dict) and key in current:
-                current = current[key]
-            elif hasattr(current, key):
-                current = getattr(current, key)
-            else:
-                return None
-
-        return current
 
     def to_dict(self) -> dict:
         """Convert context to dictionary for storage"""

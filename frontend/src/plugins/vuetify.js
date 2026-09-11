@@ -3,7 +3,6 @@ import 'vuetify/styles'
 import { createVuetify } from 'vuetify'
 import * as components from 'vuetify/components'
 import * as directives from 'vuetify/directives'
-import { VTreeview } from 'vuetify/labs/VTreeview'
 
 // Custom theme to match current Owlculus color scheme
 const owlculusTheme = {
@@ -54,10 +53,7 @@ const owlculusDarkTheme = {
 }
 
 export default createVuetify({
-  components: {
-    ...components,
-    VTreeview,
-  },
+  components,
   directives,
   theme: {
     defaultTheme: 'owlculusLight',

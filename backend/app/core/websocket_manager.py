@@ -2,9 +2,12 @@
 WebSocket connection manager for real-time notifications
 """
 
-from typing import Dict, Set
+from typing import TYPE_CHECKING
 
 from fastapi import WebSocket
+
+if TYPE_CHECKING:
+    from app.hunts.hunt_event import HuntEvent
 
 
 class WebSocketManager:
@@ -12,7 +15,7 @@ class WebSocketManager:
 
     def __init__(self):
         # Dictionary mapping execution_id to set of WebSocket connections
-        self.connections: Dict[int, Set[WebSocket]] = {}
+        self.connections: dict[int, set[WebSocket]] = {}
 
     async def connect(self, execution_id: int, websocket: WebSocket):
         """Add a WebSocket connection for an execution"""
@@ -27,129 +30,21 @@ class WebSocketManager:
             if not self.connections[execution_id]:
                 del self.connections[execution_id]
 
-    async def send_progress_update(
-        self, execution_id: int, progress: float, step_id: str = None
-    ):
-        """Send progress update to all connected clients"""
-        if execution_id not in self.connections:
-            return
-
-        message = {
-            "event_type": "progress",
-            "progress": progress,
-            "execution_id": execution_id,
-        }
-
-        if step_id:
-            message["step_id"] = step_id
-
-        # Send to all connected clients
+    async def broadcast(self, event: "HuntEvent") -> None:
+        """Send a hunt event to every connection for its execution."""
+        connections = self.connections.get(event.execution_id, set()).copy()
         disconnected = []
-        for websocket in self.connections[execution_id]:
+        for websocket in connections:
             try:
-                await websocket.send_json(message)
-            except Exception:
+                await websocket.send_json(event.to_wire())
+            except Exception:  # noqa: BLE001 - transports can fail arbitrarily
                 disconnected.append(websocket)
 
-        # Clean up disconnected websockets
         for ws in disconnected:
-            self.disconnect(execution_id, ws)
+            self.disconnect(event.execution_id, ws)
 
-    async def send_step_complete(
-        self, execution_id: int, step_id: str, progress: float
-    ):
-        """Send step completion notification"""
-        if execution_id not in self.connections:
-            return
-
-        message = {
-            "event_type": "step_complete",
-            "step_id": step_id,
-            "progress": progress,
-            "execution_id": execution_id,
-        }
-
-        # Send to all connected clients
-        disconnected = []
-        for websocket in self.connections[execution_id]:
-            try:
-                await websocket.send_json(message)
-            except Exception:
-                disconnected.append(websocket)
-
-        # Clean up disconnected websockets
-        for ws in disconnected:
-            self.disconnect(execution_id, ws)
-
-    async def send_step_failed(self, execution_id: int, step_id: str, progress: float):
-        """Send step failure notification"""
-        if execution_id not in self.connections:
-            return
-
-        message = {
-            "event_type": "step_failed",
-            "step_id": step_id,
-            "progress": progress,
-            "execution_id": execution_id,
-        }
-
-        # Send to all connected clients
-        disconnected = []
-        for websocket in self.connections[execution_id]:
-            try:
-                await websocket.send_json(message)
-            except Exception:
-                disconnected.append(websocket)
-
-        # Clean up disconnected websockets
-        for ws in disconnected:
-            self.disconnect(execution_id, ws)
-
-    async def send_execution_complete(self, execution_id: int):
-        """Send execution completion notification"""
-        if execution_id not in self.connections:
-            return
-
-        message = {"event_type": "complete", "execution_id": execution_id}
-
-        # Send to all connected clients
-        disconnected = []
-        for websocket in self.connections[execution_id]:
-            try:
-                await websocket.send_json(message)
-            except Exception:
-                disconnected.append(websocket)
-
-        # Clean up disconnected websockets
-        for ws in disconnected:
-            self.disconnect(execution_id, ws)
-
-        # Remove all connections for this execution
-        if execution_id in self.connections:
-            del self.connections[execution_id]
-
-    async def send_execution_error(self, execution_id: int, error: str):
-        """Send execution error notification"""
-        if execution_id not in self.connections:
-            return
-
-        message = {"event_type": "error", "error": error, "execution_id": execution_id}
-
-        # Send to all connected clients
-        disconnected = []
-        for websocket in self.connections[execution_id]:
-            try:
-                await websocket.send_json(message)
-            except Exception:
-                disconnected.append(websocket)
-
-        # Clean up disconnected websockets
-        for ws in disconnected:
-            self.disconnect(execution_id, ws)
-
-        # Remove all connections for this execution
-        if execution_id in self.connections:
-            del self.connections[execution_id]
+        if event.event_type in {"complete", "error"}:
+            self.connections.pop(event.execution_id, None)
 
 
 # Global WebSocket manager instance

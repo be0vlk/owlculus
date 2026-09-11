@@ -1,5 +1,5 @@
 <template>
-  <BaseDashboard :error="error" :loading="loading" title="Hunt Management">
+  <BaseDashboard :loading="loading && !huntStore.executionHistory.length" title="Hunt Management">
     <!-- Header Actions -->
     <template #header-actions>
       <div class="d-flex align-center ga-2">
@@ -9,6 +9,7 @@
           prepend-icon="mdi-refresh"
           @click="refreshData"
           :loading="loading"
+          :disabled="!caseId"
         >
           Refresh
         </v-btn>
@@ -22,8 +23,12 @@
       </v-card>
     </template>
 
+    <v-alert v-if="error || huntStore.error" type="error" role="alert" class="mb-4">
+      {{ error || huntStore.error }}
+    </v-alert>
     <!-- Main Content -->
-    <v-card variant="outlined">
+    <v-alert v-if="!caseId" type="info">Resolve an accessible case to use Hunts.</v-alert>
+    <v-card v-else variant="outlined">
       <!-- Tabs -->
       <v-tabs v-model="activeTab" bg-color="surface" class="px-4">
         <v-tab value="catalog" prepend-icon="mdi-view-grid">
@@ -69,8 +74,8 @@
           <div class="pa-4">
             <!-- Active Executions -->
             <div v-if="huntStore.runningExecutions.length > 0">
-              <div class="text-h6 mb-4">Running Executions</div>
-              <v-row dense>
+              <div class="text-title-large mb-4">Running Executions</div>
+              <v-row density="compact">
                 <v-col
                   v-for="execution in huntStore.runningExecutions"
                   :key="`running-${execution.id}`"
@@ -83,7 +88,7 @@
                 >
                   <HuntProgressCard
                     :execution="execution"
-                    :cancelling="cancellingExecutions.has(execution.id)"
+                    :cancelling="!!huntStore.cancellationPending[execution.id]"
                     @cancel="handleCancelExecution"
                     @view-details="handleViewExecutionDetails"
                     class="flex-grow-1"
@@ -94,8 +99,8 @@
 
             <!-- Recently Completed -->
             <div v-if="huntStore.completedExecutions.length > 0" class="mt-6">
-              <div class="text-h6 mb-4">Recently Completed</div>
-              <v-row dense>
+              <div class="text-title-large mb-4">Recently Completed</div>
+              <v-row density="compact">
                 <v-col
                   v-for="execution in huntStore.completedExecutions.slice(0, 6)"
                   :key="`completed-${execution.id}`"
@@ -124,8 +129,8 @@
               class="text-center pa-8"
             >
               <v-icon icon="mdi-play-circle-outline" size="64" color="grey" class="mb-4" />
-              <div class="text-h6 mb-2">No Active Executions</div>
-              <div class="text-body-2 text-medium-emphasis mb-4">
+              <div class="text-title-large mb-2">No Active Executions</div>
+              <div class="text-body-medium text-medium-emphasis mb-4">
                 Start a hunt from the Available Hunts tab to begin investigating
               </div>
               <v-btn color="primary" @click="activeTab = 'catalog'"> Browse Hunts </v-btn>
@@ -154,7 +159,9 @@
     <HuntExecutionModal
       v-model="showExecutionModal"
       :hunt="selectedHunt"
-      :cases="cases"
+      :case-id="caseId"
+      :executing="submittingHunt"
+      :error="huntSubmissionError"
       @execute="handleExecuteHuntSubmit"
       @cancel="handleExecutionModalCancel"
     />
@@ -170,8 +177,7 @@
 </template>
 
 <script setup>
-// Watch for tab changes to manage polling
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useHuntStore } from '@/stores/huntStore.js'
@@ -182,12 +188,14 @@ import HuntProgressCard from '@/components/hunts/HuntProgressCard.vue'
 import HuntExecutionModal from '@/components/hunts/HuntExecutionModal.vue'
 import HuntDetailsModal from '@/components/hunts/HuntDetailsModal.vue'
 import HuntExecutionHistory from '@/components/hunts/HuntExecutionHistory.vue'
-import { caseService } from '@/services/case'
+import { useActiveCaseStore } from '@/stores/activeCase'
 
 // Store and router
 const router = useRouter()
 const authStore = useAuthStore()
 const huntStore = useHuntStore()
+const activeCase = useActiveCaseStore()
+const caseId = computed(() => activeCase.activeCaseId)
 const { showNotification } = useNotifications()
 
 // Local state
@@ -197,10 +205,11 @@ const error = ref(null)
 const activeTab = ref('catalog')
 const selectedHunt = ref(null)
 const showExecutionModal = ref(false)
+const submittingHunt = ref(false)
+const huntSubmissionError = ref(null)
 const showDetailsModal = ref(false)
-const cases = ref([])
-const cancellingExecutions = ref(new Set())
-let pollingInterval = null
+let loadGeneration = 0
+let workflow = null
 
 // Computed properties
 const userRole = computed(() => authStore.user?.role)
@@ -217,30 +226,21 @@ const checkAccess = () => {
 
 // Methods
 const loadData = async () => {
+  const request = ++loadGeneration
+  const id = caseId.value
+  if (!id || !checkAccess()) {
+    workflow?.release()
+    loading.value = false
+    return
+  }
   try {
     loading.value = true
     error.value = null
-
-    // Load hunts and cases first
-    await Promise.all([huntStore.fetchHunts(), loadCases()])
-
-    // Then load active executions from all accessible cases
-    await huntStore.loadAllActiveExecutions(cases.value)
+    await workflow.refresh()
   } catch (err) {
-    error.value = err.message || 'Failed to load hunt data'
-    console.error('Failed to load hunt data:', err)
+    if (request === loadGeneration) error.value = err.message || 'Failed to load hunt data'
   } finally {
-    loading.value = false
-  }
-}
-
-const loadCases = async () => {
-  try {
-    const response = await caseService.getCases()
-    cases.value = response || []
-  } catch (err) {
-    console.error('Failed to load cases:', err)
-    // Don't set error here as it's not critical for hunt management
+    if (request === loadGeneration) loading.value = false
   }
 }
 
@@ -248,43 +248,29 @@ const refreshData = async () => {
   await loadData()
 }
 
-const refreshActiveExecutions = async () => {
-  await huntStore.refreshRunningExecutions()
-}
-
-const startPolling = () => {
-  // Stop any existing polling
-  stopPolling()
-
-  // Poll every 5 seconds for active executions updates
-  pollingInterval = setInterval(() => {
-    if (activeTab.value === 'active' && huntStore.runningExecutions.length > 0) {
-      refreshActiveExecutions()
-    }
-  }, 5000)
-}
-
-const stopPolling = () => {
-  if (pollingInterval) {
-    clearInterval(pollingInterval)
-    pollingInterval = null
-  }
-}
-
 const handleExecuteHunt = (hunt) => {
+  if (!caseId.value) return
+  huntSubmissionError.value = null
   selectedHunt.value = hunt
   showExecutionModal.value = true
 }
 
 const handleExecuteHuntSubmit = async (executionData) => {
+  if (submittingHunt.value || !caseId.value) return
+  const owner = workflow
+  const submittedCaseId = caseId.value
+  const huntName = selectedHunt.value?.display_name
+  submittingHunt.value = true
+  huntSubmissionError.value = null
   try {
     const execution = await huntStore.executeHunt(
       executionData.huntId,
-      executionData.caseId,
+      submittedCaseId,
       executionData.parameters,
     )
 
-    showNotification(`Hunt "${selectedHunt.value.display_name}" started successfully`, 'success')
+    if (!owner?.isCurrent()) return execution
+    showNotification(`Hunt "${huntName}" accepted`, 'success')
 
     // Switch to active executions tab
     activeTab.value = 'active'
@@ -295,8 +281,11 @@ const handleExecuteHuntSubmit = async (executionData) => {
 
     return execution
   } catch (err) {
+    if (!owner?.isCurrent()) return
     showNotification(err.message || 'Failed to execute hunt', 'error')
-    throw err
+    huntSubmissionError.value = err.message || 'Failed to execute hunt'
+  } finally {
+    if (owner?.isCurrent()) submittingHunt.value = false
   }
 }
 
@@ -319,58 +308,38 @@ const handleDetailsModalClose = () => {
 }
 
 const handleCancelExecution = async (executionId) => {
+  const owner = workflow
   try {
-    cancellingExecutions.value.add(executionId)
-
-    await huntStore.cancelExecution(executionId)
-    showNotification('Hunt execution cancelled', 'info')
+    const result = await huntStore.cancelExecution(executionId)
+    if (result && owner?.isCurrent()) showNotification('Cancellation requested', 'info')
   } catch (err) {
-    showNotification(err.message || 'Failed to cancel execution', 'error')
-  } finally {
-    cancellingExecutions.value.delete(executionId)
+    if (owner?.isCurrent()) showNotification(err.message || 'Failed to cancel execution', 'error')
   }
 }
 
 const handleViewExecutionDetails = (executionId) => {
-  router.push(`/hunts/execution/${executionId}`)
+  const execution = huntStore.activeExecutions[executionId]
+  if (execution) router.push(`/case/${execution.case_id}/hunts/execution/${executionId}`)
 }
 
-watch(activeTab, (newTab) => {
-  if (newTab === 'active') {
-    startPolling()
-  } else {
-    stopPolling()
-  }
-})
-
-// Watch for changes in running executions to manage polling
 watch(
-  () => huntStore.runningExecutions.length,
-  (count) => {
-    if (count > 0 && activeTab.value === 'active') {
-      startPolling()
-    } else if (count === 0) {
-      stopPolling()
-    }
+  caseId,
+  () => {
+    workflow = huntStore.openWorkflow({ caseId: caseId.value })
+    submittingHunt.value = false
+    error.value = null
+    showExecutionModal.value = false
+    showDetailsModal.value = false
+    selectedHunt.value = null
+    huntSubmissionError.value = null
+    loadData()
   },
+  { immediate: true },
 )
 
-// Lifecycle
-onMounted(async () => {
-  if (!checkAccess()) return
-
-  await loadData()
-
-  // Start polling if we're on the active tab and have running executions
-  if (activeTab.value === 'active' && huntStore.runningExecutions.length > 0) {
-    startPolling()
-  }
-})
-
-onUnmounted(() => {
-  // Cleanup
-  stopPolling()
-  huntStore.cleanup()
+onBeforeUnmount(() => {
+  loadGeneration++
+  workflow?.release()
 })
 </script>
 

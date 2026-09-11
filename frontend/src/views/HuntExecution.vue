@@ -1,5 +1,5 @@
 <template>
-  <BaseDashboard :error="error" :loading="loading" :title="pageTitle">
+  <BaseDashboard :loading="loading && !execution" :title="pageTitle">
     <!-- Header Actions -->
     <template #header-actions>
       <div class="d-flex align-center ga-2">
@@ -12,7 +12,7 @@
         >
           Refresh
         </v-btn>
-        <v-menu v-if="hasResults">
+        <v-menu v-if="canExport">
           <template #activator="{ props }">
             <v-btn color="white" prepend-icon="mdi-download" v-bind="props" variant="outlined">
               Export
@@ -29,12 +29,13 @@
           </v-list>
         </v-menu>
         <v-btn
-          v-if="execution?.status === 'running'"
+          v-if="['pending', 'running'].includes(execution?.status)"
           color="error"
           variant="outlined"
           prepend-icon="mdi-stop"
           @click="handleCancelExecution"
           :loading="cancelling"
+          :disabled="cancelling"
         >
           Cancel Hunt
         </v-btn>
@@ -42,7 +43,7 @@
           color="white"
           variant="text"
           prepend-icon="mdi-arrow-left"
-          @click="$router.push('/hunts')"
+          @click="$router.push(`/case/${route.params.caseId}/hunts`)"
         >
           Back to Hunts
         </v-btn>
@@ -50,6 +51,9 @@
     </template>
 
     <!-- Loading State -->
+    <v-alert v-if="huntStore.error" type="error" role="alert" class="mb-4">
+      {{ huntStore.error }}
+    </v-alert>
     <template #loading>
       <v-card variant="outlined">
         <v-skeleton-loader type="article" />
@@ -58,13 +62,17 @@
 
     <!-- Main Content -->
     <div v-if="execution">
+      <ExecutionWaiting :execution="execution" />
+      <v-alert v-if="execution.error" type="error" role="alert" class="mb-4">
+        {{ execution.error.message }}
+      </v-alert>
       <!-- Execution Overview Card -->
       <v-card variant="outlined" class="mb-6">
         <v-card-title class="d-flex align-center pa-4 bg-surface">
           <v-icon icon="mdi-information" color="primary" size="large" class="me-3" />
           <div class="flex-grow-1">
-            <div class="text-h6 font-weight-bold">Execution Information</div>
-            <div class="text-body-2 text-medium-emphasis">
+            <div class="text-title-large font-weight-bold">Execution Information</div>
+            <div class="text-body-medium text-medium-emphasis">
               Details and results for this hunt execution
             </div>
           </div>
@@ -77,17 +85,17 @@
           <v-row>
             <v-col cols="12" md="6">
               <div class="mb-4">
-                <v-list-item-subtitle class="text-subtitle-2 font-weight-medium mb-1">
+                <v-list-item-subtitle class="text-title-small font-weight-medium mb-1">
                   Hunt Name
                 </v-list-item-subtitle>
-                <v-list-item-title class="text-body-1">
+                <v-list-item-title class="text-body-large">
                   {{ execution.hunt?.display_name || 'N/A' }}
                 </v-list-item-title>
               </div>
             </v-col>
             <v-col cols="12" md="6">
               <div class="mb-4">
-                <v-list-item-subtitle class="text-subtitle-2 font-weight-medium mb-1">
+                <v-list-item-subtitle class="text-title-small font-weight-medium mb-1">
                   Status
                 </v-list-item-subtitle>
                 <v-chip
@@ -102,50 +110,50 @@
             </v-col>
             <v-col cols="12" md="6">
               <div class="mb-4">
-                <v-list-item-subtitle class="text-subtitle-2 font-weight-medium mb-1">
+                <v-list-item-subtitle class="text-title-small font-weight-medium mb-1">
                   Case
                 </v-list-item-subtitle>
-                <v-list-item-title class="text-body-1">
+                <v-list-item-title class="text-body-large">
                   {{ execution.case?.case_number || `Case #${execution.case_id}` }}
                 </v-list-item-title>
               </div>
             </v-col>
             <v-col cols="12" md="6">
               <div class="mb-4">
-                <v-list-item-subtitle class="text-subtitle-2 font-weight-medium mb-1">
+                <v-list-item-subtitle class="text-title-small font-weight-medium mb-1">
                   Category
                 </v-list-item-subtitle>
-                <v-list-item-title class="text-body-1">
+                <v-list-item-title class="text-body-large">
                   {{ displayCategory }}
                 </v-list-item-title>
               </div>
             </v-col>
             <v-col cols="12" md="6">
               <div class="mb-4">
-                <v-list-item-subtitle class="text-subtitle-2 font-weight-medium mb-1">
+                <v-list-item-subtitle class="text-title-small font-weight-medium mb-1">
                   Started By
                 </v-list-item-subtitle>
-                <v-list-item-title class="text-body-1">
+                <v-list-item-title class="text-body-large">
                   {{ execution.created_by?.username || `User #${execution.created_by_id}` }}
                 </v-list-item-title>
               </div>
             </v-col>
             <v-col cols="12" md="6">
               <div class="mb-4">
-                <v-list-item-subtitle class="text-subtitle-2 font-weight-medium mb-1">
+                <v-list-item-subtitle class="text-title-small font-weight-medium mb-1">
                   Started At
                 </v-list-item-subtitle>
-                <v-list-item-title class="text-body-1">
+                <v-list-item-title class="text-body-large">
                   {{ formatDate(execution.started_at) }}
                 </v-list-item-title>
               </div>
             </v-col>
             <v-col cols="12" md="6">
               <div class="mb-4">
-                <v-list-item-subtitle class="text-subtitle-2 font-weight-medium mb-1">
+                <v-list-item-subtitle class="text-title-small font-weight-medium mb-1">
                   {{ execution.completed_at ? 'Completed At' : 'Duration' }}
                 </v-list-item-subtitle>
-                <v-list-item-title class="text-body-1">
+                <v-list-item-title class="text-body-large">
                   {{ execution.completed_at ? formatDate(execution.completed_at) : elapsedTime }}
                 </v-list-item-title>
               </div>
@@ -159,14 +167,14 @@
             "
           >
             <v-divider class="my-4" />
-            <div class="text-subtitle-1 font-weight-medium mb-3">Hunt Parameters</div>
-            <v-table density="compact">
+            <div class="text-body-large font-weight-medium mb-3">Hunt Parameters</div>
+            <v-table class="hunt-table" density="compact">
               <tbody>
                 <tr v-for="(value, key) in execution.initial_parameters" :key="key">
-                  <td class="text-subtitle-2 font-weight-medium" style="width: 40%">
+                  <td class="text-title-small font-weight-medium" style="width: 40%">
                     {{ formatParameterName(key) }}
                   </td>
-                  <td class="text-body-2">{{ value }}</td>
+                  <td class="text-body-medium">{{ value }}</td>
                 </tr>
               </tbody>
             </v-table>
@@ -194,7 +202,7 @@
               :class="getLogEntryClass(logEntry.type)"
               class="log-entry pa-3"
             >
-              <span class="text-caption">{{ formatLogTime(logEntry.timestamp) }}</span>
+              <span class="text-body-small">{{ formatLogTime(logEntry.timestamp) }}</span>
               <span class="ml-2">{{ logEntry.message }}</span>
             </div>
             <div v-if="executionLog.length === 0" class="text-center pa-4 text-medium-emphasis">
@@ -224,7 +232,7 @@
           <!-- Step Results Section -->
           <v-divider class="my-4" />
 
-          <div class="text-h6 mb-3">Step Results</div>
+          <div class="text-title-large mb-3">Step Results</div>
           <div v-if="filteredSteps.length > 0">
             <v-expansion-panels variant="accordion">
               <v-expansion-panel v-for="(step, index) in filteredSteps" :key="step.id">
@@ -234,10 +242,10 @@
                       <v-icon :icon="getStatusIcon(step.status)" color="white" size="small" />
                     </v-avatar>
                     <div class="flex-grow-1">
-                      <div class="text-body-1 font-weight-medium">
+                      <div class="text-body-large font-weight-medium">
                         Step {{ index + 1 }}: {{ step.plugin_name }}
                       </div>
-                      <div class="text-caption text-medium-emphasis">
+                      <div class="text-body-small text-medium-emphasis">
                         {{ step.step_id }} • {{ formatDuration(step) }}
                       </div>
                     </div>
@@ -252,14 +260,21 @@
                   </div>
                 </v-expansion-panel-title>
                 <v-expansion-panel-text>
-                  <HuntStepResults :step="step" :step-number="index + 1" />
+                  <HuntStepResults
+                    :step="step"
+                    :step-number="index + 1"
+                    :retrieval-loading="loading"
+                    :retrieval-error="huntStore.error"
+                    :export-error="exportError"
+                    @retry="refreshExecution"
+                  />
                 </v-expansion-panel-text>
               </v-expansion-panel>
             </v-expansion-panels>
           </div>
           <div v-else class="text-center pa-8">
             <v-icon class="mb-2" color="grey" icon="mdi-information" size="48" />
-            <div class="text-body-1">No steps available</div>
+            <div class="text-body-large">No steps available</div>
           </div>
         </v-card-text>
       </v-card>
@@ -303,7 +318,30 @@
         <v-card-title class="pa-4"> Step Output: {{ selectedStep?.step_id }} </v-card-title>
         <v-divider />
         <v-card-text class="pa-4">
-          <pre class="step-output">{{ JSON.stringify(selectedStep?.output, null, 2) }}</pre>
+          <HuntStepResults
+            v-if="selectedStep?.plugin_name === 'CorrelationScan'"
+            :step="selectedStep"
+            :step-number="1"
+            :retrieval-loading="loading"
+            :retrieval-error="huntStore.error"
+            :export-error="exportError"
+            @retry="refreshExecution"
+          />
+          <template v-else>
+            <v-alert
+              v-if="
+                selectedStep?.output?.partial ||
+                selectedStep?.output?.errors?.length ||
+                selectedStep?.status !== 'completed'
+              "
+              type="warning"
+              role="alert"
+              class="mb-4"
+            >
+              Partial retained results. This step has not completed successfully.
+            </v-alert>
+            <pre class="step-output">{{ JSON.stringify(selectedStep?.output, null, 2) }}</pre>
+          </template>
         </v-card-text>
         <v-card-actions class="pa-4">
           <v-spacer />
@@ -334,14 +372,15 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import ExecutionWaiting from '@/components/ExecutionWaiting.vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useHuntStore } from '@/stores/huntStore.js'
+import { huntService } from '@/services/hunt'
 import { useNotifications } from '@/composables/useNotifications'
 import { formatDate } from '@/composables/dateUtils'
 import {
   calculateDuration,
-  exportToJSON,
   formatFileSize,
   formatParameterName,
   formatTime,
@@ -350,6 +389,7 @@ import {
   getStatusIcon,
   getStatusText,
 } from '@/utils/huntDisplayUtils'
+import { downloadBlob } from '@/utils/download'
 import BaseDashboard from '@/components/BaseDashboard.vue'
 import HuntResultsSummary from '@/components/hunts/HuntResultsSummary.vue'
 import HuntStepResults from '@/components/hunts/HuntStepResults.vue'
@@ -362,16 +402,22 @@ const { showNotification } = useNotifications()
 
 // Local state
 const loading = ref(true)
-const error = ref(null)
-const execution = ref(null)
-const cancelling = ref(false)
+const execution = computed(() => {
+  const record = huntStore.activeExecutions[executionId.value]
+  return record && String(record.case_id) === String(route.params.caseId) ? record : null
+})
+const cancelling = computed(() => !!huntStore.cancellationPending[executionId.value])
 const selectedStep = ref(null)
 const showStepOutputModal = ref(false)
 const showStepErrorModal = ref(false)
 const executionLog = ref([])
 const elapsedTime = ref('')
 const exportingPDF = ref(false)
+const exportError = ref(null)
 let elapsedInterval = null
+let disposed = false
+let workflow = null
+let loadGeneration = 0
 
 // Computed properties
 const executionId = computed(() => parseInt(route.params.id))
@@ -395,8 +441,8 @@ const statusText = computed(() => {
   return getStatusText(execution.value.status)
 })
 
-const hasResults = computed(() => {
-  return execution.value?.status === 'completed' || execution.value?.status === 'partial'
+const canExport = computed(() => {
+  return execution.value && !['pending', 'running', 'cancelling'].includes(execution.value.status)
 })
 
 const filteredSteps = computed(() => {
@@ -433,22 +479,20 @@ const displayCategory = computed(() => {
 
 // Methods
 const loadExecution = async () => {
+  const owner = workflow
+  const request = ++loadGeneration
+  if (!owner?.isCurrent()) return
   try {
     loading.value = true
-    error.value = null
-
-    execution.value = await huntStore.getExecution(executionId.value, true)
-
-    // Subscribe to real-time updates if running
-    if (execution.value.status === 'running') {
-      huntStore.subscribeToExecution(executionId.value)
-      startElapsedTimer()
+    const result = await owner.refresh()
+    if (!owner.isCurrent() || request !== loadGeneration) return
+    if (result && String(result.case_id) !== String(route.params.caseId)) {
+      await router.replace(`/case/${result.case_id}/hunts/execution/${result.id}`)
     }
-  } catch (err) {
-    error.value = err.message || 'Failed to load execution details'
-    console.error('Failed to load execution:', err)
+  } catch {
+    // The workflow retains read feedback until durable recovery succeeds.
   } finally {
-    loading.value = false
+    if (owner.isCurrent() && request === loadGeneration) loading.value = false
   }
 }
 
@@ -457,46 +501,38 @@ const refreshExecution = async () => {
 }
 
 const handleCancelExecution = async () => {
+  const owner = workflow
   try {
-    cancelling.value = true
-    await huntStore.cancelExecution(executionId.value)
-    showNotification('Hunt execution cancelled', 'info')
-    await loadExecution()
+    const result = await huntStore.cancelExecution(executionId.value)
+    if (result && owner?.isCurrent()) showNotification('Cancellation requested', 'info')
   } catch (err) {
-    showNotification(err.message || 'Failed to cancel execution', 'error')
-  } finally {
-    cancelling.value = false
+    if (owner?.isCurrent()) showNotification(err.message || 'Failed to cancel execution', 'error')
   }
 }
 
-const exportPDF = async () => {
+const exportExecution = async (format) => {
+  const owner = workflow
+  const id = executionId.value
   try {
-    exportingPDF.value = true
-    showNotification('PDF export functionality not yet implemented', 'info')
-    // TODO: Implement PDF export
-  } catch (error) {
-    console.error('Failed to export PDF:', error)
-    showNotification('Failed to export PDF', 'error')
-  } finally {
-    exportingPDF.value = false
-  }
-}
-
-const exportJSON = () => {
-  try {
-    const data = {
-      execution: execution.value,
-      timestamp: new Date().toISOString(),
-      export_version: '1.0',
-    }
-
-    exportToJSON(data, `hunt_execution_${executionId.value}_results.json`)
+    exportError.value = null
+    exportingPDF.value = format === 'pdf'
+    const artifact = await huntService.exportExecution(id, format)
+    if (!owner?.isCurrent()) return
+    downloadBlob(artifact, `hunt-execution-${id}.${format}`)
     showNotification('Results exported successfully', 'success')
   } catch (error) {
-    console.error('Failed to export JSON:', error)
-    showNotification('Failed to export JSON', 'error')
+    if (!owner?.isCurrent()) return
+    console.error(`Failed to export ${format.toUpperCase()}:`, error)
+    exportError.value = `Failed to export ${format.toUpperCase()}`
+    showNotification(`Failed to export ${format.toUpperCase()}`, 'error')
+  } finally {
+    if (owner?.isCurrent()) exportingPDF.value = false
   }
 }
+
+const exportPDF = () => exportExecution('pdf')
+
+const exportJSON = () => exportExecution('json')
 
 const viewEvidence = (evidence) => {
   // Navigate to evidence view
@@ -538,6 +574,7 @@ const updateElapsedTime = () => {
 }
 
 const startElapsedTimer = () => {
+  stopElapsedTimer()
   updateElapsedTime()
   elapsedInterval = setInterval(updateElapsedTime, 1000)
 }
@@ -550,28 +587,38 @@ const stopElapsedTimer = () => {
 }
 
 // Lifecycle
-onMounted(async () => {
-  await loadExecution()
-})
-
-onUnmounted(() => {
-  stopElapsedTimer()
-  huntStore.unsubscribeFromExecution(executionId.value)
-})
-
-// Watch for execution updates from store
 watch(
-  () => huntStore.activeExecutions[executionId.value],
-  (updatedExecution) => {
-    if (updatedExecution) {
-      execution.value = updatedExecution
+  () => [route.params.caseId, route.params.id],
+  () => {
+    workflow = huntStore.openWorkflow({
+      caseId: route.params.caseId,
+      executionId: executionId.value,
+    })
+    exportingPDF.value = false
+    exportError.value = null
+    selectedStep.value = null
+    showStepOutputModal.value = false
+    showStepErrorModal.value = false
+    executionLog.value = []
+    loadExecution()
+  },
+  { immediate: true },
+)
 
-      // Stop timer if execution is no longer running
-      if (updatedExecution.status !== 'running') {
-        stopElapsedTimer()
+onBeforeUnmount(() => {
+  disposed = true
+  workflow?.release()
+  stopElapsedTimer()
+})
 
-        // No need to auto-switch since results is the default tab
-      }
+// Only the display timer follows lifecycle changes; execution data belongs to the store.
+watch(
+  () => [execution.value?.id, execution.value?.status, execution.value?.started_at],
+  ([, status]) => {
+    if (!disposed && status === 'running') startElapsedTimer()
+    else {
+      stopElapsedTimer()
+      elapsedTime.value = ''
     }
   },
 )
@@ -587,22 +634,22 @@ watch(
 }
 
 .log-entry {
-  border-bottom: 1px solid rgba(var(--v-theme-outline), 0.1);
+  border-bottom: 1px solid rgb(var(--v-theme-outline), 0.1);
   white-space: pre-wrap;
 }
 
 .log-error {
-  background-color: rgba(var(--v-theme-error), 0.1);
+  background-color: rgb(var(--v-theme-error), 0.1);
   color: rgb(var(--v-theme-error));
 }
 
 .log-warning {
-  background-color: rgba(var(--v-theme-warning), 0.1);
+  background-color: rgb(var(--v-theme-warning), 0.1);
   color: rgb(var(--v-theme-warning));
 }
 
 .log-info {
-  background-color: rgba(var(--v-theme-info), 0.1);
+  background-color: rgb(var(--v-theme-info), 0.1);
   color: rgb(var(--v-theme-info));
 }
 
@@ -614,13 +661,12 @@ watch(
   background-color: rgb(var(--v-theme-surface-variant));
   padding: 16px;
   border-radius: 8px;
-  overflow-x: auto;
+  overflow: auto;
   font-size: 12px;
   max-height: 400px;
-  overflow-y: auto;
 }
 
-.v-table tbody td {
+.hunt-table tbody td {
   padding: 8px 16px;
 }
 
@@ -629,6 +675,6 @@ watch(
 }
 
 .cursor-pointer:hover {
-  background-color: rgba(var(--v-theme-on-surface), 0.04);
+  background-color: rgb(var(--v-theme-on-surface), 0.04);
 }
 </style>

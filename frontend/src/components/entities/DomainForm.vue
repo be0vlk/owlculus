@@ -1,6 +1,6 @@
 <template>
   <v-card variant="outlined">
-    <v-card-title class="text-subtitle-1">
+    <v-card-title class="text-body-large">
       <v-icon start>mdi-web</v-icon>
       Details
     </v-card-title>
@@ -8,6 +8,7 @@
     <v-card-text>
       <v-text-field
         :model-value="modelValue.domain"
+        autofocus
         @update:model-value="updateField('domain', $event)"
         label="Domain Name"
         variant="outlined"
@@ -33,12 +34,12 @@
 </template>
 
 <script setup>
-import { usePluginValidation } from '@/composables/usePluginParams'
+import { useEntityValidation } from '@/composables/useEntityValidation'
 import { entityFormProps, entityFormEmits, useEntityFormField } from '@/composables/useEntityForm'
 
 const props = defineProps(entityFormProps)
 const emit = defineEmits(entityFormEmits)
 
-const { domainRule } = usePluginValidation()
+const { domainRule } = useEntityValidation()
 const { updateField } = useEntityFormField(props, emit)
 </script>

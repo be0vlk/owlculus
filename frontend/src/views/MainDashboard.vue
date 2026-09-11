@@ -1,34 +1,23 @@
 <template>
-  <BaseDashboard :error="error" :loading="loading" title="Cases">
-    <template #loading>
-      <v-card variant="outlined">
-        <v-card-title class="d-flex align-center pa-4 bg-surface">
-          <v-skeleton-loader type="text" width="200" />
-          <v-spacer />
-          <div class="d-flex ga-2">
-            <v-skeleton-loader type="button" width="80" />
-            <v-skeleton-loader type="button" width="90" />
-            <v-skeleton-loader type="button" width="100" />
-          </div>
-          <v-skeleton-loader type="button" width="120" class="ml-4" />
-          <v-skeleton-loader type="text" width="200" class="ml-2" />
-        </v-card-title>
-        <v-divider />
-        <v-skeleton-loader type="table" class="pa-4" />
-      </v-card>
-    </template>
+  <BaseDashboard title="Cases">
+    <v-alert v-if="error" type="error" variant="tonal" class="mb-6" role="alert">
+      {{ error }}
+    </v-alert>
 
     <!-- Cases data table -->
     <v-card variant="outlined">
       <!-- Header -->
-      <v-card-title class="d-flex align-center pa-4 bg-surface">
+      <v-card-title class="d-flex flex-wrap align-center ga-3 pa-4 bg-surface">
         <v-icon class="me-3" color="primary" icon="mdi-briefcase" size="large" />
         <div class="flex-grow-1">
-          <div class="text-h6 font-weight-bold">Case Management</div>
-          <div class="text-body-2 text-medium-emphasis">Manage investigations and assignments</div>
+          <div class="text-title-large font-weight-bold">Case Management</div>
+          <div class="text-body-medium text-medium-emphasis">
+            Manage investigations and assignments
+          </div>
         </div>
         <div class="d-flex align-center ga-2">
           <v-btn
+            size="small"
             v-if="authStore.requiresAdmin()"
             color="primary"
             prepend-icon="mdi-plus"
@@ -40,6 +29,8 @@
           <v-tooltip location="bottom" text="Refresh case list">
             <template #activator="{ props }">
               <v-btn
+                size="small"
+                aria-label="Refresh case list"
                 :loading="loading"
                 icon="mdi-refresh"
                 v-bind="props"
@@ -55,11 +46,11 @@
 
       <!-- Filters and Search Toolbar -->
       <v-card-text class="pa-4">
-        <v-row align="center" class="mb-0">
+        <v-row class="mb-0 align-center">
           <!-- Quick Filter Chips -->
           <v-col cols="12" md="8">
             <div class="d-flex align-center ga-2 flex-wrap">
-              <span class="text-body-2 font-weight-medium me-2">Filter:</span>
+              <span class="text-body-medium font-weight-medium me-2">Filter:</span>
               <v-chip-group
                 v-model="activeQuickFilter"
                 color="primary"
@@ -85,7 +76,7 @@
                   density="comfortable"
                   hide-details
                 />
-                <span class="text-body-2 text-no-wrap">Show Closed</span>
+                <span class="text-body-medium text-no-wrap">Show Closed</span>
               </div>
 
               <!-- Search Field -->
@@ -112,6 +103,7 @@
         :items="enhancedFilteredCases"
         :loading="loading"
         class="elevation-0 case-dashboard-table"
+        :hide-no-data="!!error"
         hover
         item-key="id"
         @click:row="handleRowClick"
@@ -151,7 +143,7 @@
 
         <!-- Created date -->
         <template #[`item.created_at`]="{ item }">
-          <span class="text-body-2">
+          <span class="text-body-medium">
             {{ formatDate(item.created_at) }}
           </span>
         </template>
@@ -160,10 +152,10 @@
         <template #no-data>
           <div class="text-center pa-12">
             <v-icon class="mb-4" color="grey-lighten-1" icon="mdi-folder-open-outline" size="64" />
-            <h3 class="text-h6 font-weight-medium mb-2">
+            <h3 class="text-title-large font-weight-medium mb-2">
               {{ getEmptyStateTitle() }}
             </h3>
-            <p class="text-body-2 text-medium-emphasis mb-4">
+            <p class="text-body-medium text-medium-emphasis mb-4">
               {{ getEmptyStateMessage() }}
             </p>
             <v-btn
@@ -192,6 +184,7 @@
     :color="snackbar.color"
     :timeout="snackbar.timeout"
     location="top right"
+    :role="snackbar.color === 'error' ? 'alert' : 'status'"
   >
     {{ snackbar.text }}
     <template #actions>
@@ -201,14 +194,17 @@
 </template>
 
 <script setup>
-import { onMounted, ref, computed } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import BaseDashboard from '../components/BaseDashboard.vue'
 import NewCaseModal from '../components/NewCaseModal.vue'
 import { useDashboard } from '../composables/useDashboard'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { useActiveCaseStore } from '../stores/activeCase'
 import { useAuthStore } from '../stores/auth'
 
+const route = useRoute()
 const router = useRouter()
+const activeCase = useActiveCaseStore()
 const authStore = useAuthStore()
 
 const {
@@ -224,6 +220,17 @@ const {
 } = useDashboard()
 
 const isNewCaseModalOpen = ref(false)
+watch(
+  () => route.query.create,
+  (create) => {
+    if (create !== '1' || !authStore.requiresAdmin()) return
+    isNewCaseModalOpen.value = true
+    const query = { ...route.query }
+    delete query.create
+    router.replace({ query })
+  },
+  { immediate: true },
+)
 const activeQuickFilter = ref('all')
 
 const snackbar = ref({
@@ -257,15 +264,24 @@ const enhancedFilteredCases = computed(() => {
   return filteredCases
 })
 
-const handleCaseCreated = (newCase) => {
+const handleCaseCreated = async (newCase, { assignmentWarning } = {}) => {
   // Refresh the cases list
-  loadData()
+  await loadData()
   isNewCaseModalOpen.value = false
-  showNotification(`Case "${newCase?.case_number || 'New case'}" created successfully`, 'success')
+  if (assignmentWarning) {
+    showNotification(
+      `Case "${newCase?.case_number || 'New case'}" was created, but ${assignmentWarning}. Manage the case users to retry.`,
+      'warning',
+    )
+  } else {
+    showNotification(`Case "${newCase?.case_number || 'New case'}" created successfully`, 'success')
+  }
+  activeCase.notification = snackbar.value.text
+  await activeCase.select(newCase.id, { overview: true })
 }
 
 const handleRowClick = (event, { item }) => {
-  router.push(`/case/${item.id}`)
+  activeCase.select(item.id, { overview: true })
 }
 
 // Snackbar helper function
@@ -298,7 +314,9 @@ const getEmptyStateMessage = () => {
   } else if (activeQuickFilter.value === 'unassigned') {
     return 'All cases have been assigned to team members.'
   } else if ((cases.value || []).length === 0) {
-    return 'Get started by creating your first investigation case.'
+    return authStore.requiresAdmin()
+      ? 'Get started by creating your first investigation case.'
+      : 'Contact an administrator to be assigned to a case.'
   } else {
     return 'Try adjusting your filters to see more cases.'
   }
@@ -315,26 +333,3 @@ const shouldShowCreateButton = () => {
 
 onMounted(loadData)
 </script>
-
-<style scoped>
-.case-dashboard-table :deep(.v-data-table__tr:hover) {
-  background-color: rgb(var(--v-theme-primary), 0.04) !important;
-  cursor: pointer;
-}
-
-.case-dashboard-table :deep(.v-data-table__td) {
-  padding: 12px 16px !important;
-  border-bottom: 1px solid rgb(var(--v-theme-on-surface), 0.08) !important;
-}
-
-.case-dashboard-table :deep(.v-data-table__th) {
-  padding: 16px !important;
-  font-weight: 600 !important;
-  color: rgb(var(--v-theme-on-surface), 0.87) !important;
-  border-bottom: 2px solid rgb(var(--v-theme-on-surface), 0.12) !important;
-}
-
-.case-dashboard-table :deep(.v-data-table-rows-no-data) {
-  padding: 48px 16px !important;
-}
-</style>

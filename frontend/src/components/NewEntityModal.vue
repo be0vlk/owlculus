@@ -1,7 +1,23 @@
 <template>
-  <v-dialog v-model="dialogVisible" max-width="700px" persistent>
-    <v-card prepend-icon="mdi-account-plus" title="Add New Entity">
+  <v-dialog
+    v-model="dialogVisible"
+    aria-label="Add New Entity"
+    max-width="700px"
+    :persistent="entityForm.state.loading"
+  >
+    <v-card prepend-icon="mdi-account-plus">
+      <v-card-title id="new-entity-dialog-title">Add New Entity</v-card-title>
       <v-card-text>
+        <EntityDuplicateAdvisory
+          :candidates="entityForm.advisories.candidates.value"
+          :case-id="caseId"
+          :entity-type="entityForm.state.entityType"
+          :loading="entityForm.state.loading"
+          @continue="handleSubmit(true)"
+        />
+        <p v-if="!formValid" class="mb-4">
+          {{ entityIdentityGuidance[entityForm.state.entityType] }}
+        </p>
         <!-- Error Alert -->
         <v-alert v-if="entityForm.state.error" type="error" variant="tonal" class="mb-4">
           {{ entityForm.state.error }}
@@ -10,7 +26,7 @@
         <v-form ref="formRef" @submit.prevent="handleSubmit">
           <!-- Entity Type Selector -->
           <v-card variant="outlined" class="mb-6">
-            <v-card-title class="text-subtitle-1 pb-2">
+            <v-card-title class="text-body-large pb-2">
               <v-icon start>mdi-shape</v-icon>
               Entity Type
             </v-card-title>
@@ -71,6 +87,10 @@
               />
             </v-tabs-window-item>
           </v-tabs-window>
+
+          <button aria-hidden="true" class="d-none" tabindex="-1" type="submit">
+            Submit entity
+          </button>
         </v-form>
       </v-card-text>
 
@@ -78,7 +98,7 @@
 
       <v-card-actions>
         <v-spacer />
-        <v-btn :disabled="entityForm.state.loading" variant="text" @click="$emit('close')">
+        <v-btn :disabled="entityForm.state.loading" variant="text" @click="cancelDialog">
           Cancel
         </v-btn>
         <v-btn
@@ -96,9 +116,11 @@
 </template>
 
 <script setup>
+import EntityDuplicateAdvisory from './entities/EntityDuplicateAdvisory.vue'
 import { watch, computed, ref } from 'vue'
 import { useEntityForm } from '../composables/useEntityForm'
-import { useEntityValidation } from '../composables/useEntityValidation'
+import { useEntityValidation, entityIdentityGuidance } from '../composables/useEntityValidation'
+import { useDialogFocusRestore } from '../composables/useDialogFocusRestore'
 import PersonForm from './entities/PersonForm.vue'
 import CompanyForm from './entities/CompanyForm.vue'
 import DomainForm from './entities/DomainForm.vue'
@@ -109,6 +131,8 @@ const props = defineProps({
   show: { type: Boolean, required: true, default: false },
   caseId: { type: String, required: true },
 })
+
+useDialogFocusRestore(() => props.show)
 
 const emit = defineEmits(['close', 'created'])
 
@@ -142,15 +166,22 @@ const dialogVisible = computed({
 // Computed validation
 const formValid = computed(() => isFormValid(entityForm.state.entityType, entityForm.state.data))
 
+function cancelDialog() {
+  if (!entityForm.state.loading) emit('close')
+}
+
 // Handle tab change
 function handleTabChange(newTab) {
   entityForm.setEntityType(newTab)
 }
 
 // Handle form submission
-async function handleSubmit() {
+async function handleSubmit(confirmed = false) {
+  if (!formValid.value || entityForm.state.loading) return
+
   try {
-    const response = await entityForm.submitEntity()
+    const response = await entityForm.submitEntity(confirmed === true)
+    if (!response) return
     emit('created', response)
     emit('close')
   } catch {

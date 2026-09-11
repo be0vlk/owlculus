@@ -1,9 +1,18 @@
 <template>
-  <v-dialog v-model="dialogVisible" max-width="1200px" persistent scrollable>
+  <v-dialog
+    v-model="dialogVisible"
+    :aria-label="getEntityTitle"
+    max-width="1200px"
+    persistent
+    scrollable
+    @keydown.esc="handleEscape"
+  >
     <v-card>
       <v-card-title class="d-flex align-center">
         <v-icon start :icon="getEntityIcon" color="primary" />
-        <span class="text-h5">{{ getEntityTitle }}</span>
+        <span id="entity-details-dialog-title" class="text-headline-small">
+          {{ getEntityTitle }}
+        </span>
         <v-spacer />
         <v-chip :color="isEditing ? 'warning' : 'primary'" size="small" variant="tonal">
           {{ isEditing ? 'Editing' : 'View Mode' }}
@@ -14,6 +23,13 @@
 
       <v-card-text class="pa-0">
         <!-- Error Alert -->
+        <EntityDuplicateAdvisory
+          :candidates="advisories.candidates.value"
+          :case-id="caseId"
+          :entity-type="entity.entity_type"
+          :loading="updating"
+          @continue="handleSubmit(true)"
+        />
         <v-alert v-if="error" type="error" variant="tonal" class="ma-4">
           {{ error }}
         </v-alert>
@@ -32,25 +48,26 @@
 
         <!-- Tab Contents -->
         <EntityTabContent
+          ref="tabContent"
           :active-tab="activeTab"
           :entity-schema="entitySchema"
           :is-editing="isEditing"
-          :entity="entity"
-          :form-data="formData"
+          :entity="acknowledgedEntity"
+          :get-field-value="getFieldValue"
+          :update-field-value="updateFieldValue"
           :notes-expanded="notesExpanded"
           :note-editor="noteEditor"
           :note-editor-actions="noteEditorActions"
           :note-saving="noteSaving"
+          :note-save-error="noteSaveError"
           :note-last-saved-time="noteLastSavedTime"
           :note-format-last-saved="noteFormatLastSaved"
           :get-source-value="getSourceValue"
           :update-source-value="updateSourceValue"
-          :get-associate-entities="getAssociateEntities"
           :existing-entities="existingEntities"
           @submit="handleSubmit"
           @toggle-expand="notesExpanded = !notesExpanded"
           @view-entity="$emit('viewEntity', $event)"
-          @update-field="handleFieldUpdate"
         />
       </v-card-text>
 
@@ -59,7 +76,8 @@
       <EntityModalActions
         :is-editing="isEditing"
         :updating="updating"
-        @close="$emit('close')"
+        :closing="closing"
+        @close="handleClose"
         @edit="startEditing"
         @cancel="cancelEdit"
         @save="handleSubmit"
@@ -74,6 +92,7 @@
     :editor="noteEditor"
     :editor-actions="noteEditorActions"
     :saving="noteSaving"
+    :save-error="noteSaveError"
     :last-saved-time="noteLastSavedTime"
     :format-last-saved="noteFormatLastSaved"
     :is-editing="isEditing"
@@ -82,33 +101,44 @@
 </template>
 
 <script setup>
-import { ref, computed, toRef } from 'vue'
+import EntityDuplicateAdvisory from './EntityDuplicateAdvisory.vue'
+import { ref, computed, toRef, watch } from 'vue'
 import EntityTabContent from './EntityTabContent.vue'
 import EntityModalActions from './EntityModalActions.vue'
 import EntityNotesFullscreen from './EntityNotesFullscreen.vue'
 import { useEntityDetails } from '../../composables/useEntityDetails.js'
-import { useEntityAssociates } from '../../composables/useEntityAssociates.js'
 import { useEntityIcons } from '../../composables/useEntityIcons.js'
 import { useEntityDisplay } from '../../composables/useEntityDisplay.js'
-import { useEntityNoteEditor } from '../../composables/useEntityNoteEditor.js'
-import { useEntitySources } from '../../composables/useEntitySources.js'
+import { useDialogFocusRestore } from '../../composables/useDialogFocusRestore.js'
 
 const props = defineProps({
   show: { type: Boolean, required: true, default: false },
   entity: { type: Object, required: true },
   caseId: { type: Number, required: true },
   existingEntities: { type: Array, required: true },
+  restoreFocusTo: { type: Function, default: null },
 })
+
+useDialogFocusRestore(
+  () => props.show,
+  () => props.restoreFocusTo?.(),
+)
 
 const emit = defineEmits(['close', 'edit', 'viewEntity'])
 
 const notesExpanded = ref(false)
+const closing = ref(false)
+const tabContent = ref(null)
+useDialogFocusRestore(
+  () => notesExpanded.value,
+  () => tabContent.value?.$el?.querySelector('[aria-label="Expand to fullscreen"]'),
+)
 
 const dialogVisible = computed({
   get: () => props.show,
   set: (value) => {
     if (!value) {
-      emit('close')
+      handleClose()
     }
   },
 })
@@ -118,60 +148,61 @@ const caseId = toRef(props, 'caseId')
 const existingEntities = toRef(props, 'existingEntities')
 
 const {
+  advisories,
   error,
   isEditing,
   updating,
   activeTab,
-  formData,
+  acknowledgedEntity,
+  getFieldValue,
+  updateFieldValue,
+  getSourceValue,
+  updateSourceValue,
   entitySchema,
   startEditing,
   cancelEdit,
   updateEntity,
-} = useEntityDetails(entity, caseId)
-
-const { getAssociateEntities, processAssociates } = useEntityAssociates(entity)
-
-const { getEntityIcon, getSectionIcon } = useEntityIcons(entity)
-
-const { getEntityTitle } = useEntityDisplay(entity)
-
-const {
   editor: noteEditor,
   editorActions: noteEditorActions,
   saving: noteSaving,
+  saveError: noteSaveError,
   lastSavedTime: noteLastSavedTime,
   formatLastSaved: noteFormatLastSaved,
-} = useEntityNoteEditor(entity, caseId, isEditing, formData, emit)
+  saveNotes,
+} = useEntityDetails(entity, caseId, emit)
 
-const { getSourceValue, updateSourceValue } = useEntitySources(entity, formData, isEditing)
+const { getEntityIcon, getSectionIcon } = useEntityIcons(acknowledgedEntity)
+const { getEntityTitle } = useEntityDisplay(acknowledgedEntity)
 
-function handleFieldUpdate(fieldPath, value) {
-  // Handle nested field paths (e.g., 'address.street' becomes data.address.street)
-  if (fieldPath.includes('.')) {
-    const parts = fieldPath.split('.')
-    const parentField = parts[0]
-    const childField = parts[1]
-    
-    // Ensure parent object exists
-    if (!formData.value.data[parentField]) {
-      formData.value.data[parentField] = {}
-    }
-    
-    formData.value.data[parentField][childField] = value
+watch(
+  () => props.show,
+  (show) => {
+    if (!show) saveNotes()
+  },
+)
+
+function handleEscape() {
+  if (updating.value) return
+  if (isEditing.value) {
+    cancelEdit()
   } else {
-    formData.value.data[fieldPath] = value
+    handleClose()
   }
 }
 
-async function handleSubmit() {
+async function handleClose() {
+  if (closing.value || updating.value) return
+  closing.value = true
   try {
-    const { updatedEntity, createdAssociates } = await updateEntity(processAssociates)
+    if (await saveNotes()) emit('close')
+  } finally {
+    closing.value = false
+  }
+}
 
-    if (createdAssociates.length > 0) {
-      emit('edit', updatedEntity, createdAssociates)
-    } else {
-      emit('edit', updatedEntity)
-    }
+async function handleSubmit(confirmed = false) {
+  try {
+    await updateEntity(confirmed === true)
   } catch {
     // Error handled in composable
   }

@@ -1,17 +1,23 @@
 <template>
-  <v-dialog v-model="showDialog" max-width="500" persistent>
+  <v-dialog
+    v-model="showDialog"
+    :aria-label="dialogTitle"
+    max-width="500"
+    persistent
+    @keydown.esc="!loading && handleCancel()"
+  >
     <v-card>
       <v-card-title class="d-flex align-center pa-6">
         <v-icon :color="dialogIconColor" :icon="dialogIcon" class="me-3" size="large" />
-        <span class="text-h5 font-weight-medium">{{ dialogTitle }}</span>
+        <span class="text-headline-small font-weight-medium">{{ dialogTitle }}</span>
       </v-card-title>
 
       <v-divider />
 
       <v-card-text class="pa-6">
-        <div class="text-body-1 mb-4" v-html="dialogMessage" />
+        <div class="text-body-large mb-4" v-html="dialogMessage" />
         <v-alert v-if="warningText" class="mb-0" type="warning" variant="tonal">
-          <div class="text-body-2">
+          <div class="text-body-medium">
             <strong>{{ warningText }}</strong>
           </div>
         </v-alert>

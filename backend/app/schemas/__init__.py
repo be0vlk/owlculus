@@ -38,6 +38,7 @@ from .task_schema import (
 )
 from .user_schema import (
     AdminPasswordReset,
+    BootstrapUserCreate,
     PasswordChange,
     User,
     UserCreate,

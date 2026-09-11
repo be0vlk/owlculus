@@ -2,7 +2,7 @@ import api from './api'
 
 export const clientService = {
   async getClients() {
-    const response = await api.get('/api/clients')
+    const response = await api.get('/api/clients/')
     return response.data
   },
 
@@ -12,7 +12,7 @@ export const clientService = {
   },
 
   async createClient(client) {
-    const response = await api.post('/api/clients', client)
+    const response = await api.post('/api/clients/', client)
     return response.data
   },
 

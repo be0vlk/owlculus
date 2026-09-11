@@ -184,3 +184,10 @@ megalinter-reports
 /.mega-linter.yml
 /.jscpd.json
 *plan.md
+
+# Local AI and agent tooling
+/AGENTS.md
+/.agents/
+/.codex/
+/docs/
+/.scratch/

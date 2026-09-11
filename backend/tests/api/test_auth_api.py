@@ -1,24 +1,24 @@
-"""
-Tests for authentication API endpoints
-"""
+"""Tests for authentication API endpoints."""
 
-from unittest.mock import patch
+import asyncio
+import threading
 
+import bcrypt
 import pytest
-from app.core import security
-from app.core.dependencies import get_db
-from app.database.models import User
-from app.main import app
 from fastapi import status
 from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
 from sqlmodel import Session
 
-client = TestClient(app)
+from app.core import security
+from app.core.dependencies import get_current_user
+from app.database.connection import get_db
+from app.database.models import Case, Hunt, HuntExecution, User
+from app.main import app
 
 
 @pytest.fixture
 def test_user_with_password(session: Session) -> tuple[User, str]:
-    """Create a test user and return both the user and the plain password"""
     password = "testpassword123"
     user = User(
         username="testuser",
@@ -40,132 +40,183 @@ def override_get_db_factory(session: Session):
     return override_get_db
 
 
-class TestAuthAPI:
-    """Test cases for authentication API endpoints"""
+def test_setup_status_requires_setup_when_no_users_exist(
+    session: Session, client: TestClient
+):
+    app.dependency_overrides[get_db] = override_get_db_factory(session)
+    response = client.get("/api/auth/setup-status")
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == {"setup_required": True}
 
-    def test_login_success(
-        self, session: Session, test_user_with_password: tuple[User, str]
-    ):
-        """Test successful login"""
-        user, password = test_user_with_password
 
-        app.dependency_overrides[get_db] = override_get_db_factory(session)
+def test_setup_status_is_complete_when_a_user_exists(
+    session: Session, test_user_with_password: tuple[User, str], client: TestClient
+):
+    app.dependency_overrides[get_db] = override_get_db_factory(session)
+    response = client.get("/api/auth/setup-status")
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json() == {"setup_required": False}
 
-        try:
-            # Mock crud.get_user_by_username to return our test user
-            with patch(
-                "app.services.auth_service.crud.get_user_by_username"
-            ) as mock_get_user:
-                mock_get_user.return_value = user
 
-                response = client.post(
-                    "/api/auth/login",
-                    data={
-                        "username": user.username,
-                        "password": password,
-                    },
-                )
+def test_login_uses_persisted_password_hash(
+    session: Session, test_user_with_password: tuple[User, str], client: TestClient
+):
+    user, password = test_user_with_password
+    app.dependency_overrides[get_db] = override_get_db_factory(session)
+    response = client.post(
+        "/api/auth/login", data={"username": user.username, "password": password}
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json()["token_type"] == "bearer"
+    assert response.json()["access_token"]
 
-                assert response.status_code == status.HTTP_200_OK
-                data = response.json()
-                assert "access_token" in data
-                assert data["token_type"] == "bearer"
-        finally:
-            app.dependency_overrides.clear()
 
-    def test_login_invalid_username(self, session: Session):
-        """Test login with invalid username"""
-        app.dependency_overrides[get_db] = override_get_db_factory(session)
+@pytest.mark.parametrize(
+    ("username", "password"),
+    [("nonexistent", "password123"), ("testuser", "wrongpassword"), ("", "")],
+)
+def test_login_rejects_invalid_credentials(
+    session: Session,
+    test_user_with_password: tuple[User, str],
+    client: TestClient,
+    username: str,
+    password: str,
+):
+    app.dependency_overrides[get_db] = override_get_db_factory(session)
+    response = client.post(
+        "/api/auth/login", data={"username": username, "password": password}
+    )
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert response.json() == {"detail": "Incorrect username or password"}
 
-        try:
-            # Mock crud.get_user_by_username to return None (user not found)
-            with patch(
-                "app.services.auth_service.crud.get_user_by_username"
-            ) as mock_get_user:
-                mock_get_user.return_value = None
 
-                response = client.post(
-                    "/api/auth/login",
-                    data={
-                        "username": "nonexistent",
-                        "password": "password123",
-                    },
-                )
+@pytest.mark.parametrize(
+    "data", [{"username": "testuser"}, {"password": "password123"}]
+)
+def test_login_requires_both_form_fields(client: TestClient, data: dict[str, str]):
+    response = client.post("/api/auth/login", data=data)
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
-                assert response.status_code == status.HTTP_401_UNAUTHORIZED
-                assert "Incorrect username or password" in response.json()["detail"]
-        finally:
-            app.dependency_overrides.clear()
 
-    def test_login_invalid_password(
-        self, session: Session, test_user_with_password: tuple[User, str]
-    ):
-        """Test login with invalid password"""
-        user, _ = test_user_with_password
+@pytest.mark.parametrize("account_state", ["active", "inactive", "missing"])
+@pytest.mark.parametrize("password", ["a" * 73, "é" * 37, "a" * 200, "a" * 201])
+def test_login_rejects_oversized_passwords_consistently(
+    session: Session,
+    test_user_with_password: tuple[User, str],
+    client: TestClient,
+    account_state: str,
+    password: str,
+):
+    user, _ = test_user_with_password
+    if account_state == "inactive":
+        user.is_active = False
+        session.add(user)
+        session.commit()
+    username = "missing" if account_state == "missing" else user.username
+    response = client.post(
+        "/api/auth/login", data={"username": username, "password": password}
+    )
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert response.json() == {"detail": "Incorrect username or password"}
 
-        app.dependency_overrides[get_db] = override_get_db_factory(session)
 
-        try:
-            # Mock crud.get_user_by_username to return our test user
-            with patch(
-                "app.services.auth_service.crud.get_user_by_username"
-            ) as mock_get_user:
-                mock_get_user.return_value = user
+@pytest.mark.asyncio
+async def test_login_verification_allows_unrelated_api_work(
+    session: Session, test_user_with_password: tuple[User, str], monkeypatch
+):
+    user, password = test_user_with_password
+    started = threading.Event()
+    release = threading.Event()
+    event_loop_thread = threading.get_ident()
+    checkpw = bcrypt.checkpw
 
-                # Password verification will fail naturally since we're providing wrong password
-                response = client.post(
-                    "/api/auth/login",
-                    data={
-                        "username": user.username,
-                        "password": "wrongpassword",
-                    },
-                )
+    def held_checkpw(plain: bytes, hashed: bytes) -> bool:
+        assert threading.get_ident() != event_loop_thread
+        started.set()
+        assert release.wait(10), "Verification was not released"
+        return checkpw(plain, hashed)
 
-                assert response.status_code == status.HTTP_401_UNAUTHORIZED
-                assert "Incorrect username or password" in response.json()["detail"]
-        finally:
-            app.dependency_overrides.clear()
+    async def get_session():
+        return session
 
-    def test_login_missing_fields(self, session: Session):
-        """Test login with missing fields"""
-        # Missing password
-        response = client.post(
-            "/api/auth/login",
-            data={
-                "username": "testuser",
-            },
+    monkeypatch.setattr(bcrypt, "checkpw", held_checkpw)
+    app.dependency_overrides[get_db] = get_session
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as api:
+        login = asyncio.create_task(
+            api.post(
+                "/api/auth/login",
+                data={"username": user.username, "password": password},
+            )
         )
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
-
-        # Missing username
-        response = client.post(
-            "/api/auth/login",
-            data={
-                "password": "password123",
-            },
-        )
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
-
-    def test_login_empty_credentials(self, session: Session):
-        """Test login with empty credentials"""
-        app.dependency_overrides[get_db] = override_get_db_factory(session)
-
         try:
-            # Mock crud.get_user_by_username to return None for empty username
-            with patch(
-                "app.services.auth_service.crud.get_user_by_username"
-            ) as mock_get_user:
-                mock_get_user.return_value = None
-
-                response = client.post(
-                    "/api/auth/login",
-                    data={
-                        "username": "",
-                        "password": "",
-                    },
-                )
-
-                assert response.status_code == status.HTTP_401_UNAUTHORIZED
-                assert "Incorrect username or password" in response.json()["detail"]
+            assert await asyncio.to_thread(started.wait, 3)
+            health = await asyncio.wait_for(api.get("/health/live"), timeout=3)
+            setup = await asyncio.wait_for(api.get("/api/auth/setup-status"), timeout=3)
+            assert health.json() == {"status": "healthy"}
+            assert setup.json() == {"setup_required": False}
+            assert not login.done()
         finally:
-            app.dependency_overrides.clear()
+            release.set()
+            response = await login
+        assert response.status_code == status.HTTP_200_OK
+        profile = await api.get(
+            "/api/users/me",
+            headers={"Authorization": f"Bearer {response.json()['access_token']}"},
+        )
+        assert profile.status_code == status.HTTP_200_OK
+        assert profile.json()["username"] == user.username
+
+
+def _execution(session: Session, user: User) -> HuntExecution:
+    case = Case(case_number="AUTH-API", title="Auth API case")
+    hunt = Hunt(
+        name="auth-api-hunt",
+        display_name="Auth API hunt",
+        description="fixture",
+        category="test",
+        definition_json={},
+    )
+    session.add(case)
+    session.add(hunt)
+    session.commit()
+    session.refresh(case)
+    session.refresh(hunt)
+    execution = HuntExecution(
+        hunt_id=hunt.id,
+        case_id=case.id,
+        initial_parameters={},
+        created_by_id=user.id,
+    )
+    session.add(execution)
+    session.commit()
+    session.refresh(execution)
+    return execution
+
+
+@pytest.mark.parametrize(
+    "execution_exists", [False, True], ids=["missing-is-404", "denied-is-403"]
+)
+def test_websocket_token_distinguishes_missing_from_denied_execution(
+    session: Session,
+    test_user_with_password: tuple[User, str],
+    client: TestClient,
+    execution_exists: bool,
+):
+    user, _ = test_user_with_password
+    execution_id = _execution(session, user).id if execution_exists else 999_999
+
+    async def current_user_override():
+        return user
+
+    app.dependency_overrides[get_db] = override_get_db_factory(session)
+    app.dependency_overrides[get_current_user] = current_user_override
+    response = client.post(
+        "/api/auth/websocket-token", json={"execution_id": execution_id}
+    )
+
+    expected_status = (
+        status.HTTP_403_FORBIDDEN if execution_exists else status.HTTP_404_NOT_FOUND
+    )
+    assert response.status_code == expected_status

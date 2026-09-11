@@ -1,14 +1,21 @@
 <template>
-  <v-dialog v-model="dialogVisible" max-width="600px" persistent>
-    <v-card prepend-icon="mdi-account-plus" title="Add User to Case">
+  <v-dialog
+    v-model="dialogVisible"
+    aria-label="Add User to Case"
+    max-width="600px"
+    persistent
+    @keydown.esc="!loading && $emit('close')"
+  >
+    <v-card prepend-icon="mdi-account-plus">
+      <v-card-title id="add-user-to-case-dialog-title">Add User to Case</v-card-title>
       <v-card-text>
         <!-- Loading State -->
-        <v-row v-if="loading" justify="center">
+        <v-row class="justify-center" v-if="loading">
           <v-col cols="12" class="text-center">
             <v-card variant="outlined" class="pa-8">
               <v-progress-circular class="mb-4" color="primary" indeterminate size="64" width="4" />
-              <div class="text-h6">Loading Users...</div>
-              <div class="text-body-2 text-medium-emphasis">
+              <div class="text-title-large">Loading Users...</div>
+              <div class="text-body-medium text-medium-emphasis">
                 Please wait while we fetch available users
               </div>
             </v-card>
@@ -31,7 +38,7 @@
         <!-- User Selection Form -->
         <v-form v-else ref="formRef" v-model="isFormValid">
           <v-card variant="outlined" class="mb-6">
-            <v-card-title class="text-subtitle-1 pb-2">
+            <v-card-title class="text-body-large pb-2">
               <v-icon start>mdi-account-group</v-icon>
               User Selection
             </v-card-title>
@@ -39,6 +46,7 @@
             <v-card-text>
               <v-select
                 v-model="selectedUserId"
+                autofocus
                 :items="enhancedUsers"
                 item-title="displayText"
                 item-value="id"
@@ -90,6 +98,8 @@
 import { computed, ref, watch } from 'vue'
 import { userService } from '@/services/user'
 import { caseService } from '@/services/case'
+import { useDialogFocusRestore } from '@/composables/useDialogFocusRestore'
+import { getErrorMessage } from '@/utils/errorMessage'
 import ModalActions from './ModalActions.vue'
 
 const props = defineProps({
@@ -102,6 +112,8 @@ const props = defineProps({
     required: true,
   },
 })
+
+useDialogFocusRestore(() => props.show)
 
 const emit = defineEmits(['close', 'userAdded'])
 
@@ -142,7 +154,7 @@ const loadUsers = async () => {
     error.value = null
     availableUsers.value = await userService.getUsers()
   } catch (err) {
-    error.value = err.response?.data?.message || err.message || 'Failed to load users'
+    error.value = getErrorMessage(err, 'Failed to load users')
   } finally {
     loading.value = false
   }
@@ -162,7 +174,7 @@ const handleAddUser = async () => {
     emit('userAdded')
     emit('close')
   } catch (err) {
-    error.value = err.response?.data?.message || err.message || 'Failed to add user to case'
+    error.value = getErrorMessage(err, 'Failed to add user to case')
   } finally {
     loading.value = false
   }

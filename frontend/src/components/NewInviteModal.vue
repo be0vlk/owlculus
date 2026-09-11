@@ -1,11 +1,17 @@
 <template>
-  <v-dialog v-model="dialogVisible" max-width="500px" persistent scrollable>
+  <v-dialog
+    aria-label="Generate Invite"
+    v-model="dialogVisible"
+    max-width="500px"
+    persistent
+    scrollable
+  >
     <v-card>
       <v-card-title class="d-flex align-center pa-4 bg-primary">
         <v-icon start color="white" size="large">mdi-email-plus</v-icon>
         <div class="text-white">
-          <div class="text-h5 font-weight-bold">Generate Invite</div>
-          <div class="text-subtitle-2 text-blue-lighten-2">Create a new user invitation link</div>
+          <div class="text-headline-small font-weight-bold">Generate Invite</div>
+          <div class="text-title-small text-blue-lighten-2">Create a new user invitation link</div>
         </div>
       </v-card-title>
 
@@ -20,7 +26,7 @@
           {{ successMessage }}
         </v-alert>
 
-        <v-form ref="formRef" @submit.prevent="handleSubmit">
+        <v-form :id="formId" :disabled="loading" ref="formRef" @submit.prevent="handleSubmit">
           <v-container fluid class="pa-0">
             <v-row>
               <!-- Role Selection -->
@@ -41,10 +47,10 @@
                   <template #item="{ props, item }">
                     <v-list-item v-bind="props">
                       <template #prepend>
-                        <v-icon :icon="item.raw.icon" :color="item.raw.color" />
+                        <v-icon :icon="item.icon" :color="item.color" />
                       </template>
-                      <v-list-item-title>{{ item.raw.title }}</v-list-item-title>
-                      <v-list-item-subtitle>{{ item.raw.description }}</v-list-item-subtitle>
+                      <v-list-item-title>{{ item.title }}</v-list-item-title>
+                      <v-list-item-subtitle>{{ item.description }}</v-list-item-subtitle>
                     </v-list-item>
                   </template>
                 </v-select>
@@ -73,6 +79,7 @@
       <v-divider />
 
       <modal-actions
+        :submit-form="formId"
         :cancel-text="inviteLink ? 'Done' : 'Cancel'"
         submit-text="Generate Invite"
         loading-text="Generating..."
@@ -88,7 +95,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { useId, ref, computed, watch } from 'vue'
 import { inviteService } from '../services/invite'
 import ModalActions from './ModalActions.vue'
 
@@ -114,6 +121,7 @@ const loading = ref(false)
 const error = ref(null)
 const successMessage = ref(null)
 const inviteLink = ref(null)
+const formId = useId()
 const formRef = ref(null)
 
 const formData = ref({
@@ -173,6 +181,7 @@ const copyToClipboard = async () => {
 }
 
 const handleSubmit = async () => {
+  if (loading.value || inviteLink.value || !isFormValid.value) return
   try {
     loading.value = true
     error.value = null

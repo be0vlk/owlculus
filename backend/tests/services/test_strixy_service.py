@@ -9,9 +9,12 @@ within the Strixy service layer.
 from unittest.mock import Mock, patch
 
 import pytest
+
+from app.core.exceptions import BaseException as DomainException
+from app.core.exceptions import ValidationException
 from app.schemas.strixy_schema import ChatMessage
+from app.services.api_key_vault import Provider, StaticApiKeyVault
 from app.services.strixy_service import StrixyService
-from fastapi import HTTPException
 
 
 class TestStrixyService:
@@ -21,17 +24,12 @@ class TestStrixyService:
 
     @pytest.fixture
     def strixy_service(self, mock_db):
-        return StrixyService(mock_db)
+        return StrixyService(
+            mock_db, StaticApiKeyVault({Provider.OPENAI: "test-api-key"})
+        )
 
-    @patch("app.services.strixy_service.SystemConfigService")
     @patch("app.services.strixy_service.OpenAI")
-    async def test_send_chat_message_success(
-        self, mock_openai_class, mock_config_service_class, strixy_service
-    ):
-        mock_config_service = Mock()
-        mock_config_service.get_api_key.return_value = "test-api-key"
-        mock_config_service_class.return_value = mock_config_service
-
+    async def test_send_chat_message_success(self, mock_openai_class, strixy_service):
         mock_client = Mock()
         mock_completion = Mock()
         mock_completion.choices = [Mock()]
@@ -46,55 +44,34 @@ class TestStrixyService:
 
         assert response.message == "Hello! I'm Strixy, your OSINT assistant."
         assert response.role == "assistant"
-        mock_config_service.get_api_key.assert_called_once_with("openai")
         mock_openai_class.assert_called_once_with(api_key="test-api-key")
 
-    @patch("app.services.strixy_service.SystemConfigService")
-    async def test_send_chat_message_no_api_key(
-        self, mock_config_service_class, strixy_service
-    ):
-        mock_config_service = Mock()
-        mock_config_service.get_api_key.return_value = None
-        mock_config_service_class.return_value = mock_config_service
-
+    async def test_send_chat_message_no_api_key(self, mock_db):
+        strixy_service = StrixyService(mock_db, StaticApiKeyVault({}))
         messages = [ChatMessage(role="user", content="Hello")]
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(ValidationException) as exc_info:
             await strixy_service.send_chat_message(messages)
 
-        assert exc_info.value.status_code == 400
-        assert "OpenAI API key not configured" in exc_info.value.detail
+        assert "OpenAI API key not configured" in str(exc_info.value)
 
-    @patch("app.services.strixy_service.SystemConfigService")
     @patch("app.services.strixy_service.OpenAI")
     async def test_send_chat_message_openai_error(
-        self, mock_openai_class, mock_config_service_class, strixy_service
+        self, mock_openai_class, strixy_service
     ):
-        mock_config_service = Mock()
-        mock_config_service.get_api_key.return_value = "test-api-key"
-        mock_config_service_class.return_value = mock_config_service
-
         mock_client = Mock()
         mock_client.chat.completions.create.side_effect = Exception("OpenAI API Error")
         mock_openai_class.return_value = mock_client
 
         messages = [ChatMessage(role="user", content="Hello")]
 
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(DomainException) as exc_info:
             await strixy_service.send_chat_message(messages)
 
-        assert exc_info.value.status_code == 500
-        assert "Error communicating with OpenAI" in exc_info.value.detail
+        assert "Error communicating with OpenAI" in str(exc_info.value)
 
-    @patch("app.services.strixy_service.SystemConfigService")
     @patch("app.services.strixy_service.OpenAI")
-    async def test_client_reuse(
-        self, mock_openai_class, mock_config_service_class, strixy_service
-    ):
-        mock_config_service = Mock()
-        mock_config_service.get_api_key.return_value = "test-api-key"
-        mock_config_service_class.return_value = mock_config_service
-
+    async def test_client_reuse(self, mock_openai_class, strixy_service):
         mock_client = Mock()
         mock_completion = Mock()
         mock_completion.choices = [Mock()]
@@ -108,4 +85,3 @@ class TestStrixyService:
         await strixy_service.send_chat_message(messages)
 
         mock_openai_class.assert_called_once()
-        assert mock_config_service.get_api_key.call_count == 1

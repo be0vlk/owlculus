@@ -1,15 +1,21 @@
 <template>
-  <v-dialog v-model="dialogVisible" max-width="600px" persistent scrollable>
+  <v-dialog
+    :aria-label="user ? 'Edit User' : 'Add New User'"
+    v-model="dialogVisible"
+    max-width="600px"
+    persistent
+    scrollable
+  >
     <v-card>
       <v-card-title class="d-flex align-center pa-4 bg-primary">
         <v-icon start color="white" size="large">
           {{ user ? 'mdi-account-edit' : 'mdi-account-plus' }}
         </v-icon>
         <div class="text-white">
-          <div class="text-h5 font-weight-bold">
+          <div class="text-headline-small font-weight-bold">
             {{ user ? 'Edit User' : 'Add New User' }}
           </div>
-          <div class="text-subtitle-2 text-blue-lighten-2">
+          <div class="text-title-small text-blue-lighten-2">
             {{ user ? 'Update user information and permissions' : 'Create a new user account' }}
           </div>
         </div>
@@ -22,7 +28,7 @@
           {{ error }}
         </v-alert>
 
-        <v-form ref="formRef" @submit.prevent="handleSubmit">
+        <v-form :id="formId" :disabled="loading" ref="formRef" @submit.prevent="handleSubmit">
           <v-container fluid class="pa-0">
             <v-row>
               <!-- Username -->
@@ -95,10 +101,10 @@
                   <template #item="{ props, item }">
                     <v-list-item v-bind="props">
                       <template #prepend>
-                        <v-icon :icon="item.raw.icon" :color="item.raw.color" />
+                        <v-icon :icon="item.icon" :color="item.color" />
                       </template>
-                      <v-list-item-title>{{ item.raw.title }}</v-list-item-title>
-                      <v-list-item-subtitle>{{ item.raw.description }}</v-list-item-subtitle>
+                      <v-list-item-title>{{ item.title }}</v-list-item-title>
+                      <v-list-item-subtitle>{{ item.description }}</v-list-item-subtitle>
                     </v-list-item>
                   </template>
                 </v-select>
@@ -111,6 +117,7 @@
       <v-divider />
 
       <modal-actions
+        :submit-form="formId"
         :submit-text="user ? 'Save Changes' : 'Create User'"
         :submit-icon="user ? 'mdi-content-save' : 'mdi-account-plus'"
         :submit-disabled="!isFormValid"
@@ -123,7 +130,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
+import { useId, ref, onMounted, computed, watch } from 'vue'
 import { userService } from '../services/user'
 // Vuetify components are auto-imported
 import ModalActions from './ModalActions.vue'
@@ -153,6 +160,7 @@ const dialogVisible = computed({
 const loading = ref(false)
 const error = ref(null)
 const showPassword = ref(false)
+const formId = useId()
 const formRef = ref(null)
 
 const formData = ref({
@@ -279,6 +287,9 @@ watch(
 )
 
 const handleSubmit = async () => {
+  if (loading.value) return
+  const { valid } = await formRef.value.validate()
+  if (!valid || !isFormValid.value || loading.value) return
   try {
     loading.value = true
     error.value = null

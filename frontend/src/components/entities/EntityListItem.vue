@@ -2,12 +2,12 @@
   <v-list-item class="py-4">
     <template v-slot:prepend>
       <div class="flex-grow-1">
-        <v-list-item-title class="text-body-2 font-weight-medium text-truncate">
+        <v-list-item-title class="text-body-medium font-weight-medium text-truncate">
           <slot name="name" />
         </v-list-item-title>
         <v-list-item-subtitle
           v-if="hasDetail"
-          class="text-body-2 text-truncate text-medium-emphasis"
+          class="text-body-medium text-truncate text-medium-emphasis"
         >
           <slot name="detail" />
         </v-list-item-subtitle>

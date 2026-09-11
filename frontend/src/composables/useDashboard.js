@@ -1,8 +1,8 @@
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import { caseService } from '../services/case'
-import { clientService } from '../services/client'
+import { useActiveCaseStore } from '../stores/activeCase'
+import { useClientsStore } from '../stores/clients'
 import { formatDate } from '@/composables/dateUtils'
 
 export const columns = [
@@ -18,8 +18,12 @@ export function useDashboard() {
   const router = useRouter()
   const authStore = useAuthStore()
 
-  const cases = ref([])
-  const clients = ref({})
+  const activeCase = useActiveCaseStore()
+  const cases = computed(() => activeCase.accessibleCases)
+  const clientsStore = useClientsStore()
+  const clients = computed(() =>
+    Object.fromEntries(clientsStore.clients.map((client) => [client.id, client])),
+  )
   const loading = ref(true)
   const error = ref(null)
   const searchQuery = ref('')
@@ -35,21 +39,13 @@ export function useDashboard() {
 
     try {
       loading.value = true
-      // Load cases with status filter
-      const params = {}
-      if (!showClosedCases.value) {
-        params.status = 'Open'
-      }
-      const casesData = await caseService.getCases(params)
-      cases.value = casesData
+      error.value = null
+      await activeCase.refresh()
+      if (activeCase.error) throw new Error(activeCase.error)
 
       // Load clients for all authenticated users since read ops are not sensitive
       try {
-        const clientsData = await clientService.getClients()
-        clients.value = clientsData.reduce((acc, client) => {
-          acc[client.id] = client
-          return acc
-        }, {})
+        await clientsStore.refresh()
       } catch (err) {
         console.error('Failed to load clients:', err)
         // Don't set error state for client loading failures
@@ -65,13 +61,7 @@ export function useDashboard() {
 
   const toggleClosedCases = () => {
     showClosedCases.value = !showClosedCases.value
-    loadData()
   }
-
-  // Watch for changes to showClosedCases and reload data
-  watch(showClosedCases, () => {
-    loadData()
-  })
 
   const sortBy = (key) => {
     if (sortKey.value === key) {
@@ -92,7 +82,9 @@ export function useDashboard() {
   }
 
   const sortedAndFilteredCases = computed(() => {
-    let filteredCases = cases.value
+    let filteredCases = showClosedCases.value
+      ? cases.value
+      : cases.value.filter((item) => item.status === 'Open')
 
     // Apply search filter
     if (searchQuery.value) {

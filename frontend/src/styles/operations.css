@@ -1,0 +1,21 @@
+.operations-cell {
+    padding: 12px 16px;
+    border-bottom: 1px solid rgb(var(--v-theme-on-surface), 0.08);
+}
+
+.operations-column {
+    padding: 16px;
+    font-weight: 600;
+    color: rgb(var(--v-theme-on-surface), 0.87);
+    border-bottom: 2px solid rgb(var(--v-theme-on-surface), 0.12);
+}
+
+.operations-heading {
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.operations-search {
+    min-width: 0;
+    width: 100%;
+}

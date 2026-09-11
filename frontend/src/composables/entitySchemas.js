@@ -183,7 +183,7 @@ export const entitySchemas = {
           label: 'IP Address',
           type: 'text',
           required: true,
-          placeholder: '192.168.1.1',
+          placeholder: '192.0.2.1 or 2001:db8::1',
           hasSource: true,
         },
         {
@@ -225,8 +225,8 @@ export const entitySchemas = {
     basicInfo: {
       title: 'Vehicle Information',
       fields: [
-        { id: 'make', label: 'Make', type: 'text', required: true, hasSource: true },
-        { id: 'model', label: 'Model', type: 'text', required: true, hasSource: true },
+        { id: 'make', label: 'Make', type: 'text', hasSource: true },
+        { id: 'model', label: 'Model', type: 'text', hasSource: true },
         { id: 'year', label: 'Year', type: 'number', hasSource: true },
         { id: 'vin', label: 'VIN', type: 'text', hasSource: true },
         { id: 'license_plate', label: 'License Plate', type: 'text', hasSource: true },

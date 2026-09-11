@@ -1,27 +1,35 @@
 <template>
-  <v-card variant="outlined">
+  <v-card :elevation="embedded ? 0 : undefined" :variant="embedded ? 'flat' : 'outlined'">
     <!-- Header -->
-    <v-card-title class="d-flex align-center pa-4 bg-surface">
-      <v-icon icon="mdi-email" color="primary" size="large" class="me-3" />
+    <v-card-title class="operations-heading d-flex flex-wrap ga-3 align-center pa-4 bg-surface">
+      <v-icon v-if="!embedded" icon="mdi-email" color="primary" size="large" class="me-3" />
       <div class="flex-grow-1">
-        <div class="text-h6 font-weight-bold">Invite Management</div>
-        <div class="text-body-2 text-medium-emphasis">Manage user invitation links</div>
+        <h2 class="text-title-large font-weight-bold">
+          {{ embedded ? 'Invites' : 'Invite Management' }}
+        </h2>
+        <div v-if="!embedded" class="text-body-medium text-medium-emphasis">
+          Manage user invitation links
+        </div>
       </div>
       <div class="d-flex align-center ga-2">
         <v-btn
+          size="small"
+          ref="inviteAction"
           color="primary"
           variant="flat"
           prepend-icon="mdi-email-plus"
-          @click="showNewInviteModal = true"
+          @click="openCreateDialog"
         >
-          Generate Invite
+          {{ embedded ? 'Invite user' : 'Generate Invite' }}
         </v-btn>
         <v-tooltip text="Refresh invite list" location="bottom">
           <template #activator="{ props }">
             <v-btn
+              size="small"
               v-bind="props"
               icon="mdi-refresh"
               variant="outlined"
+              aria-label="Refresh invite list"
               @click="loadInvites"
               :loading="loading"
             />
@@ -34,8 +42,8 @@
 
     <!-- Search Toolbar -->
     <v-card-text class="pa-4">
-      <v-row align="center" class="mb-0">
-        <v-col cols="12" md="8">
+      <v-row class="mb-0 align-center">
+        <v-col cols="12" md="4">
           <div class="d-flex align-center ga-2">
             <v-btn
               color="error"
@@ -50,6 +58,17 @@
           </div>
         </v-col>
 
+        <v-col cols="12" md="4">
+          <v-select
+            v-model="statusFilter"
+            :items="statusOptions"
+            label="Invitation status"
+            variant="outlined"
+            density="comfortable"
+            hide-details
+          />
+        </v-col>
+
         <!-- Search Controls -->
         <v-col cols="12" md="4">
           <div class="d-flex align-center ga-4 justify-end">
@@ -61,7 +80,7 @@
               variant="outlined"
               density="comfortable"
               hide-details
-              style="min-width: 280px"
+              class="operations-search"
               clearable
             />
           </div>
@@ -71,11 +90,19 @@
 
     <v-divider />
 
+    <v-alert v-if="error" type="error" variant="tonal" class="ma-4">
+      {{ error }}
+      <v-btn variant="text" @click="loadInvites">Retry</v-btn>
+    </v-alert>
+
     <v-data-table
+      v-else
+      :cell-props="{ class: 'operations-cell' }"
+      :header-props="{ class: 'operations-column' }"
       :headers="inviteHeaders"
-      :items="sortedAndFilteredInvites"
+      :items="filteredInvites"
       :loading="loading"
-      item-key="id"
+      item-value="id"
       class="elevation-0 admin-dashboard-table"
       hover
     >
@@ -89,20 +116,20 @@
       <!-- Status column -->
       <template #[`item.status`]="{ item }">
         <v-chip :color="getInviteStatusColor(item)" size="small" variant="tonal">
-          {{ getInviteStatus(item) }}
+          {{ getInviteStatus(item) === 'Active' ? 'Pending' : getInviteStatus(item) }}
         </v-chip>
       </template>
 
       <!-- Created date -->
       <template #[`item.created_at`]="{ item }">
-        <span class="text-body-2">
+        <span class="text-body-medium">
           {{ formatDate(item.created_at) }}
         </span>
       </template>
 
       <!-- Expires date -->
       <template #[`item.expires_at`]="{ item }">
-        <span class="text-body-2">
+        <span class="text-body-medium">
           {{ formatDate(item.expires_at) }}
         </span>
       </template>
@@ -117,6 +144,7 @@
             variant="outlined"
             icon
             @click="handleCopyInviteLink(item)"
+            aria-label="Copy invite link"
           >
             <v-icon>mdi-content-copy</v-icon>
             <v-tooltip activator="parent" location="top"> Copy invite link </v-tooltip>
@@ -128,6 +156,7 @@
             variant="outlined"
             icon
             @click="handleDeleteInvite(item)"
+            aria-label="Delete invite"
           >
             <v-icon>mdi-delete</v-icon>
             <v-tooltip activator="parent" location="top"> Delete invite </v-tooltip>
@@ -139,19 +168,23 @@
       <template #no-data>
         <div class="text-center pa-12">
           <v-icon class="mb-4" color="grey-lighten-1" icon="mdi-email-outline" size="64" />
-          <h3 class="text-h6 font-weight-medium mb-2">
-            {{ getInviteEmptyStateTitle() }}
+          <h3 class="text-title-large font-weight-medium mb-2">
+            {{ statusFilter === 'all' ? getInviteEmptyStateTitle() : `No ${statusFilter} invites` }}
           </h3>
-          <p class="text-body-2 text-medium-emphasis mb-4">
-            {{ getInviteEmptyStateMessage() }}
+          <p class="text-body-medium text-medium-emphasis mb-4">
+            {{
+              statusFilter === 'all'
+                ? getInviteEmptyStateMessage()
+                : 'Try another status or search term, or invite someone new.'
+            }}
           </p>
           <v-btn
             v-if="shouldShowCreateInviteButton()"
             color="primary"
             prepend-icon="mdi-email-plus"
-            @click="showNewInviteModal = true"
+            @click="openCreateDialog"
           >
-            Generate Invite
+            {{ embedded ? 'Invite user' : 'Generate Invite' }}
           </v-btn>
         </div>
       </template>
@@ -167,15 +200,18 @@
 </template>
 
 <script setup>
-import { onMounted } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useInvites } from '@/composables/useInvites'
 import NewInviteModal from './NewInviteModal.vue'
 
-const emit = defineEmits(['notification', 'confirmDelete'])
+defineProps({ embedded: Boolean })
+const emit = defineEmits(['notification', 'confirmDelete', 'count'])
 
 const {
   // State
+  invites,
   loading,
+  error,
   inviteSearchQuery,
   cleanupLoading,
 
@@ -207,6 +243,40 @@ const {
   closeInviteModal,
   handleInviteCreated,
 } = useInvites()
+
+const statusFilter = ref('pending')
+const statusOptions = [
+  { title: 'Pending', value: 'pending' },
+  { title: 'Expired', value: 'expired' },
+  { title: 'All invitations', value: 'all' },
+]
+const pendingCount = computed(
+  () => invites.value.filter((invite) => !invite.is_used && !invite.is_expired).length,
+)
+const filteredInvites = computed(() =>
+  sortedAndFilteredInvites.value.filter((invite) => {
+    if (statusFilter.value === 'pending') return !invite.is_used && !invite.is_expired
+    if (statusFilter.value === 'expired') return !invite.is_used && invite.is_expired
+    return true
+  }),
+)
+watch([loading, error, pendingCount], () => {
+  if (!loading.value) emit('count', error.value ? null : pendingCount.value)
+})
+
+const inviteAction = ref(null)
+let inviteOrigin = null
+const openCreateDialog = (event) => {
+  inviteOrigin = event?.currentTarget || inviteAction.value?.$el
+  showNewInviteModal.value = true
+}
+watch(showNewInviteModal, async (show, wasOpen) => {
+  if (!show && wasOpen) {
+    await nextTick()
+    inviteOrigin?.focus()
+  }
+})
+defineExpose({ openCreateDialog })
 
 const handleCopyInviteLink = async (invite) => {
   try {
@@ -255,26 +325,3 @@ onMounted(async () => {
   await loadInvites()
 })
 </script>
-
-<style scoped>
-.admin-dashboard-table :deep(.v-data-table__tr:hover) {
-  background-color: rgb(var(--v-theme-primary), 0.04) !important;
-  cursor: pointer;
-}
-
-.admin-dashboard-table :deep(.v-data-table__td) {
-  padding: 12px 16px !important;
-  border-bottom: 1px solid rgb(var(--v-theme-on-surface), 0.08) !important;
-}
-
-.admin-dashboard-table :deep(.v-data-table__th) {
-  padding: 16px !important;
-  font-weight: 600 !important;
-  color: rgb(var(--v-theme-on-surface), 0.87) !important;
-  border-bottom: 2px solid rgb(var(--v-theme-on-surface), 0.12) !important;
-}
-
-.admin-dashboard-table :deep(.v-data-table-rows-no-data) {
-  padding: 48px 16px !important;
-}
-</style>

@@ -2,12 +2,12 @@ import api from './api'
 
 export const userService = {
   async getUsers() {
-    const response = await api.get('/api/users')
+    const response = await api.get('/api/users/')
     return response.data
   },
 
   async createUser(userData) {
-    const response = await api.post('/api/users', userData)
+    const response = await api.post('/api/users/', userData)
     return response.data
   },
 

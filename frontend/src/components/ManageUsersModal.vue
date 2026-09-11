@@ -1,14 +1,21 @@
 <template>
-  <v-dialog v-model="dialogVisible" max-width="800px" persistent>
-    <v-card prepend-icon="mdi-account-group" title="Manage Case Users">
+  <v-dialog
+    v-model="dialogVisible"
+    aria-label="Manage Case Users"
+    max-width="800px"
+    persistent
+    @keydown.esc="!loading && $emit('close')"
+  >
+    <v-card prepend-icon="mdi-account-group">
+      <v-card-title id="manage-case-users-dialog-title">Manage Case Users</v-card-title>
       <v-card-text>
         <!-- Loading State -->
-        <v-row v-if="loading" justify="center">
+        <v-row class="justify-center" v-if="loading">
           <v-col class="text-center" cols="12">
             <v-card class="pa-8" variant="outlined">
               <v-progress-circular class="mb-4" color="primary" indeterminate size="64" width="4" />
-              <div class="text-h6">Loading Users...</div>
-              <div class="text-body-2 text-medium-emphasis">
+              <div class="text-title-large">Loading Users...</div>
+              <div class="text-body-medium text-medium-emphasis">
                 Please wait while we fetch user data
               </div>
             </v-card>
@@ -31,7 +38,7 @@
         <div v-else>
           <!-- Current Users Section -->
           <v-card class="mb-6" variant="outlined">
-            <v-card-title class="text-subtitle-1 pb-2">
+            <v-card-title class="text-body-large pb-2">
               <v-icon start>mdi-account-check</v-icon>
               Current Case Users
             </v-card-title>
@@ -67,6 +74,7 @@
                       <v-tooltip :text="getLeadButtonTooltip(user)" location="top">
                         <template #activator="{ props }">
                           <v-btn
+                            :aria-label="`${getLeadButtonTooltip(user)} for ${user.email}`"
                             :color="user.is_lead ? 'primary' : 'default'"
                             :icon="user.is_lead ? 'mdi-star' : 'mdi-star-outline'"
                             :loading="updatingLeadStatus === user.id"
@@ -82,6 +90,7 @@
                       <v-tooltip location="top" text="Remove from Case">
                         <template #activator="{ props }">
                           <v-btn
+                            :aria-label="`Remove ${user.email} from case`"
                             :loading="removingUser === user.id"
                             color="error"
                             icon="mdi-account-remove"
@@ -105,17 +114,18 @@
 
           <!-- Add New User Section -->
           <v-card variant="outlined">
-            <v-card-title class="text-subtitle-1 pb-2">
+            <v-card-title class="text-body-large pb-2">
               <v-icon start>mdi-account-plus</v-icon>
               Add New User
             </v-card-title>
 
             <v-card-text>
               <v-form ref="formRef" v-model="isFormValid">
-                <v-row align="center">
+                <v-row class="align-center">
                   <v-col cols="12" md="6">
                     <v-select
                       v-model="selectedUserId"
+                      autofocus
                       :items="availableUsers"
                       :rules="[rules.required]"
                       clearable
@@ -184,6 +194,8 @@
 import { computed, ref, watch } from 'vue'
 import { userService } from '@/services/user'
 import { caseService } from '@/services/case'
+import { useDialogFocusRestore } from '@/composables/useDialogFocusRestore'
+import { getErrorMessage } from '@/utils/errorMessage'
 import ModalActions from './ModalActions.vue'
 
 const props = defineProps({
@@ -200,6 +212,8 @@ const props = defineProps({
     required: true,
   },
 })
+
+useDialogFocusRestore(() => props.show)
 
 const emit = defineEmits(['close', 'updated'])
 
@@ -256,7 +270,7 @@ const loadUsers = async () => {
     error.value = null
     allUsers.value = await userService.getUsers()
   } catch (err) {
-    error.value = err.response?.data?.message || err.message || 'Failed to load users'
+    error.value = getErrorMessage(err, 'Failed to load users')
   } finally {
     loading.value = false
   }
@@ -278,7 +292,7 @@ const addUser = async () => {
       formRef.value.resetValidation()
     }
   } catch (err) {
-    error.value = err.response?.data?.message || err.message || 'Failed to add user to case'
+    error.value = getErrorMessage(err, 'Failed to add user to case')
   } finally {
     addingUser.value = false
   }
@@ -295,7 +309,7 @@ const removeUser = async (user) => {
     await caseService.removeUserFromCase(props.caseId, user.id)
     emit('updated')
   } catch (err) {
-    error.value = err.response?.data?.message || err.message || 'Failed to remove user from case'
+    error.value = getErrorMessage(err, 'Failed to remove user from case')
   } finally {
     removingUser.value = null
   }
@@ -313,7 +327,7 @@ const toggleLeadStatus = async (user) => {
     await caseService.updateCaseUserLeadStatus(props.caseId, user.id, !user.is_lead)
     emit('updated')
   } catch (err) {
-    error.value = err.response?.data?.message || err.message || 'Failed to update lead status'
+    error.value = getErrorMessage(err, 'Failed to update lead status')
   } finally {
     updatingLeadStatus.value = null
   }

@@ -1,179 +1,202 @@
-"""
-Tests for hunt executor WebSocket integration
-"""
+"""Hunt executor contracts at the runner, database, and event seams."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from collections.abc import AsyncGenerator
+from typing import Any, ClassVar
 
 import pytest
-from app.core.websocket_manager import websocket_manager
-from app.database.models import HuntExecution, User
+from sqlmodel import Session, select
+
+from app.database.models import Case, Hunt, HuntExecution, HuntStep, User
+from app.hunts.hunt_event import HuntEvent
 from app.hunts.hunt_executor import HuntExecutor
+from app.plugins.base_plugin import BasePlugin, PluginRun, ResultEvent
+from app.plugins.plugin_registry import PluginRegistry
+from app.plugins.plugin_runner import PluginRunner
 
 
-class TestHuntExecutorWebSocket:
-    """Test that hunt executor sends WebSocket notifications"""
+class EventRecorder:
+    def __init__(self):
+        self.events: list[HuntEvent] = []
 
-    @pytest.mark.asyncio
-    async def test_executor_sends_progress_updates(self, db_session):
-        """Test that the executor sends progress updates via WebSocket"""
-        # Patch the websocket_manager methods
-        with patch.object(
-            websocket_manager, "send_progress_update", new_callable=AsyncMock
-        ) as mock_progress, patch.object(
-            websocket_manager, "send_step_complete", new_callable=AsyncMock
-        ) as mock_step_complete, patch.object(
-            websocket_manager, "send_execution_complete", new_callable=AsyncMock
-        ) as mock_complete:
+    async def broadcast(self, event: HuntEvent) -> None:
+        self.events.append(event)
 
-            # Create test data
-            user = User(
-                id=1,
-                username="test",
-                email="test@test.com",
-                password_hash="hash",
-                role="Admin",
-            )
-            execution = HuntExecution(
-                id=1,
-                hunt_id=1,
-                case_id=1,
-                status="running",
-                progress=0.0,
-                initial_parameters={},
-                created_by_id=1,
-            )
 
-            # Create hunt definition with 2 steps
-            hunt_definition = {
-                "steps": [
-                    {
-                        "step_id": "step1",
-                        "plugin_name": "test_plugin",
-                        "display_name": "Test Step 1",
-                        "description": "First test step",
-                        "depends_on": [],
-                        "parameter_mapping": {},
-                        "static_parameters": {},
-                        "save_to_case": False,
-                        "optional": False,
-                    },
-                    {
-                        "step_id": "step2",
-                        "plugin_name": "test_plugin",
-                        "display_name": "Test Step 2",
-                        "description": "Second test step",
-                        "depends_on": ["step1"],
-                        "parameter_mapping": {},
-                        "static_parameters": {},
-                        "save_to_case": False,
-                        "optional": False,
-                    },
-                ]
-            }
+class TrivialPlugin(BasePlugin):
+    async def run(
+        self, params: dict[str, Any], ctx: PluginRun
+    ) -> AsyncGenerator[ResultEvent, None]:
+        yield self.data({"result": "ok"})
 
-            # Mock plugin service
-            mock_plugin = AsyncMock()
 
-            # Create an async generator for execute_with_evidence_collection
-            async def mock_execute(params):
-                yield {"type": "data", "data": {"result": "test"}}
+class FirstPlugin(BasePlugin):
+    async def run(
+        self, params: dict[str, Any], ctx: PluginRun
+    ) -> AsyncGenerator[ResultEvent, None]:
+        yield self.data({"address": "192.0.2.44"})
 
-            mock_plugin.execute_with_evidence_collection = mock_execute
 
-            executor = HuntExecutor(db_session)
-            executor.plugin_service.get_plugin = MagicMock(return_value=mock_plugin)
+class SecondPlugin(BasePlugin):
+    calls: ClassVar[list[dict[str, Any]]] = []
 
-            # Mock database operations
-            db_session.add = MagicMock()
-            db_session.commit = MagicMock()
-            db_session.get = MagicMock(return_value=None)
+    async def run(
+        self, params: dict[str, Any], ctx: PluginRun
+    ) -> AsyncGenerator[ResultEvent, None]:
+        self.calls.append(params.copy())
+        yield self.data({"received": params["query"]})
 
-            # Execute hunt
-            await executor.execute_hunt(execution, hunt_definition, user)
 
-            # Verify progress updates were sent
-            # Should have called send_progress_update at least twice (once per step start)
-            assert mock_progress.call_count >= 2
+def step(
+    step_id: str,
+    *,
+    plugin_name: str = "TrivialPlugin",
+    depends_on: list[str] | None = None,
+    parameter_mapping: dict[str, str] | None = None,
+    optional: bool = False,
+) -> dict[str, Any]:
+    return {
+        "step_id": step_id,
+        "plugin_name": plugin_name,
+        "display_name": step_id,
+        "description": f"Run {step_id}",
+        "depends_on": depends_on or [],
+        "parameter_mapping": parameter_mapping or {},
+        "static_parameters": {},
+        "save_to_case": False,
+        "optional": optional,
+    }
 
-            # Should have called send_step_complete for each step
-            assert mock_step_complete.call_count == 2
 
-            # Should have called send_execution_complete
-            mock_complete.assert_called_once_with(1)
+def stored_execution(session: Session, user: User) -> HuntExecution:
+    case = Case(case_number="CASE-HUNT", title="Runner contract")
+    hunt = Hunt(
+        name="runner-contract",
+        display_name="Runner contract",
+        description="Exercise the plugin runner.",
+        category="test",
+        definition_json={"steps": []},
+    )
+    session.add_all([case, hunt])
+    session.commit()
+    execution = HuntExecution(
+        hunt_id=hunt.id,
+        case_id=case.id,
+        initial_parameters={},
+        created_by_id=user.id,
+    )
+    session.add(execution)
+    session.commit()
+    session.refresh(execution)
+    return execution
 
-    @pytest.mark.asyncio
-    async def test_executor_sends_step_failure_notification(self, db_session):
-        """Test that the executor sends step failure notifications"""
-        # Patch the websocket_manager methods
-        with patch.object(
-            websocket_manager, "send_step_failed", new_callable=AsyncMock
-        ) as mock_step_failed, patch.object(
-            websocket_manager, "send_progress_update", new_callable=AsyncMock
-        ) as mock_progress, patch.object(
-            websocket_manager, "send_execution_complete", new_callable=AsyncMock
-        ) as mock_complete:
 
-            # Create test data
-            user = User(
-                id=1,
-                username="test",
-                email="test@test.com",
-                password_hash="hash",
-                role="Admin",
-            )
-            execution = HuntExecution(
-                id=1,
-                hunt_id=1,
-                case_id=1,
-                status="running",
-                progress=0.0,
-                initial_parameters={},
-                created_by_id=1,
-            )
+def executor(
+    session: Session,
+    recorder: EventRecorder,
+    plugin_classes: list[type[BasePlugin]],
+) -> HuntExecutor:
+    runner = PluginRunner(PluginRegistry.from_classes(plugin_classes))
+    return HuntExecutor(session, recorder, plugin_runner=runner)
 
-            # Create hunt definition with a step that will fail
-            hunt_definition = {
-                "steps": [
-                    {
-                        "step_id": "step1",
-                        "plugin_name": "failing_plugin",
-                        "display_name": "Failing Step",
-                        "description": "Step that will fail",
-                        "depends_on": [],
-                        "parameter_mapping": {},
-                        "static_parameters": {},
-                        "save_to_case": False,
-                        "optional": False,  # Required step
-                    }
-                ]
-            }
 
-            # Mock plugin service to raise an exception during execution
-            mock_plugin = AsyncMock()
+@pytest.mark.asyncio
+async def test_executor_persists_declared_step_output_and_progress_events(
+    session: Session, test_user: User
+):
+    recorder = EventRecorder()
+    execution = stored_execution(session, test_user)
 
-            async def mock_execute_fail(params):
-                raise Exception("Plugin execution failed")
-                yield  # This won't be reached
+    await executor(session, recorder, [TrivialPlugin]).execute_hunt(
+        execution, {"steps": [step("lookup")]}, test_user
+    )
 
-            mock_plugin.execute_with_evidence_collection = mock_execute_fail
+    persisted = session.exec(
+        select(HuntStep).where(HuntStep.execution_id == execution.id)
+    ).one()
+    assert persisted.status == "completed"
+    assert persisted.output == {
+        "results": [{"result": "ok"}],
+        "result_count": 1,
+        "plugin": "TrivialPlugin",
+        "errors": [],
+    }
+    assert recorder.events == [
+        HuntEvent.progress(execution.id, 0.0, "lookup"),
+        HuntEvent.step_complete(execution.id, "lookup", 1.0),
+        HuntEvent.progress(execution.id, 1.0),
+        HuntEvent.complete(execution.id),
+    ]
 
-            executor = HuntExecutor(db_session)
-            executor.plugin_service.get_plugin = MagicMock(return_value=mock_plugin)
 
-            # Mock database operations
-            db_session.add = MagicMock()
-            db_session.commit = MagicMock()
-            db_session.get = MagicMock(return_value=None)
+@pytest.mark.asyncio
+async def test_throwing_plugin_is_a_persisted_failed_step(
+    session: Session, test_user: User, throwing_plugin_class
+):
+    recorder = EventRecorder()
+    execution = stored_execution(session, test_user)
 
-            # Execute hunt - should complete but mark execution as partial due to failed required step
-            await executor.execute_hunt(execution, hunt_definition, user)
+    await executor(session, recorder, [throwing_plugin_class]).execute_hunt(
+        execution,
+        {"steps": [step("lookup", plugin_name="ThrowingPlugin")]},
+        test_user,
+    )
 
-            # Verify step failure notification was sent
-            mock_step_failed.assert_called_once()
-            call_args = mock_step_failed.call_args
-            assert call_args[0][0] == 1  # execution_id
-            assert call_args[0][1] == "step1"  # step_id
-            assert call_args[0][2] == 0.0  # progress (0 steps completed)
+    persisted = session.exec(
+        select(HuntStep).where(HuntStep.execution_id == execution.id)
+    ).one()
+    assert persisted.status == "failed"
+    assert persisted.error_details == "Plugin execution error: provider exploded"
+    assert persisted.output == {
+        "results": [{"partial": True}],
+        "result_count": 1,
+        "plugin": "ThrowingPlugin",
+        "errors": [{"message": "Plugin execution error: provider exploded"}],
+    }
+    assert execution.status == "partial"
+    assert HuntEvent.step_failed(execution.id, "lookup", 0.0) in recorder.events
 
-            # Verify execution was marked as partial (not fully completed)
-            assert execution.status == "partial"
+
+@pytest.mark.asyncio
+async def test_optional_plugin_failure_is_terminal_and_hunt_completes(
+    session: Session, test_user: User, throwing_plugin_class
+):
+    recorder = EventRecorder()
+    execution = stored_execution(session, test_user)
+
+    await executor(session, recorder, [throwing_plugin_class]).execute_hunt(
+        execution,
+        {"steps": [step("lookup", plugin_name="ThrowingPlugin", optional=True)]},
+        test_user,
+    )
+
+    assert execution.status == "completed"
+    assert recorder.events[-1] == HuntEvent.complete(execution.id)
+
+
+@pytest.mark.asyncio
+async def test_executor_resolves_a_prior_step_result_for_the_next_plugin(
+    session: Session, test_user: User
+):
+    SecondPlugin.calls = []
+    recorder = EventRecorder()
+    execution = stored_execution(session, test_user)
+
+    await executor(session, recorder, [FirstPlugin, SecondPlugin]).execute_hunt(
+        execution,
+        {
+            "steps": [
+                step("first", plugin_name="FirstPlugin"),
+                step(
+                    "second",
+                    plugin_name="SecondPlugin",
+                    depends_on=["first"],
+                    parameter_mapping={"query": "first.results[0].address"},
+                ),
+            ]
+        },
+        test_user,
+    )
+
+    assert SecondPlugin.calls == [
+        {"query": "192.0.2.44", "case_id": execution.case_id, "save_to_case": False}
+    ]

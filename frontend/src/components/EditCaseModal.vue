@@ -1,6 +1,13 @@
 <template>
-  <v-dialog v-model="dialogVisible" max-width="600px" persistent>
-    <v-card prepend-icon="mdi-briefcase-edit" title="Edit Case">
+  <v-dialog
+    v-model="dialogVisible"
+    aria-label="Edit Case"
+    max-width="600px"
+    persistent
+    @keydown.esc="!updating && $emit('close')"
+  >
+    <v-card prepend-icon="mdi-briefcase-edit">
+      <v-card-title id="edit-case-dialog-title">Edit Case</v-card-title>
       <v-card-text>
         <!-- Error Alert -->
         <v-alert v-if="error" type="error" variant="tonal" class="mb-4">
@@ -10,7 +17,7 @@
         <v-form ref="formRef" v-model="isFormValid" @submit.prevent="handleSubmit">
           <!-- Case Details Section -->
           <v-card variant="outlined" class="mb-6">
-            <v-card-title class="text-subtitle-1 pb-2">
+            <v-card-title class="text-body-large pb-2">
               <v-icon start>mdi-information</v-icon>
               Case Information
             </v-card-title>
@@ -18,6 +25,7 @@
             <v-card-text>
               <v-text-field
                 v-model="formData.title"
+                autofocus
                 label="Case Title"
                 variant="outlined"
                 density="comfortable"
@@ -44,7 +52,7 @@
 
           <!-- Case Metadata (Read-only info) -->
           <v-card variant="outlined" v-if="caseData.created_at">
-            <v-card-title class="text-subtitle-1 pb-2">
+            <v-card-title class="text-body-large pb-2">
               <v-icon start>mdi-clock</v-icon>
               Case Timeline
             </v-card-title>
@@ -53,7 +61,7 @@
               <v-row>
                 <v-col cols="12" md="6">
                   <div class="mb-4">
-                    <div class="text-caption text-medium-emphasis mb-1">
+                    <div class="text-body-small text-medium-emphasis mb-1">
                       <v-icon size="16" class="me-1">mdi-calendar-plus</v-icon>
                       Created
                     </div>
@@ -65,7 +73,7 @@
 
                 <v-col cols="12" md="6">
                   <div class="mb-4">
-                    <div class="text-caption text-medium-emphasis mb-1">
+                    <div class="text-body-small text-medium-emphasis mb-1">
                       <v-icon size="16" class="me-1">mdi-calendar-edit</v-icon>
                       Last Updated
                     </div>
@@ -98,6 +106,8 @@
 import { ref, watch, computed } from 'vue'
 import api from '../services/api'
 import { formatDate } from '../composables/dateUtils'
+import { useDialogFocusRestore } from '../composables/useDialogFocusRestore'
+import { getErrorMessage } from '../utils/errorMessage'
 import ModalActions from './ModalActions.vue'
 
 const props = defineProps({
@@ -116,6 +126,8 @@ const props = defineProps({
     }),
   },
 })
+
+useDialogFocusRestore(() => props.show)
 
 const emit = defineEmits(['close', 'update'])
 
@@ -212,7 +224,7 @@ const handleSubmit = async () => {
     emit('update', response.data)
     emit('close')
   } catch (err) {
-    error.value = err.response?.data?.message || 'Failed to update case'
+    error.value = getErrorMessage(err, 'Failed to update case')
   } finally {
     updating.value = false
   }

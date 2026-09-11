@@ -1,6 +1,27 @@
 <template>
   <div class="plugin-result">
-    <component :is="pluginComponent" v-if="pluginComponent" :result="result" />
+    <v-alert v-if="executionError" type="error" role="alert" class="mb-4">
+      Plugin execution failed. {{ executionError }}
+    </v-alert>
+    <p v-else-if="executionStatus === 'failed'" role="status">Plugin execution failed.</p>
+    <p v-if="executionPartial" role="status">Partial retained output.</p>
+    <p v-if="retrievalLoading" role="status">Loading retained results…</p>
+    <v-alert v-if="retrievalError" type="warning" role="alert" class="mb-4">
+      Partial retained results. {{ retrievalError }}
+      <v-btn variant="text" @click="$emit('retry')">Retry retrieval</v-btn>
+    </v-alert>
+    <v-alert v-if="exportError" type="error" role="alert" class="mb-4">{{ exportError }}</v-alert>
+    <p v-if="['queued', 'running', 'cancelling'].includes(executionStatus)" role="status">
+      Execution {{ executionStatus }}. Retained output may be partial.
+    </p>
+    <component
+      :is="pluginComponent"
+      v-if="pluginComponent"
+      :result="result"
+      :execution-status="executionStatus"
+      :execution-partial="executionPartial"
+      :retrieval-complete="retrievalComplete"
+    />
     <div v-else class="fallback-result">
       <!-- Fallback for plugins without custom components -->
       <template v-if="Array.isArray(result)">
@@ -12,24 +33,24 @@
           rounded="lg"
         >
           <v-card-text>
-            <pre class="text-body-2 font-mono">{{ formatValue(item) }}</pre>
+            <pre class="text-body-medium font-mono">{{ formatValue(item) }}</pre>
           </v-card-text>
         </v-card>
       </template>
       <template v-else-if="typeof result === 'object' && result !== null">
         <v-card v-for="(value, key) in result" :key="key" elevation="1" rounded="lg" class="mb-2">
           <v-card-text>
-            <div class="text-body-2 font-weight-medium text-medium-emphasis mb-1">
+            <div class="text-body-medium font-weight-medium text-medium-emphasis mb-1">
               {{ formatKey(key) }}
             </div>
-            <pre class="text-body-2 font-mono">{{ formatValue(value) }}</pre>
+            <pre class="text-body-medium font-mono">{{ formatValue(value) }}</pre>
           </v-card-text>
         </v-card>
       </template>
       <template v-else>
         <v-card elevation="1" rounded="lg">
           <v-card-text>
-            <pre class="text-body-2 font-mono">{{ formatValue(result) }}</pre>
+            <pre class="text-body-medium font-mono">{{ formatValue(result) }}</pre>
           </v-card-text>
         </v-card>
       </template>
@@ -38,9 +59,16 @@
 </template>
 
 <script setup>
-import { defineProps, shallowRef, watch, markRaw } from 'vue'
+import { shallowRef, watch, markRaw } from 'vue'
 
 const props = defineProps({
+  executionStatus: { type: String, default: null },
+  executionPartial: { type: Boolean, default: false },
+  executionError: { type: String, default: null },
+  retrievalLoading: { type: Boolean, default: false },
+  retrievalComplete: { type: Boolean, default: true },
+  retrievalError: { type: String, default: null },
+  exportError: { type: String, default: null },
   result: {
     type: [Object, Array, String, Number, Boolean, null],
     required: true,
@@ -50,6 +78,8 @@ const props = defineProps({
     required: true,
   },
 })
+
+defineEmits(['retry'])
 
 // Use shallowRef for better performance with async components
 const pluginComponent = shallowRef(null)
@@ -108,6 +138,11 @@ const formatValue = (value) => {
 <style scoped>
 .plugin-result {
   width: 100%;
+}
+
+.fallback-result pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .fallback-result {

@@ -1,51 +1,57 @@
-"""
-Setup script to create the initial database and tables
-"""
+"""Create the Owlculus schema and seed deployment-level defaults."""
 
 import os
-import sys
 
-# Add the project root directory to Python path
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
-sys.path.insert(0, project_root)
-
-from backend.app.core.roles import UserRole
-from backend.app.core.security import get_password_hash
-from backend.app.database.connection import create_db_and_tables, engine
-from backend.app.database.models import Client, User
+from sqlalchemy import text
+from sqlalchemy.engine import Engine
 from sqlmodel import Session, select
 
+from app.database.connection import create_db_and_tables, engine
+from app.database.db_utils import transaction
+from app.database.models import Client
 
-def create_initial_data():
-    create_db_and_tables()
 
-    with Session(engine) as session:
-        # Create a default admin user
-        admin_user = session.exec(select(User).where(User.username == "admin")).first()
-        if not admin_user:
-            print("Create the admin user...\n")
-            admin_username = input(str("Username for admin user: "))
-            admin_password = input(str("Password for admin user: "))
-            admin_email = input(str("Email address for admin user: "))
-            admin_account = User(
-                username=admin_username,
-                email=admin_email,
-                password_hash=get_password_hash(admin_password),
-                role=UserRole.ADMIN,
-                is_superadmin=True,
-            )
-            session.add(admin_account)
-            session.commit()
-            session.refresh(admin_account)
+def initialize_database(database_engine: Engine = engine) -> None:
+    """Create the schema and idempotently seed the default Personal client."""
+    if database_engine.dialect.name == "postgresql":
+        with database_engine.begin() as connection:
+            connection.execute(text('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"'))
+    create_db_and_tables(database_engine)
+    from app.database.upgrade_authorization import upgrade as upgrade_authorization
 
-        # Create a default client "Personal" so you can create cases without a real client attached
-        client1 = session.exec(select(Client).where(Client.name == "Personal")).first()
-        if not client1:
-            client1 = Client(name="Personal", email=admin_email)
-            session.add(client1)
-            session.commit()
-            session.refresh(client1)
+    upgrade_authorization(database_engine)
+    if database_engine.dialect.name == "postgresql":
+        from app.database.upgrade_executions import upgrade
+
+        upgrade(database_engine)
+
+    from app.database.upgrade_case_relationships import upgrade as upgrade_relationships
+
+    upgrade_relationships(database_engine)
+
+    from app.database.upgrade_correlation import upgrade as upgrade_correlation
+
+    upgrade_correlation(database_engine)
+
+    with Session(database_engine) as session:
+        personal_client = session.exec(
+            select(Client).where(Client.name == "Personal")
+        ).first()
+        if personal_client is None:
+            with transaction(session):
+                session.add(Client(name="Personal"))
+
+    if database_engine.dialect.name == "postgresql" and os.environ.get(
+        "RUNTIME_POSTGRES_USER"
+    ):
+        from app.database.runtime_role import provision_runtime_role
+
+        provision_runtime_role(
+            database_engine,
+            os.environ["RUNTIME_POSTGRES_USER"],
+            os.environ.get("RUNTIME_POSTGRES_PASSWORD", ""),
+        )
 
 
 if __name__ == "__main__":
-    create_initial_data()
+    initialize_database()

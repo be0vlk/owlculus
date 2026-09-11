@@ -4,18 +4,18 @@
     <div class="mb-4">
       <v-row>
         <v-col cols="12" md="6">
-          <div class="text-caption font-weight-medium">Plugin</div>
-          <div class="text-body-2">{{ step.plugin_name }}</div>
+          <div class="text-body-small font-weight-medium">Plugin</div>
+          <div class="text-body-medium">{{ step.plugin_name }}</div>
         </v-col>
         <v-col cols="12" md="6">
-          <div class="text-caption font-weight-medium">Step ID</div>
-          <div class="text-body-2">{{ step.step_id }}</div>
+          <div class="text-body-small font-weight-medium">Step ID</div>
+          <div class="text-body-medium">{{ step.step_id }}</div>
         </v-col>
       </v-row>
 
       <!-- Parameters -->
       <div v-if="step.parameters && Object.keys(step.parameters).length > 0" class="mt-3">
-        <div class="text-caption font-weight-medium mb-2">Parameters</div>
+        <div class="text-body-small font-weight-medium mb-2">Parameters</div>
         <v-chip
           v-for="(value, key) in step.parameters"
           :key="key"
@@ -28,7 +28,12 @@
       </div>
 
       <!-- Error Details -->
-      <div v-if="step.status === 'failed' && step.error_details" class="mt-3">
+      <div
+        v-if="
+          step.plugin_name !== 'CorrelationScan' && step.status === 'failed' && step.error_details
+        "
+        class="mt-3"
+      >
         <v-alert type="error" variant="tonal" density="compact">
           {{ step.error_details }}
         </v-alert>
@@ -37,20 +42,47 @@
 
     <v-divider class="mb-4" />
 
-    <!-- Display results based on plugin type -->
-    <div v-if="step.status === 'completed' && displayResults.length > 0">
+    <v-alert
+      v-if="
+        step.plugin_name !== 'CorrelationScan' &&
+        displayResults.length &&
+        (step.status !== 'completed' || step.output?.partial || step.output?.errors?.length)
+      "
+      type="warning"
+      role="alert"
+      class="mb-4"
+    >
+      Partial retained results. This step has not completed successfully.
+    </v-alert>
+    <template v-if="step.plugin_name === 'CorrelationScan'">
+      <p role="status">Step {{ step.status }}.</p>
+      <PluginResult
+        plugin-name="CorrelationScan"
+        :result="correlationEvents"
+        :execution-status="step.status"
+        :execution-partial="!!step.output?.partial"
+        :execution-error="correlationExecutionError"
+        :retrieval-loading="retrievalLoading"
+        :retrieval-complete="retrievalComplete && !retrievalLoading && !retrievalError"
+        :retrieval-error="retrievalError"
+        :export-error="exportError"
+        @retry="$emit('retry')"
+      />
+    </template>
+    <!-- Display other Plugins' results as before -->
+    <div v-else-if="displayResults.length > 0">
       <div v-for="(result, index) in displayResults" :key="index" class="result-item mb-3">
         <v-card variant="outlined" density="compact">
           <v-card-text class="pa-3">
             <!-- Generic result display -->
             <div v-if="typeof result === 'object'">
               <div v-for="(value, key) in result" :key="key" class="mb-1">
-                <span class="text-caption font-weight-medium">{{ formatKey(key) }}:</span>
-                <span class="text-caption ml-2">{{ formatValue(value) }}</span>
+                <span class="text-body-small font-weight-medium">{{ formatKey(key) }}:</span>
+                <span class="text-body-small ml-2">{{ formatValue(value) }}</span>
               </div>
             </div>
             <!-- Simple value display -->
-            <div v-else class="text-body-2">
+            <div v-else class="text-body-medium">
               {{ result }}
             </div>
           </v-card-text>
@@ -61,33 +93,40 @@
     <!-- Empty state for completed steps -->
     <div v-else-if="step.status === 'completed'" class="text-center pa-4">
       <v-icon icon="mdi-information-outline" color="grey" class="mb-2" />
-      <div class="text-caption text-medium-emphasis">No results to display</div>
+      <div class="text-body-small text-medium-emphasis">No results to display</div>
     </div>
 
     <!-- Pending state -->
     <div v-else-if="step.status === 'pending'" class="text-center pa-4">
       <v-icon icon="mdi-clock-outline" color="grey" class="mb-2" />
-      <div class="text-caption text-medium-emphasis">Step not yet executed</div>
+      <div class="text-body-small text-medium-emphasis">Step not yet executed</div>
     </div>
 
     <!-- Running state -->
     <div v-else-if="step.status === 'running'" class="text-center pa-4">
       <v-progress-circular indeterminate size="32" color="primary" />
-      <div class="text-caption text-medium-emphasis mt-2">Step is currently running...</div>
+      <div class="text-body-small text-medium-emphasis mt-2">Step is currently running...</div>
     </div>
 
     <!-- Skipped state -->
     <div v-else-if="step.status === 'skipped'" class="text-center pa-4">
       <v-icon icon="mdi-skip-next" color="warning" class="mb-2" />
-      <div class="text-caption text-medium-emphasis">Step was skipped</div>
+      <div class="text-body-small text-medium-emphasis">Step was skipped</div>
     </div>
   </div>
 </template>
 
 <script setup>
 import { computed } from 'vue'
+import PluginResult from '@/components/plugins/PluginResult.vue'
+import { huntCorrelationEvents } from '@/utils/huntResults'
 
+defineEmits(['retry'])
 const props = defineProps({
+  exportError: { type: String, default: null },
+  retrievalLoading: { type: Boolean, default: false },
+  retrievalComplete: { type: Boolean, default: true },
+  retrievalError: { type: String, default: null },
   step: {
     type: Object,
     required: true,
@@ -97,6 +136,15 @@ const props = defineProps({
     required: true,
   },
 })
+
+const correlationEvents = computed(() => huntCorrelationEvents(props.step))
+const correlationExecutionError = computed(() =>
+  correlationEvents.value.some(
+    (event) => event.type === 'error' && event.data?.message === props.step.error_details,
+  )
+    ? null
+    : props.step.error_details,
+)
 
 // Computed properties
 const displayResults = computed(() => {

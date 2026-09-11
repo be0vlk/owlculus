@@ -6,20 +6,7 @@
     </v-card-title>
     <v-divider />
     <v-card-text class="pa-4">
-      <v-form ref="form" v-model="valid">
-        <v-select
-          v-model="formData.case_id"
-          :disabled="isEdit || !!caseId"
-          :items="cases"
-          :rules="[(v) => !!v || 'Case is required']"
-          item-title="title"
-          item-value="id"
-          label="Case"
-          variant="outlined"
-          density="comfortable"
-          class="mb-4"
-        />
-
+      <v-form ref="form" :id="formId" v-model="valid" :disabled="loading" @submit.prevent="save">
         <v-text-field
           v-model="formData.title"
           :rules="[(v) => !!v || 'Title is required']"
@@ -86,7 +73,7 @@
         <!-- Custom Fields -->
         <div v-if="customFields.length > 0" class="mt-4">
           <v-divider class="mb-4" />
-          <div class="text-subtitle-2 text-medium-emphasis mb-3">Additional Fields</div>
+          <div class="text-title-small text-medium-emphasis mb-3">Additional Fields</div>
           <CustomFieldInput
             v-for="field in customFields"
             :key="field.name"
@@ -100,8 +87,15 @@
     <v-divider />
     <v-card-actions class="pa-4">
       <v-spacer />
-      <v-btn variant="text" @click="$emit('cancel')">Cancel</v-btn>
-      <v-btn :disabled="!valid" :loading="loading" color="primary" variant="flat" @click="save">
+      <v-btn :disabled="loading" variant="text" @click="$emit('cancel')">Cancel</v-btn>
+      <v-btn
+        :disabled="!valid"
+        :loading="loading"
+        color="primary"
+        variant="flat"
+        type="submit"
+        :form="formId"
+      >
         {{ isEdit ? 'Update' : 'Create' }}
       </v-btn>
     </v-card-actions>
@@ -109,19 +103,16 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { useId, computed, onMounted, ref, watch } from 'vue'
 import { useTaskStore } from '@/stores/taskStore'
-import { caseService } from '@/services/case'
+import { useActiveCaseStore } from '@/stores/activeCase'
 import { TASK_PRIORITY, TASK_PRIORITY_LABELS } from '@/constants/tasks'
 import CustomFieldInput from './CustomFieldInput.vue'
 
 const props = defineProps({
+  saving: { type: Boolean, default: false },
   task: {
     type: Object,
-    default: null,
-  },
-  caseId: {
-    type: Number,
     default: null,
   },
 })
@@ -129,16 +120,24 @@ const props = defineProps({
 const emit = defineEmits(['save', 'cancel'])
 
 const taskStore = useTaskStore()
+const activeCase = useActiveCaseStore()
 
+const formId = useId()
 const form = ref(null)
 const valid = ref(false)
-const loading = ref(false)
-const cases = ref([])
+const validating = ref(false)
+const loading = computed(
+  () =>
+    validating.value ||
+    props.saving ||
+    !activeCase.activeCaseId ||
+    activeCase.activeCaseId !== formData.value.case_id,
+)
 
 const isEdit = computed(() => !!props.task)
 
 const formData = ref({
-  case_id: props.caseId || props.task?.case_id || null,
+  case_id: props.task?.case_id ?? activeCase.activeCaseId,
   title: props.task?.title || '',
   description: props.task?.description || '',
   template_id: null,
@@ -158,7 +157,7 @@ const priorityOptions = computed(() =>
 const filteredUsers = computed(() => {
   if (!formData.value.case_id) return []
 
-  const selectedCase = cases.value.find((c) => c.id === formData.value.case_id)
+  const selectedCase = activeCase.accessibleCases.find((c) => c.id === formData.value.case_id)
   return selectedCase?.users || []
 })
 
@@ -197,11 +196,11 @@ watch(
 )
 
 async function save() {
-  // Check if form is valid using v-model binding
-  if (!valid.value) return
-
-  loading.value = true
+  if (loading.value) return
+  validating.value = true
   try {
+    const result = await form.value.validate()
+    if (!result.valid || props.saving || activeCase.activeCaseId !== formData.value.case_id) return
     // Format date if present
     const data = { ...formData.value }
     if (data.due_date) {
@@ -210,15 +209,14 @@ async function save() {
 
     emit('save', data)
   } finally {
-    loading.value = false
+    validating.value = false
   }
 }
 
 onMounted(async () => {
   // Load required data
   try {
-    const [casesData] = await Promise.all([caseService.getCases(), taskStore.loadTemplates()])
-    cases.value = casesData
+    await taskStore.loadTemplates()
     // Templates are already stored in the taskStore
 
     // If editing a task with a template, load custom fields

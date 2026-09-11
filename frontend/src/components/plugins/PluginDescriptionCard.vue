@@ -4,7 +4,7 @@
       <v-icon color="blue">mdi-information</v-icon>
       <span class="text-subtitle2 font-weight-medium">About</span>
     </div>
-    <p class="text-body-2 mb-0">
+    <p class="text-body-medium mb-0">
       {{ description }}
     </p>
   </v-card>

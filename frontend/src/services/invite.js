@@ -2,12 +2,12 @@ import api from './api'
 
 export const inviteService = {
   async getInvites() {
-    const response = await api.get('/api/invites')
+    const response = await api.get('/api/invites/')
     return response.data
   },
 
   async createInvite(inviteData) {
-    const response = await api.post('/api/invites', inviteData)
+    const response = await api.post('/api/invites/', inviteData)
     return response.data
   },
 

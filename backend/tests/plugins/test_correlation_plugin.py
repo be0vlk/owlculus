@@ -1,681 +1,1084 @@
-"""
-Tests for the Correlation plugin
-"""
-
-from unittest.mock import AsyncMock, Mock, patch
+"""Correlation behavior through accepted Entities and the PluginRunner boundary."""
 
 import pytest
-from app.core.roles import UserRole
-from app.database.models import Case, CaseUserLink, Entity, User
+
+from app.database.models import Case, Entity
+from app.plugins.base_plugin import PluginRun
 from app.plugins.correlation_plugin import CorrelationScan
-from app.schemas.entity_schema import ENTITY_TYPE_SCHEMAS
-from sqlmodel import Session
+from app.plugins.plugin_registry import PluginRegistry
+from app.plugins.plugin_runner import PluginRunner
+from app.schemas.entity_schema import EntityCreate
+from app.services.entity_service import EntityService
 
 
-class TestCorrelationPlugin:
-    """Test cases for CorrelationScan plugin"""
+async def entity(session, user, case, kind, **data):
+    return await EntityService(session).create_entity(
+        case.id, EntityCreate(entity_type=kind, data=data), user
+    )
 
-    @pytest.fixture
-    def plugin(self):
-        """Create a CorrelationScan instance for testing"""
-        return CorrelationScan()
 
-    @pytest.fixture
-    def mock_db_session(self):
-        """Mock database session"""
-        return Mock(spec=Session)
+async def scan(session, user, case):
+    ctx = PluginRun.for_test(
+        session=session,
+        user=user,
+        api_keys={},
+        evidence=[],
+        entities=[],
+        case_id=case.id,
+    )
+    events = [
+        event
+        async for event in PluginRunner(
+            PluginRegistry.from_classes([CorrelationScan])
+        ).run("CorrelationScan", {}, ctx)
+    ]
+    assert not [event for event in events if event.kind == "error"], events
+    return [event.payload for event in events if event.kind == "data"]
 
-    @pytest.fixture
-    def mock_user(self):
-        """Mock user"""
-        user = Mock(spec=User)
-        user.id = 1
-        user.role = UserRole.INVESTIGATOR
-        return user
 
-    @pytest.fixture
-    def mock_admin_user(self):
-        """Mock admin user"""
-        user = Mock(spec=User)
-        user.id = 2
-        user.role = UserRole.ADMIN
-        return user
+@pytest.fixture
+def cases(session):
+    cases = [
+        Case(case_number="SCAN-A", title="Source investigation"),
+        Case(case_number="SCAN-B", title="Related investigation"),
+    ]
+    session.add_all(cases)
+    session.commit()
+    return cases
 
-    def test_plugin_initialization(self, plugin):
-        """Test plugin is initialized correctly"""
-        assert plugin.name == "CorrelationScan"
-        assert plugin.display_name == "Correlation Scan"
-        assert plugin.description == "Finds matching entities and relationships across cases"
-        assert plugin.category == "Other"
-        assert plugin.evidence_category == "Documents"
-        assert plugin.save_to_case is False
 
-    def test_plugin_parameters(self, plugin):
-        """Test plugin parameters are defined correctly"""
-        params = plugin.parameters
+@pytest.mark.asyncio
+async def test_unnamed_person_and_domain_connect_in_both_directions(
+    session, test_admin, cases
+):
+    source, other = cases
+    person = await entity(
+        session, test_admin, source, "person", email="ada@example.com"
+    )
+    domain = await entity(session, test_admin, other, "domain", domain=" Example.COM. ")
+    forward = await scan(session, test_admin, source)
+    backward = await scan(session, test_admin, other)
+    assert len(forward) == len(backward) == 1
+    assert forward[0]["entity_id"] == person.id
+    assert forward[0]["entity_name"] == "ada@example.com"
+    assert forward[0]["matches"][0]["entity_id"] == domain.id
+    assert backward[0]["matches"][0]["entity_id"] == person.id
+    assert (
+        forward[0]["normalized_value"]
+        == backward[0]["normalized_value"]
+        == "example.com"
+    )
+    assert forward[0]["source_fields"] == [
+        {"field": "email", "value": "ada@example.com"}
+    ]
+    assert forward[0]["matches"][0]["fields"] == [
+        {"field": "domain", "value": "example.com"}
+    ]
 
-        assert "case_id" in params
-        assert params["case_id"]["type"] == "integer"
-        assert params["case_id"]["required"] is True
-        assert params["case_id"]["description"] == "ID of the case to scan"
 
-    def test_is_admin(self, plugin, mock_user, mock_admin_user):
-        """Test admin check functionality"""
-        # Non-admin user
-        plugin._current_user = mock_user
-        assert plugin._is_admin() is False
+@pytest.mark.asyncio
+async def test_references_survive_malformed_urls_and_preserve_each_source(
+    session, test_admin, cases
+):
+    source, other = cases
+    ada = await entity(
+        session,
+        test_admin,
+        source,
+        "person",
+        first_name="Ada",
+        employer=" Engines ",
+        email="ada@example.com",
+        usernames=["https://[broken", "https://EXAMPLE.com/@ada", "plainusername"],
+    )
+    grace = await entity(
+        session, test_admin, source, "person", first_name="Grace", employer="engines"
+    )
+    charles = await entity(
+        session, test_admin, other, "person", first_name="Charles", employer="ENGINES"
+    )
+    company = await entity(
+        session, test_admin, other, "company", name="Example", website="example.com"
+    )
+    for case in cases:
+        await entity(session, test_admin, case, "ip_address", ip_address="192.0.2.1")
+    results = await scan(session, test_admin, source)
+    employers = [group for group in results if group.get("match_type") == "employer"]
+    assert {group["entity_id"] for group in employers} == {ada.id, grace.id}
+    assert all(
+        [match["entity_id"] for match in group["matches"]] == [charles.id]
+        for group in employers
+    )
+    domain = next(group for group in results if group.get("match_type") == "domain")
+    assert [match["entity_id"] for match in domain["matches"]] == [company.id]
+    assert domain["source_fields"] == [
+        {"field": "email", "value": "ada@example.com"},
+        {"field": "usernames[1]", "value": "https://EXAMPLE.com/@ada"},
+    ]
+    assert any(group.get("entity_type") == "ip_address" for group in results)
+    notice = next(
+        group for group in results if group.get("notice_type") == "skipped_reference"
+    )
+    assert notice["case_scope"] == [source.id]
+    assert notice["entity_id"] == ada.id
+    assert "incomplete" in notice["message"]
+    assert "[broken" not in str(results)
+    reverse = await scan(session, test_admin, other)
+    reverse_domain = next(
+        group for group in reverse if group.get("match_type") == "domain"
+    )
+    assert reverse_domain["matches"][0]["fields"] == domain["source_fields"]
 
-        # Admin user
-        plugin._current_user = mock_admin_user
-        assert plugin._is_admin() is True
 
-        # No user - returns None (falsy) due to short-circuit evaluation
-        plugin._current_user = None
-        # Check that it's falsy (None evaluates to False in boolean context)
-        assert not plugin._is_admin()
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "source_data,other_data,kinds,qualification",
+    [
+        ({"vin": " abc123 "}, {"vin": "ABC123"}, ["vin"], "Exact VIN"),
+        (
+            {"license_plate": "OWL-123"},
+            {"license_plate": "owl 123"},
+            ["license_plate"],
+            "Tentative",
+        ),
+        (
+            {"license_plate": "OWL-123", "registration_state": "CA"},
+            {"license_plate": "owl 123", "registration_state": "NY"},
+            [],
+            None,
+        ),
+        (
+            {"license_plate": "OWL-123", "registration_state": " ca ", "vin": "FIRST"},
+            {"license_plate": "owl 123", "registration_state": "CA", "vin": "SECOND"},
+            ["license_plate"],
+            "conflicting VINs",
+        ),
+        (
+            {"license_plate": "OWL-123", "registration_state": "CA", "vin": "SAME"},
+            {"license_plate": "owl 123", "registration_state": "NY", "vin": "SAME"},
+            ["vin"],
+            "Exact VIN",
+        ),
+    ],
+)
+async def test_vehicle_identifiers_are_independent_and_honestly_qualified(
+    session, test_admin, cases, source_data, other_data, kinds, qualification
+):
+    for case, data in zip(cases, (source_data, other_data)):
+        await entity(session, test_admin, case, "vehicle", **data)
+    for case in cases:
+        results = await scan(session, test_admin, case)
+        assert [group["match_type"] for group in results] == kinds
+        if qualification:
+            assert qualification in results[0]["matches"][0]["signal"]
 
-    def test_parse_domain_from_string(self, plugin):
-        """Test domain extraction from various string formats"""
-        # Email addresses
-        assert plugin._parse_domain_from_string("user@example.com") == "example.com"
-        assert plugin._parse_domain_from_string("test@subdomain.example.org") == "subdomain.example.org"
-        
-        # URLs
-        assert plugin._parse_domain_from_string("https://example.com") == "example.com"
-        assert plugin._parse_domain_from_string("http://example.com/path") == "example.com"
-        assert plugin._parse_domain_from_string("https://sub.example.com/page") == "sub.example.com"
-        
-        # Edge cases
-        assert plugin._parse_domain_from_string("") is None
-        assert plugin._parse_domain_from_string(None) is None
-        assert plugin._parse_domain_from_string("not-a-domain") is None
-        assert plugin._parse_domain_from_string("@") is None
 
-    def test_extract_domains_from_entity(self, plugin):
-        """Test domain extraction from different entity types"""
-        # Domain entity
-        domain_entity = Mock(spec=Entity)
-        domain_entity.entity_type = "domain"
-        domain_entity.data = {"domain": "example.com"}
-        domains = plugin._extract_domains_from_entity(domain_entity)
-        assert domains == ["example.com"]
+@pytest.mark.asyncio
+async def test_saved_report_preserves_explanations_counts_time_and_warning_scope(
+    client, session, test_admin, cases, monkeypatch
+):
+    from dataclasses import replace
 
-        # Person entity with email and usernames
-        person_entity = Mock(spec=Entity)
-        person_entity.entity_type = "person"
-        person_entity.data = {
-            "email": "john@example.com",
-            "usernames": ["john@corp.com", "johnny123", "john@social.net"]
-        }
-        domains = plugin._extract_domains_from_entity(person_entity)
-        assert set(domains) == {"example.com", "corp.com", "social.net"}
+    from app.core import file_storage
+    from app.plugins.plugin_context import ServiceEvidenceSink
+    from app.services import evidence_service
+    from app.services.evidence_service import EvidenceService
 
-        # Company entity with website
-        company_entity = Mock(spec=Entity)
-        company_entity.entity_type = "company"
-        company_entity.data = {"website": "https://company.com"}
-        domains = plugin._extract_domains_from_entity(company_entity)
-        assert domains == ["company.com"]
-
-        # Entity with no data
-        empty_entity = Mock(spec=Entity)
-        empty_entity.entity_type = "person"
-        empty_entity.data = None
-        domains = plugin._extract_domains_from_entity(empty_entity)
-        assert domains == []
-
-    def test_create_match_dict(self, plugin):
-        """Test match dictionary creation"""
-        entity = Mock(spec=Entity)
-        entity.id = 123
-        entity.entity_type = "person"
-        entity.case_id = 456
-
-        case = Mock(spec=Case)
-        case.case_number = "CASE-2024-001"
-        case.title = "Test Case"
-
-        match = plugin._create_match_dict(
-            entity, 
-            case, 
-            entity_name="John Doe",
-            extra_field="extra_value"
+    monkeypatch.setattr(evidence_service, "UPLOAD_DIR", file_storage.UPLOAD_DIR)
+    source, other = cases
+    ada = await entity(
+        session,
+        test_admin,
+        source,
+        "person",
+        first_name="Ada",
+        employer="Engines",
+        email="ada@example.com",
+    )
+    charles = await entity(
+        session,
+        test_admin,
+        other,
+        "person",
+        first_name="Charles",
+        employer="engines",
+        email="charles@example.com",
+        usernames=["https://[broken"],
+    )
+    ctx = replace(
+        PluginRun.for_test(
+            session=session,
+            user=test_admin,
+            api_keys={},
+            evidence=[],
+            entities=[],
+            case_id=source.id,
+            save_to_case=True,
+        ),
+        evidence=ServiceEvidenceSink(session),
+    )
+    events = [
+        event
+        async for event in PluginRunner(
+            PluginRegistry.from_classes([CorrelationScan])
+        ).run("CorrelationScan", {}, ctx)
+    ]
+    assert not [event for event in events if event.kind == "error"]
+    report = next(
+        item
+        for item in await EvidenceService(session).get_case_evidence(
+            source.id, test_admin
         )
+        if not item.is_folder
+    )
+    from app.core.dependencies import get_current_user
+    from app.main import app
 
-        assert match["entity_id"] == 123
-        assert match["entity_type"] == "person"
-        assert match["case_id"] == 456
-        assert match["case_number"] == "CASE-2024-001"
-        assert match["case_title"] == "Test Case"
-        assert match["entity_name"] == "John Doe"
-        assert match["extra_field"] == "extra_value"
+    app.dependency_overrides[get_current_user] = lambda: test_admin
+    response = client.get(f"/api/evidence/{report.id}/download")
+    assert response.status_code == 200
+    text = response.content.decode()
+    for expected in (
+        "Total entities with matches: 1",
+        "Total matches: 2",
+        "Related Cases: 1",
+        "Engines",
+        "Ada",
+        "Charles",
+        "email: ada@example.com",
+        "email: charles@example.com",
+        "employer: engines",
+        "Source investigation",
+        "Related investigation",
+        f"Entity ID: {ada.id}",
+        f"Entity ID: {charles.id}",
+        "incomplete",
+        next(event.payload["executed_at"] for event in events if event.kind == "data"),
+    ):
+        assert expected in text
+    assert "[broken" not in text
+    assert report.file_hash == file_storage.calculate_file_hash(response.content)
 
-    def test_get_display_name(self, plugin):
-        """Test display name extraction for different entity types"""
-        # Person entity
-        person_data = {"first_name": "John", "last_name": "Doe"}
-        assert plugin._get_display_name(person_data, "person") == "John Doe"
 
-        # Domain entity
-        domain_data = {"domain": "example.com"}
-        assert plugin._get_display_name(domain_data, "domain") == "example.com"
-
-        # Company entity - uses 'name' field not 'company'
-        company_data = {"name": "Acme Corp"}
-        assert plugin._get_display_name(company_data, "company") == "Acme Corp"
-
-        # IP address entity
-        ip_data = {"ip_address": "192.168.1.1"}
-        assert plugin._get_display_name(ip_data, "ip_address") == "192.168.1.1"
-
-        # Unknown entity type fallback
-        unknown_data = {"Name": "Fallback Name"}
-        assert plugin._get_display_name(unknown_data, "unknown_type") == "Fallback Name"
-
-        # Empty data
-        assert plugin._get_display_name({}, "person") == ""
-        assert plugin._get_display_name(None, "person") == ""
-
-    def test_get_primary_fields_for_entity(self, plugin):
-        """Test primary field detection for entity types"""
-        # Person entity should return first_name and last_name
-        fields = plugin._get_primary_fields_for_entity("person")
-        assert fields == ["first_name", "last_name"]
-
-        # Domain entity should have domain field
-        fields = plugin._get_primary_fields_for_entity("domain")
-        assert "domain" in fields[0] if fields else False
-
-        # Unknown entity type
-        fields = plugin._get_primary_fields_for_entity("unknown_type")
-        assert fields == []
-
-    @pytest.mark.asyncio
-    async def test_run_missing_parameters(self, plugin):
-        """Test error when parameters are missing"""
-        results = []
-        async for result in plugin.run(None):
-            results.append(result)
-
-        assert len(results) == 1
-        assert results[0]["type"] == "error"
-        assert "Parameters are required" in results[0]["data"]["message"]
-
-    @pytest.mark.asyncio
-    async def test_run_empty_parameters(self, plugin):
-        """Test error when parameters are empty dict"""
-        results = []
-        async for result in plugin.run({}):
-            results.append(result)
-
-        assert len(results) == 1
-        assert results[0]["type"] == "error"
-        # Empty dict evaluates to False in Python, so triggers the same error
-        assert "Parameters are required" in results[0]["data"]["message"]
-
-    @pytest.mark.asyncio
-    @patch("app.plugins.correlation_plugin.get_db")
-    async def test_run_missing_case_id(self, mock_get_db, plugin, mock_db_session):
-        """Test error when case_id is missing but other params provided"""
-        # Set current user to ensure we get to the case_id check
-        plugin._current_user = Mock(id=1, role=UserRole.ADMIN)
-        mock_get_db.return_value = iter([mock_db_session])
-        
-        # Provide non-empty params but no case_id
-        results = []
-        async for result in plugin.run({"other_param": "value"}):
-            results.append(result)
-
-        assert len(results) == 1
-        assert results[0]["type"] == "error"
-        assert "Case ID is required" in results[0]["data"]["message"]
-
-    @pytest.mark.asyncio
-    @patch("app.plugins.correlation_plugin.get_db")
-    async def test_run_no_current_user(self, mock_get_db, plugin, mock_db_session):
-        """Test error when current user is not set"""
-        mock_get_db.return_value = iter([mock_db_session])
-        plugin._current_user = None
-
-        results = []
-        async for result in plugin.run({"case_id": 123}):
-            results.append(result)
-
-        assert len(results) == 1
-        assert results[0]["type"] == "error"
-        assert "Current user not found" in results[0]["data"]["message"]
-
-    @pytest.mark.asyncio
-    @patch("app.plugins.correlation_plugin.get_db")
-    async def test_run_access_denied_non_admin(self, mock_get_db, plugin, mock_db_session, mock_user):
-        """Test access denied for non-admin user without case access"""
-        mock_get_db.return_value = iter([mock_db_session])
-        plugin._current_user = mock_user
-
-        # Mock no access to case
-        mock_result = Mock()
-        mock_result.first.return_value = None
-        mock_db_session.execute.return_value = mock_result
-
-        results = []
-        async for result in plugin.run({"case_id": 123}):
-            results.append(result)
-
-        assert len(results) == 1
-        assert results[0]["type"] == "error"
-        assert "You do not have access to this case" in results[0]["data"]["message"]
-
-    @pytest.mark.asyncio
-    async def test_execute_name_matches(self, plugin, mock_db_session, mock_admin_user):
-        """Test finding name matches across cases"""
-        plugin._current_user = mock_admin_user
-        
-        # Create test entities
-        source_entity = Mock(spec=Entity)
-        source_entity.id = 1
-        source_entity.entity_type = "person"
-        source_entity.case_id = 100
-        source_entity.data = {"first_name": "John", "last_name": "Doe"}
-
-        matching_entity = Mock(spec=Entity)
-        matching_entity.id = 2
-        matching_entity.entity_type = "person"
-        matching_entity.case_id = 200
-        matching_entity.data = {"first_name": "John", "last_name": "Doe"}
-
-        case1 = Mock(spec=Case)
-        case1.id = 100
-        case1.case_number = "CASE-001"
-        case1.title = "First Case"
-
-        case2 = Mock(spec=Case)
-        case2.id = 200
-        case2.case_number = "CASE-002"
-        case2.title = "Second Case"
-
-        # Mock database responses
-        with patch.object(plugin, '_get_case_entities', return_value=[source_entity]):
-            with patch.object(plugin, '_find_name_matches', return_value=[{
-                "entity_id": 2,
-                "entity_type": "person",
-                "case_id": 200,
-                "case_number": "CASE-002",
-                "case_title": "Second Case"
-            }]):
-                results = []
-                async for result in plugin.execute({"case_id": 100}, mock_db_session):
-                    results.append(result)
-
-        # Should have at least one data result for name match
-        data_results = [r for r in results if r["type"] == "data"]
-        assert len(data_results) >= 1
-        
-        match_data = data_results[0]["data"]
-        assert match_data["entity_name"] == "John Doe"
-        assert match_data["match_type"] == "name"
-        assert len(match_data["matches"]) == 1
-
-    @pytest.mark.asyncio
-    async def test_execute_employer_matches(self, plugin, mock_db_session, mock_admin_user):
-        """Test finding employer matches across cases"""
-        plugin._current_user = mock_admin_user
-        
-        # Create test entity with employer
-        source_entity = Mock(spec=Entity)
-        source_entity.id = 1
-        source_entity.entity_type = "person"
-        source_entity.case_id = 100
-        source_entity.data = {
-            "first_name": "John", 
-            "last_name": "Doe",
-            "employer": "Acme Corp"
+@pytest.mark.asyncio
+async def test_names_blank_entities_and_identical_domains(session, test_admin, cases):
+    for case, first, last, domain in (
+        (cases[0], " Ada ", "Lovelace ", " Example.COM. "),
+        (cases[1], "ada", "lovelace", "example.com"),
+    ):
+        await entity(
+            session, test_admin, case, "person", first_name=first, last_name=last
+        )
+        # Historical blank records remain readable and harmless to correlation.
+        session.add_all(
+            [
+                Entity(
+                    case_id=case.id,
+                    entity_type=kind,
+                    data={},
+                    created_by_id=test_admin.id,
+                )
+                for kind in ("person", "vehicle")
+            ]
+        )
+        session.commit()
+        await entity(session, test_admin, case, "domain", domain=domain)
+    for case in cases:
+        results = await scan(session, test_admin, case)
+        assert len(results) == 2
+        assert all(group["match_type"] == "name" for group in results)
+        assert {group["normalized_value"] for group in results} == {
+            "ada lovelace",
+            "example.com",
         }
 
-        # Mock database responses
-        with patch.object(plugin, '_get_case_entities', return_value=[source_entity]):
-            with patch.object(plugin, '_find_name_matches', return_value=[]):
-                with patch.object(plugin, '_find_employer_matches', return_value=[{
-                "entity_id": 3,
-                "entity_type": "person",
-                "case_id": 300,
-                "case_number": "CASE-003",
-                "case_title": "Third Case",
-                    "person_name": "Jane Smith"
-                }]):
-                    with patch.object(plugin, '_find_domain_matches', return_value={}):
-                        results = []
-                        async for result in plugin.execute({"case_id": 100}, mock_db_session):
-                            results.append(result)
 
-        # Should have employer match
-        data_results = [r for r in results if r["type"] == "data" and r["data"].get("match_type") == "employer"]
-        assert len(data_results) == 1
-        
-        match_data = data_results[0]["data"]
-        assert match_data["employer_name"] == "Acme Corp"
-        assert match_data["match_type"] == "employer"
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "reference,connects,skipped",
+    [
+        (
+            " https://user:password@EXAMPLE.com./@grace?email=other@elsewhere.com#@another.com ",
+            True,
+            False,
+        ),
+        ("HTTPS://example.com/@grace", True, False),
+        ("grace@EXAMPLE.com.", True, False),
+        ("https://sub.example.com/@grace", False, False),
+        ("example.com", False, False),
+        ("https://[broken", False, True),
+        ("https://example.com:bad", False, True),
+        ("https://bad host.com", False, True),
+    ],
+)
+async def test_profile_hostname_parsing_is_conservative(
+    session, test_admin, cases, reference, connects, skipped
+):
+    await entity(
+        session,
+        test_admin,
+        cases[0],
+        "person",
+        first_name="Profile subject",
+        usernames=[reference],
+    )
+    await entity(session, test_admin, cases[1], "domain", domain="example.com")
+    results = await scan(session, test_admin, cases[0])
+    assert any(group.get("match_type") == "domain" for group in results) is connects
+    assert (
+        any(group.get("notice_type") == "skipped_reference" for group in results)
+        is skipped
+    )
 
-    @pytest.mark.asyncio
-    async def test_execute_domain_matches(self, plugin, mock_db_session, mock_admin_user):
-        """Test finding domain matches across cases"""
-        plugin._current_user = mock_admin_user
-        
-        # Create test entity with email
-        source_entity = Mock(spec=Entity)
-        source_entity.id = 1
-        source_entity.entity_type = "person"
-        source_entity.case_id = 100
-        source_entity.data = {
-            "first_name": "John",
-            "last_name": "Doe", 
-            "email": "john@example.com"
-        }
 
-        # Mock database responses
-        with patch.object(plugin, '_get_case_entities', return_value=[source_entity]):
-            with patch.object(plugin, '_find_name_matches', return_value=[]):
-                with patch.object(plugin, '_find_employer_matches', return_value=[]):
-                    with patch.object(plugin, '_find_domain_matches', return_value={
-                "example.com": [{
-                    "entity_id": 4,
-                    "entity_type": "domain",
-                    "case_id": 400,
-                    "case_number": "CASE-004",
-                    "case_title": "Fourth Case",
-                    "entity_name": "example.com",
-                        "found_in": "domain field"
-                    }]
-                }):
-                        results = []
-                        async for result in plugin.execute({"case_id": 100}, mock_db_session):
-                            results.append(result)
+@pytest.mark.asyncio
+async def test_persisted_legacy_network_assets_keep_their_name_connection(
+    session, test_admin, cases
+):
+    from app.database.models import Entity
 
-        # Should have domain match
-        data_results = [r for r in results if r["type"] == "data" and r["data"].get("match_type") == "domain"]
-        assert len(data_results) == 1
-        
-        match_data = data_results[0]["data"]
-        assert match_data["domain"] == "example.com"
-        assert match_data["match_type"] == "domain"
+    for case in cases:
+        session.add(
+            Entity(
+                case_id=case.id,
+                created_by_id=test_admin.id,
+                entity_type="network_assets",
+                data={"domains": ["legacy.example.com"]},
+            )
+        )
+    session.commit()
+    result = await scan(session, test_admin, cases[0])
+    assert len(result) == 1
+    assert result[0]["match_type"] == "name"
+    assert result[0]["source_fields"] == [
+        {"field": "domains[0]", "value": "legacy.example.com"}
+    ]
 
-    @pytest.mark.asyncio
-    async def test_execute_exception_handling(self, plugin, mock_db_session, mock_admin_user):
-        """Test exception handling during execution"""
-        plugin._current_user = mock_admin_user
-        
-        # Mock exception during entity retrieval
-        with patch.object(plugin, '_get_case_entities', side_effect=Exception("Database error")):
-            results = []
-            async for result in plugin.execute({"case_id": 100}, mock_db_session):
-                results.append(result)
 
-        assert len(results) == 1
-        assert results[0]["type"] == "error"
-        assert "Error during correlation scan: Database error" in results[0]["data"]["message"]
+@pytest.mark.asyncio
+async def test_exact_email_is_separate_from_domain_and_preserves_local_part(
+    session, test_admin, cases
+):
+    await entity(session, test_admin, cases[0], "person", email="Ada+tag@gmail.com")
+    exact = await entity(
+        session,
+        test_admin,
+        cases[1],
+        "person",
+        first_name="Other",
+        email="Ada+tag@GMAIL.COM",
+    )
+    for address in ("ada+tag@gmail.com", "Ada@gmail.com", "A.da+tag@gmail.com"):
+        await entity(session, test_admin, cases[1], "person", email=address)
+    results = await scan(session, test_admin, cases[0])
+    assert results[0]["match_type"] == "email"
+    assert [match["entity_id"] for match in results[0]["matches"]] == [exact.id]
+    assert results[0]["source_fields"] == [
+        {"field": "email", "value": "Ada+tag@gmail.com"}
+    ]
+    assert results[0]["matches"][0]["signal"] == "Exact email match"
+    domain = next(group for group in results if group.get("match_type") == "domain")
+    assert len(domain["matches"]) == 4
+    assert "low signal" in domain["matches"][-1]["signal"].lower()
 
-    @pytest.mark.asyncio
-    async def test_find_name_matches(self, plugin, mock_db_session, mock_user):
-        """Test finding entities with matching names"""
-        plugin._current_user = mock_user
-        
-        source_entity = Mock(spec=Entity)
-        source_entity.id = 1
-        source_entity.entity_type = "person"
-        source_entity.data = {"first_name": "John", "last_name": "Doe"}
 
-        matching_entity = Mock(spec=Entity)
-        matching_entity.id = 2
-        matching_entity.entity_type = "person" 
-        matching_entity.data = {"first_name": "John", "last_name": "Doe"}
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "other_phone,connects,skipped",
+    [
+        ("+1 202.555-0123", True, False),
+        ("1 202 555 0123", False, False),
+        ("2025550123", False, False),
+        ("+1 202 555 0123 ext 4", False, True),
+        ("+1 202 555 0123#4", False, True),
+        ("call +1 202 555 0123", False, True),
+    ],
+)
+async def test_phone_matching_is_conservative_and_cross_type(
+    session, test_admin, cases, other_phone, connects, skipped
+):
+    await entity(session, test_admin, cases[0], "person", phone="+1 (202) 555-0123")
+    await entity(session, test_admin, cases[1], "company", name="", phone=other_phone)
+    for case in cases:
+        results = await scan(session, test_admin, case)
+        groups = [row for row in results if row.get("match_type") == "phone"]
+        assert bool(groups) is connects
+        assert (
+            any(row.get("notice_type") == "skipped_reference" for row in results)
+            is skipped
+        )
+        if connects:
+            assert groups[0]["normalized_value"] == "+12025550123"
+            assert groups[0]["matches"][0]["signal"] == "Exact phone match"
+            assert groups[0]["source_fields"][0]["value"] in (
+                other_phone,
+                "+1 (202) 555-0123",
+            )
 
-        case = Mock(spec=Case)
-        case.case_number = "CASE-002"
-        case.title = "Match Case"
 
-        # Mock query result
-        mock_result = [(matching_entity, case)]
-        mock_db_session.execute.return_value = mock_result
+@pytest.mark.asyncio
+async def test_large_group_is_losslessly_continued_with_report_counts(
+    session, test_admin, cases, monkeypatch
+):
+    from app.plugins.output_limits import serialized_size
 
-        matches = await plugin._find_name_matches(mock_db_session, source_entity, "John Doe")
-        
-        assert len(matches) == 1
-        assert matches[0]["entity_id"] == 2
-        assert matches[0]["case_number"] == "CASE-002"
+    monkeypatch.setenv("EXECUTION_EVENT_LIMIT_BYTES", "2400")
+    await entity(session, test_admin, cases[0], "person", employer="Popular")
+    related = [
+        await entity(
+            session,
+            test_admin,
+            cases[1],
+            "person",
+            first_name=f"Person {index}",
+            employer="Popular",
+        )
+        for index in range(12)
+    ]
+    evidence = []
+    ctx = PluginRun.for_test(
+        session=session,
+        user=test_admin,
+        api_keys={},
+        evidence=evidence,
+        entities=[],
+        case_id=cases[0].id,
+        save_to_case=True,
+    )
+    events = [
+        event
+        async for event in PluginRunner(
+            PluginRegistry.from_classes([CorrelationScan])
+        ).run("CorrelationScan", {}, ctx)
+    ]
+    assert not [event for event in events if event.kind == "error"], events
+    parts = [
+        event.payload
+        for event in events
+        if event.kind == "data" and "matches" in event.payload
+    ]
+    assert len(parts) > 1
+    assert len({part["group_id"] for part in parts}) == 1
+    assert all(part["continuation"] == "merge" for part in parts)
+    assert all(serialized_size(event.to_wire()) <= 2400 for event in events)
+    assert [match["entity_id"] for part in parts for match in part["matches"]] == [
+        row.id for row in related
+    ]
+    assert "Total entities with matches: 1" in evidence[0].content
+    assert "Total matches: 12" in evidence[0].content
+    assert evidence[0].content.count("Match Type: employer") == 1
 
-    @pytest.mark.asyncio
-    async def test_find_employer_matches(self, plugin, mock_db_session, mock_user):
-        """Test finding entities with matching employer"""
-        plugin._current_user = mock_user
-        
-        source_entity = Mock(spec=Entity)
-        source_entity.id = 1
-        source_entity.entity_type = "person"
 
-        matching_entity = Mock(spec=Entity)
-        matching_entity.id = 2
-        matching_entity.entity_type = "person"
-        matching_entity.data = {
-            "first_name": "Jane",
-            "last_name": "Smith",
-            "employer": "Acme Corp"
-        }
+@pytest.mark.asyncio
+async def test_common_provider_overlap_is_last_but_explicit_domain_is_not_downgraded(
+    session, test_admin, cases
+):
+    first = await entity(
+        session, test_admin, cases[0], "person", email="first@gmail.com"
+    )
+    await entity(session, test_admin, cases[0], "person", employer="Specific")
+    await entity(
+        session,
+        test_admin,
+        cases[1],
+        "person",
+        email="second@gmail.com",
+        employer="Specific",
+    )
+    groups = await scan(session, test_admin, cases[0])
+    assert [group["match_type"] for group in groups] == ["employer", "domain"]
+    domain = await entity(session, test_admin, cases[1], "domain", domain="gmail.com")
+    groups = await scan(session, test_admin, cases[0])
+    visible = [
+        match
+        for group in groups
+        if group.get("entity_id") == first.id
+        for match in group["matches"]
+    ]
+    assert visible[0]["entity_id"] == domain.id
+    assert visible[0]["signal_rank"] == 1
+    assert "Low signal" not in visible[0]["signal"]
+    assert visible[-1]["signal_rank"] == 2
+    reverse = await scan(session, test_admin, cases[1])
+    explicit = next(group for group in reverse if group.get("entity_id") == domain.id)
+    assert explicit["matches"][0]["signal_rank"] == 1
 
-        case = Mock(spec=Case)
-        case.case_number = "CASE-003"
-        case.title = "Employer Match Case"
 
-        # Mock query result
-        mock_result = [(matching_entity, case)]
-        mock_db_session.execute.return_value = mock_result
+@pytest.mark.asyncio
+@pytest.mark.parametrize("operation_limit,huge_value", [(4200, False), (20000, True)])
+async def test_scan_limits_keep_accepted_prefix_and_never_save_a_complete_report(
+    session, test_admin, cases, monkeypatch, operation_limit, huge_value
+):
+    monkeypatch.setenv("EXECUTION_EVENT_LIMIT_BYTES", "2400")
+    monkeypatch.setenv("EXECUTION_RESULT_LIMIT_BYTES", str(operation_limit))
+    await entity(session, test_admin, cases[0], "person", employer="Popular")
+    for index in range(12):
+        await entity(
+            session,
+            test_admin,
+            cases[1],
+            "person",
+            first_name=(
+                "x" * 3000 if huge_value and index == 11 else f"Related {index}"
+            ),
+            employer="Popular",
+        )
+    evidence = []
+    ctx = PluginRun.for_test(
+        session=session,
+        user=test_admin,
+        api_keys={},
+        evidence=evidence,
+        entities=[],
+        case_id=cases[0].id,
+        save_to_case=True,
+    )
+    events = [
+        event
+        async for event in PluginRunner(
+            PluginRegistry.from_classes([CorrelationScan])
+        ).run("CorrelationScan", {}, ctx)
+    ]
+    retained = [
+        match
+        for event in events
+        if event.kind == "data"
+        for match in event.payload.get("matches", [])
+    ]
+    assert 0 < len(retained) < 12
+    assert len({match["entity_id"] for match in retained}) == len(retained)
+    assert events[-2].kind == "error"
+    assert events[-2].payload["partial"] is True
+    assert events[-2].payload["code"] == (
+        "event_size_limit" if huge_value else "result_size_limit"
+    )
+    assert events[-1].kind == "complete"
+    assert evidence == []
 
-        matches = await plugin._find_employer_matches(mock_db_session, source_entity, "Acme Corp")
-        
-        assert len(matches) == 1
-        assert matches[0]["entity_id"] == 2
-        assert matches[0]["person_name"] == "Jane Smith"
 
-    @pytest.mark.asyncio
-    async def test_find_entities_with_domain(self, plugin, mock_db_session, mock_user):
-        """Test finding entities containing a specific domain"""
-        plugin._current_user = mock_user
-        
-        source_entity = Mock(spec=Entity)
-        source_entity.id = 1
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stop", ["cancel", "deadline"])
+async def test_stop_during_continuation_retains_prefix_without_completion_or_evidence(
+    session, test_admin, cases, monkeypatch, stop
+):
+    import asyncio
 
-        # Person entity with email
-        person_entity = Mock(spec=Entity)
-        person_entity.id = 2
-        person_entity.entity_type = "person"
-        person_entity.data = {
-            "first_name": "John",
-            "last_name": "Doe",
-            "email": "john@example.com"
-        }
+    monkeypatch.setenv("EXECUTION_EVENT_LIMIT_BYTES", "2400")
+    await entity(session, test_admin, cases[0], "person", employer="Popular")
+    for index in range(12):
+        await entity(
+            session,
+            test_admin,
+            cases[1],
+            "person",
+            first_name=f"Related {index}",
+            employer="Popular",
+        )
+    evidence, accepted = [], []
+    ctx = PluginRun.for_test(
+        session=session,
+        user=test_admin,
+        api_keys={},
+        evidence=evidence,
+        entities=[],
+        case_id=cases[0].id,
+        save_to_case=True,
+    )
 
-        # Company entity with website
-        company_entity = Mock(spec=Entity)
-        company_entity.id = 3
-        company_entity.entity_type = "company"
-        company_entity.data = {
-            "company": "Example Inc",
-            "website": "https://example.com"
-        }
+    async def consume():
+        async with asyncio.timeout(None) as deadline:
+            async for event in PluginRunner(
+                PluginRegistry.from_classes([CorrelationScan])
+            ).run("CorrelationScan", {}, ctx):
+                accepted.append(event)
+                if event.kind == "data":
+                    if stop == "cancel":
+                        asyncio.current_task().cancel()
+                    else:
+                        deadline.reschedule(asyncio.get_running_loop().time())
 
-        case1 = Mock(spec=Case)
-        case1.case_number = "CASE-001"
-        case1.title = "Case 1"
+    task = asyncio.create_task(consume())
+    with pytest.raises(asyncio.CancelledError if stop == "cancel" else TimeoutError):
+        await task
+    retained = [
+        match
+        for event in accepted
+        if event.kind == "data"
+        for match in event.payload["matches"]
+    ]
+    assert 0 < len(retained) < 12
+    assert not any(event.kind == "complete" for event in accepted)
+    assert not evidence
 
-        case2 = Mock(spec=Case)
-        case2.case_number = "CASE-002"
-        case2.title = "Case 2"
 
-        # Mock query result
-        mock_result = [(person_entity, case1), (company_entity, case2)]
-        mock_db_session.execute.return_value = mock_result
+@pytest.mark.asyncio
+async def test_provider_overlap_stays_low_signal_with_additional_profile_fields(
+    session, test_admin, cases
+):
+    for case, local in zip(cases, ("ada", "charles")):
+        await entity(
+            session,
+            test_admin,
+            case,
+            "person",
+            email=f"{local}@gmail.com",
+            usernames=[f"https://gmail.com/@{local}"],
+        )
+    results = await scan(session, test_admin, cases[0])
+    assert len(results) == 1
+    assert results[0]["matches"][0]["signal_rank"] == 2
+    assert "Low signal" in results[0]["matches"][0]["signal"]
+    assert len(results[0]["source_fields"]) == 2
+    assert len(results[0]["matches"][0]["fields"]) == 2
 
-        matches = await plugin._find_entities_with_domain(mock_db_session, source_entity, "example.com")
-        
-        assert len(matches) == 2
-        
-        # Check person match
-        person_match = next(m for m in matches if m["entity_id"] == 2)
-        assert "email: john@example.com" in person_match["found_in"]
-        
-        # Check company match
-        company_match = next(m for m in matches if m["entity_id"] == 3)
-        assert "website: https://example.com" in company_match["found_in"]
 
-    def test_format_evidence_content(self, plugin):
-        """Test evidence content formatting"""
-        results = [
-            {
-                "entity_name": "John Doe",
-                "entity_type": "person",
-                "match_type": "name",
-                "matches": [{
-                    "case_title": "Related Case",
-                    "case_number": "CASE-002",
-                    "case_id": 200
-                }]
+@pytest.mark.asyncio
+async def test_legacy_malformed_email_does_not_become_an_exact_identifier(
+    session, test_admin, cases
+):
+    from app.database.models import Entity
+
+    # Legacy stored data can predate current EmailStr input validation.
+    for case in cases:
+        session.add(
+            Entity(
+                case_id=case.id,
+                created_by_id=test_admin.id,
+                entity_type="person",
+                data={"email": "https://example.com/profile", "employer": "Shared"},
+            )
+        )
+    session.commit()
+    results = await scan(session, test_admin, cases[0])
+    assert [row["match_type"] for row in results if "matches" in row] == ["employer"]
+    warnings = [row for row in results if row.get("notice_type") == "skipped_reference"]
+    assert len(warnings) == 2
+    assert all(row["field"] == "email" for row in warnings)
+
+
+@pytest.mark.asyncio
+async def test_historical_hostname_identity_and_local_warnings(
+    session, test_admin, cases
+):
+    from app.database.models import Entity
+
+    source, other = cases
+    raw_entities = [
+        Entity(
+            created_by_id=test_admin.id,
+            case_id=source.id,
+            entity_type="company",
+            data={"name": "Historical", "website": " BÜCHER.example.:8080/path?q=1#f "},
+        ),
+        Entity(
+            created_by_id=test_admin.id,
+            case_id=other.id,
+            entity_type="domain",
+            data={"domain": " XN--BCHER-KVA.EXAMPLE. "},
+        ),
+        Entity(
+            created_by_id=test_admin.id,
+            case_id=other.id,
+            entity_type="person",
+            data={
+                "email": "Ada@bücher.example.",
+                "usernames": ["HTTPS://BÜCHER.example/profile"],
             },
-            {
-                "entity_name": "Jane Smith",
-                "entity_type": "person", 
-                "match_type": "employer",
-                "employer_name": "Acme Corp",
-                "matches": [{
-                    "case_title": "Another Case",
-                    "case_number": "CASE-003",
-                    "case_id": 300,
-                    "person_name": "Bob Johnson"
-                }]
-            }
+        ),
+        Entity(
+            created_by_id=test_admin.id,
+            case_id=other.id,
+            entity_type="domain",
+            data={"domain": "shop.bücher.example"},
+        ),
+        Entity(
+            created_by_id=test_admin.id,
+            case_id=other.id,
+            entity_type="company",
+            data={"name": "Broken", "website": "https://http//private.example"},
+        ),
+        Entity(
+            created_by_id=test_admin.id,
+            case_id=other.id,
+            entity_type="domain",
+            data={"domain": "bad_label.example"},
+        ),
+    ]
+    session.add_all(raw_entities)
+    session.commit()
+    results = await scan(session, test_admin, source)
+    group = next(item for item in results if item.get("match_type") == "domain")
+    assert group["normalized_value"] == "xn--bcher-kva.example"
+    assert {item["entity_id"] for item in group["matches"]} == {
+        raw_entities[1].id,
+        raw_entities[2].id,
+    }
+    person_match = next(
+        item for item in group["matches"] if item["entity_id"] == raw_entities[2].id
+    )
+    assert {field["field"] for field in person_match["fields"]} == {
+        "email",
+        "usernames[0]",
+    }
+    notices = [
+        item for item in results if item.get("notice_type") == "skipped_reference"
+    ]
+    assert notices, results
+    assert len(notices) == 2
+    assert all(item["case_scope"] == [source.id, other.id] for item in notices)
+    assert "private.example" not in str(notices)
+    assert "bad_label.example" not in str(notices)
+
+
+@pytest.mark.asyncio
+async def test_accepted_email_hostname_identity_preserves_local_part(
+    session, test_admin, cases
+):
+    await entity(session, test_admin, cases[0], "person", email="Ada@BÜCHER.example.")
+    await entity(
+        session, test_admin, cases[1], "person", email="Ada@xn--bcher-kva.example"
+    )
+    await entity(session, test_admin, cases[1], "person", email="ada@bücher.example")
+    results = await scan(session, test_admin, cases[0])
+    exact = next(item for item in results if item.get("match_type") == "email")
+    assert exact["normalized_value"] == "Ada@xn--bcher-kva.example"
+    assert len(exact["matches"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_canonical_ip_matches_preserve_fields_and_skip_unsupported(
+    session, test_admin, cases
+):
+    expanded = "2001:0DB8:0000:0000:0000:0000:0000:0001"
+    old = Entity(
+        case_id=cases[0].id,
+        entity_type="ip_address",
+        created_by_id=test_admin.id,
+        data={"ip_address": expanded},
+    )
+    session.add(old)
+    session.commit()
+    new = await entity(
+        session, test_admin, cases[1], "ip_address", ip_address="2001:db8::1"
+    )
+    for case in cases:
+        for raw in ("fe80::1%eth0", "address 2001:db8::1", "2001:db8::/64"):
+            session.add(
+                Entity(
+                    case_id=case.id,
+                    entity_type="ip_address",
+                    created_by_id=test_admin.id,
+                    data={"ip_address": raw},
+                )
+            )
+    session.commit()
+    await entity(session, test_admin, cases[0], "ip_address", ip_address="192.0.2.1")
+    await entity(
+        session, test_admin, cases[1], "ip_address", ip_address="::ffff:192.0.2.1"
+    )
+    await entity(session, test_admin, cases[1], "ip_address", ip_address="2001:db8::2")
+    for case, source, related, raw, other_raw in (
+        (cases[0], old, new, expanded, "2001:db8::1"),
+        (cases[1], new, old, "2001:db8::1", expanded),
+    ):
+        results = await scan(session, test_admin, case)
+        groups = [group for group in results if "matches" in group]
+        assert len(groups) == 1
+        group = groups[0]
+        assert group["match_type"] == "ip_address"
+        assert group["entity_id"] == source.id
+        assert group["normalized_value"] == "2001:db8::1"
+        assert group["source_fields"] == [{"field": "ip_address", "value": raw}]
+        assert group["matches"][0]["entity_id"] == related.id
+        assert group["matches"][0]["fields"] == [
+            {"field": "ip_address", "value": other_raw}
         ]
-        
-        params = {"case_id": 100}
-        
-        content = plugin._format_evidence_content(results, params)
-        
-        assert "Correlation Scan Results" in content
-        assert "Total entities with matches: 2" in content
-        assert "Case ID: 100" in content
-        assert "Entity: John Doe" in content
-        assert "Entity: Jane Smith" in content
-        assert "Employer: Acme Corp" in content
-        assert "Person: Bob Johnson" in content
-
-    def test_parse_output(self, plugin):
-        """Test parse_output returns None as expected"""
-        result = plugin.parse_output("test line")
-        assert result is None
-
-    @pytest.mark.asyncio
-    async def test_build_accessible_entities_query_admin(self, plugin, mock_db_session, mock_admin_user):
-        """Test query building for admin users"""
-        plugin._current_user = mock_admin_user
-        
-        # Admin should get unrestricted query
-        query = plugin._build_accessible_entities_query(mock_db_session)
-        
-        # Query should not have user restrictions
-        # (This is a simplified test - in real scenario would check the actual SQL)
-        assert query is not None
-
-    @pytest.mark.asyncio
-    async def test_build_accessible_entities_query_non_admin(self, plugin, mock_db_session, mock_user):
-        """Test query building for non-admin users"""
-        plugin._current_user = mock_user
-        
-        # Non-admin should get restricted query
-        query = plugin._build_accessible_entities_query(
-            mock_db_session,
-            exclude_entity_id=123,
-            entity_type_filter="person"
+        assert group["matches"][0]["signal"] == "Exact IP address match"
+        assert group["matches"][0]["signal_rank"] == 0
+        notices = [
+            group
+            for group in results
+            if group.get("notice_type") == "skipped_reference"
+        ]
+        assert len(notices) == 6
+        assert all(
+            notice["field"] == "ip_address" and case.id in notice["case_scope"]
+            for notice in notices
         )
-        
-        # Query should have filters applied
-        assert query is not None
 
-    @pytest.mark.asyncio
-    async def test_get_case_entities(self, plugin, mock_db_session):
-        """Test retrieving entities for a specific case"""
-        # Mock entities
-        entity1 = Mock(spec=Entity)
-        entity1.id = 1
-        entity2 = Mock(spec=Entity)
-        entity2.id = 2
-        
-        mock_result = Mock()
-        mock_result.scalars.return_value.all.return_value = [entity1, entity2]
-        mock_db_session.execute.return_value = mock_result
-        
-        entities = await plugin._get_case_entities(mock_db_session, 100)
-        
-        assert len(entities) == 2
-        assert entities[0].id == 1
-        assert entities[1].id == 2
 
-    def test_plugin_metadata(self, plugin):
-        """Test plugin metadata"""
-        metadata = plugin.get_metadata()
-        
-        assert metadata["name"] == "CorrelationScan"
-        assert metadata["display_name"] == "Correlation Scan"
-        assert metadata["category"] == "Other"
-        assert metadata["description"] == "Finds matching entities and relationships across cases"
-        
-        # Check parameters
-        params = metadata["parameters"]
-        assert "case_id" in params
-        assert params["case_id"]["type"] == "integer"
-        assert params["case_id"]["required"] is True
+@pytest.mark.asyncio
+async def test_employer_to_company_is_bidirectional_without_company_employer_reason(
+    session, test_admin, cases
+):
+    person = await entity(
+        session,
+        test_admin,
+        cases[0],
+        "person",
+        first_name="Ada",
+        employer="  Analytical   Engines ",
+    )
+    company = await entity(
+        session, test_admin, cases[1], "company", name="analytical engines"
+    )
+    colleague = await entity(
+        session,
+        test_admin,
+        cases[1],
+        "person",
+        first_name="Charles",
+        employer="ANALYTICAL ENGINES",
+    )
+    await entity(session, test_admin, cases[0], "company", name="analytical engines")
+    forward = await scan(session, test_admin, cases[0])
+    employers = [g for g in forward if g.get("match_type") == "employer"]
+    group = next(g for g in employers if g["entity_id"] == person.id)
+    assert {m["entity_id"] for m in group["matches"]} == {company.id, colleague.id}
+    assert group["source_fields"] == [
+        {"field": "employer", "value": "  Analytical   Engines "}
+    ]
+    match = next(m for m in group["matches"] if m["entity_id"] == company.id)
+    assert match["fields"] == [{"field": "name", "value": "analytical engines"}]
+    assert "not verified" in match["signal"]
+    for g in employers:
+        if g["entity_type"] == "company":
+            assert all(m["entity_type"] == "person" for m in g["matches"])
+    reverse = await scan(session, test_admin, cases[1])
+    group = next(
+        g
+        for g in reverse
+        if g.get("match_type") == "employer" and g["entity_id"] == company.id
+    )
+    assert [m["entity_id"] for m in group["matches"]] == [person.id]
+    assert group["source_fields"] == match["fields"]
 
-    @pytest.mark.asyncio
-    async def test_run_with_injected_session(self, plugin, mock_db_session, mock_admin_user):
-        """Test run method with injected database session"""
-        plugin._db_session = mock_db_session
-        plugin._current_user = mock_admin_user
-        
-        # Mock get_case_entities to return empty list
-        with patch.object(plugin, '_get_case_entities', return_value=[]):
-            results = []
-            async for result in plugin.run({"case_id": 123}):
-                results.append(result)
-        
-        # Should complete without errors (no matches found)
-        error_results = [r for r in results if r["type"] == "error"]
-        assert len(error_results) == 0
 
-    @pytest.mark.asyncio
-    async def test_deduplication_of_matches(self, plugin, mock_db_session, mock_admin_user):
-        """Test that duplicate matches are properly deduplicated"""
-        plugin._current_user = mock_admin_user
-        
-        # Create test entities that would generate duplicate matches
-        entity1 = Mock(spec=Entity)
-        entity1.id = 1
-        entity1.entity_type = "person"
-        entity1.data = {"first_name": "John", "last_name": "Doe"}
-        
-        entity2 = Mock(spec=Entity)
-        entity2.id = 2
-        entity2.entity_type = "person"
-        entity2.data = {"first_name": "John", "last_name": "Doe"}
-        
-        # Both entities from same case should only report match once
-        with patch.object(plugin, '_get_case_entities', return_value=[entity1, entity2]):
-            with patch.object(plugin, '_find_name_matches', return_value=[{
-                "entity_id": 99,
-                "entity_type": "person",
-                "case_id": 999,
-                "case_number": "CASE-999",
-                "case_title": "External Case"
-            }]):
-                results = []
-                async for result in plugin.execute({"case_id": 100}, mock_db_session):
-                    if result["type"] == "data":
-                        results.append(result)
-        
-        # Should only have one match report for "John Doe" despite two entities
-        name_matches = [r for r in results if r["data"].get("match_type") == "name"]
-        assert len(name_matches) == 1
+@pytest.mark.asyncio
+async def test_exact_profiles_preserve_locations_values_and_rank(
+    session, test_admin, cases
+):
+    raw = " HTTPS://BÜCHER.example.:8080/Ada?tag=One#Bio "
+    canonical = "https://xn--bcher-kva.example:8080/Ada?tag=One#Bio"
+    person = await entity(
+        session,
+        test_admin,
+        cases[0],
+        "person",
+        first_name="Ada",
+        social_media={"linkedin": raw, "other": canonical},
+        usernames=[canonical, canonical],
+    )
+    company = await entity(
+        session,
+        test_admin,
+        cases[1],
+        "company",
+        name="Engines",
+        social_media={"linkedin": canonical, "other": raw},
+    )
+    account = await entity(
+        session,
+        test_admin,
+        cases[1],
+        "person",
+        first_name="Account",
+        usernames=[canonical, canonical],
+    )
+    await entity(session, test_admin, cases[1], "domain", domain="bücher.example")
+    for case, source_id, related_ids in (
+        (cases[0], person.id, {company.id, account.id}),
+        (cases[1], company.id, {person.id}),
+    ):
+        results = await scan(session, test_admin, case)
+        assert results[0]["match_type"] == "exact_profile"
+        group = next(
+            g
+            for g in results
+            if g.get("match_type") == "exact_profile" and g["entity_id"] == source_id
+        )
+        assert group["normalized_value"] == canonical
+        assert {m["entity_id"] for m in group["matches"]} == related_ids
+        assert len(group["matches"]) == len(related_ids)
+        assert all(
+            m["signal_rank"] == 0
+            and "recorded profile reference" in m["signal"]
+            and "ownership" in m["signal"]
+            for m in group["matches"]
+        )
+        fields = (
+            group["source_fields"]
+            if case == cases[0]
+            else group["matches"][0]["fields"]
+        )
+        assert {f["field"] for f in fields} == {
+            "social_media.linkedin",
+            "social_media.other",
+            "usernames[0]",
+            "usernames[1]",
+        }
+        assert {f["value"] for f in fields} == {raw, canonical}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "other",
+    [
+        "http://example.com/Ada?q=One#Bio",
+        "https://example.com/ada?q=One#Bio",
+        "https://example.com/Other?q=One#Bio",
+        "https://example.com/Ada?q=Two#Bio",
+        "https://example.com/Ada?q=One#Other",
+        "https://example.com/Ada?q=One",
+        "https://example.com/Ada",
+        "Ada",
+        "ftp://example.com/Ada?q=One#Bio",
+        "https://example.com:bad/Ada?q=One#Bio",
+        "https://[broken",
+    ],
+)
+async def test_dedicated_profiles_do_not_infer_equivalence_or_host_matches(
+    session, test_admin, cases, other
+):
+    await entity(
+        session,
+        test_admin,
+        cases[0],
+        "person",
+        first_name="Source",
+        social_media={"linkedin": "https://example.com/Ada?q=One#Bio"},
+    )
+    await entity(
+        session,
+        test_admin,
+        cases[1],
+        "company",
+        name="Related",
+        social_media={"linkedin": other},
+    )
+    results = await scan(session, test_admin, cases[0])
+    assert not any("matches" in g for g in results)
+    if other in {"https://[broken", "https://example.com:bad/Ada?q=One#Bio"}:
+        assert any(g.get("field") == "social_media.linkedin" for g in results)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("source_kind", ["empty", "unusable", "malformed"])
+async def test_empty_scan_completes_with_only_source_warnings_and_provenance(
+    session, test_admin, cases, source_kind
+):
+    if source_kind != "empty":
+        session.add(
+            Entity(
+                case_id=cases[0].id,
+                created_by_id=test_admin.id,
+                entity_type="person",
+                data={
+                    "usernames": [
+                        "https://[broken" if source_kind == "malformed" else "handle"
+                    ]
+                },
+            )
+        )
+        session.commit()
+    await entity(
+        session,
+        test_admin,
+        cases[1],
+        "person",
+        first_name="Candidate",
+        usernames=["https://[broken"],
+    )
+    ctx = PluginRun.for_test(
+        session=session,
+        user=test_admin,
+        api_keys={},
+        evidence=[],
+        entities=[],
+        case_id=cases[0].id,
+    )
+    events = [
+        event
+        async for event in PluginRunner(
+            PluginRegistry.from_classes([CorrelationScan])
+        ).run("CorrelationScan", {}, ctx)
+    ]
+    assert events[-1].kind == "complete"
+    assert not any(e.kind == "error" or "matches" in e.payload for e in events)
+    notices = [e.payload for e in events if e.kind == "data"]
+    assert len(notices) == (1 if source_kind == "malformed" else 0)
+    assert all(
+        n["field"] == "usernames[0]" and n["case_scope"] == [cases[0].id]
+        for n in notices
+    )
+    assert all(cases[1].id not in e.payload.get("case_scope", []) for e in events)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "source_profile,related_profile",
+    [
+        ("same-handle", "same-handle"),
+        ("https://example.com/Ada?", "https://example.com/Ada"),
+        ("https://example.com/Ada#", "https://example.com/Ada"),
+        ("https://example.com/Ada?tag=One", "https://example.com/Ada?tag=one"),
+        ("https://example.com/Ada#Bio", "https://example.com/Ada#bio"),
+    ],
+)
+async def test_profiles_do_not_equate_handles_or_discard_url_components(
+    session, test_admin, cases, source_profile, related_profile
+):
+    for case, name, profile in (
+        (cases[0], "Source", source_profile),
+        (cases[1], "Related", related_profile),
+    ):
+        await entity(
+            session,
+            test_admin,
+            case,
+            "person",
+            first_name=name,
+            social_media={"other": profile},
+            usernames=[profile],
+        )
+    results = await scan(session, test_admin, cases[0])
+    assert not any(g.get("match_type") == "exact_profile" for g in results)
+    assert not any(g.get("notice_type") == "skipped_reference" for g in results)
+
+
+@pytest.mark.asyncio
+async def test_saved_mixed_provider_report_puts_all_useful_findings_before_weak_rows(
+    session, test_admin, cases
+):
+    source, other = cases
+    await entity(session, test_admin, source, "person", email="ada@gmail.com")
+    await entity(session, test_admin, other, "domain", domain="gmail.com")
+    await entity(session, test_admin, source, "person", employer="Useful Engines")
+    await entity(session, test_admin, other, "company", name="Useful Engines")
+    for index in range(8):
+        await entity(
+            session, test_admin, other, "person", email=f"weak{index}@gmail.com"
+        )
+    evidence = []
+    ctx = PluginRun.for_test(
+        session=session,
+        user=test_admin,
+        api_keys={},
+        evidence=evidence,
+        entities=[],
+        case_id=source.id,
+        save_to_case=True,
+    )
+    events = [
+        event
+        async for event in PluginRunner(
+            PluginRegistry.from_classes([CorrelationScan])
+        ).run("CorrelationScan", {"save_to_case": True}, ctx)
+    ]
+    assert not [event for event in events if event.kind == "error"]
+    report = evidence[0].content
+    assert report.index("Useful Engines") < report.index("weak0@gmail.com")
+    assert "Total matches: 10" in report
+    for index in range(8):
+        assert f"weak{index}@gmail.com" in report
+    assert "Weak provider matches" in report

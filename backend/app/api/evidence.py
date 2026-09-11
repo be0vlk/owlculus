@@ -7,20 +7,33 @@ ensuring proper chain of custody and forensic integrity of collected data.
 
 from typing import Optional
 
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
+from sqlmodel import Session
+
+from app.core.database_boundary import DatabaseRoute
 from app.core.dependencies import get_current_user
+from app.core.exceptions import (
+    AuthenticationException,
+    AuthorizationException,
+    DuplicateResourceException,
+    RelatedResourceException,
+    ResourceNotFoundException,
+    ValidationException,
+)
 from app.database import models
 from app.database.connection import get_db
 from app.schemas import evidence_schema as schemas
 from app.services.evidence_service import EvidenceService
 from app.services.exiftool_service import ExifToolService
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from sqlmodel import Session
 
-router = APIRouter()
+router = APIRouter(route_class=DatabaseRoute)
 
 
 @router.post(
-    "/", response_model=list[schemas.Evidence], status_code=status.HTTP_201_CREATED
+    "/",
+    response_model=schemas.EvidenceUploadResponse,
+    status_code=status.HTTP_201_CREATED,
 )
 async def create_evidence(
     title: str,
@@ -34,16 +47,21 @@ async def create_evidence(
     current_user: models.User = Depends(get_current_user),
 ):
     if not files:
+        raise ValidationException("At least one file must be provided")
+
+    if len(files) > 10:
         raise HTTPException(
-            status_code=400, detail="At least one file must be provided"
+            status_code=413,
+            detail="Upload at most 10 files per request. No Evidence was saved.",
         )
 
     evidence_service = EvidenceService(db)
-    results = []
+    created: list[models.Evidence] = []
+    failed: list[schemas.EvidenceUploadFailure] = []
 
     for file in files:
         evidence_data = schemas.EvidenceCreate(
-            title=file.filename,
+            title=file.filename or "unknown",
             description=description,
             category=category,
             case_id=case_id,
@@ -57,14 +75,35 @@ async def create_evidence(
             evidence = await evidence_service.create_evidence(
                 evidence=evidence_data, current_user=current_user, file=file
             )
-            results.append(evidence)
-        except Exception:
-            continue
+            created.append(evidence)
+        except (
+            AuthenticationException,
+            AuthorizationException,
+            ResourceNotFoundException,
+        ):
+            raise
+        except (
+            DuplicateResourceException,
+            RelatedResourceException,
+            ValidationException,
+        ) as error:
+            failed.append(
+                schemas.EvidenceUploadFailure(
+                    filename=file.filename or "unknown", error=str(error)
+                )
+            )
+        except Exception:  # noqa: BLE001 - each upload needs an explicit outcome
+            failed.append(
+                schemas.EvidenceUploadFailure(
+                    filename=file.filename or "unknown",
+                    error="Internal server error",
+                )
+            )
 
-    if not results:
-        raise HTTPException(status_code=500, detail="Failed to upload any files")
-
-    return results
+    created_responses = [
+        schemas.Evidence.model_validate(evidence) for evidence in created
+    ]
+    return schemas.EvidenceUploadResponse(created=created_responses, failed=failed)
 
 
 @router.get("/case/{case_id}", response_model=list[schemas.Evidence])
@@ -100,9 +139,14 @@ async def download_evidence(
     current_user: models.User = Depends(get_current_user),
 ):
     evidence_service = EvidenceService(db)
-    return await evidence_service.download_evidence(
+    file_path = await evidence_service.download_evidence(
         evidence_id=evidence_id,
         current_user=current_user,
+    )
+    return FileResponse(
+        path=str(file_path),
+        filename=file_path.name,
+        media_type="application/octet-stream",
     )
 
 
@@ -126,9 +170,16 @@ async def get_evidence_image(
     current_user: models.User = Depends(get_current_user),
 ):
     evidence_service = EvidenceService(db)
-    return await evidence_service.get_evidence_image(
+    file_path = await evidence_service.get_evidence_image(
         evidence_id=evidence_id,
         current_user=current_user,
+    )
+    return FileResponse(
+        path=str(file_path),
+        headers={
+            "Cache-Control": "max-age=3600",
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 
@@ -154,7 +205,7 @@ async def delete_evidence(
     current_user: models.User = Depends(get_current_user),
 ):
     evidence_service = EvidenceService(db)
-    result = await evidence_service.delete_evidence(
+    await evidence_service.delete_evidence(
         evidence_id=evidence_id, current_user=current_user
     )
 
@@ -207,9 +258,7 @@ async def delete_folder(
     current_user: models.User = Depends(get_current_user),
 ):
     evidence_service = EvidenceService(db)
-    result = await evidence_service.delete_folder(
-        folder_id=folder_id, current_user=current_user
-    )
+    await evidence_service.delete_folder(folder_id=folder_id, current_user=current_user)
 
 
 @router.get("/{evidence_id}/metadata")
@@ -226,12 +275,11 @@ async def extract_evidence_metadata(
     )
 
     if not evidence:
-        raise HTTPException(status_code=404, detail="Evidence not found")
+        raise ResourceNotFoundException("Evidence not found")
 
     if not evidence.content or evidence.is_folder:
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot extract metadata from folders or evidence without files",
+        raise ValidationException(
+            "Cannot extract metadata from folders or evidence without files"
         )
 
     from app.core.file_storage import UPLOAD_DIR

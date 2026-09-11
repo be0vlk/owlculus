@@ -1,0 +1,233 @@
+"""Generation-fenced execution writes; transactions never span provider calls."""
+
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from typing import cast
+from uuid import uuid4
+
+from fastapi import HTTPException
+from sqlmodel import Session, col, select
+
+from app.core.enums import ExecutionStatus
+from app.core.exceptions import AuthorizationException, ResourceNotFoundException
+from app.core.utils import get_utc_now
+from app.database.db_utils import transaction
+from app.database.models import (
+    ExecutionControl,
+    HuntExecution,
+    HuntStep,
+    PluginExecution,
+    PluginExecutionResult,
+)
+from app.executions.events import record_event
+from app.executions.limits import HUNT_SECONDS, PLUGIN_SECONDS, STEP_SECONDS
+from app.executions.service import authorize_execution
+
+LEASE_SECONDS = 60
+HEARTBEAT_SECONDS = 10
+
+
+class OwnershipLost(Exception):
+    """The caller no longer has permission to mutate the execution."""
+
+
+@dataclass(frozen=True)
+class Ownership:
+    control_id: int
+    generation: int
+    owner: str
+    deadline_at: datetime | None = None
+
+    def lock(
+        self, db: Session
+    ) -> tuple[ExecutionControl, PluginExecution | HuntExecution]:
+        # Read persisted state without flushing or overwriting pending domain writes.
+        with db.no_autoflush:
+            control = db.exec(
+                select(ExecutionControl)
+                .where(ExecutionControl.id == self.control_id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            ).one()
+            model = (
+                HuntExecution
+                if control.hunt_execution_id is not None
+                else PluginExecution
+            )
+            execution_id = (
+                control.hunt_execution_id
+                if model is HuntExecution
+                else control.plugin_execution_id
+            )
+            status = db.exec(
+                select(model.status).where(model.id == execution_id)
+            ).one_or_none()
+            if (
+                status != ExecutionStatus.RUNNING.value
+                or control.cancellation_requested_at is not None
+                or control.owner != self.owner
+                or control.generation != self.generation
+                or control.lease_until is None
+                or control.lease_until.replace(tzinfo=UTC) <= get_utc_now()
+            ):
+                raise OwnershipLost()
+            now = get_utc_now()
+            if control.deadline_at and control.deadline_at.replace(tzinfo=UTC) <= now:
+                raise OwnershipLost()
+            if control.hunt_execution_id:
+                overdue = db.exec(
+                    select(HuntStep).where(
+                        HuntStep.execution_id == control.hunt_execution_id,
+                        HuntStep.status == "running",
+                        col(HuntStep.started_at)
+                        <= now - timedelta(seconds=STEP_SECONDS),
+                    )
+                ).first()
+                if overdue:
+                    raise OwnershipLost()
+            execution = cast(
+                HuntExecution | PluginExecution | None, db.get(model, execution_id)
+            )
+            assert execution is not None
+            return control, execution
+
+
+def claim(db: Session, execution_id: int, *, kind: str = "plugin") -> Ownership | None:
+    model = HuntExecution if kind == "hunt" else PluginExecution
+    association = (
+        ExecutionControl.hunt_execution_id
+        if kind == "hunt"
+        else ExecutionControl.plugin_execution_id
+    )
+    with transaction(db):
+        control = db.exec(
+            select(ExecutionControl)
+            .where(association == execution_id)
+            .with_for_update()
+        ).first()
+        if control is None:
+            return None
+        execution = cast(
+            HuntExecution | PluginExecution | None, db.get(model, execution_id)
+        )
+        if (
+            execution is None
+            or execution.status
+            != ("pending" if kind == "hunt" else ExecutionStatus.QUEUED.value)
+            or control.owner is not None
+        ):
+            return None
+        try:
+            authorize_execution(db, execution)
+        except (HTTPException, AuthorizationException, ResourceNotFoundException):
+            execution.status = ExecutionStatus.FAILED.value
+            execution.error = {
+                "code": "access_revoked",
+                "message": "Initiating user no longer has execution access",
+            }
+            execution.completed_at = get_utc_now()
+            record_event(db, control)
+            return None
+        if isinstance(execution, HuntExecution):
+            from app.executions.build import implementation_build
+
+            if execution.implementation_build != implementation_build():
+                execution.status = "failed"
+                execution.error = {
+                    "code": "incompatible_build",
+                    "message": "Hunt requires its accepted implementation build; deploy matching API and workers and submit a new run",
+                }
+                execution.completed_at = get_utc_now()
+                record_event(db, control)
+                return None
+        control.generation += 1
+        control.owner = str(uuid4())
+        control.heartbeat_at = get_utc_now()
+        control.lease_until = get_utc_now() + timedelta(seconds=LEASE_SECONDS)
+        control.deadline_at = control.deadline_at or get_utc_now() + timedelta(
+            seconds=HUNT_SECONDS if kind == "hunt" else PLUGIN_SECONDS
+        )
+        record_event(db, control)
+        execution.status = ExecutionStatus.RUNNING.value
+        execution.started_at = execution.started_at or get_utc_now()
+        assert control.id is not None
+        return Ownership(
+            control.id, control.generation, control.owner, control.deadline_at
+        )
+
+
+def heartbeat(db: Session, ownership: Ownership) -> None:
+    with transaction(db):
+        control, _ = ownership.lock(db)
+        control.heartbeat_at = get_utc_now()
+        control.lease_until = get_utc_now() + timedelta(seconds=LEASE_SECONDS)
+
+
+def append_result(
+    db: Session,
+    ownership: Ownership,
+    payload: dict,
+    *,
+    operation_index: int | None = None
+) -> None:
+    with transaction(db):
+        control, execution = ownership.lock(db)
+        assert isinstance(execution, PluginExecution)
+        authorize_execution(db, execution)
+        if (
+            operation_index is not None
+            and db.exec(
+                select(PluginExecutionResult).where(
+                    PluginExecutionResult.execution_id == execution.id,
+                    PluginExecutionResult.operation_index == operation_index,
+                )
+            ).first()
+            is not None
+        ):
+            return
+        record_event(db, control)
+        db.add(
+            PluginExecutionResult(
+                execution_id=execution.id,
+                sequence=control.revision,
+                payload=payload,
+                operation_index=operation_index,
+            )
+        )
+        if payload["type"] == "error":
+            execution.error = {
+                "code": payload["data"].get("code", "plugin_error"),
+                "partial": True,
+                "message": payload["data"].get("message", "Plugin failed"),
+            }
+        if payload["type"] == "complete":
+            control.pending_status = (
+                ExecutionStatus.FAILED.value
+                if execution.error
+                else ExecutionStatus.COMPLETED.value
+            )
+
+
+def fail_execution(db: Session, ownership: Ownership) -> None:
+    """A fenced failure transition remains possible after case access is revoked."""
+    with transaction(db):
+        control, execution = ownership.lock(db)
+        record_event(db, control)
+        control.pending_status = ExecutionStatus.FAILED.value
+        execution.error = {
+            "code": "execution_error",
+            "message": "Execution could not finish; check initiating user access and worker configuration",
+            "partial": True,
+        }
+
+
+def start_operation(db: Session, ownership: Ownership, operation_id: str) -> None:
+    """Commit intent before handing control to any provider operation."""
+    with transaction(db):
+        control, execution = ownership.lock(db)
+        authorize_execution(db, execution)
+        if control.operation_id is not None:
+            raise OwnershipLost()
+        control.operation_id = operation_id
+        control.operation_started_at = get_utc_now()
+        record_event(db, control)

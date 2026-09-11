@@ -16,3 +16,12 @@ class TaskPriority(str, Enum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
+
+
+class ExecutionStatus(str, Enum):
+    QUEUED = "queued"
+    CANCELLING = "cancelling"
+    CANCELLED = "cancelled"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"

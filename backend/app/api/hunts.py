@@ -5,27 +5,32 @@ This module provides automated OSINT workflow execution capabilities through the
 enabling complex multi-step investigations with real-time monitoring and results tracking.
 """
 
-from typing import List
-
-from app.core.dependencies import get_current_user, get_db, no_analyst
-from app.core.websocket_manager import websocket_manager
-from app.database import models
-from app.schemas import hunt_schema as schemas
-from app.services.hunt_service import HuntService
 from fastapi import (
-	APIRouter,
-	Depends,
-	HTTPException,
-	WebSocket,
-	WebSocketDisconnect,
-	status,
+    APIRouter,
+    Depends,
+    Header,
+    Query,
+    Response,
+    WebSocket,
 )
+from sqlalchemy.engine import Engine
 from sqlmodel import Session
 
-router = APIRouter()
+from app.core.database_boundary import DatabaseRoute
+from app.core.dependencies import get_current_user
+from app.database import models
+from app.database.connection import get_db, get_observation_engine
+from app.executions.results import HuntResultReader
+from app.executions.service import hunt_observation
+from app.schemas import hunt_schema as schemas
+from app.services.export_service import ExportService
+from app.services.hunt_execution_export import HuntExecutionExportFormat
+from app.services.hunt_service import HuntService
+
+router = APIRouter(route_class=DatabaseRoute)
 
 
-@router.get("/", response_model=List[schemas.HuntResponse])
+@router.get("/", response_model=list[schemas.HuntResponse])
 async def list_hunts(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -47,6 +52,28 @@ async def list_hunts(
     return response
 
 
+@router.get("/executions/{execution_id}/export")
+async def export_execution(
+    execution_id: int,
+    format: HuntExecutionExportFormat,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Download a backend-generated hunt execution export."""
+    service = ExportService(db)
+    artifact = service.export_hunt_execution(
+        execution_id=execution_id,
+        current_user=current_user,
+        export_format=format,
+    )
+
+    return Response(
+        content=artifact.content,
+        media_type=artifact.media_type,
+        headers={"Content-Disposition": f'attachment; filename="{artifact.filename}"'},
+    )
+
+
 @router.get("/{hunt_id}", response_model=schemas.HuntResponse)
 async def get_hunt(
     hunt_id: int,
@@ -56,9 +83,6 @@ async def get_hunt(
     """Get details of a specific hunt"""
     service = HuntService(db)
     hunt = await service.get_hunt(hunt_id, current_user=current_user)
-
-    if not hunt:
-        raise HTTPException(status_code=404, detail="Hunt not found")
 
     hunt_dict = hunt.__dict__.copy()
     if "definition_json" in hunt_dict and "steps" in hunt_dict["definition_json"]:
@@ -70,11 +94,14 @@ async def get_hunt(
     return schemas.HuntResponse(**hunt_dict)
 
 
-@router.post("/{hunt_id}/execute", response_model=schemas.HuntExecutionResponse)
-@no_analyst()
+@router.post(
+    "/{hunt_id}/execute", response_model=schemas.HuntExecutionResponse, status_code=202
+)
 async def execute_hunt(
     hunt_id: int,
     request: schemas.HuntExecuteRequest,
+    response: Response,
+    idempotency_key: str | None = Header(None, max_length=200),
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -87,34 +114,29 @@ async def execute_hunt(
     """
     service = HuntService(db)
 
-    try:
-        execution = await service.create_execution(
-            hunt_id=hunt_id,
-            case_id=request.case_id,
-            initial_parameters=request.parameters,
-            current_user=current_user,
-        )
+    execution = await service.create_execution(
+        hunt_id=hunt_id,
+        case_id=request.case_id,
+        initial_parameters=request.parameters,
+        current_user=current_user,
+        idempotency_key=idempotency_key,
+    )
 
-        hunt = db.get(models.Hunt, execution.hunt_id)
+    hunt = db.get(models.Hunt, execution.hunt_id)
 
-        response = schemas.HuntExecutionResponse(
-            **execution.__dict__,
-            hunt=(
-                schemas.HuntResponse(
-                    **hunt.__dict__,
-                    initial_parameters=hunt.definition_json.get(
-                        "initial_parameters", {}
-                    )
-                )
-                if hunt
-                else None
+    response.headers["Location"] = f"/api/hunts/executions/{execution.id}"
+    return schemas.HuntExecutionResponse(
+        **hunt_observation(db, execution),
+        **HuntResultReader(db, execution, current_user).hunt_view(),
+        hunt=(
+            schemas.HuntResponse(
+                **hunt.__dict__,
+                initial_parameters=hunt.definition_json.get("initial_parameters", {}),
             )
-        )
-
-        return response
-
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+            if hunt
+            else None
+        ),
+    )
 
 
 @router.get("/executions/{execution_id}", response_model=schemas.HuntExecutionResponse)
@@ -133,11 +155,8 @@ async def get_execution_status(
     service = HuntService(db)
     execution = await service.get_execution(execution_id, current_user=current_user)
 
-    if not execution:
-        raise HTTPException(status_code=404, detail="Hunt execution not found")
-
     hunt = db.get(models.Hunt, execution.hunt_id)
-    case = db.get(models.Case, execution.case_id)
+    case = execution.case
     created_by = db.get(models.User, execution.created_by_id)
     steps = None
 
@@ -146,18 +165,20 @@ async def get_execution_status(
             execution_id, current_user=current_user
         )
 
+    reader = HuntResultReader(db, execution, current_user, steps)
     response = schemas.HuntExecutionResponse(
-        **execution.__dict__,
+        **hunt_observation(db, execution),
+        **reader.hunt_view(),
         hunt=(
             schemas.HuntResponse(
                 **hunt.__dict__,
-                initial_parameters=hunt.definition_json.get("initial_parameters", {})
+                initial_parameters=hunt.definition_json.get("initial_parameters", {}),
             )
             if hunt
             else None
         ),
         steps=(
-            [schemas.HuntStepResponse(**step.__dict__) for step in steps]
+            [schemas.HuntStepResponse(**reader.step_view(step)) for step in steps]
             if steps
             else None
         ),
@@ -174,7 +195,7 @@ async def get_execution_status(
             }
             if created_by
             else None
-        )
+        ),
     )
 
     return response
@@ -182,7 +203,7 @@ async def get_execution_status(
 
 @router.get(
     "/cases/{case_id}/executions",
-    response_model=List[schemas.HuntExecutionListResponse],
+    response_model=list[schemas.HuntExecutionListResponse],
 )
 async def list_case_executions(
     case_id: int,
@@ -206,7 +227,6 @@ async def list_case_executions(
 
 
 @router.delete("/executions/{execution_id}")
-@no_analyst()
 async def cancel_execution(
     execution_id: int,
     current_user: models.User = Depends(get_current_user),
@@ -215,89 +235,50 @@ async def cancel_execution(
     """Cancel a running hunt execution"""
     service = HuntService(db)
 
-    try:
-        execution = await service.cancel_execution(
-            execution_id, current_user=current_user
-        )
-        return {"message": "Hunt execution cancelled", "execution_id": execution.id}
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    execution = await service.cancel_execution(execution_id, current_user=current_user)
+    return {
+        "message": (
+            "Cancellation requested"
+            if execution.status == "cancelling"
+            else "Execution stopped"
+        ),
+        "execution_id": execution.id,
+        "status": execution.status,
+        "revision": hunt_observation(db, execution)["revision"],
+    }
 
 
 @router.websocket("/executions/{execution_id}/stream")
 async def stream_execution(
     websocket: WebSocket,
     execution_id: int,
-    db: Session = Depends(get_db),
+    database_engine: Engine = Depends(get_observation_engine),
 ):
-    """
-    WebSocket endpoint for real-time hunt execution updates
+    from app.executions.observation import observe
 
-    Streams progress events as the hunt executes including:
-    - Step start/complete events
-    - Progress updates
-    - Error notifications
-    - Final results
+    await observe(websocket, database_engine, "hunt", execution_id)
 
-    Authentication: Pass ephemeral token as query parameter ?token=<ephemeral_token>
-    The token must be obtained from POST /api/auth/websocket-token endpoint
-    """
-    token = websocket.query_params.get("token")
 
-    if not token:
-        await websocket.close(
-            code=status.WS_1008_POLICY_VIOLATION, reason="Authentication required"
-        )
-        return
+@router.get("/executions/{execution_id}/steps/{step_id}/results")
+async def get_step_results(
+    execution_id: int,
+    step_id: str,
+    cursor: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    current_user: models.User = Depends(get_current_user),  # noqa: B008
+    db: Session = Depends(get_db),  # noqa: B008 - FastAPI dependency
+):
+    from app.core.exceptions import ResourceNotFoundException
 
-    try:
-        from app.core import security
-        from app.database.models import User
-
-        user_id = security.ephemeral_token_manager.validate_token(token, execution_id)
-
-        if not user_id:
-            await websocket.close(
-                code=status.WS_1008_POLICY_VIOLATION, reason="Invalid or expired token"
-            )
-            return
-
-        current_user = db.get(User, user_id)
-        if not current_user or not current_user.is_active:
-            await websocket.close(
-                code=status.WS_1008_POLICY_VIOLATION, reason="Invalid user"
-            )
-            return
-
-    except Exception:
-        await websocket.close(
-            code=status.WS_1008_POLICY_VIOLATION, reason="Authentication failed"
-        )
-        return
-
-    await websocket.accept()
-
-    try:
-        await websocket_manager.connect(execution_id, websocket)
-
-        await websocket.send_json(
-            {
-                "execution_id": execution_id,
-                "event_type": "connected",
-                "message": "WebSocket connection established",
-            }
-        )
-
-        while True:
-            data = await websocket.receive_text()
-            if data == "ping":
-                await websocket.send_text("pong")
-
-    except WebSocketDisconnect:
-        websocket_manager.disconnect(execution_id, websocket)
-    except Exception:
-        await websocket.send_json(
-            {"event_type": "error", "message": "Connection error"}
-        )
-        websocket_manager.disconnect(execution_id, websocket)
-        await websocket.close()
+    steps = await HuntService(db).get_execution_steps(
+        execution_id, current_user=current_user
+    )
+    step = next((step for step in steps if step.step_id == step_id), None)
+    if step is None:
+        raise ResourceNotFoundException("Hunt step not found")
+    execution = await HuntService(db).get_execution(
+        execution_id, current_user=current_user
+    )
+    return HuntResultReader(db, execution, current_user, steps).step_results(
+        step, cursor, limit
+    )

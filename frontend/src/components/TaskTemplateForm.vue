@@ -1,9 +1,9 @@
 <template>
-  <v-form ref="form" @submit.prevent="handleSubmit">
+  <v-form :disabled="disabled" ref="form" @submit.prevent="handleSubmit">
     <v-row>
       <!-- Basic Information -->
       <v-col cols="12">
-        <div class="text-h6 mb-4">Basic Information</div>
+        <div class="text-title-large mb-4">Basic Information</div>
       </v-col>
 
       <v-col cols="12" md="6">
@@ -78,10 +78,10 @@
       <!-- Custom Fields -->
       <v-col cols="12">
         <v-divider class="my-4" />
-        <div class="d-flex align-center justify-space-between mb-4">
+        <div class="d-flex flex-wrap ga-3 align-center justify-space-between mb-4">
           <div>
-            <div class="text-h6">Custom Fields</div>
-            <div class="text-body-2 text-medium-emphasis">
+            <div class="text-title-large">Custom Fields</div>
+            <div class="text-body-medium text-medium-emphasis">
               Define additional fields for this task template
             </div>
           </div>
@@ -90,6 +90,7 @@
             variant="outlined"
             size="small"
             prepend-icon="mdi-plus"
+            :disabled="disabled"
             @click="addField"
           >
             Add Field
@@ -104,8 +105,8 @@
           class="empty-fields text-center py-8"
         >
           <v-icon icon="mdi-form-textbox" size="48" color="grey-lighten-1" class="mb-2" />
-          <div class="text-h6 font-weight-medium mb-2">No Custom Fields</div>
-          <p class="text-body-2 text-medium-emphasis">
+          <div class="text-title-large font-weight-medium mb-2">No Custom Fields</div>
+          <p class="text-body-medium text-medium-emphasis">
             Add custom fields to collect additional information for this task type
           </p>
         </div>
@@ -120,7 +121,7 @@
                 <v-icon :icon="getFieldIcon(field.type)" class="me-3" />
                 <span v-if="field.label" class="font-weight-medium">
                   {{ field.label }}
-                  <span v-if="field.name" class="text-caption text-medium-emphasis ms-2">
+                  <span v-if="field.name" class="text-body-small text-medium-emphasis ms-2">
                     ({{ field.name }})
                   </span>
                 </span>
@@ -210,6 +211,7 @@
                     variant="text"
                     size="small"
                     prepend-icon="mdi-delete"
+                    :disabled="disabled"
                     @click="removeField(index)"
                   >
                     Remove Field
@@ -228,6 +230,7 @@
 import { ref, watch } from 'vue'
 
 const props = defineProps({
+  disabled: { type: Boolean, default: false },
   modelValue: {
     type: Object,
     required: true,
@@ -360,15 +363,11 @@ watch(
   { deep: true },
 )
 
-// Emit changes with debouncing to prevent infinite loops
-let emitTimeout = null
+// Keep the parent payload current when Enter or the save button submits immediately.
 watch(
   localForm,
   (newValue) => {
-    clearTimeout(emitTimeout)
-    emitTimeout = setTimeout(() => {
-      emit('update:modelValue', JSON.parse(JSON.stringify(newValue)))
-    }, 100)
+    emit('update:modelValue', JSON.parse(JSON.stringify(newValue)))
   },
   { deep: true },
 )

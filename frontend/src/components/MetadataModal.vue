@@ -1,6 +1,7 @@
 <template>
   <v-dialog
     v-model="show"
+    aria-label="File Metadata"
     max-width="800px"
     scrollable
     @update:model-value="$emit('update:modelValue', $event)"
@@ -11,7 +12,13 @@
           <v-icon icon="mdi-file-image" />
           <span>File Metadata</span>
         </div>
-        <v-btn icon="mdi-close" size="small" variant="text" @click="show = false" />
+        <v-btn
+          icon="mdi-close"
+          aria-label="Close metadata"
+          size="small"
+          variant="text"
+          @click="show = false"
+        />
       </v-card-title>
 
       <v-card-text class="pa-0">
@@ -34,34 +41,34 @@
               <span>Information</span>
             </v-card-title>
             <v-card-text>
-              <v-row dense>
+              <v-row density="compact">
                 <v-col cols="12" sm="6">
-                  <div class="text-caption text-medium-emphasis">Filename</div>
-                  <div class="text-body-2 font-weight-medium">
+                  <div class="text-body-small text-medium-emphasis">Filename</div>
+                  <div class="text-body-medium font-weight-medium">
                     {{ metadata.file_info.filename }}
                   </div>
                 </v-col>
                 <v-col cols="12" sm="6">
-                  <div class="text-caption text-medium-emphasis">File Type</div>
-                  <div class="text-body-2 font-weight-medium">
+                  <div class="text-body-small text-medium-emphasis">File Type</div>
+                  <div class="text-body-medium font-weight-medium">
                     {{ metadata.file_info.file_type }}
                   </div>
                 </v-col>
                 <v-col cols="12" sm="6">
-                  <div class="text-caption text-medium-emphasis">MIME Type</div>
-                  <div class="text-body-2 font-weight-medium">
+                  <div class="text-body-small text-medium-emphasis">MIME Type</div>
+                  <div class="text-body-medium font-weight-medium">
                     {{ metadata.file_info.mime_type }}
                   </div>
                 </v-col>
                 <v-col cols="12" sm="6">
-                  <div class="text-caption text-medium-emphasis">File Size</div>
-                  <div class="text-body-2 font-weight-medium">
+                  <div class="text-body-small text-medium-emphasis">File Size</div>
+                  <div class="text-body-medium font-weight-medium">
                     {{ metadata.file_info.file_size }}
                   </div>
                 </v-col>
                 <v-col v-if="metadata.file_info.dimensions" cols="12" sm="6">
-                  <div class="text-caption text-medium-emphasis">Dimensions</div>
-                  <div class="text-body-2 font-weight-medium">
+                  <div class="text-body-small text-medium-emphasis">Dimensions</div>
+                  <div class="text-body-medium font-weight-medium">
                     {{ metadata.file_info.dimensions }}
                   </div>
                 </v-col>
@@ -81,11 +88,11 @@
               <span>GPS Location</span>
             </v-card-title>
             <v-card-text>
-              <v-row dense>
+              <v-row density="compact">
                 <v-col v-if="metadata.gps_info.coordinates" cols="12">
-                  <div class="text-caption text-medium-emphasis">Coordinates</div>
+                  <div class="text-body-small text-medium-emphasis">Coordinates</div>
                   <div class="d-flex align-center ga-2">
-                    <div class="text-body-2 font-weight-medium">
+                    <div class="text-body-medium font-weight-medium">
                       {{ metadata.gps_info.coordinates }}
                     </div>
                     <v-btn
@@ -107,12 +114,14 @@
                   </div>
                 </v-col>
                 <v-col v-if="metadata.gps_info.altitude" cols="12" sm="6">
-                  <div class="text-caption text-medium-emphasis">Altitude</div>
-                  <div class="text-body-2 font-weight-medium">{{ metadata.gps_info.altitude }}</div>
+                  <div class="text-body-small text-medium-emphasis">Altitude</div>
+                  <div class="text-body-medium font-weight-medium">
+                    {{ metadata.gps_info.altitude }}
+                  </div>
                 </v-col>
                 <v-col v-if="metadata.gps_info.timestamp" cols="12" sm="6">
-                  <div class="text-caption text-medium-emphasis">GPS Timestamp</div>
-                  <div class="text-body-2 font-weight-medium">
+                  <div class="text-body-small text-medium-emphasis">GPS Timestamp</div>
+                  <div class="text-body-medium font-weight-medium">
                     {{ metadata.gps_info.timestamp }}
                   </div>
                 </v-col>
@@ -131,25 +140,31 @@
               <span>Camera Information</span>
             </v-card-title>
             <v-card-text>
-              <v-row dense>
+              <v-row density="compact">
                 <v-col v-if="metadata.camera_info.make" cols="12" sm="6">
-                  <div class="text-caption text-medium-emphasis">Make</div>
-                  <div class="text-body-2 font-weight-medium">{{ metadata.camera_info.make }}</div>
+                  <div class="text-body-small text-medium-emphasis">Make</div>
+                  <div class="text-body-medium font-weight-medium">
+                    {{ metadata.camera_info.make }}
+                  </div>
                 </v-col>
                 <v-col v-if="metadata.camera_info.model" cols="12" sm="6">
-                  <div class="text-caption text-medium-emphasis">Model</div>
-                  <div class="text-body-2 font-weight-medium">{{ metadata.camera_info.model }}</div>
+                  <div class="text-body-small text-medium-emphasis">Model</div>
+                  <div class="text-body-medium font-weight-medium">
+                    {{ metadata.camera_info.model }}
+                  </div>
                 </v-col>
                 <v-col v-if="metadata.camera_info.lens" cols="12">
-                  <div class="text-caption text-medium-emphasis">Lens</div>
-                  <div class="text-body-2 font-weight-medium">{{ metadata.camera_info.lens }}</div>
+                  <div class="text-body-small text-medium-emphasis">Lens</div>
+                  <div class="text-body-medium font-weight-medium">
+                    {{ metadata.camera_info.lens }}
+                  </div>
                 </v-col>
               </v-row>
 
               <!-- Camera Settings -->
               <div v-if="metadata.camera_info.settings" class="mt-3">
-                <div class="text-caption text-medium-emphasis mb-2">Camera Settings</div>
-                <v-row dense>
+                <div class="text-body-small text-medium-emphasis mb-2">Camera Settings</div>
+                <v-row density="compact">
                   <v-col
                     v-for="(value, key) in metadata.camera_info.settings"
                     :key="key"
@@ -176,12 +191,12 @@
               <span>Timestamps</span>
             </v-card-title>
             <v-card-text>
-              <v-row dense>
+              <v-row density="compact">
                 <v-col v-for="(value, key) in metadata.timestamp_info" :key="key" cols="12" sm="6">
-                  <div class="text-caption text-medium-emphasis">
+                  <div class="text-body-small text-medium-emphasis">
                     {{ formatTimestampName(key) }}
                   </div>
-                  <div class="text-body-2 font-weight-medium">{{ value }}</div>
+                  <div class="text-body-medium font-weight-medium">{{ value }}</div>
                 </v-col>
               </v-row>
             </v-card-text>
@@ -194,7 +209,7 @@
               :key="categoryName"
               v-show="Object.keys(categoryData).length > 0"
             >
-              <v-expansion-panel-title>
+              <v-expansion-panel-title class="metadata-panel-title">
                 <div class="d-flex align-center ga-2">
                   <v-icon :icon="getCategoryIcon(categoryName)" />
                   <span class="text-capitalize">{{ categoryName }} Metadata</span>
@@ -212,11 +227,11 @@
                     class="metadata-item pa-3 mb-2"
                   >
                     <div class="d-flex justify-space-between align-start">
-                      <div class="flex-grow-1" style="min-width: 0; overflow: hidden;">
-                        <div class="text-caption text-medium-emphasis text-truncate">
+                      <div class="flex-grow-1" style="min-width: 0; overflow: hidden">
+                        <div class="text-body-small text-medium-emphasis text-truncate">
                           {{ formatFieldName(key) }}
                         </div>
-                        <div class="text-body-2 font-weight-medium text-break">
+                        <div class="text-body-medium font-weight-medium text-break">
                           {{ formatFieldValue(key, value) }}
                         </div>
                       </div>
@@ -371,35 +386,31 @@ const openInMaps = (coordinates) => {
 }
 
 .metadata-item {
-  background-color: rgba(var(--v-theme-surface-variant), 0.1);
+  background-color: rgb(var(--v-theme-surface-variant), 0.1);
   border-radius: 8px;
-  border: 1px solid rgba(var(--v-theme-outline), 0.2);
+  border: 1px solid rgb(var(--v-theme-outline), 0.2);
   transition: background-color 0.2s ease;
   overflow: hidden;
   word-wrap: break-word;
 }
 
 .metadata-item:hover {
-  background-color: rgba(var(--v-theme-surface-variant), 0.2);
+  background-color: rgb(var(--v-theme-surface-variant), 0.2);
 }
 
-@media (max-width: 600px) {
+@media (width <= 600px) {
   .metadata-grid {
     grid-template-columns: 1fr;
   }
 }
 
-@media (min-width: 601px) {
+@media (width >= 601px) {
   .metadata-grid {
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   }
 }
 
-:deep(.v-expansion-panel-title) {
+.metadata-panel-title {
   padding: 12px 16px;
-}
-
-:deep(.v-expansion-panel-text) {
-  padding: 0 16px 16px;
 }
 </style>

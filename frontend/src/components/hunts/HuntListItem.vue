@@ -7,7 +7,7 @@
     @click="$emit('view-details', hunt)"
   >
     <v-card-text class="pa-3">
-      <v-row align="center">
+      <v-row class="align-center">
         <!-- Hunt Icon and Basic Info -->
         <v-col cols="12" md="5" class="d-flex align-center">
           <v-avatar :color="categoryColor" size="40" class="me-3">
@@ -15,7 +15,7 @@
           </v-avatar>
           <div>
             <div class="d-flex align-center">
-              <span class="text-body-1 font-weight-bold">{{ hunt.display_name }}</span>
+              <span class="text-body-large font-weight-bold">{{ hunt.display_name }}</span>
               <v-icon
                 v-if="!hunt.is_active"
                 color="error"
@@ -25,20 +25,22 @@
                 :title="'Inactive'"
               />
             </div>
-            <div class="text-caption text-medium-emphasis">{{ displayCategory }}</div>
+            <div class="text-body-small text-medium-emphasis">{{ displayCategory }}</div>
           </div>
         </v-col>
 
         <!-- Description -->
         <v-col cols="12" md="3">
-          <div class="text-body-2 text-medium-emphasis hunt-description">
+          <div class="text-body-medium text-medium-emphasis hunt-description">
             {{ hunt.description }}
           </div>
         </v-col>
 
         <!-- Stats and Actions -->
         <v-col cols="12" md="4" class="d-flex align-center justify-md-end justify-start">
-          <div class="text-caption text-medium-emphasis me-3">{{ hunt.step_count || 0 }} steps</div>
+          <div class="text-body-small text-medium-emphasis me-3">
+            {{ hunt.step_count || 0 }} steps
+          </div>
 
           <!-- Execute Button -->
           <v-btn
@@ -104,7 +106,7 @@ const displayCategory = computed(() => {
 
 .hunt-list-item:hover {
   transform: translateX(2px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 10%);
 }
 
 /* Category-specific left border colors */
@@ -150,10 +152,7 @@ const displayCategory = computed(() => {
 .hunt-list-item:hover::before {
   content: '';
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   background: rgb(var(--v-theme-primary), 0.02);
   pointer-events: none;
 }

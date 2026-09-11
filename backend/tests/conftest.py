@@ -7,13 +7,14 @@ mock users, cases, clients, entities, and evidence for testing.
 """
 
 import os
+from collections.abc import AsyncGenerator
 from datetime import timedelta
+from typing import Any
 
 import pytest
-from app.database import crud
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel, create_engine, select
 
 # Set test environment variables before importing app
 os.environ.setdefault("SECRET_KEY", "test_secret_key_for_testing_only")
@@ -24,28 +25,49 @@ os.environ.setdefault("POSTGRES_PORT", "5432")
 os.environ.setdefault("POSTGRES_DB", "test_db")
 os.environ.setdefault("FRONTEND_URL", "http://localhost:3000")
 
+from app import main as main_module
+from app.core import file_storage
 from app.core.config import settings
 from app.core.dependencies import get_current_user
+from app.core.login_rate_limiting import get_login_rate_limiter
 from app.core.security import (
     create_access_token,
     get_password_hash,
     verify_access_token,
 )
 from app.database import models
-from app.main import app
+from app.database.connection import get_db, get_observation_engine
+from app.plugins.base_plugin import BasePlugin, PluginRun, ResultEvent
+from tests.login_admission import admitted_login
 
-# Use an in-memory SQLite database for testing
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test.db"
+app = main_module.app
+
+
+class ThrowingPlugin(BasePlugin):
+    """Shared failure adapter for runner boundary tests."""
+
+    async def run(
+        self, params: dict[str, Any], ctx: PluginRun
+    ) -> AsyncGenerator[ResultEvent, None]:
+        yield self.data({"partial": True})
+        raise RuntimeError("provider exploded")
+        yield  # pragma: no cover
+
+
+@pytest.fixture(name="throwing_plugin_class")
+def throwing_plugin_class_fixture():
+    return ThrowingPlugin
 
 
 @pytest.fixture(name="engine")
-def engine_fixture():
+def engine_fixture(tmp_path):
+    database_path = tmp_path / "test.db"
     engine = create_engine(
-        SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+        f"sqlite:///{database_path}", connect_args={"check_same_thread": False}
     )
     SQLModel.metadata.create_all(engine)
     yield engine
-    SQLModel.metadata.drop_all(engine)
+    engine.dispose()
 
 
 @pytest.fixture(name="session")
@@ -62,14 +84,34 @@ def session_fixture(engine):
 
 
 @pytest.fixture(name="client")
-def client_fixture(session):
+def client_fixture(engine, session, tmp_path, monkeypatch):
+    monkeypatch.setattr(main_module, "engine", engine)
+    monkeypatch.setattr(file_storage, "UPLOAD_DIR", tmp_path / "uploads")
+    monkeypatch.setattr(
+        "app.core.setup.SETUP_TOKEN_FILE", tmp_path / "setup" / ".setup_token"
+    )
+
     def get_session_override():
         return session
 
-    app.dependency_overrides[Session] = get_session_override
-    client = TestClient(app)
-    yield client
+    app.dependency_overrides[get_db] = get_session_override
+    app.dependency_overrides[get_observation_engine] = lambda: engine
+
+    with TestClient(app) as client:
+        yield client
+
+
+@pytest.fixture(autouse=True)
+def isolate_application_test_state():
+    """Restore mutable FastAPI test state even when a test fails."""
+    original_overrides = app.dependency_overrides.copy()
+    original_application_state = app.state._state.copy()
+    app.dependency_overrides[get_login_rate_limiter] = admitted_login
+    yield
     app.dependency_overrides.clear()
+    app.dependency_overrides.update(original_overrides)
+    app.state._state.clear()
+    app.state._state.update(original_application_state)
 
 
 @pytest.fixture(name="test_admin")
@@ -153,7 +195,10 @@ def test_investigator_fixture(session):
 @pytest.fixture(name="admin_token")
 def admin_token_fixture(test_admin):
     access_token = create_access_token(
-        data={"sub": test_admin.username},
+        data={
+            "sub": test_admin.auth_identity,
+            "session_version": test_admin.session_version,
+        },
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
     )
     return access_token
@@ -162,7 +207,10 @@ def admin_token_fixture(test_admin):
 @pytest.fixture(name="user_token")
 def user_token_fixture(test_user):
     access_token = create_access_token(
-        data={"sub": test_user.username},
+        data={
+            "sub": test_user.auth_identity,
+            "session_version": test_user.session_version,
+        },
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
     )
     return access_token
@@ -171,7 +219,10 @@ def user_token_fixture(test_user):
 @pytest.fixture(name="analyst_token")
 def analyst_token_fixture(test_analyst):
     access_token = create_access_token(
-        data={"sub": test_analyst.username},
+        data={
+            "sub": test_analyst.auth_identity,
+            "session_version": test_analyst.session_version,
+        },
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
     )
     return access_token
@@ -181,17 +232,24 @@ def analyst_token_fixture(test_analyst):
 def override_auth_fixture(session):
     """Override authentication dependencies for testing"""
 
-    async def mock_get_current_user(token: str = None):
+    async def mock_get_current_user(token: str | None = None):
         if not token:
             raise HTTPException(status_code=401, detail="Not authenticated")
         try:
-            username = verify_access_token(token, HTTPException(status_code=401))
-            user = await crud.get_user_by_username(session, username=username)
+            identity, version = verify_access_token(
+                token, HTTPException(status_code=401)
+            )
+            user = session.exec(
+                select(models.User).where(
+                    models.User.auth_identity == identity,
+                    models.User.session_version == version,
+                )
+            ).first()
             if not user:
                 raise HTTPException(status_code=401)
             return user
-        except:
-            raise HTTPException(status_code=401)
+        except Exception as error:
+            raise HTTPException(status_code=401) from error
 
     app.dependency_overrides[get_current_user] = mock_get_current_user
     app.dependency_overrides[get_current_user] = mock_get_current_user

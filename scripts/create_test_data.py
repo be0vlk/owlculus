@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Test data creation script for Owlculus
 Creates sample data for manual testing through the UI
@@ -6,6 +5,7 @@ Creates sample data for manual testing through the UI
 
 import argparse
 import asyncio
+import getpass
 import json
 
 import httpx
@@ -119,7 +119,7 @@ async def create_test_data(
 
             if not personal_client:
                 print(
-                    "ERROR: Personal client not found. Please run init_db_auto.py first."
+                    "ERROR: Personal client not found. Please run the db-init service first."
                 )
                 return
 
@@ -254,9 +254,8 @@ async def create_test_data(
             print("   - Client: Personal")
             print("   - Entity: John Doe")
             print("   - Evidence folders: Person investigation template")
-            print("")
+            print()
             print("Available test users:")
-            print("   - admin / admin (Admin role)")
             print("   - analyst / anapassword1 (Analyst role)")
             print("   - investigator / invpassword1 (Investigator role)")
 
@@ -270,10 +269,7 @@ async def create_test_data(
 def main():
     parser = argparse.ArgumentParser(description="Create test data for Owlculus")
     parser.add_argument(
-        "--username", "-u", default="admin", help="Admin username (default: admin)"
-    )
-    parser.add_argument(
-        "--password", "-p", default="admin", help="Admin password (default: admin)"
+        "--username", "-u", required=True, help="Your administrator username"
     )
     parser.add_argument(
         "--url",
@@ -282,10 +278,13 @@ def main():
     )
 
     args = parser.parse_args()
+    password = getpass.getpass("Administrator password: ")
+    if not password:
+        parser.error("administrator password cannot be empty")
 
     import sys
 
-    result = asyncio.run(create_test_data(args.username, args.password, args.url))
+    result = asyncio.run(create_test_data(args.username, password, args.url))
     if result is False:
         sys.exit(1)
 

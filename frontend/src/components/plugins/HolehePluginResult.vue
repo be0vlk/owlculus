@@ -10,30 +10,34 @@
         <v-row>
           <v-col cols="12" sm="6" md="3">
             <div class="text-center">
-              <div class="text-h4 text-success font-weight-bold">{{ summaryData.found }}</div>
-              <div class="text-body-2">Accounts Found</div>
+              <div class="text-headline-large text-success font-weight-bold">
+                {{ summaryData.found }}
+              </div>
+              <div class="text-body-medium">Accounts Found</div>
             </div>
           </v-col>
           <v-col cols="12" sm="6" md="3">
             <div class="text-center">
-              <div class="text-h4 text-medium-emphasis font-weight-bold">
+              <div class="text-headline-large text-medium-emphasis font-weight-bold">
                 {{ summaryData.notFound }}
               </div>
-              <div class="text-body-2">Not Found</div>
+              <div class="text-body-medium">Not Found</div>
             </div>
           </v-col>
           <v-col cols="12" sm="6" md="3" v-if="summaryData.withRecoveryInfo">
             <div class="text-center">
-              <div class="text-h4 text-warning font-weight-bold">
+              <div class="text-headline-large text-warning font-weight-bold">
                 {{ summaryData.withRecoveryInfo }}
               </div>
-              <div class="text-body-2">With Recovery Info</div>
+              <div class="text-body-medium">With Recovery Info</div>
             </div>
           </v-col>
           <v-col cols="12" sm="6" md="3">
             <div class="text-center">
-              <div class="text-h4 text-primary font-weight-bold">{{ platformResults.length }}</div>
-              <div class="text-body-2">Total Platforms</div>
+              <div class="text-headline-large text-primary font-weight-bold">
+                {{ platformResults.length }}
+              </div>
+              <div class="text-body-medium">Total Platforms</div>
             </div>
           </v-col>
         </v-row>
@@ -75,10 +79,11 @@
           lg="4"
         >
           <v-card
-            elevation="2"
+            elevation="1"
             rounded="lg"
-            :color="platformData.exists ? 'success-lighten-5' : 'grey-lighten-4'"
-            class="h-100"
+            :color="platformData.exists ? 'success' : 'surface-variant'"
+            class="platform-card h-100"
+            variant="tonal"
           >
             <v-card-title class="d-flex align-center">
               <v-icon
@@ -102,7 +107,7 @@
                 <!-- Email -->
                 <div class="d-flex align-center">
                   <v-icon icon="mdi-email" size="small" class="mr-2" />
-                  <span class="text-body-2">{{ platformData.email }}</span>
+                  <span class="text-body-medium">{{ platformData.email }}</span>
                   <v-btn
                     icon="mdi-content-copy"
                     size="x-small"
@@ -117,13 +122,13 @@
                 <!-- Domain -->
                 <div v-if="platformData.domain" class="d-flex align-center">
                   <v-icon icon="mdi-web" size="small" class="mr-2" />
-                  <span class="text-body-2">{{ platformData.domain }}</span>
+                  <span class="text-body-medium">{{ platformData.domain }}</span>
                 </div>
 
                 <!-- Partial Recovery Info -->
                 <div v-if="platformData.partial_info" class="d-flex align-center">
                   <v-icon icon="mdi-shield-account" size="small" class="mr-2" color="warning" />
-                  <span class="text-body-2">Recovery: {{ platformData.partial_info }}</span>
+                  <span class="text-body-medium">Recovery: {{ platformData.partial_info }}</span>
                   <v-btn
                     icon="mdi-content-copy"
                     size="x-small"
@@ -175,7 +180,7 @@
             Scan Complete
           </div>
         </template>
-        <div class="text-body-1 mb-2">{{ item.data.message }}</div>
+        <div class="text-body-large mb-2">{{ item.data.message }}</div>
 
         <div v-if="item.data.summary" class="d-flex flex-wrap ga-2">
           <v-chip size="small" color="primary" variant="text">
@@ -201,7 +206,7 @@
           </v-chip>
         </div>
 
-        <div v-if="item.data.timestamp" class="text-caption mt-2">
+        <div v-if="item.data.timestamp" class="text-body-small mt-2">
           Completed at {{ formatDate(new Date(item.data.timestamp * 1000).toISOString()) }} UTC
         </div>
       </v-alert>
@@ -214,7 +219,7 @@
             Scan Error
           </div>
         </template>
-        <div class="text-body-1">{{ item.data.message }}</div>
+        <div class="text-body-large">{{ item.data.message }}</div>
       </v-alert>
     </template>
 
@@ -294,23 +299,14 @@ const copyToClipboard = async (text) => {
 }
 
 /* Enhanced hover effects for platform cards */
-.platform-results-grid .v-card {
+.platform-card {
   transition:
     transform 0.2s ease,
     box-shadow 0.2s ease;
 }
 
-.platform-results-grid .v-card:hover {
+.platform-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgb(0 0 0 / 15%);
-}
-
-/* Better visual hierarchy for found vs not found */
-.v-card[style*='success-lighten-5'] {
-  border-left: 4px solid rgb(var(--v-theme-success));
-}
-
-.v-card[style*='grey-lighten-4'] {
-  border-left: 4px solid rgb(var(--v-theme-surface-variant));
 }
 </style>

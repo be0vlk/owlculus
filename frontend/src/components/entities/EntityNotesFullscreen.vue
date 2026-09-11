@@ -1,6 +1,7 @@
 <template>
   <v-dialog
     :model-value="show"
+    :aria-label="`${title} notes`"
     @update:model-value="$emit('update:show', $event)"
     fullscreen
     transition="dialog-bottom-transition"
@@ -13,13 +14,14 @@
           {{ title }} - Notes
         </v-toolbar-title>
         <v-spacer />
-        <v-btn icon="mdi-close" @click="$emit('close')" />
+        <v-btn aria-label="Close notes" icon="mdi-close" @click="$emit('close')" />
       </v-toolbar>
 
       <div class="flex-grow-1 d-flex flex-column overflow-hidden">
         <EditorToolbar
           v-if="editor"
           :actions="editorActions"
+          :disabled="isEditing === false"
           :saving="saving"
           :last-saved-time="lastSavedTime"
           :format-last-saved="formatLastSaved"
@@ -27,8 +29,9 @@
           @toggle-expand="$emit('close')"
         />
 
+        <v-alert v-if="saveError" type="error">{{ saveError }}</v-alert>
         <v-container fluid class="flex-grow-1 overflow-auto pa-6">
-          <v-row justify="center">
+          <v-row class="justify-center">
             <v-col cols="12" lg="10" xl="8">
               <div :class="{ 'read-only-notes': isEditing === false }">
                 <editor-content
@@ -58,6 +61,7 @@ defineProps({
   title: { type: String, required: true },
   editor: { type: Object, default: null },
   editorActions: { type: Array, default: () => [] },
+  saveError: { type: String, default: '' },
   saving: { type: Boolean, default: false },
   lastSavedTime: { type: [Date, null], default: null },
   formatLastSaved: { type: String, default: '' },
@@ -68,15 +72,13 @@ defineEmits(['update:show', 'close'])
 </script>
 
 <style scoped>
-@import '../../styles/entity-editor.css';
-
 /* Read-only styling for fullscreen notes */
-.read-only-notes .tiptap-content .ProseMirror {
+.read-only-notes .tiptap-content :deep(.ProseMirror) {
   cursor: default;
-  background-color: rgb(var(--v-theme-surface-variant), 0.03) !important;
+  background-color: rgb(var(--v-theme-surface-variant), 0.03);
 }
 
-.read-only-notes .tiptap-content .ProseMirror * {
+.read-only-notes .tiptap-content :deep(.ProseMirror *) {
   pointer-events: none;
 }
 </style>

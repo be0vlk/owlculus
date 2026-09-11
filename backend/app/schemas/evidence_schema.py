@@ -122,3 +122,17 @@ class Evidence(EvidenceBase):
     created_at: datetime
     updated_at: datetime
     created_by_id: int
+
+
+class EvidenceUploadFailure(BaseModel):
+    """A file that could not be turned into evidence."""
+
+    filename: str
+    error: str
+
+
+class EvidenceUploadResponse(BaseModel):
+    """The per-file outcomes of a multi-file upload."""
+
+    created: list[Evidence]
+    failed: list[EvidenceUploadFailure]

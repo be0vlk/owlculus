@@ -12,15 +12,15 @@
     <div v-if="dnsResults.length" class="dns-results-grid">
       <v-row>
         <v-col v-for="(dnsData, index) in dnsResults" :key="`dns-${index}`" cols="12" lg="6">
-          <v-card elevation="2" rounded="lg" class="h-100 target-card">
-            <v-card-title class="d-flex align-center bg-primary-lighten-5">
+          <v-card elevation="1" rounded="lg" class="h-100 target-card">
+            <v-card-title class="d-flex align-center result-heading">
               <v-icon
                 :icon="dnsData.target_type === 'ip_address' ? 'mdi-ip-network' : 'mdi-web'"
                 class="mr-3"
               />
               <div class="flex-grow-1">
-                <div class="text-h6">{{ dnsData.target }}</div>
-                <div class="text-caption text-medium-emphasis">
+                <div class="text-title-large">{{ dnsData.target }}</div>
+                <div class="text-body-small text-medium-emphasis">
                   {{ dnsData.target_type === 'ip_address' ? 'IP Address' : 'Domain' }}
                 </div>
               </div>
@@ -42,15 +42,15 @@
                           <v-icon icon="mdi-check-circle" size="x-small" class="mr-1" />
                           {{ recordResult.type }}{{ recordResult.ip_address ? ' (Reverse)' : '' }}
                         </v-chip>
-                        <span class="text-caption text-success"
+                        <span class="text-body-small text-success"
                           >{{ recordResult.records.length }} record(s)</span
                         >
                       </div>
 
-                      <v-card elevation="1" rounded="lg" color="success-lighten-5">
+                      <v-card elevation="1" rounded="lg" color="success" variant="tonal">
                         <v-card-text class="pa-3">
                           <div class="d-flex justify-space-between align-start">
-                            <pre class="text-body-2 font-mono flex-grow-1 records-display">{{
+                            <pre class="text-body-medium font-mono flex-grow-1 records-display">{{
                               recordResult.records.join('\n')
                             }}</pre>
                             <v-btn
@@ -113,11 +113,11 @@
 
     <!-- Legacy Format Support (for old responses) -->
     <template v-if="legacyFormat">
-      <v-card elevation="2" rounded="lg">
+      <v-card elevation="1" rounded="lg">
         <v-card-text>
           <div class="d-flex align-center">
             <v-icon icon="mdi-web" class="mr-2" color="grey-darken-1" />
-            <h3 class="text-h6 font-weight-medium">
+            <h3 class="text-title-large font-weight-medium">
               {{ legacyResult.domain }}
             </h3>
           </div>
@@ -125,14 +125,14 @@
       </v-card>
 
       <div v-if="hasIpAddresses(legacyResult)">
-        <h4 class="text-body-1 font-weight-medium d-flex align-center mb-2">
+        <h4 class="text-body-large font-weight-medium d-flex align-center mb-2">
           <v-icon icon="mdi-map-marker-outline" class="mr-1" size="16" />
           IP Addresses
         </h4>
         <v-card elevation="1" rounded="lg">
           <v-card-text>
             <div class="d-flex justify-space-between align-start">
-              <code class="text-body-2 font-mono flex-grow-1">{{
+              <code class="text-body-medium font-mono flex-grow-1">{{
                 legacyResult.ips.join('\n')
               }}</code>
               <v-btn
@@ -233,13 +233,7 @@ pre {
   margin: 0;
 }
 
-/* Enhanced visual hierarchy for record types */
-.v-chip[color='success'] {
-  background: rgb(var(--v-theme-success), 0.12);
-  border: 1px solid rgb(var(--v-theme-success), 0.3);
-}
-
-.bg-primary-lighten-5 {
+.result-heading {
   background: linear-gradient(
     45deg,
     rgb(var(--v-theme-primary), 0.08),

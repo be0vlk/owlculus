@@ -3,16 +3,20 @@
     v-model="isOpen"
     :fullscreen="mdAndDown"
     :max-width="!mdAndDown ? '90vw' : undefined"
+    aria-label="Plugin results"
+    @keydown.esc="closeModal"
     persistent
     scrollable
   >
-    <v-card height="90vh" class="d-flex flex-column">
+    <v-card :height="mdAndDown ? '100dvh' : '90vh'" class="d-flex flex-column">
       <!-- Header -->
-      <v-card-title class="d-flex align-center ga-3 px-6 py-4">
+      <v-card-title class="d-flex flex-wrap align-center ga-3 px-6 py-4">
         <v-icon :icon="getPluginIcon(pluginName)" size="24" />
-        <div class="flex-grow-1">
-          <h2 class="text-h5 font-weight-medium">{{ getPluginDisplayName(pluginName) }} Results</h2>
-          <div class="text-body-2 text-medium-emphasis">
+        <div class="flex-grow-1 text-wrap">
+          <h2 class="text-headline-small font-weight-medium">
+            {{ getPluginDisplayName(pluginName) }} Results
+          </h2>
+          <div class="text-body-medium text-medium-emphasis">
             Executed {{ formatExecutionTime(executionTime) }}
           </div>
         </div>
@@ -20,7 +24,7 @@
         <!-- Action buttons -->
         <div class="d-flex ga-2">
           <v-btn
-            v-if="results"
+            v-if="hasResults"
             variant="tonal"
             color="primary"
             prepend-icon="mdi-download"
@@ -28,7 +32,12 @@
           >
             Export
           </v-btn>
-          <v-btn icon="mdi-close" variant="text" @click="closeModal" />
+          <v-btn
+            icon="mdi-close"
+            aria-label="Close plugin results"
+            variant="text"
+            @click="closeModal"
+          />
         </div>
       </v-card-title>
 
@@ -43,7 +52,7 @@
             variant="outlined"
             class="mb-6"
           >
-            <v-card-title class="text-subtitle-1 py-3">
+            <v-card-title class="text-body-large py-3">
               <v-icon icon="mdi-cog" class="mr-2" size="20" />
               Execution Parameters
             </v-card-title>
@@ -64,9 +73,34 @@
             </v-card-text>
           </v-card>
 
+          <v-alert
+            v-if="hasResults && error && !executionStatus"
+            type="warning"
+            role="alert"
+            class="mb-4"
+          >
+            <strong>Partial retained results</strong>
+            <div>{{ error }}</div>
+          </v-alert>
           <!-- Results Display -->
-          <div v-if="results" class="results-container">
-            <PluginResult :plugin-name="pluginName" :result="results" class="modal-plugin-result" />
+          <div
+            v-if="
+              hasResults || executionStatus || retrievalError || retrievalLoading || exportError
+            "
+            class="results-container"
+          >
+            <PluginResult
+              :plugin-name="pluginName"
+              :result="results || []"
+              class="modal-plugin-result"
+              :execution-status="executionStatus"
+              :execution-error="error"
+              :retrieval-loading="retrievalLoading"
+              :retrieval-complete="retrievalComplete"
+              :retrieval-error="retrievalError"
+              :export-error="exportError"
+              @retry="$emit('retry')"
+            />
           </div>
 
           <!-- Error Display -->
@@ -77,14 +111,14 @@
                 Plugin Execution Failed
               </div>
             </template>
-            <div class="text-body-1">{{ error }}</div>
+            <div class="text-body-large">{{ error }}</div>
           </v-alert>
 
           <!-- No Results State -->
           <v-card v-else variant="outlined" class="text-center pa-8">
             <v-icon class="mb-4" color="grey-darken-1" icon="mdi-file-search-outline" size="64" />
-            <h3 class="text-h6 mb-2">No Results Available</h3>
-            <p class="text-body-2 text-medium-emphasis">
+            <h3 class="text-title-large mb-2">No Results Available</h3>
+            <p class="text-body-medium text-medium-emphasis">
               Plugin execution did not produce any results.
             </p>
           </v-card>
@@ -96,11 +130,17 @@
 
 <script setup>
 import { computed } from 'vue'
+import { assembleCorrelationResults } from '@/utils/correlationResults'
 import { useDisplay } from 'vuetify'
 import PluginResult from '@/components/plugins/PluginResult.vue'
 import { formatDate } from '@/composables/dateUtils.js'
 
 const props = defineProps({
+  executionStatus: { type: String, default: null },
+  retrievalLoading: { type: Boolean, default: false },
+  retrievalComplete: { type: Boolean, default: true },
+  retrievalError: { type: String, default: null },
+  exportError: { type: String, default: null },
   modelValue: {
     type: Boolean,
     default: false,
@@ -127,7 +167,14 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['update:modelValue', 'export'])
+const hasResults = computed(() => {
+  if (props.results === null || props.results === undefined || props.results === '') return false
+  if (Array.isArray(props.results)) return props.results.length > 0
+  if (typeof props.results === 'object') return Object.keys(props.results).length > 0
+  return true
+})
+
+const emit = defineEmits(['update:modelValue', 'export', 'retry'])
 
 const { mdAndDown } = useDisplay()
 
@@ -186,9 +233,17 @@ const formatParameterValue = (value) => {
 const exportResults = () => {
   emit('export', {
     pluginName: props.pluginName,
-    results: props.results,
+    results:
+      props.pluginName === 'CorrelationScan'
+        ? assembleCorrelationResults(props.results)
+        : props.results,
     parameters: props.parameters,
     executionTime: props.executionTime,
+    partial:
+      Boolean(props.error) ||
+      !props.retrievalComplete ||
+      Boolean(props.executionStatus && props.executionStatus !== 'completed'),
+    error: props.error || null,
   })
 }
 </script>
@@ -203,16 +258,6 @@ const exportResults = () => {
   /* Remove any width restrictions from the modal context */
   width: 100%;
   max-width: none;
-}
-
-/* Better spacing for cards in modal */
-:deep(.modal-plugin-result .v-card) {
-  margin-bottom: 1rem;
-}
-
-/* Improved table layouts for DNS and other data */
-:deep(.modal-plugin-result .v-card-text) {
-  padding: 1rem;
 }
 
 /* Better pre/code formatting in wide layout */

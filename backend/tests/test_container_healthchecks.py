@@ -1,0 +1,177 @@
+"""Deployment contract tests for backend container healthchecks."""
+
+import pytest
+
+from tests.deployment import (
+    REPOSITORY_ROOT,
+    SUPPORTED_TOPOLOGIES,
+    load_compose_configuration,
+)
+
+
+def test_backend_image_excludes_runtime_setup_data():
+    """A local pending setup token can never be copied into an image layer."""
+    dockerignore = (REPOSITORY_ROOT / "backend/.dockerignore").read_text().splitlines()
+
+    assert "data/setup/" in dockerignore
+
+
+def test_backend_image_excludes_local_python_runtime_state():
+    """Host environments and caches cannot leak into backend image layers."""
+    dockerignore = (REPOSITORY_ROOT / "backend/.dockerignore").read_text().splitlines()
+
+    assert {".venv/", "__pycache__/", ".pytest_cache/"} <= set(dockerignore)
+
+
+def test_backend_image_installs_locked_production_dependencies():
+    """The backend image and local development use one resolved dependency graph."""
+    contents = (REPOSITORY_ROOT / "backend/Dockerfile").read_text()
+
+    assert "COPY pyproject.toml uv.lock ./" in contents
+    assert "uv sync --frozen --no-dev" in contents
+    assert "requirements.txt" not in contents
+
+
+def test_backend_source_root_does_not_shadow_the_app_package():
+    """Copying the backend context must not create a competing /app package."""
+    assert not (REPOSITORY_ROOT / "backend/__init__.py").exists()
+
+
+def test_backend_image_exposes_production_and_development_targets():
+    """One backend image definition supplies both supported runtime adapters."""
+    contents = (REPOSITORY_ROOT / "backend/Dockerfile").read_text()
+
+    assert "AS development" in contents
+    assert "AS production" in contents
+    development_target = contents.split("AS development", maxsplit=1)[1].split(
+        "AS production", maxsplit=1
+    )[0]
+    assert '"--reload"' in development_target
+
+
+def test_backend_image_checks_process_liveness():
+    """The shared backend image determines health through the liveness endpoint."""
+    contents = (REPOSITORY_ROOT / "backend/Dockerfile").read_text()
+
+    assert "HEALTHCHECK" in contents
+    assert "http://localhost:8000/health/live" in contents
+
+
+def test_backend_image_owns_persistent_directories_as_the_runtime_user():
+    """Fresh named volumes inherit writable ownership for the non-root process."""
+    contents = (REPOSITORY_ROOT / "backend/Dockerfile").read_text()
+    runtime_instructions = contents[: contents.index("USER app")]
+
+    assert "mkdir -p uploads data/setup" in runtime_instructions
+    assert "chown -R app:app /app" in runtime_instructions
+
+
+@pytest.mark.parametrize(
+    "topology",
+    SUPPORTED_TOPOLOGIES,
+)
+def test_compose_backend_healthchecks_wait_for_readiness(topology):
+    """Every supported topology gates backend health on full readiness."""
+    configuration = load_compose_configuration(topology)
+
+    command = configuration["services"]["backend"]["healthcheck"]["test"]
+
+    assert "http://localhost:8000/health/ready" in command
+
+
+@pytest.mark.parametrize("worker_name", ["plugin-worker", "hunt-worker"])
+@pytest.mark.parametrize("topology", SUPPORTED_TOPOLOGIES)
+def test_execution_processes_share_configuration_and_have_role_healthchecks(
+    topology,
+    worker_name,
+):
+    services = load_compose_configuration(topology)["services"]
+    api = services["backend"]
+    worker = services[worker_name]
+    dispatcher = services["execution-dispatcher"]
+    for service in (worker, dispatcher):
+        assert service["build"] == api["build"]
+        for key in (
+            "POSTGRES_USER",
+            "POSTGRES_PASSWORD",
+            "POSTGRES_DB",
+            "POSTGRES_HOST",
+            "SECRET_KEY",
+            "REDIS_URL",
+        ):
+            assert service["environment"][key] == api["environment"][key]
+        assert "8000" not in str(service["healthcheck"])
+        assert (
+            service["depends_on"]["db-init"]["condition"]
+            == "service_completed_successfully"
+        )
+    assert worker["stop_grace_period"] == "1m15s"
+    assert worker["environment"]["PLUGIN_EXECUTION_SECONDS"] == "900"
+    assert worker["environment"]["HUNT_STEP_SECONDS"] == "900"
+    assert worker["environment"]["HUNT_EXECUTION_SECONDS"] == "7200"
+    assert "--pool=prefork" in worker["command"]
+    assert "--concurrency=2" in worker["command"]
+    assert "--prefetch-multiplier=1" in worker["command"]
+    assert "worker-egress" in worker["networks"]
+    uploads = lambda service: next(
+        volume["source"]
+        for volume in service["volumes"]
+        if volume["target"] == "/app/uploads"
+    )
+    assert uploads(worker) == uploads(api)
+
+
+@pytest.mark.parametrize("topology", SUPPORTED_TOPOLOGIES)
+def test_execution_resource_budgets_and_private_storage(topology):
+    services = load_compose_configuration(topology)["services"]
+    redis = services["redis"]
+    assert "--appendonly" in redis["command"]
+    assert "noeviction" in redis["command"]
+    assert "--maxmemory" in redis["command"]
+    assert not redis.get("ports")
+    assert int(redis["mem_limit"]) > 256 * 1024 * 1024
+    for name in ("plugin-worker", "hunt-worker"):
+        worker = services[name]
+        assert int(worker["mem_limit"]) == 1024 * 1024 * 1024
+        assert worker["environment"]["DATABASE_POOL_SIZE"] == "2"
+        assert worker["environment"]["DATABASE_MAX_OVERFLOW"] == "0"
+        assert worker["environment"]["WORKER_MAX_TASKS_PER_CHILD"] == "100"
+        for key in ("EXECUTION_BROKER_URL", "EXECUTION_EVENT_REDIS_URL"):
+            assert worker["environment"][key] == services["backend"]["environment"][key]
+
+
+@pytest.mark.parametrize("topology", SUPPORTED_TOPOLOGIES)
+def test_authentication_has_independent_capacity_and_private_network(topology):
+    services = load_compose_configuration(topology)["services"]
+    auth = services["auth-redis"]
+    assert "noeviction" in auth["command"]
+    assert "--appendonly" in auth["command"]
+    assert not auth.get("ports")
+    assert set(auth["networks"]) == {"auth-network"}
+    assert "auth-network" in services["backend"]["networks"]
+    assert "redis" not in services["backend"]["depends_on"]
+    assert (
+        services["backend"]["environment"]["AUTH_REDIS_URL"]
+        == "redis://auth-redis:6379/0"
+    )
+    for name in ("plugin-worker", "hunt-worker", "execution-dispatcher"):
+        assert "auth-network" not in services[name]["networks"]
+        assert "AUTH_REDIS_URL" not in services[name]["environment"]
+    assert auth["volumes"][0]["source"] != services["redis"]["volumes"][0]["source"]
+
+
+def test_external_redis_endpoints_are_independently_configurable():
+    urls = {
+        "AUTH_REDIS_URL": "redis://auth.example:6379/0",
+        "EXECUTION_BROKER_URL": "redis://broker.example:6379/0",
+        "EXECUTION_EVENT_REDIS_URL": "redis://events.example:6379/0",
+    }
+    services = load_compose_configuration("direct", environment_overrides=urls)[
+        "services"
+    ]
+    assert (
+        services["backend"]["environment"]["AUTH_REDIS_URL"] == urls["AUTH_REDIS_URL"]
+    )
+    for name in ("backend", "plugin-worker", "hunt-worker", "execution-dispatcher"):
+        for key in ("EXECUTION_BROKER_URL", "EXECUTION_EVENT_REDIS_URL"):
+            assert services[name]["environment"][key] == urls[key]
