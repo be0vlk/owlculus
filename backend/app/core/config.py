@@ -62,6 +62,7 @@ class Settings(BaseSettings):
     ]
     FORWARDED_ALLOW_IPS: str = os.environ.get("FORWARDED_ALLOW_IPS", "127.0.0.1,::1")
     REDIS_URL: str = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+    AUTH_REDIS_URL: str = os.environ.get("AUTH_REDIS_URL", "redis://localhost:6380/0")
     API_WORKERS: int = Field(default=1, ge=1, le=8)
     API_DATABASE_CONCURRENCY: int = Field(default=8, ge=1, le=32)
     ALGORITHM: str = "HS256"

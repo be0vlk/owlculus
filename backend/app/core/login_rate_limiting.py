@@ -17,7 +17,8 @@ from app.core.config import settings
 class RedisLoginRateLimiter:
     """Admit attempts only when both sliding windows have available capacity."""
 
-    _SCRIPT = """
+    # Redis 7 flagged scripts reject OOM before any counter mutation.
+    _SCRIPT = """#!lua
 local clock = redis.call('TIME')
 local now = clock[1] * 1000 + math.floor(clock[2] / 1000)
 local window = tonumber(ARGV[1])
@@ -79,7 +80,7 @@ return 0
 async def get_login_rate_limiter() -> AsyncIterator[RedisLoginRateLimiter]:
     """Bound Redis I/O and close request-owned connections on every exit path."""
     async with Redis.from_url(
-        settings.REDIS_URL,
+        settings.AUTH_REDIS_URL,
         socket_connect_timeout=1,
         socket_timeout=1,
         retry=Retry(NoBackoff(), 0),

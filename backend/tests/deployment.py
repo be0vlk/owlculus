@@ -34,6 +34,9 @@ def load_compose_configuration(
         "POSTGRES_PASSWORD",
         "POSTGRES_USER",
         "REDIS_URL",
+        "AUTH_REDIS_URL",
+        "EXECUTION_BROKER_URL",
+        "EXECUTION_EVENT_REDIS_URL",
         "SECRET_KEY",
     ):
         environment.pop(variable, None)

@@ -42,7 +42,7 @@ services:
     networks:
       - backend-network
 
-  # Shared rate-limit storage
+  # Execution broker and event storage (retain the existing volume)
   redis:
     image: redis:7-alpine
     logging: *container-logging
@@ -52,12 +52,28 @@ services:
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli --raw EVAL \"redis.call('LPUSH', KEYS[1], 'probe'); redis.call('EXPIRE', KEYS[1], 5); redis.call('DEL', KEYS[1]); return 1\" 1 owlculus:health:container | grep -qx 1"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
       - backend-network
+
+  auth-redis:
+    image: redis:7-alpine
+    logging: *container-logging
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "${AUTH_REDIS_MAXMEMORY:-32mb}", "--maxmemory-policy", "noeviction"]
+    mem_limit: 128m
+    volumes:
+      - auth_redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --raw EVAL \"redis.call('ZADD', KEYS[1], 1, 'probe'); redis.call('EXPIRE', KEYS[1], 5); redis.call('DEL', KEYS[1]); return 1\" 1 owlculus:health:container | grep -qx 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - auth-network
 
   # Backend API
   backend:
@@ -82,6 +98,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-owlculus}
       OWLCULUS_ENV: production
       SECRET_KEY: ${SECRET_KEY:-}
+      AUTH_REDIS_URL: ${AUTH_REDIS_URL:-redis://auth-redis:6379/0}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       EXECUTION_BROKER_URL: ${EXECUTION_BROKER_URL:-${REDIS_URL:-redis://redis:6379/0}}
       EXECUTION_EVENT_REDIS_URL: ${EXECUTION_EVENT_REDIS_URL:-${REDIS_URL:-redis://redis:6379/0}}
@@ -104,8 +121,8 @@ services:
     depends_on:
       db-init:
         condition: service_completed_successfully
-      redis:
-        condition: service_healthy
+      auth-redis:
+        condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health/ready"]
       interval: 30s
@@ -115,6 +132,7 @@ services:
     networks:
       - frontend-network
       - backend-network
+      - auth-network
 
   plugin-worker:
     mem_limit: ${PLUGIN_WORKER_MEMORY:-1g}
@@ -273,6 +291,8 @@ volumes:
     driver: local
   setup_data:
     driver: local
+  auth_redis_data:
+    driver: local
   redis_data:
     driver: local
   caddy_data:
@@ -281,6 +301,9 @@ volumes:
     driver: local
 
 networks:
+  auth-network:
+    driver: bridge
+    internal: true
   worker-egress:
     driver: bridge
   frontend-network:

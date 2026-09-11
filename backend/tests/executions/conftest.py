@@ -74,6 +74,7 @@ class ExecutionSystem:
                 if key.startswith(("POSTGRES_", "EXECUTION_", "OWLCULUS_")) or key in {
                     "SECRET_KEY",
                     "REDIS_URL",
+                    "AUTH_REDIS_URL",
                     "PLUGIN_QUEUE",
                     "HUNT_QUEUE",
                     "PYTHONPATH",
@@ -149,6 +150,7 @@ def execution_system(tmp_path):
                 ["-e", "POSTGRES_PASSWORD=acceptance", "-e", "POSTGRES_DB=acceptance"],
             ),
             ("redis", "redis:7-alpine", 6379, []),
+            ("auth-redis", "redis:7-alpine", 6379, []),
         ]:
             name = f"{namespace}-{suffix}"
             names.append(name)
@@ -174,7 +176,7 @@ def execution_system(tmp_path):
                             "--maxmemory-policy",
                             "noeviction",
                         ]
-                        if suffix == "redis"
+                        if suffix in {"redis", "auth-redis"}
                         else []
                     ),
                 ],
@@ -194,6 +196,9 @@ def execution_system(tmp_path):
             "POSTGRES_PORT": ports[0],
             "SECRET_KEY": settings.SECRET_KEY.get_secret_value(),
             "REDIS_URL": f"redis://127.0.0.1:{ports[1]}/0",
+            "EXECUTION_BROKER_URL": f"redis://127.0.0.1:{ports[1]}/0",
+            "EXECUTION_EVENT_REDIS_URL": f"redis://127.0.0.1:{ports[1]}/0",
+            "AUTH_REDIS_URL": f"redis://127.0.0.1:{ports[2]}/0",
             "PLUGIN_QUEUE": namespace,
             "HUNT_QUEUE": f"{namespace}-hunts",
             "CUSTOM_API_KEY": "",

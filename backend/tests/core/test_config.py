@@ -79,3 +79,11 @@ def test_production_launcher_preserves_worker_and_proxy_configuration(monkeypatc
             },
         )
     ]
+
+
+def test_authentication_endpoint_is_independent_of_legacy_execution_url(monkeypatch):
+    monkeypatch.setenv("REDIS_URL", "redis://execution.example:6379/0")
+    monkeypatch.setenv("AUTH_REDIS_URL", "redis://authentication.example:6379/0")
+    configured = Settings(_env_file=None)
+    assert configured.AUTH_REDIS_URL == "redis://authentication.example:6379/0"
+    assert configured.REDIS_URL == "redis://execution.example:6379/0"

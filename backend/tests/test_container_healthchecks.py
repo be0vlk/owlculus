@@ -138,3 +138,40 @@ def test_execution_resource_budgets_and_private_storage(topology):
         assert worker["environment"]["WORKER_MAX_TASKS_PER_CHILD"] == "100"
         for key in ("EXECUTION_BROKER_URL", "EXECUTION_EVENT_REDIS_URL"):
             assert worker["environment"][key] == services["backend"]["environment"][key]
+
+
+@pytest.mark.parametrize("topology", SUPPORTED_TOPOLOGIES)
+def test_authentication_has_independent_capacity_and_private_network(topology):
+    services = load_compose_configuration(topology)["services"]
+    auth = services["auth-redis"]
+    assert "noeviction" in auth["command"]
+    assert "--appendonly" in auth["command"]
+    assert not auth.get("ports")
+    assert set(auth["networks"]) == {"auth-network"}
+    assert "auth-network" in services["backend"]["networks"]
+    assert "redis" not in services["backend"]["depends_on"]
+    assert (
+        services["backend"]["environment"]["AUTH_REDIS_URL"]
+        == "redis://auth-redis:6379/0"
+    )
+    for name in ("plugin-worker", "hunt-worker", "execution-dispatcher"):
+        assert "auth-network" not in services[name]["networks"]
+        assert "AUTH_REDIS_URL" not in services[name]["environment"]
+    assert auth["volumes"][0]["source"] != services["redis"]["volumes"][0]["source"]
+
+
+def test_external_redis_endpoints_are_independently_configurable():
+    urls = {
+        "AUTH_REDIS_URL": "redis://auth.example:6379/0",
+        "EXECUTION_BROKER_URL": "redis://broker.example:6379/0",
+        "EXECUTION_EVENT_REDIS_URL": "redis://events.example:6379/0",
+    }
+    services = load_compose_configuration("direct", environment_overrides=urls)[
+        "services"
+    ]
+    assert (
+        services["backend"]["environment"]["AUTH_REDIS_URL"] == urls["AUTH_REDIS_URL"]
+    )
+    for name in ("backend", "plugin-worker", "hunt-worker", "execution-dispatcher"):
+        for key in ("EXECUTION_BROKER_URL", "EXECUTION_EVENT_REDIS_URL"):
+            assert services[name]["environment"][key] == urls[key]

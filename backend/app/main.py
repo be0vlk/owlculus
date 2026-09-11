@@ -216,6 +216,19 @@ async def _bounded_readiness() -> tuple[bool, dict[str, str]]:
         return False, {"database": "delayed"}
 
 
+@app.get("/health/execution")
+def execution_health_check() -> JSONResponse:
+    """Execution storage health does not gate authentication traffic."""
+    from app.core.redis_health import execution_storage_status
+
+    checks = execution_storage_status()
+    ready = all(value == "ok" for value in checks.values())
+    return JSONResponse(
+        status_code=200 if ready else 503,
+        content={"status": "ready" if ready else "not_ready", "checks": checks},
+    )
+
+
 @app.get("/health/ready")
 @app.get("/health")
 async def readiness_check() -> JSONResponse:

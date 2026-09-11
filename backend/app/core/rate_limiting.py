@@ -1,16 +1,21 @@
 """Application rate limits for security-sensitive public endpoints."""
 
 from collections import deque
+from collections.abc import Awaitable
 from secrets import token_hex
 from threading import Lock
 from time import monotonic
-from typing import Any, Awaitable, Protocol, cast
+from typing import Any, Protocol, cast
 
-from app.core.config import settings
-from fastapi import Request
+from fastapi import HTTPException, Request
 from redis import Redis as SyncRedis
 from redis.asyncio import Redis
+from redis.backoff import NoBackoff
 from redis.exceptions import RedisError
+from redis.retry import Retry
+
+from app.core.config import settings
+from app.core.redis_health import storage_ready
 
 
 class ClientRateLimiter(Protocol):
@@ -63,7 +68,8 @@ class InMemoryClientRateLimiter:
 class RedisClientRateLimiter:
     """Share sliding-window attempt counters across API processes and restarts."""
 
-    _ALLOW_ATTEMPT_SCRIPT = """
+    # Reject OOM before pruning counters, which legacy scripts can write past.
+    _ALLOW_ATTEMPT_SCRIPT = """#!lua
 local redis_time = redis.call('TIME')
 local now = redis_time[1] * 1000 + math.floor(redis_time[2] / 1000)
 local cutoff = now - tonumber(ARGV[1])
@@ -85,34 +91,39 @@ return 1
 
     async def allow(self, client_address: str) -> bool:
         """Atomically record one attempt in a Redis-backed sliding window."""
-        result = await cast(
-            Awaitable[Any],
-            self.redis_client.eval(
-                self._ALLOW_ATTEMPT_SCRIPT,
-                1,
-                f"owlculus:bootstrap-rate-limit:{client_address}",
-                str(self.window_milliseconds),
-                str(self.max_attempts),
-                token_hex(16),
-            ),
-        )
+        try:
+            result = await cast(
+                Awaitable[Any],
+                self.redis_client.eval(
+                    self._ALLOW_ATTEMPT_SCRIPT,
+                    1,
+                    f"owlculus:bootstrap-rate-limit:{client_address}",
+                    str(self.window_milliseconds),
+                    str(self.max_attempts),
+                    token_hex(16),
+                ),
+            )
+        except (OSError, RedisError):
+            raise HTTPException(
+                503,
+                "Setup is temporarily unavailable. Please retry shortly.",
+                headers={"Retry-After": "5"},
+            ) from None
         return bool(result)
 
 
 _limiter_creation_lock = Lock()
 _readiness_redis = SyncRedis.from_url(
-    settings.REDIS_URL,
+    settings.AUTH_REDIS_URL,
     socket_connect_timeout=1,
     socket_timeout=1,
+    retry=Retry(NoBackoff(), 0),
 )
 
 
 def is_rate_limit_storage_ready() -> bool:
-    """Return whether the shared rate-limit store accepts commands."""
-    try:
-        return bool(_readiness_redis.ping())
-    except (OSError, RedisError):
-        return False
+    """Check allocating writes without changing real admission budgets."""
+    return storage_ready(_readiness_redis, "authentication")
 
 
 def get_bootstrap_rate_limiter(request: Request) -> ClientRateLimiter:
@@ -125,7 +136,12 @@ def get_bootstrap_rate_limiter(request: Request) -> ClientRateLimiter:
         limiter = getattr(request.app.state, "bootstrap_rate_limiter", None)
         if limiter is None:
             limiter = RedisClientRateLimiter(
-                Redis.from_url(settings.REDIS_URL),
+                Redis.from_url(
+                    settings.AUTH_REDIS_URL,
+                    socket_connect_timeout=1,
+                    socket_timeout=1,
+                    retry=Retry(NoBackoff(), 0),
+                ),
                 max_attempts=3,
                 window_seconds=60 * 60,
             )

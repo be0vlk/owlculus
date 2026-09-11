@@ -34,7 +34,7 @@ async def test_shared_budget_precedes_verification(
     execution_system, monkeypatch, budget
 ):
     system = execution_system
-    monkeypatch.setattr(settings, "REDIS_URL", system.env["REDIS_URL"])
+    monkeypatch.setattr(settings, "AUTH_REDIS_URL", system.env["AUTH_REDIS_URL"])
     monkeypatch.setattr(
         settings, "LOGIN_ACCOUNT_MAX_ATTEMPTS", 2 if budget == "account" else 30
     )
@@ -85,7 +85,7 @@ async def test_shared_budget_precedes_verification(
                 data={"username": "acceptance", "password": "acceptance-password"},
             )
             assert response.status_code == 429
-        async with Redis.from_url(system.env["REDIS_URL"]) as redis:
+        async with Redis.from_url(system.env["AUTH_REDIS_URL"]) as redis:
             assert not await redis.keys("owlculus:bootstrap-rate-limit:*")
     finally:
         for client in clients:
@@ -101,7 +101,7 @@ async def test_account_exhaustion_and_expiry(
     from app.database.models import User
 
     system = execution_system
-    monkeypatch.setattr(settings, "REDIS_URL", system.env["REDIS_URL"])
+    monkeypatch.setattr(settings, "AUTH_REDIS_URL", system.env["AUTH_REDIS_URL"])
     monkeypatch.setattr(settings, "LOGIN_ACCOUNT_MAX_ATTEMPTS", 1)
     monkeypatch.setattr(settings, "LOGIN_LIMIT_WINDOW_SECONDS", 1)
     if account_state == "inactive":
@@ -138,7 +138,7 @@ async def test_account_exhaustion_and_expiry(
 @pytest.mark.asyncio
 async def test_ip_budget_and_exact_username_semantics(execution_system, monkeypatch):
     system = execution_system
-    monkeypatch.setattr(settings, "REDIS_URL", system.env["REDIS_URL"])
+    monkeypatch.setattr(settings, "AUTH_REDIS_URL", system.env["AUTH_REDIS_URL"])
     monkeypatch.setattr(settings, "LOGIN_IP_MAX_ATTEMPTS", 3)
     monkeypatch.setattr(settings, "LOGIN_ACCOUNT_MAX_ATTEMPTS", 1)
     async with AsyncClient(
@@ -176,7 +176,7 @@ async def test_proxy_identity_cannot_be_chosen_by_untrusted_peer(
     from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
     system = execution_system
-    monkeypatch.setattr(settings, "REDIS_URL", system.env["REDIS_URL"])
+    monkeypatch.setattr(settings, "AUTH_REDIS_URL", system.env["AUTH_REDIS_URL"])
     monkeypatch.setattr(settings, "LOGIN_IP_MAX_ATTEMPTS", 1)
     monkeypatch.setattr(settings, "FORWARDED_ALLOW_IPS", "172.29.0.254")
     peer = "172.29.0.254" if trusted else "198.51.100.10"
