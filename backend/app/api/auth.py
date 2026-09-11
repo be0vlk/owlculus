@@ -12,6 +12,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from sqlmodel import Session
 
+from app.core.database_boundary import DatabaseRoute
 from app.core.dependencies import get_client_ip, get_current_user
 from app.core.login_rate_limiting import RedisLoginRateLimiter, get_login_rate_limiter
 from app.core.setup import is_setup_required
@@ -20,11 +21,11 @@ from app.database.connection import get_db
 from app.schemas.auth_schema import SetupStatus, Token, WebSocketToken
 from app.services.auth_service import AuthService
 
-router = APIRouter()
+router = APIRouter(route_class=DatabaseRoute)
 
 
 @router.get("/setup-status", response_model=SetupStatus)
-def get_setup_status(db: Annotated[Session, Depends(get_db)]) -> SetupStatus:
+async def get_setup_status(db: Annotated[Session, Depends(get_db)]) -> SetupStatus:
     """Report whether this installation still needs its first user."""
     return SetupStatus(setup_required=is_setup_required(db))
 

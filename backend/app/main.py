@@ -7,6 +7,7 @@ Owlculus backend application.
 """
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI, Request, status
@@ -19,18 +20,21 @@ from sqlmodel import Session, SQLModel
 
 from app.api.router import api_router
 from app.core.config import settings
+from app.core.database_boundary import shutdown_database_workers
 from app.core.dependencies import get_client_ip, get_user_agent
 from app.core.exception_handler import handle_domain_exception
 from app.core.exceptions import BaseException as DomainException
 from app.core.logging import client_ip_context, setup_logging, user_agent_context
 from app.core.rate_limiting import is_rate_limit_storage_ready
 from app.core.setup import check_and_generate_setup_token
-from app.database.connection import engine
+from app.database.connection import readiness_engine as engine
 from app.hunts.hunt_definition_check import HuntDefinitionCheck
 from app.hunts.hunt_registry import shipped_hunt_registry
 from app.plugins.plugin_registry import PluginRegistry, get_shipped_plugin_registry
 
 HUNT_SYNC_RETRY_SECONDS = 1.0
+READINESS_TIMEOUT_SECONDS = 1.0
+_health_executor: ThreadPoolExecutor | None = None
 
 
 def _complete_setup_token_check(application: FastAPI) -> bool:
@@ -79,20 +83,21 @@ async def _retry_hunt_sync_during_startup(application: FastAPI) -> None:
     """Keep degraded startup ownership of the sync until the schema appears."""
     while not application.state.hunt_sync_complete:
         await asyncio.sleep(HUNT_SYNC_RETRY_SECONDS)
-        _complete_hunt_sync(application)
+        await _bounded_readiness()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global _health_executor
     setup_logging()
     logger.info("Owlculus backend starting up")
     app.state.setup_token_check_complete = False
     app.state.hunt_sync_complete = False
     app.state.plugin_registry = get_shipped_plugin_registry()
     _check_hunt_definitions(app.state.plugin_registry)
-    _complete_setup_token_check(app)
+    await _bounded_readiness()
     hunt_sync_task = None
-    if not _complete_hunt_sync(app):
+    if not app.state.hunt_sync_complete:
         hunt_sync_task = asyncio.create_task(_retry_hunt_sync_during_startup(app))
     try:
         yield
@@ -101,6 +106,11 @@ async def lifespan(app: FastAPI):
             hunt_sync_task.cancel()
             with suppress(asyncio.CancelledError):
                 await hunt_sync_task
+        await shutdown_database_workers()
+        if _health_executor is not None:
+            await asyncio.to_thread(_health_executor.shutdown, wait=True)
+            _health_executor = None
+        app.state.readiness_work = None
         logger.info("Owlculus backend shutting down")
 
 
@@ -175,6 +185,7 @@ def _readiness_status() -> tuple[bool, dict[str, str]]:
 
     if checks["database"] == "ok" and checks["schema"] == "ok":
         _complete_setup_token_check(app)
+        _complete_hunt_sync(app)
 
     checks["setup_token"] = (
         "ok" if app.state.setup_token_check_complete else "incomplete"
@@ -186,11 +197,30 @@ def _readiness_status() -> tuple[bool, dict[str, str]]:
     return all(check == "ok" for check in checks.values()), checks
 
 
+async def _bounded_readiness() -> tuple[bool, dict[str, str]]:
+    """Coalesce probes; a delayed check retains its one reserved worker slot."""
+    global _health_executor
+    if _health_executor is None:
+        _health_executor = ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="readiness"
+        )
+    work = getattr(app.state, "readiness_work", None)
+    if work is None or work.done():
+        work = _health_executor.submit(_readiness_status)
+        app.state.readiness_work = work
+    try:
+        return await asyncio.wait_for(
+            asyncio.shield(asyncio.wrap_future(work)), READINESS_TIMEOUT_SECONDS
+        )
+    except TimeoutError:
+        return False, {"database": "delayed"}
+
+
 @app.get("/health/ready")
 @app.get("/health")
 async def readiness_check() -> JSONResponse:
     """Report whether Owlculus can accept application traffic."""
-    ready, checks = _readiness_status()
+    ready, checks = await _bounded_readiness()
     return JSONResponse(
         status_code=(
             status.HTTP_200_OK if ready else status.HTTP_503_SERVICE_UNAVAILABLE

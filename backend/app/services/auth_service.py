@@ -7,6 +7,7 @@ from sqlmodel import Session, select
 
 from app.core import security
 from app.core.config import settings
+from app.core.database_boundary import on_transport_loop
 from app.core.exceptions import (
     AuthenticationException,
 )
@@ -58,12 +59,7 @@ class AuthService:
         if (
             user is None
             or not user.is_active
-            or not await to_thread.run_sync(
-                security.verify_password,
-                password,
-                user.password_hash,
-                limiter=_password_verification_limiter,
-            )
+            or not await self._verify_password(password, user.password_hash)
         ):
             logger.bind(event_type="login_failed").warning("Authentication failed")
             raise AuthenticationException(INVALID_CREDENTIALS_ERROR)
@@ -76,6 +72,17 @@ class AuthService:
             "Authentication successful"
         )
         return Token(access_token=token, token_type=TOKEN_TYPE_BEARER)
+
+    @staticmethod
+    async def _verify_password(password: str, password_hash: str) -> bool:
+        return await on_transport_loop(
+            lambda: to_thread.run_sync(
+                security.verify_password,
+                password,
+                password_hash,
+                limiter=_password_verification_limiter,
+            )
+        )
 
     async def create_websocket_token(
         self, execution_id: int, current_user: User, kind: str = "hunt"

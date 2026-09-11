@@ -10,12 +10,13 @@ from fastapi import APIRouter, Depends, status
 from sqlmodel import Session
 
 from app import schemas
+from app.core.database_boundary import DatabaseRoute
 from app.core.dependencies import get_current_user
 from app.database import models
 from app.database.connection import get_db
 from app.services.invite_service import InviteService
 
-router = APIRouter()
+router = APIRouter(route_class=DatabaseRoute)
 
 
 @router.post(

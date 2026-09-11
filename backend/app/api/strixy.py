@@ -11,6 +11,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
+from app.core.database_boundary import DatabaseRoute
 from app.core.dependencies import get_current_user
 from app.database import models
 from app.database.connection import get_db
@@ -18,7 +19,7 @@ from app.schemas.strixy_schema import ChatRequest, ChatResponse
 from app.services.case_access import CaseAccess
 from app.services.strixy_service import StrixyService
 
-router = APIRouter()
+router = APIRouter(route_class=DatabaseRoute)
 
 
 @router.post("/chat", response_model=ChatResponse)

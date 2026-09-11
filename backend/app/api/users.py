@@ -11,6 +11,7 @@ from fastapi import APIRouter, Body, Depends, Request, status
 from sqlmodel import Session
 
 from app import schemas
+from app.core.database_boundary import DatabaseRoute, on_transport_loop
 from app.core.dependencies import (
     get_client_ip,
     get_current_user,
@@ -24,7 +25,7 @@ from app.database import models
 from app.database.connection import get_db
 from app.services.user_service import UserService
 
-router = APIRouter()
+router = APIRouter(route_class=DatabaseRoute)
 
 
 @router.post("/", response_model=schemas.User, status_code=status.HTTP_201_CREATED)
@@ -38,7 +39,9 @@ async def create_user(
     if current_user is None:
         if is_setup_required(db):
             client_address = get_client_ip(request)
-            if not await get_bootstrap_rate_limiter(request).allow(client_address):
+            if not await on_transport_loop(
+                lambda: get_bootstrap_rate_limiter(request).allow(client_address)
+            ):
                 get_security_logger(
                     action="create_user",
                     event_type="rate_limit_exceeded",

@@ -9,6 +9,8 @@ Provides administrative endpoints for system configuration.
 from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
+from app.core.database_boundary import DatabaseRoute
+
 from ..core.dependencies import get_current_user
 from ..core.exceptions import ValidationException
 from ..database import models
@@ -17,7 +19,7 @@ from ..schemas import system_config_schema
 from ..services.api_key_vault import ConfigurationApiKeyVault, Provider
 from ..services.system_config_service import SystemConfigService
 
-router = APIRouter()
+router = APIRouter(route_class=DatabaseRoute)
 
 
 @router.get(

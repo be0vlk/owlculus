@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, s
 from fastapi.responses import FileResponse
 from sqlmodel import Session
 
+from app.core.database_boundary import DatabaseRoute
 from app.core.dependencies import get_current_user
 from app.core.exceptions import (
     AuthenticationException,
@@ -26,7 +27,7 @@ from app.schemas import evidence_schema as schemas
 from app.services.evidence_service import EvidenceService
 from app.services.exiftool_service import ExifToolService
 
-router = APIRouter()
+router = APIRouter(route_class=DatabaseRoute)
 
 
 @router.post(

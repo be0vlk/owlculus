@@ -11,12 +11,13 @@ from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
 from app import schemas
+from app.core.database_boundary import DatabaseRoute
 from app.core.dependencies import get_current_user
 from app.database.connection import get_db
 from app.database.models import User
 from app.services.task_service import TaskService
 
-router = APIRouter()
+router = APIRouter(route_class=DatabaseRoute)
 
 
 @router.get("/templates", response_model=List[schemas.TaskTemplateResponse])

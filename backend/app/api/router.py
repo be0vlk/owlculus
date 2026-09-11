@@ -8,21 +8,23 @@ system configuration, invites, external services, hunts, and tasks.
 
 from fastapi import APIRouter
 
+from app.core.database_boundary import DatabaseRoute
+
 from . import (
-	auth,
-	cases,
-	clients,
-	evidence,
-	hunts,
-	invites,
-	plugins,
-	strixy,
-	system_config,
-	tasks,
-	users,
+    auth,
+    cases,
+    clients,
+    evidence,
+    hunts,
+    invites,
+    plugins,
+    strixy,
+    system_config,
+    tasks,
+    users,
 )
 
-api_router = APIRouter()
+api_router = APIRouter(route_class=DatabaseRoute)
 
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_router.include_router(users.router, prefix="/users", tags=["users"])

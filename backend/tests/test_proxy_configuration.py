@@ -1,8 +1,8 @@
 """Deployment contract tests for the trusted reverse-proxy boundary."""
 
 import pytest
-from app.core.config import settings
 
+from app.core.config import settings
 from tests.deployment import (
     REPOSITORY_ROOT,
     SUPPORTED_TOPOLOGIES,
@@ -14,7 +14,10 @@ def test_backend_image_enables_proxy_headers_explicitly():
     """Both backend image targets make Uvicorn apply its proxy trust list."""
     contents = (REPOSITORY_ROOT / "backend/Dockerfile").read_text()
 
-    assert contents.count('"--proxy-headers"') == 2
+    development, production = contents.split("FROM runtime-base AS production")
+    assert '"--proxy-headers"' in development
+    assert 'CMD ["python", "-m", "app.serve"]' in production
+    # Production's actual proxy/worker arguments are exercised in test_config.
 
 
 def test_direct_backend_defaults_to_loopback_proxy_trust_only():

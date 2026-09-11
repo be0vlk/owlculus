@@ -218,7 +218,7 @@ async def test_process_stays_live_and_becomes_ready_after_late_schema_initializa
     tmp_path, monkeypatch
 ):
     """Startup exposes health checks while waiting for database initialization."""
-    database_engine = create_engine("sqlite://")
+    database_engine = create_engine(f"sqlite:///{tmp_path / 'late-schema.db'}")
     monkeypatch.setattr(main_module, "engine", database_engine)
     monkeypatch.setattr(
         "app.core.setup.SETUP_TOKEN_FILE", tmp_path / "setup" / ".setup_token"

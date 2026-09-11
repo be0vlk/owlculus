@@ -13,11 +13,13 @@ from fastapi import (
     Response,
     WebSocket,
 )
+from sqlalchemy.engine import Engine
 from sqlmodel import Session
 
+from app.core.database_boundary import DatabaseRoute
 from app.core.dependencies import get_current_user
 from app.database import models
-from app.database.connection import get_db
+from app.database.connection import get_db, get_observation_engine
 from app.executions.results import HuntResultReader
 from app.executions.service import hunt_observation
 from app.schemas import hunt_schema as schemas
@@ -25,7 +27,7 @@ from app.services.export_service import ExportService
 from app.services.hunt_execution_export import HuntExecutionExportFormat
 from app.services.hunt_service import HuntService
 
-router = APIRouter()
+router = APIRouter(route_class=DatabaseRoute)
 
 
 @router.get("/", response_model=list[schemas.HuntResponse])
@@ -250,11 +252,11 @@ async def cancel_execution(
 async def stream_execution(
     websocket: WebSocket,
     execution_id: int,
-    db: Session = Depends(get_db),
+    database_engine: Engine = Depends(get_observation_engine),
 ):
     from app.executions.observation import observe
 
-    await observe(websocket, db.get_bind(), "hunt", execution_id)
+    await observe(websocket, database_engine, "hunt", execution_id)
 
 
 @router.get("/executions/{execution_id}/steps/{step_id}/results")

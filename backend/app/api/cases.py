@@ -13,6 +13,7 @@ from sqlmodel import Session
 from starlette.background import BackgroundTask
 
 from app import schemas
+from app.core.database_boundary import DatabaseRoute
 from app.core.dependencies import get_current_user
 from app.database import models
 from app.database.connection import get_db
@@ -21,7 +22,7 @@ from app.services.case_service import CaseService
 from app.services.entity_service import EntityService
 from app.services.export_service import EntityExportFormat, ExportService
 
-router = APIRouter()
+router = APIRouter(route_class=DatabaseRoute)
 
 
 @router.post("/", response_model=schemas.Case, status_code=status.HTTP_201_CREATED)
@@ -129,7 +130,7 @@ async def get_case_users(
 
 
 @router.get("/{case_id}/export")
-def export_case(
+async def export_case(
     case_id: int,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),

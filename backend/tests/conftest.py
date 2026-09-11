@@ -36,7 +36,7 @@ from app.core.security import (
     verify_access_token,
 )
 from app.database import models
-from app.database.connection import get_db
+from app.database.connection import get_db, get_observation_engine
 from app.plugins.base_plugin import BasePlugin, PluginRun, ResultEvent
 from tests.login_admission import admitted_login
 
@@ -95,6 +95,7 @@ def client_fixture(engine, session, tmp_path, monkeypatch):
         return session
 
     app.dependency_overrides[get_db] = get_session_override
+    app.dependency_overrides[get_observation_engine] = lambda: engine
 
     with TestClient(app) as client:
         yield client

@@ -9,17 +9,19 @@ enabling extensible investigation capabilities through a standardized plugin arc
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, Query, Request, Response, WebSocket
+from sqlalchemy.engine import Engine
 from sqlmodel import Session
 
+from ..core.database_boundary import DatabaseRoute
 from ..core.dependencies import get_current_user
-from ..database.connection import get_db
+from ..database.connection import get_db, get_observation_engine
 from ..database.models import User
 from ..executions import service as execution_service
 from ..plugins.plugin_registry import PluginRegistry
 from ..schemas.plugin_schema import PluginMetadata
 from ..services.api_key_vault import ApiKeyVault, ConfigurationApiKeyVault
 
-router = APIRouter(tags=["plugins"])
+router = APIRouter(tags=["plugins"], route_class=DatabaseRoute)
 
 
 def get_plugin_registry(request: Request) -> PluginRegistry:
@@ -27,7 +29,7 @@ def get_plugin_registry(request: Request) -> PluginRegistry:
     return request.app.state.plugin_registry
 
 
-def get_plugin_api_keys(db: Session = Depends(get_db)) -> ApiKeyVault:
+async def get_plugin_api_keys(db: Session = Depends(get_db)) -> ApiKeyVault:
     """Provide the production credential adapter to plugin run contexts."""
     return ConfigurationApiKeyVault(db)
 
@@ -43,7 +45,7 @@ async def list_plugins(
 
 
 @router.get("/executions/case/{case_id}")
-def execution_history(
+async def execution_history(
     case_id: int,
     cursor: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
@@ -54,7 +56,7 @@ def execution_history(
 
 
 @router.get("/executions/{execution_id}")
-def execution_detail(
+async def execution_detail(
     execution_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -63,7 +65,7 @@ def execution_detail(
 
 
 @router.delete("/executions/{execution_id}")
-def cancel_execution(
+async def cancel_execution(
     execution_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -75,7 +77,7 @@ def cancel_execution(
 
 
 @router.get("/executions/{execution_id}/results")
-def execution_results(
+async def execution_results(
     execution_id: int,
     cursor: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
@@ -86,7 +88,7 @@ def execution_results(
 
 
 @router.post("/{plugin_name}/execute", status_code=202)
-def execute_plugin(
+async def execute_plugin(
     plugin_name: str,
     response: Response,
     params: dict[str, Any] | None = None,
@@ -104,8 +106,10 @@ def execute_plugin(
 
 @router.websocket("/executions/{execution_id}/stream")
 async def stream_execution(
-    websocket: WebSocket, execution_id: int, db: Session = Depends(get_db)
+    websocket: WebSocket,
+    execution_id: int,
+    database_engine: Engine = Depends(get_observation_engine),
 ):
     from app.executions.observation import observe
 
-    await observe(websocket, db.get_bind(), "plugin", execution_id)
+    await observe(websocket, database_engine, "plugin", execution_id)
