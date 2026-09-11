@@ -1,4 +1,4 @@
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { flushPromises, mount, DOMWrapper } from '@vue/test-utils'
 import { createVuetify } from 'vuetify'
 import * as components from 'vuetify/components'
@@ -17,7 +17,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-it('reports partial upload failure and retries only the remaining files', async () => {
+beforeEach(() => {
   vi.stubGlobal('visualViewport', new EventTarget())
   vi.stubGlobal(
     'ResizeObserver',
@@ -27,20 +27,25 @@ it('reports partial upload failure and retries only the remaining files', async 
       disconnect() {}
     },
   )
-  const created = { id: 2, title: 'statement.txt' }
-  evidenceService.createEvidence.mockResolvedValueOnce({
-    created: [created],
-    failed: [{ filename: 'photo.png', error: 'Storage unavailable' }],
-  })
+})
+
+async function mountModal() {
   wrapper = mount(UploadEvidenceModal, {
     props: { show: true, caseId: 7, targetFolder: { id: 1, title: 'Documents' } },
     attachTo: document.body,
     global: { plugins: [createVuetify({ components, directives, theme: false })] },
   })
   await flushPromises()
-  const dialog = new DOMWrapper(
-    document.querySelector('[role="dialog"][aria-label="Upload Evidence"]'),
-  )
+  return new DOMWrapper(document.querySelector('[role="dialog"][aria-label="Upload Evidence"]'))
+}
+
+it('reports partial upload failure and retries only the remaining files', async () => {
+  const created = { id: 2, title: 'statement.txt' }
+  evidenceService.createEvidence.mockResolvedValueOnce({
+    created: [created],
+    failed: [{ filename: 'photo.png', error: 'Storage unavailable' }],
+  })
+  const dialog = await mountModal()
   const input = dialog.get('input[type="file"]')
   const photo = new File(['photo'], 'photo.png', { type: 'image/png' })
   Object.defineProperty(input.element, 'files', {
@@ -64,24 +69,7 @@ it('reports partial upload failure and retries only the remaining files', async 
 })
 
 it('rejects duplicate filenames so failed uploads can be retried unambiguously', async () => {
-  vi.stubGlobal('visualViewport', new EventTarget())
-  vi.stubGlobal(
-    'ResizeObserver',
-    class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    },
-  )
-  wrapper = mount(UploadEvidenceModal, {
-    props: { show: true, caseId: 7, targetFolder: { id: 1, title: 'Documents' } },
-    attachTo: document.body,
-    global: { plugins: [createVuetify({ components, directives, theme: false })] },
-  })
-  await flushPromises()
-  const dialog = new DOMWrapper(
-    document.querySelector('[role="dialog"][aria-label="Upload Evidence"]'),
-  )
+  const dialog = await mountModal()
   const input = dialog.get('input[type="file"]')
   Object.defineProperty(input.element, 'files', {
     value: [new File(['first'], 'statement.txt'), new File(['second'], 'statement.txt')],
@@ -94,4 +82,23 @@ it('rejects duplicate filenames so failed uploads can be retried unambiguously',
       .find((button) => button.text().trim() === 'Upload')
       .attributes('disabled'),
   ).toBeDefined()
+})
+
+it('reports aggregate rejection without claiming Evidence was saved', async () => {
+  evidenceService.createEvidence.mockRejectedValueOnce({ response: { status: 413 } })
+  const dialog = await mountModal()
+  const input = dialog.get('input[type="file"]')
+  const photo = new File(['photo'], 'photo.png', { type: 'image/png' })
+  Object.defineProperty(input.element, 'files', {
+    value: [new File(['statement'], 'statement.txt'), photo],
+  })
+  await input.trigger('change')
+  const upload = dialog.findAll('button').find((button) => button.text().trim() === 'Upload')
+  await upload.trigger('click')
+  await flushPromises()
+  expect(dialog.text()).toContain('Upload too large. No Evidence was saved.')
+  expect(wrapper.emitted('uploaded')).toBeUndefined()
+  expect(wrapper.emitted('close')).toBeUndefined()
+  expect(dialog.text()).toContain('statement.txt')
+  expect(dialog.text()).toContain('photo.png')
 })

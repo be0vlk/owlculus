@@ -898,3 +898,24 @@ class TestEvidenceAPI:
 
         finally:
             app.dependency_overrides.clear()
+
+
+def test_upload_file_count_rejected_before_saving(
+    session, test_admin, test_case, client
+):
+    app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+        test_admin
+    )
+    app.dependency_overrides[get_db] = override_get_db_factory(session)
+    try:
+        response = client.post(
+            f"/api/evidence/?title=batch&case_id={test_case.id}&category=document",
+            files=[
+                ("files", (f"file-{i}.txt", b"test", "text/plain")) for i in range(11)
+            ],
+        )
+        assert response.status_code == 413
+        assert "No Evidence was saved" in response.json()["detail"]
+        assert client.get(f"/api/evidence/case/{test_case.id}").json() == []
+    finally:
+        app.dependency_overrides.clear()

@@ -122,7 +122,7 @@ async def validate_file_security(file: UploadFile) -> None:
         if file_size > MAX_FILE_SIZE:
             await file.seek(0)
             raise ValidationException(
-                f"File too large. Maximum size is {MAX_FILE_SIZE / (1024 * 1024)}MB"
+                f"File too large. Maximum size is {MAX_FILE_SIZE / (1024 * 1024):g} MiB"
             )
 
     await file.seek(0)

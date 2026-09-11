@@ -1,4 +1,18 @@
 (backendProxy) {
+	@evidenceUpload {
+		method POST
+		path /api/evidence /api/evidence/
+	}
+	request_body @evidenceUpload {
+		max_size {$EVIDENCE_BODY_LIMIT:158334976}
+	}
+	@otherRequest not {
+		method POST
+		path /api/evidence /api/evidence/
+	}
+	request_body @otherRequest {
+		max_size {$API_BODY_LIMIT:2097152}
+	}
 	reverse_proxy backend:8000 {
 		header_up X-Forwarded-For {remote_host}
 		header_up X-Real-IP {remote_host}

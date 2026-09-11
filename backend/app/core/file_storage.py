@@ -160,8 +160,8 @@ async def save_upload_file(
 
         content = await upload_file.read()
 
-        if len(content) > 15 * 1024 * 1024:  # 15MB limit
-            raise ValidationException("File too large. Maximum size is 15MB")
+        if len(content) > 15 * 1024 * 1024:  # 15 MiB limit
+            raise ValidationException("File too large. Maximum size is 15 MiB")
 
         file_hash = calculate_file_hash(content)
 

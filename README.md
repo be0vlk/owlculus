@@ -128,3 +128,50 @@ If you find the app useful and feel so inclined, please consider fueling my futu
 below. Anything and everything helps and is greatly appreciated :)
 
 <a href="https://www.buymeacoffee.com/be0vlk" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" style="height: 60px !important;width: 217px !important;" ></a>
+
+### Upload and log storage limits
+
+The production Caddy gateway caps `POST /api/evidence/` (including the slashless
+redirect) at **151 MiB = 158,334,976 bytes**, including multipart headers and form
+fields. Evidence batches support **at most 10 files**, each **15 MiB = 15,728,640
+bytes**; the extra 1 MiB accommodates ordinary multipart overhead and descriptions.
+Other requests are capped at **2 MiB = 2,097,152 bytes**. Exactly the limit is
+accepted; the next byte produces HTTP 413. Large descriptions can therefore
+reject an otherwise valid batch. The browser retains rejected selections and
+reports that no Evidence was saved; split the batch or shorten the description
+before retrying. Per-file validation still reports partial success for accepted
+batches, and retries include only failed files.
+
+Caddy's [request body limiter](https://caddyserver.com/docs/caddyfile/directives/request_body)
+bounds reads for both declared-length and streamed/chunked requests, before the
+application can parse their full oversized bodies. The proxy streams a bounded
+prefix; it does not buffer an unlimited body on disk. These are per-request limits,
+not a total upload-volume quota or a concurrent-request budget. Case authorization
+and authentication still apply. Direct development port 8000 and Vite's development
+proxy bypass Caddy: they retain per-file/count validation but **do not provide this
+pre-parser aggregate protection**. Keep development listeners private.
+
+Every Compose service uses Docker `json-file` rotation: `max-size: 10m`,
+`max-file: 3` (active file included), approximately **30 MiB per container**, plus
+record/rotation overhead. This applies to production and the merged development
+configuration, including workers, Redis, PostgreSQL, and the one-shot initializer.
+Read retained output with `docker compose logs --tail 200 SERVICE`; older output is
+removed during rotation. Apply the new policy to existing containers by rebuilding
+and recreating them, for example `./scripts/compose.sh direct up -d --build
+--force-recreate` (use `development` for the development stack). Restarting alone
+does not update a container's logging policy. This preserves named data volumes.
+
+Docker retention is separate from optional application log files configured with
+`OWLCULUS_LOG_FILE` (development defaults to `logs/owlculus.log`). Those use Loguru's
+`OWLCULUS_LOG_ROTATION` (default `10 MB`) and `OWLCULUS_LOG_RETENTION` (default
+`30 days`); time retention is not a fixed disk quota. Monitor saved Evidence and
+application-log volumes separately; do not delete Evidence files to recover space
+outside the application's normal deletion workflow.
+
+For bounded local verification using an already cached `caddy:2-alpine` image:
+`cd backend && RUN_DOCKER_PROBES=1 uv run --locked pytest -q
+ tests/test_gateway_resource_limits.py`. The disposable probes use the tracked
+production Caddyfile with 4 KiB/1 KiB limits, loopback listeners, and a 4 KiB × 2
+log budget; they remove only their own containers. `EVIDENCE_BODY_LIMIT` and
+`API_BODY_LIMIT` are gateway test overrides; normal Compose deployments use the
+fixed defaults above. Rebuild the frontend image to apply gateway changes.

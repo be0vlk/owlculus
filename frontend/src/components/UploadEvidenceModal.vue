@@ -108,7 +108,7 @@
                 v-for="file in selectedFiles"
                 :key="file.name"
                 :title="file.name"
-                :subtitle="`${(file.size / 1024 / 1024).toFixed(2)} MB`"
+                :subtitle="`${(file.size / 1024 / 1024).toFixed(2)} MiB`"
               >
                 <template v-slot:prepend>
                   <v-icon>{{ getFileIcon(file.name) }}</v-icon>
@@ -251,13 +251,17 @@ const loadFolders = async () => {
 }
 
 function addFiles(files) {
-  const invalidFiles = files.filter((file) => file.size > 50000000)
+  const invalidFiles = files.filter((file) => file.size > 15 * 1024 * 1024)
   if (invalidFiles.length > 0) {
-    fileError.value = `${invalidFiles.length} file(s) exceed 50MB size limit`
+    fileError.value = `${invalidFiles.length} file(s) exceed 15 MiB size limit`
     return
   }
 
   const combinedFiles = [...selectedFiles.value, ...files]
+  if (combinedFiles.length > 10) {
+    fileError.value = 'Upload at most 10 files per request.'
+    return
+  }
   if (new Set(combinedFiles.map((file) => file.name)).size !== combinedFiles.length) {
     fileError.value = 'Files must have unique names. Rename duplicate files before uploading.'
     return
@@ -314,8 +318,11 @@ async function handleSubmit() {
     } else {
       emit('close')
     }
-  } catch {
-    fileError.value = 'Failed to upload files. Please try again.'
+  } catch (error) {
+    fileError.value =
+      error.response?.status === 413
+        ? 'Upload too large. No Evidence was saved. Select fewer files (at most 10, 15 MiB each) or shorten the description, then retry.'
+        : 'Failed to upload files. Please try again.'
   } finally {
     uploading.value = false
   }
