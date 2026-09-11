@@ -11,8 +11,15 @@ import os
 import dotenv
 from pydantic import AnyHttpUrl, Field, SecretStr
 from pydantic_settings import BaseSettings
+from sqlalchemy.engine import URL
+
+from .deployment import validate_deployment
 
 dotenv.load_dotenv()
+
+# Local Python tooling keeps its existing configuration; Compose sets this explicitly.
+if os.environ.get("OWLCULUS_ENV") == "production":
+    validate_deployment(os.environ, bootstrap="RUNTIME_POSTGRES_USER" in os.environ)
 
 
 class LoggingSettings(BaseSettings):
@@ -37,7 +44,14 @@ class Settings(BaseSettings):
 
     @property
     def DATABASE_URI(self) -> str:
-        return f"postgresql://{self.DB_USER}:{self.DB_PASSWORD.get_secret_value()}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+        return URL.create(
+            "postgresql",
+            username=self.DB_USER,
+            password=self.DB_PASSWORD.get_secret_value(),
+            host=self.DB_HOST,
+            port=int(self.DB_PORT),
+            database=self.DB_NAME,
+        ).render_as_string(hide_password=False)
 
     BACKEND_CORS_ORIGINS: list[str | AnyHttpUrl] = [
         os.environ.get("FRONTEND_URL", "http://localhost:5173"),

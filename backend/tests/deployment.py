@@ -17,6 +17,12 @@ def load_compose_configuration(
     """Render one supported topology through Docker Compose's merge semantics."""
     environment = os.environ.copy()
     for variable in (
+        "DEV_BIND_HOST",
+        "DEV_HOST",
+        "DEV_FRONTEND_PORT",
+        "DB_PORT",
+        "RUNTIME_POSTGRES_USER",
+        "RUNTIME_POSTGRES_PASSWORD",
         "BACKEND_PORT",
         "BACKEND_URL",
         "DOMAIN",
@@ -37,6 +43,8 @@ def load_compose_configuration(
         [
             COMPOSE_SCRIPT,
             topology,
+            "--env-file",
+            "/dev/null",
             "config",
             "--format",
             "json",

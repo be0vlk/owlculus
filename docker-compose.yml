@@ -20,7 +20,7 @@ services:
       - no-new-privileges:true
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-owlculus}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-owlculus_secure_password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
       POSTGRES_DB: ${POSTGRES_DB:-owlculus}
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -65,12 +65,13 @@ services:
     security_opt:
       - no-new-privileges:true
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-owlculus}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-owlculus_secure_password}
+      POSTGRES_USER: ${RUNTIME_POSTGRES_USER:-owlculus_runtime}
+      POSTGRES_PASSWORD: ${RUNTIME_POSTGRES_PASSWORD:-}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-owlculus}
-      SECRET_KEY: ${SECRET_KEY:-development_key_not_secure}
+      OWLCULUS_ENV: production
+      SECRET_KEY: ${SECRET_KEY:-}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       EXECUTION_BROKER_URL: ${EXECUTION_BROKER_URL:-${REDIS_URL:-redis://redis:6379/0}}
       EXECUTION_EVENT_REDIS_URL: ${EXECUTION_EVENT_REDIS_URL:-${REDIS_URL:-redis://redis:6379/0}}
@@ -121,12 +122,13 @@ services:
       EXECUTION_RESULT_LIMIT_BYTES: ${EXECUTION_RESULT_LIMIT_BYTES:-26214400}
       EXECUTION_DISPATCH_POLL_SECONDS: ${EXECUTION_DISPATCH_POLL_SECONDS:-0.2}
       EXECUTION_REDISPATCH_SECONDS: ${EXECUTION_REDISPATCH_SECONDS:-30}
-      POSTGRES_USER: ${POSTGRES_USER:-owlculus}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-owlculus_secure_password}
+      POSTGRES_USER: ${RUNTIME_POSTGRES_USER:-owlculus_runtime}
+      POSTGRES_PASSWORD: ${RUNTIME_POSTGRES_PASSWORD:-}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-owlculus}
-      SECRET_KEY: ${SECRET_KEY:-development_key_not_secure}
+      OWLCULUS_ENV: production
+      SECRET_KEY: ${SECRET_KEY:-}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       EXECUTION_BROKER_URL: ${EXECUTION_BROKER_URL:-${REDIS_URL:-redis://redis:6379/0}}
       EXECUTION_EVENT_REDIS_URL: ${EXECUTION_EVENT_REDIS_URL:-${REDIS_URL:-redis://redis:6379/0}}
@@ -194,11 +196,14 @@ services:
     build: *backend-build
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-owlculus}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-owlculus_secure_password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_DB: ${POSTGRES_DB:-owlculus}
-      SECRET_KEY: ${SECRET_KEY:-development_key_not_secure}
+      RUNTIME_POSTGRES_USER: ${RUNTIME_POSTGRES_USER:-owlculus_runtime}
+      RUNTIME_POSTGRES_PASSWORD: ${RUNTIME_POSTGRES_PASSWORD:-}
+      OWLCULUS_ENV: production
+      SECRET_KEY: ${SECRET_KEY:-}
     command: python3 -m app.database.init_db
     depends_on:
       postgres:

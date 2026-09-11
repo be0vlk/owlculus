@@ -28,31 +28,37 @@ collaborate, and run OSINT tools directly in your browser.
 
 ## Documentation
 
+See [deployment security and upgrades](docs/deployment-security.md) for required
+production secrets, database roles, and preservation of existing installations.
+
 ### Development access
 
 Run `./setup.sh dev` and choose local development, or run
 `./setup.sh dev --non-interactive`. Development publishes Vite on port 5173 by
-default, independently of the production `FRONTEND_PORT` setting.
+default, independently of the production `FRONTEND_PORT` setting. PostgreSQL,
+the direct API, and Vite bind to loopback by default.
 
 For access from another machine over a LAN or private network, put the hostname
 you use in the browser in the repository's untracked `.env` file:
 
 ```dotenv
+DEV_BIND_HOST=0.0.0.0
 DEV_HOST=devbox.example.test
 DEV_FRONTEND_PORT=5173
 ```
 
-Replace the example with a hostname that resolves to your development machine.
+This explicitly exposes development database, API, and Vite ports; restrict access
+with a firewall on a trusted private network. Replace the example with a hostname that resolves to your development machine.
 `DEV_HOST` is a hostname only, without a scheme, port, or path; it defaults to
 `localhost`. It allows that additional hostname through Vite's host checks.
 `DEV_FRONTEND_PORT` controls the published development port. If you previously
 used `FRONTEND_PORT` for a custom development port, move that value to
 `DEV_FRONTEND_PORT`; `FRONTEND_PORT` now controls production only.
 
-After changing these settings, recreate the frontend:
+After changing these settings, recreate the development services:
 
 ```bash
-./scripts/compose.sh development up -d --no-deps frontend
+./scripts/compose.sh development up -d --force-recreate
 ```
 
 Open `http://devbox.example.test:5173` using your configured hostname and port.

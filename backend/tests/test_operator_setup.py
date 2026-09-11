@@ -24,6 +24,15 @@ def setup_workspace(tmp_path: Path) -> tuple[Path, dict[str, str]]:
     shutil.copy2(
         REPOSITORY_ROOT / "scripts/compose.sh", tmp_path / "scripts/compose.sh"
     )
+    shutil.copy2(
+        REPOSITORY_ROOT / "scripts/validate-deployment.py",
+        tmp_path / "scripts/validate-deployment.py",
+    )
+    (tmp_path / "backend/app/core").mkdir(parents=True)
+    shutil.copy2(
+        REPOSITORY_ROOT / "backend/app/core/deployment.py",
+        tmp_path / "backend/app/core/deployment.py",
+    )
     (tmp_path / "frontend").mkdir()
 
     fake_bin = tmp_path / "bin"
@@ -37,7 +46,17 @@ if [[ "$*" == "compose version" ]]; then
 fi
 printf '%s\n' "$*" >> "$DOCKER_CALL_LOG"
 if [[ "$*" == *"config --format json"* ]]; then
-    python3 -c 'import json, os; print(json.dumps({"services": {"frontend": {"environment": {"__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS": os.environ.get("TEST_DEV_HOST", "localhost")}, "ports": [{"target": 5173, "published": os.environ.get("TEST_DEV_PORT", "5173")}]}, "backend": {"ports": [{"target": 8000, "published": "8000"}]}}}))'
+    if [[ "$*" == *"docker-compose.dev.yml"* ]]; then export TEST_TOPOLOGY=development; fi
+    python3 - <<'PYTHON'
+import json, os
+from pathlib import Path
+values = dict(line.split("=", 1) for line in Path(".env").read_text().splitlines() if line and not line.startswith("#") and "=" in line) if Path(".env").exists() else {}
+values["OWLCULUS_ENV"] = "development" if os.environ.get("TEST_TOPOLOGY") == "development" else "production"
+services = {name: {"environment": values} for name in ("backend", "plugin-worker", "hunt-worker", "execution-dispatcher", "db-init")}
+services["backend"]["ports"] = [{"target": 8000, "published": "8000"}]
+services["frontend"] = {"environment": {"__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS": os.environ.get("TEST_DEV_HOST", "localhost")}, "ports": [{"target": 5173, "published": os.environ.get("TEST_DEV_PORT", "5173")}]}
+print(json.dumps({"services": services}))
+PYTHON
     exit 0
 fi
 if [[ -n "${FAIL_COMPOSE_COMMAND:-}" && " $* " == *" $FAIL_COMPOSE_COMMAND "* ]]; then
@@ -250,10 +269,11 @@ def test_operator_documentation_explains_the_first_run_lifecycle():
 def test_browser_extension_defaults_to_the_public_gateway():
     """Extension guidance and requests use the browser-facing site origin."""
     api_client = (REPOSITORY_ROOT / "extension/utils/api.js").read_text()
+    session_config = (REPOSITORY_ROOT / "extension/utils/session.js").read_text()
     options_page = (REPOSITORY_ROOT / "extension/options/options.html").read_text()
     manifest = (REPOSITORY_ROOT / "extension/manifest.json").read_text()
 
-    assert '|| "http://localhost"' in api_client
+    assert '|| "http://localhost"' in session_config
     assert 'placeholder="http://localhost"' in options_page
     assert '"http://localhost/*"' in manifest
     assert "http://localhost:8000" not in api_client + options_page + manifest
@@ -353,3 +373,26 @@ def test_fresh_development_setup_saves_separate_development_settings(setup_works
     assert "FRONTEND_PORT=80" in settings
     assert "DEV_FRONTEND_PORT=5180" in settings
     assert "DEV_HOST=devbox.example.test" in settings
+
+
+@pytest.mark.parametrize("invalid", ["", "owlculus_secure_password"])
+def test_existing_setup_rejects_bad_credentials_without_rewriting(
+    setup_workspace, invalid
+):
+    workspace, environment = setup_workspace
+    original = f"SECRET_KEY=existing-private-key\nPOSTGRES_USER=owlculus\nPOSTGRES_PASSWORD={invalid}\nRUNTIME_POSTGRES_USER=owlculus_runtime\nRUNTIME_POSTGRES_PASSWORD=runtime-private-password\n"
+    (workspace / ".env").write_text(original)
+    result = subprocess.run(
+        ["bash", "setup.sh", "--non-interactive"],
+        cwd=workspace,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert (workspace / ".env").read_text() == original
+    assert "POSTGRES_PASSWORD" in result.stderr
+    assert "existing-private-key" not in result.stdout + result.stderr
+    assert "runtime-private-password" not in result.stdout + result.stderr
+    assert " build" not in (workspace / "docker-calls.log").read_text()

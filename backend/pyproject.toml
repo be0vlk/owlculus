@@ -70,6 +70,7 @@ module = [
     "filetype",
     "holehe.*",
     "peopledatalabs.*",
+    "psycopg2.*",
     "shodan.*",
     "sqlalchemy_utils.*",
     "vt.*",

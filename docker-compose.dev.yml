@@ -13,7 +13,7 @@ services:
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "${DEV_BIND_HOST:-127.0.0.1}:${DB_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-owlculus} -d ${POSTGRES_DB:-owlculus_dev}"]
 
@@ -24,9 +24,10 @@ services:
   backend:
     build: *backend-development-build
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-owlculus}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-owlculus_dev_password}
+      POSTGRES_USER: ${RUNTIME_POSTGRES_USER:-owlculus_runtime}
+      POSTGRES_PASSWORD: ${RUNTIME_POSTGRES_PASSWORD:-owlculus_dev_runtime_password}
       POSTGRES_DB: ${POSTGRES_DB:-owlculus_dev}
+      OWLCULUS_ENV: development
       SECRET_KEY: ${SECRET_KEY:-dev_secret_key_change_in_production}
       FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-172.30.0.254}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
@@ -37,13 +38,14 @@ services:
       - setup_dev_data:/app/data/setup
       - logs_dev_data:/app/logs
     ports:
-      - "${BACKEND_PORT:-8000}:8000"
+      - "${DEV_BIND_HOST:-127.0.0.1}:${BACKEND_PORT:-8000}:8000"
 
   plugin-worker:
     build: *backend-development-build
     environment: &execution-development-environment
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-owlculus_dev_password}
+      POSTGRES_PASSWORD: ${RUNTIME_POSTGRES_PASSWORD:-owlculus_dev_runtime_password}
       POSTGRES_DB: ${POSTGRES_DB:-owlculus_dev}
+      OWLCULUS_ENV: development
       SECRET_KEY: ${SECRET_KEY:-dev_secret_key_change_in_production}
     volumes:
       - ./backend:/app
@@ -68,6 +70,9 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-owlculus}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-owlculus_dev_password}
       POSTGRES_DB: ${POSTGRES_DB:-owlculus_dev}
+      RUNTIME_POSTGRES_USER: ${RUNTIME_POSTGRES_USER:-owlculus_runtime}
+      RUNTIME_POSTGRES_PASSWORD: ${RUNTIME_POSTGRES_PASSWORD:-owlculus_dev_runtime_password}
+      OWLCULUS_ENV: development
       SECRET_KEY: ${SECRET_KEY:-dev_secret_key_change_in_production}
     volumes:
       - ./backend:/app
@@ -93,7 +98,7 @@ services:
       - ./frontend:/app
       - /app/node_modules
     ports: !override
-      - "${DEV_FRONTEND_PORT:-5173}:5173"
+      - "${DEV_BIND_HOST:-127.0.0.1}:${DEV_FRONTEND_PORT:-5173}:5173"
     command: npm run dev -- --host 0.0.0.0
     healthcheck: !reset null
     networks: !override

@@ -261,6 +261,14 @@ def execution_system(tmp_path):
                 "sub": user.auth_identity,
                 "session_version": user.session_version,
             }
+        from app.database.runtime_role import provision_runtime_role
+
+        provision_runtime_role(engine, "acceptance_runtime", "acceptance-runtime")
+        env.update(
+            POSTGRES_USER="acceptance_runtime", POSTGRES_PASSWORD="acceptance-runtime"
+        )
+        env.pop("RUNTIME_POSTGRES_USER", None)
+        env.pop("RUNTIME_POSTGRES_PASSWORD", None)
         system = ExecutionSystem(tmp_path, env)
         system.engine, system.user_id, system.case_id = engine, user_id, case_id
         system.db_container = names[0]

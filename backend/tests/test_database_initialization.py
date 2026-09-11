@@ -121,6 +121,7 @@ def test_development_topology_keeps_hot_reload_and_published_ports():
     assert backend["build"]["target"] == "development"
     assert backend["ports"] == [
         {
+            "host_ip": "127.0.0.1",
             "mode": "ingress",
             "protocol": "tcp",
             "published": "8000",
@@ -129,6 +130,7 @@ def test_development_topology_keeps_hot_reload_and_published_ports():
     ]
     assert frontend["ports"] == [
         {
+            "host_ip": "127.0.0.1",
             "mode": "ingress",
             "protocol": "tcp",
             "published": "5173",

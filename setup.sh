@@ -102,8 +102,8 @@ generate_secret_key() {
     elif command_exists python3; then
         python3 -c "import secrets; print(secrets.token_hex(32))"
     else
-        # Fallback to a basic method
-        date +%s | sha256sum | base64 | head -c 32
+        print_error "A cryptographic random generator (openssl or python3) is required" >&2
+        return 1
     fi
 }
 
@@ -483,8 +483,9 @@ setup_owlculus() {
         
         # Generate secure credentials
         print_status "Generating secure credentials..."
-        SECRET_KEY=$(generate_secret_key)
-        DB_PASSWORD=$(openssl rand -base64 32 | tr -d /=+ | cut -c -25)
+        SECRET_KEY=$(generate_secret_key) || return 1
+        DB_PASSWORD=$(generate_secret_key) || return 1
+        RUNTIME_DB_PASSWORD=$(generate_secret_key) || return 1
 
 		# Set DB port comment depending on deployment type
 		if [ "$DEPLOYMENT_TYPE" = "local_dev" ]; then
@@ -503,10 +504,12 @@ setup_owlculus() {
         fi
 
         # Create .env file directly with all values
-        cat > .env << EOF
+        (umask 077; cat > .env << EOF
 SECRET_KEY=$SECRET_KEY
 POSTGRES_USER=owlculus
 POSTGRES_PASSWORD=$DB_PASSWORD
+RUNTIME_POSTGRES_USER=owlculus_runtime
+RUNTIME_POSTGRES_PASSWORD=$RUNTIME_DB_PASSWORD
 POSTGRES_DB=owlculus
 DOMAIN=$CADDY_DOMAIN
 
@@ -522,6 +525,7 @@ DB_PORT=5432
 USE_REVERSE_PROXY=$USE_REVERSE_PROXY
 USE_HTTPS=$USE_HTTPS
 EOF
+        )
         
         print_success ".env file created with configuration"
     else
@@ -541,6 +545,15 @@ EOF
         COMPOSE_TOPOLOGY="$DIRECT_TOPOLOGY"
     fi
     
+    # Validate the fully merged configuration without printing secret values.
+    if ! (set -o pipefail
+        "$DOCKER_COMPOSE_CMD" "$COMPOSE_TOPOLOGY" config --format json |
+            python3 scripts/validate-deployment.py
+    ); then
+        print_error "Deployment credentials are invalid. See docs/deployment-security.md."
+        return 1
+    fi
+
     # Keep Docker diagnostics visible and stop before claiming a failed install works.
     print_status "Building Docker images..."
     if ! "$DOCKER_COMPOSE_CMD" "$COMPOSE_TOPOLOGY" build; then
