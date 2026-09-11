@@ -181,6 +181,20 @@ class InviteService:
         )
         try:
             with transaction(self.db):
+                # Refresh even an already-loaded invite after acquiring the lock.
+                # Check wall-clock expiry here, after any competing transaction.
+                invite = self.db.exec(
+                    select(models.Invite)
+                    .where(models.Invite.token == registration.token)
+                    .with_for_update()
+                    .execution_options(populate_existing=True)
+                ).first()
+                validation = _validation_for(invite)
+                if not validation.valid or invite is None:
+                    raise ValidationException(
+                        validation.error or "Invalid invite token"
+                    )
+                user.role = invite.role
                 self.db.add(user)
                 invite.used_at = get_utc_now()
                 self.db.add(invite)

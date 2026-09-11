@@ -2,7 +2,7 @@
 Comprehensive tests for invites API endpoints
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi import status
@@ -246,7 +246,7 @@ class TestInvitesAPI:
                 token="test_token",
                 role="Investigator",
                 created_by_id=test_admin.id,
-                expires_at=datetime.now(timezone.utc) + timedelta(hours=48),
+                expires_at=datetime.now(UTC) + timedelta(hours=48),
             )
             session.add(invite)
             session.commit()
@@ -389,7 +389,7 @@ class TestInvitesAPI:
                 token="valid_token",
                 role="Investigator",
                 created_by_id=test_admin.id,
-                expires_at=datetime.now(timezone.utc) + timedelta(hours=48),
+                expires_at=datetime.now(UTC) + timedelta(hours=48),
             )
             session.add(invite)
             session.commit()
@@ -419,7 +419,7 @@ class TestInvitesAPI:
                 token="valid_token2",
                 role="Investigator",
                 created_by_id=test_admin.id,
-                expires_at=datetime.now(timezone.utc) + timedelta(hours=48),
+                expires_at=datetime.now(UTC) + timedelta(hours=48),
             )
             session.add(invite)
             session.commit()
@@ -436,3 +436,61 @@ class TestInvitesAPI:
             assert "Email already registered" in response.json()["detail"]
         finally:
             app.dependency_overrides.clear()
+
+
+def test_register_admin_and_reject_used_invite(session, test_admin, client):
+    invite = Invite(
+        token="one-use-admin",
+        role="Admin",
+        created_by_id=test_admin.id,
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
+    )
+    session.add(invite)
+    session.commit()
+    data = {
+        "token": invite.token,
+        "username": "invitedadmin",
+        "email": "invitedadmin@example.com",
+        "password": "securepassword123",
+    }
+    winner = client.post("/api/invites/register", json=data)
+    assert winner.status_code == 201
+    assert winner.json()["role"] == "Admin"
+    data.update(username="loser", email="loser@example.com")
+    loser = client.post("/api/invites/register", json=data)
+    assert loser.status_code == 422
+    assert loser.json()["detail"] == "Invite has already been used"
+
+
+def test_register_losing_claim_returns_normal_error(
+    session, test_admin, client, monkeypatch
+):
+    invite = Invite(
+        token="contested-admin",
+        role="Admin",
+        created_by_id=test_admin.id,
+        expires_at=datetime.now(UTC) + timedelta(hours=1),
+    )
+    session.add(invite)
+    session.commit()
+
+    def consume_after_validation(password):
+        invite.used_at = datetime.now(UTC)
+        session.add(invite)
+        session.commit()
+        return "unused"
+
+    monkeypatch.setattr(
+        "app.services.invite_service.get_password_hash", consume_after_validation
+    )
+    response = client.post(
+        "/api/invites/register",
+        json={
+            "token": invite.token,
+            "username": "contestedloser",
+            "email": "contestedloser@example.com",
+            "password": "securepassword123",
+        },
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Invite has already been used"
