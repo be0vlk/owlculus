@@ -550,7 +550,7 @@ EOF
         "$DOCKER_COMPOSE_CMD" "$COMPOSE_TOPOLOGY" config --format json |
             python3 scripts/validate-deployment.py
     ); then
-        print_error "Deployment credentials are invalid. See docs/deployment-security.md."
+        print_error "Deployment credentials are invalid. Follow the instructions above, then rerun setup."
         return 1
     fi
 

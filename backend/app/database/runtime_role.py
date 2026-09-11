@@ -53,7 +53,8 @@ def provision_runtime_role(engine: Engine, username: str, password: str) -> None
                         pass
                 except SQLAlchemyError:
                     raise ValueError(
-                        "Runtime database login failed; restore its existing password or follow the documented rotation procedure"
+                        "Runtime database login failed; restore its existing password "
+                        "as RUNTIME_POSTGRES_PASSWORD in .env and restart services."
                     ) from None
                 finally:
                     runtime_engine.dispose()

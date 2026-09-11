@@ -396,3 +396,32 @@ def test_existing_setup_rejects_bad_credentials_without_rewriting(
     assert "existing-private-key" not in result.stdout + result.stderr
     assert "runtime-private-password" not in result.stdout + result.stderr
     assert " build" not in (workspace / "docker-calls.log").read_text()
+
+
+def test_existing_setup_explains_missing_runtime_credentials(setup_workspace):
+    workspace, environment = setup_workspace
+    original = (
+        "SECRET_KEY=existing-private-key\n"
+        "POSTGRES_USER=owlculus\n"
+        "POSTGRES_PASSWORD=existing-private-password\n"
+    )
+    (workspace / ".env").write_text(original)
+    result = subprocess.run(
+        ["bash", "setup.sh", "--non-interactive"],
+        cwd=workspace,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    output = result.stdout + result.stderr
+    assert result.returncode != 0
+    assert "RUNTIME_POSTGRES_PASSWORD" in output
+    assert "restricted database login" in output
+    assert "openssl rand -hex 32" in output
+    assert "preserve SECRET_KEY and POSTGRES_PASSWORD" in output
+    assert "docs/deployment-security.md" not in output
+    assert "existing-private-key" not in output
+    assert "existing-private-password" not in output
+    assert (workspace / ".env").read_text() == original
+    assert " build" not in (workspace / "docker-calls.log").read_text()
