@@ -30,6 +30,14 @@ collaborate, and run OSINT tools directly in your browser.
 
 [Wiki](https://github.com/be0vlk/owlculus/wiki)
 
+Run `make setup` for production or `make setup-dev` for development. Fresh installs generate `.env` automatically. See the commented [.env.example](.env.example) for configuration settings.
+
+If `make setup` reports a missing `RUNTIME_POSTGRES_PASSWORD` when upgrading:
+
+1. Run `openssl rand -hex 32` to generate a password for the new restricted database login.
+2. Edit the existing `.env` in the repository root. Add `RUNTIME_POSTGRES_USER=owlculus_runtime` (different from `POSTGRES_USER`) and `RUNTIME_POSTGRES_PASSWORD=`, pasting the generated output after `=`. If that login already exists, use its existing password instead.
+3. Preserve `SECRET_KEY` and all existing `POSTGRES_*` values. Save the file and rerun `make setup`.
+
 ## Contributing
 GitHub Issues and Pull Requests always welcome! Oh and make sure to at least read the CONTRIBUTING.md readme first for some basic guidelines.
 

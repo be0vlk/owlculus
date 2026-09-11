@@ -20,6 +20,7 @@ def _write_executable(path: Path, contents: str) -> None:
 def setup_workspace(tmp_path: Path) -> tuple[Path, dict[str, str]]:
     """Copy the setup entrypoint and replace external tools at their boundary."""
     shutil.copy2(REPOSITORY_ROOT / "setup.sh", tmp_path / "setup.sh")
+    shutil.copy2(REPOSITORY_ROOT / "Makefile", tmp_path / "Makefile")
     (tmp_path / "scripts").mkdir()
     shutil.copy2(
         REPOSITORY_ROOT / "scripts/compose.sh", tmp_path / "scripts/compose.sh"
@@ -407,7 +408,9 @@ def test_existing_setup_explains_missing_runtime_credentials(setup_workspace):
     )
     (workspace / ".env").write_text(original)
     result = subprocess.run(
-        ["bash", "setup.sh", "--non-interactive"],
+        ["make", "setup"],
+        input="2\ny\n",
+        timeout=15,
         cwd=workspace,
         env=environment,
         capture_output=True,
@@ -419,6 +422,8 @@ def test_existing_setup_explains_missing_runtime_credentials(setup_workspace):
     assert "RUNTIME_POSTGRES_PASSWORD" in output
     assert "restricted database login" in output
     assert "openssl rand -hex 32" in output
+    assert "Edit .env in the repository root" in output
+    assert "Save .env and rerun: make setup" in output
     assert "preserve SECRET_KEY and POSTGRES_PASSWORD" in output
     assert "docs/deployment-security.md" not in output
     assert "existing-private-key" not in output
