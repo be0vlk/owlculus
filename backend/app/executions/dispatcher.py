@@ -124,6 +124,7 @@ def dispatch_once(database_engine=engine) -> bool:
 def main():
     from app.executions.events import publish_once, redis_client, refresh_active_streams
     from app.executions.recovery import reconcile
+    from app.executions.strixy_dispatcher import dispatch_once as dispatch_strixy
 
     poll_seconds = max(
         0.05, float(os.environ.get("EXECUTION_DISPATCH_POLL_SECONDS", "0.2"))
@@ -135,6 +136,7 @@ def main():
                 reconcile()
                 next_reconcile = time.monotonic() + 10
             busy = dispatch_once()
+            busy = dispatch_strixy() or busy
             # Event publication has its own failure boundary: completed work stays
             # completed, and dispatch/recovery proceed during event outages.
             try:

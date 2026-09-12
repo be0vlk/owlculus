@@ -25,3 +25,8 @@ class ChatResponse(BaseModel):
     message: str
     role: Literal["assistant"]
     timestamp: datetime
+
+
+class SubmitMessage(BaseModel):
+    model_config = {"extra": "forbid", "str_strip_whitespace": True}
+    content: str = Field(min_length=1, max_length=16000)

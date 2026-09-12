@@ -216,12 +216,20 @@ if __name__ == "__main__":
         sys.argv.pop(1)
         main()
     elif sys.argv[1] == "api":
+        if os.environ.get("STRIXY_ACCEPTANCE") == "1":
+            from tests.executions.strixy_provider import install
+
+            install()
         import uvicorn
 
         uvicorn.run(
             "app.main:app", host="127.0.0.1", port=int(sys.argv[2]), log_level="warning"
         )
     elif sys.argv[1] in {"worker", "hunt-worker"}:
+        if os.environ.get("STRIXY_ACCEPTANCE") == "1":
+            from tests.executions.strixy_provider import install
+
+            install()
         from app.executions.celery_app import HUNT_QUEUE, QUEUE, app
 
         queue = HUNT_QUEUE if sys.argv[1] == "hunt-worker" else QUEUE

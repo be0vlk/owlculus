@@ -49,3 +49,15 @@ def execute_hunt(execution_id: int):
     from app.executions.supervisor import run
 
     run(execution_id, "hunt")
+
+
+@app.task(name="owlculus.execute_strixy", time_limit=660)
+def execute_strixy(run_id: str):
+    from app.database.connection import create_execution_engine
+    from app.executions.strixy_worker import execute
+
+    database_engine = create_execution_engine()
+    try:
+        execute(run_id, database_engine)
+    finally:
+        database_engine.dispose()

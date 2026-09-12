@@ -5,7 +5,7 @@
         <v-alert v-if="availabilityError" class="mb-6" type="warning" variant="tonal">
           <v-alert-title>Strixy unavailable</v-alert-title>
           {{ availabilityError }}
-          <v-btn variant="text" :loading="checkingAvailability" @click="checkAvailability">
+          <v-btn variant="text" :loading="checkingAvailability" @click="initializeChat">
             Check again
           </v-btn>
         </v-alert>
@@ -15,12 +15,29 @@
             Strixy requires an OpenAI API key to function. Please contact your administrator to
             configure the OpenAI API key in the system settings.
           </div>
-          <v-btn variant="text" :loading="checkingAvailability" @click="checkAvailability">
+          <v-btn variant="text" :loading="checkingAvailability" @click="initializeChat">
             Check again
           </v-btn>
         </v-alert>
 
-        <v-card variant="outlined" class="chat-container" :class="{ 'chat-disabled': apiKeyError }">
+        <v-select
+          :model-value="conversationId"
+          :items="
+            conversations.map((item, index) => ({
+              title: `Conversation ${conversations.length - index} · ${new Date(item.created_at).toLocaleString()}`,
+              value: item.id,
+            }))
+          "
+          label="Private conversations"
+          @update:model-value="selectConversation"
+        />
+        <v-alert v-if="operationError" type="warning" class="mb-4">
+          {{ operationError }}
+          <v-btn variant="text" @click="selectConversation(conversationId)"
+            >Reopen conversation</v-btn
+          >
+        </v-alert>
+        <v-card variant="outlined" class="chat-container">
           <v-card-title class="d-flex align-center pa-4 bg-surface">
             <v-icon
               :color="apiKeyError ? 'grey' : 'primary'"
@@ -57,13 +74,26 @@
                   v-bind="props"
                   icon="mdi-plus"
                   variant="outlined"
-                  :disabled="loading"
+                  :disabled="!canChat"
+                  aria-label="Start new conversation"
                   @click="handleNewChat"
                 />
               </template>
             </v-tooltip>
+            <v-btn
+              icon="mdi-delete"
+              variant="text"
+              aria-label="Delete conversation"
+              :disabled="!conversationId"
+              @click="handleDelete"
+            />
           </v-card-title>
-
+          <v-card-subtitle class="py-2"
+            >Private to you. Case records and attachments have not been inspected.</v-card-subtitle
+          >
+          <v-alert v-if="runExplanation" variant="tonal" class="ma-4" role="status">{{
+            runExplanation
+          }}</v-alert>
           <v-divider />
 
           <v-card-text class="pa-0">
@@ -164,14 +194,19 @@ const {
   canChat,
   availabilityError,
   checkingAvailability,
-  checkAvailability,
   messages,
   loading,
   currentMessage,
   apiKeyError,
   sendMessage,
   initializeChat,
-  clearChat,
+  createConversation,
+  conversations,
+  conversationId,
+  selectConversation,
+  deleteConversation,
+  operationError,
+  runExplanation,
 } = useStrixyChat()
 
 const confirmDialog = ref(null)
@@ -181,22 +216,19 @@ const hasUserMessages = computed(() => {
 })
 
 const handleNewChat = async () => {
-  if (hasUserMessages.value) {
-    const confirmed = await confirmDialog.value.confirm({
-      title: 'Start New Chat',
-      message:
-        'Are you sure you want to start a new chat? This will clear your current conversation.',
-      icon: 'mdi-chat-plus',
-      iconColor: 'primary',
-      confirmText: 'Start New Chat',
-      confirmColor: 'primary',
-    })
-    if (confirmed) {
-      await clearChat()
-    }
-  } else {
-    await clearChat()
-  }
+  await createConversation()
+}
+
+const handleDelete = async () => {
+  const confirmed = await confirmDialog.value.confirm({
+    title: 'Delete conversation',
+    message:
+      'Remove this conversation and its replies from Owlculus? This does not change the provider’s independent retention policies.',
+    icon: 'mdi-delete',
+    confirmText: 'Delete',
+    confirmColor: 'error',
+  })
+  if (confirmed) await deleteConversation()
 }
 
 const formatTime = (timestamp) => {

@@ -11,7 +11,7 @@ from typing import List, Optional
 from uuid import uuid4
 
 from pydantic import EmailStr
-from sqlalchemy import JSON, CheckConstraint, Column, UniqueConstraint
+from sqlalchemy import JSON, CheckConstraint, Column, DateTime, UniqueConstraint
 from sqlmodel import Field, Relationship, SQLModel
 
 from ..core.enums import ExecutionStatus, TaskPriority, TaskStatus
@@ -367,3 +367,71 @@ class ExecutionEvent(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     control_id: int = Field(foreign_key="executioncontrol.id", index=True)
     revision: int
+
+
+class StrixyConversation(SQLModel, table=True):
+    """Private transcript; deletion retains only an append-blocking tombstone."""
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    case_id: int = Field(foreign_key="case.id", ondelete="CASCADE", index=True)
+    owner_id: int = Field(foreign_key="user.id", ondelete="CASCADE", index=True)
+    created_at: datetime = Field(
+        default_factory=get_utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    deleted_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+
+
+class StrixyMessage(SQLModel, table=True):
+    """Server-ordered, immutable user or assistant message."""
+
+    __table_args__ = (UniqueConstraint("conversation_id", "position"),)
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    conversation_id: str = Field(
+        foreign_key="strixyconversation.id", ondelete="CASCADE", index=True
+    )
+    position: int
+    role: str
+    content: str
+    timestamp: datetime = Field(
+        default_factory=get_utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+
+
+class StrixyRun(SQLModel, table=True):
+    """Durable acceptance and dispatch intent, with a single non-replayable claim."""
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    conversation_id: str = Field(
+        foreign_key="strixyconversation.id", ondelete="CASCADE", index=True
+    )
+    strixy_id: int = Field(foreign_key="user.id")
+    position: int
+    status: str = Field(default="pending", index=True)
+    created_at: datetime = Field(
+        default_factory=get_utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    started_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    finished_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    dispatch_at: datetime = Field(
+        default_factory=get_utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False, index=True),
+    )
+    dispatch_attempts: int = 0
+    deadline: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    error_code: str | None = None
+    limit_code: str | None = None
+    coverage: str = "conversation_only"
+    configuration: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    input_tokens: int = 0
+    output_tokens: int = 0

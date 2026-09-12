@@ -8,17 +8,17 @@ service for intelligence gathering operations.
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlmodel import Session
 
 from app.core.database_boundary import DatabaseRoute
 from app.core.dependencies import get_current_user
 from app.database import models
 from app.database.connection import get_db
-from app.schemas.strixy_schema import ChatRequest, ChatResponse
+from app.schemas.strixy_schema import ChatRequest, ChatResponse, SubmitMessage
 from app.services.api_key_vault import ConfigurationApiKeyVault, Provider
 from app.services.strixy_access import require_strixy_access
-from app.services.strixy_service import StrixyService
+from app.services.strixy_conversations import StrixyConversations
 
 router = APIRouter(route_class=DatabaseRoute)
 
@@ -42,5 +42,76 @@ async def chat_with_strixy(
     current_user: Annotated[models.User, Depends(get_current_user)],
 ) -> ChatResponse:
     require_strixy_access(db, current_user, request.case_id)
-    service = StrixyService(db)
-    return await service.send_chat_message(request.messages)
+    raise HTTPException(410, "Use private conversations to submit a new user message")
+
+
+@router.post("/cases/{case_id}/conversations", status_code=201)
+async def create_conversation(
+    case_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[models.User, Depends(get_current_user)],
+):
+    return StrixyConversations(db, current_user, case_id).create()
+
+
+@router.get("/cases/{case_id}/conversations")
+async def list_conversations(
+    case_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[models.User, Depends(get_current_user)],
+):
+    return StrixyConversations(db, current_user, case_id).list()
+
+
+@router.get("/cases/{case_id}/conversations/{conversation_id}")
+async def read_conversation(
+    case_id: int,
+    conversation_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[models.User, Depends(get_current_user)],
+):
+    return StrixyConversations(db, current_user, case_id).read(conversation_id)
+
+
+@router.delete("/cases/{case_id}/conversations/{conversation_id}", status_code=204)
+async def delete_conversation(
+    case_id: int,
+    conversation_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[models.User, Depends(get_current_user)],
+):
+    StrixyConversations(db, current_user, case_id).delete(conversation_id)
+    return Response(status_code=204)
+
+
+@router.get("/cases/{case_id}/conversations/{conversation_id}/runs/{run_id}")
+async def observe_run(
+    case_id: int,
+    conversation_id: str,
+    run_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[models.User, Depends(get_current_user)],
+):
+    return StrixyConversations(db, current_user, case_id).observe(
+        conversation_id, run_id
+    )
+
+
+@router.post(
+    "/cases/{case_id}/conversations/{conversation_id}/messages", status_code=202
+)
+async def submit_message(
+    case_id: int,
+    conversation_id: str,
+    request: SubmitMessage,
+    response: Response,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[models.User, Depends(get_current_user)],
+):
+    run = StrixyConversations(db, current_user, case_id).submit(
+        conversation_id, request.content
+    )
+    response.headers["Location"] = (
+        f"/api/strixy/cases/{case_id}/conversations/{conversation_id}/runs/{run['id']}"
+    )
+    return run

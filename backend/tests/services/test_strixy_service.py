@@ -1,87 +1,45 @@
-"""
-Test suite for Strixy service business logic.
+"""Provider protocol translation; the HTTP lifecycle tests own application behavior."""
 
-This module tests Strixy integration, data processing, error handling,
-OpenAI API interaction, and OSINT-focused AI assistant functionality
-within the Strixy service layer.
-"""
-
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-
-from app.core.exceptions import BaseException as DomainException
 from app.core.exceptions import ValidationException
+from app.core.strixy_config import StrixyConfig
 from app.schemas.strixy_schema import ChatMessage
 from app.services.api_key_vault import Provider, StaticApiKeyVault
 from app.services.strixy_service import StrixyService
 
 
-class TestStrixyService:
-    @pytest.fixture
-    def mock_db(self):
-        return Mock()
-
-    @pytest.fixture
-    def strixy_service(self, mock_db):
-        return StrixyService(
-            mock_db, StaticApiKeyVault({Provider.OPENAI: "test-api-key"})
+@pytest.mark.parametrize("limited", [False, True])
+def test_responses_adapter_bounds_usage_and_retains_partial_text(limited):
+    client = MagicMock()
+    client.__enter__.return_value = client
+    client.responses.create.return_value = Mock(
+        status="incomplete" if limited else "completed",
+        incomplete_details=Mock(reason="max_output_tokens") if limited else None,
+        output_text="Useful text",
+        usage=Mock(input_tokens=10, output_tokens=20),
+    )
+    service = StrixyService(Mock(), StaticApiKeyVault({Provider.OPENAI: "fake"}))
+    config = StrixyConfig()
+    with patch("app.services.strixy_service.OpenAI", return_value=client) as factory:
+        result = service.generate(
+            [ChatMessage(role="user", content="Question")], config, 12
         )
+    assert result.content == "Useful text"
+    assert result.limit_code == ("output_limit" if limited else None)
+    assert (result.input_tokens, result.output_tokens) == (10, 20)
+    assert factory.call_args.kwargs["max_retries"] == 0
+    assert factory.call_args.kwargs["timeout"] == 12
+    sent = client.responses.create.call_args.kwargs
+    assert sent["store"] is False
+    assert sent["max_output_tokens"] == config.max_output_tokens
+    assert "tools" not in sent and "previous_response_id" not in sent
 
-    @patch("app.services.strixy_service.OpenAI")
-    async def test_send_chat_message_success(self, mock_openai_class, strixy_service):
-        mock_client = Mock()
-        mock_completion = Mock()
-        mock_completion.choices = [Mock()]
-        mock_completion.choices[0].message.content = (
-            "Hello! I'm Strixy, your OSINT assistant."
-        )
-        mock_client.chat.completions.create.return_value = mock_completion
-        mock_openai_class.return_value = mock_client
 
-        messages = [ChatMessage(role="user", content="Hello")]
-        response = await strixy_service.send_chat_message(messages)
-
-        assert response.message == "Hello! I'm Strixy, your OSINT assistant."
-        assert response.role == "assistant"
-        mock_openai_class.assert_called_once_with(api_key="test-api-key")
-
-    async def test_send_chat_message_no_api_key(self, mock_db):
-        strixy_service = StrixyService(mock_db, StaticApiKeyVault({}))
-        messages = [ChatMessage(role="user", content="Hello")]
-
-        with pytest.raises(ValidationException) as exc_info:
-            await strixy_service.send_chat_message(messages)
-
-        assert "OpenAI API key not configured" in str(exc_info.value)
-
-    @patch("app.services.strixy_service.OpenAI")
-    async def test_send_chat_message_openai_error(
-        self, mock_openai_class, strixy_service
-    ):
-        mock_client = Mock()
-        mock_client.chat.completions.create.side_effect = Exception("OpenAI API Error")
-        mock_openai_class.return_value = mock_client
-
-        messages = [ChatMessage(role="user", content="Hello")]
-
-        with pytest.raises(DomainException) as exc_info:
-            await strixy_service.send_chat_message(messages)
-
-        assert "Error communicating with OpenAI" in str(exc_info.value)
-
-    @patch("app.services.strixy_service.OpenAI")
-    async def test_client_reuse(self, mock_openai_class, strixy_service):
-        mock_client = Mock()
-        mock_completion = Mock()
-        mock_completion.choices = [Mock()]
-        mock_completion.choices[0].message.content = "Response"
-        mock_client.chat.completions.create.return_value = mock_completion
-        mock_openai_class.return_value = mock_client
-
-        messages = [ChatMessage(role="user", content="Hello")]
-
-        await strixy_service.send_chat_message(messages)
-        await strixy_service.send_chat_message(messages)
-
-        mock_openai_class.assert_called_once()
+def test_missing_vault_key_never_calls_provider():
+    service = StrixyService(Mock(), StaticApiKeyVault({}))
+    with patch("app.services.strixy_service.OpenAI") as factory:
+        with pytest.raises(ValidationException):
+            service.generate([], StrixyConfig(), 12)
+        factory.assert_not_called()

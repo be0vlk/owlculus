@@ -3,3 +3,7 @@
 from provider import install
 
 install()
+
+from strixy_provider import install as install_strixy
+
+install_strixy()

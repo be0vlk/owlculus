@@ -1,6 +1,6 @@
 """Permanent AI identity behavior through authentication and membership APIs."""
 
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 from app.core import rate_limiting, setup
@@ -122,21 +122,16 @@ def test_assignment_controls_chat_for_admin_and_human_analyst(
     case_id = test_case_with_users.id
     membership = f"/api/cases/{case_id}/users/{strixy.id}"
     payload = {"case_id": case_id, "messages": [{"role": "user", "content": "Hello"}]}
-    provider = Mock()
-    provider.chat.completions.create.return_value.choices = [
-        Mock(message=Mock(content="Deterministic reply"))
-    ]
     with patch(
-        "app.services.strixy_service.StrixyService._get_openai_client",
-        return_value=provider,
-    ):
+        "app.services.strixy_service.StrixyService.generate",
+    ) as provider:
         denied = client.post(
             "/api/strixy/chat", json=payload, headers=headers(admin_token)
         )
         assert denied.status_code == 403
         assert "not assigned" in denied.json()["detail"]
         assert denied.json()["code"] == "strixy_not_assigned"
-        provider.chat.completions.create.assert_not_called()
+        provider.assert_not_called()
 
         for token in [analyst_token, user_token]:
             assert (
@@ -170,8 +165,7 @@ def test_assignment_controls_chat_for_admin_and_human_analyst(
             reply = client.post(
                 "/api/strixy/chat", json=payload, headers=headers(token)
             )
-            assert reply.status_code == 200
-            assert reply.json()["message"] == "Deterministic reply"
+            assert reply.status_code == 410
         assert (
             client.patch(
                 membership, json={"is_lead": True}, headers=headers(admin_token)
@@ -181,14 +175,14 @@ def test_assignment_controls_chat_for_admin_and_human_analyst(
         assert (
             client.delete(membership, headers=headers(admin_token)).status_code == 200
         )
-        provider.chat.completions.create.reset_mock()
+        provider.reset_mock()
         assert (
             client.post(
                 "/api/strixy/chat", json=payload, headers=headers(analyst_token)
             ).status_code
             == 403
         )
-        provider.chat.completions.create.assert_not_called()
+        provider.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -213,9 +207,7 @@ def test_unavailable_accounts_and_cases_do_not_reach_provider(
     expected = (
         401 if unavailable == "human" else 404 if unavailable == "missing_case" else 403
     )
-    with patch(
-        "app.services.strixy_service.StrixyService._get_openai_client"
-    ) as provider:
+    with patch("app.services.strixy_service.StrixyService.generate") as provider:
         for response in [
             client.get(
                 "/api/strixy/availability",

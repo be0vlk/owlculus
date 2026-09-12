@@ -1,109 +1,59 @@
-"""
-Business logic for Strixy external service integration.
+"""Small stateless OpenAI Responses adapter; application state stays in PostgreSQL."""
 
-Provides OSINT-focused AI assistance through OpenAI integration with specialized
-system prompts for intelligence gathering operations.
-
-Key features:
-- OSINT-specialized AI assistant for digital investigations
-- Multi-domain intelligence support (SOCMINT, GEOINT, financial investigations)
-- Professional investigation methodology guidance
-- Secure OpenAI integration with API key management
-"""
-
-from datetime import UTC, datetime
-from typing import List, cast
+from dataclasses import dataclass
+from typing import cast
 
 from openai import OpenAI
-from openai.types.chat import ChatCompletionMessageParam
+from openai.types.responses import ResponseInputParam
 from sqlmodel import Session
 
-from app.core.exceptions import BaseException as DomainException
 from app.core.exceptions import ValidationException
-from app.schemas.strixy_schema import ChatMessage, ChatResponse
+from app.core.strixy_config import StrixyConfig
+from app.schemas.strixy_schema import ChatMessage
 from app.services.api_key_vault import ApiKeyVault, ConfigurationApiKeyVault, Provider
+
+
+@dataclass(frozen=True)
+class ProviderReply:
+    content: str
+    input_tokens: int = 0
+    output_tokens: int = 0
+    limit_code: str | None = None
 
 
 class StrixyService:
     def __init__(self, db: Session, api_key_vault: ApiKeyVault | None = None):
-        self.db = db
         self.api_key_vault = api_key_vault or ConfigurationApiKeyVault(db)
-        self._client: OpenAI | None = None
 
-    def _get_openai_client(self) -> OpenAI:
-        if self._client is None:
-            api_key = self.api_key_vault.get_key(Provider.OPENAI)
-            if not api_key:
-                raise ValidationException(
-                    "OpenAI API key not configured. Please contact administrator to "
-                    "configure the OpenAI API key."
-                )
-            self._client = OpenAI(api_key=api_key)
-        return self._client
-
-    async def send_chat_message(self, messages: List[ChatMessage]) -> ChatResponse:
-        try:
-            client = self._get_openai_client()
-
-            system_message = {
-                "role": "system",
-                "content": """# Role and Objective
-You are Strixy, an expert AI assistant specialized in OSINT investigations within the Owlculus case management platform.
-
-## Core Responsibilities
-- Assist with OSINT research methodologies and digital investigation techniques
-- Analyze and correlate information from open sources
-- Suggest investigation strategies and evidence evaluation approaches
-
-## Domain Expertise
-- Digital forensics and cyber investigations
-- Social media intelligence (SOCMINT)
-- Geospatial intelligence (GEOINT)
-- Financial investigations and cryptocurrency tracing
-- Dark web research and monitoring
-- Data correlation and pattern analysis
-
-## Communication Guidelines
-- Be precise, professional, and methodical
-- Think step-by-step through investigation approaches
-- Provide actionable, specific guidance
-- Always consider legal and ethical boundaries
-- Explain appropriate use cases for suggested tools
-
-## Response Structure
-1. Assess the investigation context
-2. Suggest specific methodologies or tools
-
-Maintain professional objectivity.""",
-            }
-
-            openai_messages: list[ChatCompletionMessageParam] = [
-                cast(ChatCompletionMessageParam, system_message)
-            ]
-            openai_messages.extend(
-                [
-                    cast(
-                        ChatCompletionMessageParam,
-                        {"role": msg.role, "content": msg.content},
-                    )
-                    for msg in messages
-                ]
+    def generate(
+        self, messages: list[ChatMessage], config: StrixyConfig, timeout: float
+    ) -> ProviderReply:
+        key = self.api_key_vault.get_key(Provider.OPENAI)
+        if not key:
+            raise ValidationException("OpenAI API key not configured")
+        # No SDK retries: an uncertain completion must require explicit human action.
+        with OpenAI(api_key=key, max_retries=0, timeout=timeout) as client:
+            response = client.responses.create(
+                model=config.model,
+                instructions=config.instructions,
+                input=cast(ResponseInputParam, [m.model_dump() for m in messages]),
+                max_output_tokens=config.max_output_tokens,
+                store=False,
             )
-
-            completion = client.chat.completions.create(
-                model="gpt-4o",
-                messages=openai_messages,
-                max_tokens=1000,
-                temperature=0.7,
-            )
-
-            response_content = cast(str, completion.choices[0].message.content)
-
-            return ChatResponse(
-                message=response_content, role="assistant", timestamp=datetime.now(UTC)
-            )
-
-        except ValidationException:
-            raise
-        except Exception as e:
-            raise DomainException(f"Error communicating with OpenAI: {str(e)}") from e
+        limit = None
+        if (
+            response.status == "incomplete"
+            and response.incomplete_details
+            and response.incomplete_details.reason == "max_output_tokens"
+        ):
+            limit = "output_limit"
+        elif response.status != "completed":
+            raise RuntimeError("Provider did not complete the response")
+        if not response.output_text and not limit:
+            raise RuntimeError("Provider returned no answer")
+        return ProviderReply(
+            content=response.output_text,
+            input_tokens=response.usage.input_tokens if response.usage else 0,
+            output_tokens=response.usage.output_tokens if response.usage else 0,
+            limit_code=limit,
+        )

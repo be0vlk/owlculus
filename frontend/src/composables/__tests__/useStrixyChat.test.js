@@ -1,124 +1,129 @@
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { effectScope } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import { useStrixyChat } from '../useStrixyChat'
 import { useActiveCaseStore } from '../../stores/activeCase'
 import api from '../../services/api'
 
-vi.mock('../../services/api', () => ({ default: { post: vi.fn(), get: vi.fn() } }))
-vi.mock('../useNotifications', () => ({ useNotifications: () => ({ showError: vi.fn() }) }))
-
-let scope
-let chat
-let activeCase
+vi.mock('../../services/api', () => ({ default: { post: vi.fn(), get: vi.fn(), delete: vi.fn() } }))
+let scope, chat, activeCase, saved
+const detail = '/api/strixy/cases/2/conversations/one'
 beforeEach(async () => {
-  scope?.stop()
   vi.clearAllMocks()
   setActivePinia(createPinia())
   activeCase = useActiveCaseStore()
   Object.assign(activeCase, { initialized: true, accessibleCases: [{ id: 1 }, { id: 2 }] })
   activeCase.resolve(2)
+  saved = { messages: [], runs: [] }
+  api.get.mockImplementation(async (url) => ({
+    data: url.endsWith('availability')
+      ? { is_configured: true }
+      : url.endsWith('conversations')
+        ? [{ id: 'one' }]
+        : saved,
+  }))
   scope = effectScope()
   chat = scope.run(() => useStrixyChat())
-  api.get.mockResolvedValue({ data: { is_configured: true } })
-  await chat.checkAvailability()
+  await chat.initializeChat()
 })
+afterEach(() => scope.stop())
 
-it('sends only conversation messages and the resolved active case', async () => {
-  api.post.mockResolvedValue({ data: { message: 'Reply for case two' } })
-  chat.currentMessage.value = 'Investigate this domain'
-  await chat.sendMessage()
-  expect(api.post).toHaveBeenCalledWith('/api/strixy/chat', {
-    case_id: 2,
-    messages: [{ role: 'user', content: 'Investigate this domain' }],
-  })
-  expect(chat.messages.value.at(-1).content).toBe('Reply for case two')
-})
-
-it('blocks sends while context is unresolved or refreshing', async () => {
-  for (const state of [
-    { initialized: false },
-    { initialized: true, refreshing: true },
-    { refreshing: false, accessibleCases: [] },
-  ]) {
-    Object.assign(activeCase, state)
-    chat.currentMessage.value = 'Do not send'
-    await chat.sendMessage()
+it('submits only a new message and displays persisted timestamps', async () => {
+  saved = {
+    messages: [
+      { role: 'user', content: 'Question', timestamp: '2026-01-01T12:00:00' },
+      { role: 'assistant', content: 'Saved reply', timestamp: '2026-01-01T12:01:00' },
+    ],
+    runs: [{ id: 'run', status: 'completed' }],
   }
-  expect(api.post).not.toHaveBeenCalled()
+  api.post.mockResolvedValue({ data: saved.runs[0] })
+  chat.currentMessage.value = 'Question'
+  await chat.sendMessage()
+  expect(api.post).toHaveBeenCalledWith(`${detail}/messages`, { content: 'Question' })
+  expect(chat.messages.value).toEqual(saved.messages)
+  expect(chat.currentMessage.value).toBe('')
 })
 
-it('drops drafts and late replies when switching investigations, even when returning', async () => {
+it('reopens pending work and polls authoritative output without duplicates', async () => {
+  vi.useFakeTimers()
+  saved = {
+    messages: [{ role: 'user', content: 'Question' }],
+    runs: [{ id: 'run', status: 'running' }],
+  }
+  await chat.selectConversation('one')
+  expect(chat.loading.value).toBe(true)
+  saved = {
+    messages: [...saved.messages, { role: 'assistant', content: 'Answer' }],
+    runs: [{ id: 'run', status: 'completed' }],
+  }
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(chat.messages.value).toEqual(saved.messages)
+  expect(chat.loading.value).toBe(false)
+  vi.useRealTimers()
+})
+
+it('preserves old conversations when creating a new one', async () => {
+  api.post.mockResolvedValue({ data: { id: 'two' } })
+  await chat.createConversation()
+  expect(chat.conversations.value.map((c) => c.id)).toEqual(['two', 'one'])
+  expect(chat.conversationId.value).toBe('two')
+})
+
+it('discards late responses when switching cases and returning', async () => {
   let finish
   api.post.mockReturnValueOnce(
     new Promise((resolve) => {
       finish = resolve
     }),
   )
-  chat.currentMessage.value = 'Private question for case two'
+  chat.currentMessage.value = 'Private question'
   const pending = chat.sendMessage()
   activeCase.resolve(1)
-  chat.currentMessage.value = 'Draft for case one'
   activeCase.resolve(2)
-  finish({ data: { message: 'Late reply for the old conversation' } })
+  finish({ data: { id: 'late', status: 'running' } })
   await pending
   expect(chat.currentMessage.value).toBe('')
-  expect(chat.messages.value.some((message) => /Private|Late|Draft/.test(message.content))).toBe(
-    false,
-  )
-  expect(chat.loading.value).toBe(false)
+  expect(chat.runs.value.some((run) => run.id === 'late')).toBe(false)
 })
 
-it('explains missing AI assignment without discarding the accessible active case', async () => {
+it('clears protected content after assignment revocation', async () => {
+  saved.messages = [{ content: 'Private answer' }]
+  await chat.selectConversation('one')
   api.get.mockRejectedValueOnce({
     response: {
       status: 403,
-      data: {
-        code: 'strixy_not_assigned',
-        detail: 'Strixy is not assigned to this case. Ask an administrator to assign Strixy.',
-      },
+      data: { code: 'strixy_not_assigned', detail: 'Ask an administrator to assign Strixy.' },
     },
   })
   await chat.checkAvailability()
-  expect(chat.availabilityError.value).toContain('not assigned')
-  expect(activeCase.activeCaseId).toBe(2)
-  chat.currentMessage.value = 'Do not send'
-  await chat.sendMessage()
-  expect(api.post).not.toHaveBeenCalled()
-  await chat.checkAvailability()
-  expect(chat.availabilityError.value).toBe('')
-  api.post.mockResolvedValueOnce({ data: { message: 'Now assigned' } })
-  await chat.sendMessage()
-  expect(chat.messages.value.at(-1).content).toBe('Now assigned')
-})
-
-it('handles membership revocation between availability check and send', async () => {
-  api.post.mockRejectedValueOnce({
-    response: {
-      status: 403,
-      data: {
-        code: 'strixy_not_assigned',
-        detail: 'Strixy is not assigned to this case. Ask an administrator to assign Strixy.',
-      },
-    },
-  })
-  chat.currentMessage.value = 'Question'
-  await chat.sendMessage()
-  expect(chat.availabilityError.value).toContain('not assigned')
+  expect(chat.canChat.value).toBe(false)
+  expect(chat.messages.value).toEqual([])
   expect(activeCase.activeCaseId).toBe(2)
 })
 
-it('keeps the active case when the server changes the assignment explanation', async () => {
-  api.get.mockRejectedValueOnce({
-    response: {
-      status: 403,
-      data: {
-        code: 'strixy_not_assigned',
-        detail: 'Ask your administrator to add the AI Analyst.',
-      },
-    },
-  })
-  await chat.checkAvailability()
-  expect(chat.availabilityError.value).toBe('Ask your administrator to add the AI Analyst.')
-  expect(activeCase.activeCaseId).toBe(2)
+it('keeps failed submissions as drafts and requires an explicit retry', async () => {
+  api.post.mockRejectedValueOnce(new Error('network lost'))
+  chat.currentMessage.value = 'My draft'
+  await chat.sendMessage()
+  expect(chat.currentMessage.value).toBe('My draft')
+  expect(chat.operationError.value).toContain('check whether your message was accepted')
+  expect(api.post).toHaveBeenCalledTimes(1)
+})
+
+it('deletes the selected conversation and clears the transcript', async () => {
+  api.delete.mockResolvedValue({})
+  await chat.deleteConversation()
+  expect(api.delete).toHaveBeenCalledWith(detail)
+  expect(chat.conversations.value).toEqual([])
+  expect(chat.messages.value).toEqual([])
+})
+
+it('loads a replacement Case after a background access refresh finishes', async () => {
+  activeCase.refreshing = true
+  activeCase.resolve(1)
+  expect(chat.canChat.value).toBe(false)
+  activeCase.refreshing = false
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(chat.canChat.value).toBe(true)
+  expect(api.get).toHaveBeenCalledWith('/api/strixy/cases/1/conversations')
 })
