@@ -67,7 +67,7 @@
                       {{ user.role }}
                     </v-chip>
                   </v-list-item-title>
-                  <v-list-item-subtitle>{{ user.username }}</v-list-item-subtitle>
+                  <v-list-item-subtitle>{{ userDisplayName(user) }}</v-list-item-subtitle>
 
                   <template #append>
                     <div class="d-flex align-center ga-1">
@@ -191,6 +191,7 @@
 </template>
 
 <script setup>
+import { userDisplayName } from '@/utils/userDisplay'
 import { computed, ref, watch } from 'vue'
 import { userService } from '@/services/user'
 import { caseService } from '@/services/case'
@@ -253,7 +254,7 @@ const availableUsers = computed(() => {
     .filter((user) => !caseUserIds.includes(user.id))
     .map((user) => ({
       ...user,
-      displayText: `${user.email} - ${user.username} (${user.role})`,
+      displayText: `${user.email} - ${userDisplayName(user)} (${user.role})`,
     }))
 })
 

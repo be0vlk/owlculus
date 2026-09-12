@@ -59,7 +59,7 @@ export function useUsers() {
   // Permission checking functions
   const canDeleteUser = (targetUser) => {
     const currentUser = authStore.user
-    if (!currentUser) return false
+    if (!currentUser || targetUser.system_identity) return false
 
     // Cannot delete yourself
     if (currentUser.id === targetUser.id) return false
@@ -76,7 +76,7 @@ export function useUsers() {
 
   const canResetPassword = (targetUser) => {
     const currentUser = authStore.user
-    if (!currentUser) return false
+    if (!currentUser || targetUser.system_identity) return false
 
     // Only superadmin can reset superadmin passwords
     if (targetUser.is_superadmin && !currentUser.is_superadmin) return false
@@ -87,7 +87,7 @@ export function useUsers() {
 
   const canEditUser = (targetUser) => {
     const currentUser = authStore.user
-    if (!currentUser) return false
+    if (!currentUser || targetUser.system_identity) return false
 
     // Only superadmin can edit superadmin users
     if (targetUser.is_superadmin && !currentUser.is_superadmin) return false

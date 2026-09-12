@@ -34,6 +34,10 @@ class AuthenticationException(BaseException):
 class AuthorizationException(BaseException):
     """Raised when user lacks authorization for an operation"""
 
+    def __init__(self, message: str, *, code: str | None = None):
+        super().__init__(message)
+        self.code = code
+
 
 class RateLimitException(BaseException):
     """Raised when an application-level request limit is exceeded."""

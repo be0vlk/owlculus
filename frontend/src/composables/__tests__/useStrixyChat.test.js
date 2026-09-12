@@ -4,18 +4,14 @@ import { createPinia, setActivePinia } from 'pinia'
 import { useStrixyChat } from '../useStrixyChat'
 import { useActiveCaseStore } from '../../stores/activeCase'
 import api from '../../services/api'
-import { systemService } from '../../services/system'
 
-vi.mock('../../services/api', () => ({ default: { post: vi.fn() } }))
-vi.mock('../../services/system', () => ({
-  systemService: { checkApiKeyStatus: vi.fn().mockResolvedValue({ is_configured: true }) },
-}))
+vi.mock('../../services/api', () => ({ default: { post: vi.fn(), get: vi.fn() } }))
 vi.mock('../useNotifications', () => ({ useNotifications: () => ({ showError: vi.fn() }) }))
 
 let scope
 let chat
 let activeCase
-beforeEach(() => {
+beforeEach(async () => {
   scope?.stop()
   vi.clearAllMocks()
   setActivePinia(createPinia())
@@ -24,6 +20,8 @@ beforeEach(() => {
   activeCase.resolve(2)
   scope = effectScope()
   chat = scope.run(() => useStrixyChat())
+  api.get.mockResolvedValue({ data: { is_configured: true } })
+  await chat.checkAvailability()
 })
 
 it('sends only conversation messages and the resolved active case', async () => {
@@ -71,12 +69,56 @@ it('drops drafts and late replies when switching investigations, even when retur
   expect(chat.loading.value).toBe(false)
 })
 
-it('allows investigators to chat when the administrator-only key status is forbidden', async () => {
-  systemService.checkApiKeyStatus.mockRejectedValueOnce({ response: { status: 403 } })
-  await chat.initializeChat()
-  api.post.mockResolvedValueOnce({ data: { message: 'Investigator reply' } })
-  chat.currentMessage.value = 'An assigned case question'
+it('explains missing AI assignment without discarding the accessible active case', async () => {
+  api.get.mockRejectedValueOnce({
+    response: {
+      status: 403,
+      data: {
+        code: 'strixy_not_assigned',
+        detail: 'Strixy is not assigned to this case. Ask an administrator to assign Strixy.',
+      },
+    },
+  })
+  await chat.checkAvailability()
+  expect(chat.availabilityError.value).toContain('not assigned')
+  expect(activeCase.activeCaseId).toBe(2)
+  chat.currentMessage.value = 'Do not send'
   await chat.sendMessage()
-  expect(chat.apiKeyError.value).toBe(false)
-  expect(chat.messages.value.at(-1).content).toBe('Investigator reply')
+  expect(api.post).not.toHaveBeenCalled()
+  await chat.checkAvailability()
+  expect(chat.availabilityError.value).toBe('')
+  api.post.mockResolvedValueOnce({ data: { message: 'Now assigned' } })
+  await chat.sendMessage()
+  expect(chat.messages.value.at(-1).content).toBe('Now assigned')
+})
+
+it('handles membership revocation between availability check and send', async () => {
+  api.post.mockRejectedValueOnce({
+    response: {
+      status: 403,
+      data: {
+        code: 'strixy_not_assigned',
+        detail: 'Strixy is not assigned to this case. Ask an administrator to assign Strixy.',
+      },
+    },
+  })
+  chat.currentMessage.value = 'Question'
+  await chat.sendMessage()
+  expect(chat.availabilityError.value).toContain('not assigned')
+  expect(activeCase.activeCaseId).toBe(2)
+})
+
+it('keeps the active case when the server changes the assignment explanation', async () => {
+  api.get.mockRejectedValueOnce({
+    response: {
+      status: 403,
+      data: {
+        code: 'strixy_not_assigned',
+        detail: 'Ask your administrator to add the AI Analyst.',
+      },
+    },
+  })
+  await chat.checkAvailability()
+  expect(chat.availabilityError.value).toBe('Ask your administrator to add the AI Analyst.')
+  expect(activeCase.activeCaseId).toBe(2)
 })

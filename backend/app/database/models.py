@@ -31,10 +31,17 @@ class CaseUserLink(SQLModel, table=True):
 class User(SQLModel, table=True):
     __table_args__ = (
         CheckConstraint(
+            "system_identity IS NULL OR "
+            "(system_identity = 'strixy' AND role = 'Analyst' "
+            "AND is_superadmin = false AND password_hash = '!')",
+            name="user_system_identity_policy",
+        ),
+        CheckConstraint(
             "session_version >= 0", name="user_session_version_nonnegative"
         ),
     )
 
+    system_identity: str | None = Field(default=None, unique=True)
     auth_identity: str = Field(
         default_factory=lambda: str(uuid4()), unique=True, nullable=False
     )

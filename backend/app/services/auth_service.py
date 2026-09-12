@@ -59,6 +59,7 @@ class AuthService:
         if (
             user is None
             or not user.is_active
+            or user.system_identity is not None
             or not await self._verify_password(password, user.password_hash)
         ):
             logger.bind(event_type="login_failed").warning("Authentication failed")

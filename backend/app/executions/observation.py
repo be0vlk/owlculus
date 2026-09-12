@@ -26,7 +26,7 @@ AUTH_SECONDS = min(
 
 def readable_execution(db, user_id, kind, execution_id):
     user = db.get(User, user_id, populate_existing=True)
-    if user is None or not user.is_active:
+    if user is None or not user.is_active or user.system_identity is not None:
         raise HTTPException(403, "Observation access is no longer available")
     model = HuntExecution if kind == "hunt" else PluginExecution
     execution = db.get(model, execution_id, populate_existing=True)

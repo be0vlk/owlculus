@@ -190,6 +190,7 @@ class TestUsersAPI:
         assert response.status_code == status.HTTP_201_CREATED
         assert response.json() == {
             "id": response.json()["id"],
+            "system_identity": None,
             "username": "first_admin",
             "email": "first_admin@example.com",
             "role": "Admin",
@@ -854,6 +855,7 @@ class TestUsersAPI:
             assert response.status_code == status.HTTP_200_OK
             assert response.json() == {
                 "id": legacy_user.id,
+                "system_identity": None,
                 "username": "legacyadmin",
                 "email": "admin@owlculus.local",
                 "role": "Admin",
@@ -946,7 +948,9 @@ class TestUsersAPI:
                 user for user in response.json() if user["id"] == legacy_user.id
             )
             assert serialized_user["email"] == "user@owlculus.local"
+            assert serialized_user["system_identity"] is None
             assert set(serialized_user) == {
+                "system_identity",
                 "id",
                 "username",
                 "email",

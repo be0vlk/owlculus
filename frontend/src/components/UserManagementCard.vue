@@ -102,7 +102,7 @@
     >
       <template #[`item.username`]="{ item }">
         <div class="py-2" style="min-width: 220px; overflow-wrap: anywhere">
-          <div class="font-weight-medium">{{ item.username }}</div>
+          <div class="font-weight-medium">{{ userDisplayName(item) }}</div>
           <div v-if="embedded" class="text-body-small text-medium-emphasis">{{ item.email }}</div>
         </div>
       </template>
@@ -211,6 +211,7 @@
 </template>
 
 <script setup>
+import { userDisplayName } from '@/utils/userDisplay'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useUsers } from '@/composables/useUsers'
 import UserModal from './UserModal.vue'
@@ -289,14 +290,14 @@ watch([loading, error, () => users.value.length], () => {
 const handleDeleteUser = (user) => {
   emit('confirmDelete', {
     title: 'Confirm Deletion',
-    message: `Are you sure you want to delete the user <strong>${user.username}</strong>?`,
+    message: `Are you sure you want to delete the user <strong>${userDisplayName(user)}</strong>?`,
     warning:
       'This action cannot be undone. All user data and associated records will be permanently removed.',
     onConfirm: async () => {
       try {
         await deleteUser(user.id)
         emit('notification', {
-          text: `User '${user.username}' deleted successfully`,
+          text: `User '${userDisplayName(user)}' deleted successfully`,
           color: 'success',
         })
       } catch (err) {
@@ -310,7 +311,10 @@ const handleDeleteUser = (user) => {
 
 const handleUserSavedWithNotification = (user) => {
   handleUserSaved(user)
-  emit('notification', { text: `User '${user.username}' saved successfully`, color: 'success' })
+  emit('notification', {
+    text: `User '${userDisplayName(user)}' saved successfully`,
+    color: 'success',
+  })
 }
 
 const handlePasswordResetSavedWithNotification = () => {

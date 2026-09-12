@@ -60,6 +60,7 @@
 
               <v-checkbox
                 v-model="isLead"
+                :disabled="isSelectedUserAnalyst"
                 color="primary"
                 hint="Lead investigators have primary responsibility for the case"
                 label="Set as Lead Investigator"
@@ -95,6 +96,7 @@
 </template>
 
 <script setup>
+import { userDisplayName } from '@/utils/userDisplay'
 import { computed, ref, watch } from 'vue'
 import { userService } from '@/services/user'
 import { caseService } from '@/services/case'
@@ -140,11 +142,18 @@ const dialogVisible = computed({
   },
 })
 
+const isSelectedUserAnalyst = computed(
+  () => availableUsers.value.find((user) => user.id === selectedUserId.value)?.role === 'Analyst',
+)
+watch(selectedUserId, () => {
+  if (isSelectedUserAnalyst.value) isLead.value = false
+})
+
 // Enhanced computed property for user display
 const enhancedUsers = computed(() => {
   return availableUsers.value.map((user) => ({
     ...user,
-    displayText: `${user.email} - ${user.username}`,
+    displayText: `${user.email} - ${userDisplayName(user)}`,
   }))
 })
 

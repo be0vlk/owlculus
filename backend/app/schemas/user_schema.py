@@ -56,6 +56,7 @@ class AdminPasswordReset(BaseModel):
 
 
 class User(UserBase):
+    system_identity: str | None = None
     model_config = ConfigDict(from_attributes=True)
 
     id: int

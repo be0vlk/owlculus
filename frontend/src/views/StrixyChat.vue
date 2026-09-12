@@ -2,15 +2,22 @@
   <div>
     <v-main>
       <v-container fluid class="pa-6">
+        <v-alert v-if="availabilityError" class="mb-6" type="warning" variant="tonal">
+          <v-alert-title>Strixy unavailable</v-alert-title>
+          {{ availabilityError }}
+          <v-btn variant="text" :loading="checkingAvailability" @click="checkAvailability">
+            Check again
+          </v-btn>
+        </v-alert>
         <v-alert v-if="apiKeyError" class="mb-6" prominent type="warning" variant="tonal">
           <v-alert-title>OpenAI API Key Required</v-alert-title>
           <div>
             Strixy requires an OpenAI API key to function. Please contact your administrator to
             configure the OpenAI API key in the system settings.
           </div>
-          <template #append>
-            <v-icon size="large">mdi-key-alert</v-icon>
-          </template>
+          <v-btn variant="text" :loading="checkingAvailability" @click="checkAvailability">
+            Check again
+          </v-btn>
         </v-alert>
 
         <v-card variant="outlined" class="chat-container" :class="{ 'chat-disabled': apiKeyError }">
@@ -111,7 +118,7 @@
                     variant="outlined"
                     density="comfortable"
                     hide-details
-                    :disabled="!contextReady || loading || apiKeyError"
+                    :disabled="!canChat || loading || apiKeyError"
                     @keydown.enter="sendMessage"
                     aria-label="Message input"
                   />
@@ -121,7 +128,7 @@
                     color="primary"
                     icon="mdi-send"
                     :loading="loading"
-                    :disabled="!contextReady || !currentMessage.trim() || loading || apiKeyError"
+                    :disabled="!canChat || !currentMessage.trim() || loading || apiKeyError"
                     @click="sendMessage"
                     aria-label="Send message"
                   />
@@ -154,7 +161,10 @@ const md = new MarkdownIt({
 
 const activeCase = useActiveCaseStore()
 const {
-  contextReady,
+  canChat,
+  availabilityError,
+  checkingAvailability,
+  checkAvailability,
   messages,
   loading,
   currentMessage,

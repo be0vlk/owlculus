@@ -1,7 +1,6 @@
 import { ref, nextTick, computed, watch, onScopeDispose } from 'vue'
 import { useActiveCaseStore } from '@/stores/activeCase'
 import { strixyService } from '@/services/strixy'
-import { systemService } from '@/services/system'
 import { useNotifications } from './useNotifications'
 
 export function useStrixyChat() {
@@ -15,6 +14,17 @@ export function useStrixyChat() {
   const loading = ref(false)
   const currentMessage = ref('')
   const apiKeyError = ref(false)
+  const availabilityError = ref('')
+  const checkingAvailability = ref(false)
+  const availabilityChecked = ref(false)
+  const canChat = computed(
+    () =>
+      contextReady.value &&
+      availabilityChecked.value &&
+      !checkingAvailability.value &&
+      !apiKeyError.value &&
+      !availabilityError.value,
+  )
   const { showError } = useNotifications()
 
   const addMessage = (message, role) => {
@@ -26,8 +36,7 @@ export function useStrixyChat() {
   }
 
   const sendMessage = async () => {
-    if (!contextReady.value || !currentMessage.value.trim() || loading.value || apiKeyError.value)
-      return
+    if (!canChat.value || !currentMessage.value.trim() || loading.value) return
 
     const requestGeneration = generation
     const caseId = activeCase.activeCaseId
@@ -52,6 +61,10 @@ export function useStrixyChat() {
     } catch (error) {
       if (requestGeneration !== generation) return
       console.error('Error sending message:', error)
+      if (isStrixyUnavailable(error)) {
+        availabilityError.value = error.response.data.detail
+        return
+      }
       if ([403, 404].includes(error.response?.status)) {
         await activeCase.recoverUnavailable(caseId)
         return
@@ -79,23 +92,33 @@ export function useStrixyChat() {
     }
   }
 
-  const checkApiKeyStatus = async () => {
+  const isStrixyUnavailable = (error) =>
+    error.response?.status === 403 &&
+    ['strixy_not_assigned', 'strixy_unavailable'].includes(error.response?.data?.code)
+
+  const checkAvailability = async () => {
+    if (!contextReady.value) return
     const requestGeneration = generation
+    const caseId = activeCase.activeCaseId
+    checkingAvailability.value = true
     try {
-      const status = await systemService.checkApiKeyStatus('openai')
+      const status = await strixyService.getAvailability(caseId)
       if (requestGeneration !== generation) return
+      availabilityError.value = ''
       apiKeyError.value = !status.is_configured
-      if (!status.is_configured) {
-        showError('OpenAI API key not configured. Please contact your administrator.')
-      }
+      availabilityChecked.value = true
     } catch (error) {
       if (requestGeneration !== generation) return
-      // Investigators cannot read administrator configuration. The chat endpoint
-      // remains authoritative about whether a model key is configured.
-      if (error.response?.status === 403) return
-      console.error('Error checking OpenAI API key status:', error)
-      apiKeyError.value = true
-      showError('Unable to verify OpenAI API key status. Please contact your administrator.')
+      if (isStrixyUnavailable(error)) {
+        availabilityError.value = error.response.data.detail
+      } else if ([403, 404].includes(error.response?.status)) {
+        availabilityError.value = 'This case is unavailable or you no longer have access.'
+        await activeCase.recoverUnavailable(caseId)
+      } else {
+        availabilityError.value = 'Unable to check Strixy availability. Please try again.'
+      }
+    } finally {
+      if (requestGeneration === generation) checkingAvailability.value = false
     }
   }
 
@@ -107,7 +130,7 @@ export function useStrixyChat() {
         'assistant',
       )
     }
-    await checkApiKeyStatus()
+    await checkAvailability()
   }
 
   const clearChat = async () => {
@@ -116,6 +139,9 @@ export function useStrixyChat() {
     currentMessage.value = ''
     loading.value = false
     apiKeyError.value = false
+    availabilityError.value = ''
+    availabilityChecked.value = false
+    checkingAvailability.value = false
     await initializeChat()
   }
 
@@ -123,6 +149,10 @@ export function useStrixyChat() {
 
   return {
     contextReady,
+    canChat,
+    availabilityError,
+    checkingAvailability,
+    checkAvailability,
     messages,
     loading,
     currentMessage,

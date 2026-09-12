@@ -20,6 +20,9 @@ def initialize_database(database_engine: Engine = engine) -> None:
     from app.database.upgrade_authorization import upgrade as upgrade_authorization
 
     upgrade_authorization(database_engine)
+    from app.database.upgrade_strixy import upgrade as upgrade_strixy
+
+    upgrade_strixy(database_engine)
     if database_engine.dialect.name == "postgresql":
         from app.database.upgrade_executions import upgrade
 

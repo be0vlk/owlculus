@@ -11,10 +11,25 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from app.core.exceptions import ValidationException
+from app.database.models import Case, CaseUserLink, User
 from app.schemas.strixy_schema import ChatResponse
 
 
 class TestStrixyAPI:
+    @pytest.fixture(autouse=True)
+    def assigned_strixy(self, session, test_case_with_users):
+        system = User(
+            system_identity="strixy",
+            username="strixy",
+            email="strixy@system.invalid",
+            role="Analyst",
+            password_hash="!",
+        )
+        session.add(system)
+        session.flush()
+        session.add(CaseUserLink(case_id=test_case_with_users.id, user_id=system.id))
+        session.commit()
+
     @pytest.fixture
     def auth_headers(self, user_token):
         return {"Authorization": f"Bearer {user_token}"}
@@ -126,12 +141,24 @@ class TestStrixyAPI:
     )
     @patch("app.api.strixy.StrixyService")
     def test_rejects_invalid_case_before_model_call(
-        self, mock_service_class, client, auth_headers, test_case, case_source, expected
+        self,
+        mock_service_class,
+        client,
+        auth_headers,
+        test_case,
+        case_source,
+        expected,
+        session,
     ):
+        inaccessible = Case(
+            title="Other case", case_number="OTHER", client_id=test_case.client_id
+        )
+        session.add(inaccessible)
+        session.commit()
         payload = {"messages": [{"role": "user", "content": "Hello"}]}
         if case_source != "omitted":
             payload["case_id"] = (
-                test_case.id if case_source == "inaccessible" else 99999
+                inaccessible.id if case_source == "inaccessible" else 99999
             )
         response = client.post("/api/strixy/chat", json=payload, headers=auth_headers)
         assert response.status_code == expected

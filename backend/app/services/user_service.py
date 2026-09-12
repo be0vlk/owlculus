@@ -118,6 +118,13 @@ class UserService:
         self.db = db
         self.case_access = CaseAccess(db)
 
+    @staticmethod
+    def _require_human_account(user: User) -> None:
+        if user.system_identity is not None:
+            raise AuthorizationException(
+                "Permanent AI system accounts cannot be modified"
+            )
+
     def _find_by_username(self, username: str) -> User | None:
         return self.db.exec(select(User).where(User.username == username)).first()
 
@@ -286,7 +293,9 @@ class UserService:
         self, current_user: User, skip: int = 0, limit: int = 100
     ) -> list[schemas.User]:
         self.case_access.require_admin(current_user)
-        users = self.db.exec(select(User).offset(skip).limit(min(limit, 200))).all()
+        users = self.db.exec(
+            select(User).order_by(col(User.id)).offset(skip).limit(min(limit, 200))
+        ).all()
         return [schemas.User.model_validate(user) for user in users]
 
     @_audit_user_operation("user_update")
@@ -299,6 +308,7 @@ class UserService:
         user = self.db.get(User, user_id)
         if user is None:
             raise ResourceNotFoundException("User not found")
+        self._require_human_account(user)
         if user.is_superadmin and not current_user.is_superadmin:
             raise AuthorizationException("Only superadmin can edit superadmin users")
         updates = user_update.model_dump(exclude_unset=True)
@@ -348,6 +358,7 @@ class UserService:
         user = self.db.get(User, user_id)
         if user is None:
             raise ResourceNotFoundException("User not found")
+        self._require_human_account(user)
         if current_user.id != user_id:
             raise AuthorizationException("Not authorized")
         if not security.verify_password(current_password, user.password_hash):
@@ -363,6 +374,7 @@ class UserService:
         user = self.db.get(User, user_id)
         if user is None:
             raise ResourceNotFoundException("User not found")
+        self._require_human_account(user)
         if user.is_superadmin and not current_user.is_superadmin:
             raise AuthorizationException(
                 "Only superadmin can reset superadmin passwords"
@@ -398,6 +410,7 @@ class UserService:
         user = self.db.get(User, user_id)
         if user is None:
             raise ResourceNotFoundException("User not found")
+        self._require_human_account(user)
         if user.is_superadmin:
             raise AuthorizationException("Cannot delete superadmin user")
         if current_user.id == user_id:

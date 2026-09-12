@@ -11,7 +11,7 @@ from typing import Iterator
 
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.database.models import User
 
@@ -125,8 +125,13 @@ def serialize_first_user_creation(session: Session) -> Iterator[None]:
 
 
 def is_setup_required(session: Session) -> bool:
-    """Return whether the installation has no users yet."""
-    return session.exec(select(User.id).limit(1)).first() is None
+    """Return whether the installation has no human accounts yet."""
+    return (
+        session.exec(
+            select(User.id).where(col(User.system_identity).is_(None)).limit(1)
+        ).first()
+        is None
+    )
 
 
 def check_and_generate_setup_token(session: Session) -> None:
