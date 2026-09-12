@@ -1,9 +1,10 @@
 """Private durable Strixy conversations through the authenticated HTTP boundary."""
 
 import pytest
+from sqlmodel import Session, select
+
 from app.database.models import CaseUserLink, User
 from app.database.upgrade_strixy import upgrade
-from sqlmodel import Session, select
 
 
 @pytest.fixture
@@ -119,7 +120,7 @@ def test_worker_publishes_once_and_uses_saved_history(
     histories = []
 
     def reply(self, messages, config, timeout):
-        histories.append([(m.role, m.content) for m in messages])
+        histories.append([(m.role, m.content) for m in messages if m.role != "system"])
         return ProviderReply(content="A saved answer", input_tokens=12, output_tokens=8)
 
     monkeypatch.setattr(StrixyService, "generate", reply)
@@ -275,9 +276,10 @@ def test_transport_loss_reports_uncertain_completion(
     client, assigned, configured, analyst_token, engine, monkeypatch
 ):
     import httpx
+    from openai import APIConnectionError
+
     from app.executions.strixy_worker import execute
     from app.services.strixy_service import StrixyService
-    from openai import APIConnectionError
 
     def uncertain(*args):
         raise APIConnectionError(

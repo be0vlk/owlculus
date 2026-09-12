@@ -9,6 +9,10 @@ export function useStrixyChat() {
   const conversationId = ref(null)
   const messages = ref([])
   const runs = ref([])
+  const focus = ref([])
+  const sourceOptions = ref([])
+  const sourcePreview = ref(null)
+  const sourceError = ref('')
   const sending = ref(false)
   const currentMessage = ref('')
   const apiKeyError = ref(false)
@@ -35,6 +39,12 @@ export function useStrixyChat() {
     if (!run) return ''
     if (run.limit_code === 'input_limit')
       return 'Conversation limit reached. No answer was generated. Start a new conversation with a shorter question.'
+    if (run.limit_code === 'model_call_limit')
+      return 'Analysis step limit reached. Ask a more focused question to continue.'
+    if (run.error_code === 'sources_changed')
+      return 'Source content or access changed during analysis. Send a new question to use current permitted records.'
+    if (run.error_code === 'invalid_citation')
+      return 'The reply contained an invalid source reference and was withheld. Send a new question to try again.'
     if (run.limit_code === 'output_limit')
       return 'Reply limit reached. The answer may be incomplete; send a follow-up question to continue.'
     if (run.error_code === 'completion_uncertain')
@@ -56,6 +66,8 @@ export function useStrixyChat() {
   const invalidate = () => {
     generation++
     clearTimeout(timer)
+    sourcePreview.value = null
+    sourceError.value = ''
     sending.value = false
   }
   onScopeDispose(invalidate)
@@ -67,6 +79,8 @@ export function useStrixyChat() {
     messages.value = []
     runs.value = []
     conversations.value = []
+    sourcePreview.value = null
+    sourceOptions.value = []
   }
   const handleError = async (error, caseId) => {
     const status = error.response?.status
@@ -155,6 +169,9 @@ export function useStrixyChat() {
       const saved = await strixyService.list(caseId)
       if (token !== generation) return
       conversations.value = saved
+      const catalog = await strixyService.sources(caseId)
+      if (token !== generation) return
+      sourceOptions.value = catalog.sources || []
       if (saved.length) await selectConversation(saved[0].id)
     } catch (error) {
       if (token === generation) await handleError(error, caseId)
@@ -203,7 +220,12 @@ export function useStrixyChat() {
         conversationId.value = created.id
         conversations.value.unshift(created)
       }
-      const run = await strixyService.sendMessage(content, caseId, conversationId.value)
+      const run = await strixyService.sendMessage(
+        content,
+        caseId,
+        conversationId.value,
+        focus.value,
+      )
       if (token !== generation) return
       runs.value.push(run)
       currentMessage.value = ''
@@ -215,11 +237,42 @@ export function useStrixyChat() {
       if (token === generation) sending.value = false
     }
   }
+  const openSource = async (citation) => {
+    const token = generation
+    const caseId = activeCase.activeCaseId
+    sourcePreview.value = null
+    sourceError.value = ''
+    try {
+      const source = await strixyService.source(caseId, citation.source_id)
+      if (token !== generation) return
+      sourcePreview.value = source
+    } catch {
+      if (token === generation)
+        sourceError.value = 'This source is unavailable or your access has changed.'
+    }
+  }
+  const authorizedExport = async () => {
+    const token = generation
+    const caseId = activeCase.activeCaseId
+    const id = conversationId.value
+    if (!id) return null
+    try {
+      const saved = await strixyService.read(caseId, id)
+      if (token !== generation) return null
+      messages.value = saved.messages
+      runs.value = saved.runs
+      return saved
+    } catch (error) {
+      if (token === generation) await handleError(error, caseId)
+      return null
+    }
+  }
   watch(
     () => activeCase.activeCaseId,
     async () => {
       invalidate()
       conversationId.value = null
+      focus.value = []
       clearPrivateContent()
       currentMessage.value = ''
       availabilityError.value = ''
@@ -241,6 +294,12 @@ export function useStrixyChat() {
   )
 
   return {
+    focus,
+    sourceOptions,
+    sourcePreview,
+    sourceError,
+    openSource,
+    authorizedExport,
     contextReady,
     canChat,
     availabilityError,

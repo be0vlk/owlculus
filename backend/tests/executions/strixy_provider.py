@@ -1,5 +1,6 @@
 """Deterministic external model substitute, loaded only by acceptance workers."""
 
+import json
 import os
 import time
 from pathlib import Path
@@ -16,7 +17,15 @@ def generate(self, messages, config, timeout):
     deadline = time.monotonic() + 30
     while not (root / "strixy-release").exists() and time.monotonic() < deadline:
         time.sleep(0.05)
+    source = json.loads(messages[0].content)["sources"][0]
     return ProviderReply(
+        citations=[
+            {
+                "source_id": source["source_id"],
+                "field": "case_number",
+                "excerpt": source["fields"]["case_number"],
+            }
+        ],
         content=f"Saved answer: {messages[-1].content}",
         input_tokens=20,
         output_tokens=10,

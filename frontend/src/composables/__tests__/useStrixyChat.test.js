@@ -127,3 +127,40 @@ it('loads a replacement Case after a background access refresh finishes', async 
   expect(chat.canChat.value).toBe(true)
   expect(api.get).toHaveBeenCalledWith('/api/strixy/cases/1/conversations')
 })
+
+it('submits optional focus and clears it on Case switching', async () => {
+  api.post.mockResolvedValue({ data: { id: 'run', status: 'completed' } })
+  chat.focus.value = ['entity:7']
+  chat.currentMessage.value = 'Compare this record'
+  await chat.sendMessage()
+  expect(api.post).toHaveBeenCalledWith(`${detail}/messages`, {
+    content: 'Compare this record',
+    focus: ['entity:7'],
+  })
+  activeCase.resolve(1)
+  expect(chat.focus.value).toEqual([])
+})
+
+it('discards a late citation preview after switching Cases', async () => {
+  let finish
+  api.get.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve
+      }),
+  )
+  const pending = chat.openSource({ source_id: 'entity:7' })
+  activeCase.resolve(1)
+  finish({ data: { sources: [{ source_id: 'entity:7', fields: { data: 'Private' } }] } })
+  await pending
+  expect(chat.sourcePreview.value).toBe(null)
+})
+
+it('revalidates a saved answer before export and drops revoked text', async () => {
+  chat.messages.value = [{ role: 'assistant', content: 'Previously visible' }]
+  saved = { case_id: 2, messages: [{ role: 'assistant', content: '', withheld: true }], runs: [] }
+  const exported = await chat.authorizedExport()
+  expect(exported.messages[0].withheld).toBe(true)
+  expect(JSON.stringify(exported)).not.toContain('Previously visible')
+  expect(chat.messages.value).toEqual(saved.messages)
+})

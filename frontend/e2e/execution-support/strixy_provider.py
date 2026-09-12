@@ -1,5 +1,6 @@
 """Test-only Strixy external provider; all application lifecycle code stays real."""
 
+import json
 import os
 import time
 from pathlib import Path
@@ -20,8 +21,18 @@ def install():
             if time.monotonic() >= deadline:
                 raise RuntimeError("Browser barrier timed out")
             time.sleep(0.1)
+        source = json.loads(messages[0].content)["sources"][0]
         return ProviderReply(
-            content=f"Saved Strixy reply {marker}", input_tokens=12, output_tokens=8
+            citations=[
+                {
+                    "source_id": source["source_id"],
+                    "field": "case_number",
+                    "excerpt": source["fields"]["case_number"],
+                }
+            ],
+            content=f"Saved Strixy reply {marker}",
+            input_tokens=12,
+            output_tokens=8,
         )
 
     StrixyService.generate = generate

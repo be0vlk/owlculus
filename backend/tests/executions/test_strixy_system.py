@@ -4,12 +4,12 @@ from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 import pytest
-from app.core.security import encrypt_api_key
-from app.database.models import CaseUserLink, SystemConfiguration, User
-from app.database.upgrade_strixy import upgrade
 from celery import Celery
 from sqlmodel import Session, select
 
+from app.core.security import encrypt_api_key
+from app.database.models import CaseUserLink, SystemConfiguration, User
+from app.database.upgrade_strixy import upgrade
 from tests.executions.conftest import eventually
 
 
@@ -66,6 +66,10 @@ def test_accepted_reply_survives_restart_and_duplicate_delivery(strixy_system):
         "Persist me",
         "Saved answer: Persist me",
     ]
+    answer = saved["messages"][-1]
+    assert answer["coverage"]["counts"]["read"] >= 1
+    assert answer["citations"][0]["source_id"] == f"case:{system.case_id}"
+    assert reopened.get(answer["citations"][0]["url"]).status_code == 200
     assert reopened.get(detail).json() == saved
     assert (system.root / "strixy-starts").read_text().splitlines() == ["started"]
 

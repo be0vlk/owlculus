@@ -89,7 +89,8 @@
             />
           </v-card-title>
           <v-card-subtitle class="py-2"
-            >Private to you. Case records and attachments have not been inspected.</v-card-subtitle
+            >Private to you. Findings use permitted Case records. Attachment contents are not yet
+            examined.</v-card-subtitle
           >
           <v-alert v-if="runExplanation" variant="tonal" class="ma-4" role="status">{{
             runExplanation
@@ -126,7 +127,45 @@
                         {{ formatTime(message.timestamp) }}
                       </span>
                     </div>
-                    <div class="message-content" v-html="renderMarkdown(message.content)"></div>
+                    <v-alert v-if="message.withheld" type="warning" variant="tonal">
+                      This answer is unavailable because a required source is unavailable or access
+                      changed.
+                    </v-alert>
+                    <div
+                      v-else
+                      class="message-content"
+                      v-html="renderMarkdown(message.content)"
+                    ></div>
+                    <div v-if="message.coverage" class="mt-3 text-body-small">
+                      {{
+                        message.coverage.mode === 'focused' ? 'Focused analysis' : 'Case briefing'
+                      }}: {{ message.coverage.counts.read }} records read,
+                      {{ message.coverage.counts.partly_read }} partly read,
+                      {{ message.coverage.counts.unexamined }} unexamined.
+                      <strong v-if="!message.coverage.complete">Incomplete coverage.</strong>
+                      <span v-if="!message.coverage.enumeration_complete"
+                        >The record limit was reached; more material may exist.</span
+                      >
+                      Attachments unexamined. Citations verify source references, not the accuracy
+                      of every interpretation.
+                    </div>
+                    <div v-if="message.citations?.length" class="mt-2" aria-label="Sources">
+                      <div
+                        v-for="citation in message.citations"
+                        :key="`${citation.source_id}:${citation.field}:${citation.excerpt}`"
+                      >
+                        <v-btn variant="text" size="small" @click="openSource(citation)">
+                          {{ citation.source_id }} · {{ citation.field }}
+                        </v-btn>
+                        <span v-if="citation.source_status === 'changed'"
+                          >Source changed since this answer.</span
+                        >
+                        <div class="text-body-small">{{ citation.excerpt }}</div>
+                        <div class="text-body-small">
+                          Inspected {{ new Date(citation.inspected_at).toLocaleString() }}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </v-list-item>
               </v-list>
@@ -140,6 +179,20 @@
             <v-divider />
 
             <div class="pa-4">
+              <v-select
+                v-model="focus"
+                :items="sourceOptions"
+                item-title="source_id"
+                item-value="source_id"
+                label="Focus on records (optional)"
+                multiple
+                chips
+                clearable
+                :disabled="!canChat || loading"
+                hint="Leave empty for a bounded Case briefing. Evidence selections include metadata only."
+                persistent-hint
+                class="mb-4"
+              />
               <v-row class="align-center" no-gutters>
                 <v-col>
                   <v-text-field
@@ -170,6 +223,26 @@
       </v-container>
     </v-main>
 
+    <v-alert v-if="sourceError" type="warning" class="ma-4">{{ sourceError }}</v-alert>
+    <v-dialog
+      :model-value="!!sourcePreview"
+      max-width="800"
+      @update:model-value="sourcePreview = null"
+    >
+      <v-card title="Case source">
+        <v-card-text>
+          <div v-for="source in sourcePreview?.sources || []" :key="source.source_id">
+            <strong>{{ source.source_id }}</strong>
+            <div v-for="(value, field) in source.fields" :key="field" class="mb-2">
+              <strong>{{ field }}</strong>
+              <pre class="source-field">{{ value }}</pre>
+            </div>
+            <p v-if="source.attachment">Attachment contents unexamined.</p>
+          </div>
+        </v-card-text>
+        <v-card-actions><v-btn @click="sourcePreview = null">Close source</v-btn></v-card-actions>
+      </v-card>
+    </v-dialog>
     <!-- Confirmation Dialog -->
     <ConfirmationDialog ref="confirmDialog" />
   </div>
@@ -184,13 +257,21 @@ import MarkdownIt from 'markdown-it'
 
 const md = new MarkdownIt({
   html: false,
-  linkify: true,
+  linkify: false,
   typographer: true,
   breaks: true,
 })
 
+md.disable(['link', 'image', 'autolink'])
+
 const activeCase = useActiveCaseStore()
 const {
+  focus,
+  sourceOptions,
+  sourcePreview,
+  sourceError,
+  openSource,
+  authorizedExport,
   canChat,
   availabilityError,
   checkingAvailability,
@@ -238,17 +319,22 @@ const formatTime = (timestamp) => {
   })
 }
 
-const exportChat = () => {
+const exportChat = async () => {
   if (!hasUserMessages.value) return
+  const saved = await authorizedExport()
+  if (!saved) return
 
   const exportData = {
     title: 'Strixy Chat Export',
-    case_id: activeCase.activeCaseId,
+    case_id: saved.case_id,
     exportTime: new Date().toISOString(),
-    messages: messages.value.map((msg) => ({
+    messages: saved.messages.map((msg) => ({
       role: msg.role,
       content: msg.content,
       timestamp: msg.timestamp,
+      citations: msg.citations,
+      coverage: msg.coverage,
+      withheld: msg.withheld,
     })),
   }
 
@@ -275,6 +361,11 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.source-field {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .chat-container {
   max-width: 100%;
 }

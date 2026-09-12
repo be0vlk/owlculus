@@ -1,12 +1,20 @@
 """Owner-scoped persistence and atomic turn acceptance for Strixy."""
 
+import builtins
+
 from fastapi import HTTPException
 from sqlalchemy import delete
 from sqlmodel import Session, col, select
 
 from app.core.utils import get_utc_now
 from app.database.db_utils import transaction
-from app.database.models import StrixyConversation, StrixyMessage, StrixyRun, User
+from app.database.models import (
+    StrixyConversation,
+    StrixyGrounding,
+    StrixyMessage,
+    StrixyRun,
+    User,
+)
 from app.services.strixy_access import require_strixy_access
 
 
@@ -61,11 +69,14 @@ class StrixyConversations:
         conversation = self.owned(conversation_id)
         return {
             **conversation.model_dump(exclude={"owner_id", "deleted_at"}),
-            "messages": self.db.exec(
-                select(StrixyMessage)
-                .where(StrixyMessage.conversation_id == conversation_id)
-                .order_by(col(StrixyMessage.position))
-            ).all(),
+            "messages": [
+                self.message_view(message)
+                for message in self.db.exec(
+                    select(StrixyMessage)
+                    .where(StrixyMessage.conversation_id == conversation_id)
+                    .order_by(col(StrixyMessage.position))
+                ).all()
+            ],
             "runs": [
                 self.run_view(run)
                 for run in self.db.exec(
@@ -75,6 +86,70 @@ class StrixyConversations:
                 ).all()
             ],
         }
+
+    def grounding_for(self, message: StrixyMessage):
+        if message.role != "assistant":
+            return None
+        return self.db.exec(
+            select(StrixyGrounding)
+            .join(StrixyRun)
+            .where(
+                StrixyRun.conversation_id == message.conversation_id,
+                StrixyRun.position == message.position - 1,
+            )
+        ).first()
+
+    def authorized_history(self, conversation_id: str):
+        from app.schemas.strixy_schema import ChatMessage
+        from app.services.strixy_sources import CaseSources
+
+        reader = CaseSources(self.db, self.human, self.case_id)
+        history, inherited = [], []
+        for message in self.db.exec(
+            select(StrixyMessage)
+            .where(StrixyMessage.conversation_id == conversation_id)
+            .order_by(col(StrixyMessage.position))
+        ).all():
+            grounding = self.grounding_for(message)
+            if grounding:
+                if not reader.validate_provenance(grounding.provenance, current=True):
+                    continue
+                inherited.extend(grounding.provenance)
+            history.append(ChatMessage(role=message.role, content=message.content))
+        return history, inherited
+
+    def message_view(self, message: StrixyMessage):
+        from app.services.strixy_sources import CaseSources
+
+        data = message.model_dump()
+        if message.role != "assistant":
+            return data
+        grounding = self.grounding_for(message)
+        if grounding is None:
+            return data
+        reader = CaseSources(self.db, self.human, self.case_id)
+        if not reader.validate_provenance(grounding.provenance):
+            return data | {
+                "content": "",
+                "withheld": True,
+                "citations": [],
+                "coverage": None,
+            }
+        citations = []
+        for citation in grounding.citations:
+            source = reader.read(citation["source_id"])
+            citations.append(
+                citation
+                | {
+                    "source_status": (
+                        "current"
+                        if source.version == citation["version"]
+                        else "changed"
+                    ),
+                    "url": f"/api/strixy/cases/{self.case_id}/sources/{citation['source_id']}",
+                }
+            )
+        return data | {"citations": citations, "coverage": grounding.coverage}
 
     @staticmethod
     def run_view(run: StrixyRun):
@@ -109,13 +184,24 @@ class StrixyConversations:
                     col(StrixyMessage.conversation_id) == conversation_id
                 )
             )
+            run_ids = select(StrixyRun.id).where(
+                StrixyRun.conversation_id == conversation_id
+            )
+            self.db.execute(
+                delete(StrixyGrounding).where(col(StrixyGrounding.run_id).in_(run_ids))
+            )
             self.db.execute(
                 delete(StrixyRun).where(
                     col(StrixyRun.conversation_id) == conversation_id
                 )
             )
 
-    def submit(self, conversation_id: str, content: str):
+    def submit(
+        self,
+        conversation_id: str,
+        content: str,
+        focus: builtins.list[str] | None = None,
+    ):
         from app.core.strixy_config import get_strixy_config
         from app.services.api_key_vault import ConfigurationApiKeyVault, Provider
 
@@ -138,6 +224,12 @@ class StrixyConversations:
                     "OpenAI API key not configured. Ask an administrator to configure it.",
                 )
             config = get_strixy_config()
+            if focus:
+                from app.services.strixy_sources import CaseSources
+
+                reader = CaseSources(self.db, self.human, self.case_id)
+                for source_id in focus:
+                    reader.read(source_id)
             messages = self.db.exec(
                 select(StrixyMessage)
                 .where(StrixyMessage.conversation_id == conversation_id)
@@ -170,5 +262,7 @@ class StrixyConversations:
                 run.limit_code = "input_limit"
                 run.finished_at = get_utc_now()
             self.db.add(run)
+            self.db.flush()
+            self.db.add(StrixyGrounding(run_id=run.id, focus=focus or []))
         self.db.refresh(run)
         return self.run_view(run)

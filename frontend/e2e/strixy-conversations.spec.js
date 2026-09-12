@@ -58,6 +58,12 @@ test('private Strixy conversations survive navigation and keep delayed replies i
     await expect(
       page.getByText(`Saved Strixy reply ${fixture.marker}`, { exact: true }),
     ).toHaveCount(1)
+    await expect(page.getByText('Case briefing:', { exact: false })).toBeVisible()
+    await page
+      .getByRole('button', { name: `case:${fixture.cases[0].id} · case_number`, exact: true })
+      .click()
+    await expect(page.getByRole('dialog')).toContainText(fixture.cases[0].case_number)
+    await page.getByRole('button', { name: 'Close source' }).click()
     await page.getByRole('button', { name: 'Start new conversation' }).click()
     await expect(
       page.getByText(`Saved Strixy reply ${fixture.marker}`, { exact: true }),

@@ -435,3 +435,15 @@ class StrixyRun(SQLModel, table=True):
     configuration: dict = Field(default_factory=dict, sa_column=Column(JSON))
     input_tokens: int = 0
     output_tokens: int = 0
+
+
+class StrixyGrounding(SQLModel, table=True):
+    """Assistant-owned source ledger; no investigative record is modified."""
+
+    run_id: str = Field(
+        foreign_key="strixyrun.id", ondelete="CASCADE", primary_key=True
+    )
+    focus: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    provenance: list[dict] = Field(default_factory=list, sa_column=Column(JSON))
+    citations: list[dict] = Field(default_factory=list, sa_column=Column(JSON))
+    coverage: dict = Field(default_factory=dict, sa_column=Column(JSON))

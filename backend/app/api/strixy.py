@@ -109,9 +109,43 @@ async def submit_message(
     current_user: Annotated[models.User, Depends(get_current_user)],
 ):
     run = StrixyConversations(db, current_user, case_id).submit(
-        conversation_id, request.content
+        conversation_id, request.content, request.focus
     )
     response.headers["Location"] = (
         f"/api/strixy/cases/{case_id}/conversations/{conversation_id}/runs/{run['id']}"
     )
     return run
+
+
+@router.get("/cases/{case_id}/sources")
+async def list_sources(
+    case_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[models.User, Depends(get_current_user)],
+):
+    from app.core.strixy_config import get_strixy_config
+    from app.services.strixy_sources import CaseSources
+
+    sources, complete = CaseSources(db, current_user, case_id).catalog(
+        get_strixy_config()
+    )
+    return {
+        "sources": [{"source_id": s.source_id, "kind": s.kind} for s in sources],
+        "enumeration_complete": complete,
+    }
+
+
+@router.get("/cases/{case_id}/sources/{source_id}")
+async def read_source(
+    case_id: int,
+    source_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[models.User, Depends(get_current_user)],
+):
+    from app.core.strixy_config import get_strixy_config
+    from app.services.strixy_sources import CaseSources, GroundedMaterial
+
+    config = get_strixy_config()
+    source = CaseSources(db, current_user, case_id).read(source_id)
+    material = GroundedMaterial([source], True, config, [])
+    return material.context()

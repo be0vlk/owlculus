@@ -12,10 +12,17 @@ from app.core.strixy_config import StrixyConfig
 from app.core.utils import get_utc_now
 from app.database.connection import engine
 from app.database.db_utils import transaction
-from app.database.models import StrixyConversation, StrixyMessage, StrixyRun, User
+from app.database.models import (
+    StrixyConversation,
+    StrixyGrounding,
+    StrixyMessage,
+    StrixyRun,
+    User,
+)
 from app.schemas.strixy_schema import ChatMessage
 from app.services.strixy_access import require_strixy_access
-from app.services.strixy_service import StrixyService
+from app.services.strixy_analysis import GroundingError, analyze
+from app.services.strixy_sources import CaseSources
 
 
 def lock_run(db: Session, run_id: str):
@@ -83,29 +90,18 @@ def execute(run_id: str, database_engine: Engine = engine):
         deadline = run.deadline
     reply = None
     error = None
-    # Recheck after claim commits, immediately before the external model boundary.
-    with Session(database_engine) as db:
-        try:
-            selected = lock_run(db, run_id)
-            if selected is None or selected[1].status != "running":
-                return
-            authorize(db, *selected)
-            remaining = (deadline - get_utc_now()).total_seconds()
-            if remaining <= 0:
-                error = "runtime_limit"
-            else:
-                service = StrixyService(db)
-                # Release row locks before waiting on external I/O.
-                db.rollback()
-                reply = service.generate(messages, config, remaining)
-        except ValidationException:
-            error = "provider_not_configured"
-        except DomainException:
-            error = "access_revoked"
-        except APIConnectionError:
-            error = "completion_uncertain"
-        except Exception:  # noqa: BLE001 - sanitized external failures
-            error = "provider_failed"
+    try:
+        reply = analyze(run_id, database_engine, config, deadline)
+    except GroundingError as failure:
+        error = failure.code
+    except ValidationException:
+        error = "provider_not_configured"
+    except DomainException:
+        error = "access_revoked"
+    except APIConnectionError:
+        error = "completion_uncertain"
+    except Exception:  # noqa: BLE001 - sanitized external failures
+        error = "provider_failed"
     with Session(database_engine) as db, transaction(db):
         selected = lock_run(db, run_id)
         if selected is None or selected[1].status != "running":
@@ -117,6 +113,13 @@ def execute(run_id: str, database_engine: Engine = engine):
             finish(run, "cancelled", "access_revoked")
             db.add(run)
             return
+        ledger = db.get(StrixyGrounding, run_id)
+        human = db.get(User, conversation.owner_id)
+        assert human is not None
+        if ledger and not CaseSources(
+            db, human, conversation.case_id
+        ).validate_provenance(ledger.provenance, current=True):
+            error = "sources_changed"
         if get_utc_now() >= deadline:
             run.limit_code = "runtime_limit"
             finish(run, "failed", "completion_uncertain")
@@ -128,6 +131,7 @@ def execute(run_id: str, database_engine: Engine = engine):
                 reply.output_tokens,
             )
             run.limit_code = reply.limit_code
+            run.coverage = "case_records"
             if reply.content:
                 db.add(
                     StrixyMessage(
