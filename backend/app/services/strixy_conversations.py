@@ -10,10 +10,12 @@ from app.core.utils import get_utc_now
 from app.database.db_utils import transaction
 from app.database.models import (
     StrixyConversation,
+    StrixyCopiedGrounding,
     StrixyGrounding,
     StrixyMessage,
     StrixyProgress,
     StrixyRun,
+    StrixyShare,
     User,
 )
 from app.services.strixy_access import require_strixy_access
@@ -89,6 +91,9 @@ class StrixyConversations:
         }
 
     def grounding_for(self, message: StrixyMessage):
+        copied = self.db.get(StrixyCopiedGrounding, message.id)
+        if copied:
+            return copied
         if message.role != "assistant":
             return None
         return self.db.exec(
@@ -139,16 +144,21 @@ class StrixyConversations:
         return history, inherited
 
     def message_view(self, message: StrixyMessage):
-        from app.services.strixy_sources import CaseSources
-
         data = message.model_dump()
-        if message.role != "assistant":
-            return data
         grounding = self.grounding_for(message)
         if grounding is None:
             return data
+        if isinstance(grounding, StrixyCopiedGrounding) and grounding.partial:
+            data["partial"] = True
+        return self.grounded_view(
+            data, grounding.provenance, grounding.citations, grounding.coverage
+        )
+
+    def grounded_view(self, data, provenance, saved_citations, coverage):
+        from app.services.strixy_sources import CaseSources
+
         reader = CaseSources(self.db, self.human, self.case_id)
-        if not reader.validate_provenance(grounding.provenance):
+        if not reader.validate_provenance(provenance):
             return data | {
                 "content": "",
                 "withheld": True,
@@ -156,7 +166,7 @@ class StrixyConversations:
                 "coverage": None,
             }
         citations = []
-        for citation in grounding.citations:
+        for citation in saved_citations:
             source = reader.read(citation["source_id"])
             parts = citation["field"].split(":")
             page_query = (
@@ -177,7 +187,7 @@ class StrixyConversations:
                     "url": f"/api/strixy/cases/{self.case_id}/sources/{citation['source_id']}{page_query}",
                 }
             )
-        return data | {"citations": citations, "coverage": grounding.coverage}
+        return data | {"citations": citations, "coverage": coverage or None}
 
     def run_view(self, run: StrixyRun):
         data = run.model_dump(
@@ -292,6 +302,19 @@ class StrixyConversations:
             conversation = self.owned(conversation_id)
             conversation.deleted_at = get_utc_now()
             self.db.add(conversation)
+            self.db.execute(
+                delete(StrixyShare).where(
+                    col(StrixyShare.conversation_id) == conversation_id
+                )
+            )
+            message_ids = select(StrixyMessage.id).where(
+                StrixyMessage.conversation_id == conversation_id
+            )
+            self.db.execute(
+                delete(StrixyCopiedGrounding).where(
+                    col(StrixyCopiedGrounding.message_id).in_(message_ids)
+                )
+            )
             self.db.execute(
                 delete(StrixyMessage).where(
                     col(StrixyMessage.conversation_id) == conversation_id

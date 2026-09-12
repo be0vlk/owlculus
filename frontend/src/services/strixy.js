@@ -28,6 +28,23 @@ export const strixyService = {
   async control(caseId, id, runId, action) {
     return (await api.post(`${base(caseId)}/${id}/runs/${runId}/${action}`)).data
   },
+  async shares(caseId, id) {
+    return (await api.get(`${base(caseId)}/${id}/shares`)).data
+  },
+  async share(caseId, id, throughMessageId) {
+    return (
+      await api.post(`${base(caseId)}/${id}/shares`, { through_message_id: throughMessageId })
+    ).data
+  },
+  async readShare(caseId, id) {
+    return (await api.get(`/api/strixy/cases/${caseId}/shares/${id}`)).data
+  },
+  async revokeShare(caseId, id) {
+    await api.delete(`/api/strixy/cases/${caseId}/shares/${id}`)
+  },
+  async copyShare(caseId, id) {
+    return (await api.post(`/api/strixy/cases/${caseId}/shares/${id}/copy`)).data
+  },
   async sources(caseId) {
     return (await api.get(`/api/strixy/cases/${caseId}/sources`)).data
   },

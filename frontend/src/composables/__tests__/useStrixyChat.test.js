@@ -217,3 +217,30 @@ it('does not let an older poll restore running output after cancellation', async
     vi.useRealTimers()
   }
 })
+
+it('keeps a late shared snapshot out of a newly selected Case', async () => {
+  let finish
+  api.get.mockReturnValueOnce(
+    new Promise((resolve) => {
+      finish = resolve
+    }),
+  )
+  const pending = chat.openShare('shared')
+  activeCase.resolve(1)
+  finish({ data: { id: 'shared', messages: [{ content: 'Other Case secret' }] } })
+  await pending
+  expect(chat.sharedSnapshot.value).toBeNull()
+  expect(chat.visibleMessages.value.some((m) => m.content === 'Other Case secret')).toBe(false)
+})
+
+it('opens fixed read-only content and creates an independent private follow-up', async () => {
+  api.get.mockResolvedValueOnce({ data: { id: 'shared', messages: [{ content: 'Fixed answer' }] } })
+  await chat.openShare('shared')
+  expect(chat.canChat.value).toBe(false)
+  expect(chat.visibleMessages.value).toEqual([{ content: 'Fixed answer' }])
+  api.post.mockResolvedValueOnce({ data: { id: 'copy' } })
+  await chat.copyShare()
+  expect(api.post).toHaveBeenCalledWith('/api/strixy/cases/2/shares/shared/copy')
+  expect(chat.conversationId.value).toBe('copy')
+  expect(chat.sharedSnapshot.value).toBeNull()
+})

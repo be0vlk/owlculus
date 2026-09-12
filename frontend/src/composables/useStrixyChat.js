@@ -9,6 +9,10 @@ export function useStrixyChat() {
   const conversationId = ref(null)
   const messages = ref([])
   const runs = ref([])
+  const shares = ref([])
+  const sharedSnapshot = ref(null)
+  const shareError = ref('')
+  const sharing = ref(false)
   const focus = ref([])
   const sourceOptions = ref([])
   const sourcePreview = ref(null)
@@ -24,22 +28,25 @@ export function useStrixyChat() {
   let observation = 0
   let timer
   const latestRun = computed(() => runs.value.at(-1))
-  const visibleMessages = computed(() =>
-    [
-      ...messages.value,
-      ...runs.value
-        .filter((run) => run.partial)
-        .map((run) => ({
-          ...run.partial,
-          position: run.position + 0.5,
-        })),
-    ].sort((a, b) => a.position - b.position),
+  const visibleMessages = computed(
+    () =>
+      sharedSnapshot.value?.messages ||
+      [
+        ...messages.value,
+        ...runs.value
+          .filter((run) => run.partial)
+          .map((run) => ({
+            ...run.partial,
+            position: run.position + 0.5,
+          })),
+      ].sort((a, b) => a.position - b.position),
   )
   const loading = computed(
     () => sending.value || ['pending', 'running'].includes(latestRun.value?.status),
   )
   const canChat = computed(
     () =>
+      !sharedSnapshot.value &&
       contextReady.value &&
       availabilityChecked.value &&
       !checkingAvailability.value &&
@@ -107,6 +114,10 @@ export function useStrixyChat() {
     sourcePreview.value = null
     sourceError.value = ''
     sending.value = false
+    sharing.value = false
+    sharedSnapshot.value = null
+    shares.value = []
+    shareError.value = ''
   }
   onScopeDispose(invalidate)
   const scrollToBottom = () => {
@@ -116,6 +127,8 @@ export function useStrixyChat() {
   const clearPrivateContent = () => {
     messages.value = []
     runs.value = []
+    sharedSnapshot.value = null
+    shares.value = []
     conversations.value = []
     sourcePreview.value = null
     sourceOptions.value = []
@@ -177,7 +190,16 @@ export function useStrixyChat() {
     messages.value = []
     runs.value = []
     operationError.value = ''
+    const token = generation
+    const caseId = activeCase.activeCaseId
     await refresh()
+    if (!id || token !== generation) return
+    try {
+      const saved = await strixyService.shares(caseId, id)
+      if (token === generation) shares.value = Array.isArray(saved) ? saved : []
+    } catch {
+      if (token === generation) shareError.value = 'Unable to load snapshots.'
+    }
   }
   const checkAvailability = async () => {
     if (!contextReady.value) return
@@ -297,6 +319,73 @@ export function useStrixyChat() {
       if (token === generation) sending.value = false
     }
   }
+  const createShare = async (throughMessageId) => {
+    if (!conversationId.value || sharing.value) return
+    const token = generation
+    const caseId = activeCase.activeCaseId
+    sharing.value = true
+    shareError.value = ''
+    try {
+      const saved = await strixyService.share(caseId, conversationId.value, throughMessageId)
+      if (token === generation) shares.value.push(saved)
+    } catch {
+      if (token === generation)
+        shareError.value =
+          'Unable to share these messages. Reopen the conversation to check current access.'
+    } finally {
+      if (token === generation) sharing.value = false
+    }
+  }
+  const revokeShare = async (id) => {
+    const token = generation
+    const caseId = activeCase.activeCaseId
+    try {
+      await strixyService.revokeShare(caseId, id)
+      if (token === generation) shares.value = shares.value.filter((s) => s.id !== id)
+    } catch {
+      if (token === generation)
+        shareError.value = 'Unable to revoke this snapshot. Reopen to check its status.'
+    }
+  }
+  const openShare = async (id) => {
+    if (!contextReady.value || !id) return
+    invalidate()
+    conversationId.value = null
+    messages.value = []
+    runs.value = []
+    currentMessage.value = ''
+    const token = generation
+    const caseId = activeCase.activeCaseId
+    try {
+      const saved = await strixyService.readShare(caseId, id)
+      if (token === generation) sharedSnapshot.value = saved
+    } catch {
+      if (token === generation)
+        shareError.value =
+          'Snapshot unavailable. It may have been revoked, deleted, or access may have changed.'
+    }
+  }
+  const copyShare = async () => {
+    if (!sharedSnapshot.value || sharing.value) return
+    const token = generation
+    const caseId = activeCase.activeCaseId
+    const id = sharedSnapshot.value.id
+    sharing.value = true
+    try {
+      const created = await strixyService.copyShare(caseId, id)
+      if (token !== generation) return
+      conversations.value.unshift(created)
+      await selectConversation(created.id)
+    } catch {
+      if (token === generation) {
+        sharedSnapshot.value = null
+        shareError.value =
+          'Unable to start a follow-up. The snapshot or required access is unavailable.'
+      }
+    } finally {
+      if (token === generation) sharing.value = false
+    }
+  }
   const openSource = async (citation) => {
     const token = generation
     const caseId = activeCase.activeCaseId
@@ -359,6 +448,14 @@ export function useStrixyChat() {
   )
 
   return {
+    shares,
+    sharedSnapshot,
+    shareError,
+    sharing,
+    createShare,
+    revokeShare,
+    openShare,
+    copyShare,
     latestRun,
     coverageLimits,
     visibleMessages,

@@ -63,3 +63,8 @@ class GroundedAnswer(BaseModel):
     model_config = {"extra": "forbid"}
     content: str
     citations: list[SourceCitation]
+
+
+class CreateShare(BaseModel):
+    model_config = {"extra": "forbid"}
+    through_message_id: str = Field(min_length=1, max_length=36)

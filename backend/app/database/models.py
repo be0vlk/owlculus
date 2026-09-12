@@ -464,3 +464,31 @@ class StrixyProgress(SQLModel, table=True):
     material: dict = Field(default_factory=dict, sa_column=Column(JSON))
     resume_from: str | None = None
     model_calls: int = 0
+
+
+class StrixyShare(SQLModel, table=True):
+    """Immutable snapshot; access is serialized with source conversation deletion."""
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    conversation_id: str = Field(
+        foreign_key="strixyconversation.id", ondelete="CASCADE", index=True
+    )
+    through_message_id: str
+    created_at: datetime = Field(
+        default_factory=get_utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    messages: list[dict] = Field(default_factory=list, sa_column=Column(JSON))
+    provenance: list[dict] = Field(default_factory=list, sa_column=Column(JSON))
+
+
+class StrixyCopiedGrounding(SQLModel, table=True):
+    """Independent provenance for copied messages, without fabricated worker runs."""
+
+    message_id: str = Field(
+        foreign_key="strixymessage.id", ondelete="CASCADE", primary_key=True
+    )
+    partial: bool = False
+    provenance: list[dict] = Field(default_factory=list, sa_column=Column(JSON))
+    citations: list[dict] = Field(default_factory=list, sa_column=Column(JSON))
+    coverage: dict = Field(default_factory=dict, sa_column=Column(JSON))

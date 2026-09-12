@@ -31,6 +31,38 @@
           label="Private conversations"
           @update:model-value="selectConversation"
         />
+        <v-alert v-if="shareError" type="warning" class="mb-4">{{ shareError }}</v-alert>
+        <v-alert v-if="sharedSnapshot" variant="tonal" class="mb-4">
+          Read-only snapshot · {{ sharedSnapshot.message_count }} messages · Shared
+          {{ new Date(sharedSnapshot.created_at).toLocaleString() }}. Later private messages are
+          excluded.
+          <v-btn :loading="sharing" @click="copyShare">Start private follow-up</v-btn>
+          <p>
+            A follow-up is independently owned by you and keeps the sources' access restrictions.
+          </p>
+        </v-alert>
+        <v-expansion-panels v-if="conversationId" class="mb-4">
+          <v-expansion-panel title="Shared snapshots">
+            <v-expansion-panel-text>
+              <p>
+                Share through a message using its Share through here button. Only authorized Case
+                readers can open the fixed snapshot.
+              </p>
+              <div v-for="share in shares" :key="share.id" class="my-3">
+                <v-text-field :model-value="shareLink(share.id)" label="Snapshot link" readonly />
+                <p>
+                  {{ share.message_count }} messages · Shared
+                  {{ new Date(share.created_at).toLocaleString() }}
+                </p>
+                <v-btn @click="revokeShare(share.id)">Revoke snapshot</v-btn>
+              </div>
+              <p>
+                Revocation removes access to the snapshot. It cannot retract information already
+                read or delete independent follow-ups.
+              </p>
+            </v-expansion-panel-text>
+          </v-expansion-panel>
+        </v-expansion-panels>
         <v-alert v-if="operationError" type="warning" class="mb-4">
           {{ operationError }}
           <v-btn variant="text" @click="selectConversation(conversationId)"
@@ -74,7 +106,7 @@
                   v-bind="props"
                   icon="mdi-plus"
                   variant="outlined"
-                  :disabled="!canChat"
+                  :disabled="!!availabilityError"
                   aria-label="Start new conversation"
                   @click="handleNewChat"
                 />
@@ -89,8 +121,9 @@
             />
           </v-card-title>
           <v-card-subtitle class="py-2"
-            >Private to you. Findings use permitted Case records and supported attachment contents.
-            Coverage shows what was examined.</v-card-subtitle
+            >{{ sharedSnapshot ? 'Shared read-only snapshot.' : 'Private to you.' }} Findings use
+            permitted Case records and supported attachment contents. Coverage shows what was
+            examined.</v-card-subtitle
           >
           <v-alert v-if="runExplanation" variant="tonal" class="ma-4" role="status">{{
             runExplanation
@@ -160,13 +193,28 @@
                         class="me-2"
                       />
                       <span class="text-body-small font-weight-medium">
-                        {{ message.role === 'user' ? 'You' : 'Strixy' }}
+                        {{
+                          message.role === 'user'
+                            ? sharedSnapshot
+                              ? 'Conversation participant'
+                              : 'User'
+                            : 'Strixy'
+                        }}
                       </span>
                       <v-spacer />
                       <span class="text-body-small text-medium-emphasis">
                         {{ formatTime(message.timestamp) }}
                       </span>
                     </div>
+                    <v-btn
+                      v-if="!sharedSnapshot && !message.withheld"
+                      size="small"
+                      variant="text"
+                      :disabled="sharing"
+                      @click="createShare(message.id)"
+                    >
+                      Share through here
+                    </v-btn>
                     <div v-if="message.partial" class="text-body-small mb-2">
                       Partial findings · analysis may be incomplete
                     </div>
@@ -232,7 +280,7 @@
 
             <v-divider />
 
-            <div class="pa-4">
+            <div v-if="!sharedSnapshot" class="pa-4">
               <v-select
                 v-model="focus"
                 :items="sourceOptions"
@@ -325,7 +373,8 @@
 
 <script setup>
 import { useActiveCaseStore } from '@/stores/activeCase'
-import { onMounted, computed, ref } from 'vue'
+import { onMounted, computed, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import ConfirmationDialog from '@/components/ConfirmationDialog.vue'
 import StrixyAttachmentCoverage from '@/components/StrixyAttachmentCoverage.vue'
 import { useStrixyChat } from '@/composables/useStrixyChat'
@@ -341,7 +390,17 @@ const md = new MarkdownIt({
 md.disable(['link', 'image', 'autolink'])
 
 const activeCase = useActiveCaseStore()
+const route = useRoute()
+const router = useRouter()
 const {
+  shares,
+  sharedSnapshot,
+  shareError,
+  sharing,
+  createShare,
+  revokeShare,
+  openShare,
+  copyShare: copySharedConversation,
   latestRun,
   coverageLimits,
   visibleMessages,
@@ -364,12 +423,20 @@ const {
   createConversation,
   conversations,
   conversationId,
-  selectConversation,
+  selectConversation: selectPrivateConversation,
   deleteConversation,
   operationError,
   runExplanation,
 } = useStrixyChat()
 
+const selectConversation = async (id) => {
+  await selectPrivateConversation(id)
+  if (route?.query.share) await router.replace({ query: {} })
+}
+const copyShare = async () => {
+  await copySharedConversation()
+  if (conversationId.value && route?.query.share) await router.replace({ query: {} })
+}
 const confirmDialog = ref(null)
 
 const hasUserMessages = computed(() => {
@@ -378,13 +445,14 @@ const hasUserMessages = computed(() => {
 
 const handleNewChat = async () => {
   await createConversation()
+  if (conversationId.value && route?.query.share) await router.replace({ query: {} })
 }
 
 const handleDelete = async () => {
   const confirmed = await confirmDialog.value.confirm({
     title: 'Delete conversation',
     message:
-      'Remove this conversation and its replies from Owlculus? This does not change the provider’s independent retention policies.',
+      'Remove this conversation, its replies, and all its shared snapshots from Owlculus? Independently owned follow-ups remain. This does not change the provider’s independent retention policies.',
     icon: 'mdi-delete',
     confirmText: 'Delete',
     confirmColor: 'error',
@@ -435,9 +503,20 @@ const renderMarkdown = (content) => {
   return md.render(content)
 }
 
+const shareLink = (id) =>
+  `${window.location.origin}/case/${activeCase.activeCaseId}/strixy?share=${encodeURIComponent(id)}`
+const openLinkedShare = async () => {
+  if (
+    typeof route?.query.share === 'string' &&
+    String(route.params.caseId) === String(activeCase.activeCaseId)
+  )
+    await openShare(route?.query.share)
+}
 onMounted(async () => {
   await initializeChat()
+  await openLinkedShare()
 })
+watch(() => route?.query.share, openLinkedShare)
 </script>
 
 <style scoped>

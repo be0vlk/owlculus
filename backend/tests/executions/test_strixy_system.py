@@ -374,3 +374,56 @@ def test_cancellation_during_attachment_preparation_keeps_api_responsive(strixy_
     assert not (system.root / "strixy-starts").exists()
     assert len(client.get(detail).json()["messages"]) == 1
     assert client.get(accepted.headers["location"]).json()["status"] == "cancelled"
+
+
+@pytest.mark.parametrize("race", ["share_delete", "copy_delete", "copy_revoke"])
+def test_snapshot_operations_serialize_with_removal(strixy_system, race):
+    from threading import Barrier
+
+    system = strixy_system
+    _, client = system.api()
+    detail = conversation(client, system)
+    client.post(
+        f"{detail}/messages", json={"content": "Fixed question"}
+    ).raise_for_status()
+    message = client.get(detail).json()["messages"][0]
+    share_url = f"{detail}/shares"
+    payload = {"through_message_id": message["id"]}
+    created = client.post(share_url, json=payload)
+    created.raise_for_status()
+    snapshot_url = f"/api/strixy/cases/{system.case_id}/shares/{created.json()['id']}"
+    barrier = Barrier(2)
+
+    def operation(index):
+        with httpx.Client(
+            base_url=str(client.base_url), headers=client.headers, timeout=15
+        ) as separate:
+            barrier.wait()
+            if index == 0:
+                return (
+                    separate.post(share_url, json=payload)
+                    if race == "share_delete"
+                    else separate.post(f"{snapshot_url}/copy")
+                )
+            return separate.delete(snapshot_url if race == "copy_revoke" else detail)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        created, removed = list(pool.map(operation, range(2)))
+    assert removed.status_code == 204
+    assert created.status_code in (201, 404)
+    assert client.get(snapshot_url).status_code == 404
+    assert client.post(f"{snapshot_url}/copy").status_code == 404
+    if created.status_code == 201 and race != "share_delete":
+        copied_url = (
+            f"/api/strixy/cases/{system.case_id}/conversations/{created.json()['id']}"
+        )
+        assert (
+            client.get(copied_url).json()["messages"][0]["content"] == "Fixed question"
+        )
+    if created.status_code == 201 and race == "share_delete":
+        assert (
+            client.get(
+                f"/api/strixy/cases/{system.case_id}/shares/{created.json()['id']}"
+            ).status_code
+            == 404
+        )

@@ -197,3 +197,63 @@ async def restart_run(
         f"/api/strixy/cases/{case_id}/conversations/{conversation_id}/runs/{run['id']}"
     )
     return run
+
+
+from app.schemas.strixy_schema import CreateShare
+from app.services.strixy_shares import StrixyShares
+
+
+@router.post("/cases/{case_id}/conversations/{conversation_id}/shares", status_code=201)
+async def create_share(
+    case_id: int,
+    conversation_id: str,
+    request: CreateShare,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[models.User, Depends(get_current_user)],
+):
+    return StrixyShares(StrixyConversations(db, current_user, case_id)).create(
+        conversation_id, request.through_message_id
+    )
+
+
+@router.get("/cases/{case_id}/conversations/{conversation_id}/shares")
+async def list_shares(
+    case_id: int,
+    conversation_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[models.User, Depends(get_current_user)],
+):
+    return StrixyShares(StrixyConversations(db, current_user, case_id)).list(
+        conversation_id
+    )
+
+
+@router.get("/cases/{case_id}/shares/{share_id}")
+async def read_share(
+    case_id: int,
+    share_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[models.User, Depends(get_current_user)],
+):
+    return StrixyShares(StrixyConversations(db, current_user, case_id)).read(share_id)
+
+
+@router.delete("/cases/{case_id}/shares/{share_id}", status_code=204)
+async def revoke_share(
+    case_id: int,
+    share_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[models.User, Depends(get_current_user)],
+):
+    StrixyShares(StrixyConversations(db, current_user, case_id)).revoke(share_id)
+    return Response(status_code=204)
+
+
+@router.post("/cases/{case_id}/shares/{share_id}/copy", status_code=201)
+async def copy_share(
+    case_id: int,
+    share_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[models.User, Depends(get_current_user)],
+):
+    return StrixyShares(StrixyConversations(db, current_user, case_id)).copy(share_id)
