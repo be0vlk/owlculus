@@ -219,15 +219,18 @@ class StrixyConversations:
         ).validate_provenance(ledger.provenance):
             data["source_coverage"] = ledger.coverage or None
             if progress and progress.content:
-                data["partial"] = {
-                    "id": run.id,
-                    "role": "assistant",
-                    "content": progress.content,
-                    "timestamp": progress.updated_at,
-                    "citations": ledger.citations,
-                    "coverage": ledger.coverage,
-                    "partial": True,
-                }
+                data["partial"] = self.grounded_view(
+                    {
+                        "id": run.id,
+                        "role": "assistant",
+                        "content": progress.content,
+                        "timestamp": progress.updated_at,
+                        "partial": True,
+                    },
+                    ledger.provenance,
+                    ledger.citations,
+                    ledger.coverage,
+                )
         return data
 
     def observe(self, conversation_id: str, run_id: str):

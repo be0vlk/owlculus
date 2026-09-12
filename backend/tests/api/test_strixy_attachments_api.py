@@ -3,6 +3,7 @@
 import json
 
 import pytest
+
 from app.services.strixy_service import ProviderReply, StrixyService
 from tests.api import test_strixy_conversations_api as fixtures
 from tests.api.test_strixy_sources_api import new_conversation, turn
@@ -11,6 +12,105 @@ assigned = fixtures.assigned
 configured = fixtures.configured
 session = fixtures.session
 strixy = fixtures.strixy
+
+
+@pytest.mark.parametrize("first_format", ["unreadable", "office_warning"])
+def test_continuation_passes_exhausted_attachment_gaps_to_later_records(
+    client,
+    assigned,
+    configured,
+    admin_token,
+    analyst_token,
+    engine,
+    monkeypatch,
+    first_format,
+):
+    from app.core.strixy_config import StrixyConfig
+    from app.executions.strixy_worker import execute
+    from tests.attachment_fixtures import office
+
+    if first_format == "unreadable":
+        name, data, mime = "broken.json", b'{"broken":', "application/json"
+    else:
+        name = "facts.xlsx"
+        data, mime = office("xlsx")
+    first = upload(client, assigned, admin_token, name, data, mime)
+    later = upload(client, assigned, admin_token, "later.txt", b"Later witness found.")
+    monkeypatch.setattr(
+        "app.core.strixy_config.get_strixy_config", lambda: StrixyConfig(max_sources=3)
+    )
+    seen = []
+
+    def reply(self, messages, config, timeout):
+        seen.append(json.loads(messages[0].content))
+        return ProviderReply("A permitted finding")
+
+    monkeypatch.setattr(StrixyService, "generate", reply)
+    detail, owner = new_conversation(client, assigned, analyst_token)
+    saved = turn(client, detail, owner, engine)
+    outcome = next(
+        item
+        for item in saved["runs"][-1]["source_coverage"]["attachment_outcomes"]
+        if item["source_id"] == f"evidence:{first['id']}"
+    )
+    assert outcome["state"] == (
+        "unavailable" if first_format == "unreadable" else "partly_read"
+    )
+    continued = client.post(
+        f"{detail}/runs/{saved['runs'][-1]['id']}/continue", headers=owner
+    )
+    assert continued.status_code == 202, continued.text
+    execute(continued.json()["id"], engine)
+    assert any(
+        source["source_id"] == f"evidence:{later['id']}"
+        and source["fields"].get("attachment:line:1") == "Later witness found."
+        for source in seen[-1]["sources"]
+    )
+    historical = client.get(detail, headers=owner).json()["runs"][0]
+    assert (
+        historical["source_coverage"]["attachment_outcomes"]
+        == saved["runs"][0]["source_coverage"]["attachment_outcomes"]
+    )
+
+
+def test_retained_partial_marks_changed_attachment_without_rewriting_history(
+    client, assigned, configured, admin_token, analyst_token, engine, monkeypatch
+):
+    from app.core import file_storage
+
+    evidence = upload(
+        client, assigned, admin_token, "witness.txt", b"Ada works at Acme."
+    )
+
+    def reply(self, messages, config, timeout):
+        self.on_progress(
+            ProviderReply(
+                "The witness names Acme.",
+                citations=[
+                    {
+                        "source_id": f"evidence:{evidence['id']}",
+                        "field": "attachment:line:1",
+                        "excerpt": "Ada works at Acme.",
+                    }
+                ],
+            )
+        )
+        raise RuntimeError("Deterministic interrupted reply")
+
+    monkeypatch.setattr(StrixyService, "generate", reply)
+    detail, owner = new_conversation(client, assigned, analyst_token)
+    saved = turn(client, detail, owner, engine)
+    original = saved["runs"][0]["partial"]
+    assert saved["runs"][0]["status"] == "failed"
+    (file_storage.UPLOAD_DIR / evidence["content"]).write_bytes(
+        b"Ada works at Otherco."
+    )
+    reopened = client.get(detail, headers=owner).json()["runs"][0]["partial"]
+    assert reopened["content"] == original["content"]
+    assert reopened["timestamp"] == original["timestamp"]
+    assert reopened["citations"][0]["version"] == original["citations"][0]["version"]
+    assert reopened["citations"][0].get("source_status") == "changed"
+    assert client.get(reopened["citations"][0]["url"], headers=owner).status_code == 200
 
 
 @pytest.fixture(autouse=True)

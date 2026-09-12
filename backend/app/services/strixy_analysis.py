@@ -125,7 +125,7 @@ def analyze(
                     cursor = (
                         previous.next_cursor
                         if not previous.enumeration_complete
-                        and all(state == "read" for state in previous.states.values())
+                        and previous.batch_exhausted()
                         else previous.cursor
                     )
                 catalog = None

@@ -89,10 +89,20 @@ class MaterialCheckpoint(BaseModel):
     states: dict[str, Literal["read", "partly_read", "unexamined", "unavailable"]] = (
         Field(default_factory=dict)
     )
+    exhausted_sources: list[str] = Field(default_factory=list)
     offsets: dict[str, dict[str, int]] = Field(default_factory=dict)
     cursor: dict[str, int] = Field(default_factory=dict)
     next_cursor: dict[str, int] = Field(default_factory=dict)
     enumeration_complete: bool = False
+
+    def exhausted(self) -> set[str]:
+        # Older checkpoints already identify completely supplied sources as read.
+        return set(self.exhausted_sources) | {
+            key for key, state in self.states.items() if state == "read"
+        }
+
+    def batch_exhausted(self) -> bool:
+        return self.states.keys() <= self.exhausted()
 
 
 @dataclass
@@ -367,19 +377,24 @@ class GroundedMaterial:
         self.tool_result: dict | None = None
         self.states = {key: "unexamined" for key in self.sources}
         self.previous = previous or MaterialCheckpoint()
+        # Cumulative processing is independent of what fits this model input.
+        # Incomplete but exhausted attachments still retain their honest coverage.
+        self.exhausted_sources = self.previous.exhausted() & self.sources.keys()
         self.catalog = catalog or SourceCatalog(sources, complete)
         self.cursor = cursor or {}
         self.limits = set(self.catalog.limits)
-        self.offsets = dict(self.previous.offsets)
+        self.offsets = {
+            key: value
+            for key, value in self.previous.offsets.items()
+            if key in self.sources
+        }
         self.reused_progress = bool(previous)
         self.remaining = config.max_source_bytes
         self.images: list[VisualInput] = []
         self.visual_remaining = config.visual_max_input_bytes
         ordered = focus or list(self.sources)
         if previous:
-            ordered = sorted(
-                ordered, key=lambda key: previous.states.get(key) == "read"
-            )
+            ordered = sorted(ordered, key=lambda key: key in self.exhausted_sources)
         for source_id in ordered:
             self.read(source_id)
 
@@ -392,7 +407,9 @@ class GroundedMaterial:
             return
         source = self.sources[source_id]
         cached = self.previous.supplied.get(source_id)
-        if cached and self.previous.states.get(source_id) == "read":
+        if source_id in self.exhausted_sources:
+            if not cached:
+                return
             size = len(encoded(cached).encode())
             images = [v for v in self.previous.images if v.source_id == source_id]
             visual_size = sum(len(v.data) for v in images)
@@ -404,7 +421,7 @@ class GroundedMaterial:
                 self.images.extend(images)
                 self.visual_remaining -= visual_size
                 self.supplied[source_id] = cached
-                self.states[source_id] = "read"
+                self.states[source_id] = self.previous.states[source_id]
                 self.remaining -= size
             else:
                 self.limits.add("source_bytes_limit")
@@ -481,6 +498,18 @@ class GroundedMaterial:
         self.states[source_id] = (
             "partly_read" if partial or attachment_partial else "read"
         )
+        # Unit, time and model-input budgets reset on an explicit continuation.
+        # Fixed format/size limitations and warnings cannot be improved by reading
+        # the same unchanged attachment again; reanalysis can retry those outcomes.
+        resumable_attachment = source.prepared and source.prepared["reason"] in {
+            "attachment_unit_limit",
+            "visual_input_limit",
+            "attachment_time_limit",
+            "attachment_processing_limit",
+            "source_changed",
+        }
+        if not partial and not resumable_attachment:
+            self.exhausted_sources.add(source_id)
         if partial:
             self.limits.add(
                 "source_field_limit" if field_limit else "source_bytes_limit"
@@ -534,6 +563,7 @@ class GroundedMaterial:
             supplied=self.supplied,
             images=self.images,
             states=self.states,
+            exhausted_sources=sorted(self.exhausted_sources),
             offsets=self.offsets,
             cursor=self.cursor,
             next_cursor=self.catalog.cursor,

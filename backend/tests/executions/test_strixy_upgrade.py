@@ -2,11 +2,12 @@
 
 from concurrent.futures import ThreadPoolExecutor
 
+from sqlalchemy import text
+from sqlmodel import Session, select
+
 from app.database.init_db import initialize_database
 from app.database.models import User
 from app.database.upgrade_strixy import upgrade
-from sqlalchemy import text
-from sqlmodel import Session, select
 
 
 def test_existing_human_collision_and_concurrent_repeatable_upgrade(execution_system):

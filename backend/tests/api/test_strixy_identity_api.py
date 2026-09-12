@@ -3,12 +3,13 @@
 from unittest.mock import patch
 
 import pytest
+from sqlmodel import select
+
 from app.core import rate_limiting, setup
 from app.core.security import create_access_token
 from app.database.models import User
 from app.database.upgrade_strixy import upgrade
 from app.main import app
-from sqlmodel import select
 
 
 @pytest.fixture

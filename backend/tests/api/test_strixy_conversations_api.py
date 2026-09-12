@@ -748,3 +748,74 @@ def test_continuation_reads_next_record_chunk_without_repeating_preparation(
         execute(run["id"], engine)
         run = client.post(f"{detail}/runs/{run['id']}/continue", headers=owner).json()
     assert "".join(chunks) == evidence.description
+
+
+def test_continuation_finishes_byte_limited_batches_before_later_records(
+    client,
+    assigned,
+    configured,
+    analyst_token,
+    engine,
+    monkeypatch,
+    session,
+    test_analyst,
+):
+    import json
+
+    from app.core.strixy_config import StrixyConfig
+    from app.database.models import Entity
+    from app.executions.strixy_worker import execute
+    from app.services.strixy_service import ProviderReply, StrixyService
+
+    entities = [
+        Entity(
+            case_id=assigned,
+            created_by_id=test_analyst.id,
+            entity_type="person",
+            data={
+                "name": f"Witness {index}",
+                "statement": " ".join(f"fact-{index}-{part:03}" for part in range(60)),
+            },
+        )
+        for index in range(4)
+    ]
+    session.add_all(entities)
+    session.commit()
+    monkeypatch.setattr(
+        "app.core.strixy_config.get_strixy_config",
+        lambda: StrixyConfig(max_sources=3, max_source_bytes=1200),
+    )
+    chunks = {f"entity:{entity.id}": "" for entity in entities}
+    empty_sources = []
+
+    def reply(self, messages, config, timeout):
+        context = json.loads(messages[0].content)
+        for source in context["sources"]:
+            source_id = source["source_id"]
+            if not any(source["fields"].values()):
+                empty_sources.append(source_id)
+            data = source["fields"].get("data", "")
+            if source_id in chunks and data and data not in chunks[source_id]:
+                chunks[source_id] += data
+        return ProviderReply("A permitted finding")
+
+    monkeypatch.setattr(StrixyService, "generate", reply)
+    owner = auth(analyst_token)
+    url = f"/api/strixy/cases/{assigned}/conversations"
+    detail = f"{url}/{client.post(url, headers=owner).json()['id']}"
+    run = client.post(
+        f"{detail}/messages", headers=owner, json={"content": "Analyze all records"}
+    ).json()
+    expected = {
+        f"entity:{entity.id}": json.dumps(entity.data, sort_keys=True)
+        for entity in entities
+    }
+    for _ in range(10):
+        execute(run["id"], engine)
+        if chunks == expected:
+            break
+        response = client.post(f"{detail}/runs/{run['id']}/continue", headers=owner)
+        assert response.status_code == 202, response.text
+        run = response.json()
+    assert chunks == expected
+    assert empty_sources == []
