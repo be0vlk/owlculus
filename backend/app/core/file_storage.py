@@ -290,3 +290,15 @@ async def delete_file(relative_path: str) -> None:
         security_logger.error(f"Failed to delete file {relative_path}: {str(e)}")
 
         raise DomainException("Could not delete file") from e
+
+
+def evidence_file_path(case_id: int, relative_path: str) -> Path:
+    """Resolve stored Evidence inside its own Case; callers authorize the record first."""
+    root = UPLOAD_DIR.resolve()
+    case_root = root / str(case_id)
+    path = (root / relative_path).resolve()
+    if not case_root.is_relative_to(root) or case_root.resolve() != case_root:
+        raise ValueError("Invalid Case storage")
+    if not path.is_relative_to(case_root) or not path.is_file():
+        raise ValueError("Evidence file unavailable")
+    return path

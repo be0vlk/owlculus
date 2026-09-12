@@ -84,6 +84,8 @@ ALLOWED_MIME_TYPES = {
     "application/pdf",
     "application/msword",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     "text/plain",
     "text/html",
     "image/jpeg",
@@ -134,7 +136,11 @@ async def validate_file_security(file: UploadFile) -> None:
 
     # If filetype couldn't detect the type or it's not in allowed types,
     # check if it might be a text file (including HTML)
-    if file.content_type in ["text/plain", "text/html"]:
+    if file.content_type in ["text/plain", "text/html"] or (
+        Path(file.filename).suffix.lower() in {".json", ".csv"}
+        and file.content_type
+        in {"application/json", "text/csv", "application/octet-stream"}
+    ):
         try:
             content.decode("utf-8")
             # If we got here, it's valid UTF-8 text

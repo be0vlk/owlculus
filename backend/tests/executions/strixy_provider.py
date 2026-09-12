@@ -13,6 +13,7 @@ def generate(self, messages, config, timeout):
     root = Path(os.environ["EXECUTION_TEST_DIR"])
     with (root / "strixy-starts").open("a") as output:
         output.write("started\n")
+    (root / "strixy-inputs.json").write_text(messages[0].content)
     source = json.loads(messages[0].content)["sources"][0]
     partial = ProviderReply(
         "Partial answer: " + messages[-1].content,

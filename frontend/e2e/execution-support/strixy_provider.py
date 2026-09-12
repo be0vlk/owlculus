@@ -17,8 +17,10 @@ def install():
         root = Path(os.environ["OWLCULUS_EXECUTION_CONTROLS"])
         with (root / f"{marker}.starts").open("a") as output:
             output.write("started\n")
-        source = json.loads(messages[0].content)["sources"][0]
-        citations = [{"source_id": source["source_id"], "field": "case_number", "excerpt": source["fields"]["case_number"]}]
+        sources = json.loads(messages[0].content)["sources"]
+        source = next((item for item in sources if "attachment:line:1" in item["fields"]), sources[0])
+        field = "attachment:line:1" if "attachment:line:1" in source["fields"] else "case_number"
+        citations = [{"source_id": source["source_id"], "field": field, "excerpt": source["fields"][field]}]
         if self.on_progress:
             self.on_progress(ProviderReply(f"Partial Strixy reply {marker}", citations=citations))
         (root / f"{marker}.ready").touch()
@@ -34,13 +36,7 @@ def install():
         if first and mode == "failure":
             raise RuntimeError("Synthetic provider failure")
         return ProviderReply(
-            citations=[
-                {
-                    "source_id": source["source_id"],
-                    "field": "case_number",
-                    "excerpt": source["fields"]["case_number"],
-                }
-            ],
+            citations=citations,
             content=f"Saved Strixy reply {marker}",
             input_tokens=12,
             output_tokens=8,

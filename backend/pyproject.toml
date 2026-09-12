@@ -10,6 +10,7 @@ dependencies = [
     "celery[redis]==5.6.3",
     "chardet==7.6.0",
     "cryptography==50.0.1",
+    "defusedxml==0.7.1",
     "dnspython==2.8.0",
     "fastapi[standard]==0.115.6",
     "filetype==1.2.0",
@@ -17,6 +18,7 @@ dependencies = [
     "holehe==1.61",
     "idna==3.19",
     "loguru==0.7.3",
+    "olefile==0.47",
     "openai==3.7.0",
     "peopledatalabs==6.4.13",
     "psycopg2-binary==2.9.12",
@@ -66,6 +68,8 @@ warn_unused_configs = true
 # These installed runtime dependencies do not publish stubs or a py.typed marker.
 [[tool.mypy.overrides]]
 module = [
+    "defusedxml.*",
+    "olefile",
     "exiftool",
     "filetype",
     "holehe.*",

@@ -31,6 +31,22 @@ def analyze(
 
     material: GroundedMaterial | None = None
 
+    def before_attachment(source):
+        with Session(database_engine) as db, transaction(db):
+            selected = lock_run(db, run_id)
+            if selected is None or selected[1].status != "running":
+                raise GroundingError("cancelled")
+            conversation, run = selected
+            authorize(db, conversation, run)
+            if get_utc_now() >= deadline:
+                raise GroundingError("runtime_limit")
+            human = db.get(User, conversation.owner_id)
+            assert human is not None
+            if not CaseSources(db, human, conversation.case_id).validate_provenance(
+                [source.reference()], current=True
+            ):
+                raise GroundingError("sources_changed")
+
     def checkpoint(reply: ProviderReply):
         from app.services.strixy_sources import CaseSources
 
@@ -122,10 +138,37 @@ def analyze(
                 else:
                     catalog = reader.catalog(config, cursor)
                     sources, complete = catalog.sources, catalog.complete
-                material = GroundedMaterial(
-                    sources, complete, config, ledger.focus, previous, catalog, cursor
-                )
-            elif not reader.validate_provenance(ledger.provenance, current=True):
+                focus = list(ledger.focus)
+        # Parsing is local but may be expensive. Release lifecycle locks so owners
+        # can cancel/delete while it runs, then fence all inputs before provider I/O.
+        if material is None:
+            material = GroundedMaterial(
+                sources,
+                complete,
+                config,
+                focus,
+                previous,
+                catalog,
+                cursor,
+                preparation_timeout=(deadline - get_utc_now()).total_seconds(),
+                before_attachment=before_attachment,
+            )
+        with Session(database_engine) as db, transaction(db):
+            selected = lock_run(db, run_id)
+            if selected is None or selected[1].status != "running":
+                raise GroundingError("cancelled")
+            conversation, run = selected
+            authorize(db, conversation, run)
+            human = db.get(User, conversation.owner_id)
+            assert human is not None
+            reader = CaseSources(db, human, conversation.case_id)
+            ledger = db.get(StrixyGrounding, run_id) or StrixyGrounding(run_id=run_id)
+            saved_progress = db.get(StrixyProgress, run_id)
+            assert saved_progress is not None
+            progress = saved_progress
+            if not reader.validate_provenance(
+                material.provenance() + ledger.provenance, current=True
+            ):
                 raise GroundingError("sources_changed")
             history, inherited = StrixyConversations(
                 db, human, conversation.case_id

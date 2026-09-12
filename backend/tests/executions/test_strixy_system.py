@@ -4,12 +4,12 @@ from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 import pytest
-from celery import Celery
-from sqlmodel import Session, select
-
 from app.core.security import encrypt_api_key
 from app.database.models import CaseUserLink, SystemConfiguration, User
 from app.database.upgrade_strixy import upgrade
+from celery import Celery
+from sqlmodel import Session, select
+
 from tests.executions.conftest import eventually
 
 
@@ -227,3 +227,106 @@ def test_progress_schema_upgrade_preserves_existing_conversations(strixy_system)
     initialize_database(system.engine)
     _, reopened = system.api()
     assert reopened.get(detail).json() == original
+
+
+def test_mixed_attachments_cross_real_upload_broker_and_worker_boundary(strixy_system):
+    import json
+    from pathlib import Path
+
+    from tests.attachment_fixtures import office
+
+    system = strixy_system
+    _, client = system.api()
+    assert (
+        client.post(
+            "/api/evidence/folders",
+            json={"case_id": system.case_id, "title": "Documents"},
+        ).status_code
+        == 201
+    )
+    fixtures = [
+        ("witness.txt", b"Ada works at Acme.", "text/plain"),
+        ("witness.json", b'{"employer":"Acme"}', "application/json"),
+        ("witness.csv", b"name,employer\nAda,Acme", "text/csv"),
+        (
+            "witness.doc",
+            (Path(__file__).parents[1] / "fixtures/strixy/witness.doc").read_bytes(),
+            "application/msword",
+        ),
+    ]
+    for extension in ("docx", "xlsx", "pptx"):
+        data, mime = office(extension)
+        fixtures.append(("witness." + extension, data, mime))
+    uploaded = client.post(
+        "/api/evidence/",
+        params={
+            "case_id": system.case_id,
+            "title": "Witnesses",
+            "category": "Documents",
+        },
+        files=[("files", item) for item in fixtures],
+    )
+    assert uploaded.status_code == 201 and not uploaded.json()["failed"], uploaded.text
+    detail = conversation(client, system)
+    accepted = client.post(f"{detail}/messages", json={"content": "Read attachments"})
+    assert accepted.status_code == 202
+    system.start("-m", "app.executions.dispatcher")
+    system.worker()
+    eventually(lambda: (system.root / "strixy-ready").exists())
+    supplied = json.loads((system.root / "strixy-inputs.json").read_text())
+    for evidence in uploaded.json()["created"]:
+        source = next(
+            s
+            for s in supplied["sources"]
+            if s["source_id"] == f"evidence:{evidence['id']}"
+        )
+        assert any(
+            "Acme" in text
+            for key, text in source["fields"].items()
+            if key.startswith("attachment:")
+        ), source
+    (system.root / "strixy-release").touch()
+    eventually(
+        lambda: client.get(accepted.headers["location"]).json()["status"] == "completed"
+    )
+    saved = client.get(detail).json()
+    assert len(saved["messages"][-1]["coverage"]["attachment_outcomes"]) == 7
+    assert client.get(detail).json() == saved
+    for evidence, (_, data, _) in zip(uploaded.json()["created"], fixtures):
+        assert client.get(f"/api/evidence/{evidence['id']}/download").content == data
+
+
+def test_cancellation_during_attachment_preparation_keeps_api_responsive(strixy_system):
+    system = strixy_system
+    temporary = system.root / "preparation"
+    temporary.mkdir()
+    system.env["TMPDIR"] = str(temporary)
+    system.env["STRIXY_TEST_RUNTIME_SECONDS"] = "30"
+    _, client = system.api()
+    client.post(
+        "/api/evidence/folders", json={"case_id": system.case_id, "title": "Documents"}
+    ).raise_for_status()
+    data = b"[" + b"0," * 3_999_999 + b"0]"
+    uploaded = client.post(
+        "/api/evidence/",
+        params={"case_id": system.case_id, "title": "Slow", "category": "Documents"},
+        files=[
+            ("files", ("slow.json", data, "application/json")),
+            ("files", ("later.txt", b"Later attachment", "text/plain")),
+        ],
+    )
+    assert uploaded.status_code == 201 and not uploaded.json()["failed"], uploaded.text
+    detail = conversation(client, system)
+    accepted = client.post(
+        f"{detail}/messages", json={"content": "Prepare attachments"}
+    )
+    assert accepted.status_code == 202
+    system.start("-m", "app.executions.dispatcher")
+    system.worker()
+    eventually(lambda: any(temporary.glob("strixy-attachment-*/input.json")))
+    cancelled = client.post(accepted.headers["location"] + "/cancel", timeout=2)
+    assert cancelled.status_code == 200 and cancelled.json()["status"] == "cancelled"
+    eventually(lambda: not list(temporary.glob("strixy-attachment-*")))
+    assert not (system.root / "strixy-starts").exists()
+    assert len(client.get(detail).json()["messages"]) == 1
+    assert client.get(accepted.headers["location"]).json()["status"] == "cancelled"

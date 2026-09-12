@@ -964,6 +964,15 @@ wheels = [
 ]
 
 [[package]]
+name = "olefile"
+version = "0.47"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/69/1b/077b508e3e500e1629d366249c3ccb32f95e50258b231705c09e3c7a4366/olefile-0.47.zip", hash = "sha256:599383381a0bf3dfbd932ca0ca6515acd174ed48870cbf7fee123d698c192c1c", size = 112240, upload-time = "2023-12-01T16:22:53.025Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/17/d3/b64c356a907242d719fc668b71befd73324e47ab46c8ebbbede252c154b2/olefile-0.47-py2.py3-none-any.whl", hash = "sha256:543c7da2a7adadf21214938bb79c83ea12b473a4b6ee4ad4bf854e7715e13d1f", size = 114565, upload-time = "2023-12-01T16:22:51.518Z" },
+]
+
+[[package]]
 name = "openai"
 version = "3.7.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1003,6 +1012,7 @@ dependencies = [
     { name = "celery", extra = ["redis"] },
     { name = "chardet" },
     { name = "cryptography" },
+    { name = "defusedxml" },
     { name = "dnspython" },
     { name = "fastapi", extra = ["standard"] },
     { name = "filetype" },
@@ -1010,6 +1020,7 @@ dependencies = [
     { name = "holehe" },
     { name = "idna" },
     { name = "loguru" },
+    { name = "olefile" },
     { name = "openai" },
     { name = "peopledatalabs" },
     { name = "psycopg2-binary" },
@@ -1047,6 +1058,7 @@ requires-dist = [
     { name = "celery", extras = ["redis"], specifier = "==5.6.3" },
     { name = "chardet", specifier = "==7.6.0" },
     { name = "cryptography", specifier = "==50.0.1" },
+    { name = "defusedxml", specifier = "==0.7.1" },
     { name = "dnspython", specifier = "==2.8.0" },
     { name = "fastapi", extras = ["standard"], specifier = "==0.115.6" },
     { name = "filetype", specifier = "==1.2.0" },
@@ -1054,6 +1066,7 @@ requires-dist = [
     { name = "holehe", specifier = "==1.61" },
     { name = "idna", specifier = "==3.19" },
     { name = "loguru", specifier = "==0.7.3" },
+    { name = "olefile", specifier = "==0.47" },
     { name = "openai", specifier = "==3.7.0" },
     { name = "peopledatalabs", specifier = "==6.4.13" },
     { name = "psycopg2-binary", specifier = "==2.9.12" },

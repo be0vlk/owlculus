@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer'
 import { expect, test } from '@playwright/test'
 import { adminHeaders, bootstrap, investigatorCases, json, loginUi } from './support/workflow'
 import { ready, release, starts } from './execution-support/journey'
@@ -24,6 +25,45 @@ test('private Strixy conversations survive navigation and keep delayed replies i
       data: { api_key: 'deterministic-test-only', name: 'Browser fake' },
     }),
   )
+  await json(
+    await request.post('/api/evidence/folders', {
+      headers: admin,
+      data: { case_id: fixture.cases[0].id, title: 'Documents' },
+    }),
+  )
+  const uploaded = await json(
+    await request.post(
+      `/api/evidence/?title=witness&case_id=${fixture.cases[0].id}&category=Documents`,
+      {
+        headers: admin,
+        multipart: {
+          files: {
+            name: 'witness.txt',
+            mimeType: 'text/plain',
+            buffer: Buffer.from('Ada works at Acme. Employer disputed.'),
+          },
+        },
+      },
+    ),
+  )
+  expect(uploaded.failed).toEqual([])
+  const attachment = uploaded.created[0]
+  const unsupported = await json(
+    await request.post(
+      `/api/evidence/?title=unsupported&case_id=${fixture.cases[0].id}&category=Documents`,
+      {
+        headers: admin,
+        multipart: {
+          files: {
+            name: 'unexamined.html',
+            mimeType: 'text/html',
+            buffer: Buffer.from('<p>Unexamined source</p>'),
+          },
+        },
+      },
+    ),
+  )
+  expect(unsupported.failed).toEqual([])
   const original = `/case/${fixture.cases[0].id}/strixy`
   try {
     await loginUi(page, fixture.credentials)
@@ -59,10 +99,21 @@ test('private Strixy conversations survive navigation and keep delayed replies i
       page.getByText(`Saved Strixy reply ${fixture.marker}`, { exact: true }),
     ).toHaveCount(1)
     await expect(page.getByText('Case briefing:', { exact: false })).toBeVisible()
+    const savedReply = page
+      .getByRole('listitem')
+      .filter({ hasText: `Saved Strixy reply ${fixture.marker}` })
+    await expect(
+      savedReply.getByText('This attachment format is not supported for analysis.', {
+        exact: false,
+      }),
+    ).toBeVisible()
+    await expect(
+      savedReply.getByText(`evidence:${attachment.id}: Attachment examined.`, { exact: false }),
+    ).toBeVisible()
     await page
-      .getByRole('button', { name: `case:${fixture.cases[0].id} · case_number`, exact: true })
+      .getByRole('button', { name: `evidence:${attachment.id} · attachment:line:1`, exact: true })
       .click()
-    await expect(page.getByRole('dialog')).toContainText(fixture.cases[0].case_number)
+    await expect(page.getByRole('dialog')).toContainText('Ada works at Acme. Employer disputed.')
     await page.getByRole('button', { name: 'Close source' }).click()
     await page.getByRole('button', { name: 'Start new conversation' }).click()
     await expect(

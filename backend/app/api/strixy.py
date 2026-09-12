@@ -148,6 +148,12 @@ async def read_source(
     config = get_strixy_config()
     source = CaseSources(db, current_user, case_id).read(source_id)
     material = GroundedMaterial([source], True, config, [])
+    if not CaseSources(db, current_user, case_id).validate_provenance(
+        material.provenance(), current=True
+    ):
+        from app.core.exceptions import ResourceNotFoundException
+
+        raise ResourceNotFoundException("Source unavailable")
     return material.context()
 
 

@@ -68,3 +68,67 @@ it('shows coverage, changed-source citations and authorized previews without mod
   const body = new DOMWrapper(document.body)
   expect(body.find('[role="dialog"]').text()).toContain('Ada in current record')
 })
+
+it('distinguishes examined attachment lines from partial and unavailable attachments', async () => {
+  setActivePinia(createPinia())
+  const active = useActiveCaseStore()
+  Object.assign(active, { initialized: true, accessibleCases: [{ id: 2, case_number: 'CASE-2' }] })
+  active.resolve(2)
+  api.get.mockImplementation(async (url) => ({
+    data: url.endsWith('availability')
+      ? { is_configured: true }
+      : url.endsWith('conversations')
+        ? [{ id: 'one' }]
+        : url.endsWith('/sources')
+          ? { sources: [] }
+          : {
+              messages: [
+                {
+                  role: 'assistant',
+                  content: 'Partial document findings',
+                  timestamp: '2026-01-01T12:00:00Z',
+                  citations: [
+                    {
+                      ...citation,
+                      source_id: 'evidence:8',
+                      field: 'attachment:sheet:Witnesses:row:2',
+                    },
+                  ],
+                  coverage: {
+                    mode: 'broad',
+                    complete: false,
+                    enumeration_complete: true,
+                    counts: { read: 1, partly_read: 1, unexamined: 0 },
+                    attachment_outcomes: [
+                      {
+                        source_id: 'evidence:8',
+                        state: 'partly_read',
+                        reason: 'attachment_unit_limit',
+                        units_read: 2,
+                      },
+                      {
+                        source_id: 'evidence:9',
+                        state: 'unavailable',
+                        reason: 'encrypted_file',
+                        units_read: 0,
+                      },
+                      { source_id: 'evidence:10', state: 'read', units_read: 3 },
+                    ],
+                  },
+                },
+              ],
+              runs: [],
+            },
+  }))
+  wrapper = mountWithVuetify({
+    components: { StrixyChat },
+    template: '<v-app><StrixyChat /></v-app>',
+  })
+  await flushPromises()
+  expect(wrapper.text()).toContain('evidence:8: Attachment partly examined')
+  expect(wrapper.text()).toContain('Attachment unit limit reached')
+  expect(wrapper.text()).toContain('File is encrypted')
+  expect(wrapper.text()).toContain('evidence:10: Attachment examined')
+  expect(wrapper.text()).toContain('attachment:sheet:Witnesses:row:2')
+  expect(wrapper.text()).not.toContain('Attachments unexamined.')
+})

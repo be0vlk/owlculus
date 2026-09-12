@@ -25,8 +25,8 @@ from pydantic import BaseModel, ConfigDict, Field
 class StrixyConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    version: str = "strixy-4-v1"
-    instruction_version: str = "grounded-case-v1"
+    version: str = "strixy-5-v1"
+    instruction_version: str = "grounded-attachments-v1"
     model: str = "gpt-5.4-mini-2026-03-17"
     supports_tools: bool = True
     supports_streaming: bool = True
@@ -58,7 +58,7 @@ class StrixyConfig(BaseModel):
         "state contradictions, uncertainty, missing information and insufficient "
         "evidence explicitly. Cite observations with exact supplied source_id, "
         "field and a nonempty verbatim excerpt. Do not invent citations or URLs. "
-        "Evidence descriptions are metadata; attachment bytes have NOT been read. "
+        "Evidence descriptions are metadata. Only attachment-prefixed fields contain examined attachment contents; use their exact line, row, field, paragraph or slide locators. Other attachment content is unexamined. "
         "Use server coverage, never claim complete coverage when limited. "
         "read_case_sources can list, search or read the bounded permitted set; "
         "each call receives the refreshed material as a new stateless request. "

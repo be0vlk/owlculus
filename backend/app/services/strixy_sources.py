@@ -2,7 +2,9 @@
 
 import hashlib
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from time import monotonic
 from typing import Literal, cast
 
 from pydantic import BaseModel, Field
@@ -21,6 +23,7 @@ from app.executions.results import HuntResultReader
 from app.services.case_access import CaseAccess
 from app.services.evidence_service import EvidenceService
 from app.services.strixy_access import require_strixy_access
+from app.services.strixy_attachments import Attachment, prepare
 
 SourceRow = (
     m.Case
@@ -53,6 +56,8 @@ class CaseSource:
     case_ids: list[int]
     version: str
     attachment: bool = False
+    stored_attachment: Attachment | None = None
+    prepared: dict | None = None
 
     @property
     def source_id(self) -> str:
@@ -71,7 +76,7 @@ class CaseSource:
             "kind": self.kind,
             "fields": self.fields,
             "version": self.version,
-            "attachment": "unexamined" if self.attachment else None,
+            "attachment": self.prepared or ("unexamined" if self.attachment else None),
         }
 
 
@@ -223,11 +228,28 @@ class CaseSources:
             key: value if isinstance(value, str) else encoded(value)
             for key, value in fields.items()
         }
+        stored_attachment = (
+            Attachment.locate(self.case_id, row.content)
+            if isinstance(row, m.Evidence) and attachment
+            else None
+        )
         version = hashlib.sha256(
-            encoded([rendered, getattr(row, "updated_at", None)]).encode()
+            encoded(
+                [
+                    rendered,
+                    getattr(row, "updated_at", None),
+                    stored_attachment.version if stored_attachment else None,
+                ]
+            ).encode()
         ).hexdigest()
         return CaseSource(
-            kind, int(identifier), rendered, sorted(scope), version, attachment
+            kind,
+            int(identifier),
+            rendered,
+            sorted(scope),
+            version,
+            attachment,
+            stored_attachment,
         )
 
     def _correlation(self, payload: dict) -> tuple[dict, set[int]]:
@@ -318,7 +340,18 @@ class GroundedMaterial:
         previous: MaterialCheckpoint | None = None,
         catalog: SourceCatalog | None = None,
         cursor: dict[str, int] | None = None,
+        preparation_timeout: float | None = None,
+        before_attachment: Callable[[CaseSource], None] | None = None,
     ):
+        self.before_attachment = before_attachment
+        self.preparation_deadline = monotonic() + min(
+            config.attachment_seconds,
+            (
+                preparation_timeout
+                if preparation_timeout is not None
+                else config.attachment_seconds
+            ),
+        )
         self.sources = {s.source_id: s for s in sources}
         if set(focus) - self.sources.keys():
             raise ResourceNotFoundException("Focus source unavailable")
@@ -365,6 +398,26 @@ class GroundedMaterial:
         if self.remaining < 256:
             self.limits.add("source_bytes_limit")
             return
+        if source.stored_attachment:
+            if self.before_attachment:
+                self.before_attachment(source)
+            prior = (cached or {}).get("attachment") or {}
+            start = prior.get("start_unit", 0)
+            if prior.get("reason") == "attachment_unit_limit" and not prior.get(
+                "text_truncated"
+            ):
+                start = prior["next_unit"]
+                self.offsets.pop(source_id, None)
+            prepared = prepare(
+                source.stored_attachment,
+                self.config,
+                start=start,
+                timeout=self.preparation_deadline - monotonic(),
+            )
+            source.fields.update(prepared.fields)
+            source.prepared = prepared.view() | {"start_unit": start}
+            if prepared.reason and prepared.reason.endswith("_limit"):
+                self.limits.add(prepared.reason)
         fields = {}
         partial = False
         field_limit = self.config.max_source_field_bytes <= self.remaining - 256
@@ -378,6 +431,15 @@ class GroundedMaterial:
             offsets[key] = offset + len(fields[key].encode())
             partial |= offsets[key] < len(value.encode())
         view = source.view() | {"fields": fields}
+        if (
+            source.prepared
+            and partial
+            and any(key.startswith("attachment:") for key in fields)
+        ):
+            view["attachment"] = source.prepared | {
+                "state": "partly_read",
+                "text_truncated": True,
+            }
         size = len(encoded(view).encode())
         if size > self.remaining:
             self.limits.add("source_bytes_limit")
@@ -385,7 +447,10 @@ class GroundedMaterial:
         self.remaining -= size
         self.offsets[source_id] = offsets
         self.supplied[source_id] = view
-        self.states[source_id] = "partly_read" if partial else "read"
+        attachment_partial = source.prepared and source.prepared["state"] != "read"
+        self.states[source_id] = (
+            "partly_read" if partial or attachment_partial else "read"
+        )
         if partial:
             self.limits.add(
                 "source_field_limit" if field_limit else "source_bytes_limit"
@@ -444,17 +509,31 @@ class GroundedMaterial:
             enumeration_complete=self.complete,
         ).model_dump()
 
+    def attachment_outcome(self, key: str) -> dict:
+        outcome = self.supplied.get(key, {}).get("attachment")
+        return outcome if isinstance(outcome, dict) else {"state": "unexamined"}
+
     def coverage(self) -> dict:
+        attachments_read = all(
+            not source.attachment or self.attachment_outcome(key).get("state") == "read"
+            for key, source in self.sources.items()
+        )
         return {
             "mode": "focused" if self.focus else "batch" if self.cursor else "broad",
             "limits": sorted(self.limits),
             "enumeration_complete": self.complete,
-            "attachments": "unexamined",
-            "complete": self.complete
+            "attachments": "examined" if attachments_read else "incomplete",
+            "attachment_outcomes": [
+                {"source_id": key, **self.attachment_outcome(key)}
+                for key, s in self.sources.items()
+                if s.attachment
+            ],
+            "complete": not self.reused_progress
+            and self.complete
             and not self.focus
             and not self.cursor
             and all(v == "read" for v in self.states.values())
-            and not any(s.attachment for s in self.sources.values()),
+            and attachments_read,
             "counts": {
                 state: list(self.states.values()).count(state)
                 for state in ("read", "partly_read", "unexamined", "unavailable")

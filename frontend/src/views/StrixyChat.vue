@@ -89,8 +89,8 @@
             />
           </v-card-title>
           <v-card-subtitle class="py-2"
-            >Private to you. Findings use permitted Case records. Attachment contents are not yet
-            examined.</v-card-subtitle
+            >Private to you. Findings use permitted Case records and supported attachment contents.
+            Coverage shows what was examined.</v-card-subtitle
           >
           <v-alert v-if="runExplanation" variant="tonal" class="ma-4" role="status">{{
             runExplanation
@@ -133,6 +133,7 @@
             {{ latestRun.source_coverage.counts.unexamined }} unexamined.
             <strong v-if="!latestRun.source_coverage.complete">Incomplete coverage.</strong>
             {{ coverageLimits(latestRun.source_coverage) }}
+            <StrixyAttachmentCoverage :outcomes="latestRun.source_coverage.attachment_outcomes" />
           </div>
           <v-divider />
 
@@ -193,8 +194,11 @@
                       <span v-if="!message.coverage.enumeration_complete"
                         >The record limit was reached; more material may exist.</span
                       >
-                      Attachments unexamined. Citations verify source references, not the accuracy
-                      of every interpretation.
+                      <StrixyAttachmentCoverage :outcomes="message.coverage.attachment_outcomes" />
+                      <span v-if="!message.coverage.attachment_outcomes"
+                        >Attachments unexamined.</span
+                      >
+                      Citations verify source references, not the accuracy of every interpretation.
                     </div>
                     <div v-if="message.citations?.length" class="mt-2" aria-label="Sources">
                       <div
@@ -236,7 +240,7 @@
                 chips
                 clearable
                 :disabled="!canChat || loading"
-                hint="Leave empty for a bounded Case briefing. Evidence selections include metadata only."
+                hint="Leave empty for a bounded Case briefing. Evidence selections include supported attachment contents."
                 persistent-hint
                 class="mb-4"
               />
@@ -284,7 +288,11 @@
               <strong>{{ field }}</strong>
               <pre class="source-field">{{ value }}</pre>
             </div>
-            <p v-if="source.attachment">Attachment contents unexamined.</p>
+            <StrixyAttachmentCoverage
+              v-if="source.attachment && typeof source.attachment === 'object'"
+              :outcomes="[{ source_id: source.source_id, ...source.attachment }]"
+            />
+            <p v-else-if="source.attachment">Attachment contents unexamined.</p>
           </div>
         </v-card-text>
         <v-card-actions><v-btn @click="sourcePreview = null">Close source</v-btn></v-card-actions>
@@ -299,6 +307,7 @@
 import { useActiveCaseStore } from '@/stores/activeCase'
 import { onMounted, computed, ref } from 'vue'
 import ConfirmationDialog from '@/components/ConfirmationDialog.vue'
+import StrixyAttachmentCoverage from '@/components/StrixyAttachmentCoverage.vue'
 import { useStrixyChat } from '@/composables/useStrixyChat'
 import MarkdownIt from 'markdown-it'
 
