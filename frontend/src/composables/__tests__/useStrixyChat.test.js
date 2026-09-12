@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { effectScope } from 'vue'
+import { flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { useStrixyChat } from '../useStrixyChat'
 import { useActiveCaseStore } from '../../stores/activeCase'
@@ -163,4 +164,56 @@ it('revalidates a saved answer before export and drops revoked text', async () =
   expect(exported.messages[0].withheld).toBe(true)
   expect(JSON.stringify(exported)).not.toContain('Previously visible')
   expect(chat.messages.value).toEqual(saved.messages)
+})
+
+it('recovers streamed findings, cancels owned work and explicitly continues', async () => {
+  saved = {
+    messages: [{ id: 'question', position: 0, role: 'user', content: 'Question' }],
+    runs: [
+      {
+        id: 'run',
+        position: 0,
+        status: 'running',
+        progress: 'preparing_findings',
+        partial: { id: 'run', content: 'Partial finding', role: 'assistant' },
+      },
+    ],
+  }
+  await chat.selectConversation('one')
+  expect(chat.visibleMessages.value.map((message) => message.content)).toEqual([
+    'Question',
+    'Partial finding',
+  ])
+  saved.runs[0].status = 'cancelled'
+  api.post.mockResolvedValue({ data: saved.runs[0] })
+  await chat.controlRun('cancel')
+  expect(api.post).toHaveBeenCalledWith(`${detail}/runs/run/cancel`)
+  expect(chat.runExplanation.value).toContain('already sent')
+  saved.runs.push({ id: 'continued', position: 1, status: 'pending' })
+  await chat.controlRun('continue')
+  expect(api.post).toHaveBeenLastCalledWith(`${detail}/runs/run/continue`)
+})
+
+it('does not let an older poll restore running output after cancellation', async () => {
+  vi.useFakeTimers()
+  try {
+    saved = { messages: [], runs: [{ id: 'run', status: 'running' }] }
+    await chat.selectConversation('one')
+    let finishPoll
+    api.get.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishPoll = resolve
+        }),
+    )
+    await vi.advanceTimersByTimeAsync(1000)
+    saved = { messages: [], runs: [{ id: 'run', status: 'cancelled' }] }
+    api.post.mockResolvedValue({ data: saved.runs[0] })
+    await chat.controlRun('cancel')
+    finishPoll({ data: { messages: [], runs: [{ id: 'run', status: 'running' }] } })
+    await flushPromises()
+    expect(chat.latestRun.value.status).toBe('cancelled')
+  } finally {
+    vi.useRealTimers()
+  }
 })

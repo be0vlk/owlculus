@@ -2,9 +2,10 @@
 
 import hashlib
 import json
-from dataclasses import dataclass
-from typing import cast
+from dataclasses import dataclass, field
+from typing import Literal, cast
 
+from pydantic import BaseModel, Field
 from sqlmodel import Session, col, select
 
 from app.core.exceptions import AuthorizationException, ResourceNotFoundException
@@ -72,6 +73,27 @@ class CaseSource:
             "version": self.version,
             "attachment": "unexamined" if self.attachment else None,
         }
+
+
+class MaterialCheckpoint(BaseModel):
+    """Version-checked preparation state; cursors are internal, never model inputs."""
+
+    supplied: dict[str, dict] = Field(default_factory=dict)
+    states: dict[str, Literal["read", "partly_read", "unexamined", "unavailable"]] = (
+        Field(default_factory=dict)
+    )
+    offsets: dict[str, dict[str, int]] = Field(default_factory=dict)
+    cursor: dict[str, int] = Field(default_factory=dict)
+    next_cursor: dict[str, int] = Field(default_factory=dict)
+    enumeration_complete: bool = False
+
+
+@dataclass
+class SourceCatalog:
+    sources: list[CaseSource]
+    complete: bool
+    cursor: dict[str, int] = field(default_factory=dict)
+    limits: list[str] = field(default_factory=list)
 
 
 class CaseSources:
@@ -221,9 +243,14 @@ class CaseSources:
         scope.update(match["case_id"] for match in data.get("matches", []))
         return payload, scope
 
-    def catalog(self, config: StrixyConfig) -> tuple[list[CaseSource], bool]:
-        sources = [self.read(f"case:{self.case_id}")]
-        complete = True
+    def catalog(
+        self, config: StrixyConfig, cursor: dict[str, int] | None = None
+    ) -> SourceCatalog:
+        after = dict(cursor or {})
+        sources = []
+        if "case" not in after:
+            sources.append(self.read(f"case:{self.case_id}"))
+            after["case"] = self.case_id
         queries = {
             "entity": select(m.Entity.id).where(m.Entity.case_id == self.case_id),
             "evidence": select(m.Evidence.id).where(m.Evidence.case_id == self.case_id),
@@ -244,21 +271,23 @@ class CaseSources:
         }
         for kind, query in queries.items():
             rows = self.db.exec(
-                query.order_by(col(SOURCE_MODELS[kind].id)).limit(
-                    config.max_source_scan + 1
-                )
+                query.where(col(SOURCE_MODELS[kind].id) > after.get(kind, 0))
+                .order_by(col(SOURCE_MODELS[kind].id))
+                .limit(config.max_source_scan + 1)
             ).all()
-            if len(rows) > config.max_source_scan:
-                complete = False
             for identifier in rows[: config.max_source_scan]:
+                if len(sources) >= config.max_sources:
+                    return SourceCatalog(sources, False, after, ["source_count_limit"])
+                assert identifier is not None
+                after[kind] = identifier
                 try:
                     source = self.read(f"{kind}:{identifier}")
                 except (AuthorizationException, ResourceNotFoundException):
                     continue
-                if len(sources) >= config.max_sources:
-                    return sources, False
                 sources.append(source)
-        return sources, complete
+            if len(rows) > config.max_source_scan:
+                return SourceCatalog(sources, False, after, ["source_scan_limit"])
+        return SourceCatalog(sources, True, after)
 
     def validate_provenance(
         self, references: list[dict], *, current: bool = False
@@ -286,6 +315,9 @@ class GroundedMaterial:
         complete: bool,
         config: StrixyConfig,
         focus: list[str],
+        previous: MaterialCheckpoint | None = None,
+        catalog: SourceCatalog | None = None,
+        cursor: dict[str, int] | None = None,
     ):
         self.sources = {s.source_id: s for s in sources}
         if set(focus) - self.sources.keys():
@@ -297,8 +329,19 @@ class GroundedMaterial:
         self.supplied: dict[str, dict] = {}
         self.tool_result: dict | None = None
         self.states = {key: "unexamined" for key in self.sources}
+        self.previous = previous or MaterialCheckpoint()
+        self.catalog = catalog or SourceCatalog(sources, complete)
+        self.cursor = cursor or {}
+        self.limits = set(self.catalog.limits)
+        self.offsets = dict(self.previous.offsets)
+        self.reused_progress = bool(previous)
         self.remaining = config.max_source_bytes
-        for source_id in focus or list(self.sources):
+        ordered = focus or list(self.sources)
+        if previous:
+            ordered = sorted(
+                ordered, key=lambda key: previous.states.get(key) == "read"
+            )
+        for source_id in ordered:
             self.read(source_id)
 
     def read(self, source_id: str):
@@ -309,23 +352,44 @@ class GroundedMaterial:
         if source_id in self.supplied:
             return
         source = self.sources[source_id]
+        cached = self.previous.supplied.get(source_id)
+        if cached and self.previous.states.get(source_id) == "read":
+            size = len(encoded(cached).encode())
+            if size <= self.remaining:
+                self.supplied[source_id] = cached
+                self.states[source_id] = "read"
+                self.remaining -= size
+            else:
+                self.limits.add("source_bytes_limit")
+            return
         if self.remaining < 256:
+            self.limits.add("source_bytes_limit")
             return
         fields = {}
         partial = False
+        field_limit = self.config.max_source_field_bytes <= self.remaining - 256
         budget = min(self.config.max_source_field_bytes, self.remaining - 256)
+        offsets = dict(self.offsets.get(source_id, {}))
         for key, value in source.fields.items():
-            raw = value.encode()
+            offset = offsets.get(key, 0)
+            raw = value.encode()[offset:]
             fields[key] = raw[:budget].decode("utf-8", errors="ignore")
             budget -= len(fields[key].encode())
-            partial |= fields[key] != value
+            offsets[key] = offset + len(fields[key].encode())
+            partial |= offsets[key] < len(value.encode())
         view = source.view() | {"fields": fields}
         size = len(encoded(view).encode())
         if size > self.remaining:
+            self.limits.add("source_bytes_limit")
             return
         self.remaining -= size
+        self.offsets[source_id] = offsets
         self.supplied[source_id] = view
         self.states[source_id] = "partly_read" if partial else "read"
+        if partial:
+            self.limits.add(
+                "source_field_limit" if field_limit else "source_bytes_limit"
+            )
 
     def lookup(self, source_id: str):
         self.read(source_id)
@@ -359,6 +423,7 @@ class GroundedMaterial:
 
     def context(self) -> dict:
         return {
+            "reused_progress": self.reused_progress,
             "tool_result": self.tool_result,
             "sources": list(self.supplied.values()),
             "coverage": self.coverage(),
@@ -369,13 +434,25 @@ class GroundedMaterial:
             ],
         }
 
+    def checkpoint(self) -> dict:
+        return MaterialCheckpoint(
+            supplied=self.supplied,
+            states=self.states,
+            offsets=self.offsets,
+            cursor=self.cursor,
+            next_cursor=self.catalog.cursor,
+            enumeration_complete=self.complete,
+        ).model_dump()
+
     def coverage(self) -> dict:
         return {
-            "mode": "focused" if self.focus else "broad",
+            "mode": "focused" if self.focus else "batch" if self.cursor else "broad",
+            "limits": sorted(self.limits),
             "enumeration_complete": self.complete,
             "attachments": "unexamined",
             "complete": self.complete
             and not self.focus
+            and not self.cursor
             and all(v == "read" for v in self.states.values())
             and not any(s.attachment for s in self.sources.values()),
             "counts": {

@@ -73,3 +73,79 @@ def test_responses_adapter_translates_function_request_without_executing_it():
         }
     ]
     assert reply.content == "" and reply.citations == []
+
+
+def test_streams_only_visible_answer_content_and_retains_incomplete_output():
+    client = MagicMock()
+    client.__enter__.return_value = client
+    stream = MagicMock()
+    stream.__enter__.return_value = stream
+    stream.__iter__.return_value = iter(
+        [
+            Mock(type="response.reasoning_text.delta", delta="private reasoning"),
+            Mock(type="response.output_text.delta", delta='{"content":"A useful'),
+            Mock(type="response.output_text.delta", delta=" partial finding"),
+            Mock(
+                type="response.incomplete",
+                response=Mock(
+                    status="incomplete",
+                    incomplete_details=Mock(reason="max_output_tokens"),
+                    output_text='{"content":"A useful partial finding',
+                    output=[],
+                    usage=Mock(input_tokens=10, output_tokens=16),
+                ),
+            ),
+        ]
+    )
+    client.responses.create.return_value = stream
+    updates = []
+    service = StrixyService(
+        Mock(), StaticApiKeyVault({Provider.OPENAI: "fake"}), on_progress=updates.append
+    )
+    with patch("app.services.strixy_service.OpenAI", return_value=client):
+        result = service.generate(
+            [ChatMessage(role="user", content="Question")], StrixyConfig(), 12
+        )
+    assert updates[0].content == "A useful"
+    assert result.content == "A useful partial finding"
+    assert result.limit_code == "output_limit"
+    assert result.citations == []
+    assert "private reasoning" not in str(updates)
+    assert client.responses.create.call_args.kwargs["stream"] is True
+
+
+def test_streaming_preserves_complete_citations_before_output_limit():
+    client = MagicMock()
+    client.__enter__.return_value = client
+    citation = {"source_id": "case:1", "field": "title", "excerpt": "Known fact"}
+    import json
+
+    text = json.dumps({"content": "Finding", "citations": [citation]})[:-2]
+    stream = MagicMock()
+    stream.__enter__.return_value = stream
+    stream.__iter__.return_value = iter(
+        [
+            Mock(type="response.output_text.delta", delta=text),
+            Mock(
+                type="response.incomplete",
+                response=Mock(
+                    status="incomplete",
+                    incomplete_details=Mock(reason="max_output_tokens"),
+                    output_text=text,
+                    output=[],
+                    usage=None,
+                ),
+            ),
+        ]
+    )
+    client.responses.create.return_value = stream
+    updates = []
+    service = StrixyService(
+        Mock(), StaticApiKeyVault({Provider.OPENAI: "fake"}), on_progress=updates.append
+    )
+    with patch("app.services.strixy_service.OpenAI", return_value=client):
+        reply = service.generate([], StrixyConfig(), 12)
+    assert updates[0].citations == [citation]
+    assert reply.citations == [citation]
+    assert reply.content == "Finding"
+    assert reply.limit_code == "output_limit"

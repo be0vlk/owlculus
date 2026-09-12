@@ -13,11 +13,31 @@ def generate(self, messages, config, timeout):
     root = Path(os.environ["EXECUTION_TEST_DIR"])
     with (root / "strixy-starts").open("a") as output:
         output.write("started\n")
+    source = json.loads(messages[0].content)["sources"][0]
+    partial = ProviderReply(
+        "Partial answer: " + messages[-1].content,
+        citations=[
+            {
+                "source_id": source["source_id"],
+                "field": "case_number",
+                "excerpt": source["fields"]["case_number"],
+            }
+        ],
+    )
+    if self.on_progress:
+        self.on_progress(partial)
     (root / "strixy-ready").touch()
     deadline = time.monotonic() + 30
     while not (root / "strixy-release").exists() and time.monotonic() < deadline:
         time.sleep(0.05)
     source = json.loads(messages[0].content)["sources"][0]
+    mode = (root / "strixy-mode").read_text() if (root / "strixy-mode").exists() else ""
+    if mode == "failure":
+        raise RuntimeError("private provider failure")
+    if mode == "limit":
+        return ProviderReply(
+            "", input_tokens=20, output_tokens=2000, limit_code="output_limit"
+        )
     return ProviderReply(
         citations=[
             {
@@ -36,4 +56,6 @@ def install():
     StrixyService.generate = generate
     from app.core import strixy_config
 
-    strixy_config.get_strixy_config = lambda: StrixyConfig(runtime_seconds=3)
+    strixy_config.get_strixy_config = lambda: StrixyConfig(
+        runtime_seconds=int(os.environ.get("STRIXY_TEST_RUNTIME_SECONDS", "3"))
+    )

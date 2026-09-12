@@ -447,3 +447,20 @@ class StrixyGrounding(SQLModel, table=True):
     provenance: list[dict] = Field(default_factory=list, sa_column=Column(JSON))
     citations: list[dict] = Field(default_factory=list, sa_column=Column(JSON))
     coverage: dict = Field(default_factory=dict, sa_column=Column(JSON))
+
+
+class StrixyProgress(SQLModel, table=True):
+    """Replaceable run checkpoint; never a second transcript or provider session."""
+
+    run_id: str = Field(
+        foreign_key="strixyrun.id", ondelete="CASCADE", primary_key=True
+    )
+    phase: str = "locating_records"
+    content: str = ""
+    updated_at: datetime = Field(
+        default_factory=get_utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    material: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    resume_from: str | None = None
+    model_calls: int = 0

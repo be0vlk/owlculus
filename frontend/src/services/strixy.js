@@ -25,6 +25,9 @@ export const strixyService = {
       })
     ).data
   },
+  async control(caseId, id, runId, action) {
+    return (await api.post(`${base(caseId)}/${id}/runs/${runId}/${action}`)).data
+  },
   async sources(caseId) {
     return (await api.get(`/api/strixy/cases/${caseId}/sources`)).data
   },

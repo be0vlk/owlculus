@@ -12,6 +12,7 @@ from app.database.models import (
     StrixyConversation,
     StrixyGrounding,
     StrixyMessage,
+    StrixyProgress,
     StrixyRun,
     User,
 )
@@ -116,6 +117,25 @@ class StrixyConversations:
                     continue
                 inherited.extend(grounding.provenance)
             history.append(ChatMessage(role=message.role, content=message.content))
+            if message.role == "user":
+                prior = self.db.exec(
+                    select(StrixyRun).where(
+                        StrixyRun.conversation_id == conversation_id,
+                        StrixyRun.position == message.position,
+                    )
+                ).first()
+                progress = self.db.get(StrixyProgress, prior.id) if prior else None
+                ledger = self.db.get(StrixyGrounding, prior.id) if prior else None
+                if (
+                    progress
+                    and progress.content
+                    and ledger
+                    and reader.validate_provenance(ledger.provenance, current=True)
+                ):
+                    history.append(
+                        ChatMessage(role="assistant", content=progress.content)
+                    )
+                    inherited.extend(ledger.provenance)
         return history, inherited
 
     def message_view(self, message: StrixyMessage):
@@ -151,9 +171,8 @@ class StrixyConversations:
             )
         return data | {"citations": citations, "coverage": grounding.coverage}
 
-    @staticmethod
-    def run_view(run: StrixyRun):
-        return run.model_dump(
+    def run_view(self, run: StrixyRun):
+        data = run.model_dump(
             exclude={
                 "configuration",
                 "strixy_id",
@@ -167,11 +186,97 @@ class StrixyConversations:
             "instruction_version": run.configuration.get("instruction_version"),
         }
 
+        from app.services.strixy_sources import CaseSources
+
+        progress = self.db.get(StrixyProgress, run.id)
+        ledger = self.db.get(StrixyGrounding, run.id)
+        data.update(
+            progress=progress.phase if progress else "locating_records",
+            partial=None,
+            source_coverage=None,
+            model_calls=progress.model_calls if progress else 0,
+        )
+        if ledger and CaseSources(
+            self.db, self.human, self.case_id
+        ).validate_provenance(ledger.provenance):
+            data["source_coverage"] = ledger.coverage or None
+            if progress and progress.content:
+                data["partial"] = {
+                    "id": run.id,
+                    "role": "assistant",
+                    "content": progress.content,
+                    "timestamp": progress.updated_at,
+                    "citations": ledger.citations,
+                    "coverage": ledger.coverage,
+                    "partial": True,
+                }
+        return data
+
     def observe(self, conversation_id: str, run_id: str):
         self.owned(conversation_id)
         run = self.db.get(StrixyRun, run_id)
         if run is None or run.conversation_id != conversation_id:
             raise HTTPException(404, "Run not found")
+        return self.run_view(run)
+
+    def restart(self, conversation_id: str, run_id: str, action: str):
+        with transaction(self.db):
+            self.owned(conversation_id)
+            prior = self.db.get(StrixyRun, run_id)
+            if prior is None or prior.conversation_id != conversation_id:
+                raise HTTPException(404, "Run not found")
+            latest = self.db.exec(
+                select(StrixyRun)
+                .where(StrixyRun.conversation_id == conversation_id)
+                .order_by(col(StrixyRun.position).desc())
+            ).first()
+            if (
+                latest is None
+                or latest.id != run_id
+                or prior.status in {"pending", "running"}
+            ):
+                raise HTTPException(
+                    409, "Only the latest finished run can be continued or retried"
+                )
+            ledger = self.db.get(StrixyGrounding, run_id)
+            if action == "continue" and not (
+                prior.limit_code
+                or prior.status == "cancelled"
+                or (ledger and ledger.coverage and not ledger.coverage.get("complete"))
+            ):
+                raise HTTPException(409, "This run has no unfinished analysis")
+            if action == "retry" and prior.status != "failed":
+                raise HTTPException(409, "Only failed runs can be retried")
+            question = self.db.exec(
+                select(StrixyMessage).where(
+                    StrixyMessage.conversation_id == conversation_id,
+                    StrixyMessage.position == prior.position,
+                )
+            ).one()
+            content = (
+                "Continue the previous analysis using retained findings and remaining material."
+                if action == "continue"
+                else question.content
+            )
+            accepted = self.submit(
+                conversation_id, content, ledger.focus if ledger else []
+            )
+            if action == "continue":
+                self.db.add(StrixyProgress(run_id=accepted["id"], resume_from=run_id))
+        return accepted
+
+    def cancel(self, conversation_id: str, run_id: str):
+        from app.executions.strixy_worker import finish
+
+        with transaction(self.db):
+            self.owned(conversation_id)
+            run = self.db.get(StrixyRun, run_id)
+            if run is None or run.conversation_id != conversation_id:
+                raise HTTPException(404, "Run not found")
+            if run.status in {"pending", "running"}:
+                finish(run, "cancelled")
+                self.db.add(run)
+        self.db.refresh(run)
         return self.run_view(run)
 
     def delete(self, conversation_id: str):
@@ -186,6 +291,9 @@ class StrixyConversations:
             )
             run_ids = select(StrixyRun.id).where(
                 StrixyRun.conversation_id == conversation_id
+            )
+            self.db.execute(
+                delete(StrixyProgress).where(col(StrixyProgress.run_id).in_(run_ids))
             )
             self.db.execute(
                 delete(StrixyGrounding).where(col(StrixyGrounding.run_id).in_(run_ids))

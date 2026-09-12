@@ -16,6 +16,7 @@ from app.database.models import (
     StrixyConversation,
     StrixyGrounding,
     StrixyMessage,
+    StrixyProgress,
     StrixyRun,
     User,
 )
@@ -120,9 +121,9 @@ def execute(run_id: str, database_engine: Engine = engine):
             db, human, conversation.case_id
         ).validate_provenance(ledger.provenance, current=True):
             error = "sources_changed"
-        if get_utc_now() >= deadline:
+        if get_utc_now() >= deadline or error == "runtime_limit":
             run.limit_code = "runtime_limit"
-            finish(run, "failed", "completion_uncertain")
+            finish(run, "completed")
         elif error:
             finish(run, "failed", error)
         elif reply is not None:
@@ -141,5 +142,14 @@ def execute(run_id: str, database_engine: Engine = engine):
                         content=reply.content,
                     )
                 )
+                progress = db.get(StrixyProgress, run_id)
+                if progress:
+                    progress.content = ""
+                    db.add(progress)
             finish(run, "completed")
+        if error in {"sources_changed", "invalid_citation", "access_revoked"}:
+            progress = db.get(StrixyProgress, run_id)
+            if progress:
+                progress.content = ""
+                db.add(progress)
         db.add(run)

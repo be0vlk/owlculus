@@ -21,8 +21,20 @@ export function useStrixyChat() {
   const checkingAvailability = ref(false)
   const availabilityChecked = ref(false)
   let generation = 0
+  let observation = 0
   let timer
   const latestRun = computed(() => runs.value.at(-1))
+  const visibleMessages = computed(() =>
+    [
+      ...messages.value,
+      ...runs.value
+        .filter((run) => run.partial)
+        .map((run) => ({
+          ...run.partial,
+          position: run.position + 0.5,
+        })),
+    ].sort((a, b) => a.position - b.position),
+  )
   const loading = computed(
     () => sending.value || ['pending', 'running'].includes(latestRun.value?.status),
   )
@@ -34,37 +46,63 @@ export function useStrixyChat() {
       !apiKeyError.value &&
       !availabilityError.value,
   )
+  const coverageLimits = (coverage) =>
+    (coverage?.limits || [])
+      .map(
+        (limit) =>
+          ({
+            source_count_limit: 'Record count limit reached.',
+            source_scan_limit: 'Record scan limit reached.',
+            source_bytes_limit: 'Source size limit reached.',
+            source_field_limit: 'Record text limit reached.',
+          })[limit] || 'Processing limit reached.',
+      )
+      .join(' ')
   const runExplanation = computed(() => {
     const run = latestRun.value
     if (!run) return ''
-    if (run.limit_code === 'input_limit')
-      return 'Conversation limit reached. No answer was generated. Start a new conversation with a shorter question.'
-    if (run.limit_code === 'model_call_limit')
-      return 'Analysis step limit reached. Ask a more focused question to continue.'
     if (run.error_code === 'sources_changed')
-      return 'Source content or access changed during analysis. Send a new question to use current permitted records.'
+      return 'Source content or access changed. Reanalyze to use current permitted records.'
     if (run.error_code === 'invalid_citation')
-      return 'The reply contained an invalid source reference and was withheld. Send a new question to try again.'
-    if (run.limit_code === 'output_limit')
-      return 'Reply limit reached. The answer may be incomplete; send a follow-up question to continue.'
+      return 'The reply contained an invalid source reference and was withheld. Retry to request a new answer.'
     if (run.error_code === 'completion_uncertain')
-      return 'The worker stopped or timed out. Completion is uncertain, so Strixy did not automatically retry. You can send a new message.'
+      return 'The worker stopped. Completion is uncertain; no automatic retry was made. Saved partial findings may be incomplete.'
+    if (run.status === 'cancelled')
+      return run.error_code === 'access_revoked'
+        ? 'Analysis stopped because access changed.'
+        : 'Analysis cancelled. Saved partial findings are retained. A provider request already sent cannot be retracted.'
+    if (run.limit_code) {
+      const limit =
+        {
+          input_limit: 'Conversation input',
+          model_input_limit: 'Model input usage',
+          output_limit: 'Reply',
+          model_call_limit: 'Analysis step',
+          runtime_limit: 'Runtime',
+        }[run.limit_code] || 'Processing'
+      return `${limit} limit reached. ${run.partial || messages.value.some((m) => m.role === 'assistant' && m.position === run.position + 1) ? 'Saved findings may be incomplete.' : 'No findings were produced.'} Continue explicitly for another bounded analysis, or start a shorter conversation.`
+    }
     if (run.error_code === 'provider_not_configured')
-      return 'Ask an administrator to configure the OpenAI API key, then send a new message.'
+      return 'Ask an administrator to configure the OpenAI API key, then retry.'
     if (['dispatch_failed', 'worker_unavailable'].includes(run.error_code))
-      return 'Background services are unavailable. Ask an administrator to check them, then send a new message.'
+      return 'Background services are unavailable. Ask an administrator to check them, then retry.'
     if (run.status === 'failed')
-      return 'Strixy could not complete this reply. Your conversation is saved; send a new message to try again.'
-    if (run.status === 'cancelled') return 'This run stopped because access changed.'
-    return run.status === 'pending'
-      ? 'Reply queued'
-      : run.status === 'running'
-        ? 'Preparing reply'
-        : 'Reply completed'
+      return 'Strixy could not complete this reply. Your conversation and permitted partial findings are saved. Retry when ready.'
+    if (run.status === 'pending') return 'Reply queued'
+    if (run.status === 'running')
+      return (
+        {
+          locating_records: 'Locating records',
+          examining_inputs: 'Examining available inputs',
+          preparing_findings: 'Preparing findings',
+        }[run.progress] || 'Preparing reply'
+      )
+    return 'Reply completed'
   })
 
   const invalidate = () => {
     generation++
+    observation++
     clearTimeout(timer)
     sourcePreview.value = null
     sourceError.value = ''
@@ -106,21 +144,23 @@ export function useStrixyChat() {
   }
 
   const refresh = async (token = generation) => {
+    const revision = ++observation
+    clearTimeout(timer)
     const caseId = activeCase.activeCaseId
     const id = conversationId.value
     if (!id) return
     try {
       const saved = await strixyService.read(caseId, id)
-      if (token !== generation) return
+      if (token !== generation || revision !== observation) return
       messages.value = saved.messages
       runs.value = saved.runs
       operationError.value = ''
       await nextTick()
-      if (token !== generation) return
+      if (token !== generation || revision !== observation) return
       scrollToBottom()
       if (loading.value) timer = setTimeout(() => refresh(token), 1000)
     } catch (error) {
-      if (token !== generation) return
+      if (token !== generation || revision !== observation) return
       if (error.response?.status === 404) {
         messages.value = []
         runs.value = []
@@ -237,6 +277,26 @@ export function useStrixyChat() {
       if (token === generation) sending.value = false
     }
   }
+  const controlRun = async (action) => {
+    if (!canChat.value || !latestRun.value || sending.value) return
+    const token = generation
+    const caseId = activeCase.activeCaseId
+    const id = conversationId.value
+    const runId = latestRun.value.id
+    observation++
+    sending.value = true
+    clearTimeout(timer)
+    try {
+      await strixyService.control(caseId, id, runId, action)
+      if (token !== generation) return
+      sending.value = false
+      await refresh(token)
+    } catch (error) {
+      if (token === generation) await handleError(error, caseId)
+    } finally {
+      if (token === generation) sending.value = false
+    }
+  }
   const openSource = async (citation) => {
     const token = generation
     const caseId = activeCase.activeCaseId
@@ -294,6 +354,10 @@ export function useStrixyChat() {
   )
 
   return {
+    latestRun,
+    coverageLimits,
+    visibleMessages,
+    controlRun,
     focus,
     sourceOptions,
     sourcePreview,

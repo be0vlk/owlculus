@@ -81,3 +81,95 @@ test('private Strixy conversations survive navigation and keep delayed replies i
     await release(fixture.marker)
   }
 })
+
+const beforeRelease = {
+  cancel: async (page) => {
+    await page.getByRole('button', { name: 'Cancel analysis', exact: true }).click()
+    await expect(page.getByText('Analysis cancelled.', { exact: false })).toBeVisible()
+  },
+}
+const recovery = {
+  limit: { terminal: 'completed', action: 'Continue analysis' },
+  cancel: { terminal: 'cancelled', action: 'Continue analysis' },
+  failure: { terminal: 'failed', action: 'Retry analysis' },
+}
+
+for (const mode of ['limit', 'cancel', 'failure']) {
+  test(`long analysis preserves partial findings and supports explicit ${mode} recovery`, async ({
+    page,
+    request,
+  }) => {
+    const fixture = await investigatorCases(request)
+    const admin = await adminHeaders(request)
+    const users = await json(await request.get('/api/users/', { headers: admin }))
+    const strixy = users.find((user) => user.system_identity === 'strixy')
+    for (const item of fixture.cases) {
+      await json(await request.post(`/api/cases/${item.id}/users/${strixy.id}`, { headers: admin }))
+    }
+    await json(
+      await request.put('/api/admin/configuration/api-keys/openai', {
+        headers: admin,
+        data: { api_key: 'deterministic-test-only', name: 'Browser fake' },
+      }),
+    )
+    const original = `/case/${fixture.cases[0].id}/strixy`
+    try {
+      await loginUi(page, fixture.credentials)
+      await page.goto(original)
+      await page.getByRole('textbox', { name: 'Message input' }).fill(`${fixture.marker}|${mode}`)
+      const acceptance = page.waitForResponse(
+        (response) =>
+          response.request().method() === 'POST' && response.url().endsWith('/messages'),
+      )
+      await page.getByRole('button', { name: 'Send message' }).click()
+      const accepted = await acceptance
+      expect(accepted.status()).toBe(202)
+      await ready(fixture.marker)
+      await expect(page.getByText('Preparing findings', { exact: true })).toBeVisible()
+      await expect(
+        page.getByText(`Partial Strixy reply ${fixture.marker}`, { exact: true }),
+      ).toBeVisible()
+      await page.goto(`/case/${fixture.cases[1].id}/strixy`)
+      await expect(
+        page.getByText(`Partial Strixy reply ${fixture.marker}`, { exact: true }),
+      ).toHaveCount(0)
+      await page.goto(original)
+      await page.reload()
+      await expect(
+        page.getByText(`Partial Strixy reply ${fixture.marker}`, { exact: true }),
+      ).toHaveCount(1)
+      await page
+        .getByRole('button', { name: `case:${fixture.cases[0].id} · case_number`, exact: true })
+        .click()
+      await expect(page.getByRole('dialog')).toContainText(fixture.cases[0].case_number)
+      await page.getByRole('button', { name: 'Close source' }).click()
+      await beforeRelease[mode]?.(page)
+      await release(fixture.marker)
+      await expect
+        .poll(
+          async () =>
+            (
+              await json(
+                await request.get(accepted.headers().location, { headers: fixture.headers }),
+              )
+            ).status,
+        )
+        .toBe(recovery[mode].terminal)
+      const action = recovery[mode].action
+      await page.getByRole('button', { name: action, exact: true }).click()
+      await expect(
+        page.getByText(`Saved Strixy reply ${fixture.marker}`, { exact: true }),
+      ).toBeVisible()
+      await page.reload()
+      await expect(
+        page.getByText(`Saved Strixy reply ${fixture.marker}`, { exact: true }),
+      ).toHaveCount(1)
+      await expect(
+        page.getByText(`Partial Strixy reply ${fixture.marker}`, { exact: true }),
+      ).toHaveCount(1)
+      expect(await starts(fixture.marker)).toBe(2)
+    } finally {
+      await release(fixture.marker)
+    }
+  })
+}

@@ -6,7 +6,7 @@ providing chat interface functionality for interacting with the Strixy
 service for intelligence gathering operations.
 """
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlmodel import Session
@@ -126,12 +126,12 @@ async def list_sources(
     from app.core.strixy_config import get_strixy_config
     from app.services.strixy_sources import CaseSources
 
-    sources, complete = CaseSources(db, current_user, case_id).catalog(
-        get_strixy_config()
-    )
+    catalog = CaseSources(db, current_user, case_id).catalog(get_strixy_config())
     return {
-        "sources": [{"source_id": s.source_id, "kind": s.kind} for s in sources],
-        "enumeration_complete": complete,
+        "sources": [
+            {"source_id": s.source_id, "kind": s.kind} for s in catalog.sources
+        ],
+        "enumeration_complete": catalog.complete,
     }
 
 
@@ -149,3 +149,38 @@ async def read_source(
     source = CaseSources(db, current_user, case_id).read(source_id)
     material = GroundedMaterial([source], True, config, [])
     return material.context()
+
+
+@router.post("/cases/{case_id}/conversations/{conversation_id}/runs/{run_id}/cancel")
+async def cancel_run(
+    case_id: int,
+    conversation_id: str,
+    run_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[models.User, Depends(get_current_user)],
+):
+    return StrixyConversations(db, current_user, case_id).cancel(
+        conversation_id, run_id
+    )
+
+
+@router.post(
+    "/cases/{case_id}/conversations/{conversation_id}/runs/{run_id}/{action}",
+    status_code=202,
+)
+async def restart_run(
+    case_id: int,
+    conversation_id: str,
+    run_id: str,
+    action: Literal["continue", "retry", "reanalyze"],
+    response: Response,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[models.User, Depends(get_current_user)],
+):
+    run = StrixyConversations(db, current_user, case_id).restart(
+        conversation_id, run_id, action
+    )
+    response.headers["Location"] = (
+        f"/api/strixy/cases/{case_id}/conversations/{conversation_id}/runs/{run['id']}"
+    )
+    return run

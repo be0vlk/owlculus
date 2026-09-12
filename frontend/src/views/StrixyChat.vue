@@ -95,6 +95,45 @@
           <v-alert v-if="runExplanation" variant="tonal" class="ma-4" role="status">{{
             runExplanation
           }}</v-alert>
+          <div v-if="latestRun" class="d-flex ga-2 mx-4 mb-3">
+            <v-btn
+              v-if="['pending', 'running'].includes(latestRun.status)"
+              :disabled="!canChat"
+              @click="controlRun('cancel')"
+              >Cancel analysis</v-btn
+            >
+            <template v-else>
+              <v-btn
+                v-if="
+                  latestRun.limit_code ||
+                  latestRun.status === 'cancelled' ||
+                  (latestRun.source_coverage && !latestRun.source_coverage.complete)
+                "
+                :disabled="!canChat || loading"
+                @click="controlRun('continue')"
+                >Continue analysis</v-btn
+              >
+              <v-btn
+                v-if="latestRun.status === 'failed'"
+                :disabled="!canChat || loading"
+                @click="controlRun('retry')"
+                >Retry analysis</v-btn
+              >
+              <v-btn :disabled="!canChat || loading" @click="controlRun('reanalyze')"
+                >Reanalyze current data</v-btn
+              >
+            </template>
+          </div>
+          <div
+            v-if="latestRun?.source_coverage && !latestRun.partial"
+            class="mx-4 mb-3 text-body-small"
+          >
+            {{ latestRun.source_coverage.counts.read }} records read,
+            {{ latestRun.source_coverage.counts.partly_read }} partly read,
+            {{ latestRun.source_coverage.counts.unexamined }} unexamined.
+            <strong v-if="!latestRun.source_coverage.complete">Incomplete coverage.</strong>
+            {{ coverageLimits(latestRun.source_coverage) }}
+          </div>
           <v-divider />
 
           <v-card-text class="pa-0">
@@ -104,7 +143,7 @@
               ref="chatContainer"
             >
               <v-list class="pa-0">
-                <v-list-item v-for="(message, index) in messages" :key="index" class="px-0 mb-3">
+                <v-list-item v-for="message in visibleMessages" :key="message.id" class="px-0 mb-3">
                   <div
                     class="message-bubble"
                     :class="{
@@ -127,6 +166,9 @@
                         {{ formatTime(message.timestamp) }}
                       </span>
                     </div>
+                    <div v-if="message.partial" class="text-body-small mb-2">
+                      Partial findings · analysis may be incomplete
+                    </div>
                     <v-alert v-if="message.withheld" type="warning" variant="tonal">
                       This answer is unavailable because a required source is unavailable or access
                       changed.
@@ -138,11 +180,16 @@
                     ></div>
                     <div v-if="message.coverage" class="mt-3 text-body-small">
                       {{
-                        message.coverage.mode === 'focused' ? 'Focused analysis' : 'Case briefing'
+                        message.coverage.mode === 'focused'
+                          ? 'Focused analysis'
+                          : message.coverage.mode === 'batch'
+                            ? 'Current batch'
+                            : 'Case briefing'
                       }}: {{ message.coverage.counts.read }} records read,
                       {{ message.coverage.counts.partly_read }} partly read,
                       {{ message.coverage.counts.unexamined }} unexamined.
                       <strong v-if="!message.coverage.complete">Incomplete coverage.</strong>
+                      {{ coverageLimits(message.coverage) }}
                       <span v-if="!message.coverage.enumeration_complete"
                         >The record limit was reached; more material may exist.</span
                       >
@@ -266,6 +313,10 @@ md.disable(['link', 'image', 'autolink'])
 
 const activeCase = useActiveCaseStore()
 const {
+  latestRun,
+  coverageLimits,
+  visibleMessages,
+  controlRun,
   focus,
   sourceOptions,
   sourcePreview,
