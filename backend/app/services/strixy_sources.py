@@ -20,6 +20,7 @@ from app.executions.correlation_visibility import (
     CorrelationVisibility,
 )
 from app.executions.results import HuntResultReader
+from app.schemas.strixy_schema import VisualInput
 from app.services.case_access import CaseAccess
 from app.services.evidence_service import EvidenceService
 from app.services.strixy_access import require_strixy_access
@@ -84,6 +85,7 @@ class MaterialCheckpoint(BaseModel):
     """Version-checked preparation state; cursors are internal, never model inputs."""
 
     supplied: dict[str, dict] = Field(default_factory=dict)
+    images: list[VisualInput] = Field(default_factory=list)
     states: dict[str, Literal["read", "partly_read", "unexamined", "unavailable"]] = (
         Field(default_factory=dict)
     )
@@ -342,7 +344,9 @@ class GroundedMaterial:
         cursor: dict[str, int] | None = None,
         preparation_timeout: float | None = None,
         before_attachment: Callable[[CaseSource], None] | None = None,
+        attachment_start: int = 0,
     ):
+        self.attachment_start = attachment_start
         self.before_attachment = before_attachment
         self.preparation_deadline = monotonic() + min(
             config.attachment_seconds,
@@ -369,6 +373,8 @@ class GroundedMaterial:
         self.offsets = dict(self.previous.offsets)
         self.reused_progress = bool(previous)
         self.remaining = config.max_source_bytes
+        self.images: list[VisualInput] = []
+        self.visual_remaining = config.visual_max_input_bytes
         ordered = focus or list(self.sources)
         if previous:
             ordered = sorted(
@@ -388,7 +394,15 @@ class GroundedMaterial:
         cached = self.previous.supplied.get(source_id)
         if cached and self.previous.states.get(source_id) == "read":
             size = len(encoded(cached).encode())
-            if size <= self.remaining:
+            images = [v for v in self.previous.images if v.source_id == source_id]
+            visual_size = sum(len(v.data) for v in images)
+            if (
+                size <= self.remaining
+                and visual_size <= self.visual_remaining
+                and len(self.images) + len(images) <= self.config.visual_max_images
+            ):
+                self.images.extend(images)
+                self.visual_remaining -= visual_size
                 self.supplied[source_id] = cached
                 self.states[source_id] = "read"
                 self.remaining -= size
@@ -398,22 +412,34 @@ class GroundedMaterial:
         if self.remaining < 256:
             self.limits.add("source_bytes_limit")
             return
+        prepared_images = []
         if source.stored_attachment:
             if self.before_attachment:
                 self.before_attachment(source)
             prior = (cached or {}).get("attachment") or {}
-            start = prior.get("start_unit", 0)
-            if prior.get("reason") == "attachment_unit_limit" and not prior.get(
-                "text_truncated"
+            start = prior.get("start_unit", self.attachment_start)
+            if (
+                prior.get("reason") in {"attachment_unit_limit", "visual_input_limit"}
+                and prior.get("next_unit", 0) > start
+                and not prior.get("text_truncated")
             ):
                 start = prior["next_unit"]
                 self.offsets.pop(source_id, None)
             prepared = prepare(
                 source.stored_attachment,
-                self.config,
+                self.config.model_copy(
+                    update={
+                        "visual_max_images": self.config.visual_max_images
+                        - len(self.images),
+                        "visual_max_input_bytes": self.visual_remaining,
+                    }
+                ),
                 start=start,
                 timeout=self.preparation_deadline - monotonic(),
             )
+            prepared_images = [
+                VisualInput(source_id=source_id, **image) for image in prepared.images
+            ]
             source.fields.update(prepared.fields)
             source.prepared = prepared.view() | {"start_unit": start}
             if prepared.reason and prepared.reason.endswith("_limit"):
@@ -440,10 +466,14 @@ class GroundedMaterial:
                 "state": "partly_read",
                 "text_truncated": True,
             }
+        if prepared_images:
+            view["visual_fields"] = [v.field for v in prepared_images]
         size = len(encoded(view).encode())
         if size > self.remaining:
             self.limits.add("source_bytes_limit")
             return
+        self.images.extend(prepared_images)
+        self.visual_remaining -= sum(len(v.data) for v in prepared_images)
         self.remaining -= size
         self.offsets[source_id] = offsets
         self.supplied[source_id] = view
@@ -502,6 +532,7 @@ class GroundedMaterial:
     def checkpoint(self) -> dict:
         return MaterialCheckpoint(
             supplied=self.supplied,
+            images=self.images,
             states=self.states,
             offsets=self.offsets,
             cursor=self.cursor,
@@ -554,10 +585,17 @@ class GroundedMaterial:
                 raise ValueError("Invalid citation")
             source = self.supplied.get(citation["source_id"])
             excerpt = citation["excerpt"]
-            if (
-                source is None
-                or citation["field"] not in source["fields"]
-                or not isinstance(excerpt, str)
+            visual = any(
+                v.source_id == citation["source_id"] and v.field == citation["field"]
+                for v in self.images
+            )
+            if source is None or not isinstance(excerpt, str):
+                raise ValueError("Invalid citation")
+            if visual:
+                if excerpt != "":
+                    raise ValueError("Visual references cannot verify transcriptions")
+            elif (
+                citation["field"] not in source["fields"]
                 or not excerpt
                 or excerpt not in source["fields"][citation["field"]]
             ):
@@ -565,5 +603,6 @@ class GroundedMaterial:
             result.append(
                 citation
                 | {"version": source["version"], "inspected_at": self.inspected_at}
+                | ({"kind": "visual"} if visual else {})
             )
         return result

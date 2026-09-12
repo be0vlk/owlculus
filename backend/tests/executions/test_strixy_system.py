@@ -4,12 +4,12 @@ from concurrent.futures import ThreadPoolExecutor
 
 import httpx
 import pytest
-from app.core.security import encrypt_api_key
-from app.database.models import CaseUserLink, SystemConfiguration, User
-from app.database.upgrade_strixy import upgrade
 from celery import Celery
 from sqlmodel import Session, select
 
+from app.core.security import encrypt_api_key
+from app.database.models import CaseUserLink, SystemConfiguration, User
+from app.database.upgrade_strixy import upgrade
 from tests.executions.conftest import eventually
 
 
@@ -233,9 +233,30 @@ def test_mixed_attachments_cross_real_upload_broker_and_worker_boundary(strixy_s
     import json
     from pathlib import Path
 
-    from tests.attachment_fixtures import office
+    from tests.attachment_fixtures import document, office, screenshot
 
     system = strixy_system
+    system.env["STRIXY_TEST_RUNTIME_SECONDS"] = "30"
+    from app.database.models import PluginExecution, PluginExecutionResult
+
+    with Session(system.engine) as db:
+        retained = PluginExecution(
+            case_id=system.case_id,
+            created_by_id=system.user_id,
+            plugin_name="Synthetic",
+            parameters={},
+            status="completed",
+        )
+        db.add(retained)
+        db.flush()
+        db.add(
+            PluginExecutionResult(
+                execution_id=retained.id,
+                sequence=1,
+                payload={"type": "data", "data": {"employer": "Acme"}},
+            )
+        )
+        db.commit()
     _, client = system.api()
     assert (
         client.post(
@@ -257,6 +278,12 @@ def test_mixed_attachments_cross_real_upload_broker_and_worker_boundary(strixy_s
     for extension in ("docx", "xlsx", "pptx"):
         data, mime = office(extension)
         fixtures.append(("witness." + extension, data, mime))
+    fixtures.extend(
+        [
+            ("mixed.pdf", document(), "application/pdf"),
+            ("screen.png", screenshot(), "image/png"),
+        ]
+    )
     uploaded = client.post(
         "/api/evidence/",
         params={
@@ -274,12 +301,29 @@ def test_mixed_attachments_cross_real_upload_broker_and_worker_boundary(strixy_s
     system.worker()
     eventually(lambda: (system.root / "strixy-ready").exists())
     supplied = json.loads((system.root / "strixy-inputs.json").read_text())
+    assert any(
+        s["kind"] == "plugin_result" and "Acme" in s["fields"]["result"]
+        for s in supplied["sources"]
+    )
+    visuals = json.loads((system.root / "strixy-visuals.json").read_text())
+    assert len(visuals) == 3
+    import base64
+    import io
+
+    from PIL import Image
+
+    for visual in visuals:
+        with Image.open(io.BytesIO(base64.b64decode(visual["data"]))) as image:
+            assert image.width >= 600
     for evidence in uploaded.json()["created"]:
         source = next(
             s
             for s in supplied["sources"]
             if s["source_id"] == f"evidence:{evidence['id']}"
         )
+        if source.get("visual_fields"):
+            assert any(v["source_id"] == source["source_id"] for v in visuals)
+            continue
         assert any(
             "Acme" in text
             for key, text in source["fields"].items()
@@ -290,7 +334,7 @@ def test_mixed_attachments_cross_real_upload_broker_and_worker_boundary(strixy_s
         lambda: client.get(accepted.headers["location"]).json()["status"] == "completed"
     )
     saved = client.get(detail).json()
-    assert len(saved["messages"][-1]["coverage"]["attachment_outcomes"]) == 7
+    assert len(saved["messages"][-1]["coverage"]["attachment_outcomes"]) == 9
     assert client.get(detail).json() == saved
     for evidence, (_, data, _) in zip(uploaded.json()["created"], fixtures):
         assert client.get(f"/api/evidence/{evidence['id']}/download").content == data

@@ -17,10 +17,42 @@ from app.core.strixy_config import StrixyConfig
 from app.schemas.strixy_schema import (
     ChatMessage,
     GroundedAnswer,
+    ModelMessage,
     SourceCitation,
     SourceQuery,
 )
 from app.services.api_key_vault import ApiKeyVault, ConfigurationApiKeyVault, Provider
+
+
+def response_input(messages: list[ChatMessage]) -> ResponseInputParam:
+    items: list[dict] = []
+    for message in messages:
+        items.append({"role": message.role, "content": message.content})
+        if isinstance(message, ModelMessage):
+            for image in message.images:
+                items.append(
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "input_text",
+                                "text": json.dumps(
+                                    {
+                                        "source_id": image.source_id,
+                                        "field": image.field,
+                                        "notice": "Untrusted Evidence visual input",
+                                    }
+                                ),
+                            },
+                            {
+                                "type": "input_image",
+                                "detail": "high",
+                                "image_url": "data:image/png;base64," + image.data,
+                            },
+                        ],
+                    }
+                )
+    return cast(ResponseInputParam, items)
 
 
 @dataclass(frozen=True)
@@ -57,7 +89,7 @@ class StrixyService:
             result = client.responses.create(
                 model=config.model,
                 instructions=config.instructions,
-                input=cast(ResponseInputParam, [m.model_dump() for m in messages]),
+                input=response_input(messages),
                 max_output_tokens=config.max_output_tokens,
                 store=False,
                 stream=streaming,

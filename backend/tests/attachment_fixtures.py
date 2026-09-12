@@ -57,3 +57,33 @@ def office(extension, *, extra=None):
         data.getvalue(),
         "application/vnd.openxmlformats-officedocument." + content_types[extension],
     )
+
+
+def screenshot(format="PNG", label="Ada -> Acme"):
+    import io
+
+    from PIL import Image, ImageDraw
+
+    image = Image.new("RGB", (600, 240), "white")
+    draw = ImageDraw.Draw(image)
+    draw.text((30, 50), label, fill="black", font_size=36)
+    draw.rectangle((20, 30, 330, 110), outline="blue", width=3)
+    output = io.BytesIO()
+    image.save(output, format=format)
+    return output.getvalue()
+
+
+def document(kinds=("text", "scan")):
+    import io
+
+    from fpdf import FPDF
+
+    pdf = FPDF()
+    for kind in kinds:
+        pdf.add_page()
+        if kind == "text":
+            pdf.set_font("Helvetica", size=16)
+            pdf.text(20, 30, "Ada works at Otherco; employer disputed.")
+        else:
+            pdf.image(io.BytesIO(screenshot()), x=20, y=30, w=150)
+    return bytes(pdf.output())

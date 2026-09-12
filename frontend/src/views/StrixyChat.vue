@@ -211,7 +211,10 @@
                         <span v-if="citation.source_status === 'changed'"
                           >Source changed since this answer.</span
                         >
-                        <div class="text-body-small">{{ citation.excerpt }}</div>
+                        <div v-if="citation.kind === 'visual'" class="text-body-small">
+                          Visual reference; interpretation is not a verified transcription.
+                        </div>
+                        <div v-else class="text-body-small">{{ citation.excerpt }}</div>
                         <div class="text-body-small">
                           Inspected {{ new Date(citation.inspected_at).toLocaleString() }}
                         </div>
@@ -284,6 +287,23 @@
         <v-card-text>
           <div v-for="source in sourcePreview?.sources || []" :key="source.source_id">
             <strong>{{ source.source_id }}</strong>
+            <p>{{ sourcePreview.citation?.field }}</p>
+            <p v-if="sourcePreview.citation?.source_status === 'changed'">
+              Current file shown. This source changed since the historical answer.
+            </p>
+            <figure
+              v-for="image in (sourcePreview.images || []).filter(
+                (i) => i.source_id === source.source_id,
+              )"
+              :key="image.field"
+            >
+              <img
+                :src="'data:image/png;base64,' + image.data"
+                :alt="source.source_id + ' · ' + image.field"
+                class="source-image"
+              />
+              <figcaption>{{ image.field }} · Current authorized file</figcaption>
+            </figure>
             <div v-for="(value, field) in source.fields" :key="field" class="mb-2">
               <strong>{{ field }}</strong>
               <pre class="source-field">{{ value }}</pre>
@@ -589,5 +609,12 @@ onMounted(async () => {
   .chat-messages {
     height: 400px;
   }
+}
+</style>
+
+<style scoped>
+.source-image {
+  max-width: 100%;
+  height: auto;
 }
 </style>

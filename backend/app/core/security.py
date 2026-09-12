@@ -90,6 +90,7 @@ ALLOWED_MIME_TYPES = {
     "text/html",
     "image/jpeg",
     "image/png",
+    "image/webp",
     "image/gif",
     "image/bmp",
     "video/mp4",

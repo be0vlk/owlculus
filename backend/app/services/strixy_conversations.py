@@ -158,6 +158,14 @@ class StrixyConversations:
         citations = []
         for citation in grounding.citations:
             source = reader.read(citation["source_id"])
+            parts = citation["field"].split(":")
+            page_query = (
+                f"?unit={int(parts[2])}"
+                if len(parts) == 4
+                and parts[:2] == ["attachment", "page"]
+                and parts[2].isdigit()
+                else ""
+            )
             citations.append(
                 citation
                 | {
@@ -166,7 +174,7 @@ class StrixyConversations:
                         if source.version == citation["version"]
                         else "changed"
                     ),
-                    "url": f"/api/strixy/cases/{self.case_id}/sources/{citation['source_id']}",
+                    "url": f"/api/strixy/cases/{self.case_id}/sources/{citation['source_id']}{page_query}",
                 }
             )
         return data | {"citations": citations, "coverage": grounding.coverage}

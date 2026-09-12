@@ -14,6 +14,9 @@ def generate(self, messages, config, timeout):
     with (root / "strixy-starts").open("a") as output:
         output.write("started\n")
     (root / "strixy-inputs.json").write_text(messages[0].content)
+    (root / "strixy-visuals.json").write_text(
+        json.dumps([v.model_dump() for v in messages[0].images])
+    )
     source = json.loads(messages[0].content)["sources"][0]
     partial = ProviderReply(
         "Partial answer: " + messages[-1].content,

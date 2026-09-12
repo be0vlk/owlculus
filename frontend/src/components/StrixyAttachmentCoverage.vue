@@ -2,6 +2,13 @@
   <div v-for="outcome in outcomes" :key="outcome.source_id" class="mt-1">
     {{ outcome.source_id }}: {{ states[outcome.state] || 'Attachment unexamined' }}.
     <span v-if="outcome.units_read">{{ outcome.units_read }} content units prepared.</span>
+    <div v-for="page in outcome.pages || []" :key="page.unit">
+      Page/image {{ page.unit }}: {{ states[page.state] || 'Unexamined' }}.
+      {{ reasons[page.reason] || '' }}
+    </div>
+    <div v-if="outcome.unexamined_from">
+      Pages {{ outcome.unexamined_from }}–{{ outcome.total_units }} unexamined in this run.
+    </div>
     {{ reasons[outcome.reason] || '' }}
     <span v-if="outcome.text_truncated">Only part of the prepared text was supplied.</span>
     <span v-for="warning in outcome.warnings || []" :key="warning">
@@ -24,6 +31,13 @@ const reasons = {
   attachment_expansion_limit: 'Expanded document exceeds the processing limit.',
   attachment_time_limit: 'Attachment preparation time limit reached.',
   attachment_processing_limit: 'Attachment processing limit reached.',
+  visual_input_limit: 'Visual input budget reached. Continue analysis to examine more.',
+  visual_pixel_limit: 'Page or image exceeds the pixel processing limit.',
+  visual_resolution_reduced: 'Resolution was reduced; small text or details may be unreadable.',
+  unreadable_page: 'This page could not be rendered faithfully.',
+  vision_unavailable: 'The configured model does not support visual analysis.',
+  animated_image_unsupported: 'Animated images are not supported for analysis.',
+  interactive_content_unexamined: 'Interactive form content was not examined.',
   encrypted_file: 'File is encrypted. An authorized reader can upload an unlocked copy.',
   unreadable_file: 'File is damaged or could not be read faithfully.',
   file_unavailable: 'Stored file is unavailable.',

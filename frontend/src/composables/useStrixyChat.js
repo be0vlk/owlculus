@@ -303,9 +303,14 @@ export function useStrixyChat() {
     sourcePreview.value = null
     sourceError.value = ''
     try {
-      const source = await strixyService.source(caseId, citation.source_id)
+      const page = /^attachment:page:(\d+):/.exec(citation.field || '')
+      const source = await strixyService.source(
+        caseId,
+        citation.source_id,
+        page ? Number(page[1]) : undefined,
+      )
       if (token !== generation) return
-      sourcePreview.value = source
+      sourcePreview.value = { ...source, citation }
     } catch {
       if (token === generation)
         sourceError.value = 'This source is unavailable or your access has changed.'

@@ -16,6 +16,18 @@ class ChatMessage(BaseModel):
     content: str
 
 
+class VisualInput(BaseModel):
+    source_id: str
+    field: str
+    data: str
+
+
+class ModelMessage(ChatMessage):
+    """Internal provider input; never accepted as a client chat submission."""
+
+    images: list[VisualInput]
+
+
 class ChatRequest(BaseModel):
     case_id: int = Field(gt=0)
     messages: list[ChatMessage]

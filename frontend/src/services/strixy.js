@@ -31,8 +31,11 @@ export const strixyService = {
   async sources(caseId) {
     return (await api.get(`/api/strixy/cases/${caseId}/sources`)).data
   },
-  async source(caseId, sourceId) {
-    return (await api.get(`/api/strixy/cases/${caseId}/sources/${encodeURIComponent(sourceId)}`))
-      .data
+  async source(caseId, sourceId, unit) {
+    return (
+      await api.get(`/api/strixy/cases/${caseId}/sources/${encodeURIComponent(sourceId)}`, {
+        params: unit ? { unit } : {},
+      })
+    ).data
   },
 }

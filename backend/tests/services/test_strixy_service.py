@@ -6,7 +6,7 @@ import pytest
 
 from app.core.exceptions import ValidationException
 from app.core.strixy_config import StrixyConfig
-from app.schemas.strixy_schema import ChatMessage
+from app.schemas.strixy_schema import ChatMessage, ModelMessage, VisualInput
 from app.services.api_key_vault import Provider, StaticApiKeyVault
 from app.services.strixy_service import StrixyService
 
@@ -26,7 +26,21 @@ def test_responses_adapter_bounds_usage_and_withholds_incomplete_json(limited):
     config = StrixyConfig()
     with patch("app.services.strixy_service.OpenAI", return_value=client) as factory:
         result = service.generate(
-            [ChatMessage(role="user", content="Question")], config, 12
+            [
+                ModelMessage(
+                    role="user",
+                    content="Question",
+                    images=[
+                        VisualInput(
+                            source_id="evidence:2",
+                            field="attachment:page:1:image",
+                            data="cGl4ZWxz",
+                        )
+                    ],
+                )
+            ],
+            config,
+            12,
         )
     assert result.content == ("" if limited else "Useful text")
     assert result.limit_code == ("output_limit" if limited else None)
@@ -34,6 +48,14 @@ def test_responses_adapter_bounds_usage_and_withholds_incomplete_json(limited):
     assert factory.call_args.kwargs["max_retries"] == 0
     assert factory.call_args.kwargs["timeout"] == 12
     sent = client.responses.create.call_args.kwargs
+    assert sent["input"][1]["role"] == "user"
+    image_parts = sent["input"][1]["content"]
+    assert '"source_id": "evidence:2"' in image_parts[0]["text"]
+    assert image_parts[1] == {
+        "type": "input_image",
+        "detail": "high",
+        "image_url": "data:image/png;base64,cGl4ZWxz",
+    }
     assert sent["store"] is False
     assert sent["max_output_tokens"] == config.max_output_tokens
     assert [tool["name"] for tool in sent["tools"]] == ["read_case_sources"]

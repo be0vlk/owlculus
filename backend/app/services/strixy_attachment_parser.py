@@ -135,6 +135,11 @@ def main():
     }
     warnings: set[str] = set()
     try:
+        from app.services.strixy_visual import VISUAL_EXTENSIONS, prepare_visual
+
+        if path.suffix in VISUAL_EXTENSIONS:
+            print(json.dumps(prepare_visual(path, limits, start)))
+            return
         # Validate the entire bounded file even when only a slice is returned.
         total_bytes = 0
         for index, (locator, text) in enumerate(

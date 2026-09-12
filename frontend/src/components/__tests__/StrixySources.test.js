@@ -91,7 +91,9 @@ it('distinguishes examined attachment lines from partial and unavailable attachm
                     {
                       ...citation,
                       source_id: 'evidence:8',
-                      field: 'attachment:sheet:Witnesses:row:2',
+                      field: 'attachment:page:2:image',
+                      kind: 'visual',
+                      excerpt: '',
                     },
                   ],
                   coverage: {
@@ -105,6 +107,12 @@ it('distinguishes examined attachment lines from partial and unavailable attachm
                         state: 'partly_read',
                         reason: 'attachment_unit_limit',
                         units_read: 2,
+                        total_units: 4,
+                        unexamined_from: 3,
+                        pages: [
+                          { unit: 1, state: 'read' },
+                          { unit: 2, state: 'unavailable', reason: 'unreadable_page' },
+                        ],
                       },
                       {
                         source_id: 'evidence:9',
@@ -129,6 +137,28 @@ it('distinguishes examined attachment lines from partial and unavailable attachm
   expect(wrapper.text()).toContain('Attachment unit limit reached')
   expect(wrapper.text()).toContain('File is encrypted')
   expect(wrapper.text()).toContain('evidence:10: Attachment examined')
-  expect(wrapper.text()).toContain('attachment:sheet:Witnesses:row:2')
+  expect(wrapper.text()).toContain('attachment:page:2:image')
+  expect(wrapper.text()).toContain('Pages 3–4 unexamined')
+  expect(wrapper.text()).toContain('This page could not be rendered faithfully')
+  expect(wrapper.text()).toContain(
+    'Visual reference; interpretation is not a verified transcription',
+  )
+  api.get.mockResolvedValueOnce({
+    data: {
+      sources: [{ source_id: 'evidence:8', fields: { title: 'Current PDF' } }],
+      images: [{ source_id: 'evidence:8', field: 'attachment:page:2:image', data: 'cGl4ZWxz' }],
+    },
+  })
+  await wrapper
+    .findAll('button')
+    .find((b) => b.text().includes('evidence:8'))
+    .trigger('click')
+  await flushPromises()
+  expect(api.get).toHaveBeenLastCalledWith('/api/strixy/cases/2/sources/evidence%3A8', {
+    params: { unit: 2 },
+  })
+  const dialog = new DOMWrapper(document.body).find('[role="dialog"]')
+  expect(dialog.text()).toContain('Current file shown')
+  expect(dialog.find('img').attributes('src')).toBe('data:image/png;base64,cGl4ZWxz')
   expect(wrapper.text()).not.toContain('Attachments unexamined.')
 })

@@ -8,7 +8,7 @@ from app.core.strixy_config import StrixyConfig
 from app.core.utils import get_utc_now
 from app.database.db_utils import transaction
 from app.database.models import StrixyGrounding, StrixyProgress, User
-from app.schemas.strixy_schema import ChatMessage, SourceQuery
+from app.schemas.strixy_schema import ModelMessage, SourceQuery
 from app.services.strixy_conversations import StrixyConversations
 from app.services.strixy_service import ProviderReply, StrixyService
 from app.services.strixy_sources import (
@@ -183,7 +183,11 @@ def analyze(
             db.add(ledger)
             # Persist every source input before external I/O, even if no answer follows.
             messages = [
-                ChatMessage(role="system", content=encoded(material.context()))
+                ModelMessage(
+                    role="system",
+                    content=encoded(material.context()),
+                    images=material.images,
+                )
             ] + history
             remaining = (deadline - get_utc_now()).total_seconds()
             if remaining <= 0:
@@ -194,7 +198,11 @@ def analyze(
             if input_bytes > config.max_input_bytes:
                 return ProviderReply("", input_tokens, output_tokens, "input_limit")
             # UTF-8 bytes conservatively reserve input tokens before external I/O.
-            if input_tokens + input_bytes > config.max_total_input_tokens:
+            visual_tokens = len(material.images) * config.visual_input_token_reserve
+            if (
+                input_tokens + input_bytes + visual_tokens
+                > config.max_total_input_tokens
+            ):
                 return ProviderReply(
                     "", input_tokens, output_tokens, "model_input_limit"
                 )

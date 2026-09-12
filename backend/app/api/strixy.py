@@ -141,20 +141,27 @@ async def read_source(
     source_id: str,
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[models.User, Depends(get_current_user)],
+    unit: Annotated[int | None, Query(ge=1, le=100000)] = None,
 ):
     from app.core.strixy_config import get_strixy_config
     from app.services.strixy_sources import CaseSources, GroundedMaterial
 
     config = get_strixy_config()
     source = CaseSources(db, current_user, case_id).read(source_id)
-    material = GroundedMaterial([source], True, config, [])
+    material = GroundedMaterial(
+        [source],
+        True,
+        config.model_copy(update={"visual_max_images": 1}),
+        [],
+        attachment_start=(unit or 1) - 1,
+    )
     if not CaseSources(db, current_user, case_id).validate_provenance(
         material.provenance(), current=True
     ):
         from app.core.exceptions import ResourceNotFoundException
 
         raise ResourceNotFoundException("Source unavailable")
-    return material.context()
+    return material.context() | {"images": [v.model_dump() for v in material.images]}
 
 
 @router.post("/cases/{case_id}/conversations/{conversation_id}/runs/{run_id}/cancel")

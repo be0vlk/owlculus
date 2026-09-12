@@ -50,6 +50,11 @@ class PreparedAttachment:
     next_unit: int = 0
     warnings: list[str] = field(default_factory=list)
 
+    images: list[dict] = field(default_factory=list)
+    pages: list[dict] = field(default_factory=list)
+    total_units: int = 0
+    unexamined_from: int | None = None
+
     def view(self) -> dict:
         return {
             "state": self.state,
@@ -57,6 +62,15 @@ class PreparedAttachment:
             "units_read": self.units_read,
             "next_unit": self.next_unit,
             "warnings": self.warnings,
+            **(
+                {
+                    "pages": self.pages,
+                    "total_units": self.total_units,
+                    "unexamined_from": self.unexamined_from,
+                }
+                if self.total_units
+                else {}
+            ),
         }
 
 
@@ -74,6 +88,11 @@ def prepare(
     if attachment.size > config.attachment_max_bytes:
         return PreparedAttachment(reason="attachment_size_limit")
     if attachment.path.suffix.lower() not in {
+        ".pdf",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".webp",
         ".txt",
         ".json",
         ".csv",
