@@ -45,19 +45,20 @@ async def test_no_key_run_is_independent_of_session_shape(
     ]
 
 
-def test_evidence_formatter_receives_payloads_and_includes_findings():
+@pytest.mark.parametrize("ip", ["192.0.2.8", None])
+def test_evidence_formatter_receives_payloads_and_includes_findings(ip):
     content = SubdomainEnumPlugin().format_evidence(
         [
             {
                 "subdomain": "api.example.com",
-                "ip": "192.0.2.8",
-                "resolved": True,
+                "ip": ip,
+                "resolved": ip is not None,
                 "source": "crt.sh",
             },
             {
                 "phase": "summary",
                 "total_discovered": 1,
-                "total_resolved": 1,
+                "total_resolved": int(ip is not None),
                 "sources_used": ["crt.sh"],
             },
         ],
@@ -65,5 +66,6 @@ def test_evidence_formatter_receives_payloads_and_includes_findings():
     )
 
     assert "api.example.com" in content
-    assert "192.0.2.8" in content
+    assert f"→ {ip or 'N/A':<15} (Source: crt.sh)" in content
     assert "Total Unique Subdomains Found: 1" in content
+    assert f"Successfully Resolved: {int(ip is not None)}" in content

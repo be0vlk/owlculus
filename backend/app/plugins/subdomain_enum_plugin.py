@@ -230,7 +230,7 @@ class SubdomainEnumPlugin(BasePlugin):
             discovered_subdomains.sort(key=lambda x: x.get("subdomain", ""))
             for sub in discovered_subdomains:
                 content_lines.append(
-                    f"{sub.get('subdomain', 'Unknown'):<50} → {sub.get('ip', 'N/A'):<15} (Source: {sub.get('source', 'Unknown')})"
+                    f"{sub.get('subdomain', 'Unknown'):<50} → {sub.get('ip') or 'N/A':<15} (Source: {sub.get('source', 'Unknown')})"
                 )
         return "\n".join(content_lines)
 
