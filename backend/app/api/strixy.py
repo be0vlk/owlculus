@@ -128,9 +128,7 @@ async def list_sources(
 
     catalog = CaseSources(db, current_user, case_id).catalog(get_strixy_config())
     return {
-        "sources": [
-            {"source_id": s.source_id, "kind": s.kind} for s in catalog.sources
-        ],
+        "sources": [source.catalog_entry() for source in catalog.sources],
         "enumeration_complete": catalog.complete,
     }
 

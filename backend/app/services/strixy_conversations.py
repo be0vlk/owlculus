@@ -3,7 +3,7 @@
 import builtins
 
 from fastapi import HTTPException
-from sqlalchemy import delete
+from sqlalchemy import delete, func
 from sqlmodel import Session, col, select
 
 from app.core.utils import get_utc_now
@@ -47,7 +47,7 @@ class StrixyConversations:
 
     def list(self):
         self.authorized()
-        return self.db.exec(
+        conversations = self.db.exec(
             select(StrixyConversation)
             .where(
                 StrixyConversation.case_id == self.case_id,
@@ -56,6 +56,42 @@ class StrixyConversations:
             )
             .order_by(col(StrixyConversation.created_at).desc(), StrixyConversation.id)
         ).all()
+        if not conversations:
+            return []
+        first_positions = (
+            select(
+                StrixyMessage.conversation_id,
+                func.min(StrixyMessage.position).label("position"),
+            )
+            .where(
+                col(StrixyMessage.conversation_id).in_(
+                    [item.id for item in conversations]
+                ),
+                StrixyMessage.role == "user",
+            )
+            .group_by(StrixyMessage.conversation_id)
+            .subquery()
+        )
+        titles = {}
+        for message in self.db.exec(
+            select(StrixyMessage).join(
+                first_positions,
+                (StrixyMessage.conversation_id == first_positions.c.conversation_id)
+                & (StrixyMessage.position == first_positions.c.position),
+            )
+        ).all():
+            # Copied user questions can carry inherited source restrictions too.
+            visible = self.message_view(message)
+            titles[message.conversation_id] = (
+                "Conversation unavailable"
+                if visible.get("withheld")
+                else " ".join(visible["content"].split())[:120] or "New conversation"
+            )
+        return [
+            item.model_dump(exclude={"owner_id", "deleted_at"})
+            | {"title": titles.get(item.id, "New conversation")}
+            for item in conversations
+        ]
 
     def create(self):
         with transaction(self.db):
@@ -163,9 +199,11 @@ class StrixyConversations:
                 "content": "",
                 "withheld": True,
                 "citations": [],
+                "source_labels": {},
                 "coverage": None,
             }
         citations = []
+        source_labels = {}
         for citation in saved_citations:
             source = reader.read(citation["source_id"])
             parts = citation["field"].split(":")
@@ -176,6 +214,11 @@ class StrixyConversations:
                 and parts[2].isdigit()
                 else ""
             )
+            label = source.catalog_entry()
+            source_labels[source.source_id] = {
+                "title": label["title"],
+                "subtitle": label["subtitle"],
+            }
             citations.append(
                 citation
                 | {
@@ -187,7 +230,11 @@ class StrixyConversations:
                     "url": f"/api/strixy/cases/{self.case_id}/sources/{citation['source_id']}{page_query}",
                 }
             )
-        return data | {"citations": citations, "coverage": coverage or None}
+        return data | {
+            "citations": citations,
+            "source_labels": source_labels,
+            "coverage": coverage or None,
+        }
 
     def run_view(self, run: StrixyRun):
         data = run.model_dump(

@@ -53,9 +53,9 @@ test('two readers share a fixed snapshot and keep an independent follow-up after
     const sharedResponse = page.waitForResponse(
       (r) => r.request().method() === 'POST' && r.url().endsWith('/shares'),
     )
-    await page.getByRole('button', { name: 'Share through here', exact: true }).last().click()
+    await page.getByRole('button', { name: 'Share conversation', exact: true }).click()
+    await page.getByRole('button', { name: 'Create snapshot', exact: true }).click()
     const share = await json(await sharedResponse)
-    await page.getByRole('button', { name: 'Shared snapshots', exact: true }).click()
     await expect(page.getByRole('textbox', { name: 'Snapshot link' })).toHaveValue(
       new RegExp(share.id),
     )
@@ -63,7 +63,7 @@ test('two readers share a fixed snapshot and keep an independent follow-up after
     await loginUi(viewer, administrator)
     await viewer.goto(sharePath)
     await expect(viewer.getByText('Read-only snapshot', { exact: false }).first()).toBeVisible()
-    await viewer.getByRole('button', { name: `case:${caseId} · case_number`, exact: true }).click()
+    await viewer.getByRole('button', { name: /^Open source 1:/ }).click()
     await expect(viewer.getByRole('dialog')).toContainText(fixture.cases[0].case_number)
     await viewer.getByRole('button', { name: 'Close source' }).click()
     await json(
@@ -85,7 +85,9 @@ test('two readers share a fixed snapshot and keep an independent follow-up after
     await expect(page.getByRole('textbox', { name: 'Snapshot link' })).toHaveCount(0)
     await viewer.goto(sharePath)
     await expect(viewer.getByText('Snapshot unavailable.', { exact: false })).toBeVisible()
-    await page.getByRole('button', { name: 'Delete conversation', exact: true }).click()
+    await page.getByRole('button', { name: 'Close sharing', exact: true }).click()
+    await page.getByRole('button', { name: 'Conversation actions', exact: true }).click()
+    await page.getByText('Delete conversation', { exact: true }).click()
     await page.getByRole('button', { name: 'Delete', exact: true }).click()
     await expect
       .poll(async () => (await request.get(detail, { headers: fixture.headers })).status())

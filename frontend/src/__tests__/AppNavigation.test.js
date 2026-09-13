@@ -63,11 +63,11 @@ it('keeps one sidebar across Settings, Strixy, and case switches while resetting
     expect(wrapper.get('[aria-label="Owlculus Logo"]').element).toBe(logo)
 
     if (path === '/case/1/strixy') {
-      await wrapper.get('input[aria-label="Message input"]').setValue('First case draft')
+      await wrapper.get('textarea[aria-label="Message input"]').setValue('First case draft')
     }
     if (path === '/case/2/strixy') {
-      expect(wrapper.get('input[aria-label="Message input"]').element.value).toBe('')
-      expect(wrapper.text()).toContain('Strixy · TWO')
+      expect(wrapper.get('textarea[aria-label="Message input"]').element.value).toBe('')
+      expect(wrapper.text()).toContain('TWO · Case assistant')
     }
   }
 })
@@ -82,13 +82,13 @@ it('retains the sidebar while case access fails and recovers', async () => {
   await activeCase.initialize(1)
   await flushPromises()
   expect(wrapper.text()).toContain('Unable to load accessible cases')
-  expect(wrapper.find('input[aria-label="Message input"]').exists()).toBe(false)
+  expect(wrapper.find('textarea[aria-label="Message input"]').exists()).toBe(false)
   expect(wrapper.findAll('.owlculus-sidebar')).toHaveLength(1)
   expect(wrapper.get('.owlculus-sidebar').element).toBe(sidebar)
 
   await activeCase.refresh()
   await flushPromises()
-  expect(wrapper.find('input[aria-label="Message input"]').exists()).toBe(true)
+  expect(wrapper.find('textarea[aria-label="Message input"]').exists()).toBe(true)
   expect(wrapper.get('.owlculus-sidebar').element).toBe(sidebar)
 })
 

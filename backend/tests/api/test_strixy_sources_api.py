@@ -74,6 +74,8 @@ def test_briefing_reads_case_records_and_returns_verified_citations(
     assert "private/path.txt" not in json.dumps(supplied)
     assert answer["citations"][0]["source_id"] == f"entity:{entity.id}"
     assert answer["citations"][0]["source_status"] == "current"
+    assert answer["source_labels"][f"entity:{entity.id}"]["title"] == "ada@example.test"
+    assert answer["source_labels"][f"entity:{entity.id}"]["subtitle"] == "Person"
     assert answer["coverage"]["attachments"] == "incomplete"
     assert answer["coverage"]["attachment_outcomes"][0]["reason"] == "file_unavailable"
     assert answer["coverage"]["counts"]["read"] == 2

@@ -129,17 +129,37 @@ it('loads a replacement Case after a background access refresh finishes', async 
   expect(api.get).toHaveBeenCalledWith('/api/strixy/cases/1/conversations')
 })
 
-it('submits optional focus and clears it on Case switching', async () => {
+it('automatically sends subsequent questions in the newly active case', async () => {
   api.post.mockResolvedValue({ data: { id: 'run', status: 'completed' } })
-  chat.focus.value = ['entity:7']
-  chat.currentMessage.value = 'Compare this record'
+  chat.currentMessage.value = 'Compare the employees'
   await chat.sendMessage()
-  expect(api.post).toHaveBeenCalledWith(`${detail}/messages`, {
-    content: 'Compare this record',
-    focus: ['entity:7'],
+  expect(api.post).toHaveBeenLastCalledWith(`${detail}/messages`, {
+    content: 'Compare the employees',
   })
   activeCase.resolve(1)
-  expect(chat.focus.value).toEqual([])
+  await flushPromises()
+  chat.currentMessage.value = 'Summarize this case'
+  await chat.sendMessage()
+  expect(api.post).toHaveBeenLastCalledWith('/api/strixy/cases/1/conversations/one/messages', {
+    content: 'Summarize this case',
+  })
+  expect(api.get.mock.calls.some(([url]) => url.endsWith('/sources'))).toBe(false)
+})
+
+it('does not restore a stale history title after switching cases', async () => {
+  let finish
+  api.get.mockReturnValueOnce(
+    new Promise((resolve) => {
+      finish = resolve
+    }),
+  )
+  const pending = chat.refreshConversations()
+  activeCase.resolve(1)
+  finish({ data: [{ id: 'old', title: 'Private old case question' }] })
+  await pending
+  expect(chat.conversations.value.some((item) => item.title === 'Private old case question')).toBe(
+    false,
+  )
 })
 
 it('discards a late citation preview after switching Cases', async () => {

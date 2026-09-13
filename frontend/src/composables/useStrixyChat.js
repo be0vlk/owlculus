@@ -13,8 +13,6 @@ export function useStrixyChat() {
   const sharedSnapshot = ref(null)
   const shareError = ref('')
   const sharing = ref(false)
-  const focus = ref([])
-  const sourceOptions = ref([])
   const sourcePreview = ref(null)
   const sourceError = ref('')
   const sending = ref(false)
@@ -131,7 +129,6 @@ export function useStrixyChat() {
     shares.value = []
     conversations.value = []
     sourcePreview.value = null
-    sourceOptions.value = []
   }
   const handleError = async (error, caseId) => {
     const status = error.response?.status
@@ -231,12 +228,22 @@ export function useStrixyChat() {
       const saved = await strixyService.list(caseId)
       if (token !== generation) return
       conversations.value = saved
-      const catalog = await strixyService.sources(caseId)
-      if (token !== generation) return
-      sourceOptions.value = catalog.sources || []
       if (saved.length) await selectConversation(saved[0].id)
     } catch (error) {
       if (token === generation) await handleError(error, caseId)
+    }
+  }
+  const refreshConversations = async () => {
+    const token = generation
+    const caseId = activeCase.activeCaseId
+    try {
+      const saved = await strixyService.list(caseId)
+      if (token === generation) conversations.value = saved
+    } catch (error) {
+      if (token === generation) {
+        conversations.value = []
+        await handleError(error, caseId)
+      }
     }
   }
   const createConversation = async () => {
@@ -282,12 +289,7 @@ export function useStrixyChat() {
         conversationId.value = created.id
         conversations.value.unshift(created)
       }
-      const run = await strixyService.sendMessage(
-        content,
-        caseId,
-        conversationId.value,
-        focus.value,
-      )
+      const run = await strixyService.sendMessage(content, caseId, conversationId.value)
       if (token !== generation) return
       runs.value.push(run)
       currentMessage.value = ''
@@ -426,7 +428,6 @@ export function useStrixyChat() {
     async () => {
       invalidate()
       conversationId.value = null
-      focus.value = []
       clearPrivateContent()
       currentMessage.value = ''
       availabilityError.value = ''
@@ -460,8 +461,7 @@ export function useStrixyChat() {
     coverageLimits,
     visibleMessages,
     controlRun,
-    focus,
-    sourceOptions,
+    refreshConversations,
     sourcePreview,
     sourceError,
     openSource,

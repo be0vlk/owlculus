@@ -1,6 +1,7 @@
 <template>
   <div v-for="outcome in outcomes" :key="outcome.source_id" class="mt-1">
-    {{ outcome.source_id }}: {{ states[outcome.state] || 'Attachment unexamined' }}.
+    {{ sourceLabels[outcome.source_id] || sourceLabel(outcome) }}:
+    {{ states[outcome.state] || 'Attachment unexamined' }}.
     <span v-if="outcome.units_read">{{ outcome.units_read }} content units prepared.</span>
     <div v-for="page in outcome.pages || []" :key="page.unit">
       Page/image {{ page.unit }}: {{ states[page.state] || 'Unexamined' }}.
@@ -18,7 +19,11 @@
 </template>
 
 <script setup>
-defineProps({ outcomes: { type: Array, default: () => [] } })
+import { sourceLabel } from '@/utils/strixyDisplay'
+defineProps({
+  outcomes: { type: Array, default: () => [] },
+  sourceLabels: { type: Object, default: () => ({}) },
+})
 const states = {
   read: 'Attachment examined',
   partly_read: 'Attachment partly examined',

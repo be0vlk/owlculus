@@ -107,7 +107,8 @@ it('explains missing assignment on the chat page and recovers after assignment',
     template: '<v-app><StrixyChat /></v-app>',
   })
   await flushPromises()
-  expect(wrapper.text()).toContain('Strixy · CASE-9')
+  expect(wrapper.find('h1').text()).toBe('Strixy')
+  expect(wrapper.text()).toContain('CASE-9')
   expect(wrapper.text()).toContain('Strixy is not assigned to this case')
   expect(wrapper.get('[aria-label="Message input"]').element.disabled).toBe(true)
   strixyService.getAvailability.mockResolvedValueOnce({ is_configured: true })

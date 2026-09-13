@@ -20,6 +20,7 @@ from app.executions.correlation_visibility import (
     CorrelationVisibility,
 )
 from app.executions.results import HuntResultReader
+from app.schemas.entity_schema import entity_display_name
 from app.schemas.strixy_schema import VisualInput
 from app.services.case_access import CaseAccess
 from app.services.evidence_service import EvidenceService
@@ -69,6 +70,38 @@ class CaseSource:
             "source_id": self.source_id,
             "case_ids": self.case_ids,
             "version": self.version,
+        }
+
+    def catalog_entry(self) -> dict:
+        """Small display labels derived only from this already-authorized projection."""
+        title = ""
+        subtitle = self.kind.replace("_", " ").capitalize()
+        if self.kind == "entity":
+            entity_type = self.fields.get("entity_type", "entity")
+            data = json.loads(self.fields.get("data", "{}"))
+            if isinstance(data, dict):
+                title = entity_display_name(entity_type, data) or str(
+                    data.get("name") or ""
+                )
+            subtitle = entity_type.replace("_", " ").capitalize()
+        elif self.kind in {"case", "evidence"}:
+            title = self.fields.get("title", "")
+            subtitle = (
+                self.fields.get("case_number", "Case")
+                if self.kind == "case"
+                else (
+                    "Evidence folder"
+                    if self.fields.get("is_folder") == "true"
+                    else "Evidence"
+                )
+            )
+        else:
+            title = self.fields.get("plugin", "")
+        return {
+            "source_id": self.source_id,
+            "kind": self.kind,
+            "title": " ".join(title.split())[:200] or f"{subtitle} #{self.id}",
+            "subtitle": subtitle[:100],
         }
 
     def view(self) -> dict:

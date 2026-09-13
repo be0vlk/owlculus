@@ -98,29 +98,29 @@ test('private Strixy conversations survive navigation and keep delayed replies i
     await expect(
       page.getByText(`Saved Strixy reply ${fixture.marker}`, { exact: true }),
     ).toHaveCount(1)
-    await expect(page.getByText('Case briefing:', { exact: false })).toBeVisible()
     const savedReply = page
-      .getByRole('listitem')
+      .getByRole('article')
       .filter({ hasText: `Saved Strixy reply ${fixture.marker}` })
+    await savedReply.getByRole('button', { name: /Review details/ }).click()
+    const review = page.getByRole('dialog')
     await expect(
-      savedReply.getByText('This attachment format is not supported for analysis.', {
+      review.getByText('This attachment format is not supported for analysis.', {
         exact: false,
       }),
     ).toBeVisible()
     await expect(
-      savedReply.getByText(`evidence:${attachment.id}: Attachment examined.`, { exact: false }),
+      review.getByText(`${attachment.title}: Attachment examined.`, { exact: false }),
     ).toBeVisible()
-    await page
-      .getByRole('button', { name: `evidence:${attachment.id} · attachment:line:1`, exact: true })
-      .click()
+    await review.getByRole('button').filter({ hasText: attachment.title }).first().click()
     await expect(page.getByRole('dialog')).toContainText('Ada works at Acme. Employer disputed.')
     await page.getByRole('button', { name: 'Close source' }).click()
     await page.getByRole('button', { name: 'Start new conversation' }).click()
     await expect(
       page.getByText(`Saved Strixy reply ${fixture.marker}`, { exact: true }),
     ).toHaveCount(0)
-    await page.getByRole('combobox', { name: 'Private conversations' }).press('Enter')
-    await page.getByRole('option', { name: /Conversation 1/ }).click()
+    await page.getByRole('button', { name: 'Conversations', exact: true }).click()
+    await page.getByRole('textbox', { name: 'Find a conversation' }).fill(fixture.marker)
+    await page.getByRole('dialog').getByRole('button').filter({ hasText: fixture.marker }).click()
     await expect(
       page.getByText(`Saved Strixy reply ${fixture.marker}`, { exact: true }),
     ).toBeVisible()
@@ -189,9 +189,7 @@ for (const mode of ['limit', 'cancel', 'failure']) {
       await expect(
         page.getByText(`Partial Strixy reply ${fixture.marker}`, { exact: true }),
       ).toHaveCount(1)
-      await page
-        .getByRole('button', { name: `case:${fixture.cases[0].id} · case_number`, exact: true })
-        .click()
+      await page.getByRole('button', { name: /^Open source 1:/ }).click()
       await expect(page.getByRole('dialog')).toContainText(fixture.cases[0].case_number)
       await page.getByRole('button', { name: 'Close source' }).click()
       await beforeRelease[mode]?.(page)

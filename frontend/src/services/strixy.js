@@ -17,11 +17,10 @@ export const strixyService = {
   async remove(caseId, id) {
     await api.delete(`${base(caseId)}/${id}`)
   },
-  async sendMessage(content, caseId, id, focus = []) {
+  async sendMessage(content, caseId, id) {
     return (
       await api.post(`${base(caseId)}/${id}/messages`, {
         content,
-        ...(focus.length ? { focus } : {}),
       })
     ).data
   },
@@ -44,9 +43,6 @@ export const strixyService = {
   },
   async copyShare(caseId, id) {
     return (await api.post(`/api/strixy/cases/${caseId}/shares/${id}/copy`)).data
-  },
-  async sources(caseId) {
-    return (await api.get(`/api/strixy/cases/${caseId}/sources`)).data
   },
   async source(caseId, sourceId, unit) {
     return (
