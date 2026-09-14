@@ -48,6 +48,8 @@ def test_responses_adapter_bounds_usage_and_withholds_incomplete_json(limited):
     assert factory.call_args.kwargs["max_retries"] == 0
     assert factory.call_args.kwargs["timeout"] == 12
     sent = client.responses.create.call_args.kwargs
+    assert sent["model"] == "gpt-6-astra"
+    assert sent["reasoning"] == {"effort": "low"}
     assert sent["input"][1]["role"] == "user"
     image_parts = sent["input"][1]["content"]
     assert '"source_id": "evidence:2"' in image_parts[0]["text"]
@@ -133,7 +135,10 @@ def test_streams_only_visible_answer_content_and_retains_incomplete_output():
     assert result.limit_code == "output_limit"
     assert result.citations == []
     assert "private reasoning" not in str(updates)
-    assert client.responses.create.call_args.kwargs["stream"] is True
+    sent = client.responses.create.call_args.kwargs
+    assert sent["stream"] is True
+    assert sent["model"] == "gpt-6-astra"
+    assert sent["reasoning"] == {"effort": "low"}
 
 
 def test_streaming_preserves_complete_citations_before_output_limit():

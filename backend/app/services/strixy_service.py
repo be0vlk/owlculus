@@ -88,6 +88,7 @@ class StrixyService:
         with OpenAI(api_key=key, max_retries=0, timeout=timeout) as client:
             result = client.responses.create(
                 model=config.model,
+                reasoning={"effort": config.reasoning_effort},
                 instructions=config.instructions,
                 input=response_input(messages),
                 max_output_tokens=config.max_output_tokens,

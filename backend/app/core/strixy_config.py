@@ -1,11 +1,12 @@
 """Versioned Strixy policy and bounded provider settings, owned by the backend.
 
-Verified 2026-09-12 against official OpenAI documentation:
-https://developers.openai.com/api/docs/models/gpt-5.4-mini
+Verified 2026-09-13 against official OpenAI documentation:
+https://developers.openai.com/api/docs/models/gpt-6-astra
 https://developers.openai.com/api/docs/guides/file-inputs
 https://developers.openai.com/api/reference/typescript/resources/beta/subresources/responses/methods/create
 
-GPT-5.4 mini supports Responses, function calling, streaming and image input.
+GPT-6 Astra supports Responses, function calling, streaming and image input.
+Use the current flagship alias with explicit low reasoning by default.
 File inputs support PDFs with text and page images for vision-capable models.
 Grounding uses only our read_case_sources function and strict JSON answers.
 https://developers.openai.com/api/docs/guides/function-calling
@@ -19,15 +20,18 @@ Responses max_output_tokens bounds visible output plus reasoning tokens;
 store=False avoids persisted response state, not independent provider retention.
 """
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
 class StrixyConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    version: str = "strixy-6-v1"
+    version: str = "strixy-6-v2"
     instruction_version: str = "grounded-visuals-v1"
-    model: str = "gpt-5.4-mini-2026-03-17"
+    model: str = "gpt-6-astra"
+    reasoning_effort: Literal["low", "medium", "high", "xhigh", "max"] = "low"
     supports_tools: bool = True
     supports_streaming: bool = True
     supports_vision: bool = True

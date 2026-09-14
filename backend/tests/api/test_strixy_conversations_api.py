@@ -68,7 +68,7 @@ def configured(session):
 
 
 def test_acceptance_owns_history_and_blocks_overlapping_turns(
-    client, assigned, configured, analyst_token, admin_token
+    client, session, assigned, configured, analyst_token, admin_token
 ):
     owner = auth(analyst_token)
     url = f"/api/strixy/cases/{assigned}/conversations"
@@ -91,7 +91,13 @@ def test_acceptance_owns_history_and_blocks_overlapping_turns(
     run = accepted.json()
     assert run["status"] == "pending"
     assert run["coverage"] == "conversation_only"
-    assert run["model"] and run["instruction_version"] and run["configuration_version"]
+    assert run["model"] == "gpt-6-astra"
+    assert run["instruction_version"]
+    assert run["configuration_version"] == "strixy-6-v2"
+    from app.database.models import StrixyRun
+
+    persisted_run = session.get(StrixyRun, run["id"])
+    assert persisted_run.configuration["reasoning_effort"] == "low"
     assert (
         client.get(accepted.headers["location"], headers=owner).json()["id"]
         == run["id"]
