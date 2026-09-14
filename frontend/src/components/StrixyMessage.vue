@@ -4,10 +4,9 @@
     :class="message.role === 'user' ? 'user-message' : 'assistant-message'"
   >
     <div class="message-heading">
-      <span
-        ><v-icon v-if="message.role === 'assistant'" icon="mdi-owl" size="22" />{{
-          message.role === 'assistant' ? 'Strixy' : shared ? 'Conversation participant' : 'You'
-        }}</span
+      <span>{{
+        message.role === 'assistant' ? 'Strixy' : shared ? 'Conversation participant' : 'You'
+      }}</span
       ><time v-if="message.timestamp" :datetime="message.timestamp">{{ time }}</time
       ><v-menu v-if="!message.withheld && !shared && message.id" location="bottom end"
         ><template #activator="{ props }"

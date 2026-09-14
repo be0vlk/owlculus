@@ -2,7 +2,6 @@
   <v-main class="strixy-page" :class="{ 'strixy-dark': isDark }">
     <header class="strixy-header">
       <div class="strixy-brand">
-        <div class="strixy-brand-icon"><v-icon icon="mdi-owl" size="23" /></div>
         <div>
           <h1>Strixy</h1>
           <p>
@@ -123,7 +122,6 @@
           <v-progress-circular indeterminate size="24" width="2" /> Opening conversation…
         </div>
         <div v-else-if="!visibleMessages.length && !sharedSnapshot" class="strixy-welcome">
-          <div class="strixy-welcome-mark"><v-icon icon="mdi-owl" size="32" /></div>
           <p class="strixy-eyebrow">A little clarity for your case</p>
           <h2>Where should we start?</h2>
           <p class="strixy-welcome-copy">
@@ -957,16 +955,6 @@ watch(
   gap: 12px;
 }
 
-.strixy-brand-icon {
-  display: grid;
-  place-items: center;
-  width: 39px;
-  height: 39px;
-  border: 1px solid var(--strixy-line);
-  border-radius: 12px;
-  color: var(--strixy-accent);
-}
-
 .strixy-brand h1 {
   font-size: 19px;
   line-height: 1.4;
@@ -1025,17 +1013,6 @@ watch(
 .strixy-welcome {
   width: 100%;
   padding: 22px 0;
-}
-
-.strixy-welcome-mark {
-  display: grid;
-  place-items: center;
-  width: 58px;
-  height: 58px;
-  margin-bottom: 28px;
-  color: var(--strixy-accent);
-  background: var(--strixy-soft);
-  border-radius: 18px;
 }
 
 .strixy-eyebrow {
@@ -1402,7 +1379,6 @@ watch(
     padding: 20px 0 16px;
   }
 
-  .strixy-welcome-mark,
   .strixy-welcome > .strixy-eyebrow {
     display: none;
   }
@@ -1442,7 +1418,6 @@ watch(
 }
 
 @media (width <= 450px) {
-  .strixy-brand-icon,
   .strixy-brand-role {
     display: none;
   }
