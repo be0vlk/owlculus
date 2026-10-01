@@ -82,12 +82,11 @@ export const entitySchemas = {
     basicInfo: {
       title: 'Basic Information',
       fields: [
-        { id: 'name', label: 'Company Name', type: 'text', required: true, hasSource: true },
+        { id: 'name', label: 'Company Name', type: 'text', hasSource: true },
         {
           id: 'website',
           label: 'Website',
           type: 'url',
-          placeholder: 'example.com',
           hasSource: true,
         },
         { id: 'phone', label: 'Phone', type: 'tel', hasSource: true },
@@ -143,15 +142,12 @@ export const entitySchemas = {
           id: 'domain',
           label: 'Domain Name',
           type: 'text',
-          required: true,
-          placeholder: 'example.com',
           hasSource: true,
         },
         {
           id: 'description',
           label: 'Description',
           type: 'textarea',
-          placeholder: 'Add any notes or context about this domain',
           hasSource: true,
         },
       ],
@@ -164,7 +160,6 @@ export const entitySchemas = {
           label: 'Subdomains',
           type: 'array',
           isArray: true,
-          arrayFields: ['subdomain', 'ip', 'resolved', 'source'],
         },
       ],
     },
@@ -182,35 +177,12 @@ export const entitySchemas = {
           id: 'ip_address',
           label: 'IP Address',
           type: 'text',
-          required: true,
-          placeholder: '192.0.2.1 or 2001:db8::1',
           hasSource: true,
         },
         {
           id: 'description',
           label: 'Description',
           type: 'textarea',
-          placeholder: 'Add any notes or context about this IP address',
-          hasSource: true,
-        },
-      ],
-    },
-    notes: {
-      title: 'Notes',
-      fields: [],
-      isNoteEditor: true,
-    },
-  },
-  network_assets: {
-    basicInfo: {
-      title: 'Network Assets',
-      fields: [
-        {
-          id: 'subdomains',
-          label: 'Subdomains',
-          type: 'text',
-          isArray: true,
-          placeholder: 'Enter subdomain and press Enter',
           hasSource: true,
         },
       ],

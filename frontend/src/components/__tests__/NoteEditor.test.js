@@ -4,14 +4,11 @@ import { createVuetify } from 'vuetify'
 import * as components from 'vuetify/components'
 import * as directives from 'vuetify/directives'
 import NoteEditor from '../NoteEditor.vue'
-import { caseService } from '@/services/case'
 
-vi.mock('@/services/case', () => ({ caseService: { updateCase: vi.fn() } }))
 let wrapper
 let warningSpy
 
 beforeEach(() => {
-  vi.clearAllMocks()
   warningSpy = vi.spyOn(console, 'warn')
   vi.stubGlobal(
     'ResizeObserver',
@@ -32,106 +29,66 @@ afterEach(() => {
   document.body.innerHTML = ''
 })
 
+const mountNotes = (props) =>
+  mount(NoteEditor, {
+    props,
+    attachTo: document.body,
+    global: { plugins: [createVuetify({ components, directives, theme: false })] },
+  })
+const textbox = () => wrapper.get('[role="textbox"][aria-label="Case notes"]')
+
 describe('Case note editor', () => {
-  it('changes edit mode silently and still saves subsequent user edits', async () => {
-    wrapper = mount(NoteEditor, {
-      props: { modelValue: '<p>Initial notes</p>', caseId: 7, isEditing: false },
-      global: { plugins: [createVuetify({ components, directives, theme: false })] },
-    })
+  it('changes edit mode silently and emits subsequent user edits', async () => {
+    wrapper = mountNotes({ modelValue: '<p>Initial notes</p>', isEditing: false })
     await flushPromises()
-    vi.useFakeTimers()
+    expect(textbox().attributes('contenteditable')).toBe('false')
     await wrapper.setProps({ isEditing: true })
-    await vi.advanceTimersByTimeAsync(1000)
     expect(wrapper.emitted('update:modelValue')).toBeUndefined()
-    expect(caseService.updateCase).not.toHaveBeenCalled()
-    const box = wrapper.get('[aria-label="Case notes"]')
-    box.element.innerHTML = '<p>User edit</p>'
-    await box.trigger('input')
-    await vi.advanceTimersByTimeAsync(1000)
-    expect(caseService.updateCase).toHaveBeenCalledExactlyOnceWith(7, { notes: '<p>User edit</p>' })
-    await wrapper.setProps({ isEditing: false })
-    expect(box.attributes('contenteditable')).toBe('false')
-    await vi.advanceTimersByTimeAsync(1000)
+    textbox().element.innerHTML = '<p>User edit</p>'
+    await textbox().trigger('input')
     expect(wrapper.emitted('update:modelValue')).toEqual([['<p>User edit</p>']])
-    expect(caseService.updateCase).toHaveBeenCalledTimes(1)
+    await wrapper.setProps({ isEditing: false })
+    expect(textbox().attributes('contenteditable')).toBe('false')
+    expect(wrapper.emitted('update:modelValue')).toHaveLength(1)
   })
 
-  it('emits manual edits immediately without saving on timers or unmount', async () => {
-    wrapper = mount(NoteEditor, {
-      props: { modelValue: '<p>Initial</p>', caseId: 7, saveMode: 'manual' },
-      global: { plugins: [createVuetify({ components, directives, theme: false })] },
-    })
+  it('emits each edit once, immediately', async () => {
+    wrapper = mountNotes({ modelValue: '<p>Initial</p>' })
     await flushPromises()
     vi.useFakeTimers()
-    const box = wrapper.get('[aria-label="Case notes"]')
-    box.element.innerHTML = '<p>Manual edit</p>'
-    await box.trigger('input')
+    textbox().element.innerHTML = '<p>Manual edit</p>'
+    await textbox().trigger('input')
     expect(wrapper.emitted('update:modelValue')).toEqual([['<p>Manual edit</p>']])
     await vi.advanceTimersByTimeAsync(5000)
-    wrapper.unmount()
-    await vi.advanceTimersByTimeAsync(5000)
-    expect(caseService.updateCase).not.toHaveBeenCalled()
+    expect(wrapper.emitted('update:modelValue')).toHaveLength(1)
   })
 
-  it('loads and replaces notes silently, then saves a user edit and reopens the HTML', async () => {
-    const mountNotes = (modelValue) =>
-      mount(NoteEditor, {
-        props: { modelValue, caseId: 7 },
-        attachTo: document.body,
-        global: { plugins: [createVuetify({ components, directives, theme: false })] },
-      })
-    wrapper = mountNotes('<p>Initial notes</p>')
+  it('loads and replaces notes silently, then reopens emitted HTML', async () => {
+    wrapper = mountNotes({ modelValue: '<p>Initial notes</p>' })
     await flushPromises()
-    vi.useFakeTimers()
-    const textbox = () => wrapper.get('[role="textbox"][aria-label="Case notes"]')
     expect(textbox().text()).toBe('Initial notes')
-    await vi.advanceTimersByTimeAsync(1100)
-    expect(caseService.updateCase).not.toHaveBeenCalled()
-    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
 
     for (const content of ['<p>Refreshed notes</p>', '']) {
       await wrapper.setProps({ modelValue: content })
       expect(textbox().text()).toBe(content ? 'Refreshed notes' : '')
-      await vi.advanceTimersByTimeAsync(1100)
-      expect(caseService.updateCase).not.toHaveBeenCalled()
       expect(wrapper.emitted('update:modelValue')).toBeUndefined()
     }
 
-    caseService.updateCase.mockResolvedValue({})
     textbox().element.innerHTML = '<p>Saved <strong>case</strong> notes</p>'
     await textbox().trigger('input')
-    await vi.advanceTimersByTimeAsync(1100)
-    const saved = '<p>Saved <strong>case</strong> notes</p>'
-    expect(wrapper.emitted('update:modelValue').at(-1)).toEqual([saved])
-    expect(caseService.updateCase).toHaveBeenCalledExactlyOnceWith(7, { notes: saved })
+    const saved = wrapper.emitted('update:modelValue').at(-1)[0]
+    expect(saved).toBe('<p>Saved <strong>case</strong> notes</p>')
     wrapper.unmount()
-    vi.useRealTimers()
-    wrapper = mountNotes(saved)
+    wrapper = mountNotes({ modelValue: saved })
     await flushPromises()
     expect(textbox().get('strong').text()).toBe('case')
     expect(textbox().text()).toBe('Saved case notes')
   })
 
-  it('labels formatting and editing, and reports failed saves followed by recovery', async () => {
-    wrapper = mount(NoteEditor, {
-      props: { modelValue: '<p>Initial notes</p>', caseId: 7 },
-      attachTo: document.body,
-      global: { plugins: [createVuetify({ components, directives, theme: false })] },
-    })
+  it('labels formatting controls without a save status', async () => {
+    wrapper = mountNotes({ modelValue: '<p>Initial notes</p>' })
     await flushPromises()
     expect(wrapper.get('[aria-label="Bold (Ctrl+B)"]').attributes('aria-pressed')).toBe('false')
-    const textbox = wrapper.get('[role="textbox"][aria-label="Case notes"]')
-    vi.useFakeTimers()
-    caseService.updateCase.mockRejectedValueOnce(new Error('Unavailable'))
-    textbox.element.innerHTML = '<p>New notes</p>'
-    await textbox.trigger('input')
-    await vi.advanceTimersByTimeAsync(1100)
-    expect(wrapper.get('[role="alert"]').text()).toContain('Failed to save notes')
-    caseService.updateCase.mockResolvedValueOnce({})
-    textbox.element.innerHTML = '<p>Recovered notes</p>'
-    await textbox.trigger('input')
-    await vi.advanceTimersByTimeAsync(1100)
-    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
-    expect(wrapper.get('[role="status"]').text()).toContain('Last saved:')
+    expect(wrapper.get('[role="status"]').text()).toBe('')
   })
 })

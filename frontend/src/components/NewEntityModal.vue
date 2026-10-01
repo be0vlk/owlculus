@@ -23,7 +23,7 @@
           {{ entityForm.state.error }}
         </v-alert>
 
-        <v-form ref="formRef" @submit.prevent="handleSubmit">
+        <v-form @submit.prevent="handleSubmit">
           <!-- Entity Type Selector -->
           <v-card variant="outlined" class="mb-6">
             <v-card-title class="text-body-large pb-2">
@@ -32,14 +32,9 @@
             </v-card-title>
 
             <v-card-text class="pt-0">
-              <v-tabs
-                v-model="selectedTab"
-                color="primary"
-                align-tabs="start"
-                @update:model-value="handleTabChange"
-              >
+              <v-tabs v-model="entityForm.state.entityType" color="primary" align-tabs="start">
                 <v-tab
-                  v-for="entityType in entityTypes"
+                  v-for="entityType in ENTITY_TYPES"
                   :key="entityType.value"
                   :value="entityType.value"
                   :prepend-icon="entityType.icon"
@@ -51,40 +46,25 @@
           </v-card>
 
           <!-- Entity Form Content -->
-          <v-tabs-window v-model="selectedTab">
+          <v-tabs-window v-model="entityForm.state.entityType">
             <v-tabs-window-item value="person">
-              <PersonForm
-                v-model="entityForm.state.data"
-                @update:model-value="entityForm.updateData"
-              />
+              <PersonForm v-model="entityForm.state.data" />
             </v-tabs-window-item>
 
             <v-tabs-window-item value="company">
-              <CompanyForm
-                v-model="entityForm.state.data"
-                @update:model-value="entityForm.updateData"
-              />
+              <CompanyForm v-model="entityForm.state.data" />
             </v-tabs-window-item>
 
             <v-tabs-window-item value="domain">
-              <DomainForm
-                v-model="entityForm.state.data"
-                @update:model-value="entityForm.updateData"
-              />
+              <DomainForm v-model="entityForm.state.data" />
             </v-tabs-window-item>
 
             <v-tabs-window-item value="ip_address">
-              <IpAddressForm
-                v-model="entityForm.state.data"
-                @update:model-value="entityForm.updateData"
-              />
+              <IpAddressForm v-model="entityForm.state.data" />
             </v-tabs-window-item>
 
             <v-tabs-window-item value="vehicle">
-              <VehicleForm
-                v-model="entityForm.state.data"
-                @update:model-value="entityForm.updateData"
-              />
+              <VehicleForm v-model="entityForm.state.data" />
             </v-tabs-window-item>
           </v-tabs-window>
 
@@ -117,9 +97,10 @@
 
 <script setup>
 import EntityDuplicateAdvisory from './entities/EntityDuplicateAdvisory.vue'
-import { watch, computed, ref } from 'vue'
+import { watch, computed } from 'vue'
 import { useEntityForm } from '../composables/useEntityForm'
-import { useEntityValidation, entityIdentityGuidance } from '../composables/useEntityValidation'
+import { isFormValid, entityIdentityGuidance } from '../composables/entityValidation'
+import { ENTITY_TYPES } from '../composables/entityTypes'
 import { useDialogFocusRestore } from '../composables/useDialogFocusRestore'
 import PersonForm from './entities/PersonForm.vue'
 import CompanyForm from './entities/CompanyForm.vue'
@@ -136,22 +117,7 @@ useDialogFocusRestore(() => props.show)
 
 const emit = defineEmits(['close', 'created'])
 
-// Entity types configuration
-const entityTypes = [
-  { value: 'person', title: 'Person', icon: 'mdi-account' },
-  { value: 'company', title: 'Company', icon: 'mdi-domain' },
-  { value: 'domain', title: 'Domain', icon: 'mdi-web' },
-  { value: 'ip_address', title: 'IP Address', icon: 'mdi-ip' },
-  { value: 'vehicle', title: 'Vehicle', icon: 'mdi-car' },
-]
-
-// Reactive variables
-const selectedTab = ref('person')
-const formRef = ref(null)
-
-// Composables
 const entityForm = useEntityForm(props.caseId)
-const { isFormValid } = useEntityValidation()
 
 // Dialog visibility
 const dialogVisible = computed({
@@ -163,19 +129,12 @@ const dialogVisible = computed({
   },
 })
 
-// Computed validation
 const formValid = computed(() => isFormValid(entityForm.state.entityType, entityForm.state.data))
 
 function cancelDialog() {
   if (!entityForm.state.loading) emit('close')
 }
 
-// Handle tab change
-function handleTabChange(newTab) {
-  entityForm.setEntityType(newTab)
-}
-
-// Handle form submission
 async function handleSubmit(confirmed = false) {
   if (!formValid.value || entityForm.state.loading) return
 
@@ -189,29 +148,10 @@ async function handleSubmit(confirmed = false) {
   }
 }
 
-// Watch for tab changes to sync with entity type
-watch(selectedTab, (newTab) => {
-  if (newTab !== entityForm.state.entityType) {
-    entityForm.setEntityType(newTab)
-  }
-})
-
-// Watch for entity type changes to sync with tabs
-watch(
-  () => entityForm.state.entityType,
-  (newType) => {
-    selectedTab.value = newType
-  },
-)
-
-// Initialize form when dialog opens
 watch(
   () => props.show,
   (show) => {
-    if (show) {
-      entityForm.reset()
-      selectedTab.value = 'person'
-    }
+    if (show) entityForm.reset()
   },
 )
 </script>

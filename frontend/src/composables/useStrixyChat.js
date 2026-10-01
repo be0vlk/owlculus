@@ -63,48 +63,6 @@ export function useStrixyChat() {
           })[limit] || 'Processing limit reached.',
       )
       .join(' ')
-  const runExplanation = computed(() => {
-    const run = latestRun.value
-    if (!run) return ''
-    if (run.error_code === 'sources_changed')
-      return 'Source content or access changed. Reanalyze to use current permitted records.'
-    if (run.error_code === 'invalid_citation')
-      return 'The reply contained an invalid source reference and was withheld. Retry to request a new answer.'
-    if (run.error_code === 'completion_uncertain')
-      return 'The worker stopped. Completion is uncertain; no automatic retry was made. Saved partial findings may be incomplete.'
-    if (run.status === 'cancelled')
-      return run.error_code === 'access_revoked'
-        ? 'Analysis stopped because access changed.'
-        : 'Analysis cancelled. Saved partial findings are retained. A provider request already sent cannot be retracted.'
-    if (run.limit_code) {
-      const limit =
-        {
-          input_limit: 'Conversation input',
-          model_input_limit: 'Model input usage',
-          output_limit: 'Reply',
-          model_call_limit: 'Analysis step',
-          runtime_limit: 'Runtime',
-        }[run.limit_code] || 'Processing'
-      return `${limit} limit reached. ${run.partial || messages.value.some((m) => m.role === 'assistant' && m.position === run.position + 1) ? 'Saved findings may be incomplete.' : 'No findings were produced.'} Continue explicitly for another bounded analysis, or start a shorter conversation.`
-    }
-    if (run.error_code === 'provider_not_configured')
-      return 'Ask an administrator to configure the OpenAI API key, then retry.'
-    if (['dispatch_failed', 'worker_unavailable'].includes(run.error_code))
-      return 'Background services are unavailable. Ask an administrator to check them, then retry.'
-    if (run.status === 'failed')
-      return 'Strixy could not complete this reply. Your conversation and permitted partial findings are saved. Retry when ready.'
-    if (run.status === 'pending') return 'Reply queued'
-    if (run.status === 'running')
-      return (
-        {
-          locating_records: 'Locating records',
-          examining_inputs: 'Examining available inputs',
-          preparing_findings: 'Preparing findings',
-        }[run.progress] || 'Preparing reply'
-      )
-    return 'Reply completed'
-  })
-
   const invalidate = () => {
     generation++
     observation++
@@ -466,25 +424,20 @@ export function useStrixyChat() {
     sourceError,
     openSource,
     authorizedExport,
-    contextReady,
     canChat,
     availabilityError,
     operationError,
     checkingAvailability,
-    checkAvailability,
     conversations,
     conversationId,
     selectConversation,
     deleteConversation,
     messages,
-    runs,
-    runExplanation,
     loading,
     currentMessage,
     apiKeyError,
     sendMessage,
     initializeChat,
     createConversation,
-    scrollToBottom,
   }
 }

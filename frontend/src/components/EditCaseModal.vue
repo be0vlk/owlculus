@@ -104,7 +104,7 @@
 
 <script setup>
 import { ref, watch, computed } from 'vue'
-import api from '../services/api'
+import { caseService } from '../services/case'
 import { formatDate } from '../composables/dateUtils'
 import { useDialogFocusRestore } from '../composables/useDialogFocusRestore'
 import { getErrorMessage } from '../utils/errorMessage'
@@ -118,12 +118,6 @@ const props = defineProps({
   caseData: {
     type: Object,
     required: true,
-    default: () => ({
-      title: '',
-      status: '',
-      created_at: null,
-      updated_at: null,
-    }),
   },
 })
 
@@ -217,11 +211,11 @@ const handleSubmit = async () => {
   error.value = null
 
   try {
-    const response = await api.put(`/api/cases/${props.caseData.id}`, {
+    const updatedCase = await caseService.updateCase(props.caseData.id, {
       title: formData.value.title.trim(),
       status: formData.value.status,
     })
-    emit('update', response.data)
+    emit('update', updatedCase)
     emit('close')
   } catch (err) {
     error.value = getErrorMessage(err, 'Failed to update case')

@@ -46,7 +46,8 @@
 </template>
 
 <script setup>
-import { usePluginValidation, usePluginParamsAdvanced } from '@/composables/usePluginParams'
+import { usePluginParamsAdvanced } from '@/composables/usePluginParams'
+import { domainRule } from '@/composables/entityValidation'
 import PluginDescriptionCard from './PluginDescriptionCard.vue'
 import CaseEvidenceToggle from './CaseEvidenceToggle.vue'
 
@@ -67,6 +68,4 @@ const emit = defineEmits(['update:modelValue'])
 const { pluginDescription, localParams, updateParams } = usePluginParamsAdvanced(props, emit, {
   parameterDefaults: { domain: '', concurrency: 5, use_securitytrails: false },
 })
-
-const { domainRule } = usePluginValidation()
 </script>

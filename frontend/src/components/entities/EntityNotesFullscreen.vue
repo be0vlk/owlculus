@@ -70,15 +70,3 @@ defineProps({
 
 defineEmits(['update:show', 'close'])
 </script>
-
-<style scoped>
-/* Read-only styling for fullscreen notes */
-.read-only-notes .tiptap-content :deep(.ProseMirror) {
-  cursor: default;
-  background-color: rgb(var(--v-theme-surface-variant), 0.03);
-}
-
-.read-only-notes .tiptap-content :deep(.ProseMirror *) {
-  pointer-events: none;
-}
-</style>

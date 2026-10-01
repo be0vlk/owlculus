@@ -231,7 +231,7 @@ async function exerciseEvidenceAndNotes(page) {
   await expect(bold).toHaveAttribute('aria-pressed', 'true')
   const expand = page.getByRole('button', { name: 'Expand to fullscreen', exact: true })
   await expand.click()
-  const fullscreen = page.getByRole('dialog', { name: 'Case Notes Editor', exact: true })
+  const fullscreen = page.getByRole('dialog', { name: 'Case notes', exact: true })
   await expect(fullscreen.getByRole('textbox', { name: 'Case notes', exact: true })).toContainText(
     'Investigation notes',
   )
@@ -378,7 +378,7 @@ async function exerciseCaseAndEntityWorkflow(page) {
   entityRow = page.getByRole('row').filter({ hasText: 'Grace Lovelace' })
   await expect(entityRow).toBeVisible()
   await page.getByRole('button', { name: 'Delete Grace Lovelace', exact: true }).click()
-  const deleteDialog = page.getByRole('dialog', { name: 'Confirm Delete', exact: true })
+  const deleteDialog = page.getByRole('dialog', { name: 'Confirm Deletion', exact: true })
   await expect(deleteDialog).toContainText('This action cannot be undone.')
   await deleteDialog.getByRole('button', { name: 'Cancel', exact: true }).click()
   await expect(entityRow).toBeVisible()

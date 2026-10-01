@@ -17,17 +17,13 @@
 
     <!-- Create Task Dialog -->
     <v-dialog aria-label="Create Task" v-model="showCreateDialog" max-width="600">
-      <TaskForm
-        :saving="loading"
-        @cancel="showCreateDialog = false"
-        @save="handleCreateTask"
-      />
+      <TaskForm :saving="loading" @cancel="showCreateDialog = false" @save="handleCreateTask" />
     </v-dialog>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useTaskStore } from '@/stores/taskStore'
 import { useTaskTable } from '@/composables/useTaskTable'
 import TaskForm from '@/components/tasks/TaskForm.vue'
@@ -62,16 +58,5 @@ async function handleCreateTask(taskData) {
   await loadTasks()
 }
 
-// Watch for case ID changes
-watch(
-  () => props.caseId,
-  () => {
-    loadTasks()
-  },
-)
-
-// Lifecycle
-onMounted(async () => {
-  await loadTasks()
-})
+watch(() => props.caseId, loadTasks, { immediate: true })
 </script>

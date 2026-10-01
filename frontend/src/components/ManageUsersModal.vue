@@ -35,146 +35,31 @@
           {{ error }}
         </v-alert>
 
-        <div v-else>
-          <!-- Current Users Section -->
-          <v-card class="mb-6" variant="outlined">
-            <v-card-title class="text-body-large pb-2">
-              <v-icon start>mdi-account-check</v-icon>
-              Current Case Users
-            </v-card-title>
-
-            <v-card-text>
-              <v-list v-if="caseUsers.length > 0" density="compact">
-                <v-list-item v-for="user in caseUsers" :key="user.id" class="px-0">
-                  <template #prepend>
-                    <v-avatar color="grey-lighten-1" size="32">
-                      <v-icon>mdi-account</v-icon>
-                    </v-avatar>
-                  </template>
-
-                  <v-list-item-title>
-                    {{ user.email }}
-                    <v-icon v-if="user.is_lead" class="ml-1" color="primary" size="x-small">
-                      mdi-star
-                    </v-icon>
-                    <v-chip
-                      v-if="user.role === 'Analyst'"
-                      class="ml-2"
-                      color="grey"
-                      size="x-small"
-                      variant="tonal"
-                    >
-                      {{ user.role }}
-                    </v-chip>
-                  </v-list-item-title>
-                  <v-list-item-subtitle>{{ userDisplayName(user) }}</v-list-item-subtitle>
-
-                  <template #append>
-                    <div class="d-flex align-center ga-1">
-                      <v-tooltip :text="getLeadButtonTooltip(user)" location="top">
-                        <template #activator="{ props }">
-                          <v-btn
-                            :aria-label="`${getLeadButtonTooltip(user)} for ${user.email}`"
-                            :color="user.is_lead ? 'primary' : 'default'"
-                            :icon="user.is_lead ? 'mdi-star' : 'mdi-star-outline'"
-                            :loading="updatingLeadStatus === user.id"
-                            :disabled="user.role === 'Analyst' && !user.is_lead"
-                            size="small"
-                            v-bind="props"
-                            variant="text"
-                            @click="toggleLeadStatus(user)"
-                          />
-                        </template>
-                      </v-tooltip>
-
-                      <v-tooltip location="top" text="Remove from Case">
-                        <template #activator="{ props }">
-                          <v-btn
-                            :aria-label="`Remove ${user.email} from case`"
-                            :loading="removingUser === user.id"
-                            color="error"
-                            icon="mdi-account-remove"
-                            size="small"
-                            v-bind="props"
-                            variant="text"
-                            @click="removeUser(user)"
-                          />
-                        </template>
-                      </v-tooltip>
-                    </div>
-                  </template>
-                </v-list-item>
-              </v-list>
-
-              <v-alert v-else icon="mdi-information" type="info" variant="tonal">
-                No users are currently assigned to this case
-              </v-alert>
-            </v-card-text>
-          </v-card>
-
-          <!-- Add New User Section -->
-          <v-card variant="outlined">
-            <v-card-title class="text-body-large pb-2">
-              <v-icon start>mdi-account-plus</v-icon>
-              Add New User
-            </v-card-title>
-
-            <v-card-text>
-              <v-form ref="formRef" v-model="isFormValid">
-                <v-row class="align-center">
-                  <v-col cols="12" md="6">
-                    <v-select
-                      v-model="selectedUserId"
-                      autofocus
-                      :items="availableUsers"
-                      :rules="[rules.required]"
-                      clearable
-                      density="comfortable"
-                      item-title="displayText"
-                      item-value="id"
-                      label="Select User"
-                      placeholder="Choose a user to add"
-                      variant="outlined"
-                    />
-                  </v-col>
-                  <v-col cols="12" md="3">
-                    <v-checkbox
-                      v-model="isLead"
-                      density="comfortable"
-                      hide-details
-                      label="Set as Lead"
-                      :disabled="isSelectedUserAnalyst"
-                    />
-                  </v-col>
-                  <v-col cols="12" md="3">
-                    <v-btn
-                      :disabled="!selectedUserId"
-                      :loading="addingUser"
-                      block
-                      color="primary"
-                      prepend-icon="mdi-account-plus"
-                      variant="tonal"
-                      @click="addUser"
-                    >
-                      Add User
-                    </v-btn>
-                  </v-col>
-                </v-row>
-              </v-form>
-
-              <v-alert
-                v-if="availableUsers.length === 0"
-                class="mt-4"
-                icon="mdi-information"
-                type="info"
-                variant="tonal"
-              >
-                <v-alert-title>No Users Available</v-alert-title>
-                All users are already assigned to this case
-              </v-alert>
-            </v-card-text>
-          </v-card>
-        </div>
+        <v-card v-else variant="outlined">
+          <v-card-title class="text-body-large pb-2">
+            <v-icon start>mdi-account-check</v-icon>
+            Case Users
+          </v-card-title>
+          <v-card-text>
+            <CaseUserList
+              :users="caseUsers"
+              :all-users="allUsers"
+              :adding="addingUser"
+              :busy-user-id="busyUserId"
+              autofocus
+              remove-target="case"
+              @add="addUser"
+              @toggle-lead="toggleLeadStatus"
+              @remove="removeUser"
+            >
+              <template #empty>
+                <v-alert class="mb-4" icon="mdi-information" type="info" variant="tonal">
+                  No users are currently assigned to this case
+                </v-alert>
+              </template>
+            </CaseUserList>
+          </v-card-text>
+        </v-card>
       </v-card-text>
 
       <v-divider />
@@ -191,13 +76,13 @@
 </template>
 
 <script setup>
-import { userDisplayName } from '@/utils/userDisplay'
 import { computed, ref, watch } from 'vue'
 import { userService } from '@/services/user'
 import { caseService } from '@/services/case'
 import { useDialogFocusRestore } from '@/composables/useDialogFocusRestore'
 import { getErrorMessage } from '@/utils/errorMessage'
 import ModalActions from './ModalActions.vue'
+import CaseUserList from './CaseUserList.vue'
 
 const props = defineProps({
   show: {
@@ -218,22 +103,11 @@ useDialogFocusRestore(() => props.show)
 
 const emit = defineEmits(['close', 'updated'])
 
-// Reactive variables
-const formRef = ref(null)
-const isFormValid = ref(false)
 const loading = ref(false)
 const error = ref(null)
-const selectedUserId = ref(null)
-const isLead = ref(false)
 const allUsers = ref([])
 const addingUser = ref(false)
-const removingUser = ref(null)
-const updatingLeadStatus = ref(null)
-
-// Validation rules
-const rules = {
-  required: (value) => !!value || 'Please select a user',
-}
+const busyUserId = ref(null)
 
 const dialogVisible = computed({
   get: () => props.show,
@@ -244,26 +118,7 @@ const dialogVisible = computed({
   },
 })
 
-// Current case users
 const caseUsers = computed(() => props.caseData?.users || [])
-
-// Available users (not already in case)
-const availableUsers = computed(() => {
-  const caseUserIds = caseUsers.value.map((u) => u.id)
-  return allUsers.value
-    .filter((user) => !caseUserIds.includes(user.id))
-    .map((user) => ({
-      ...user,
-      displayText: `${user.email} - ${userDisplayName(user)} (${user.role})`,
-    }))
-})
-
-// Check if selected user is an analyst
-const isSelectedUserAnalyst = computed(() => {
-  if (!selectedUserId.value) return false
-  const selectedUser = allUsers.value.find((u) => u.id === selectedUserId.value)
-  return selectedUser?.role === 'Analyst'
-})
 
 const loadUsers = async () => {
   try {
@@ -277,21 +132,12 @@ const loadUsers = async () => {
   }
 }
 
-const addUser = async () => {
-  if (!selectedUserId.value) return
-
+const addUser = async (userId, isLead) => {
   try {
     addingUser.value = true
     error.value = null
-    await caseService.addUserToCase(props.caseId, selectedUserId.value, isLead.value)
+    await caseService.addUserToCase(props.caseId, userId, isLead)
     emit('updated')
-
-    // Reset form
-    selectedUserId.value = null
-    isLead.value = false
-    if (formRef.value) {
-      formRef.value.resetValidation()
-    }
   } catch (err) {
     error.value = getErrorMessage(err, 'Failed to add user to case')
   } finally {
@@ -305,65 +151,34 @@ const removeUser = async (user) => {
   }
 
   try {
-    removingUser.value = user.id
+    busyUserId.value = user.id
     error.value = null
     await caseService.removeUserFromCase(props.caseId, user.id)
     emit('updated')
   } catch (err) {
     error.value = getErrorMessage(err, 'Failed to remove user from case')
   } finally {
-    removingUser.value = null
+    busyUserId.value = null
   }
 }
 
 const toggleLeadStatus = async (user) => {
-  // Don't allow toggle if user is an analyst and not currently a lead
-  if (user.role === 'Analyst' && !user.is_lead) {
-    return
-  }
-
   try {
-    updatingLeadStatus.value = user.id
+    busyUserId.value = user.id
     error.value = null
     await caseService.updateCaseUserLeadStatus(props.caseId, user.id, !user.is_lead)
     emit('updated')
   } catch (err) {
     error.value = getErrorMessage(err, 'Failed to update lead status')
   } finally {
-    updatingLeadStatus.value = null
+    busyUserId.value = null
   }
 }
 
-const getLeadButtonTooltip = (user) => {
-  if (user.role === 'Analyst' && !user.is_lead) {
-    return 'Analysts cannot be set as leads'
-  }
-  return user.is_lead ? 'Remove as Lead' : 'Set as Lead'
-}
-
-// Watch for dialog opening/closing
 watch(
   () => props.show,
-  (newValue) => {
-    if (newValue) {
-      loadUsers()
-      // Reset form when dialog opens
-      selectedUserId.value = null
-      isLead.value = false
-      error.value = null
-      if (formRef.value) {
-        setTimeout(() => {
-          formRef.value.resetValidation()
-        }, 100)
-      }
-    }
+  (show) => {
+    if (show) loadUsers()
   },
 )
-
-// Watch for user selection to reset isLead for analysts
-watch(selectedUserId, (newUserId) => {
-  if (newUserId && isSelectedUserAnalyst.value) {
-    isLead.value = false
-  }
-})
 </script>

@@ -1,5 +1,4 @@
-import { computed } from 'vue'
-import { supportedProfile } from './useEntityValidation'
+import { supportedProfile } from './entityValidation'
 
 export function getEntityDisplayName(entity) {
   if (!entity) return ''
@@ -37,13 +36,4 @@ export function getEntityDisplayName(entity) {
     default:
       return 'Unnamed Entity'
   }
-}
-
-export function useEntityDisplay(entity) {
-  const getEntityTitle = computed(() =>
-    entity.value ? getEntityDisplayName(entity.value) : 'Entity Details',
-  )
-  const getFieldValue = (data, parentField, fieldId) =>
-    parentField ? data[parentField]?.[fieldId] : data[fieldId]
-  return { getEntityDisplayName, getEntityTitle, getFieldValue }
 }

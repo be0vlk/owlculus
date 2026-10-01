@@ -12,6 +12,7 @@ describe('useBaseNoteEditor', () => {
   let updateCallback
 
   beforeEach(() => {
+    vi.clearAllMocks()
     vi.useFakeTimers()
 
     mockEditor = {
@@ -118,9 +119,9 @@ describe('useBaseNoteEditor', () => {
   it('should provide editor actions', () => {
     const result = useBaseNoteEditor({})
 
-    expect(result.editorActions.value).toHaveLength(9)
+    expect(result.editorActions).toHaveLength(9)
 
-    const boldAction = result.editorActions.value.find((a) => a.icon === 'mdi-format-bold')
+    const boldAction = result.editorActions.find((a) => a.icon === 'mdi-format-bold')
     expect(boldAction).toBeDefined()
     expect(boldAction.title).toBe('Bold (Ctrl+B)')
 

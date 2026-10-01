@@ -6,84 +6,7 @@ import { getErrorMessage } from '../utils/errorMessage'
 
 export function useEntityForm(caseId) {
   const advisories = useEntityAdvisories(caseId)
-  const state = reactive({
-    entityType: 'person',
-    data: {
-      social_media: {
-        x: '',
-        linkedin: '',
-        facebook: '',
-        instagram: '',
-        tiktok: '',
-        reddit: '',
-        other: '',
-      },
-      ip_addresses: [],
-      subdomains: [],
-      sources: {},
-    },
-    loading: false,
-    error: null,
-  })
-
-  const resetFormData = (entityType) => {
-    advisories.clear()
-    const baseSocialMedia = {}
-    state.data = {
-      social_media: baseSocialMedia,
-      ip_addresses: [],
-      subdomains: [],
-      sources: {},
-    }
-
-    switch (entityType) {
-      case 'person':
-        Object.assign(state.data, {
-          first_name: '',
-          last_name: '',
-        })
-        break
-      case 'company':
-        Object.assign(state.data, {
-          name: '',
-        })
-        break
-      case 'domain':
-        Object.assign(state.data, {
-          domain: '',
-          description: '',
-        })
-        break
-      case 'ip_address':
-        Object.assign(state.data, {
-          ip_address: '',
-          description: '',
-        })
-        break
-      case 'vehicle':
-        Object.assign(state.data, {
-          make: '',
-          model: '',
-          year: '',
-          vin: '',
-          license_plate: '',
-          color: '',
-          owner: '',
-          registration_state: '',
-          description: '',
-        })
-        break
-    }
-  }
-
-  const setEntityType = (type) => {
-    state.entityType = type
-    resetFormData(type)
-  }
-
-  const updateData = (data) => {
-    state.data = { ...state.data, ...data }
-  }
+  const state = reactive({ entityType: 'person', data: {}, loading: false, error: null })
 
   const submitEntity = async (confirmed = false) => {
     state.loading = true
@@ -109,26 +32,19 @@ export function useEntityForm(caseId) {
   const reset = () => {
     advisories.clear()
     state.entityType = 'person'
-    resetFormData('person')
+    state.data = {}
     state.error = null
   }
 
-  // Watch for entity type changes
   watch(
     () => state.entityType,
-    (newType) => {
-      resetFormData(newType)
+    () => {
+      advisories.clear()
+      state.data = {}
     },
   )
 
-  return {
-    state,
-    advisories,
-    setEntityType,
-    updateData,
-    submitEntity,
-    reset,
-  }
+  return { state, advisories, submitEntity, reset }
 }
 
 // Shared props and emit definitions for entity form components

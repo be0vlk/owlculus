@@ -5,11 +5,9 @@ import * as components from 'vuetify/components'
 import * as directives from 'vuetify/directives'
 import NoteEditor from '../NoteEditor.vue'
 import EntityDetailsModal from '../entities/EntityDetailsModal.vue'
-import { caseService } from '@/services/case'
 import { entityService } from '@/services/entity'
 import { richNote } from './fixtures/richNote'
 
-vi.mock('@/services/case', () => ({ caseService: { updateCase: vi.fn() } }))
 vi.mock('@/services/entity', () => ({ entityService: { updateEntity: vi.fn() } }))
 let wrapper
 let warningSpy
@@ -32,7 +30,6 @@ beforeEach(() => {
   // jsdom has no layout; ProseMirror scrolls selections after toolbar actions.
   Range.prototype.getClientRects = () => []
   Range.prototype.getBoundingClientRect = () => new DOMRect()
-  caseService.updateCase.mockResolvedValue({})
   entityService.updateEntity.mockImplementation(async (_caseId, _id, data) => ({ id: 9, ...data }))
 })
 afterEach(() => {
@@ -50,12 +47,11 @@ async function open(kind, notes, editable = true) {
   wrapper = mount(kind === 'case' ? NoteEditor : EntityDetailsModal, {
     props:
       kind === 'case'
-        ? { modelValue: notes, caseId: 7, isEditing: editable }
+        ? { modelValue: notes, isEditing: editable }
         : {
             show: true,
             entity: { ...entity, data: { ...entity.data, notes } },
             caseId: 7,
-            existingEntities: [],
           },
     attachTo: document.body,
     global: {
@@ -118,28 +114,25 @@ function expectRichContent() {
   )
 }
 
-describe.each(['case', 'entity'])('%s note compatibility', (kind) => {
-  const saveService = () => (kind === 'case' ? caseService.updateCase : entityService.updateEntity)
-  const delay = kind === 'case' ? 1000 : 5000
+// Case notes save manually from the dashboard; only entity notes autosave.
+describe('entity note autosave', () => {
+  const kind = 'entity'
+  const saveService = () => entityService.updateEntity
+  const delay = 5000
   const edit = async (html) => {
     textbox().element.innerHTML = html
     await textbox().trigger('input')
   }
-  const exitEditing = async () => {
-    if (kind === 'case') await wrapper.setProps({ isEditing: false })
-    else
-      await wrapper
-        .findAll('button')
-        .find((button) => button.text() === 'Cancel')
-        .trigger('click')
-  }
+  const exitEditing = () =>
+    wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Cancel')
+      .trigger('click')
 
   it('debounces successive edits, synchronizes saved content silently, and skips unchanged HTML', async () => {
     await open(kind, '<p>Initial</p>')
     vi.useFakeTimers()
     await edit('<p>First edit</p>')
-    if (kind === 'case')
-      expect(wrapper.emitted('update:modelValue').at(-1)).toEqual(['<p>First edit</p>'])
     await vi.advanceTimersByTimeAsync(delay - 1)
     expect(saveService()).not.toHaveBeenCalled()
     await edit('<p>Latest edit</p>')
@@ -148,17 +141,15 @@ describe.each(['case', 'entity'])('%s note compatibility', (kind) => {
     await vi.advanceTimersByTimeAsync(1)
     expect(saveService()).toHaveBeenCalledTimes(1)
     const payload = saveService().mock.calls[0].at(-1)
-    expect(kind === 'case' ? payload.notes : payload.data.notes).toBe('<p>Latest edit</p>')
-    const emissions = wrapper.emitted(kind === 'case' ? 'update:modelValue' : 'edit').length
-    await wrapper.setProps(
-      kind === 'case'
-        ? { modelValue: '<p>Latest edit</p>' }
-        : { entity: { ...entity, data: { ...entity.data, notes: '<p>Latest edit</p>' } } },
-    )
+    expect(payload.data.notes).toBe('<p>Latest edit</p>')
+    const emissions = wrapper.emitted('edit').length
+    await wrapper.setProps({
+      entity: { ...entity, data: { ...entity.data, notes: '<p>Latest edit</p>' } },
+    })
     await edit('<p>Latest edit</p>')
     await vi.advanceTimersByTimeAsync(delay)
     expect(saveService()).toHaveBeenCalledTimes(1)
-    expect(wrapper.emitted(kind === 'case' ? 'update:modelValue' : 'edit')).toHaveLength(emissions)
+    expect(wrapper.emitted('edit')).toHaveLength(emissions)
     await edit('<p>Next edit</p>')
     await vi.advanceTimersByTimeAsync(delay)
     expect(saveService()).toHaveBeenCalledTimes(2)
@@ -214,7 +205,7 @@ describe.each(['case', 'entity'])('%s note compatibility', (kind) => {
     await vi.advanceTimersByTimeAsync(delay * 2)
     expect(saveService()).toHaveBeenCalledTimes(1)
     const payload = saveService().mock.calls[0].at(-1)
-    expect(kind === 'case' ? payload.notes : payload.data.notes).toBe('<p>Pending</p>')
+    expect(payload.data.notes).toBe('<p>Pending</p>')
   })
 
   it.each([
@@ -247,16 +238,12 @@ describe.each(['case', 'entity'])('%s note compatibility', (kind) => {
       if (newerEdit) await edit('<p>Latest</p>')
       wrapper.unmount()
       expect(saveService()).toHaveBeenCalledTimes(1)
-      completeSave(
-        kind === 'case' ? {} : { ...entity, data: { ...entity.data, notes: '<p>First</p>' } },
-      )
+      completeSave({ ...entity, data: { ...entity.data, notes: '<p>First</p>' } })
       await flushPromises()
       await vi.advanceTimersByTimeAsync(delay * 2)
       expect(saveService()).toHaveBeenCalledTimes(newerEdit ? 2 : 1)
       const payload = saveService().mock.calls.at(-1).at(-1)
-      expect(kind === 'case' ? payload.notes : payload.data.notes).toBe(
-        newerEdit ? '<p>Latest</p>' : '<p>First</p>',
-      )
+      expect(payload.data.notes).toBe(newerEdit ? '<p>Latest</p>' : '<p>First</p>')
     },
   )
 
@@ -270,12 +257,10 @@ describe.each(['case', 'entity'])('%s note compatibility', (kind) => {
     expect(saveService()).toHaveBeenCalledTimes(1)
     expect(textbox().text()).toBe('Unsaved')
     expect(wrapper.text()).toContain('Failed to save notes')
-    if (kind === 'case') await wrapper.setProps({ isEditing: true })
-    else
-      await wrapper
-        .findAll('button')
-        .find((button) => button.text() === 'Edit Entity')
-        .trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Edit Entity')
+      .trigger('click')
     await exitEditing()
     await flushPromises()
     expect(saveService()).toHaveBeenCalledTimes(2)
@@ -300,13 +285,11 @@ describe.each(['case', 'entity'])('%s note compatibility', (kind) => {
     await edit('<p>Initial</p>')
     await exitEditing()
     wrapper.unmount()
-    completeSave(
-      kind === 'case' ? {} : { ...entity, data: { ...entity.data, notes: '<p>First</p>' } },
-    )
+    completeSave({ ...entity, data: { ...entity.data, notes: '<p>First</p>' } })
     await flushPromises()
     expect(saveService()).toHaveBeenCalledTimes(2)
     const payload = saveService().mock.calls.at(-1).at(-1)
-    expect(kind === 'case' ? payload.notes : payload.data.notes).toBe('<p>Initial</p>')
+    expect(payload.data.notes).toBe('<p>Initial</p>')
   })
 
   it('retries an already failed autosave on unmount without a timer retry loop', async () => {
@@ -321,7 +304,9 @@ describe.each(['case', 'entity'])('%s note compatibility', (kind) => {
     await vi.advanceTimersByTimeAsync(delay * 2)
     expect(saveService()).toHaveBeenCalledTimes(2)
   })
+})
 
+describe.each(['case', 'entity'])('%s note compatibility', (kind) => {
   it('preserves supported rich HTML through editing, saving and reopening', async () => {
     await open(kind, richNote)
     expectRichContent()
@@ -331,7 +316,7 @@ describe.each(['case', 'entity'])('%s note compatibility', (kind) => {
     await vi.advanceTimersByTimeAsync(5100)
     const saved =
       kind === 'case'
-        ? caseService.updateCase.mock.calls.at(-1)[1].notes
+        ? wrapper.emitted('update:modelValue').at(-1)[0]
         : entityService.updateEntity.mock.calls.at(-1)[2].data.notes
     expect(saved).toContain('Edited end of note')
     wrapper.unmount()
@@ -384,7 +369,7 @@ describe.each(['case', 'entity'])('%s note compatibility', (kind) => {
       expect(textbox().get('li.task-item').attributes('data-checked')).toBe('true')
       expectRichContent()
     }
-    expect(caseService.updateCase).not.toHaveBeenCalled()
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
     expect(entityService.updateEntity).not.toHaveBeenCalled()
   })
 

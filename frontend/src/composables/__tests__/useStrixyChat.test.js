@@ -84,7 +84,7 @@ it('discards late responses when switching cases and returning', async () => {
   finish({ data: { id: 'late', status: 'running' } })
   await pending
   expect(chat.currentMessage.value).toBe('')
-  expect(chat.runs.value.some((run) => run.id === 'late')).toBe(false)
+  expect(chat.latestRun.value?.id).not.toBe('late')
 })
 
 it('clears protected content after assignment revocation', async () => {
@@ -96,7 +96,7 @@ it('clears protected content after assignment revocation', async () => {
       data: { code: 'strixy_not_assigned', detail: 'Ask an administrator to assign Strixy.' },
     },
   })
-  await chat.checkAvailability()
+  await chat.initializeChat()
   expect(chat.canChat.value).toBe(false)
   expect(chat.messages.value).toEqual([])
   expect(activeCase.activeCaseId).toBe(2)
@@ -208,7 +208,6 @@ it('recovers streamed findings, cancels owned work and explicitly continues', as
   api.post.mockResolvedValue({ data: saved.runs[0] })
   await chat.controlRun('cancel')
   expect(api.post).toHaveBeenCalledWith(`${detail}/runs/run/cancel`)
-  expect(chat.runExplanation.value).toContain('already sent')
   saved.runs.push({ id: 'continued', position: 1, status: 'pending' })
   await chat.controlRun('continue')
   expect(api.post).toHaveBeenLastCalledWith(`${detail}/runs/run/continue`)

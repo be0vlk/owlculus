@@ -1,4 +1,3 @@
-import { ipAddressRule } from '@/utils/ipAddress'
 import { reactive, computed, watch } from 'vue'
 
 /**
@@ -54,27 +53,5 @@ export function usePluginParamsAdvanced(props, emit, config = {}) {
     pluginDescription,
     localParams,
     updateParams,
-  }
-}
-
-export function usePluginValidation() {
-  const emailRule = (value) => {
-    if (!value) return 'Email is required'
-    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    return emailPattern.test(value) || 'Please enter a valid email address'
-  }
-
-  const domainRule = (value) => {
-    if (!value) return 'Domain is required'
-    const domainPattern = /^[a-zA-Z0-9][a-zA-Z0-9-_]*\.{1}[a-zA-Z]{2,}$/
-    return domainPattern.test(value) || 'Please enter a valid domain name'
-  }
-
-  const ipRule = ipAddressRule
-
-  return {
-    emailRule,
-    domainRule,
-    ipRule,
   }
 }

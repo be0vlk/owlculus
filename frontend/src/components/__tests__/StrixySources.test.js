@@ -177,8 +177,8 @@ it('distinguishes examined attachment lines from partial and unavailable attachm
   expect(api.get).toHaveBeenLastCalledWith('/api/strixy/cases/2/sources/evidence%3A8', {
     params: { unit: 2 },
   })
-  const dialog = new DOMWrapper(document.body).find(
-    '[role="dialog"][aria-labelledby="strixy-preview-title"]',
+  const dialog = new DOMWrapper(
+    document.querySelector('[aria-label="Close source preview"]').closest('[role="dialog"]'),
   )
   expect(dialog.text()).toContain('Current file shown')
   expect(dialog.find('img').attributes('src')).toBe('data:image/png;base64,cGl4ZWxz')

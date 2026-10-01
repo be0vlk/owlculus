@@ -31,7 +31,8 @@
 </template>
 
 <script setup>
-import { usePluginValidation, usePluginParamsAdvanced } from '@/composables/usePluginParams'
+import { usePluginParamsAdvanced } from '@/composables/usePluginParams'
+import { domainRule } from '@/composables/entityValidation'
 import PluginDescriptionCard from './PluginDescriptionCard.vue'
 import CaseEvidenceToggle from './CaseEvidenceToggle.vue'
 
@@ -55,6 +56,4 @@ const { pluginDescription, localParams, updateParams } = usePluginParamsAdvanced
     timeout: 30,
   },
 })
-
-const { domainRule } = usePluginValidation()
 </script>

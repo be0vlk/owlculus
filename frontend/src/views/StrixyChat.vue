@@ -1,5 +1,5 @@
 <template>
-  <v-main class="strixy-page" :class="{ 'strixy-dark': isDark }">
+  <v-main class="strixy-page">
     <header class="strixy-header">
       <div class="strixy-brand">
         <div>
@@ -111,7 +111,6 @@
       </div>
 
       <div
-        ref="chatContainer"
         class="chat-messages"
         role="log"
         aria-label="Conversation"
@@ -182,9 +181,7 @@
       </div>
       <div v-if="!sharedSnapshot" class="strixy-compose-area">
         <form class="strixy-composer" @submit.prevent="sendMessage">
-          <label for="strixy-message-input" class="sr-only">Message input</label
-          ><textarea
-            id="strixy-message-input"
+          <textarea
             ref="messageInput"
             v-model="currentMessage"
             aria-label="Message input"
@@ -223,24 +220,21 @@
       </div>
     </section>
 
-    <v-dialog
-      v-model="historyOpen"
-      max-width="560"
-      scrollable
-      aria-labelledby="strixy-history-title"
-      ><v-card class="strixy-dialog" rounded="xl"
-        ><div class="strixy-dialog-heading">
-          <div>
-            <h2 id="strixy-history-title">Your conversations</h2>
-            <p>Private to you, within this case.</p>
-          </div>
+    <v-dialog v-model="historyOpen" max-width="560" scrollable aria-label="Your conversations"
+      ><v-card
+        class="strixy-dialog"
+        rounded="xl"
+        title="Your conversations"
+        subtitle="Private to you, within this case."
+      >
+        <template #append>
           <v-btn
             icon="mdi-close"
             variant="text"
             aria-label="Close conversations"
             @click="historyOpen = false"
           />
-        </div>
+        </template>
         <div class="dialog-search">
           <v-text-field
             v-model="historyQuery"
@@ -255,17 +249,18 @@
             <v-progress-circular indeterminate size="20" />Loading conversations…
           </div>
           <template v-else
-            ><button
-              v-for="conversation in filteredConversations"
-              :key="conversation.id"
-              class="strixy-history-row"
-              @click="selectConversation(conversation.id)"
-            >
-              <v-icon icon="mdi-chat-outline" size="20" /><span
-                ><strong>{{ conversation.title }}</strong
-                ><small>{{ formatDate(conversation.created_at) }}</small></span
-              ><v-icon icon="mdi-chevron-right" size="18" />
-            </button>
+            ><v-list v-if="filteredConversations.length" class="pa-0">
+              <v-list-item
+                v-for="conversation in filteredConversations"
+                :key="conversation.id"
+                :title="conversation.title"
+                :subtitle="formatDate(conversation.created_at)"
+                prepend-icon="mdi-chat-outline"
+                append-icon="mdi-chevron-right"
+                lines="two"
+                @click="selectConversation(conversation.id)"
+              />
+            </v-list>
             <p v-if="!filteredConversations.length" class="dialog-note">
               {{
                 conversations.length
@@ -291,37 +286,41 @@
       :model-value="!!reviewedMessage"
       max-width="650"
       scrollable
-      aria-labelledby="strixy-review-title"
+      aria-label="Behind this answer"
       @update:model-value="!$event && (reviewIndex = null)"
-      ><v-card v-if="reviewedMessage" class="strixy-dialog" rounded="xl"
-        ><div class="strixy-dialog-heading">
-          <div>
-            <h2 id="strixy-review-title">Behind this answer</h2>
-            <p>{{ reviewedMessage.citations?.length || 0 }} source references</p>
-          </div>
+      ><v-card
+        v-if="reviewedMessage"
+        class="strixy-dialog"
+        rounded="xl"
+        title="Behind this answer"
+        :subtitle="`${reviewedMessage.citations?.length || 0} source references`"
+      >
+        <template #append>
           <v-btn
             icon="mdi-close"
             variant="text"
             aria-label="Close review details"
             @click="reviewIndex = null"
           />
-        </div>
+        </template>
         <v-card-text>
           <div
             v-for="(citation, index) in reviewedMessage.citations || []"
             :key="`${citation.source_id}:${citation.field}:${index}`"
             class="review-citation"
           >
-            <button class="strixy-history-row" @click="inspectReviewedSource(citation)">
-              <span class="review-citation-number">{{ index + 1 }}</span
-              ><span
-                ><strong>{{ sourceLabel(citation) }}</strong
-                ><small
-                  >{{ citationLocation(citation) }} · Inspected
-                  {{ formatDate(citation.inspected_at) }}</small
-                ></span
-              ><v-icon icon="mdi-chevron-right" size="18" />
-            </button>
+            <v-list-item
+              :title="sourceLabel(citation)"
+              :subtitle="`${citationLocation(citation)} · Inspected ${formatDate(citation.inspected_at)}`"
+              append-icon="mdi-chevron-right"
+              lines="two"
+              class="px-0"
+              @click="inspectReviewedSource(citation)"
+            >
+              <template #prepend>
+                <span class="review-citation-number me-3">{{ index + 1 }}</span>
+              </template>
+            </v-list-item>
             <p v-if="citation.kind === 'visual'" class="dialog-note">
               Visual reference; interpretation is not a verified transcription.
             </p>
@@ -364,23 +363,22 @@
       :model-value="!!sourcePreview || !!sourceError"
       max-width="720"
       scrollable
-      aria-labelledby="strixy-preview-title"
+      :aria-label="sourcePreviewTitle"
       @update:model-value="closeSource"
-      ><v-card class="strixy-dialog" rounded="xl"
-        ><div class="strixy-dialog-heading">
-          <div>
-            <p class="strixy-eyebrow">Source preview</p>
-            <h2 id="strixy-preview-title">
-              {{ sourcePreview ? labelForSourcePreview : 'Source unavailable' }}
-            </h2>
-          </div>
+      ><v-card
+        class="strixy-dialog"
+        rounded="xl"
+        :title="sourcePreviewTitle"
+        subtitle="Source preview"
+      >
+        <template #append>
           <v-btn
             icon="mdi-close"
             variant="text"
             aria-label="Close source preview"
             @click="closeSource"
           />
-        </div>
+        </template>
         <v-card-text
           ><p v-if="sourceError" role="status">{{ sourceError }}</p>
           <template v-else-if="sourcePreview"
@@ -430,24 +428,21 @@
       ></v-dialog
     >
 
-    <v-dialog
-      v-model="sharingOpen"
-      max-width="580"
-      scrollable
-      aria-labelledby="strixy-sharing-title"
-      ><v-card class="strixy-dialog" rounded="xl"
-        ><div class="strixy-dialog-heading">
-          <div>
-            <h2 id="strixy-sharing-title">Share this conversation</h2>
-            <p>Give your case team a fixed copy.</p>
-          </div>
+    <v-dialog v-model="sharingOpen" max-width="580" scrollable aria-label="Share this conversation"
+      ><v-card
+        class="strixy-dialog"
+        rounded="xl"
+        title="Share this conversation"
+        subtitle="Give your case team a fixed copy."
+      >
+        <template #append>
           <v-btn
             icon="mdi-close"
             variant="text"
             aria-label="Close sharing"
             @click="sharingOpen = false"
           />
-        </div>
+        </template>
         <v-card-text
           ><p class="dialog-note">
             Only authorized case readers can open a snapshot. Future private replies are excluded.
@@ -503,19 +498,18 @@
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useTheme } from 'vuetify'
 import { useActiveCaseStore } from '@/stores/activeCase'
 import { useStrixyChat } from '@/composables/useStrixyChat'
 import ConfirmationDialog from '@/components/ConfirmationDialog.vue'
 import StrixyAttachmentCoverage from '@/components/StrixyAttachmentCoverage.vue'
 import StrixyMessage from '@/components/StrixyMessage.vue'
 import { citationLocation, hasIncompleteReview, sourceLabel } from '@/utils/strixyDisplay'
+import { formatDate } from '@/composables/dateUtils'
+import { downloadBlob } from '@/utils/download'
 
 const activeCase = useActiveCaseStore()
 const route = useRoute()
 const router = useRouter()
-const theme = useTheme()
-const isDark = computed(() => theme.current.value.dark)
 const {
   shares,
   sharedSnapshot,
@@ -560,7 +554,6 @@ const shareThroughId = ref(null)
 const reviewIndex = ref(null)
 const exportError = ref(false)
 const confirmDialog = ref(null)
-const chatContainer = ref(null)
 const messageInput = ref(null)
 const starterPrompts = [
   {
@@ -633,6 +626,9 @@ const labelForSourcePreview = computed(() =>
       sourceLabels.value[sourcePreview.value?.citation?.source_id],
   }),
 )
+const sourcePreviewTitle = computed(() =>
+  sourcePreview.value ? labelForSourcePreview.value : 'Source unavailable',
+)
 const filteredConversations = computed(() =>
   conversations.value
     .map((conversation) => {
@@ -680,16 +676,6 @@ const recoveryNotice = computed(() => {
     return 'The review is incomplete. Continue to examine more of the available material.'
   return ''
 })
-function formatDate(value) {
-  return value
-    ? new Date(value).toLocaleString([], {
-        day: 'numeric',
-        month: 'short',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    : ''
-}
 function formattedField(value) {
   try {
     return JSON.stringify(JSON.parse(value), null, 2)
@@ -809,14 +795,10 @@ async function exportChat() {
       withheld: message.withheld,
     })),
   }
-  const url = URL.createObjectURL(
-    new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }),
+  downloadBlob(
+    { blob: new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }) },
+    `strixy_chat_${Date.now()}.json`,
   )
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `strixy_chat_${Date.now()}.json`
-  link.click()
-  URL.revokeObjectURL(url)
 }
 const shareLink = (id) =>
   `${window.location.origin}/case/${activeCase.activeCaseId}/strixy?share=${encodeURIComponent(id)}`
@@ -859,7 +841,7 @@ watch(
   color: var(--strixy-text);
 }
 
-.strixy-dark,
+.v-theme--owlculusDark .strixy-page,
 .v-theme--owlculusDark .strixy-dialog,
 .strixy-dialog.v-theme--owlculusDark {
   --strixy-accent: #8ed6ce;
@@ -869,38 +851,17 @@ watch(
   --strixy-soft: #233a36;
 }
 
-.strixy-dialog :where(h2, h3, p) {
+.strixy-dialog :where(h3, p) {
   margin: 0;
 }
 
-.strixy-dialog-heading {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 24px 24px 18px;
-}
-
-.strixy-dialog-heading > div {
-  flex: 1;
-  min-width: 0;
-}
-
-.strixy-dialog-heading h2 {
-  font-size: 20px;
-  font-weight: 600;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-}
-
-.strixy-dialog-heading p {
-  margin-top: 7px;
-  font-size: 13px;
-  line-height: 1.7;
+.strixy-dialog .v-card-subtitle {
   color: var(--strixy-muted);
 }
 
-.strixy-dialog-heading > .v-btn {
-  margin: -6px -8px 0 0;
+.strixy-dialog :is(.v-card-title, .v-list-item-title) {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .strixy-dialog-actions {
@@ -911,11 +872,6 @@ watch(
   gap: 12px;
   padding: 18px 24px;
   border-top: 1px solid var(--strixy-line);
-}
-
-.strixy-dialog-actions > span {
-  font-size: 12px;
-  color: var(--strixy-muted);
 }
 
 .strixy-page button:focus-visible,
@@ -947,12 +903,6 @@ watch(
   min-height: 88px;
   padding: 18px 30px;
   border-bottom: 1px solid var(--strixy-line);
-}
-
-.strixy-brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
 }
 
 .strixy-brand h1 {
@@ -1198,51 +1148,8 @@ watch(
   padding: 20px 0;
 }
 
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-
 .dialog-search {
   padding: 0 24px 16px;
-}
-
-.strixy-history-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 16px 2px;
-  text-align: left;
-  border: 0;
-  border-bottom: 1px solid var(--strixy-line);
-  background: transparent;
-  color: var(--strixy-text);
-  cursor: pointer;
-}
-
-.strixy-history-row > span:not(.review-citation-number) {
-  flex: 1;
-}
-
-.strixy-history-row strong {
-  display: block;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.6;
-  overflow-wrap: anywhere;
-}
-
-.strixy-history-row small {
-  display: block;
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--strixy-muted);
 }
 
 .dialog-note {

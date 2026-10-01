@@ -5,8 +5,8 @@
         <v-icon
           :icon="
             section.parentField === 'social_media'
-              ? getSocialMediaIcon(field.id)
-              : getFieldIcon(field.type)
+              ? socialMediaIcon(field.id)
+              : fieldIcon(field.type)
           "
           size="small"
           class="me-2"
@@ -17,27 +17,25 @@
       <!-- Associates Section -->
       <div v-if="section.parentField === 'associates'">
         <v-chip variant="text" color="grey" size="small">
-          {{ getFieldValue(entity.data, section.parentField, field.id) || 'Not specified' }}
+          {{ value || 'Not specified' }}
         </v-chip>
       </div>
 
       <!-- URL Fields -->
       <div v-else-if="field.type === 'url'">
         <v-btn
-          v-if="getFieldValue(entity.data, section.parentField, field.id)"
-          :href="ensureProtocol(getFieldValue(entity.data, section.parentField, field.id))"
+          v-if="value"
+          :href="ensureProtocol(value)"
           target="_blank"
           variant="outlined"
           color="primary"
           size="small"
           :prepend-icon="
-            section.parentField === 'social_media'
-              ? getSocialMediaIcon(field.id)
-              : 'mdi-open-in-new'
+            section.parentField === 'social_media' ? socialMediaIcon(field.id) : 'mdi-open-in-new'
           "
           class="ma-0"
         >
-          {{ getFieldValue(entity.data, section.parentField, field.id) }}
+          {{ value }}
         </v-btn>
         <v-chip v-else color="grey" size="small" variant="text"> Not provided </v-chip>
 
@@ -51,18 +49,15 @@
 
       <!-- Array Fields -->
       <div v-else-if="field.type === 'array' && field.isArray">
-        <div v-if="arrayValue && arrayValue.length > 0">
+        <div v-if="value?.length">
           <v-data-table
-            v-model:page="currentPage"
-            v-model:items-per-page="itemsPerPage"
-            :headers="subdomainHeaders"
-            :items="arrayValue"
-            :items-length="arrayValue.length"
+            :headers="SUBDOMAIN_HEADERS"
+            :items="value"
+            :items-per-page="10"
             :items-per-page-options="[10, 25, 50, 100]"
             density="compact"
             class="elevation-0 subdomain-table"
-            :loading="loading"
-            item-key="subdomain"
+            item-value="subdomain"
             hover
             items-per-page-text="Subdomains per page:"
           >
@@ -116,8 +111,8 @@
 
       <!-- Regular Fields -->
       <div v-else class="text-body-large">
-        <span v-if="regularValue">
-          {{ regularValue }}
+        <span v-if="value">
+          {{ value }}
         </span>
         <v-chip v-else color="grey" size="small" variant="text"> Not provided </v-chip>
 
@@ -133,79 +128,49 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
-import { useEntityIcons } from '../../composables/useEntityIcons.js'
-import { useEntityDisplay } from '../../composables/useEntityDisplay.js'
+import { computed } from 'vue'
+import { fieldIcon, socialMediaIcon } from '../../composables/entityTypes.js'
 import { ensureProtocol } from '../../utils/urlHelpers.js'
+import { downloadBlob } from '../../utils/download.js'
 
 const props = defineProps({
   field: { type: Object, required: true },
   section: { type: Object, required: true },
   entity: { type: Object, required: true },
   sourceValue: { type: String, default: '' },
-  existingEntities: { type: Array, required: true },
 })
 
-defineEmits(['viewEntity'])
+const value = computed(() => {
+  const { data } = props.entity
+  const parent = props.section.parentField
+  return parent ? data[parent]?.[props.field.id] : data[props.field.id]
+})
 
-const { getFieldIcon, getSocialMediaIcon } = useEntityIcons(props.entity)
-const { getFieldValue } = useEntityDisplay(props.entity)
-
-const regularValue = computed(() =>
-  getFieldValue(props.entity.data, props.section.parentField, props.field.id),
-)
-
-const currentPage = ref(1)
-const itemsPerPage = ref(10)
-const loading = ref(false)
-
-const arrayValue = computed(() =>
-  getFieldValue(props.entity.data, props.section.parentField, props.field.id),
-)
-
-const subdomainHeaders = computed(() => [
+const SUBDOMAIN_HEADERS = [
   { title: 'Subdomain', value: 'subdomain', sortable: true },
   { title: 'IP Address', value: 'ip', sortable: true },
   { title: 'Resolved', value: 'resolved', sortable: true },
   { title: 'Source', value: 'source', sortable: true },
-])
+]
+
+const csvCell = (text) => `"${(text || '').replace(/"/g, '""')}"`
 
 const exportSubdomains = () => {
-  try {
-    const subdomains = arrayValue.value || []
-
-    if (subdomains.length === 0) {
-      return
-    }
-
-    const headers = ['Subdomain', 'IP Address', 'Resolved', 'Source']
-    const csvData = [
-      headers.join(','),
-      ...subdomains.map((item) =>
-        [
-          `"${(item.subdomain || '').replace(/"/g, '""')}"`,
-          `"${(item.ip || '').replace(/"/g, '""')}"`,
-          item.resolved ? 'Yes' : 'No',
-          `"${(item.source || '').replace(/"/g, '""')}"`,
-        ].join(','),
-      ),
-    ].join('\n')
-
-    const blob = new Blob([csvData], { type: 'text/csv;charset=utf-8;' })
-    const link = document.createElement('a')
-    const url = URL.createObjectURL(blob)
-    link.setAttribute('href', url)
-    link.setAttribute(
-      'download',
-      `subdomains-${props.field.label.toLowerCase().replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.csv`,
-    )
-    link.style.visibility = 'hidden'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
-  } catch (error) {
-    console.error('Error exporting subdomains:', error)
-  }
+  const csv = [
+    'Subdomain,IP Address,Resolved,Source',
+    ...value.value.map((item) =>
+      [
+        csvCell(item.subdomain),
+        csvCell(item.ip),
+        item.resolved ? 'Yes' : 'No',
+        csvCell(item.source),
+      ].join(','),
+    ),
+  ].join('\n')
+  const label = props.field.label.toLowerCase().replace(/\s+/g, '-')
+  downloadBlob(
+    { blob: new Blob([csv], { type: 'text/csv;charset=utf-8;' }) },
+    `subdomains-${label}-${new Date().toISOString().split('T')[0]}.csv`,
+  )
 }
 </script>

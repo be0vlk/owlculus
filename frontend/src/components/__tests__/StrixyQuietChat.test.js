@@ -93,7 +93,7 @@ it('refreshes and searches named history before reopening its transcript', async
     .trigger('click')
   await flushPromises()
   expect(dialog.text()).toContain('Who is Ada?')
-  await dialog.find('.strixy-history-row').trigger('click')
+  await dialog.find('.v-list-item').trigger('click')
   await flushPromises()
   expect(api.get).toHaveBeenCalledWith(`${base}/one`)
   expect(wrapper.find('.user-message').text()).toContain('Who is Ada?')

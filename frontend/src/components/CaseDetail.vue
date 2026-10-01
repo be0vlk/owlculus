@@ -1,43 +1,14 @@
 <template>
   <div>
     <v-row>
-      <v-col cols="12" md="6">
+      <v-col v-for="field in fields" :key="field.label" cols="12" md="6">
         <div class="mb-4">
           <v-list-item-subtitle class="text-title-small font-weight-medium mb-1">
-            Title
+            {{ field.label }}
           </v-list-item-subtitle>
-          <v-list-item-title class="text-body-large text-wrap">
-            {{ caseData?.title || 'N/A' }}
-          </v-list-item-title>
-        </div>
-      </v-col>
-      <v-col cols="12" md="6">
-        <div class="mb-4">
-          <v-list-item-subtitle class="text-title-small font-weight-medium mb-1">
-            Status
-          </v-list-item-subtitle>
-          <v-chip size="small" variant="tonal">
-            {{ caseData?.status || 'N/A' }}
-          </v-chip>
-        </div>
-      </v-col>
-      <v-col cols="12" md="6">
-        <div class="mb-4">
-          <v-list-item-subtitle class="text-title-small font-weight-medium mb-1">
-            Client
-          </v-list-item-subtitle>
-          <v-list-item-title class="text-body-large text-wrap">
-            {{ client?.name || 'No client assigned' }}
-          </v-list-item-title>
-        </div>
-      </v-col>
-      <v-col cols="12" md="6">
-        <div class="mb-4">
-          <v-list-item-subtitle class="text-title-small font-weight-medium mb-1">
-            Created Date
-          </v-list-item-subtitle>
-          <v-list-item-title class="text-body-large text-wrap">
-            {{ formatDate(caseData?.created_at) || 'N/A' }}
+          <v-chip v-if="field.chip" size="small" variant="tonal">{{ field.value }}</v-chip>
+          <v-list-item-title v-else class="text-body-large text-wrap">
+            {{ field.value }}
           </v-list-item-title>
         </div>
       </v-col>
@@ -67,12 +38,20 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { formatDate } from '../composables/dateUtils'
 
-defineProps({
+const props = defineProps({
   caseData: { type: Object, required: true },
   client: { type: Object, default: () => ({}) },
 })
+
+const fields = computed(() => [
+  { label: 'Title', value: props.caseData.title || 'N/A' },
+  { label: 'Status', value: props.caseData.status || 'N/A', chip: true },
+  { label: 'Client', value: props.client?.name || 'No client assigned' },
+  { label: 'Created Date', value: formatDate(props.caseData.created_at) || 'N/A' },
+])
 </script>
 
 <style scoped>

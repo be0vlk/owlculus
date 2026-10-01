@@ -26,7 +26,7 @@
         variant="outlined"
         density="comfortable"
         clearable
-        :prepend-inner-icon="getFieldIcon(field.type)"
+        :prepend-inner-icon="fieldIcon(field.type)"
       />
       <v-text-field
         v-if="field.hasSource"
@@ -46,10 +46,10 @@
 </template>
 
 <script setup>
-import { useEntityValidation } from '../../composables/useEntityValidation.js'
-import { useEntityIcons } from '../../composables/useEntityIcons.js'
+import { domainRule, ipRule } from '../../composables/entityValidation.js'
+import { fieldIcon } from '../../composables/entityTypes.js'
 
-const props = defineProps({
+defineProps({
   field: { type: Object, required: true },
   fieldValue: { type: [String, Number], default: '' },
   sourceValue: { type: String, default: '' },
@@ -58,7 +58,5 @@ const props = defineProps({
 
 defineEmits(['update:field', 'update:source'])
 
-const { domainRule, ipRule } = useEntityValidation()
 const identifierRules = { domain: domainRule, ip_address: ipRule }
-const { getFieldIcon } = useEntityIcons(props.entity)
 </script>
