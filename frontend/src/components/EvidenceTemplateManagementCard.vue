@@ -1,10 +1,6 @@
 <template>
-  <v-card
-    :elevation="embedded ? 0 : undefined"
-    :class="embedded ? 'admin-embedded' : 'mb-6'"
-    :variant="embedded ? 'flat' : 'outlined'"
-  >
-    <v-card-title v-if="embedded" class="d-flex flex-wrap align-center ga-3 pa-4">
+  <v-card :elevation="0" variant="flat">
+    <v-card-title class="d-flex flex-wrap align-center ga-3 pa-4">
       <div class="flex-grow-1">
         <h2 class="text-title-large font-weight-bold">Evidence folders</h2>
         <p class="text-body-medium text-medium-emphasis mb-0">
@@ -22,131 +18,90 @@
         >Save Changes</v-btn
       >
     </v-card-title>
-    <v-expansion-panels v-model="expansionPanel" variant="accordion">
-      <v-expansion-panel :elevation="embedded ? 0 : undefined" :static="embedded">
-        <v-expansion-panel-title v-if="!embedded" class="pa-4 bg-surface">
-          <div class="d-flex align-center w-100">
-            <v-icon icon="mdi-folder-multiple" color="primary" size="large" class="me-3" />
-            <div class="flex-grow-1">
-              <div class="text-title-large font-weight-bold">Evidence Folder Templates</div>
-              <div class="text-body-medium text-medium-emphasis">
-                Configure folder structures for different types of investigations
+    <!-- Loading state -->
+    <div v-if="loading" class="pa-6">
+      <v-skeleton-loader type="table-row@3" />
+    </div>
+
+    <!-- Error state -->
+    <v-alert v-else-if="error" :text="error" class="ma-4" type="error" variant="tonal">
+      <template v-slot:append>
+        <v-btn size="small" variant="text" @click="loadTemplates">Retry</v-btn>
+      </template>
+    </v-alert>
+
+    <v-alert v-if="saveError" :text="saveError" class="ma-4" type="error" variant="tonal" />
+
+    <!-- Success notification -->
+    <v-alert v-if="saveSuccess" class="ma-4" closable type="success" variant="tonal">
+      Templates saved successfully!
+    </v-alert>
+
+    <!-- Main content -->
+    <div v-if="!loading && !error">
+      <!-- Tabs section with proper padding -->
+      <div class="pa-4 pb-0">
+        <v-tabs v-model="activeTab" bg-color="surface" class="mb-4">
+          <v-tab
+            v-for="(template, templateKey) in templates"
+            :key="templateKey"
+            :value="templateKey"
+          >
+            {{ template.name }}
+          </v-tab>
+        </v-tabs>
+      </div>
+
+      <v-divider />
+
+      <!-- Tab content with consistent padding -->
+      <div class="pa-4">
+        <v-window v-model="activeTab">
+          <v-window-item
+            v-for="(template, templateKey) in templates"
+            :key="templateKey"
+            :value="templateKey"
+          >
+            <div class="template-editor">
+              <div class="d-flex align-center justify-space-between mb-4">
+                <div class="text-title-large font-weight-bold">Folder Structure</div>
+                <v-btn
+                  prepend-icon="mdi-folder-plus"
+                  size="small"
+                  variant="outlined"
+                  @click="addRootFolder(templateKey)"
+                >
+                  Add Folder
+                </v-btn>
+              </div>
+
+              <div v-if="template.folders && template.folders.length > 0" class="folders-container">
+                <folder-editor
+                  v-for="(folder, index) in template.folders"
+                  :key="`${templateKey}-${index}`"
+                  :folder="folder"
+                  :level="0"
+                  @delete="deleteFolder(templateKey, index)"
+                  @update="updateFolder(templateKey, index, $event)"
+                />
+              </div>
+
+              <div v-else class="empty-template text-center py-8">
+                <v-icon class="mb-2" color="grey-lighten-1" icon="mdi-folder-outline" size="48" />
+                <div class="text-title-large font-weight-medium mb-2">No Folder Structure</div>
+                <p class="text-body-medium text-medium-emphasis mb-4">
+                  No folders configured for this template. Click "Add Folder" to get started.
+                </p>
               </div>
             </div>
-            <v-btn
-              size="small"
-              v-if="expansionPanel === 0"
-              @click.stop="saveTemplates"
-              color="primary"
-              variant="flat"
-              prepend-icon="mdi-content-save"
-              :disabled="saving"
-              :loading="saving"
-              class="me-3"
-            >
-              Save Changes
-            </v-btn>
-          </div>
-        </v-expansion-panel-title>
-
-        <v-expansion-panel-text class="pa-0">
-          <!-- Loading state -->
-          <div v-if="loading" class="pa-6">
-            <v-skeleton-loader type="table-row@3" />
-          </div>
-
-          <!-- Error state -->
-          <v-alert v-else-if="error" :text="error" class="ma-4" type="error" variant="tonal">
-            <template v-slot:append>
-              <v-btn size="small" variant="text" @click="loadTemplates">Retry</v-btn>
-            </template>
-          </v-alert>
-
-          <!-- Success notification -->
-          <v-alert v-if="saveSuccess" class="ma-4" closable type="success" variant="tonal">
-            Templates saved successfully!
-          </v-alert>
-
-          <!-- Main content -->
-          <div v-if="!loading && !error">
-            <!-- Tabs section with proper padding -->
-            <div class="pa-4 pb-0">
-              <v-tabs v-model="activeTab" bg-color="surface" class="mb-4">
-                <v-tab
-                  v-for="(template, templateKey) in templates"
-                  :key="templateKey"
-                  :value="templateKey"
-                >
-                  {{ template.name }}
-                </v-tab>
-              </v-tabs>
-            </div>
-
-            <v-divider />
-
-            <!-- Tab content with consistent padding -->
-            <div class="pa-4">
-              <v-window v-model="activeTab">
-                <v-window-item
-                  v-for="(template, templateKey) in templates"
-                  :key="templateKey"
-                  :value="templateKey"
-                >
-                  <div class="template-editor">
-                    <div class="d-flex align-center justify-space-between mb-4">
-                      <div class="text-title-large font-weight-bold">Folder Structure</div>
-                      <v-btn
-                        :color="embedded ? undefined : 'primary'"
-                        prepend-icon="mdi-folder-plus"
-                        size="small"
-                        variant="outlined"
-                        @click="addRootFolder(templateKey)"
-                      >
-                        Add Folder
-                      </v-btn>
-                    </div>
-
-                    <div
-                      v-if="template.folders && template.folders.length > 0"
-                      class="folders-container"
-                    >
-                      <folder-editor
-                        v-for="(folder, index) in template.folders"
-                        :key="`${templateKey}-${index}`"
-                        :folder="folder"
-                        :level="0"
-                        @delete="deleteFolder(templateKey, index)"
-                        @update="updateFolder(templateKey, index, $event)"
-                      />
-                    </div>
-
-                    <div v-else class="empty-template text-center py-8">
-                      <v-icon
-                        class="mb-2"
-                        color="grey-lighten-1"
-                        icon="mdi-folder-outline"
-                        size="48"
-                      />
-                      <div class="text-title-large font-weight-medium mb-2">
-                        No Folder Structure
-                      </div>
-                      <p class="text-body-medium text-medium-emphasis mb-4">
-                        No folders configured for this template. Click "Add Folder" to get started.
-                      </p>
-                    </div>
-                  </div>
-                </v-window-item>
-              </v-window>
-            </div>
-          </div>
-        </v-expansion-panel-text>
-      </v-expansion-panel>
-    </v-expansion-panels>
+          </v-window-item>
+        </v-window>
+      </div>
+    </div>
   </v-card>
 </template>
 
 <script setup>
-const props = defineProps({ embedded: Boolean })
 import { ref, onMounted } from 'vue'
 import { systemService } from '@/services/system'
 import FolderEditor from './FolderEditor.vue'
@@ -154,10 +109,10 @@ import FolderEditor from './FolderEditor.vue'
 const loading = ref(false)
 const saving = ref(false)
 const error = ref('')
+const saveError = ref('')
 const saveSuccess = ref(false)
 const activeTab = ref('Company')
 const templates = ref({})
-const expansionPanel = ref(props.embedded ? 0 : undefined)
 
 const loadTemplates = async () => {
   loading.value = true
@@ -182,7 +137,7 @@ const loadTemplates = async () => {
 const saveTemplates = async () => {
   saving.value = true
   saveSuccess.value = false
-  error.value = ''
+  saveError.value = ''
   try {
     await systemService.updateEvidenceFolderTemplates(templates.value)
     saveSuccess.value = true
@@ -190,7 +145,7 @@ const saveTemplates = async () => {
       saveSuccess.value = false
     }, 3000)
   } catch (err) {
-    error.value = 'Failed to save templates'
+    saveError.value = 'Failed to save templates'
     console.error('Error saving templates:', err)
   } finally {
     saving.value = false

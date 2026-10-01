@@ -24,12 +24,7 @@
     </v-snackbar>
 
     <!-- Global session expiration notification -->
-    <v-snackbar
-      v-model="sessionSnackbar.show"
-      :color="sessionSnackbar.color"
-      :timeout="sessionSnackbar.timeout"
-      location="top center"
-    >
+    <v-snackbar v-model="sessionSnackbar.show" color="error" :timeout="6000" location="top center">
       {{ sessionSnackbar.text }}
       <template #actions>
         <v-btn variant="text" @click="sessionSnackbar.show = false"> Close </v-btn>
@@ -71,12 +66,7 @@ const caseContextBlocked = computed(
 authStore.init()
 
 // Global session expiration notification
-const sessionSnackbar = ref({
-  show: false,
-  text: '',
-  color: 'error',
-  timeout: 6000,
-})
+const sessionSnackbar = ref({ show: false, text: '' })
 
 // Handle session expiration notification
 const handleSessionExpired = (event) => {

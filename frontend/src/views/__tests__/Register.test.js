@@ -238,17 +238,13 @@ describe('invite registration workflow', () => {
     expect(writes()).toEqual([])
   })
 
-  // Known defect: .scratch/frontend-test-coverage-defects/issues/02-registration-validation.md
-  it.fails.each(invalidDetails)(
-    'rejects %s through native form submission',
-    async (_, overrides) => {
-      const { wrapper } = await openRegistration()
-      await fillForm(wrapper, overrides)
-      await submitNativeForm(wrapper)
-      expect(writes()).toEqual([])
-      expect(wrapper.text()).not.toContain('Registration Successful!')
-    },
-  )
+  it.each(invalidDetails)('rejects %s through native form submission', async (_, overrides) => {
+    const { wrapper } = await openRegistration()
+    await fillForm(wrapper, overrides)
+    await submitNativeForm(wrapper)
+    expect(writes()).toEqual([])
+    expect(wrapper.text()).not.toContain('Registration Successful!')
+  })
 
   it.each(['button', 'native form submission'])(
     'registers valid details through %s and redirects after confirmation',

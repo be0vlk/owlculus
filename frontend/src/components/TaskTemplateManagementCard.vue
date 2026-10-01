@@ -1,21 +1,8 @@
 <template>
-  <v-card
-    :elevation="embedded ? 0 : undefined"
-    :class="embedded ? 'admin-embedded' : 'mb-6'"
-    :variant="embedded ? 'flat' : 'outlined'"
-  >
+  <v-card :elevation="0" variant="flat">
     <v-card-title class="operations-heading d-flex flex-wrap ga-3 align-center pa-4 bg-surface">
-      <v-icon
-        v-if="!embedded"
-        icon="mdi-clipboard-text"
-        color="primary"
-        size="large"
-        class="me-3"
-      />
       <div class="flex-grow-1">
-        <h2 class="text-title-large font-weight-bold">
-          {{ embedded ? 'Task templates' : 'Task Templates' }}
-        </h2>
+        <h2 class="text-title-large font-weight-bold">Task templates</h2>
         <div class="text-body-medium text-medium-emphasis">
           Manage reusable task templates for standardized workflows
         </div>
@@ -99,7 +86,6 @@
             <td class="operations-cell">
               <div class="d-flex align-center" style="gap: 8px">
                 <v-btn
-                  :color="embedded ? undefined : 'primary'"
                   size="small"
                   variant="outlined"
                   icon
@@ -209,7 +195,6 @@
 </template>
 
 <script setup>
-defineProps({ embedded: Boolean })
 import { onMounted, ref, useId } from 'vue'
 import { useTaskTemplates } from '@/composables/useTaskTemplates'
 import TaskTemplateForm from './TaskTemplateForm.vue'

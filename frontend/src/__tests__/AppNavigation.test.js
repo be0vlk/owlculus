@@ -118,7 +118,7 @@ async function openApp(path = '/cases') {
   const wrapper = mountWithVuetify(App, {
     global: {
       plugins: [pinia, router],
-      stubs: { NewCaseModal: true, NewClientModal: true, EditClientModal: true },
+      stubs: { NewCaseModal: true, ClientModal: true },
     },
   })
   await flushPromises()

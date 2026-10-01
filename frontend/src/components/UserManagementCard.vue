@@ -1,20 +1,13 @@
 <template>
-  <v-card :elevation="embedded ? 0 : undefined" :variant="embedded ? 'flat' : 'outlined'">
+  <v-card :elevation="0" variant="flat">
     <!-- Header -->
     <v-card-title class="operations-heading d-flex flex-wrap ga-3 align-center pa-4 bg-surface">
-      <v-icon v-if="!embedded" icon="mdi-account-cog" color="primary" size="large" class="me-3" />
       <div class="flex-grow-1">
-        <h2 class="text-title-large font-weight-bold">
-          {{ embedded ? 'Users' : 'User Management' }}
-        </h2>
-        <div v-if="!embedded" class="text-body-medium text-medium-emphasis">
-          Manage system users and their permissions
-        </div>
+        <h2 class="text-title-large font-weight-bold">Users</h2>
       </div>
       <div class="d-flex flex-wrap align-center ga-2">
         <v-btn
           size="small"
-          v-if="embedded"
           color="primary"
           variant="flat"
           prepend-icon="mdi-email-plus"
@@ -24,8 +17,7 @@
         </v-btn>
         <v-btn
           size="small"
-          :color="embedded ? undefined : 'primary'"
-          :variant="embedded ? 'outlined' : 'flat'"
+          variant="outlined"
           prepend-icon="mdi-account-plus"
           @click="showNewUserModal = true"
         >
@@ -93,8 +85,10 @@
       v-else
       :cell-props="{ class: 'operations-cell' }"
       :header-props="{ class: 'operations-column' }"
-      :headers="tableHeaders"
+      :headers="headers"
       :items="filteredUsers"
+      :search="searchQuery"
+      :sort-by="[{ key: 'username', order: 'asc' }]"
       :loading="loading"
       item-value="id"
       class="elevation-0 admin-dashboard-table"
@@ -103,14 +97,14 @@
       <template #[`item.username`]="{ item }">
         <div class="py-2" style="min-width: 220px; overflow-wrap: anywhere">
           <div class="font-weight-medium">{{ userDisplayName(item) }}</div>
-          <div v-if="embedded" class="text-body-small text-medium-emphasis">{{ item.email }}</div>
+          <div class="text-body-small text-medium-emphasis">{{ item.email }}</div>
         </div>
       </template>
 
       <!-- Role column -->
       <template #[`item.role`]="{ item }">
         <div class="d-flex align-center ga-2">
-          <v-chip :color="getRoleColor(item.role)" size="small" variant="tonal">
+          <v-chip color="grey-darken-1" size="small" variant="tonal">
             {{ item.role }}
           </v-chip>
           <v-chip v-if="item.is_superadmin" color="orange-darken-2" size="small" variant="flat">
@@ -175,13 +169,25 @@
         <div class="text-center pa-12">
           <v-icon class="mb-4" color="grey-lighten-1" icon="mdi-account-group-outline" size="64" />
           <h3 class="text-title-large font-weight-medium mb-2">
-            {{ roleFilter ? 'No users match your filters' : getEmptyStateTitle() }}
+            {{
+              roleFilter
+                ? 'No users match your filters'
+                : searchQuery
+                  ? 'No users found'
+                  : 'No users yet'
+            }}
           </h3>
           <p class="text-body-medium text-medium-emphasis mb-4">
-            {{ roleFilter ? 'Try another role or search term.' : getEmptyStateMessage() }}
+            {{
+              roleFilter
+                ? 'Try another role or search term.'
+                : searchQuery
+                  ? "Try adjusting your search terms to find the user you're looking for."
+                  : 'Get started by adding your first user to begin managing the system.'
+            }}
           </p>
           <v-btn
-            v-if="shouldShowCreateButton()"
+            v-if="!users.length && !searchQuery"
             color="primary"
             prepend-icon="mdi-account-plus"
             @click="showNewUserModal = true"
@@ -197,15 +203,15 @@
       :show="showNewUserModal"
       :user="editingUser"
       @close="closeUserModal"
-      @saved="handleUserSavedWithNotification"
+      @saved="handleUserSaved"
     />
 
     <!-- Password Reset Modal -->
     <PasswordResetModal
       :show="showPasswordResetModal"
-      :userId="selectedUserForPasswordReset ? selectedUserForPasswordReset.id : null"
+      :userId="selectedUserForPasswordReset?.id ?? null"
       @close="closePasswordResetModal"
-      @saved="handlePasswordResetSavedWithNotification"
+      @saved="handlePasswordResetSaved"
     />
   </v-card>
 </template>
@@ -213,56 +219,31 @@
 <script setup>
 import { userDisplayName } from '@/utils/userDisplay'
 import { computed, onMounted, ref, watch } from 'vue'
-import { useUsers } from '@/composables/useUsers'
+import { formatDate } from '@/composables/dateUtils'
+import { userService } from '@/services/user'
+import { useAuthStore } from '@/stores/auth'
 import UserModal from './UserModal.vue'
 import PasswordResetModal from './PasswordResetModal.vue'
 
-const props = defineProps({ embedded: Boolean })
 const emit = defineEmits(['notification', 'confirmDelete', 'invite', 'count'])
+const authStore = useAuthStore()
 
-const {
-  // State
-  users,
-  loading,
-  error,
-  searchQuery,
+const users = ref([])
+const loading = ref(true)
+const error = ref(null)
+const searchQuery = ref('')
+const showNewUserModal = ref(false)
+const editingUser = ref(null)
+const showPasswordResetModal = ref(false)
+const selectedUserForPasswordReset = ref(null)
 
-  // Modal state
-  showNewUserModal,
-  editingUser,
-  showPasswordResetModal,
-  selectedUserForPasswordReset,
-
-  // Constants
-  vuetifyHeaders,
-
-  // Computed
-  sortedAndFilteredUsers,
-
-  // Permission functions
-  canDeleteUser,
-  canResetPassword,
-  canEditUser,
-
-  // Helper functions
-  getRoleColor,
-  getEmptyStateTitle,
-  getEmptyStateMessage,
-  shouldShowCreateButton,
-  formatDate,
-
-  // CRUD operations
-  loadUsers,
-  deleteUser,
-
-  // Modal management
-  editUser,
-  closeUserModal,
-  handleUserSaved,
-  resetPassword,
-  closePasswordResetModal,
-  handlePasswordResetSaved,
-} = useUsers()
+const headers = [
+  // The email is searched and shown under the username.
+  { title: 'User', key: 'username', value: (user) => `${user.username} ${user.email}` },
+  { title: 'Role', key: 'role' },
+  { title: 'Created', key: 'created_at' },
+  { title: 'Actions', key: 'actions', sortable: false },
+]
 
 const roleFilter = ref('')
 const roleOptions = [
@@ -272,20 +253,80 @@ const roleOptions = [
   { title: 'Analyst', value: 'Analyst' },
 ]
 const filteredUsers = computed(() =>
-  sortedAndFilteredUsers.value.filter(
-    (user) => !roleFilter.value || user.role === roleFilter.value,
-  ),
-)
-const tableHeaders = computed(() =>
-  props.embedded
-    ? vuetifyHeaders
-        .filter((header) => header.key !== 'email')
-        .map((header) => (header.key === 'username' ? { ...header, title: 'User' } : header))
-    : vuetifyHeaders,
+  users.value.filter((user) => !roleFilter.value || user.role === roleFilter.value),
 )
 watch([loading, error, () => users.value.length], () => {
   if (!loading.value) emit('count', error.value ? null : users.value.length)
 })
+
+// Permission checks
+const canDeleteUser = (targetUser) => {
+  const currentUser = authStore.user
+  if (!currentUser || targetUser.system_identity) return false
+  // Cannot delete yourself or superadmins; only superadmins delete admins
+  if (currentUser.id === targetUser.id || targetUser.is_superadmin) return false
+  return targetUser.role !== 'Admin' || !!currentUser.is_superadmin
+}
+
+// Only superadmins edit or reset superadmins
+const canEditUser = (targetUser) => {
+  const currentUser = authStore.user
+  if (!currentUser || targetUser.system_identity) return false
+  return !targetUser.is_superadmin || !!currentUser.is_superadmin
+}
+const canResetPassword = canEditUser
+
+const loadUsers = async () => {
+  try {
+    loading.value = true
+    error.value = null
+    users.value = await userService.getUsers()
+  } catch (err) {
+    error.value = 'Failed to load users. Please try again later.'
+    console.error('Error loading users:', err)
+  } finally {
+    loading.value = false
+  }
+}
+
+const editUser = (user) => {
+  editingUser.value = user
+  showNewUserModal.value = true
+}
+
+const closeUserModal = () => {
+  showNewUserModal.value = false
+  editingUser.value = null
+}
+
+const handleUserSaved = (user) => {
+  if (editingUser.value) {
+    const index = users.value.findIndex((u) => u.id === user.id)
+    if (index !== -1) users.value[index] = user
+  } else {
+    users.value.push(user)
+  }
+  closeUserModal()
+  emit('notification', {
+    text: `User '${userDisplayName(user)}' saved successfully`,
+    color: 'success',
+  })
+}
+
+const resetPassword = (user) => {
+  selectedUserForPasswordReset.value = user
+  showPasswordResetModal.value = true
+}
+
+const closePasswordResetModal = () => {
+  showPasswordResetModal.value = false
+  selectedUserForPasswordReset.value = null
+}
+
+const handlePasswordResetSaved = () => {
+  closePasswordResetModal()
+  emit('notification', { text: 'Password has been reset successfully', color: 'success' })
+}
 
 const handleDeleteUser = (user) => {
   emit('confirmDelete', {
@@ -295,7 +336,8 @@ const handleDeleteUser = (user) => {
       'This action cannot be undone. All user data and associated records will be permanently removed.',
     onConfirm: async () => {
       try {
-        await deleteUser(user.id)
+        await userService.deleteUser(user.id)
+        users.value = users.value.filter((u) => u.id !== user.id)
         emit('notification', {
           text: `User '${userDisplayName(user)}' deleted successfully`,
           color: 'success',
@@ -309,20 +351,5 @@ const handleDeleteUser = (user) => {
   })
 }
 
-const handleUserSavedWithNotification = (user) => {
-  handleUserSaved(user)
-  emit('notification', {
-    text: `User '${userDisplayName(user)}' saved successfully`,
-    color: 'success',
-  })
-}
-
-const handlePasswordResetSavedWithNotification = () => {
-  handlePasswordResetSaved()
-  emit('notification', { text: 'Password has been reset successfully', color: 'success' })
-}
-
-onMounted(async () => {
-  await loadUsers()
-})
+onMounted(loadUsers)
 </script>

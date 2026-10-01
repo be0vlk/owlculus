@@ -1,8 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import { DOMWrapper, flushPromises } from '@vue/test-utils'
 import { mountWithVuetify } from './helpers/vuetify'
-import NewClientModal from '../NewClientModal.vue'
-import EditClientModal from '../EditClientModal.vue'
+import ClientModal from '../ClientModal.vue'
 import { clientService } from '@/services/client'
 
 vi.mock('@/services/client', () => ({
@@ -10,7 +9,7 @@ vi.mock('@/services/client', () => ({
 }))
 let wrapper
 it('validates client submissions and preserves entered values after failure', async () => {
-  wrapper = mountWithVuetify(NewClientModal, {
+  wrapper = mountWithVuetify(ClientModal, {
     props: { isOpen: false },
     attachTo: document.body,
   })
@@ -35,11 +34,11 @@ it('validates client submissions and preserves entered values after failure', as
   clientService.createClient.mockResolvedValueOnce({ id: 7, name: 'Acme' })
   await dialog.get('form').trigger('submit')
   await flushPromises()
-  expect(wrapper.emitted('created')).toEqual([[{ id: 7, name: 'Acme' }]])
+  expect(wrapper.emitted('saved')).toEqual([[{ id: 7, name: 'Acme' }]])
 })
 
 it('allows clients with no optional contact details', async () => {
-  wrapper = mountWithVuetify(NewClientModal, { props: { isOpen: false }, attachTo: document.body })
+  wrapper = mountWithVuetify(ClientModal, { props: { isOpen: false }, attachTo: document.body })
   await wrapper.setProps({ isOpen: true })
   await flushPromises()
   const dialog = new DOMWrapper(document.querySelector('[role="dialog"]'))
@@ -53,11 +52,11 @@ it('allows clients with no optional contact details', async () => {
     phone: '',
     address: '',
   })
-  expect(wrapper.emitted('created')).toEqual([[{ id: 8, name: 'Name Only' }]])
+  expect(wrapper.emitted('saved')).toEqual([[{ id: 8, name: 'Name Only' }]])
 })
 
 it('edits existing clients without requiring optional contacts', async () => {
-  wrapper = mountWithVuetify(EditClientModal, {
+  wrapper = mountWithVuetify(ClientModal, {
     props: { isOpen: false, client: { id: 4, name: 'Existing Client' } },
     attachTo: document.body,
   })
@@ -74,5 +73,5 @@ it('edits existing clients without requiring optional contacts', async () => {
     phone: '',
     address: '',
   })
-  expect(wrapper.emitted('updated')).toEqual([[{ id: 4, name: 'Updated Client' }]])
+  expect(wrapper.emitted('saved')).toEqual([[{ id: 4, name: 'Updated Client' }]])
 })

@@ -3,12 +3,7 @@ import { apiBaseURL } from './config'
 
 // Create a separate axios instance for auth that doesn't have interceptors
 // to avoid circular dependencies with the main api instance
-const authApi = axios.create({
-  baseURL: apiBaseURL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-})
+const authApi = axios.create({ baseURL: apiBaseURL })
 
 export const authService = {
   async getSetupStatus() {
@@ -26,11 +21,7 @@ export const authService = {
     formData.append('username', username)
     formData.append('password', password)
 
-    const response = await authApi.post('/api/auth/login', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    })
+    const response = await authApi.post('/api/auth/login', formData)
 
     if (response.data.access_token) {
       localStorage.setItem('access_token', response.data.access_token)
@@ -95,11 +86,6 @@ export const authService = {
   },
 
   isAuthenticated() {
-    try {
-      return !!localStorage.getItem('access_token')
-    } catch (error) {
-      console.error('Failed to check authentication status:', error)
-      return false
-    }
+    return !!this.getCurrentToken()
   },
 }

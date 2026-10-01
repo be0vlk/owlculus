@@ -1,21 +1,8 @@
 <template>
-  <v-card
-    :elevation="embedded ? 0 : undefined"
-    :class="[embedded ? 'admin-embedded' : 'mb-6', { 'configuration-workspace': embedded }]"
-    :variant="embedded ? 'flat' : 'outlined'"
-  >
+  <v-card :elevation="0" class="configuration-workspace" variant="flat">
     <v-card-title class="operations-heading d-flex flex-wrap ga-3 align-center pa-4 bg-surface">
-      <v-icon
-        v-if="!embedded"
-        icon="mdi-format-list-numbered"
-        color="primary"
-        size="large"
-        class="me-3"
-      />
       <div>
-        <h2 class="text-title-large font-weight-bold">
-          {{ embedded ? 'Case numbering' : 'Case Number Configuration' }}
-        </h2>
+        <h2 class="text-title-large font-weight-bold">Case numbering</h2>
         <div class="text-body-medium text-medium-emphasis">
           Configure how case numbers are generated
         </div>
@@ -56,7 +43,7 @@
               density="comfortable"
               prepend-inner-icon="mdi-alphabetical-variant"
               :rules="[validatePrefix]"
-              @update:model-value="onPrefixChange"
+              @update:model-value="updatePreview"
               hint="Enter 2-8 alphanumeric characters"
               persistent-hint
             />
@@ -65,7 +52,7 @@
 
         <v-row v-if="exampleCaseNumber">
           <v-col cols="12">
-            <v-card :elevation="embedded ? 0 : undefined" variant="outlined" class="pa-4">
+            <v-card :elevation="0" variant="outlined" class="pa-4">
               <div class="d-flex align-center">
                 <v-icon icon="mdi-eye" color="info" class="me-3" />
                 <div>
@@ -102,7 +89,7 @@
         prepend-icon="mdi-content-save"
         :loading="configLoading"
         :disabled="!isConfigChanged || !isConfigValid || configLoading || !!loadError"
-        @click="handleSave"
+        @click="save"
       >
         Save Configuration
       </v-btn>
@@ -111,42 +98,91 @@
 </template>
 
 <script setup>
-defineProps({ embedded: Boolean })
-import { onMounted, ref } from 'vue'
-import { useSystemConfiguration } from '@/composables/useSystemConfiguration'
-
-const loadError = ref('')
+import { computed, onMounted, ref } from 'vue'
+import api from '@/services/api'
 
 const emit = defineEmits(['notification'])
 
-const {
-  // State
-  selectedTemplate,
-  caseNumberPrefix,
-  configLoading,
-  exampleCaseNumber,
+const templateOptions = [
+  { display_name: 'Monthly Reset (YYMM-NN)', value: 'YYMM-NN' },
+  { display_name: 'Prefix + Monthly Reset (PREFIX-YYMM-NN)', value: 'PREFIX-YYMM-NN' },
+]
 
-  // Constants
-  templateOptions,
+const selectedTemplate = ref('YYMM-NN')
+const caseNumberPrefix = ref('')
+const saved = ref({ template: 'YYMM-NN', prefix: '' })
+const configLoading = ref(false)
+const loadError = ref('')
+const exampleCaseNumber = ref('')
 
-  // Computed
-  isConfigChanged,
-  isConfigValid,
+const isConfigChanged = computed(
+  () =>
+    selectedTemplate.value !== saved.value.template ||
+    caseNumberPrefix.value !== saved.value.prefix,
+)
 
-  // Validation
-  validatePrefix,
+const validatePrefix = (value) => {
+  if (selectedTemplate.value === 'PREFIX-YYMM-NN') {
+    if (!value) return 'Prefix is required'
+    if (!/^[A-Za-z0-9]{2,8}$/.test(value)) return 'Prefix must be 2-8 alphanumeric characters'
+  }
+  return true
+}
+const isConfigValid = computed(() => validatePrefix(caseNumberPrefix.value) === true)
 
-  // Methods
-  onTemplateChange,
-  onPrefixChange,
-  loadConfiguration,
-  saveConfiguration,
-  resetConfiguration,
-} = useSystemConfiguration()
-
-const handleSave = async () => {
+const updatePreview = async () => {
+  if (!isConfigValid.value) {
+    exampleCaseNumber.value = ''
+    return
+  }
   try {
-    if (!(await saveConfiguration())) return
+    const params = new URLSearchParams({ template: selectedTemplate.value })
+    if (selectedTemplate.value === 'PREFIX-YYMM-NN' && caseNumberPrefix.value) {
+      params.append('prefix', caseNumberPrefix.value)
+    }
+    const response = await api.get(`/api/admin/configuration/preview?${params}`)
+    exampleCaseNumber.value = response.data.example_case_number
+  } catch (error) {
+    console.error('Error updating preview:', error)
+    exampleCaseNumber.value = ''
+  }
+}
+
+const onTemplateChange = () => {
+  if (selectedTemplate.value !== 'PREFIX-YYMM-NN') caseNumberPrefix.value = ''
+  return updatePreview()
+}
+
+const resetConfiguration = () => {
+  selectedTemplate.value = saved.value.template
+  caseNumberPrefix.value = saved.value.prefix
+  return updatePreview()
+}
+
+const load = async () => {
+  loadError.value = ''
+  configLoading.value = true
+  try {
+    const { data } = await api.get('/api/admin/configuration')
+    saved.value = { template: data.case_number_template, prefix: data.case_number_prefix || '' }
+    await resetConfiguration()
+  } catch {
+    loadError.value = 'Failed to load case numbering. Please try again.'
+  } finally {
+    configLoading.value = false
+  }
+}
+
+const save = async () => {
+  if (!isConfigValid.value) return
+  configLoading.value = true
+  try {
+    await api.put('/api/admin/configuration', {
+      case_number_template: selectedTemplate.value,
+      case_number_prefix:
+        selectedTemplate.value === 'PREFIX-YYMM-NN' ? caseNumberPrefix.value : null,
+    })
+    saved.value = { template: selectedTemplate.value, prefix: caseNumberPrefix.value }
     emit('notification', { text: 'Configuration saved successfully!', color: 'success' })
   } catch (error) {
     console.error('Error saving configuration:', error)
@@ -154,20 +190,11 @@ const handleSave = async () => {
       text: 'Failed to save configuration. Please try again.',
       color: 'error',
     })
-  }
-}
-
-const load = async () => {
-  loadError.value = ''
-  configLoading.value = true
-  try {
-    await loadConfiguration()
-  } catch {
-    loadError.value = 'Failed to load case numbering. Please try again.'
   } finally {
     configLoading.value = false
   }
 }
+
 onMounted(load)
 </script>
 

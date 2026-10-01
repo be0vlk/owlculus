@@ -1,5 +1,5 @@
 <template>
-  <BaseDashboard compact :loading="loading" title="Admin">
+  <BaseDashboard compact title="Admin">
     <template #header>
       <header class="d-flex flex-wrap align-center ga-4 mb-6">
         <div class="d-flex align-center ga-3">
@@ -47,7 +47,6 @@
         <template v-if="visited.has(tab.value)">
           <UserManagementCard
             v-if="tab.value === 'users'"
-            embedded
             @count="userCount = $event"
             @invite="inviteUser"
             @confirmDelete="handleConfirmDelete"
@@ -56,14 +55,12 @@
           <InviteManagementCard
             v-else-if="tab.value === 'invites'"
             ref="inviteCard"
-            embedded
             @count="inviteCount = $event"
             @confirmDelete="handleConfirmDelete"
             @notification="handleNotification"
           />
           <ApiKeyManagementCard
             v-else-if="tab.value === 'keys'"
-            embedded
             @confirmDelete="handleConfirmDelete"
             @notification="handleNotification"
           />
@@ -85,7 +82,7 @@
               role="tabpanel"
               aria-labelledby="template-tab-evidence"
             >
-              <EvidenceTemplateManagementCard embedded @notification="handleNotification" />
+              <EvidenceTemplateManagementCard />
             </section>
             <section
               id="template-panel-tasks"
@@ -94,7 +91,6 @@
               aria-labelledby="template-tab-tasks"
             >
               <TaskTemplateManagementCard
-                embedded
                 @notification="handleNotification"
                 @confirmDelete="handleConfirmDelete"
               />
@@ -102,7 +98,6 @@
           </template>
           <SystemConfigurationCard
             v-else-if="tab.value === 'configuration'"
-            embedded
             @notification="handleNotification"
           />
         </template>
@@ -128,9 +123,8 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onMounted } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
 import { useNotifications } from '@/composables/useNotifications'
 import BaseDashboard from '@/components/BaseDashboard.vue'
 import SystemConfigurationCard from '@/components/SystemConfigurationCard.vue'
@@ -142,10 +136,6 @@ import InviteManagementCard from '@/components/InviteManagementCard.vue'
 import ConfirmationDialog from '@/components/ConfirmationDialog.vue'
 
 const router = useRouter()
-const authStore = useAuthStore()
-
-// State
-const loading = ref(true)
 const route = useRoute()
 const tabs = [
   { value: 'users', label: 'Users' },
@@ -200,16 +190,6 @@ const handleConfirmDelete = async ({ title, message, warning, onConfirm }) => {
     // User cancelled or action failed
   }
 }
-
-onMounted(async () => {
-  if (!authStore.isAuthenticated || authStore.user?.role !== 'Admin') {
-    router.push('/')
-    return
-  }
-
-  // Let child components handle their own loading
-  loading.value = false
-})
 </script>
 
 <style scoped>

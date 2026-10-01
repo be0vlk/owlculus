@@ -60,7 +60,7 @@
           </v-list-item>
         </template>
       </v-select>
-      <p class="sr-only" role="status" aria-live="polite" aria-atomic="true">
+      <p class="d-sr-only" role="status" aria-live="polite" aria-atomic="true">
         Active case: {{ activeCase.activeCase?.case_number }} — {{ activeCase.activeCase?.title }} ·
         {{ activeCase.activeCase?.status }}
       </p>
@@ -165,15 +165,5 @@ const options = computed(() =>
 
 .active-case-option :deep(.v-list-item__append) {
   padding-inline-start: 12px;
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
 }
 </style>

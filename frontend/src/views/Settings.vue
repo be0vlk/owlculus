@@ -58,14 +58,6 @@
                   <!-- Error Alert -->
                   <v-alert v-if="error" :text="error" class="mb-4" type="error" />
 
-                  <!-- Success Alert -->
-                  <v-alert
-                    v-if="success"
-                    type="success"
-                    class="mb-4"
-                    text="Password updated successfully"
-                  />
-
                   <v-btn
                     type="submit"
                     color="primary"
@@ -98,11 +90,9 @@ const newPassword = ref('')
 const confirmPassword = ref('')
 const isLoading = ref(false)
 const error = ref(null)
-const success = ref(false)
 
 const handlePasswordChange = async () => {
   error.value = null
-  success.value = false
 
   if (newPassword.value !== confirmPassword.value) {
     error.value = 'New passwords do not match'
@@ -115,7 +105,6 @@ const handlePasswordChange = async () => {
       current_password: currentPassword.value,
       new_password: newPassword.value,
     })
-    success.value = true
     currentPassword.value = ''
     newPassword.value = ''
     confirmPassword.value = ''

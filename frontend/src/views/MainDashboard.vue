@@ -99,8 +99,9 @@
       <v-divider />
 
       <v-data-table
-        :headers="vuetifyHeaders"
-        :items="enhancedFilteredCases"
+        :headers="headers"
+        :items="filteredCases"
+        :sort-by="[{ key: 'created_at', order: 'desc' }]"
         :loading="loading"
         class="elevation-0 case-dashboard-table"
         :hide-no-data="!!error"
@@ -152,14 +153,10 @@
         <template #no-data>
           <div class="text-center pa-12">
             <v-icon class="mb-4" color="grey-lighten-1" icon="mdi-folder-open-outline" size="64" />
-            <h3 class="text-title-large font-weight-medium mb-2">
-              {{ getEmptyStateTitle() }}
-            </h3>
-            <p class="text-body-medium text-medium-emphasis mb-4">
-              {{ getEmptyStateMessage() }}
-            </p>
+            <h3 class="text-title-large font-weight-medium mb-2">{{ emptyState.title }}</h3>
+            <p class="text-body-medium text-medium-emphasis mb-4">{{ emptyState.message }}</p>
             <v-btn
-              v-if="shouldShowCreateButton()"
+              v-if="emptyState.create"
               color="primary"
               prepend-icon="mdi-plus"
               @click="isNewCaseModalOpen = true"
@@ -178,7 +175,6 @@
     @created="handleCaseCreated"
   />
 
-  <!-- Snackbar for notifications -->
   <v-snackbar
     v-model="snackbar.show"
     :color="snackbar.color"
@@ -188,7 +184,7 @@
   >
     {{ snackbar.text }}
     <template #actions>
-      <v-btn variant="text" @click="snackbar.show = false"> Close </v-btn>
+      <v-btn variant="text" @click="closeNotification"> Close </v-btn>
     </template>
   </v-snackbar>
 </template>
@@ -197,29 +193,27 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import BaseDashboard from '../components/BaseDashboard.vue'
 import NewCaseModal from '../components/NewCaseModal.vue'
-import { useDashboard } from '../composables/useDashboard'
+import { formatDate } from '../composables/dateUtils'
+import { useNotifications } from '../composables/useNotifications'
 import { useRoute, useRouter } from 'vue-router'
 import { useActiveCaseStore } from '../stores/activeCase'
 import { useAuthStore } from '../stores/auth'
+import { useClientsStore } from '../stores/clients'
 
 const route = useRoute()
 const router = useRouter()
 const activeCase = useActiveCaseStore()
 const authStore = useAuthStore()
+const clientsStore = useClientsStore()
+const { snackbar, showNotification, closeNotification } = useNotifications()
 
-const {
-  loading,
-  error,
-  searchQuery,
-  showClosedCases,
-  loadData,
-  getClientName,
-  formatDate,
-  sortedAndFilteredCases,
-  cases,
-} = useDashboard()
-
+const loading = ref(true)
+const error = ref(null)
+const searchQuery = ref('')
+const showClosedCases = ref(false)
+const activeQuickFilter = ref('all')
 const isNewCaseModalOpen = ref(false)
+
 watch(
   () => route.query.create,
   (create) => {
@@ -231,41 +225,90 @@ watch(
   },
   { immediate: true },
 )
-const activeQuickFilter = ref('all')
 
-const snackbar = ref({
-  show: false,
-  text: '',
-  color: 'success',
-  timeout: 4000,
-})
+const headers = [
+  { title: 'Case Number', key: 'case_number' },
+  { title: 'Title', key: 'title' },
+  { title: 'Client', key: 'client_id' },
+  { title: 'Status', key: 'status' },
+  { title: 'Created', key: 'created_at' },
+  { title: 'Assigned Users', key: 'users', sortable: false },
+]
 
-const vuetifyHeaders = computed(() => [
-  { title: 'Case Number', value: 'case_number', sortable: true },
-  { title: 'Title', value: 'title', sortable: true },
-  { title: 'Client', value: 'client_id', sortable: true },
-  { title: 'Status', value: 'status', sortable: true },
-  { title: 'Created', value: 'created_at', sortable: true },
-  { title: 'Assigned Users', value: 'users', sortable: false },
-])
+const clientNames = computed(() =>
+  Object.fromEntries(clientsStore.clients.map((client) => [client.id, client.name])),
+)
+const getClientName = (clientId) => clientNames.value[clientId] || 'Unknown Client'
 
-const enhancedFilteredCases = computed(() => {
-  let filteredCases = sortedAndFilteredCases.value
-
-  // Apply quick filter
-  if (activeQuickFilter.value === 'my-cases' && authStore.user) {
-    filteredCases = filteredCases.filter((case_) =>
-      case_.users?.some((user) => user.id === authStore.user.id),
+const filteredCases = computed(() => {
+  const query = searchQuery.value?.toLowerCase()
+  const userId = authStore.user?.id
+  return activeCase.accessibleCases.filter((item) => {
+    if (!showClosedCases.value && item.status !== 'Open') return false
+    if (activeQuickFilter.value === 'my-cases' && userId) {
+      if (!item.users?.some((user) => user.id === userId)) return false
+    }
+    if (activeQuickFilter.value === 'unassigned' && item.users?.length) return false
+    if (!query) return true
+    return (
+      [item.case_number, item.title, getClientName(item.client_id), item.status].some((value) =>
+        (value || '').toLowerCase().includes(query),
+      ) || !!item.users?.some((user) => (user.username || '').toLowerCase().includes(query))
     )
-  } else if (activeQuickFilter.value === 'unassigned') {
-    filteredCases = filteredCases.filter((case_) => !case_.users || case_.users.length === 0)
-  }
-
-  return filteredCases
+  })
 })
+
+const emptyState = computed(() => {
+  if (searchQuery.value) {
+    return {
+      title: 'No results found',
+      message: 'Try adjusting your search terms or removing filters to see more results.',
+    }
+  }
+  if (activeQuickFilter.value === 'my-cases') {
+    return {
+      title: 'No cases assigned to you',
+      message: "You haven't been assigned to any cases yet. Check with your administrator.",
+    }
+  }
+  if (activeQuickFilter.value === 'unassigned') {
+    return {
+      title: 'No unassigned cases',
+      message: 'All cases have been assigned to team members.',
+    }
+  }
+  if (!activeCase.accessibleCases.length) {
+    return authStore.requiresAdmin()
+      ? {
+          title: 'No cases yet',
+          message: 'Get started by creating your first investigation case.',
+          create: true,
+        }
+      : { title: 'No cases yet', message: 'Contact an administrator to be assigned to a case.' }
+  }
+  return {
+    title: 'No cases match your filters',
+    message: 'Try adjusting your filters to see more cases.',
+  }
+})
+
+const loadData = async () => {
+  try {
+    loading.value = true
+    error.value = null
+    await activeCase.refresh()
+    if (activeCase.error) throw new Error(activeCase.error)
+    // Client names are optional; their failure does not block the case list.
+    await clientsStore.refresh().catch((err) => console.error('Failed to load clients:', err))
+  } catch (err) {
+    error.value = 'Failed to load dashboard data'
+    console.error('Dashboard loading error:', err)
+  } finally {
+    loading.value = false
+  }
+}
 
 const handleCaseCreated = async (newCase, { assignmentWarning } = {}) => {
-  // Refresh the cases list
   await loadData()
   isNewCaseModalOpen.value = false
   if (assignmentWarning) {
@@ -274,7 +317,7 @@ const handleCaseCreated = async (newCase, { assignmentWarning } = {}) => {
       'warning',
     )
   } else {
-    showNotification(`Case "${newCase?.case_number || 'New case'}" created successfully`, 'success')
+    showNotification(`Case "${newCase?.case_number || 'New case'}" created successfully`)
   }
   activeCase.notification = snackbar.value.text
   await activeCase.select(newCase.id, { overview: true })
@@ -282,53 +325,6 @@ const handleCaseCreated = async (newCase, { assignmentWarning } = {}) => {
 
 const handleRowClick = (event, { item }) => {
   activeCase.select(item.id, { overview: true })
-}
-
-// Snackbar helper function
-const showNotification = (text, color = 'success') => {
-  snackbar.value.text = text
-  snackbar.value.color = color
-  snackbar.value.show = true
-}
-
-// Empty state functions
-const getEmptyStateTitle = () => {
-  if (searchQuery.value) {
-    return 'No results found'
-  } else if (activeQuickFilter.value === 'my-cases') {
-    return 'No cases assigned to you'
-  } else if (activeQuickFilter.value === 'unassigned') {
-    return 'No unassigned cases'
-  } else if ((cases.value || []).length === 0) {
-    return 'No cases yet'
-  } else {
-    return 'No cases match your filters'
-  }
-}
-
-const getEmptyStateMessage = () => {
-  if (searchQuery.value) {
-    return 'Try adjusting your search terms or removing filters to see more results.'
-  } else if (activeQuickFilter.value === 'my-cases') {
-    return "You haven't been assigned to any cases yet. Check with your administrator."
-  } else if (activeQuickFilter.value === 'unassigned') {
-    return 'All cases have been assigned to team members.'
-  } else if ((cases.value || []).length === 0) {
-    return authStore.requiresAdmin()
-      ? 'Get started by creating your first investigation case.'
-      : 'Contact an administrator to be assigned to a case.'
-  } else {
-    return 'Try adjusting your filters to see more cases.'
-  }
-}
-
-const shouldShowCreateButton = () => {
-  return (
-    (cases.value || []).length === 0 &&
-    !searchQuery.value &&
-    activeQuickFilter.value === 'all' &&
-    authStore.requiresAdmin()
-  )
 }
 
 onMounted(loadData)

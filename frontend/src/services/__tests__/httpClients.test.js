@@ -55,11 +55,7 @@ describe('browser HTTP clients', () => {
     const apiClient = axiosMock.instances.find(({ get }) => get.mock.calls.length > 0)
     const authClient = axiosMock.instances.find(({ post }) => post.mock.calls.length > 0)
     expect(apiClient.get).toHaveBeenCalledWith('/api/cases/')
-    expect(authClient.post).toHaveBeenCalledWith(
-      '/api/auth/login',
-      expect.any(FormData),
-      expect.any(Object),
-    )
+    expect(authClient.post).toHaveBeenCalledWith('/api/auth/login', expect.any(FormData))
   })
 
   it('honors an explicit API-base override for development and tests', async () => {

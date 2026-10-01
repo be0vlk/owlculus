@@ -57,7 +57,6 @@ const button = (wrapper, name) =>
   wrapper.findAll('button').find((item) => item.text().trim() === name)
 async function mountEditor() {
   const wrapper = mountWithVuetify(EvidenceTemplateManagementCard, { attachTo: document.body })
-  await wrapper.get('.v-expansion-panel-title').trigger('click')
   await flushPromises()
   return wrapper
 }

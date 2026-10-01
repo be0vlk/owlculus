@@ -20,7 +20,7 @@
             color="primary"
             prepend-icon="mdi-plus"
             variant="flat"
-            @click="openNewClientModal"
+            @click="openClientModal()"
           >
             Add Client
           </v-btn>
@@ -45,9 +45,7 @@
       <!-- Search Toolbar -->
       <v-card-text class="pa-4">
         <v-row class="mb-0 align-center">
-          <v-col cols="12" md="8">
-            <!-- Could add filters here in the future -->
-          </v-col>
+          <v-col cols="12" md="8" />
 
           <!-- Search Controls -->
           <v-col cols="12" md="4">
@@ -73,8 +71,10 @@
       <v-data-table
         :cell-props="{ class: 'operations-cell' }"
         :header-props="{ class: 'operations-column' }"
-        :headers="vuetifyHeaders"
-        :items="sortedAndFilteredClients"
+        :headers="headers"
+        :items="clients"
+        :search="searchQuery"
+        :sort-by="[{ key: 'name', order: 'asc' }]"
         :loading="loading"
         class="elevation-0 clients-dashboard-table"
         :hide-no-data="!!error"
@@ -98,7 +98,7 @@
               size="small"
               variant="outlined"
               :aria-label="`Edit ${item.name}`"
-              @click="openEditClientModal(item)"
+              @click="openClientModal(item)"
             >
               <v-icon>mdi-pencil</v-icon>
               <v-tooltip activator="parent" location="top"> Edit {{ item.name }} </v-tooltip>
@@ -127,16 +127,20 @@
               size="64"
             />
             <h3 class="text-title-large font-weight-medium mb-2">
-              {{ getEmptyStateTitle() }}
+              {{ searchQuery ? 'No clients found' : 'No clients yet' }}
             </h3>
             <p class="text-body-medium text-medium-emphasis mb-4">
-              {{ getEmptyStateMessage() }}
+              {{
+                searchQuery
+                  ? "Try adjusting your search terms to find the client you're looking for."
+                  : 'Get started by adding your first client to begin managing cases.'
+              }}
             </p>
             <v-btn
-              v-if="shouldShowCreateButton()"
+              v-if="!searchQuery"
               color="primary"
               prepend-icon="mdi-plus"
-              @click="openNewClientModal"
+              @click="openClientModal()"
             >
               Add First Client
             </v-btn>
@@ -146,22 +150,13 @@
     </v-card>
   </BaseDashboard>
 
-  <!-- New Client Modal -->
-  <NewClientModal
-    :is-open="isNewClientModalOpen"
-    @close="closeNewClientModal"
-    @created="handleClientCreated"
-  />
-
-  <!-- Edit Client Modal -->
-  <EditClientModal
+  <ClientModal
     :client="selectedClient"
-    :is-open="isEditClientModalOpen"
-    @close="closeEditClientModal"
-    @updated="handleClientUpdated"
+    :is-open="isClientModalOpen"
+    @close="isClientModalOpen = false"
+    @saved="handleClientSaved"
   />
 
-  <!-- Snackbar for notifications -->
   <v-snackbar
     v-model="snackbar.show"
     :color="snackbar.color"
@@ -170,76 +165,67 @@
   >
     {{ snackbar.text }}
     <template #actions>
-      <v-btn variant="text" @click="snackbar.show = false"> Close </v-btn>
+      <v-btn variant="text" @click="closeNotification"> Close </v-btn>
     </template>
   </v-snackbar>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { storeToRefs } from 'pinia'
 import BaseDashboard from '../components/BaseDashboard.vue'
-import NewClientModal from '../components/NewClientModal.vue'
-import EditClientModal from '../components/EditClientModal.vue'
-import { useClients } from '../composables/useClients'
+import ClientModal from '../components/ClientModal.vue'
+import { formatDate } from '../composables/dateUtils'
+import { useNotifications } from '../composables/useNotifications'
 import { clientService } from '../services/client'
 import { useClientsStore } from '../stores/clients'
 
-const { loading, error, searchQuery, clients, loadData, formatDate, sortedAndFilteredClients } =
-  useClients()
 const clientsStore = useClientsStore()
+const { clients } = storeToRefs(clientsStore)
+const { snackbar, showNotification, closeNotification } = useNotifications()
 
-// Vuetify table headers
-const vuetifyHeaders = [
-  { title: 'Name', key: 'name', sortable: true },
-  { title: 'Email', key: 'email', sortable: true },
-  { title: 'Phone', key: 'phone', sortable: true },
-  { title: 'Address', key: 'address', sortable: true },
-  { title: 'Created', key: 'created_at', sortable: true },
+const loading = ref(true)
+const error = ref(null)
+const searchQuery = ref('')
+
+const headers = [
+  { title: 'Name', key: 'name' },
+  { title: 'Email', key: 'email' },
+  { title: 'Phone', key: 'phone' },
+  { title: 'Address', key: 'address' },
+  { title: 'Created', key: 'created_at' },
   { title: 'Actions', key: 'actions', sortable: false },
 ]
 
-const isNewClientModalOpen = ref(false)
-const isEditClientModalOpen = ref(false)
+const loadData = async () => {
+  try {
+    loading.value = true
+    error.value = null
+    await clientsStore.refresh()
+  } catch (err) {
+    error.value = 'Failed to load clients. Please try again later.'
+    console.error('Error loading clients:', err)
+  } finally {
+    loading.value = false
+  }
+}
+
+const isClientModalOpen = ref(false)
 const selectedClient = ref(null)
 
-// Snackbar state
-const snackbar = ref({
-  show: false,
-  text: '',
-  color: 'success',
-  timeout: 4000,
-})
-
-const openNewClientModal = () => {
-  isNewClientModalOpen.value = true
-}
-
-const closeNewClientModal = () => {
-  isNewClientModalOpen.value = false
-}
-
-const handleClientCreated = (newClient) => {
-  clientsStore.upsert(newClient)
-  showNotification(`Client "${newClient.name}" created successfully`, 'success')
-}
-
-const openEditClientModal = (client) => {
+const openClientModal = (client = null) => {
   selectedClient.value = client
-  isEditClientModalOpen.value = true
+  isClientModalOpen.value = true
 }
 
-const closeEditClientModal = () => {
-  isEditClientModalOpen.value = false
-  selectedClient.value = null
-}
-
-const handleClientUpdated = (updatedClient) => {
-  clientsStore.upsert(updatedClient)
-  showNotification(`Client "${updatedClient.name}" updated successfully`, 'success')
+const handleClientSaved = (client) => {
+  clientsStore.upsert(client)
+  const action = selectedClient.value ? 'updated' : 'created'
+  showNotification(`Client "${client.name}" ${action} successfully`)
 }
 
 const handleRowDoubleClick = (event, { item }) => {
-  openEditClientModal(item)
+  openClientModal(item)
 }
 
 const handleDelete = async (client) => {
@@ -248,46 +234,12 @@ const handleDelete = async (client) => {
   try {
     await clientService.deleteClient(client.id)
     clientsStore.remove(client.id)
-    showNotification(`Client "${client.name}" deleted successfully`, 'success')
+    showNotification(`Client "${client.name}" deleted successfully`)
   } catch (error) {
     console.error('Error deleting client:', error)
     showNotification('Failed to delete client. Please try again.', 'error')
   }
 }
 
-// Snackbar helper function
-const showNotification = (text, color = 'success') => {
-  snackbar.value.text = text
-  snackbar.value.color = color
-  snackbar.value.show = true
-}
-
-// Empty state functions
-const getEmptyStateTitle = () => {
-  if (searchQuery.value) {
-    return 'No clients found'
-  } else if ((clients.value || []).length === 0) {
-    return 'No clients yet'
-  } else {
-    return 'No clients match your search'
-  }
-}
-
-const getEmptyStateMessage = () => {
-  if (searchQuery.value) {
-    return "Try adjusting your search terms to find the client you're looking for."
-  } else if ((clients.value || []).length === 0) {
-    return 'Get started by adding your first client to begin managing cases.'
-  } else {
-    return 'Try adjusting your search to see more clients.'
-  }
-}
-
-const shouldShowCreateButton = () => {
-  return (clients.value || []).length === 0 && !searchQuery.value
-}
-
-onMounted(() => {
-  loadData()
-})
+onMounted(loadData)
 </script>

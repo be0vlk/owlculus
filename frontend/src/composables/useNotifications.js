@@ -26,14 +26,6 @@ export function useNotifications() {
     showNotification(text, 'error', timeout)
   }
 
-  const showWarning = (text, timeout = 5000) => {
-    showNotification(text, 'warning', timeout)
-  }
-
-  const showInfo = (text, timeout = 4000) => {
-    showNotification(text, 'info', timeout)
-  }
-
   // Close the snackbar
   const closeNotification = () => {
     snackbar.value.show = false
@@ -47,8 +39,6 @@ export function useNotifications() {
     showNotification,
     showSuccess,
     showError,
-    showWarning,
-    showInfo,
     closeNotification,
   }
 }

@@ -56,24 +56,20 @@
                 <v-form
                   v-else-if="tokenValidation && tokenValidation.valid"
                   ref="formRef"
-                  validate-on="submit"
+                  v-model="valid"
                   @submit.prevent="handleRegister"
                 >
                   <!-- Role Info Card -->
-                  <v-card :color="getRoleColor(tokenValidation.role)" class="mb-6" variant="tonal">
+                  <v-card :color="role?.color" class="mb-6" variant="tonal">
                     <v-card-text class="py-3">
                       <div class="d-flex align-center">
-                        <v-icon
-                          :icon="getRoleIcon(tokenValidation.role)"
-                          :color="getRoleColor(tokenValidation.role)"
-                          class="me-3"
-                        />
+                        <v-icon :icon="role?.icon" :color="role?.color" class="me-3" />
                         <div>
                           <div class="text-title-small font-weight-bold">
                             You're registering as a {{ tokenValidation.role }}
                           </div>
                           <div class="text-body-small text-medium-emphasis">
-                            {{ getRoleDescription(tokenValidation.role) }}
+                            {{ role?.description }}
                           </div>
                         </div>
                       </div>
@@ -170,7 +166,7 @@
                     size="large"
                     block
                     :loading="isLoading"
-                    :disabled="isLoading || !isFormValid"
+                    :disabled="isLoading || !valid"
                     class="text-none mb-4"
                   >
                     <v-icon start>mdi-account-plus</v-icon>
@@ -205,6 +201,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useDarkMode } from '../composables/useDarkMode'
 import { inviteService } from '../services/invite'
+import { ROLE_OPTIONS } from '../constants/roles'
 
 const router = useRouter()
 const route = useRoute()
@@ -217,6 +214,7 @@ const registrationSuccess = ref(false)
 const showPassword = ref(false)
 const showConfirmPassword = ref(false)
 const formRef = ref(null)
+const valid = ref(false)
 const tokenValidation = ref(null)
 
 const formData = reactive({
@@ -240,57 +238,9 @@ const rules = {
 
 const confirmPasswordRule = (v) => v === formData.password || 'Passwords do not match'
 
-const isFormValid = computed(() => {
-  return (
-    formData.username &&
-    formData.email &&
-    formData.password &&
-    formData.confirmPassword &&
-    formData.password === formData.confirmPassword &&
-    formData.username.length >= 3 &&
-    formData.password.length >= 8 &&
-    /.+@.+\..+/.test(formData.email)
-  )
-})
-
-const getRoleColor = (role) => {
-  switch (role) {
-    case 'Admin':
-      return 'error'
-    case 'Investigator':
-      return 'primary'
-    case 'Analyst':
-      return 'info'
-    default:
-      return 'primary'
-  }
-}
-
-const getRoleIcon = (role) => {
-  switch (role) {
-    case 'Admin':
-      return 'mdi-shield-check'
-    case 'Investigator':
-      return 'mdi-account-search'
-    case 'Analyst':
-      return 'mdi-chart-line'
-    default:
-      return 'mdi-account'
-  }
-}
-
-const getRoleDescription = (role) => {
-  switch (role) {
-    case 'Admin':
-      return 'Full system access and user management'
-    case 'Investigator':
-      return 'Read/write access, can run plugins'
-    case 'Analyst':
-      return 'Read-only access to assigned cases'
-    default:
-      return ''
-  }
-}
+const role = computed(() =>
+  ROLE_OPTIONS.find((option) => option.value === tokenValidation.value?.role),
+)
 
 const validateInviteToken = async () => {
   const token = route.query.token
@@ -324,6 +274,7 @@ const handleRegister = async () => {
     error.value = 'No invite token found'
     return
   }
+  if (!(await formRef.value.validate()).valid || isLoading.value) return
 
   try {
     error.value = null
