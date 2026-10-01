@@ -216,7 +216,7 @@ async function exerciseEvidenceAndNotes(page) {
     .click({ trial: true })
   await captureOperations(page, 'evidence')
   await page.getByRole('button', { name: 'Delete statement.txt', exact: true }).click()
-  const deleteDialog = page.getByRole('dialog', { name: 'Confirm Delete', exact: true })
+  const deleteDialog = page.getByRole('dialog', { name: 'Confirm Deletion', exact: true })
   await expect(deleteDialog).toContainText('statement.txt')
   await page.keyboard.press('Escape')
   await expect(deleteDialog).toBeHidden()

@@ -7,7 +7,7 @@ import { evidenceService } from '@/services/evidence'
 import EvidenceList from '../EvidenceList.vue'
 
 vi.mock('@/services/evidence', () => ({
-  evidenceService: { deleteEvidence: vi.fn(), moveEvidence: vi.fn() },
+  evidenceService: { deleteEvidence: vi.fn(), updateEvidence: vi.fn() },
 }))
 
 const evidence = [
@@ -70,23 +70,21 @@ describe('Evidence tree', () => {
       .find((item) => item.text().includes('Documents'))
     await folder.trigger('click')
     await flushPromises()
-    const data = new Map()
-    const dataTransfer = {
-      setData: (key, value) => data.set(key, value),
-      getData: (key) => data.get(key),
-      setDragImage: vi.fn(),
-    }
+    const dataTransfer = { setData: vi.fn() }
     await wrapper.get('[draggable="true"]').trigger('dragstart', { dataTransfer })
-    evidenceService.moveEvidence.mockRejectedValueOnce(new Error('Move unavailable'))
+    evidenceService.updateEvidence.mockRejectedValueOnce(new Error('Move unavailable'))
     const target = wrapper
       .findAll('.tree-item-title-wrapper')
       .find((item) => item.text() === 'Archive')
     await target.trigger('drop', { dataTransfer })
     await flushPromises()
+    expect(evidenceService.updateEvidence).toHaveBeenCalledWith(2, { parentFolderId: 3 })
+    const [[optimistic], [restored]] = wrapper.emitted('evidence-moved')
+    expect(optimistic.find((item) => item.id === 2).parent_folder_id).toBe(3)
     expect(wrapper.get('[role="alert"]').text()).toContain('Move unavailable')
-    expect(wrapper.emitted('evidence-moved').at(-1)[0]).toEqual(items)
+    expect(restored).toEqual(items)
   })
-  it('keeps failed deletion feedback inside the confirmation dialog', async () => {
+  it('confirms deletion and reports a failed delete', async () => {
     vi.stubGlobal('visualViewport', new EventTarget())
     vi.stubGlobal(
       'ResizeObserver',
@@ -99,23 +97,24 @@ describe('Evidence tree', () => {
     evidenceService.deleteEvidence.mockRejectedValueOnce(new Error('Unavailable'))
     wrapper = mount(EvidenceList, {
       props: {
-        evidenceList: [{ id: 2, title: 'statement.txt', evidence_type: 'file' }],
+        evidenceList: [{ id: 2, title: '<img src=x>.txt', evidence_type: 'file' }],
         caseId: 7,
       },
       attachTo: document.body,
       global: { plugins: [createVuetify({ components, directives, theme: false })] },
     })
-    await wrapper.get('[aria-label="Delete statement.txt"]').trigger('click')
+    await wrapper.get('[aria-label="Delete <img src=x>.txt"]').trigger('click')
     await flushPromises()
-    const dialog = document.querySelector('[role="dialog"][aria-label="Confirm Delete"]')
+    const dialog = document.querySelector('[role="dialog"][aria-label="Confirm Deletion"]')
+    expect(dialog.textContent).toContain('<img src=x>.txt')
+    expect(dialog.querySelector('img')).toBeNull()
     const confirm = [...dialog.querySelectorAll('button')].find(
       (button) => button.textContent.trim() === 'Delete',
     )
     confirm.click()
     await flushPromises()
-    expect(dialog.querySelector('[role="alert"]').textContent).toContain(
-      'Failed to delete evidence',
-    )
+    expect(evidenceService.deleteEvidence).toHaveBeenCalledWith(2)
+    expect(wrapper.get('[role="alert"]').text()).toContain('Unavailable')
     expect(wrapper.emitted('refresh')).toBeUndefined()
   })
 })

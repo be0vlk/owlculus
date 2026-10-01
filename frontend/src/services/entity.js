@@ -1,5 +1,4 @@
 import api from './api'
-import { createDownloadArtifact } from '@/utils/download'
 
 const ENTITY_FETCH_PAGE_SIZE = 1000
 
@@ -56,6 +55,6 @@ export const entityService = {
         responseType: 'blob',
       },
     )
-    return createDownloadArtifact(response.data, response.headers)
+    return { blob: response.data, headers: response.headers }
   },
 }

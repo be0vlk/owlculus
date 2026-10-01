@@ -1,7 +1,6 @@
 import { createExecutionStream, closeExecutionStream } from './executionStream'
 import api from './api'
 import { submitExecution } from './executionSubmission'
-import { createDownloadArtifact } from '@/utils/download'
 
 /**
  * Hunt API service for managing OSINT hunt workflows
@@ -54,7 +53,7 @@ export const huntService = {
       params: { format },
       responseType: 'blob',
     })
-    return createDownloadArtifact(response.data, response.headers)
+    return { blob: response.data, headers: response.headers }
   },
 
   /**

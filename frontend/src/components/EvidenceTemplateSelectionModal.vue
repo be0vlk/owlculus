@@ -56,7 +56,7 @@
             <template v-slot:item="{ props: itemProps, item }">
               <v-list-item v-bind="itemProps" :subtitle="item.description">
                 <template v-slot:prepend>
-                  <v-icon icon="mdi-folder-multiple" :color="getFolderColor()" class="me-3" />
+                  <v-icon icon="mdi-folder-multiple" color="purple-darken-1" class="me-3" />
                 </template>
               </v-list-item>
             </template>
@@ -116,10 +116,7 @@ import { ref, computed, watch } from 'vue'
 import { systemService } from '@/services/system'
 import { evidenceService } from '@/services/evidence'
 import TemplateFolderTree from './TemplateFolderTree.vue'
-import { useFolderIcons } from '../composables/useFolderIcons'
 import ModalActions from './ModalActions.vue'
-
-const { getFolderColor } = useFolderIcons()
 
 const props = defineProps({
   modelValue: {

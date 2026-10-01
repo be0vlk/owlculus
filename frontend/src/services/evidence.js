@@ -1,5 +1,4 @@
 import api from './api'
-import { createDownloadArtifact } from '@/utils/download'
 
 export const evidenceService = {
   async createEvidence({ description, category, caseId, files, folderPath, parentFolderId }) {
@@ -35,7 +34,7 @@ export const evidenceService = {
     const response = await api.get(`/api/evidence/${evidenceId}/download`, {
       responseType: 'blob',
     })
-    return createDownloadArtifact(response.data, response.headers)
+    return { blob: response.data, headers: response.headers }
   },
 
   async deleteEvidence(evidenceId) {
@@ -57,12 +56,8 @@ export const evidenceService = {
     return response.data
   },
 
-  async updateFolder(folderId, { title, description, parentFolderId }) {
-    const response = await api.put(`/api/evidence/folders/${folderId}`, {
-      title,
-      description,
-      parent_folder_id: parentFolderId,
-    })
+  async updateFolder(folderId, { title }) {
+    const response = await api.put(`/api/evidence/folders/${folderId}`, { title })
     return response.data
   },
 
@@ -70,12 +65,9 @@ export const evidenceService = {
     await api.delete(`/api/evidence/folders/${folderId}`)
   },
 
-  async updateEvidence(evidenceId, { title, description, category, folderPath, parentFolderId }) {
+  async updateEvidence(evidenceId, { title, parentFolderId }) {
     const response = await api.put(`/api/evidence/${evidenceId}`, {
       title,
-      description,
-      category,
-      folder_path: folderPath,
       parent_folder_id: parentFolderId,
     })
     return response.data
@@ -94,13 +86,6 @@ export const evidenceService = {
   async applyFolderTemplate(caseId, templateName) {
     const response = await api.post(`/api/evidence/case/${caseId}/apply-template`, null, {
       params: { template_name: templateName },
-    })
-    return response.data
-  },
-
-  async moveEvidence(evidenceId, targetFolderId) {
-    const response = await api.put(`/api/evidence/${evidenceId}`, {
-      parent_folder_id: targetFolderId,
     })
     return response.data
   },

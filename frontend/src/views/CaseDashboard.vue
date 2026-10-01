@@ -76,7 +76,6 @@
               :case-id="caseId"
               :entity-service="entityServiceRef"
               @create="openNewEntityModal"
-              @deleted="handleEntityDeleted"
               @edit="showEntityDetails"
               @view="showEntityDetails"
             />
@@ -100,19 +99,17 @@
               </v-col>
             </v-row>
             <EvidenceList
-              ref="evidenceListRef"
               :case-id="caseId"
               :error="evidenceError"
               :evidence-list="evidence"
               :loading="loadingEvidence"
               :user-role="userRole"
-              @delete="handleDeleteEvidence"
               @download="handleDownloadEvidence"
               @refresh="loadEvidence"
               @upload-to-folder="handleUploadToFolder"
               @extract-metadata="handleExtractMetadata"
               @view-content="handleViewFileContent"
-              @evidence-moved="handleEvidenceMoved"
+              @evidence-moved="evidence = $event"
             />
           </div>
 
@@ -260,6 +257,7 @@
     :case-id="caseId"
     :show="showUploadEvidenceModal"
     :target-folder="uploadTargetFolder"
+    :folders="evidence"
     @close="handleCloseUploadModal"
     @uploaded="handleEvidenceUpload"
   />
@@ -267,20 +265,11 @@
   <MetadataModal
     v-model="showMetadataModal"
     :error="metadataError"
-    :evidence-item="selectedEvidenceForMetadata"
     :loading="loadingMetadata"
     :metadata="extractedMetadata"
   />
 
-  <FileContentModal
-    v-model="showFileContentModal"
-    :evidence-item="selectedEvidenceForContent"
-    :content="fileContent"
-    :file-info="fileContentInfo"
-    :loading="loadingFileContent"
-    :error="fileContentError"
-    @download="handleDownloadEvidence"
-  />
+  <FileContentModal v-model="showFileContentModal" :evidence-item="selectedEvidenceForContent" />
 
   <!-- Entity Creation Success Dialog -->
   <v-dialog
@@ -360,7 +349,6 @@ const caseData = ref(null)
 const client = ref(null)
 const entities = ref([])
 const entityTableRef = ref(null)
-const evidenceListRef = ref(null)
 const showCaseDetails = ref(false)
 const detailsRefreshError = ref('')
 const showEditModal = ref(false)
@@ -380,17 +368,12 @@ let entityDetailsActivator = null
 
 useDialogFocusRestore(showEntityCreationSuccess)
 const showMetadataModal = ref(false)
-const selectedEvidenceForMetadata = ref(null)
 const extractedMetadata = ref(null)
 const loadingMetadata = ref(false)
 const metadataError = ref('')
 
 const showFileContentModal = ref(false)
 const selectedEvidenceForContent = ref(null)
-const fileContent = ref(null)
-const fileContentInfo = ref(null)
-const loadingFileContent = ref(false)
-const fileContentError = ref('')
 
 const isEditingNotes = ref(false)
 const savingNotes = ref(false)
@@ -563,8 +546,6 @@ const handleSkipEditEntity = () => {
   createdEntity.value = null
 }
 
-const handleEntityDeleted = () => {}
-
 const loadClientData = async (clientId) => {
   const owner = caseId.value
   try {
@@ -650,29 +631,8 @@ const handleExportCase = async () => {
   }
 }
 
-const handleDeleteEvidence = async (evidenceItem) => {
-  if (!confirm('Are you sure you want to delete this evidence?')) return
-
-  try {
-    await evidenceService.deleteEvidence(evidenceItem.id)
-    evidence.value = evidence.value.filter((e) => e.id !== evidenceItem.id)
-  } catch (error) {
-    console.error('Failed to delete evidence:', error)
-  }
-}
-
 const handleEvidenceUpload = async (newEvidenceList) => {
   evidence.value = [...evidence.value, ...newEvidenceList]
-}
-
-const handleEvidenceMoved = (updatedEvidenceList, openState) => {
-  // Update the evidence list with optimistic changes
-  evidence.value = updatedEvidenceList
-
-  // Restore the folder open state if provided
-  if (openState && evidenceListRef.value) {
-    evidenceListRef.value.restoreOpenState(openState)
-  }
 }
 
 const handleUploadToFolder = (folder) => {
@@ -686,7 +646,6 @@ const handleCloseUploadModal = () => {
 }
 
 const handleExtractMetadata = async (evidenceItem) => {
-  selectedEvidenceForMetadata.value = evidenceItem
   extractedMetadata.value = null
   metadataError.value = ''
   loadingMetadata.value = true
@@ -702,14 +661,8 @@ const handleExtractMetadata = async (evidenceItem) => {
   }
 }
 
-const handleViewFileContent = async (evidenceItem) => {
+const handleViewFileContent = (evidenceItem) => {
   selectedEvidenceForContent.value = evidenceItem
-
-  fileContent.value = null
-  fileContentInfo.value = null
-  fileContentError.value = ''
-  loadingFileContent.value = false
-
   showFileContentModal.value = true
 }
 

@@ -63,7 +63,7 @@ async function mountEditor() {
 }
 function row(wrapper, name) {
   return wrapper
-    .findAll('.folder-row')
+    .findAll('.folder-content')
     .find((item) => item.get('input[placeholder="Folder name"]').element.value === name)
 }
 async function edit(wrapper, name, value, description = false) {

@@ -4,9 +4,8 @@
     :aria-label="`${titleText}: ${evidenceItem?.title || 'Evidence'}`"
     max-width="1200px"
     scrollable
-    @update:model-value="handleModelValueUpdate"
   >
-    <v-card class="d-flex flex-column h-100-dialog">
+    <v-card class="d-flex flex-column">
       <v-card-title class="d-flex align-center justify-space-between flex-shrink-0">
         <div class="preview-title d-flex align-center flex-wrap ga-2">
           <v-icon :icon="titleIcon" />
@@ -71,6 +70,7 @@
 import { useDialogFocusRestore } from '@/composables/useDialogFocusRestore'
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { evidenceService } from '@/services/evidence'
+import { getErrorMessage } from '@/utils/errorMessage'
 import {
   FileTypeIcons,
   getFileTypeByExtension,
@@ -129,19 +129,8 @@ const titleIcon = computed(() => {
   return FileTypeIcons[displayContentType.value] || FileTypeIcons.DEFAULT
 })
 
-const titleText = computed(() => {
-  switch (displayContentType.value) {
-    case 'TEXT':
-      return 'Text File Content'
-    case 'IMAGE':
-      return 'Image Preview'
-    case 'PDF':
-      return 'PDF Document Preview'
-    // Add more cases for other types
-    default:
-      return 'File Content'
-  }
-})
+const TITLES = { TEXT: 'Text File Content', IMAGE: 'Image Preview' }
+const titleText = computed(() => TITLES[displayContentType.value] || 'File Content')
 
 const cleanupBlobUrl = () => {
   if (
@@ -155,14 +144,6 @@ const cleanupBlobUrl = () => {
 }
 
 const fetchFileContent = async (item) => {
-  if (!item || !item.id) {
-    cleanupBlobUrl()
-    fileContent.value = null
-    fileInfo.value = null
-    error.value = ''
-    return
-  }
-
   // Determine the content type *for the request*
   const currentRequestType = requestContentType.value
 
@@ -193,11 +174,7 @@ const fetchFileContent = async (item) => {
     }
   } catch (err) {
     console.error('Error fetching file content:', err)
-    if (err.response && err.response.data && err.response.data.detail) {
-      error.value = err.response.data.detail
-    } else {
-      error.value = 'Failed to load file content.'
-    }
+    error.value = getErrorMessage(err, 'Failed to load file content.')
     cleanupBlobUrl()
   } finally {
     loading.value = false
@@ -236,13 +213,6 @@ watch(
   },
 )
 
-const handleModelValueUpdate = (value) => {
-  emit('update:modelValue', value)
-  if (!value) {
-    resetModalState()
-  }
-}
-
 onUnmounted(() => {
   cleanupBlobUrl()
 })
@@ -250,12 +220,6 @@ useDialogFocusRestore(() => props.modelValue)
 </script>
 
 <style scoped>
-.h-100-dialog {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
 .preview-title {
   min-width: 0;
   white-space: normal;

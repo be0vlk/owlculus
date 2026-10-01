@@ -117,7 +117,6 @@
                         :level="0"
                         @delete="deleteFolder(templateKey, index)"
                         @update="updateFolder(templateKey, index, $event)"
-                        @add-subfolder="addSubfolder(templateKey, index, $event)"
                       />
                     </div>
 
@@ -215,23 +214,6 @@ const updateFolder = (templateKey, index, updatedFolder) => {
 
 const deleteFolder = (templateKey, index) => {
   templates.value[templateKey].folders.splice(index, 1)
-}
-
-const addSubfolder = (templateKey, parentIndex, path) => {
-  // Navigate to the correct subfolder array using the path
-  let current = templates.value[templateKey].folders[parentIndex]
-  for (let i = 0; i < path.length; i++) {
-    current = current.subfolders[path[i]]
-  }
-
-  if (!current.subfolders) {
-    current.subfolders = []
-  }
-  current.subfolders.push({
-    name: 'New Subfolder',
-    description: '',
-    subfolders: [],
-  })
 }
 
 onMounted(() => {

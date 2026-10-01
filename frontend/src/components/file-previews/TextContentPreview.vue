@@ -30,7 +30,7 @@
               size="small"
               variant="outlined"
               prepend-icon="mdi-content-copy"
-              @click="copyToClipboard"
+              @click="copyToClipboard(content)"
             >
               Copy All
             </v-btn>
@@ -73,6 +73,8 @@
 
 <script setup>
 import { ref, watch, nextTick } from 'vue'
+import { copyToClipboard } from '@/utils/clipboard'
+import { formatFileSize } from '@/utils/huntDisplayUtils'
 
 const props = defineProps({
   content: {
@@ -89,20 +91,6 @@ const searchTerm = ref('')
 const wordWrap = ref(false)
 const contentElement = ref(null)
 const displayContent = ref('')
-
-const formatFileSize = (bytes) => {
-  if (!bytes) return 'Unknown'
-  const units = ['B', 'KB', 'MB', 'GB']
-  let size = bytes
-  let unitIndex = 0
-
-  while (size >= 1024 && unitIndex < units.length - 1) {
-    size /= 1024
-    unitIndex++
-  }
-
-  return `${size.toFixed(unitIndex > 0 ? 1 : 0)} ${units[unitIndex]}`
-}
 
 const escapeHtml = (text) => {
   const div = document.createElement('div')
@@ -135,25 +123,7 @@ const highlightSearch = () => {
   }
 }
 
-const copyToClipboard = async () => {
-  try {
-    await navigator.clipboard.writeText(props.content)
-  } catch (err) {
-    console.error('Failed to copy text:', err)
-  }
-}
-
-watch(
-  () => props.content,
-  () => {
-    highlightSearch()
-  },
-  { immediate: true },
-)
-
-watch(searchTerm, () => {
-  highlightSearch()
-})
+watch([() => props.content, searchTerm], highlightSearch, { immediate: true })
 
 const reset = () => {
   searchTerm.value = ''
@@ -164,13 +134,10 @@ defineExpose({ reset })
 </script>
 
 <style scoped>
-.h-100 {
-  height: 100%;
-}
-
 .content-container {
   max-height: 60vh;
   overflow: auto;
+  scrollbar-width: thin;
   border: 1px solid rgb(var(--v-theme-outline), 0.2);
   margin: 0 16px 16px;
   border-radius: 8px;
@@ -217,24 +184,5 @@ defineExpose({ reset })
   .content-container {
     max-height: 70vh;
   }
-}
-
-.content-container::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-.content-container::-webkit-scrollbar-track {
-  background: rgb(var(--v-theme-surface-variant), 0.1);
-  border-radius: 4px;
-}
-
-.content-container::-webkit-scrollbar-thumb {
-  background: rgb(var(--v-theme-outline), 0.3);
-  border-radius: 4px;
-}
-
-.content-container::-webkit-scrollbar-thumb:hover {
-  background: rgb(var(--v-theme-outline), 0.5);
 }
 </style>
