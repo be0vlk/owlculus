@@ -52,7 +52,6 @@
       <v-text-field
         v-model="searchTerm"
         label="Search in file"
-        variant="outlined"
         density="compact"
         prepend-inner-icon="mdi-magnify"
         clearable

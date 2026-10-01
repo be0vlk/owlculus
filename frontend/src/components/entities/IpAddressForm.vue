@@ -11,8 +11,6 @@
         autofocus
         @update:model-value="updateField('ip_address', $event)"
         label="IP Address"
-        variant="outlined"
-        density="comfortable"
         prepend-inner-icon="mdi-ip"
         placeholder="192.0.2.1 or 2001:db8::1"
         required
@@ -24,8 +22,6 @@
         :model-value="modelValue.description"
         @update:model-value="updateField('description', $event)"
         label="Description (Optional)"
-        variant="outlined"
-        density="comfortable"
         rows="3"
         placeholder="Add any notes or context about this IP address"
       />

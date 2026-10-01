@@ -10,7 +10,6 @@
       <v-btn
         size="small"
         color="primary"
-        variant="flat"
         prepend-icon="mdi-plus"
         @click="openDialog()"
         :disabled="loading"
@@ -37,7 +36,7 @@
         <div class="text-body-medium text-medium-emphasis mb-4">
           Create task templates to standardize your investigation workflows
         </div>
-        <v-btn color="primary" prepend-icon="mdi-plus" variant="flat" @click="openDialog()">
+        <v-btn color="primary" prepend-icon="mdi-plus" @click="openDialog()">
           Create Your First Template
         </v-btn>
       </div>
@@ -150,7 +149,7 @@
         <v-card-actions class="pa-4 flex-wrap">
           <v-spacer />
           <v-btn :disabled="saving" variant="text" @click="showDialog = false">Cancel</v-btn>
-          <v-btn color="primary" variant="flat" :loading="saving" type="submit" :form="formId">
+          <v-btn color="primary" :loading="saving" type="submit" :form="formId">
             {{ editing ? 'Update Template' : 'Create Template' }}
           </v-btn>
         </v-card-actions>

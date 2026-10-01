@@ -9,8 +9,6 @@
       :hint="field.description"
       :persistent-hint="!!field.description"
       :readonly="readonly"
-      variant="outlined"
-      density="comfortable"
     />
 
     <!-- Number field -->
@@ -23,8 +21,6 @@
       :persistent-hint="!!field.description"
       :readonly="readonly"
       type="number"
-      variant="outlined"
-      density="comfortable"
     />
 
     <!-- Date field -->
@@ -37,8 +33,6 @@
       :persistent-hint="!!field.description"
       :readonly="readonly"
       type="date"
-      variant="outlined"
-      density="comfortable"
     />
 
     <!-- Boolean field (checkbox) -->
@@ -61,8 +55,6 @@
       :hint="field.description"
       :persistent-hint="!!field.description"
       :readonly="readonly"
-      variant="outlined"
-      density="comfortable"
       rows="3"
     />
 
@@ -76,8 +68,6 @@
       :hint="field.description"
       :persistent-hint="!!field.description"
       :readonly="readonly"
-      variant="outlined"
-      density="comfortable"
     />
 
     <!-- Fallback for unknown field type -->

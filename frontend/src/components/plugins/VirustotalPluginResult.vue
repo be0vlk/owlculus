@@ -424,12 +424,6 @@ const getDetectionCategoryColor = (category) => {
   font-size: 0.85em;
 }
 
-.text-truncate {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .detection-progress {
   box-shadow: inset 0 1px 2px rgb(0 0 0 / 10%);
 }

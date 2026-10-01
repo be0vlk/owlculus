@@ -21,7 +21,6 @@
             v-if="authStore.requiresAdmin()"
             color="primary"
             prepend-icon="mdi-plus"
-            variant="flat"
             @click="isNewCaseModalOpen = true"
           >
             New Case
@@ -84,12 +83,10 @@
                 v-model="searchQuery"
                 class="flex-grow-1"
                 clearable
-                density="comfortable"
                 hide-details
                 label="Search cases..."
                 prepend-inner-icon="mdi-magnify"
                 style="min-width: 200px; max-width: 280px"
-                variant="outlined"
               />
             </div>
           </v-col>

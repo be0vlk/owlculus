@@ -15,13 +15,7 @@
           </div>
         </div>
         <div class="d-flex align-center ga-2">
-          <v-btn
-            size="small"
-            color="primary"
-            prepend-icon="mdi-plus"
-            variant="flat"
-            @click="openClientModal()"
-          >
+          <v-btn size="small" color="primary" prepend-icon="mdi-plus" @click="openClientModal()">
             Add Client
           </v-btn>
           <v-tooltip location="bottom" text="Refresh client list">
@@ -54,12 +48,10 @@
               <v-text-field
                 v-model="searchQuery"
                 clearable
-                density="comfortable"
                 hide-details
                 label="Search clients..."
                 prepend-inner-icon="mdi-magnify"
                 class="operations-search"
-                variant="outlined"
               />
             </div>
           </v-col>

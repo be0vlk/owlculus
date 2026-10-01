@@ -20,10 +20,10 @@
     },
     "files": {
         "src/App.vue": {
-            "lines": 87.5,
-            "statements": 82.14,
-            "functions": 66.66,
-            "branches": 80
+            "lines": 85.18,
+            "statements": 80.64,
+            "functions": 64.7,
+            "branches": 78.78
         },
         "src/components/EvidenceList.vue": {
             "lines": 44.6,
@@ -38,8 +38,8 @@
             "branches": 90.47
         },
         "src/components/EvidenceTemplateSelectionModal.vue": {
-            "lines": 98.36,
-            "statements": 96.92,
+            "lines": 98.27,
+            "statements": 96.77,
             "functions": 100,
             "branches": 92.85
         },
@@ -110,14 +110,14 @@
             "branches": 62.5
         },
         "src/services/case.js": {
-            "lines": 36.84,
-            "statements": 36.84,
+            "lines": 36.36,
+            "statements": 36.36,
             "functions": 33.33,
             "branches": 50
         },
         "src/services/evidence.js": {
-            "lines": 14.28,
-            "statements": 14.28,
+            "lines": 13.04,
+            "statements": 13.04,
             "functions": 14.28,
             "branches": 0
         },
@@ -146,8 +146,8 @@
             "branches": 43.54
         },
         "src/stores/auth.js": {
-            "lines": 71.25,
-            "statements": 71.25,
+            "lines": 66.66,
+            "statements": 67.39,
             "functions": 72.72,
             "branches": 66.66
         },
@@ -166,7 +166,7 @@
         "src/views/Register.vue": {
             "lines": 91.83,
             "statements": 92.07,
-            "functions": 92.5,
+            "functions": 92.3,
             "branches": 90.62
         },
         "src/views/cases/CaseTasks.vue": {
@@ -176,7 +176,7 @@
             "branches": 73.33
         },
         "src/views/tasks/TaskDetail.vue": {
-            "lines": 92.53,
+            "lines": 92.48,
             "statements": 87.41,
             "functions": 87.01,
             "branches": 79.08

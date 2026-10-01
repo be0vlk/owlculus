@@ -12,22 +12,18 @@ export const userService = {
   },
 
   async createUser(userData) {
-    const response = await api.post('/api/users/', userData)
-    return response.data
+    return (await api.post('/api/users/', userData)).data
   },
 
   async updateUser(id, userData) {
-    const response = await api.put(`/api/users/${id}`, userData)
-    return response.data
+    return (await api.put(`/api/users/${id}`, userData)).data
   },
 
   async deleteUser(id) {
-    const response = await api.delete(`/api/users/${id}`)
-    return response.data
+    return (await api.delete(`/api/users/${id}`)).data
   },
 
   async resetPassword(id, newPassword) {
-    const response = await api.put(`/api/users/${id}/password`, { new_password: newPassword })
-    return response.data
+    return (await api.put(`/api/users/${id}/password`, { new_password: newPassword })).data
   },
 }

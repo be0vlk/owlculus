@@ -86,10 +86,6 @@ import { ref, computed, watch, useId } from 'vue'
 import HuntParameterForm from './HuntParameterForm.vue'
 
 const props = defineProps({
-  modelValue: {
-    type: Boolean,
-    default: false,
-  },
   hunt: {
     type: Object,
     default: null,
@@ -102,19 +98,16 @@ const props = defineProps({
   error: { type: String, default: null },
 })
 
-const emit = defineEmits(['update:modelValue', 'execute', 'cancel'])
+const emit = defineEmits(['execute', 'cancel'])
 
 // Local state
 const parameterForm = ref(null)
 const parameterFormId = useId()
 const parameterValues = ref({})
 
-// Computed properties
-const dialog = computed({
-  get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value),
-})
+const dialog = defineModel({ type: Boolean, default: false })
 
+// Computed properties
 const isFormValid = computed(() => !!props.caseId)
 
 // Methods
@@ -136,9 +129,9 @@ const handleCancel = () => {
 }
 
 watch(
-  [() => props.modelValue, () => props.hunt],
+  [dialog, () => props.hunt],
   () => {
-    if (props.modelValue) {
+    if (dialog.value) {
       parameterValues.value = {}
     }
   },

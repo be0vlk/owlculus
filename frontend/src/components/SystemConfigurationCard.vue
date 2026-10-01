@@ -27,8 +27,6 @@
               item-title="display_name"
               item-value="value"
               label="Case Number Format"
-              variant="outlined"
-              density="comfortable"
               prepend-inner-icon="mdi-format-list-numbered"
               @update:model-value="onTemplateChange"
             />
@@ -39,8 +37,6 @@
               v-model="caseNumberPrefix"
               :disabled="configLoading || !!loadError"
               label="Prefix (2-8 letters/numbers)"
-              variant="outlined"
-              density="comfortable"
               prepend-inner-icon="mdi-alphabetical-variant"
               :rules="[validatePrefix]"
               @update:model-value="updatePreview"
@@ -85,7 +81,6 @@
       </v-btn>
       <v-btn
         color="primary"
-        variant="flat"
         prepend-icon="mdi-content-save"
         :loading="configLoading"
         :disabled="!isConfigChanged || !isConfigValid || configLoading || !!loadError"

@@ -7,7 +7,6 @@
       v-model="localParams.target"
       :label="targetText[localParams.analysis_type].label"
       :placeholder="targetText[localParams.analysis_type].placeholder"
-      variant="outlined"
       density="compact"
       @update:model-value="updateParams"
     />
@@ -19,7 +18,6 @@
       :items="analysisTypes"
       item-title="title"
       item-value="value"
-      variant="outlined"
       density="compact"
       @update:model-value="updateParams"
     />
@@ -39,7 +37,6 @@
       label="API Timeout (seconds)"
       placeholder="30"
       type="number"
-      variant="outlined"
       density="compact"
       min="5"
       max="120"

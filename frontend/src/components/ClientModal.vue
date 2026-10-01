@@ -19,8 +19,6 @@
             required
             :rules="[(v) => !!v?.trim() || 'Name is required']"
             autofocus
-            variant="outlined"
-            density="comfortable"
           />
 
           <v-text-field
@@ -28,25 +26,11 @@
             label="Email"
             :rules="[(v) => !v || /.+@.+\..+/.test(v) || 'Email must be valid']"
             type="email"
-            variant="outlined"
-            density="comfortable"
           />
 
-          <v-text-field
-            v-model="form.phone"
-            label="Phone"
-            type="tel"
-            variant="outlined"
-            density="comfortable"
-          />
+          <v-text-field v-model="form.phone" label="Phone" type="tel" />
 
-          <v-textarea
-            v-model="form.address"
-            label="Address"
-            rows="3"
-            variant="outlined"
-            density="comfortable"
-          />
+          <v-textarea v-model="form.address" label="Address" rows="3" />
         </v-form>
       </v-card-text>
 
@@ -55,7 +39,6 @@
         <v-btn :disabled="isSubmitting" variant="text" @click="$emit('close')"> Cancel </v-btn>
         <v-btn
           color="primary"
-          variant="flat"
           type="submit"
           :form="formId"
           :disabled="isSubmitting"

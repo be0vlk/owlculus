@@ -10,7 +10,6 @@
           size="small"
           ref="inviteAction"
           color="primary"
-          variant="flat"
           prepend-icon="mdi-email-plus"
           @click="openCreateDialog"
         >
@@ -57,8 +56,6 @@
             v-model="statusFilter"
             :items="statusOptions"
             label="Invitation status"
-            variant="outlined"
-            density="comfortable"
             hide-details
           />
         </v-col>
@@ -71,8 +68,6 @@
               v-model="searchQuery"
               prepend-inner-icon="mdi-magnify"
               label="Search invites..."
-              variant="outlined"
-              density="comfortable"
               hide-details
               class="operations-search"
               clearable

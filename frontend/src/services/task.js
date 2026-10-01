@@ -2,80 +2,77 @@ import api from './api'
 
 export const taskService = {
   async getTemplates(includeInactive = false) {
-    const response = await api.get('/api/tasks/templates', {
-      params: { include_inactive: includeInactive },
-    })
-    return response.data
+    return (
+      await api.get('/api/tasks/templates', {
+        params: { include_inactive: includeInactive },
+      })
+    ).data
   },
 
   async createCustomTemplate(template) {
-    const response = await api.post('/api/tasks/templates', template)
-    return response.data
+    return (await api.post('/api/tasks/templates', template)).data
   },
 
   async updateTemplate(templateId, updates) {
-    const response = await api.put(`/api/tasks/templates/${templateId}`, updates)
-    return response.data
+    return (await api.put(`/api/tasks/templates/${templateId}`, updates)).data
   },
 
   async deleteTemplate(templateId) {
-    const response = await api.delete(`/api/tasks/templates/${templateId}`)
-    return response.data
+    return (await api.delete(`/api/tasks/templates/${templateId}`)).data
   },
 
   async getTasks(filters = {}) {
-    const response = await api.get('/api/tasks/', { params: filters })
-    return response.data
+    return (await api.get('/api/tasks/', { params: filters })).data
   },
 
   async getTask(taskId) {
-    const response = await api.get(`/api/tasks/${taskId}`)
-    return response.data
+    return (await api.get(`/api/tasks/${taskId}`)).data
   },
 
   async createTask(taskData) {
-    const response = await api.post('/api/tasks/', taskData)
-    return response.data
+    return (await api.post('/api/tasks/', taskData)).data
   },
 
   async updateTask(taskId, updates) {
-    const response = await api.put(`/api/tasks/${taskId}`, updates)
-    return response.data
+    return (await api.put(`/api/tasks/${taskId}`, updates)).data
   },
 
   async deleteTask(taskId) {
-    const response = await api.delete(`/api/tasks/${taskId}`)
-    return response.data
+    return (await api.delete(`/api/tasks/${taskId}`)).data
   },
 
   async assignTask(taskId, userId) {
-    const response = await api.post(`/api/tasks/${taskId}/assign`, null, {
-      params: { user_id: userId },
-    })
-    return response.data
+    return (
+      await api.post(`/api/tasks/${taskId}/assign`, null, {
+        params: { user_id: userId },
+      })
+    ).data
   },
 
   async updateStatus(taskId, status) {
-    const response = await api.put(`/api/tasks/${taskId}/status`, null, {
-      params: { status },
-    })
-    return response.data
+    return (
+      await api.put(`/api/tasks/${taskId}/status`, null, {
+        params: { status },
+      })
+    ).data
   },
 
   async bulkAssign(taskIds, userId) {
-    const response = await api.post('/api/tasks/bulk/assign', {
-      task_ids: taskIds,
-      user_id: userId,
-    })
-    return response.data
+    return (
+      await api.post('/api/tasks/bulk/assign', {
+        task_ids: taskIds,
+        user_id: userId,
+      })
+    ).data
   },
 
   async bulkUpdateStatus(taskIds, status) {
-    const response = await api.post('/api/tasks/bulk/status', {
-      task_ids: taskIds,
-      status,
-    })
-    return response.data
+    return (
+      await api.post('/api/tasks/bulk/status', {
+        task_ids: taskIds,
+        status,
+      })
+    ).data
   },
 }
 

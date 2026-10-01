@@ -13,7 +13,6 @@
     <v-btn
       v-if="showSubmit"
       :color="submitColor"
-      variant="flat"
       :prepend-icon="submitIcon"
       :type="submitForm ? 'submit' : 'button'"
       :form="submitForm"

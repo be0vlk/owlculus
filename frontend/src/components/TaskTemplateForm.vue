@@ -10,8 +10,6 @@
         <v-text-field
           v-model="form.name"
           label="Template Name"
-          variant="outlined"
-          density="comfortable"
           prepend-inner-icon="mdi-identifier"
           :rules="nameRules"
           :disabled="isEdit"
@@ -25,8 +23,6 @@
         <v-text-field
           v-model="form.display_name"
           label="Display Name"
-          variant="outlined"
-          density="comfortable"
           prepend-inner-icon="mdi-tag"
           :rules="displayNameRules"
           hint="User-friendly name"
@@ -39,8 +35,6 @@
         <v-textarea
           v-model="form.description"
           label="Description"
-          variant="outlined"
-          density="comfortable"
           prepend-inner-icon="mdi-text"
           :rules="[required('Description')]"
           rows="2"
@@ -142,7 +136,6 @@
                   <v-text-field
                     v-model="field.name"
                     label="Field Name"
-                    variant="outlined"
                     density="compact"
                     :rules="[
                       required('Field name'),
@@ -158,7 +151,6 @@
                   <v-text-field
                     v-model="field.label"
                     label="Display Label"
-                    variant="outlined"
                     density="compact"
                     :rules="[required('Label')]"
                     hint="User-friendly field name"
@@ -172,7 +164,6 @@
                     v-model="field.type"
                     :items="fieldTypes"
                     label="Field Type"
-                    variant="outlined"
                     density="compact"
                   />
                 </v-col>
@@ -191,7 +182,6 @@
                   <v-textarea
                     v-model="field.description"
                     label="Field Description (Optional)"
-                    variant="outlined"
                     density="compact"
                     rows="2"
                     hint="Help text for users"

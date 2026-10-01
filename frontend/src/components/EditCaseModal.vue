@@ -27,8 +27,6 @@
                 v-model="formData.title"
                 autofocus
                 label="Case Title"
-                variant="outlined"
-                density="comfortable"
                 prepend-inner-icon="mdi-briefcase"
                 :rules="[rules.required, rules.titleLength]"
                 counter="100"
@@ -41,8 +39,6 @@
                 v-model="formData.status"
                 :items="statusOptions"
                 label="Case Status"
-                variant="outlined"
-                density="comfortable"
                 prepend-inner-icon="mdi-flag"
                 :rules="[rules.required]"
                 :readonly="updating"

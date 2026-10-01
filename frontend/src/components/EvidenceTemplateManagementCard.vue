@@ -10,7 +10,6 @@
       <v-btn
         size="small"
         color="primary"
-        variant="flat"
         prepend-icon="mdi-content-save"
         :loading="saving"
         :disabled="saving || loading || !!error"

@@ -52,6 +52,28 @@ const owlculusDarkTheme = {
   },
 }
 
+export const defaults = {
+  VBtn: {
+    variant: 'flat',
+    style: 'text-transform: none;',
+  },
+  VCard: {
+    elevation: 2,
+  },
+  VTextField: {
+    variant: 'outlined',
+    density: 'comfortable',
+  },
+  VSelect: {
+    variant: 'outlined',
+    density: 'comfortable',
+  },
+  VTextarea: {
+    variant: 'outlined',
+    density: 'comfortable',
+  },
+}
+
 export default createVuetify({
   components,
   directives,
@@ -62,25 +84,5 @@ export default createVuetify({
       owlculusDark: owlculusDarkTheme,
     },
   },
-  defaults: {
-    VBtn: {
-      variant: 'flat',
-      style: 'text-transform: none;',
-    },
-    VCard: {
-      elevation: 2,
-    },
-    VTextField: {
-      variant: 'outlined',
-      density: 'comfortable',
-    },
-    VSelect: {
-      variant: 'outlined',
-      density: 'comfortable',
-    },
-    VTextarea: {
-      variant: 'outlined',
-      density: 'comfortable',
-    },
-  },
+  defaults,
 })

@@ -16,7 +16,6 @@
       v-model="localParams.domain"
       :label="inputLabel"
       :placeholder="inputPlaceholder"
-      variant="outlined"
       density="compact"
       @update:model-value="updateParams"
     />
@@ -31,7 +30,6 @@
       multiple
       chips
       persistent-hint
-      variant="outlined"
       density="compact"
       @update:model-value="updateParams"
     />
@@ -42,7 +40,6 @@
       label="Timeout"
       placeholder="Query timeout in seconds"
       type="number"
-      variant="outlined"
       density="compact"
       @update:model-value="updateParams"
     />
@@ -52,7 +49,6 @@
       v-model="localParams.nameservers"
       label="Custom Nameservers (Optional)"
       placeholder="Comma-separated custom DNS servers (e.g., 8.8.8.8,1.1.1.1)"
-      variant="outlined"
       density="compact"
       @update:model-value="updateParams"
     />

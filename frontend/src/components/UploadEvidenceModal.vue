@@ -21,8 +21,6 @@
             item-title="label"
             item-value="value"
             label="Destination Folder"
-            variant="outlined"
-            density="comfortable"
             placeholder="Select a folder or upload to root"
             clearable
             class="mb-4"
@@ -38,8 +36,6 @@
             v-model="form.category"
             :items="CATEGORIES"
             label="Category (Optional)"
-            variant="outlined"
-            density="comfortable"
             placeholder="Select a category"
             clearable
             class="mb-4"
@@ -50,8 +46,6 @@
             v-model="form.description"
             label="Description (Optional)"
             rows="3"
-            variant="outlined"
-            density="comfortable"
             class="mb-4"
           />
 
@@ -142,7 +136,6 @@
         <v-btn :disabled="uploading" variant="text" @click="$emit('close')"> Cancel </v-btn>
         <v-btn
           color="primary"
-          variant="flat"
           @click="handleSubmit"
           :disabled="uploading || selectedFiles.length === 0"
           :loading="uploading"

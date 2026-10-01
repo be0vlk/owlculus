@@ -44,8 +44,6 @@
                   v-model="formData.username"
                   label="Username"
                   :disabled="!!user"
-                  variant="outlined"
-                  density="comfortable"
                   prepend-inner-icon="mdi-account"
                   :rules="usernameRules"
                   required
@@ -62,8 +60,6 @@
                   v-model="formData.email"
                   label="Email Address"
                   type="email"
-                  variant="outlined"
-                  density="comfortable"
                   prepend-inner-icon="mdi-email"
                   :rules="emailRules"
                   required
@@ -78,8 +74,6 @@
                   v-model="formData.password"
                   label="Password"
                   :type="showPassword ? 'text' : 'password'"
-                  variant="outlined"
-                  density="comfortable"
                   prepend-inner-icon="mdi-lock"
                   :append-inner-icon="showPassword ? 'mdi-eye' : 'mdi-eye-off'"
                   @click:append-inner="showPassword = !showPassword"
@@ -98,8 +92,6 @@
                   item-title="title"
                   item-value="value"
                   label="User Role"
-                  variant="outlined"
-                  density="comfortable"
                   prepend-inner-icon="mdi-shield-account"
                   required
                   hint="Determines user permissions and access level"

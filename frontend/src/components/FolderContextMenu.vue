@@ -62,10 +62,6 @@ import { computed } from 'vue'
 import { copyToClipboard } from '@/utils/clipboard'
 
 const props = defineProps({
-  modelValue: {
-    type: Boolean,
-    default: false,
-  },
   activator: {
     type: [String, Object],
     default: null,
@@ -80,14 +76,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits([
-  'update:modelValue',
-  'createSubfolder',
-  'uploadFiles',
-  'rename',
-  'delete',
-  'extractMetadata',
-])
+const emit = defineEmits(['createSubfolder', 'uploadFiles', 'rename', 'delete', 'extractMetadata'])
 
 const METADATA_EXTENSIONS = new Set(
   'jpg jpeg png gif bmp tiff tif webp heic heif raw cr2 nef arw dng mp4 avi mov wmv flv webm mkv m4v 3gp pdf doc docx xls xlsx ppt pptx'.split(
@@ -95,10 +84,7 @@ const METADATA_EXTENSIONS = new Set(
   ),
 )
 
-const menu = computed({
-  get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value),
-})
+const menu = defineModel({ type: Boolean, default: false })
 
 const canDelete = computed(() => props.userRole !== 'Analyst')
 const canUpload = computed(() => props.item?.is_folder && canDelete.value)

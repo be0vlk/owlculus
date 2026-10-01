@@ -32,7 +32,6 @@
                   label="Username"
                   prepend-inner-icon="mdi-account"
                   required
-                  variant="outlined"
                 />
 
                 <v-text-field
@@ -43,7 +42,6 @@
                   prepend-inner-icon="mdi-lock"
                   required
                   type="password"
-                  variant="outlined"
                 />
 
                 <!-- Error Alert -->

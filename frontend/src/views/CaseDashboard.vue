@@ -153,12 +153,7 @@
               <v-card-actions class="pa-4">
                 <v-spacer />
                 <div v-if="!isEditingNotes">
-                  <v-btn
-                    color="primary"
-                    prepend-icon="mdi-pencil"
-                    variant="flat"
-                    @click="startEditingNotes"
-                  >
+                  <v-btn color="primary" prepend-icon="mdi-pencil" @click="startEditingNotes">
                     Edit Notes
                   </v-btn>
                 </div>
@@ -168,7 +163,6 @@
                     :loading="savingNotes"
                     color="primary"
                     prepend-icon="mdi-content-save"
-                    variant="flat"
                     @click="saveNotes"
                   >
                     Save
@@ -292,9 +286,7 @@
       <v-card-actions>
         <v-spacer />
         <v-btn variant="text" @click="handleSkipEditEntity"> No, thanks </v-btn>
-        <v-btn color="primary" variant="flat" @click="handleEditNewEntity">
-          Yes, edit entity
-        </v-btn>
+        <v-btn color="primary" @click="handleEditNewEntity"> Yes, edit entity </v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>

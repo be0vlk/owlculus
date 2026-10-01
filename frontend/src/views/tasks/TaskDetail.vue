@@ -138,7 +138,6 @@
                           <v-btn
                             size="small"
                             color="primary"
-                            variant="flat"
                             class="ml-2"
                             @click="saveFieldEdit(field)"
                           >
@@ -281,19 +280,13 @@
       </v-card-title>
       <v-divider />
       <v-card-text class="pa-4">
-        <v-select
-          v-model="newStatus"
-          :items="TASK_STATUS_OPTIONS"
-          label="New Status"
-          variant="outlined"
-          density="comfortable"
-        />
+        <v-select v-model="newStatus" :items="TASK_STATUS_OPTIONS" label="New Status" />
       </v-card-text>
       <v-divider />
       <v-card-actions class="pa-4 flex-wrap">
         <v-spacer />
         <v-btn variant="text" @click="showStatusDialog = false">Cancel</v-btn>
-        <v-btn color="primary" variant="flat" @click="handleStatusUpdate">Update</v-btn>
+        <v-btn color="primary" @click="handleStatusUpdate">Update</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>

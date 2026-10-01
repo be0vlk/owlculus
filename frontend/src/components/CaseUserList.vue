@@ -67,12 +67,10 @@
         :autofocus="autofocus"
         :items="availableUsers"
         clearable
-        density="comfortable"
         item-title="displayText"
         item-value="id"
         label="Select User"
         placeholder="Choose a user to add"
-        variant="outlined"
       />
     </v-col>
     <v-col cols="12" md="3">

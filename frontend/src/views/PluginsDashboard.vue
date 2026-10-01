@@ -164,7 +164,6 @@
                       class="mb-4"
                       color="primary"
                       prepend-icon="mdi-play"
-                      variant="flat"
                       type="submit"
                     >
                       <template v-if="missingKeys(plugin).length">API Key Required</template>

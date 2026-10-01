@@ -16,9 +16,12 @@
     >
       <!-- Title Column -->
       <template #[`item.title`]="{ item }">
-        <router-link :to="`/case/${item.case_id}/tasks/${item.id}`" class="owlculus-link" @click.stop>{{
-          item.title
-        }}</router-link>
+        <router-link
+          :to="`/case/${item.case_id}/tasks/${item.id}`"
+          class="owlculus-link"
+          @click.stop
+          >{{ item.title }}</router-link
+        >
       </template>
 
       <!-- Priority Column -->
@@ -140,7 +143,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import { useTaskTable } from '@/composables/useTaskTable'
 import { useTaskStore } from '@/stores/taskStore'
 import { formatDateOnly } from '@/composables/dateUtils'
@@ -155,7 +158,7 @@ import {
 import TaskAssignDialog from './TaskAssignDialog.vue'
 import ConfirmationDialog from '@/components/ConfirmationDialog.vue'
 
-const props = defineProps({
+defineProps({
   tasks: {
     type: Array,
     required: true,
@@ -168,21 +171,12 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
-  modelValue: {
-    type: Array,
-    default: () => [],
-  },
 })
-
-const emit = defineEmits(['update:modelValue'])
 
 const taskStore = useTaskStore()
 const confirmDialog = ref(null)
 
-const selectedItems = computed({
-  get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value),
-})
+const selectedItems = defineModel({ type: Array, default: () => [] })
 
 const {
   snackbar,

@@ -6,8 +6,6 @@
         :model-value="fieldValue"
         @update:model-value="$emit('update:field', $event)"
         :label="field.label"
-        variant="outlined"
-        density="comfortable"
         rows="3"
         auto-grow
         clearable
@@ -23,8 +21,6 @@
             ? [identifierRules[field.id]]
             : []
         "
-        variant="outlined"
-        density="comfortable"
         clearable
         :prepend-inner-icon="fieldIcon(field.type)"
       />
@@ -33,8 +29,6 @@
         :model-value="sourceValue"
         @update:model-value="$emit('update:source', $event)"
         :label="`Source for ${field.label}`"
-        variant="outlined"
-        density="comfortable"
         clearable
         prepend-inner-icon="mdi-source-branch"
         bg-color="surface-variant"

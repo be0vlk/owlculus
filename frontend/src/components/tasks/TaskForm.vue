@@ -11,8 +11,6 @@
           v-model="formData.title"
           :rules="[(v) => !!v || 'Title is required']"
           label="Title"
-          variant="outlined"
-          density="comfortable"
           class="mb-4"
         />
 
@@ -21,8 +19,6 @@
           :rules="[(v) => !!v || 'Description is required']"
           label="Description"
           rows="3"
-          variant="outlined"
-          density="comfortable"
           class="mb-4"
         />
 
@@ -34,8 +30,6 @@
           item-title="display_name"
           item-value="id"
           label="Template (Optional)"
-          variant="outlined"
-          density="comfortable"
           class="mb-4"
         />
 
@@ -43,8 +37,6 @@
           v-model="formData.priority"
           :items="TASK_PRIORITY_OPTIONS"
           label="Priority"
-          variant="outlined"
-          density="comfortable"
           class="mb-4"
         />
 
@@ -55,8 +47,6 @@
           item-title="username"
           item-value="id"
           label="Assign To"
-          variant="outlined"
-          density="comfortable"
           class="mb-4"
         />
 
@@ -65,8 +55,6 @@
           clearable
           label="Due Date"
           type="date"
-          variant="outlined"
-          density="comfortable"
           class="mb-4"
         />
 
@@ -88,14 +76,7 @@
     <v-card-actions class="pa-4">
       <v-spacer />
       <v-btn :disabled="loading" variant="text" @click="$emit('cancel')">Cancel</v-btn>
-      <v-btn
-        :disabled="!valid"
-        :loading="loading"
-        color="primary"
-        variant="flat"
-        type="submit"
-        :form="formId"
-      >
+      <v-btn :disabled="!valid" :loading="loading" color="primary" type="submit" :form="formId">
         {{ isEdit ? 'Update' : 'Create' }}
       </v-btn>
     </v-card-actions>

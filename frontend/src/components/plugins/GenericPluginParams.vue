@@ -38,7 +38,6 @@
         :hint="param.description"
         persistent-hint
         type="number"
-        variant="outlined"
         density="compact"
         @update:model-value="updateParams"
       />
@@ -52,7 +51,6 @@
         :rules="parameterRules(param, paramName)"
         :hint="param.description"
         persistent-hint
-        variant="outlined"
         density="compact"
         @update:model-value="updateParams"
       />

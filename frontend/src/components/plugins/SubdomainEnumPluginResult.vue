@@ -330,11 +330,4 @@ code {
 .subdomain-results-grid::-webkit-scrollbar-thumb:hover {
   background: rgb(var(--v-theme-primary), 0.5);
 }
-
-/* Ensure text doesn't overflow */
-.text-truncate {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 </style>

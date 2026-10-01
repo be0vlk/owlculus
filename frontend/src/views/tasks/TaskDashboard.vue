@@ -87,12 +87,10 @@
               <v-text-field
                 v-model="searchQuery"
                 clearable
-                density="comfortable"
                 hide-details
                 label="Search tasks..."
                 prepend-inner-icon="mdi-magnify"
                 class="operations-search"
-                variant="outlined"
               />
             </div>
           </v-col>

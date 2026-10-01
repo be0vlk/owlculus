@@ -10,7 +10,6 @@
       <v-btn
         size="small"
         color="primary"
-        variant="flat"
         prepend-icon="mdi-plus"
         @click="openDialog()"
         :disabled="loading"
@@ -37,7 +36,7 @@
         <div class="text-body-medium text-medium-emphasis mb-4">
           Add API keys to enable external service integrations and plugins
         </div>
-        <v-btn color="primary" prepend-icon="mdi-plus" variant="flat" @click="openDialog()">
+        <v-btn color="primary" prepend-icon="mdi-plus" @click="openDialog()">
           Add Your First API Key
         </v-btn>
       </div>
@@ -146,8 +145,6 @@
                     item-title="text"
                     item-value="value"
                     label="Provider"
-                    variant="outlined"
-                    density="comfortable"
                     prepend-inner-icon="mdi-web"
                     :rules="[validateProvider]"
                     @update:model-value="suggestName"
@@ -167,8 +164,6 @@
                   <v-text-field
                     v-model="form.provider"
                     label="Custom Provider Name"
-                    variant="outlined"
-                    density="comfortable"
                     prepend-inner-icon="mdi-identifier"
                     :rules="[validateProvider]"
                     hint="Use lowercase letters, numbers, underscores, and hyphens only"
@@ -182,8 +177,6 @@
                 <v-text-field
                   v-model="form.name"
                   label="Display Name"
-                  variant="outlined"
-                  density="comfortable"
                   prepend-inner-icon="mdi-tag"
                   :rules="[(v) => !!v || 'Name is required']"
                   :hint="editing ? undefined : 'Friendly name for this API key'"
@@ -196,8 +189,6 @@
                 <v-text-field
                   v-model="form.api_key"
                   label="API Key"
-                  variant="outlined"
-                  density="comfortable"
                   prepend-inner-icon="mdi-key"
                   :type="showKey ? 'text' : 'password'"
                   :append-inner-icon="showKey ? 'mdi-eye' : 'mdi-eye-off'"
@@ -222,14 +213,7 @@
         <v-card-actions class="pa-4 flex-wrap">
           <v-spacer />
           <v-btn :disabled="saving" variant="text" @click="showDialog = false"> Cancel </v-btn>
-          <v-btn
-            color="primary"
-            variant="flat"
-            :loading="saving"
-            :disabled="!valid"
-            type="submit"
-            :form="formId"
-          >
+          <v-btn color="primary" :loading="saving" :disabled="!valid" type="submit" :form="formId">
             {{ editing ? 'Update API Key' : 'Add API Key' }}
           </v-btn>
         </v-card-actions>

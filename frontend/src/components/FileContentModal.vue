@@ -81,22 +81,13 @@ import TextContentPreview from './file-previews/TextContentPreview.vue'
 import ImageContentPreview from './file-previews/ImageContentPreview.vue'
 
 const props = defineProps({
-  modelValue: {
-    type: Boolean,
-    default: false,
-  },
   evidenceItem: {
     type: Object,
     default: null,
   },
 })
 
-const emit = defineEmits(['update:modelValue'])
-
-const show = computed({
-  get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value),
-})
+const show = defineModel({ type: Boolean, default: false })
 
 const loading = ref(false)
 const error = ref('')
@@ -193,7 +184,7 @@ const resetModalState = () => {
 }
 
 watch(
-  () => props.modelValue,
+  show,
   (newValue) => {
     if (newValue && props.evidenceItem) {
       fetchFileContent(props.evidenceItem)
@@ -216,7 +207,7 @@ watch(
 onUnmounted(() => {
   cleanupBlobUrl()
 })
-useDialogFocusRestore(() => props.modelValue)
+useDialogFocusRestore(show)
 </script>
 
 <style scoped>

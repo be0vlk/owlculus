@@ -227,15 +227,10 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
 import { copyToClipboard } from '@/utils/clipboard'
 import { formatParameterName } from '@/utils/huntDisplayUtils'
 
-const props = defineProps({
-  modelValue: {
-    type: Boolean,
-    default: false,
-  },
+defineProps({
   metadata: {
     type: Object,
     default: null,
@@ -250,12 +245,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['update:modelValue'])
-
-const show = computed({
-  get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value),
-})
+const show = defineModel({ type: Boolean, default: false })
 
 const FILE_FIELDS = [
   ['Filename', 'filename'],

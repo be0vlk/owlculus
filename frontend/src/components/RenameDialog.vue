@@ -14,8 +14,6 @@
             label="Name"
             :rules="nameRules"
             required
-            variant="outlined"
-            density="comfortable"
             :prepend-inner-icon="item?.is_folder ? 'mdi-folder' : 'mdi-file'"
           ></v-text-field>
 
@@ -50,22 +48,18 @@ export const nameRules = [
 <script setup>
 import { getErrorMessage } from '@/utils/errorMessage'
 import { useDialogFocusRestore } from '@/composables/useDialogFocusRestore'
-import { ref, computed, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { evidenceService } from '../services/evidence'
 import ModalActions from './ModalActions.vue'
 
 const props = defineProps({
-  modelValue: {
-    type: Boolean,
-    default: false,
-  },
   item: {
     type: Object,
     default: null,
   },
 })
 
-const emit = defineEmits(['update:modelValue', 'renamed'])
+const emit = defineEmits(['renamed'])
 
 // Reactive data
 const form = ref()
@@ -74,11 +68,7 @@ const loading = ref(false)
 const error = ref('')
 const newName = ref('')
 
-// Computed
-const dialog = computed({
-  get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value),
-})
+const dialog = defineModel({ type: Boolean, default: false })
 
 // Methods
 const rename = async () => {

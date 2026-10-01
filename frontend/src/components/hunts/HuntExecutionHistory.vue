@@ -9,8 +9,6 @@
               v-model="searchQuery"
               prepend-inner-icon="mdi-magnify"
               label="Search executions..."
-              variant="outlined"
-              density="comfortable"
               clearable
               hide-details
             />
@@ -20,8 +18,6 @@
               v-model="statusFilter"
               :items="statusOptions"
               label="Status"
-              variant="outlined"
-              density="comfortable"
               clearable
               hide-details
             />
@@ -31,8 +27,6 @@
               v-model="categoryFilter"
               :items="categoryOptions"
               label="Category"
-              variant="outlined"
-              density="comfortable"
               clearable
               hide-details
             />

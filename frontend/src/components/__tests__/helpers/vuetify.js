@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils'
 import { createVuetify } from 'vuetify'
 import * as components from 'vuetify/components'
 import * as directives from 'vuetify/directives'
+import { defaults } from '@/plugins/vuetify'
 
 const wrappers = []
 
@@ -32,7 +33,7 @@ export function mountWithVuetify(component, options = {}) {
       ...options.global,
       plugins: [
         ...(options.global?.plugins || []),
-        createVuetify({ components, directives, theme: false }),
+        createVuetify({ components, directives, defaults, theme: false }),
       ],
     },
   })

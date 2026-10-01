@@ -21,8 +21,6 @@
             v-model="formData.title"
             autofocus
             label="Title"
-            variant="outlined"
-            density="comfortable"
             :rules="[(v) => !!v || 'Title is required']"
             required
             class="mb-4"
@@ -34,8 +32,6 @@
             item-title="name"
             item-value="id"
             label="Client"
-            variant="outlined"
-            density="comfortable"
             :rules="[(v) => !!v || 'Client is required']"
             required
             class="mb-4"

@@ -119,7 +119,6 @@
           </v-btn>
           <v-btn
             color="primary"
-            variant="flat"
             prepend-icon="mdi-content-save"
             @click="handleSubmit()"
             :disabled="updating"
@@ -133,7 +132,6 @@
           <v-btn
             color="primary"
             prepend-icon="mdi-pencil"
-            variant="flat"
             :disabled="closing"
             @click="startEditing"
           >

@@ -9,8 +9,6 @@
               v-model="searchQuery"
               prepend-inner-icon="mdi-magnify"
               label="Search hunts..."
-              variant="outlined"
-              density="comfortable"
               clearable
               hide-details
             />
@@ -20,8 +18,6 @@
               v-model="selectedCategory"
               :items="categoryOptions"
               label="Category"
-              variant="outlined"
-              density="comfortable"
               clearable
               hide-details
             />

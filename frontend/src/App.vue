@@ -96,6 +96,8 @@ body {
     'Open Sans',
     'Helvetica Neue',
     sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

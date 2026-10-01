@@ -13,7 +13,6 @@
         <v-text-field
           v-model="localFolder.name"
           placeholder="Folder name"
-          variant="outlined"
           density="compact"
           hide-details
           class="folder-name-field"
@@ -23,7 +22,6 @@
         <v-text-field
           v-model="localFolder.description"
           placeholder="Description (optional)"
-          variant="outlined"
           density="compact"
           hide-details
           class="folder-desc-field"

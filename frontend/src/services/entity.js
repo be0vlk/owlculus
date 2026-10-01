@@ -19,20 +19,19 @@ export const entityService = {
   },
 
   async getDuplicateAdvisories(caseId, payload, excludeId) {
-    const response = await api.post(`/api/cases/${caseId}/entities/duplicate-advisories`, payload, {
-      params: { exclude_id: excludeId },
-    })
-    return response.data
+    return (
+      await api.post(`/api/cases/${caseId}/entities/duplicate-advisories`, payload, {
+        params: { exclude_id: excludeId },
+      })
+    ).data
   },
 
   async createEntity(caseId, entityData) {
-    const response = await api.post(`/api/cases/${caseId}/entities`, entityData)
-    return response.data
+    return (await api.post(`/api/cases/${caseId}/entities`, entityData)).data
   },
 
   async updateEntity(caseId, entityId, entityData) {
-    const response = await api.put(`/api/cases/${caseId}/entities/${entityId}`, entityData)
-    return response.data
+    return (await api.put(`/api/cases/${caseId}/entities/${entityId}`, entityData)).data
   },
 
   async deleteEntity(caseId, entityId) {
@@ -40,8 +39,7 @@ export const entityService = {
   },
 
   async getEntity(caseId, entityId) {
-    const response = await api.get(`/api/cases/${caseId}/entities/${entityId}`)
-    return response.data
+    return (await api.get(`/api/cases/${caseId}/entities/${entityId}`)).data
   },
 
   async exportEntities(caseId, { format = 'csv', entityTypes = [], search = '' } = {}) {

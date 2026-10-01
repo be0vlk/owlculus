@@ -13,8 +13,6 @@
           v-model="formData.status"
           :items="TASK_STATUS_OPTIONS"
           label="Status"
-          variant="outlined"
-          density="comfortable"
           class="mb-4"
         />
 
@@ -24,8 +22,6 @@
           v-model="formData.due_date"
           label="Due Date"
           type="date"
-          variant="outlined"
-          density="comfortable"
           clearable
           class="mb-4"
         />
@@ -52,7 +48,6 @@
         :disabled="!valid || !hasChanges"
         :loading="loading"
         color="primary"
-        variant="flat"
         type="submit"
         :form="formId"
       >

@@ -18,7 +18,6 @@
       :label="queryText[searchType].label"
       :placeholder="queryText[searchType].placeholder"
       :hint="queryText[searchType].hint"
-      variant="outlined"
       density="compact"
       persistent-hint
       @update:model-value="updateParams"

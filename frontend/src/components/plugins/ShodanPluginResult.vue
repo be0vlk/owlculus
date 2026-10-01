@@ -300,8 +300,4 @@ const shodanResults = computed(() => dataResults.value.map((item) => item.data))
     rgb(var(--v-theme-primary), 0.03)
   );
 }
-
-.cursor-pointer {
-  cursor: pointer;
-}
 </style>

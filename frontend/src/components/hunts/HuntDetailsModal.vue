@@ -157,24 +157,17 @@ import { formatParameterName, getCategoryIcon } from '@/utils/huntDisplayUtils'
 import { computed } from 'vue'
 
 const props = defineProps({
-  modelValue: {
-    type: Boolean,
-    default: false,
-  },
   hunt: {
     type: Object,
     default: null,
   },
 })
 
-const emit = defineEmits(['update:modelValue', 'execute', 'close'])
+const emit = defineEmits(['execute', 'close'])
+
+const dialog = defineModel({ type: Boolean, default: false })
 
 // Computed properties
-const dialog = computed({
-  get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value),
-})
-
 const categoryColor = computed(() => {
   const colorMap = {
     person: 'primary',

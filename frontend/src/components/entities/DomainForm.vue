@@ -11,8 +11,6 @@
         autofocus
         @update:model-value="updateField('domain', $event)"
         label="Domain Name"
-        variant="outlined"
-        density="comfortable"
         prepend-inner-icon="mdi-web"
         placeholder="example.com"
         required
@@ -24,8 +22,6 @@
         :model-value="modelValue.description"
         @update:model-value="updateField('description', $event)"
         label="Description (Optional)"
-        variant="outlined"
-        density="comfortable"
         rows="3"
         placeholder="Add any notes or context about this domain"
       />

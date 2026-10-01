@@ -6,13 +6,7 @@
         <h2 class="text-title-large font-weight-bold">Users</h2>
       </div>
       <div class="d-flex flex-wrap align-center ga-2">
-        <v-btn
-          size="small"
-          color="primary"
-          variant="flat"
-          prepend-icon="mdi-email-plus"
-          @click="emit('invite')"
-        >
+        <v-btn size="small" color="primary" prepend-icon="mdi-email-plus" @click="emit('invite')">
           Invite user
         </v-btn>
         <v-btn
@@ -45,14 +39,7 @@
     <v-card-text class="pa-4">
       <v-row class="mb-0 align-center">
         <v-col cols="12" md="4">
-          <v-select
-            v-model="roleFilter"
-            :items="roleOptions"
-            label="Filter by role"
-            variant="outlined"
-            density="comfortable"
-            hide-details
-          />
+          <v-select v-model="roleFilter" :items="roleOptions" label="Filter by role" hide-details />
         </v-col>
 
         <!-- Search Controls -->
@@ -63,8 +50,6 @@
               v-model="searchQuery"
               prepend-inner-icon="mdi-magnify"
               label="Search users..."
-              variant="outlined"
-              density="comfortable"
               hide-details
               class="operations-search"
               clearable

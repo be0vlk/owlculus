@@ -141,10 +141,6 @@ const props = defineProps({
   retrievalComplete: { type: Boolean, default: true },
   retrievalError: { type: String, default: null },
   exportError: { type: String, default: null },
-  modelValue: {
-    type: Boolean,
-    default: false,
-  },
   pluginName: {
     type: String,
     required: true,
@@ -169,14 +165,11 @@ const props = defineProps({
 
 const hasResults = computed(() => props.results?.length > 0)
 
-const emit = defineEmits(['update:modelValue', 'export', 'retry'])
+const emit = defineEmits(['export', 'retry'])
 
 const { mdAndDown } = useDisplay()
 
-const isOpen = computed({
-  get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value),
-})
+const isOpen = defineModel({ type: Boolean, default: false })
 
 const closeModal = () => {
   isOpen.value = false

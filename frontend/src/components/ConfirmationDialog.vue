@@ -30,12 +30,7 @@
         <v-btn color="primary" variant="text" @click="handleCancel">
           {{ opts.cancelText }}
         </v-btn>
-        <v-btn
-          variant="flat"
-          :color="opts.confirmColor"
-          @click="handleConfirm"
-          prepend-icon="mdi-check"
-        >
+        <v-btn :color="opts.confirmColor" @click="handleConfirm" prepend-icon="mdi-check">
           {{ opts.confirmText }}
         </v-btn>
       </v-card-actions>

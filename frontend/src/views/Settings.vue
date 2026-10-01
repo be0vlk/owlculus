@@ -29,7 +29,6 @@
                     v-model="currentPassword"
                     label="Current Password"
                     type="password"
-                    variant="outlined"
                     :disabled="isLoading"
                     required
                     class="mb-4"
@@ -39,7 +38,6 @@
                     v-model="newPassword"
                     label="New Password"
                     type="password"
-                    variant="outlined"
                     :disabled="isLoading"
                     required
                     class="mb-4"
@@ -49,7 +47,6 @@
                     v-model="confirmPassword"
                     label="Confirm New Password"
                     type="password"
-                    variant="outlined"
                     :disabled="isLoading"
                     required
                     class="mb-4"

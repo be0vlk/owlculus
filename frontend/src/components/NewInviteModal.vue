@@ -38,8 +38,6 @@
                   item-title="title"
                   item-value="value"
                   label="User Role"
-                  variant="outlined"
-                  density="comfortable"
                   prepend-inner-icon="mdi-shield-account"
                   required
                   hint="Select the role for the new user account"
@@ -62,8 +60,6 @@
                 <v-text-field
                   :model-value="inviteLink"
                   label="Invite Link"
-                  variant="outlined"
-                  density="comfortable"
                   prepend-inner-icon="mdi-link"
                   readonly
                   append-inner-icon="mdi-content-copy"

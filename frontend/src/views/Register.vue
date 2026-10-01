@@ -81,7 +81,6 @@
                     v-model="formData.username"
                     label="Username"
                     prepend-inner-icon="mdi-account"
-                    variant="outlined"
                     :disabled="isLoading"
                     :rules="[
                       rules.required('Username is required'),
@@ -99,7 +98,6 @@
                     label="Email Address"
                     type="email"
                     prepend-inner-icon="mdi-email"
-                    variant="outlined"
                     :disabled="isLoading"
                     :rules="[
                       rules.required('Email is required'),
@@ -118,7 +116,6 @@
                     :type="showPassword ? 'text' : 'password'"
                     prepend-inner-icon="mdi-lock"
                     :append-inner-icon="showPassword ? 'mdi-eye' : 'mdi-eye-off'"
-                    variant="outlined"
                     :disabled="isLoading"
                     :rules="[
                       rules.required('Password is required'),
@@ -138,7 +135,6 @@
                     :type="showConfirmPassword ? 'text' : 'password'"
                     prepend-inner-icon="mdi-lock-check"
                     :append-inner-icon="showConfirmPassword ? 'mdi-eye' : 'mdi-eye-off'"
-                    variant="outlined"
                     :disabled="isLoading"
                     :rules="[rules.required('Please confirm your password'), confirmPasswordRule]"
                     required

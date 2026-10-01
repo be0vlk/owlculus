@@ -234,13 +234,6 @@ const huntDisplayTitle = computed(() => {
   background-color: rgb(var(--v-theme-surface-variant), 0.1);
 }
 
-/* Ensure proper text truncation */
-.text-truncate {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 /* Responsive adjustments */
 @media (width <= 600px) {
   .hunt-progress-card {

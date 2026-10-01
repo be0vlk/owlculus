@@ -83,7 +83,6 @@
         </v-btn>
         <v-btn
           color="primary"
-          variant="flat"
           @click="handleSubmit"
           :disabled="entityForm.state.loading || !formValid"
           :loading="entityForm.state.loading"

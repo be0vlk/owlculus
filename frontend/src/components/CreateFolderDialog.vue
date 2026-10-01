@@ -14,16 +14,12 @@
             label="Folder Name"
             :rules="nameRules"
             required
-            variant="outlined"
-            density="comfortable"
             prepend-inner-icon="mdi-folder"
           ></v-text-field>
 
           <v-textarea
             v-model="description"
             label="Description (Optional)"
-            variant="outlined"
-            density="comfortable"
             rows="2"
             prepend-inner-icon="mdi-text"
           ></v-textarea>
@@ -48,17 +44,13 @@
 
 <script setup>
 import { useDialogFocusRestore } from '@/composables/useDialogFocusRestore'
-import { ref, computed, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { evidenceService } from '../services/evidence'
 import ModalActions from './ModalActions.vue'
 import { nameRules } from './RenameDialog.vue'
 import { getErrorMessage } from '@/utils/errorMessage'
 
 const props = defineProps({
-  modelValue: {
-    type: Boolean,
-    default: false,
-  },
   caseId: {
     type: Number,
     required: true,
@@ -69,7 +61,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['update:modelValue', 'folderCreated'])
+const emit = defineEmits(['folderCreated'])
 
 // Reactive data
 const form = ref()
@@ -79,11 +71,7 @@ const error = ref('')
 const folderName = ref('')
 const description = ref('')
 
-// Computed
-const dialog = computed({
-  get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value),
-})
+const dialog = defineModel({ type: Boolean, default: false })
 
 // Methods
 const createFolder = async () => {
