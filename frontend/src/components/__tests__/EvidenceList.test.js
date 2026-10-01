@@ -117,4 +117,41 @@ describe('Evidence tree', () => {
     expect(wrapper.get('[role="alert"]').text()).toContain('Unavailable')
     expect(wrapper.emitted('refresh')).toBeUndefined()
   })
+  it('refreshes after a bulk delete that fails partway', async () => {
+    vi.stubGlobal('visualViewport', new EventTarget())
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    )
+    evidenceService.deleteEvidence
+      .mockResolvedValueOnce()
+      .mockRejectedValueOnce(new Error('Unavailable'))
+    wrapper = mount(EvidenceList, {
+      props: {
+        evidenceList: [
+          { id: 2, title: 'a.txt', evidence_type: 'file' },
+          { id: 3, title: 'b.txt', evidence_type: 'file' },
+        ],
+        caseId: 7,
+      },
+      attachTo: document.body,
+      global: { plugins: [createVuetify({ components, directives, theme: false })] },
+    })
+    await wrapper.get('[aria-label="Select a.txt"]').setValue(true)
+    await wrapper.get('[aria-label="Select b.txt"]').setValue(true)
+    const deleteSelected = wrapper
+      .findAll('button')
+      .find((button) => button.text().trim() === 'Delete Selected')
+    await deleteSelected.trigger('click')
+    await flushPromises()
+    const dialog = document.querySelector('[role="dialog"][aria-label="Confirm Deletion"]')
+    ;[...dialog.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Delete').click()
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toContain('Unavailable')
+    expect(wrapper.emitted('refresh')).toHaveLength(1)
+  })
 })

@@ -354,17 +354,19 @@ const deleteItems = async (items, label) => {
     return
   }
   actionError.value = ''
+  let deleted = 0
   try {
     for (const item of items) {
       await (item.is_folder
         ? evidenceService.deleteFolder(item.id)
         : evidenceService.deleteEvidence(item.id))
+      deleted++
     }
-    emit('refresh')
-    return true
   } catch (error) {
     actionError.value = getErrorMessage(error, 'Failed to delete evidence')
   }
+  // Refreshing drops deleted ids from the selection; failed ones stay selected for a retry.
+  if (deleted) emit('refresh')
 }
 
 const deleteItem = (item) => {
@@ -372,10 +374,10 @@ const deleteItem = (item) => {
   deleteItems([item], item.is_folder ? `${title} and all its contents` : title)
 }
 
-const deleteSelected = async () => {
+const deleteSelected = () => {
   const items = props.evidenceList.filter((item) => selectedItems.value.includes(item.id))
   const label = `<strong>${items.length}</strong> selected items (folders with all their contents)`
-  if (await deleteItems(items, label)) selectedItems.value = []
+  deleteItems(items, label)
 }
 
 const handleTemplateApplied = () => {
