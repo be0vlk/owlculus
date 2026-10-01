@@ -15,7 +15,7 @@
       <v-divider />
 
       <v-card-text class="pa-6">
-        <div class="text-body-large mb-4" v-html="dialogMessage" />
+        <p class="text-body-large mb-4">{{ dialogMessage }}</p>
         <v-alert v-if="warningText" class="mb-0" type="warning" variant="tonal">
           <div class="text-body-medium">
             <strong>{{ warningText }}</strong>

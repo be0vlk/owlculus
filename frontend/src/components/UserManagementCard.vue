@@ -290,7 +290,7 @@ watch([loading, error, () => users.value.length], () => {
 const handleDeleteUser = (user) => {
   emit('confirmDelete', {
     title: 'Confirm Deletion',
-    message: `Are you sure you want to delete the user <strong>${userDisplayName(user)}</strong>?`,
+    message: `Are you sure you want to delete the user "${userDisplayName(user)}"?`,
     warning:
       'This action cannot be undone. All user data and associated records will be permanently removed.',
     onConfirm: async () => {

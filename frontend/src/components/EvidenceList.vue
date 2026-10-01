@@ -340,13 +340,6 @@ const toggleSelection = (itemId) => {
   }
 }
 
-// The confirmation dialog renders its message as HTML.
-const escapeHtml = (text) => {
-  const div = document.createElement('div')
-  div.textContent = text
-  return div.innerHTML
-}
-
 const deleteItems = async (items, label) => {
   try {
     await confirmDialog.value.confirmDelete(label)
@@ -370,13 +363,13 @@ const deleteItems = async (items, label) => {
 }
 
 const deleteItem = (item) => {
-  const title = `<strong>${escapeHtml(item.title)}</strong>`
+  const title = `"${item.title}"`
   deleteItems([item], item.is_folder ? `${title} and all its contents` : title)
 }
 
 const deleteSelected = () => {
   const items = props.evidenceList.filter((item) => selectedItems.value.includes(item.id))
-  const label = `<strong>${items.length}</strong> selected items (folders with all their contents)`
+  const label = `${items.length} selected items (folders with all their contents)`
   deleteItems(items, label)
 }
 
