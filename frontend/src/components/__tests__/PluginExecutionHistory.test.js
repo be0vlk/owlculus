@@ -10,6 +10,8 @@ vi.mock('@/services/plugin', () => ({
     getHistory: vi.fn(),
     executePlugin: vi.fn(),
     getExecution: vi.fn(),
+    createExecutionStream: vi.fn(),
+    closeExecutionStream: vi.fn(),
     getResults: vi.fn(),
     cancelExecution: vi.fn(),
   },

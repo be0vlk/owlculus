@@ -31,11 +31,7 @@
 </template>
 
 <script setup>
-import {
-  usePluginValidation,
-  usePluginParamsAdvanced,
-  pluginParamConfigs,
-} from '@/composables/usePluginParams'
+import { usePluginValidation, usePluginParamsAdvanced } from '@/composables/usePluginParams'
 import PluginDescriptionCard from './PluginDescriptionCard.vue'
 import CaseEvidenceToggle from './CaseEvidenceToggle.vue'
 
@@ -55,7 +51,7 @@ const emit = defineEmits(['update:modelValue'])
 // Use advanced plugin params composable with domain configuration
 const { pluginDescription, localParams, updateParams } = usePluginParamsAdvanced(props, emit, {
   parameterDefaults: {
-    ...pluginParamConfigs.domain(),
+    domain: '',
     timeout: 30,
   },
 })

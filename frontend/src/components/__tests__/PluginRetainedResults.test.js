@@ -10,6 +10,8 @@ vi.mock('@/services/plugin', () => ({
     getExecution: vi.fn(),
     getResults: vi.fn(),
     cancelExecution: vi.fn(),
+    createExecutionStream: vi.fn(),
+    closeExecutionStream: vi.fn(),
   },
 }))
 vi.mock('@/utils/download', () => ({ downloadBlob: vi.fn() }))

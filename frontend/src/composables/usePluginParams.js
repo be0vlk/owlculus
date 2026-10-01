@@ -1,16 +1,11 @@
 import { ipAddressRule } from '@/utils/ipAddress'
-import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { reactive, computed, watch } from 'vue'
 
 /**
  * Enhanced composable for standardized plugin parameter management
  */
 export function usePluginParamsAdvanced(props, emit, config = {}) {
-  const {
-    parameterDefaults = {},
-    apiKeyRequirements = null,
-    onApiKeyCheck = null,
-    customUpdateLogic = null,
-  } = config
+  const { parameterDefaults = {}, customUpdateLogic = null } = config
 
   const pluginDescription = computed(() => {
     return props.parameters?.description || ''
@@ -25,9 +20,6 @@ export function usePluginParamsAdvanced(props, emit, config = {}) {
       ]),
     ),
   })
-
-  const missingApiKeys = ref([])
-  const apiKeyError = ref(null)
 
   const updateParams = () => {
     const updatedValue = {
@@ -58,34 +50,10 @@ export function usePluginParamsAdvanced(props, emit, config = {}) {
     { deep: true },
   )
 
-  // API key checking (if configured)
-  const checkApiKeys = async () => {
-    if (!apiKeyRequirements || !onApiKeyCheck) return
-
-    try {
-      const result = await onApiKeyCheck(apiKeyRequirements)
-      missingApiKeys.value = result.missing || []
-      apiKeyError.value = result.error || null
-    } catch (error) {
-      console.error('Failed to check API keys:', error)
-      apiKeyError.value = 'Failed to validate API keys'
-    }
-  }
-
-  onMounted(() => {
-    if (apiKeyRequirements && props.parameters.api_key_requirements) {
-      checkApiKeys()
-    }
-  })
-
   return {
     pluginDescription,
     localParams,
-    missingApiKeys,
-    apiKeyError,
-
     updateParams,
-    checkApiKeys,
   }
 }
 
@@ -109,41 +77,4 @@ export function usePluginValidation() {
     domainRule,
     ipRule,
   }
-}
-
-/**
- * Configuration helper for common parameter types
- */
-export const pluginParamConfigs = {
-  domain: (defaultDomain = '') => ({
-    domain: defaultDomain,
-  }),
-
-  domainWithConcurrency: (defaultDomain = '', defaultConcurrency = 5) => ({
-    domain: defaultDomain,
-    concurrency: defaultConcurrency,
-  }),
-
-  domainWithSecurityTrails: (defaultDomain = '', defaultConcurrency = 5) => ({
-    domain: defaultDomain,
-    concurrency: defaultConcurrency,
-    use_securitytrails: false,
-  }),
-
-  email: (defaultEmail = '') => ({
-    email: defaultEmail,
-  }),
-
-  ip: (defaultIp = '') => ({
-    ip_address: defaultIp,
-  }),
-
-  searchQuery: (defaultQuery = '') => ({
-    query: defaultQuery,
-  }),
-
-  multiSearch: (defaultType = '') => ({
-    search_type: defaultType,
-    query: '',
-  }),
 }

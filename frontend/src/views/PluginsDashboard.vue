@@ -73,34 +73,17 @@
                   </div>
                   <div class="d-flex align-center ga-2">
                     <v-chip
-                      v-if="
-                        plugin.api_key_requirements &&
-                        plugin.api_key_requirements.length > 0 &&
-                        plugin.api_key_status
-                      "
-                      :color="
-                        Object.values(plugin.api_key_status).every((status) => status)
-                          ? 'success'
-                          : 'warning'
-                      "
+                      v-if="plugin.api_key_requirements?.length && plugin.api_key_status"
+                      :color="missingKeys(plugin).length ? 'warning' : 'success'"
                       prepend-icon="mdi-key"
                       size="small"
                       variant="tonal"
                     >
                       <v-tooltip activator="parent" location="bottom">
-                        <template
-                          v-if="Object.values(plugin.api_key_status).every((status) => status)"
-                        >
-                          All required API keys configured
+                        <template v-if="missingKeys(plugin).length">
+                          Missing API keys: {{ missingKeys(plugin).join(', ') }}
                         </template>
-                        <template v-else>
-                          Missing API keys:
-                          {{
-                            plugin.api_key_requirements
-                              .filter((p) => !plugin.api_key_status[p])
-                              .join(', ')
-                          }}
-                        </template>
+                        <template v-else>All required API keys configured</template>
                       </v-tooltip>
                       API Keys
                     </v-chip>
@@ -139,6 +122,11 @@
                     :disabled="executing[name] || !plugin.enabled"
                     @submit.prevent="executePlugin(name)"
                   >
+                    <ApiKeyWarning
+                      v-if="missingKeys(plugin).length"
+                      :missing-providers="missingKeys(plugin)"
+                    />
+
                     <!-- Parameters Section -->
                     <div
                       v-if="plugin.parameters && Object.keys(plugin.parameters).length"
@@ -158,7 +146,6 @@
                           v-else
                           v-model="pluginParams[name]"
                           :parameters="plugin.parameters"
-                          :plugin-name="name"
                         />
                       </div>
                     </div>
@@ -170,10 +157,7 @@
                         !activeCase.activeCaseId ||
                         !plugin.enabled ||
                         executing[name] ||
-                        (plugin.api_key_requirements &&
-                          plugin.api_key_requirements.length > 0 &&
-                          plugin.api_key_status &&
-                          !Object.values(plugin.api_key_status).every((status) => status))
+                        missingKeys(plugin).length > 0
                       "
                       :loading="executing[name]"
                       block
@@ -183,16 +167,7 @@
                       variant="flat"
                       type="submit"
                     >
-                      <template
-                        v-if="
-                          plugin.api_key_requirements &&
-                          plugin.api_key_requirements.length > 0 &&
-                          plugin.api_key_status &&
-                          !Object.values(plugin.api_key_status).every((status) => status)
-                        "
-                      >
-                        API Key Required
-                      </template>
+                      <template v-if="missingKeys(plugin).length">API Key Required</template>
                       <template v-else>
                         {{ executing[name] ? 'Executing...' : 'Execute Plugin' }}
                       </template>
@@ -242,7 +217,7 @@ import PluginExecutionHistory from '@/components/plugins/PluginExecutionHistory.
 import GenericPluginParams from '@/components/plugins/GenericPluginParams.vue'
 import { ref, onMounted, reactive, computed, markRaw } from 'vue'
 import { pluginService } from '@/services/plugin'
-import { usePluginApiKeys } from '@/composables/usePluginApiKeys'
+import ApiKeyWarning from '@/components/plugins/ApiKeyWarning.vue'
 import BaseDashboard from '@/components/BaseDashboard.vue'
 
 const acceptedExecutionId = ref(null)
@@ -259,8 +234,10 @@ const pluginParamComponents = ref({})
 const categories = ['Person', 'Network', 'Company', 'Other']
 const selectedTab = ref('all')
 
-// Plugin API key checking
-const { checkPluginApiKeys, getApiKeyWarningMessage } = usePluginApiKeys()
+const missingKeys = (plugin) =>
+  plugin.api_key_status
+    ? (plugin.api_key_requirements ?? []).filter((provider) => !plugin.api_key_status[provider])
+    : []
 
 // Helper function to get category icons
 const getCategoryIcon = (category) => {
@@ -273,47 +250,20 @@ const getCategoryIcon = (category) => {
   return iconMap[category] || 'mdi-puzzle'
 }
 
-const filteredPlugins = computed(() => {
-  let result = {}
-
-  // If "all" tab is selected, show all plugins
-  if (selectedTab.value === 'all') {
-    result = plugins.value
-  } else {
-    // Filter by the selected category tab
-    const selectedCategory = categories.find((cat) => cat.toLowerCase() === selectedTab.value)
-    if (selectedCategory) {
-      result = Object.entries(plugins.value).reduce((acc, [name, plugin]) => {
-        // Get the plugin's category, defaulting to 'Other' if not set or not matching predefined categories
-        const pluginCategory =
-          plugin.category && categories.includes(plugin.category) ? plugin.category : 'Other'
-        // Include plugins that match the selected category
-        if (pluginCategory === selectedCategory) {
-          acc[name] = plugin
-        }
-        return acc
-      }, {})
-    }
-  }
-
-  // Sort plugins alphabetically by display name or name
-  return Object.entries(result)
-    .sort(([nameA, pluginA], [nameB, pluginB]) => {
-      const displayNameA = pluginA.display_name || nameA
-      const displayNameB = pluginB.display_name || nameB
-      return displayNameA.localeCompare(displayNameB)
-    })
-    .reduce((acc, [name, plugin]) => {
-      acc[name] = plugin
-      return acc
-    }, {})
-})
-
-const initializeExpandedState = (pluginsList) => {
-  Object.keys(pluginsList).forEach((name) => {
-    expandedCards.value[name] = false
-  })
-}
+const filteredPlugins = computed(() =>
+  Object.fromEntries(
+    Object.entries(plugins.value)
+      .filter(
+        ([, plugin]) =>
+          selectedTab.value === 'all' ||
+          (categories.includes(plugin.category) ? plugin.category : 'Other').toLowerCase() ===
+            selectedTab.value,
+      )
+      .toSorted(([nameA, a], [nameB, b]) =>
+        (a.display_name || nameA).localeCompare(b.display_name || nameB),
+      ),
+  ),
+)
 
 const toggleCard = (name) => {
   expandedCards.value[name] = !expandedCards.value[name]
@@ -339,7 +289,6 @@ const loadPlugins = async () => {
   try {
     error.value = null
     plugins.value = await pluginService.listPlugins()
-    initializeExpandedState(plugins.value)
     // Initialize parameters for each plugin and load custom parameter components
     const loadPromises = Object.keys(plugins.value).map(async (name) => {
       // Load custom parameter component
@@ -373,21 +322,11 @@ const pluginForms = {}
 
 const executePlugin = async (name) => {
   const caseId = activeCase.activeCaseId
-  if (!activeCase.ready || !caseId || !plugins.value[name].enabled || executing[name]) return
-  if (pluginForms[name] && !(await pluginForms[name].validate()).valid) return
-  // Check API key requirements first
   const plugin = plugins.value[name]
-  if (plugin.api_key_requirements && plugin.api_key_requirements.length > 0) {
-    const hasAllKeys = await checkPluginApiKeys(plugin)
-    if (!hasAllKeys) {
-      const warningMessage = getApiKeyWarningMessage(plugin)
-      pluginErrors[name] = warningMessage
-      return
-    }
-  }
-
+  if (!activeCase.ready || !caseId || !plugin.enabled || executing[name]) return
+  if (missingKeys(plugin).length) return
+  if (pluginForms[name] && !(await pluginForms[name].validate()).valid) return
   if (!activeCase.ready || activeCase.activeCaseId !== caseId) return
-
   executing[name] = true
   pluginErrors[name] = null
 

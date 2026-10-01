@@ -2,9 +2,6 @@
   <div class="d-flex flex-column ga-3">
     <PluginDescriptionCard :description="pluginDescription" />
 
-    <!-- API Key Warning -->
-    <ApiKeyWarning v-if="missingApiKeys.length > 0" :missing-providers="missingApiKeys" />
-
     <!-- Generic parameter fields -->
     <template v-for="(param, paramName) in filteredParameters" :key="paramName">
       <!-- Boolean type - Switch -->
@@ -71,10 +68,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch, computed, onMounted } from 'vue'
-import { usePluginApiKeys } from '@/composables/usePluginApiKeys'
+import { reactive, watch, computed, onMounted } from 'vue'
 import PluginDescriptionCard from './PluginDescriptionCard.vue'
-import ApiKeyWarning from './ApiKeyWarning.vue'
 import CaseEvidenceToggle from './CaseEvidenceToggle.vue'
 
 const props = defineProps({
@@ -85,10 +80,6 @@ const props = defineProps({
   modelValue: {
     type: Object,
     required: true,
-  },
-  pluginName: {
-    type: String,
-    default: '',
   },
 })
 
@@ -143,24 +134,7 @@ const initializeParams = () => {
   })
 }
 
-// Use plugin API keys composable
-const { checkPluginApiKeys, getMissingApiKeys } = usePluginApiKeys()
-const missingApiKeys = ref([])
-
-// Check API keys on mount
-onMounted(async () => {
-  initializeParams()
-
-  // Check if plugin has API key requirements
-  if (props.parameters.api_key_requirements && props.parameters.api_key_requirements.length > 0) {
-    const plugin = {
-      name: props.pluginName,
-      api_key_requirements: props.parameters.api_key_requirements,
-    }
-    await checkPluginApiKeys(plugin)
-    missingApiKeys.value = getMissingApiKeys(plugin)
-  }
-})
+onMounted(initializeParams)
 
 // Emit parameter updates for plugin-specific params
 const updateParams = () => {

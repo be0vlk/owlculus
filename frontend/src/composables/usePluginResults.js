@@ -1,46 +1,17 @@
 import { computed } from 'vue'
+import { formatDate } from '@/composables/dateUtils'
 
 export function usePluginResults(result) {
-  const parsedResults = computed(() => {
-    if (!result.value) return []
-
-    if (Array.isArray(result.value)) {
-      return result.value
-    }
-
-    if (result.value.type) {
-      return [result.value]
-    }
-
-    return []
-  })
-
-  const legacyFormat = computed(() => {
-    if (!result.value) return false
-    return !Array.isArray(result.value) && !result.value.type
-  })
-
-  const statusMessages = computed(() =>
-    parsedResults.value.filter((item) => item.type === 'status'),
-  )
-
-  const completionMessages = computed(() =>
-    parsedResults.value.filter((item) => item.type === 'complete'),
-  )
-
-  const errorMessages = computed(() => parsedResults.value.filter((item) => item.type === 'error'))
-
-  const dataResults = computed(() => parsedResults.value.filter((item) => item.type === 'data'))
-
-  const hasResults = computed(() => parsedResults.value.length > 0 || legacyFormat.value)
+  const byType = (type) => computed(() => result.value.filter((item) => item.type === type))
 
   return {
-    parsedResults,
-    legacyFormat,
-    statusMessages,
-    completionMessages,
-    errorMessages,
-    dataResults,
-    hasResults,
+    statusMessages: byType('status'),
+    completionMessages: byType('complete'),
+    errorMessages: byType('error'),
+    dataResults: byType('data'),
   }
 }
+
+// Plugin output dates may be free text ("Unknown", registrar formats); show those as-is.
+export const formatResultDate = (value) =>
+  Number.isNaN(Date.parse(value)) ? value || 'Unknown' : formatDate(value)

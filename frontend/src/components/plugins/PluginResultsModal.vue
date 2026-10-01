@@ -91,7 +91,7 @@
           >
             <PluginResult
               :plugin-name="pluginName"
-              :result="results || []"
+              :result="results ?? []"
               class="modal-plugin-result"
               :execution-status="executionStatus"
               :execution-error="error"
@@ -130,10 +130,10 @@
 
 <script setup>
 import { computed } from 'vue'
-import { assembleCorrelationResults } from '@/utils/correlationResults'
 import { useDisplay } from 'vuetify'
 import PluginResult from '@/components/plugins/PluginResult.vue'
 import { formatDate } from '@/composables/dateUtils.js'
+import { formatParameterName } from '@/utils/huntDisplayUtils'
 
 const props = defineProps({
   executionStatus: { type: String, default: null },
@@ -150,8 +150,8 @@ const props = defineProps({
     required: true,
   },
   results: {
-    type: [Object, Array, String, Number, Boolean],
-    default: null,
+    type: Array,
+    default: () => [],
   },
   error: {
     type: String,
@@ -167,12 +167,7 @@ const props = defineProps({
   },
 })
 
-const hasResults = computed(() => {
-  if (props.results === null || props.results === undefined || props.results === '') return false
-  if (Array.isArray(props.results)) return props.results.length > 0
-  if (typeof props.results === 'object') return Object.keys(props.results).length > 0
-  return true
-})
+const hasResults = computed(() => props.results?.length > 0)
 
 const emit = defineEmits(['update:modelValue', 'export', 'retry'])
 
@@ -215,13 +210,6 @@ const formatExecutionTime = (time) => {
   return formatDate(time.toISOString())
 }
 
-const formatParameterName = (key) => {
-  return key
-    .split('_')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ')
-}
-
 const formatParameterValue = (value) => {
   if (value === null || value === undefined) return 'Not set'
   if (typeof value === 'boolean') return value ? 'Yes' : 'No'
@@ -231,20 +219,8 @@ const formatParameterValue = (value) => {
 }
 
 const exportResults = () => {
-  emit('export', {
-    pluginName: props.pluginName,
-    results:
-      props.pluginName === 'CorrelationScan'
-        ? assembleCorrelationResults(props.results)
-        : props.results,
-    parameters: props.parameters,
-    executionTime: props.executionTime,
-    partial:
-      Boolean(props.error) ||
-      !props.retrievalComplete ||
-      Boolean(props.executionStatus && props.executionStatus !== 'completed'),
-    error: props.error || null,
-  })
+  // The listener fetches and fills in the current results, parameters and status.
+  emit('export', { pluginName: props.pluginName, executionTime: props.executionTime })
 }
 </script>
 

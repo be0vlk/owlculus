@@ -7,7 +7,7 @@
           color="white"
           variant="text"
           prepend-icon="mdi-refresh"
-          @click="refreshData"
+          @click="loadData"
           :loading="loading"
           :disabled="!caseId"
         >
@@ -64,7 +64,7 @@
               :error="error"
               @execute="handleExecuteHunt"
               @view-details="handleViewHuntDetails"
-              @retry="refreshData"
+              @retry="loadData"
             />
           </div>
         </v-tabs-window-item>
@@ -147,7 +147,6 @@
                   (exec) => exec.status !== 'running' && exec.status !== 'pending',
                 )
               "
-              :loading="historyLoading"
               @view-details="handleViewExecutionDetails"
             />
           </div>
@@ -200,7 +199,6 @@ const { showNotification } = useNotifications()
 
 // Local state
 const loading = ref(true)
-const historyLoading = ref(false)
 const error = ref(null)
 const activeTab = ref('catalog')
 const selectedHunt = ref(null)
@@ -242,10 +240,6 @@ const loadData = async () => {
   } finally {
     if (request === loadGeneration) loading.value = false
   }
-}
-
-const refreshData = async () => {
-  await loadData()
 }
 
 const handleExecuteHunt = (hunt) => {
@@ -342,7 +336,3 @@ onBeforeUnmount(() => {
   workflow?.release()
 })
 </script>
-
-<style scoped>
-/* Any custom styles if needed */
-</style>

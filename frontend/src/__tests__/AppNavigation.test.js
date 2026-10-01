@@ -21,9 +21,6 @@ vi.mock('../services/auth', () => ({
     logout: vi.fn(),
   },
 }))
-vi.mock('../services/system', () => ({
-  systemService: { checkApiKeyStatus: async () => ({ is_configured: true }) },
-}))
 vi.mock('../composables/useDarkMode', async () => {
   const { ref } = await import('vue')
   return { useDarkMode: () => ({ isDark: ref(false), toggleDark: vi.fn() }) }

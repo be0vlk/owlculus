@@ -8,7 +8,7 @@
       :message="item.data.message"
     />
 
-    <template v-for="(item, index) in parsedResults" :key="index">
+    <template v-for="(item, index) in result" :key="index">
       <!-- Person Results -->
       <v-card
         v-if="item.type === 'data' && item.data.search_type === 'person'"
@@ -307,11 +307,12 @@
     </template>
 
     <!-- No Results -->
-    <NoResultsCard v-if="!parsedResults.length" />
+    <NoResultsCard v-if="!result.length" />
   </div>
 </template>
 
 <script setup>
+import { copyToClipboard } from '@/utils/clipboard'
 import { toRef } from 'vue'
 import { usePluginResults } from '@/composables/usePluginResults'
 import PluginStatusAlert from './PluginStatusAlert.vue'
@@ -319,12 +320,12 @@ import NoResultsCard from './NoResultsCard.vue'
 
 const props = defineProps({
   result: {
-    type: [Object, Array],
+    type: Array,
     required: true,
   },
 })
 
-const { parsedResults, statusMessages } = usePluginResults(toRef(props, 'result'))
+const { statusMessages } = usePluginResults(toRef(props, 'result'))
 
 // Helper function to get confidence color
 const getConfidenceColor = (confidence) => {
@@ -336,14 +337,5 @@ const getConfidenceColor = (confidence) => {
   if (conf.includes('low') || conf === '2' || conf === '1') return 'error'
 
   return 'info'
-}
-
-// Copy to clipboard function
-const copyToClipboard = async (text) => {
-  try {
-    await navigator.clipboard.writeText(text)
-  } catch (err) {
-    console.error('Failed to copy text:', err)
-  }
 }
 </script>

@@ -67,9 +67,7 @@ export function usePluginExecution() {
           throw failure
         }
       },
-      openStream: pluginService.createExecutionStream
-        ? (...args) => pluginService.createExecutionStream(id, ...args)
-        : undefined,
+      openStream: (...args) => pluginService.createExecutionStream(id, ...args),
       closeStream: pluginService.closeExecutionStream,
       onError(message) {
         if (current === generation) error.value = message
@@ -106,7 +104,6 @@ export function usePluginExecution() {
     retrievalComplete,
     retry: () => observe(selectedId, true),
     observe,
-    stop,
     cancel,
     cancelling,
   }

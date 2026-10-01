@@ -15,7 +15,7 @@ export function observeExecution({ refresh, openStream, closeStream, onError }) 
     stopped = true
     clearTimeout(timer)
     controller.abort()
-    closeStream?.(socket)
+    closeStream(socket)
     socket = null
   }
 
@@ -28,20 +28,20 @@ export function observeExecution({ refresh, openStream, closeStream, onError }) 
   }
 
   async function connect() {
-    if (stopped || socket || opening || !openStream) return
+    if (stopped || socket || opening) return
     opening = true
     try {
       const next = await openStream(
         changed,
         () => {
           if (stopped) return
-          closeStream?.(socket)
+          closeStream(socket)
           socket = null
           onError('Live progress interrupted; checking retained investigation results')
         },
         cursor,
       )
-      if (stopped) closeStream?.(next)
+      if (stopped) closeStream(next)
       else socket = next
     } catch {
       // The durable polling path remains available during token/Redis outages.

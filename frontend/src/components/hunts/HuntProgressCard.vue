@@ -33,9 +33,12 @@
             <v-icon icon="mdi-clock-end" size="small" class="me-1" />
             <span class="text-body-small">Completed: {{ formatDate(execution.completed_at) }}</span>
           </div>
-          <div v-else-if="execution.status === 'running'" class="d-flex align-center mb-1">
+          <div
+            v-else-if="execution.status === 'running' && execution.started_at"
+            class="d-flex align-center mb-1"
+          >
             <v-icon icon="mdi-clock" size="small" class="me-1" />
-            <span class="text-body-small">{{ elapsedTime }}</span>
+            <span class="text-body-small">{{ calculateDuration(execution.started_at, now) }}</span>
           </div>
         </div>
       </div>
@@ -50,8 +53,8 @@
             class="step-item d-flex align-center mb-2"
           >
             <!-- Step Status Icon -->
-            <v-avatar :color="getStepStatusColor(step.status)" size="24" class="me-3">
-              <v-icon :icon="getStepStatusIcon(step.status)" color="white" size="small" />
+            <v-avatar :color="getStatusColor(step.status)" size="24" class="me-3">
+              <v-icon :icon="getStatusIcon(step.status)" color="white" size="small" />
             </v-avatar>
 
             <!-- Step Info -->
@@ -65,7 +68,7 @@
             </div>
 
             <!-- Step Status -->
-            <v-chip :color="getStepStatusColor(step.status)" variant="flat" size="x-small">
+            <v-chip :color="getStatusColor(step.status)" variant="flat" size="x-small">
               {{ step.status }}
             </v-chip>
           </div>
@@ -153,8 +156,10 @@
 
 <script setup>
 import ExecutionWaiting from '@/components/ExecutionWaiting.vue'
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed } from 'vue'
+import { useNow } from '@/composables/useNow'
 import {
+  calculateDuration,
   formatHuntExecutionTitle,
   getStatusText,
   getStatusColor,
@@ -175,9 +180,7 @@ const props = defineProps({
 
 defineEmits(['cancel', 'view-details'])
 
-// Local state
-const elapsedTime = ref('')
-let elapsedInterval = null
+const now = useNow(() => props.execution.status === 'running')
 
 // Computed properties
 const statusColor = computed(() => getStatusColor(props.execution.status))
@@ -206,115 +209,6 @@ const huntDisplayTitle = computed(() => {
 
   return formatHuntExecutionTitle(baseName, initialParams, huntCategory)
 })
-
-// Methods
-const getStepStatusColor = (status) => {
-  switch (status) {
-    case 'pending':
-      return 'grey'
-    case 'running':
-      return 'primary'
-    case 'completed':
-      return 'success'
-    case 'failed':
-      return 'error'
-    case 'skipped':
-      return 'warning'
-    case 'cancelled':
-      return 'grey'
-    default:
-      return 'grey'
-  }
-}
-
-const getStepStatusIcon = (status) => {
-  switch (status) {
-    case 'pending':
-      return 'mdi-clock-outline'
-    case 'running':
-      return 'mdi-play'
-    case 'completed':
-      return 'mdi-check'
-    case 'failed':
-      return 'mdi-close'
-    case 'skipped':
-      return 'mdi-skip-next'
-    case 'cancelling':
-      return 'mdi-timer-sand'
-    case 'cancelled':
-      return 'mdi-stop'
-    default:
-      return 'mdi-help'
-  }
-}
-
-// formatDate is now imported from dateUtils
-
-const updateElapsedTime = () => {
-  if (props.execution.status !== 'running' || !props.execution.started_at) {
-    elapsedTime.value = ''
-    return
-  }
-
-  // Ensure the timestamp is parsed as UTC by appending 'Z' if it doesn't have timezone info
-  let startTimeStr = props.execution.started_at
-  if (
-    !startTimeStr.includes('Z') &&
-    !startTimeStr.includes('+') &&
-    !startTimeStr.includes('-', 10)
-  ) {
-    startTimeStr += 'Z'
-  }
-
-  const startTime = new Date(startTimeStr)
-  const now = new Date()
-  const diff = now - startTime
-
-  // Ensure we don't show negative times
-  if (diff < 0) {
-    elapsedTime.value = '0s'
-    return
-  }
-
-  const minutes = Math.floor(diff / 60000)
-  const seconds = Math.floor((diff % 60000) / 1000)
-
-  if (minutes > 0) {
-    elapsedTime.value = `${minutes}m ${seconds}s`
-  } else {
-    elapsedTime.value = `${seconds}s`
-  }
-}
-
-// Lifecycle
-onMounted(() => {
-  updateElapsedTime()
-  if (props.execution.status === 'running') {
-    elapsedInterval = setInterval(updateElapsedTime, 1000)
-  }
-})
-
-onUnmounted(() => {
-  if (elapsedInterval) {
-    clearInterval(elapsedInterval)
-  }
-})
-
-// Watch for status changes
-import { watch } from 'vue'
-watch(
-  () => props.execution.status,
-  (newStatus) => {
-    if (newStatus === 'running' && !elapsedInterval) {
-      updateElapsedTime()
-      elapsedInterval = setInterval(updateElapsedTime, 1000)
-    } else if (newStatus !== 'running' && elapsedInterval) {
-      clearInterval(elapsedInterval)
-      elapsedInterval = null
-      elapsedTime.value = ''
-    }
-  },
-)
 </script>
 
 <style scoped>

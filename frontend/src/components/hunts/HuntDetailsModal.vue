@@ -3,7 +3,12 @@
     <v-card>
       <!-- Header -->
       <v-card-title class="d-flex align-center pa-4 header-gradient text-white">
-        <v-icon :icon="categoryIcon" :color="categoryColor" size="large" class="me-3" />
+        <v-icon
+          :icon="getCategoryIcon(hunt?.category)"
+          :color="categoryColor"
+          size="large"
+          class="me-3"
+        />
         <div class="flex-grow-1">
           <div class="text-headline-small font-weight-bold">{{ hunt?.display_name }}</div>
         </div>
@@ -148,6 +153,7 @@
 </template>
 
 <script setup>
+import { formatParameterName, getCategoryIcon } from '@/utils/huntDisplayUtils'
 import { computed } from 'vue'
 
 const props = defineProps({
@@ -169,19 +175,6 @@ const dialog = computed({
   set: (value) => emit('update:modelValue', value),
 })
 
-const categoryIcon = computed(() => {
-  const iconMap = {
-    person: 'mdi-account',
-    domain: 'mdi-web',
-    company: 'mdi-office-building',
-    ip: 'mdi-ip-network',
-    phone: 'mdi-phone',
-    email: 'mdi-email',
-    general: 'mdi-magnify',
-  }
-  return iconMap[props.hunt?.category] || iconMap.general
-})
-
 const categoryColor = computed(() => {
   const colorMap = {
     person: 'primary',
@@ -201,10 +194,6 @@ const huntSteps = computed(() => {
 })
 
 // Methods
-const formatParameterName = (paramName) => {
-  return paramName.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
-}
-
 const getStepColor = (index) => {
   const colors = ['primary', 'secondary', 'success', 'info', 'warning', 'error']
   return colors[index % colors.length]

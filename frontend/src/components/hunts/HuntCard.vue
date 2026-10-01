@@ -2,7 +2,7 @@
   <v-card class="hunt-card" elevation="1" hover rounded="lg" @click="$emit('view-details', hunt)">
     <!-- Hunt Category Header -->
     <v-card-title class="d-flex align-center pa-3 header-gradient text-white">
-      <v-icon :icon="categoryIcon" color="white" size="small" class="me-2" />
+      <v-icon :icon="getCategoryIcon(hunt.category)" color="white" size="small" class="me-2" />
       <span class="text-body-small text-uppercase font-weight-bold">{{ displayCategory }}</span>
       <v-spacer />
       <v-chip :color="hunt.is_active ? 'success' : 'error'" size="x-small" variant="flat">
@@ -51,7 +51,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { getDisplayCategory } from '@/utils/huntDisplayUtils'
+import { getCategoryIcon, getDisplayCategory } from '@/utils/huntDisplayUtils'
 
 const props = defineProps({
   hunt: {
@@ -63,19 +63,6 @@ const props = defineProps({
 defineEmits(['execute', 'view-details'])
 
 // Computed properties
-const categoryIcon = computed(() => {
-  const iconMap = {
-    person: 'mdi-account',
-    domain: 'mdi-web',
-    company: 'mdi-office-building',
-    ip: 'mdi-ip-network',
-    phone: 'mdi-phone',
-    email: 'mdi-email',
-    general: 'mdi-magnify',
-  }
-  return iconMap[props.hunt.category] || iconMap.general
-})
-
 const displayCategory = computed(() => {
   return getDisplayCategory(props.hunt.category)
 })

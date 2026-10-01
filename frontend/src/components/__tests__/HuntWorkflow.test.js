@@ -3,7 +3,7 @@ import { flushPromises } from '@vue/test-utils'
 import { mountWithVuetify } from './helpers/vuetify'
 import HuntParameterForm from '../hunts/HuntParameterForm.vue'
 
-it('accepts zero, preserves defaults, and renders multiline and server errors accessibly', async () => {
+it('accepts zero, preserves defaults, and renders multiline and validation errors accessibly', async () => {
   const wrapper = mountWithVuetify(HuntParameterForm, {
     props: {
       parameters: {
@@ -16,10 +16,12 @@ it('accepts zero, preserves defaults, and renders multiline and server errors ac
   await flushPromises()
   expect(await wrapper.vm.validate()).toBe(true)
   expect(wrapper.get('textarea').element.value).toBe('Investigation notes')
-  await wrapper.setProps({ errors: { limit: 'Limit unavailable' } })
+  const limit = wrapper.get('input[type="number"]')
+  await limit.setValue('')
+  await limit.trigger('blur')
   await flushPromises()
-  expect(wrapper.text()).toContain('Limit unavailable')
-  expect(wrapper.get('input[type="number"]').attributes('aria-invalid')).toBe('true')
+  expect(wrapper.text()).toContain('Limit is required')
+  expect(limit.attributes('aria-invalid')).toBe('true')
 })
 
 it('validates before execution, submits defaults, and retains failure feedback while open', async () => {

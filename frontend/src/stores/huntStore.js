@@ -101,7 +101,6 @@ export const useHuntStore = defineStore('hunt', () => {
       (a, b) => new Date(records.value[b].created_at) - new Date(records.value[a].created_at),
     )
   }
-  const loading = ref(false)
   const readErrors = ref({})
   const actionError = ref(null)
   const cancellationPending = ref({})
@@ -148,17 +147,6 @@ export const useHuntStore = defineStore('hunt', () => {
   const observations = new Map()
 
   // Getters
-  const huntsByCategory = computed(() => {
-    const categorized = {}
-    availableHunts.value.forEach((hunt) => {
-      if (!categorized[hunt.category]) {
-        categorized[hunt.category] = []
-      }
-      categorized[hunt.category].push(hunt)
-    })
-    return categorized
-  })
-
   const runningExecutions = computed(() => {
     return Object.values(activeExecutions.value).filter((execution) =>
       ['pending', 'running', 'cancelling'].includes(execution.status),
@@ -171,17 +159,10 @@ export const useHuntStore = defineStore('hunt', () => {
     )
   })
 
-  const failedExecutions = computed(() => {
-    return Object.values(activeExecutions.value).filter(
-      (execution) => execution.status === 'failed',
-    )
-  })
-
   // Actions
   async function fetchHunts() {
     const request = generation
     try {
-      loading.value = true
       readErrors.value['catalog'] = null
       const hunts = await read((signal) => huntService.getHunts(signal))
       if (request !== generation) return
@@ -190,21 +171,6 @@ export const useHuntStore = defineStore('hunt', () => {
       if (request !== generation) return
       readErrors.value['catalog'] = err.response?.data?.detail || 'Failed to fetch hunts'
       console.error('Failed to fetch hunts:', err)
-      throw err
-    } finally {
-      if (request === generation) loading.value = false
-    }
-  }
-
-  async function getHunt(huntId) {
-    const request = generation
-    try {
-      const hunt = await read((signal) => huntService.getHunt(huntId, signal))
-      return hunt
-    } catch (err) {
-      if (request === generation)
-        readErrors.value[`hunt-${huntId}`] = err.response?.data?.detail || 'Failed to fetch hunt'
-      console.error('Failed to fetch hunt:', err)
       throw err
     }
   }
@@ -281,7 +247,7 @@ export const useHuntStore = defineStore('hunt', () => {
 
   async function getCaseExecutions(caseId) {
     if (String(caseId) !== String(workflowCaseId)) {
-      resetCaseExecutions()
+      invalidateWorkflow(true)
       workflowCaseId = caseId
     }
     const request = generation
@@ -322,7 +288,7 @@ export const useHuntStore = defineStore('hunt', () => {
       return current() ? executionHistory.value : []
     } catch (err) {
       if (!current()) return []
-      if (isAccessFailure(err)) resetCaseExecutions()
+      if (isAccessFailure(err)) invalidateWorkflow(true)
       readErrors.value['history'] = err.response?.data?.detail || 'Failed to fetch case executions'
       throw err
     }
@@ -404,12 +370,6 @@ export const useHuntStore = defineStore('hunt', () => {
     observation.stop?.()
   }
 
-  function clearError() {
-    readErrors.value = {}
-    actionError.value = null
-    cancellationErrors.value = {}
-  }
-
   function removeExecution(executionId) {
     // A denied identity stays unavailable until a newly authorized workflow opens.
     deniedExecutionIds.add(String(executionId))
@@ -438,15 +398,10 @@ export const useHuntStore = defineStore('hunt', () => {
       historyIds.value = []
     }
     workflowCaseId = null
-    loading.value = false
     cancellationPending.value = {}
     cancellationErrors.value = {}
     readErrors.value = {}
     actionError.value = null
-  }
-
-  function resetCaseExecutions() {
-    invalidateWorkflow(true)
   }
 
   return {
@@ -454,29 +409,20 @@ export const useHuntStore = defineStore('hunt', () => {
     availableHunts,
     activeExecutions,
     executionHistory,
-    loading,
     cancellationPending,
-    cancellationErrors,
     error: visibleError,
 
     // Getters
-    huntsByCategory,
     runningExecutions,
     completedExecutions,
-    failedExecutions,
 
     // Actions
     openWorkflow,
     fetchHunts,
-    getHunt,
     executeHunt,
     getExecution,
     getCaseExecutions,
     cancelExecution,
-    subscribeToExecution,
-    unsubscribeFromExecution,
-    clearError,
-    removeExecution,
-    resetCaseExecutions,
+    invalidateWorkflow,
   }
 })

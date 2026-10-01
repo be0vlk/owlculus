@@ -2,16 +2,8 @@
   <div class="d-flex flex-column ga-3">
     <PluginDescriptionCard :description="pluginDescription" />
 
-    <!-- API Key Warning -->
-    <ApiKeyWarning v-if="missingApiKeys.length > 0" :missing-providers="missingApiKeys" />
-
     <!-- Search Type Selection -->
-    <v-radio-group
-      v-model="searchType"
-      inline
-      density="compact"
-      @update:model-value="updateSearchType"
-    >
+    <v-radio-group v-model="searchType" inline density="compact">
       <template #label>
         <span class="text-subtitle2">Search Type</span>
       </template>
@@ -159,9 +151,7 @@
 <script setup>
 import { computed } from 'vue'
 import { usePluginParamsAdvanced } from '@/composables/usePluginParams'
-import { usePluginApiKeys } from '@/composables/usePluginApiKeys'
 import PluginDescriptionCard from './PluginDescriptionCard.vue'
-import ApiKeyWarning from './ApiKeyWarning.vue'
 import CaseEvidenceToggle from './CaseEvidenceToggle.vue'
 
 const props = defineProps({
@@ -178,35 +168,19 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue'])
 
 // Use advanced plugin params composable with multi-search configuration
-const { pluginDescription, localParams, updateParams, missingApiKeys } = usePluginParamsAdvanced(
-  props,
-  emit,
-  {
-    parameterDefaults: {
-      search_type: 'person',
-      email: '',
-      phone: '',
-      name: '',
-      company: '',
-      website: '',
-      domain: '',
-      location: '',
-      linkedin: '',
-    },
-    apiKeyRequirements: props.parameters.api_key_requirements,
-    onApiKeyCheck: async (requirements) => {
-      const { checkPluginApiKeys, getMissingApiKeys } = usePluginApiKeys()
-      const plugin = {
-        name: 'PeopledatalabsPlugin',
-        api_key_requirements: requirements,
-      }
-      await checkPluginApiKeys(plugin)
-      return {
-        missing: getMissingApiKeys(plugin),
-      }
-    },
+const { pluginDescription, localParams, updateParams } = usePluginParamsAdvanced(props, emit, {
+  parameterDefaults: {
+    search_type: 'person',
+    email: '',
+    phone: '',
+    name: '',
+    company: '',
+    website: '',
+    domain: '',
+    location: '',
+    linkedin: '',
   },
-)
+})
 
 // Search type state (computed from localParams)
 const searchType = computed({
@@ -216,9 +190,4 @@ const searchType = computed({
     updateParams()
   },
 })
-
-// Update search type
-const updateSearchType = () => {
-  updateParams()
-}
 </script>

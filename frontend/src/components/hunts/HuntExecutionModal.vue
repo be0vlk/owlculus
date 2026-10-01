@@ -10,7 +10,7 @@
     <v-card>
       <!-- Header -->
       <v-card-title class="d-flex align-center pa-4 bg-primary text-white">
-        <v-icon :icon="categoryIcon" class="me-3" />
+        <v-icon :icon="getCategoryIcon(hunt?.category)" class="me-3" />
         <div class="flex-grow-1">
           <div class="text-title-large">Execute Hunt</div>
           <div class="text-title-small opacity-75">{{ hunt?.display_name }}</div>
@@ -81,6 +81,7 @@
 </template>
 
 <script setup>
+import { getCategoryIcon } from '@/utils/huntDisplayUtils'
 import { ref, computed, watch, useId } from 'vue'
 import HuntParameterForm from './HuntParameterForm.vue'
 
@@ -112,19 +113,6 @@ const parameterValues = ref({})
 const dialog = computed({
   get: () => props.modelValue,
   set: (value) => emit('update:modelValue', value),
-})
-
-const categoryIcon = computed(() => {
-  const iconMap = {
-    person: 'mdi-account',
-    domain: 'mdi-web',
-    company: 'mdi-office-building',
-    ip: 'mdi-ip-network',
-    phone: 'mdi-phone',
-    email: 'mdi-email',
-    general: 'mdi-magnify',
-  }
-  return iconMap[props.hunt?.category] || iconMap.general
 })
 
 const isFormValid = computed(() => !!props.caseId)

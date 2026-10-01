@@ -95,7 +95,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  useHuntStore().resetCaseExecutions()
+  useHuntStore().invalidateWorkflow(true)
   vi.useRealTimers()
 })
 

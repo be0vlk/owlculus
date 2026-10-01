@@ -10,13 +10,32 @@ vi.mock('@/stores/activeCase', () => ({ useActiveCaseStore: () => activeCase }))
 vi.mock('@/services/plugin', () => ({
   pluginService: { listPlugins: vi.fn(), executePlugin: vi.fn(), getHistory: vi.fn().mockResolvedValue({ items: [] }) },
 }))
-vi.mock('@/composables/usePluginApiKeys', () => ({
-  usePluginApiKeys: () => ({
-    checkPluginApiKeys: vi.fn(),
-    getMissingApiKeys: () => [],
-    getApiKeyWarningMessage: vi.fn(),
-  }),
-}))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ userRole: 'Analyst' }) }))
+vi.mock('@/services/api', () => ({ default: { get: vi.fn() } }))
+
+it('reads missing API keys from the plugin list without fetching key status', async () => {
+  const { default: api } = await import('@/services/api')
+  pluginService.listPlugins.mockResolvedValue({
+    KeyedPlugin: {
+      display_name: 'Keyed',
+      enabled: true,
+      api_key_requirements: ['shodan', 'virustotal'],
+      api_key_status: { shodan: true, virustotal: false },
+      parameters: { query: { type: 'string' } },
+    },
+  })
+  const wrapper = mountWithVuetify(PluginsDashboard, {
+    global: { stubs: { BaseDashboard: { template: '<main><slot /></main>' } } },
+  })
+  await flushPromises()
+  await wrapper.get('button[aria-label="Configure Keyed"]').trigger('click')
+  await flushPromises()
+  const submit = wrapper.get('button[type="submit"]')
+  expect(submit.text()).toContain('API Key Required')
+  expect(submit.element.disabled).toBe(true)
+  expect(wrapper.text()).toContain('requires an API key for: Virustotal')
+  expect(api.get).not.toHaveBeenCalled()
+})
 
 it('validates keyboard submissions, disables pending requests, and permits retry after failure', async () => {
   pluginService.listPlugins.mockResolvedValue({

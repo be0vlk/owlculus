@@ -88,7 +88,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   wrapper?.unmount()
-  useHuntStore().resetCaseExecutions()
+  useHuntStore().invalidateWorkflow(true)
   vi.useRealTimers()
 })
 async function open(path) {
@@ -161,7 +161,7 @@ it('replaces the selected execution and Case during a pending detail read', asyn
   await open('/case/1/hunts/execution/7')
   const pending = deferred()
   huntService.getExecution.mockReturnValueOnce(pending.promise)
-  const refresh = wrapper.findComponent(HuntExecution).vm.refreshExecution()
+  const refresh = wrapper.findComponent(HuntExecution).vm.loadExecution()
   const signal = huntService.getExecution.mock.calls.at(-1)[2]
   await router.push('/case/2/hunts/execution/8')
   await flushPromises()
@@ -231,7 +231,7 @@ it('recovers reads and reconnect bursts, retaining output until complete termina
   const view = wrapper.findComponent(HuntExecution)
   const store = useHuntStore()
   huntService.getExecution.mockRejectedValueOnce(new Error('Temporary read failure'))
-  await view.vm.refreshExecution()
+  await view.vm.loadExecution()
   await flushPromises()
   expect(wrapper.get('[role="alert"]').text()).toContain('Temporary read failure')
   expect(wrapper.text()).toContain('Hunt 7')
@@ -262,7 +262,7 @@ it('recovers reads and reconnect bursts, retaining output until complete termina
   expect(huntService.getExecution).toHaveBeenCalledTimes(terminalReads)
   expect(vi.getTimerCount()).toBe(0)
   expect(huntService.closeExecutionStream).toHaveBeenCalledWith(streams[1])
-  await view.vm.refreshExecution()
+  await view.vm.loadExecution()
   expect(huntService.getExecution).toHaveBeenCalledTimes(terminalReads + 1)
   await router.push('/cases')
   await router.push('/case/1/hunts/execution/7')
@@ -294,7 +294,7 @@ it('replaces an execution within the same Case without accepting a late failure 
   await open('/case/1/hunts/execution/7')
   const pending = deferred()
   huntService.getExecution.mockReturnValueOnce(pending.promise)
-  const refresh = wrapper.findComponent(HuntExecution).vm.refreshExecution()
+  const refresh = wrapper.findComponent(HuntExecution).vm.loadExecution()
   huntService.getExecution.mockImplementation(async (id) => detail(Number(id), 1, 'pending'))
   await router.push('/case/1/hunts/execution/9')
   await flushPromises()
@@ -316,7 +316,7 @@ it.each([401, 403, 404])(
     await open('/case/1/hunts/execution/7')
     const pending = deferred()
     huntService.getExecution.mockReturnValueOnce(pending.promise)
-    const refresh = wrapper.findComponent(HuntExecution).vm.refreshExecution()
+    const refresh = wrapper.findComponent(HuntExecution).vm.loadExecution()
     const signal = huntService.getExecution.mock.calls.at(-1)[2]
     huntService.getExecution.mockRejectedValueOnce({
       response: { status, data: { detail: 'Access revoked' } },

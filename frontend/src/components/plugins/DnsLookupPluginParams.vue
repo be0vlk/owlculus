@@ -3,7 +3,7 @@
     <PluginDescriptionCard :description="pluginDescription" />
 
     <!-- Lookup Mode -->
-    <v-radio-group v-model="lookupMode" density="compact" inline @update:model-value="updateMode">
+    <v-radio-group v-model="lookupMode" density="compact" inline>
       <template #label>
         <span class="text-subtitle2">Lookup Type</span>
       </template>
@@ -33,7 +33,7 @@
       persistent-hint
       variant="outlined"
       density="compact"
-      @update:model-value="updateRecordTypes"
+      @update:model-value="updateParams"
     />
 
     <!-- Timeout -->
@@ -117,7 +117,7 @@ const lookupMode = computed({
   get: () => localParams.lookup_mode,
   set: (value) => {
     localParams.lookup_mode = value
-    updateMode()
+    updateParams()
   },
 })
 
@@ -139,16 +139,6 @@ const selectedRecordTypes = ref(
     : ['A'],
 )
 
-// Update mode and clear inappropriate parameters
-const updateMode = () => {
-  updateParams()
-}
-
-// Update record types parameter when selection changes
-const updateRecordTypes = () => {
-  updateParams()
-}
-
 // Watch for external changes to record_types
 watch(
   () => props.modelValue.record_types,
@@ -161,6 +151,6 @@ watch(
 
 // Initialize record_types on mount for forward mode
 if (lookupMode.value === 'forward' && !props.modelValue.record_types) {
-  updateRecordTypes()
+  updateParams()
 }
 </script>

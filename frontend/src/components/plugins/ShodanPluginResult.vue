@@ -224,7 +224,7 @@
                 <!-- Last Update -->
                 <div v-if="result.last_update" class="text-body-small text-medium-emphasis">
                   <v-icon icon="mdi-clock-outline" size="x-small" class="mr-1" />
-                  Last updated: {{ formatDate(result.last_update) }}
+                  Last updated: {{ formatResultDate(result.last_update) }}
                 </div>
               </div>
             </v-card-text>
@@ -243,53 +243,27 @@
     />
 
     <!-- No Results -->
-    <NoResultsCard v-if="!parsedResults.length" />
+    <NoResultsCard v-if="!result.length" />
   </div>
 </template>
 
 <script setup>
+import { copyToClipboard } from '@/utils/clipboard'
 import { computed, toRef } from 'vue'
-import { usePluginResults } from '@/composables/usePluginResults'
+import { usePluginResults, formatResultDate } from '@/composables/usePluginResults'
 import PluginStatusAlert from './PluginStatusAlert.vue'
 import NoResultsCard from './NoResultsCard.vue'
 
 const props = defineProps({
   result: {
-    type: [Object, Array],
+    type: Array,
     required: true,
   },
 })
 
-const { parsedResults, statusMessages, errorMessages } = usePluginResults(toRef(props, 'result'))
+const { statusMessages, errorMessages, dataResults } = usePluginResults(toRef(props, 'result'))
 
-// Extract Shodan data results
-const shodanResults = computed(() => {
-  return parsedResults.value.filter((item) => item.type === 'data').map((item) => item.data)
-})
-
-const formatDate = (dateString) => {
-  if (!dateString || dateString === 'Unknown') return 'Unknown'
-
-  try {
-    // Handle timestamp format
-    if (typeof dateString === 'string' && dateString.includes('T')) {
-      return new Date(dateString).toLocaleDateString()
-    }
-
-    // Handle other formats
-    return new Date(dateString).toLocaleDateString()
-  } catch {
-    return dateString
-  }
-}
-
-const copyToClipboard = async (text) => {
-  try {
-    await navigator.clipboard.writeText(text)
-  } catch (err) {
-    console.error('Failed to copy text:', err)
-  }
-}
+const shodanResults = computed(() => dataResults.value.map((item) => item.data))
 </script>
 
 <style scoped>

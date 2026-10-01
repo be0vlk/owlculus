@@ -173,6 +173,7 @@
 </template>
 
 <script setup>
+import { copyToClipboard } from '@/utils/clipboard'
 import { computed, toRef } from 'vue'
 import { usePluginResults } from '@/composables/usePluginResults'
 import PluginStatusAlert from './PluginStatusAlert.vue'
@@ -180,7 +181,7 @@ import NoResultsCard from './NoResultsCard.vue'
 
 const props = defineProps({
   result: {
-    type: [Object, Array],
+    type: Array,
     required: true,
   },
 })
@@ -234,14 +235,6 @@ const getSourceIcon = (source) => {
     SecurityTrails: 'mdi-security',
   }
   return icons[source] || 'mdi-source-merge'
-}
-
-const copyToClipboard = async (text) => {
-  try {
-    await navigator.clipboard.writeText(text)
-  } catch (err) {
-    console.error('Failed to copy text:', err)
-  }
 }
 
 const copyAllSubdomains = () => {

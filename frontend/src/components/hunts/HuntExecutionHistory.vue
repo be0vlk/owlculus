@@ -132,7 +132,9 @@
 
         <!-- Duration Column -->
         <template #[`item.duration`]="{ item }">
-          <span class="text-body-medium">{{ calculateDuration(item) }}</span>
+          <span class="text-body-medium">{{
+            calculateDuration(item.started_at, item.completed_at)
+          }}</span>
         </template>
 
         <!-- Actions Column -->
@@ -153,9 +155,12 @@
 <script setup>
 import { ref, computed } from 'vue'
 import {
+  calculateDuration,
   getHuntTargetSummary,
   getCategoryColor,
   getCategoryIcon,
+  getStatusColor,
+  getStatusIcon,
   getStatusText as formatStatusText,
 } from '@/utils/huntDisplayUtils'
 import { formatDate } from '@/composables/dateUtils'
@@ -248,70 +253,7 @@ const filteredExecutions = computed(() => {
 })
 
 // Methods
-
-const getStatusColor = (status) => {
-  switch (status) {
-    case 'pending':
-      return 'grey'
-    case 'running':
-      return 'primary'
-    case 'completed':
-      return 'success'
-    case 'partial':
-      return 'warning'
-    case 'failed':
-      return 'error'
-    case 'cancelled':
-      return 'grey'
-    default:
-      return 'grey'
-  }
-}
-
-const getStatusIcon = (status) => {
-  switch (status) {
-    case 'pending':
-      return 'mdi-clock-outline'
-    case 'running':
-      return 'mdi-play'
-    case 'completed':
-      return 'mdi-check'
-    case 'partial':
-      return 'mdi-alert'
-    case 'failed':
-      return 'mdi-close'
-    case 'cancelled':
-      return 'mdi-stop'
-    default:
-      return 'mdi-help'
-  }
-}
-
 const getStatusText = (status) => formatStatusText(status, true)
-
-// formatDate and formatTimeOnly are now imported from dateUtils
-
-const calculateDuration = (execution) => {
-  if (!execution.started_at) return 'N/A'
-
-  const startTime = new Date(execution.started_at)
-  const endTime = execution.completed_at ? new Date(execution.completed_at) : new Date()
-  const diffMs = endTime - startTime
-
-  if (diffMs < 1000) return '< 1s'
-
-  const diffSeconds = Math.floor(diffMs / 1000)
-  const diffMinutes = Math.floor(diffSeconds / 60)
-  const diffHours = Math.floor(diffMinutes / 60)
-
-  if (diffHours > 0) {
-    return `${diffHours}h ${diffMinutes % 60}m`
-  } else if (diffMinutes > 0) {
-    return `${diffMinutes}m ${diffSeconds % 60}s`
-  } else {
-    return `${diffSeconds}s`
-  }
-}
 
 const clearFilters = () => {
   searchQuery.value = ''
@@ -319,31 +261,6 @@ const clearFilters = () => {
   categoryFilter.value = null
 }
 
-const getTargetDisplay = (execution) => {
-  const initialParams = execution.initial_parameters || {}
-  const huntCategory = execution.hunt_category || 'general'
-
-  // First try to get the target from the helper function
-  const target = getHuntTargetSummary(initialParams, huntCategory)
-
-  // If we got a meaningful result, return it
-  if (target && target !== 'N/A') {
-    return target
-  }
-
-  // Otherwise, try to extract any parameter value as fallback
-  const paramKeys = Object.keys(initialParams)
-  if (paramKeys.length > 0) {
-    // Get the first non-empty parameter value
-    for (const key of paramKeys) {
-      const value = initialParams[key]
-      if (value && typeof value === 'string' && value.trim()) {
-        // Truncate if too long
-        return value.length > 30 ? value.substring(0, 27) + '...' : value
-      }
-    }
-  }
-
-  return 'N/A'
-}
+const getTargetDisplay = (execution) =>
+  getHuntTargetSummary(execution.initial_parameters || {}, execution.hunt_category || 'general')
 </script>

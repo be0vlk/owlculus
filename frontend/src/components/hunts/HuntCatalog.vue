@@ -101,7 +101,8 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
+import { getDisplayCategory } from '@/utils/huntDisplayUtils'
 import HuntCard from './HuntCard.vue'
 import HuntListItem from './HuntListItem.vue'
 
@@ -122,20 +123,13 @@ const props = defineProps({
 
 defineEmits(['execute', 'view-details', 'retry'])
 
+// Same categories as plugins for consistency
+const categoryOptions = ['Person', 'Network', 'Company', 'Other']
+
 // Local state
 const searchQuery = ref('')
 const selectedCategory = ref(null)
 const viewMode = ref('grid')
-
-// Computed properties
-const categoryOptions = computed(() => {
-  // Use the same categories as plugins for consistency
-  const categories = ['Person', 'Network', 'Company', 'Other']
-  return categories.map((category) => ({
-    title: category,
-    value: category,
-  }))
-})
 
 const filteredHunts = computed(() => {
   let filtered = props.hunts
@@ -151,24 +145,14 @@ const filteredHunts = computed(() => {
     )
   }
 
-  // Filter by category
   if (selectedCategory.value) {
-    // Map plugin categories to hunt categories
-    const categoryMapping = {
-      Person: ['person'],
-      Network: ['domain', 'network'],
-      Company: ['company'],
-      Other: ['general', 'other'],
-    }
-
-    const huntCategories = categoryMapping[selectedCategory.value] || [
-      selectedCategory.value.toLowerCase(),
-    ]
-    filtered = filtered.filter((hunt) => huntCategories.includes(hunt.category.toLowerCase()))
+    filtered = filtered.filter(
+      (hunt) => getDisplayCategory(hunt.category) === selectedCategory.value,
+    )
   }
 
   // Sort by category, then by display name
-  return filtered.sort((a, b) => {
+  return filtered.toSorted((a, b) => {
     if (a.category !== b.category) {
       return a.category.localeCompare(b.category)
     }
@@ -181,20 +165,6 @@ const clearFilters = () => {
   searchQuery.value = ''
   selectedCategory.value = null
 }
-
-// Watch for prop changes to reset local state if needed
-watch(
-  () => props.hunts,
-  () => {
-    // If selected category no longer exists, clear it
-    if (
-      selectedCategory.value &&
-      !categoryOptions.value.some((opt) => opt.value === selectedCategory.value)
-    ) {
-      selectedCategory.value = null
-    }
-  },
-)
 </script>
 
 <style scoped>

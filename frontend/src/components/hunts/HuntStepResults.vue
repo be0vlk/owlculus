@@ -63,7 +63,7 @@
         :execution-partial="!!step.output?.partial"
         :execution-error="correlationExecutionError"
         :retrieval-loading="retrievalLoading"
-        :retrieval-complete="retrievalComplete && !retrievalLoading && !retrievalError"
+        :retrieval-complete="!retrievalLoading && !retrievalError"
         :retrieval-error="retrievalError"
         :export-error="exportError"
         @retry="$emit('retry')"
@@ -77,7 +77,9 @@
             <!-- Generic result display -->
             <div v-if="typeof result === 'object'">
               <div v-for="(value, key) in result" :key="key" class="mb-1">
-                <span class="text-body-small font-weight-medium">{{ formatKey(key) }}:</span>
+                <span class="text-body-small font-weight-medium"
+                  >{{ formatParameterName(key) }}:</span
+                >
                 <span class="text-body-small ml-2">{{ formatValue(value) }}</span>
               </div>
             </div>
@@ -120,19 +122,15 @@
 import { computed } from 'vue'
 import PluginResult from '@/components/plugins/PluginResult.vue'
 import { huntCorrelationEvents } from '@/utils/huntResults'
+import { formatParameterName } from '@/utils/huntDisplayUtils'
 
 defineEmits(['retry'])
 const props = defineProps({
   exportError: { type: String, default: null },
   retrievalLoading: { type: Boolean, default: false },
-  retrievalComplete: { type: Boolean, default: true },
   retrievalError: { type: String, default: null },
   step: {
     type: Object,
-    required: true,
-  },
-  stepNumber: {
-    type: Number,
     required: true,
   },
 })
@@ -164,10 +162,6 @@ const displayResults = computed(() => {
 })
 
 // Methods
-const formatKey = (key) => {
-  return key.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
-}
-
 const formatValue = (value) => {
   if (value === null || value === undefined) return 'N/A'
   if (typeof value === 'boolean') return value ? 'Yes' : 'No'

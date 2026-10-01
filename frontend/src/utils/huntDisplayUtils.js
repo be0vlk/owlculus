@@ -2,64 +2,41 @@
  * Hunt display utilities for extracting meaningful information from hunt executions
  */
 
+const parameterPriority = {
+  domain: ['domain', 'hostname', 'url'],
+  person: ['username', 'email', 'full_name', 'first_name', 'last_name'],
+  company: ['company_name', 'organization', 'org_name', 'name'],
+  ip: ['ip_address', 'ip', 'host'],
+  phone: ['phone_number', 'phone'],
+  email: ['email', 'email_address'],
+  general: ['target', 'query', 'search_term'],
+}
+
 /**
  * Extract display-friendly parameter value from hunt initial_parameters
  * @param {Object} initialParameters - The initial_parameters object from hunt execution
  * @param {string} huntCategory - The hunt category (domain, person, company, etc.)
  * @returns {string} Display-friendly parameter value or empty string
  */
-import { formatDate, formatTimeOnly } from '@/composables/dateUtils'
-
 export function extractHuntTargetDisplay(initialParameters, huntCategory) {
   if (!initialParameters || typeof initialParameters !== 'object') {
     return ''
   }
 
-  // Define priority order for parameter extraction based on hunt category
-  const parameterPriority = {
-    domain: ['domain', 'hostname', 'url'],
-    person: ['username', 'email', 'full_name', 'first_name', 'last_name'],
-    company: ['company_name', 'organization', 'org_name', 'name'],
-    ip: ['ip_address', 'ip', 'host'],
-    phone: ['phone_number', 'phone'],
-    email: ['email', 'email_address'],
-    general: ['target', 'query', 'search_term'],
-  }
-
-  // Get parameter priority for this hunt category, fallback to general
-  const priorities = parameterPriority[huntCategory] || parameterPriority.general
-
-  // Try to find a parameter value in priority order
-  for (const paramName of priorities) {
-    if (paramName in initialParameters) {
-      const value = initialParameters[paramName]
-      if (value && typeof value === 'string' && value.trim()) {
-        return value.trim()
-      }
+  // First non-blank string value among the given keys
+  const pick = (keys) => {
+    for (const key of keys) {
+      const value = initialParameters[key]
+      if (value && typeof value === 'string' && value.trim()) return value.trim()
     }
+    return ''
   }
 
-  // If no priority parameters found, try to find any meaningful string parameter
-  const fallbackParams = ['domain', 'username', 'email', 'target', 'query', 'search', 'name']
-  for (const paramName of fallbackParams) {
-    if (paramName in initialParameters) {
-      const value = initialParameters[paramName]
-      if (value && typeof value === 'string' && value.trim()) {
-        return value.trim()
-      }
-    }
-  }
-
-  // If still no value found, try the first string parameter
-  const allParams = Object.keys(initialParameters)
-  for (const paramName of allParams) {
-    const value = initialParameters[paramName]
-    if (value && typeof value === 'string' && value.trim() && paramName !== 'save_to_case') {
-      return value.trim()
-    }
-  }
-
-  return ''
+  return (
+    pick(parameterPriority[huntCategory] || parameterPriority.general) ||
+    pick(['domain', 'username', 'email', 'target', 'query', 'search', 'name']) ||
+    pick(Object.keys(initialParameters).filter((key) => key !== 'save_to_case'))
+  )
 }
 
 /**
@@ -173,23 +150,16 @@ export const getCategoryColor = (category) => {
   return colorMap[category] || colorMap.general
 }
 
-// Format date/time
-export const formatDateTime = (dateString) => {
-  return formatDate(dateString) || 'N/A'
-}
-
-// Format time only
-export const formatTime = (timestamp) => {
-  return formatTimeOnly(timestamp)
-}
-
 // Calculate and format duration
+// Hunt timestamps are UTC but may arrive without a zone designator.
+const parseUtc = (value) =>
+  new Date(typeof value === 'string' && !/(Z|[+-]\d\d:?\d\d)$/i.test(value) ? `${value}Z` : value)
+
 export const calculateDuration = (startTime, endTime) => {
   if (!startTime) return 'N/A'
 
-  const start = new Date(startTime)
-  const end = endTime ? new Date(endTime) : new Date()
-  const diffMs = end - start
+  const end = endTime ? parseUtc(endTime) : new Date()
+  const diffMs = Math.max(0, end - parseUtc(startTime))
 
   const diffSeconds = Math.floor(diffMs / 1000)
   const diffMinutes = Math.floor(diffSeconds / 60)
@@ -224,16 +194,6 @@ export const formatMetadataValue = (value) => {
   if (typeof value === 'object') return JSON.stringify(value)
   if (typeof value === 'boolean') return value ? 'Yes' : 'No'
   return String(value)
-}
-
-// Get log entry CSS class
-export const getLogEntryClass = (type) => {
-  const classMap = {
-    error: 'log-error',
-    warning: 'log-warning',
-    info: 'log-info',
-  }
-  return classMap[type] || 'log-default'
 }
 
 // Get display category name

@@ -171,7 +171,7 @@
     </div>
 
     <!-- Completion and Error Messages -->
-    <template v-for="(item, index) in parsedResults" :key="`message-${index}`">
+    <template v-for="(item, index) in result" :key="`message-${index}`">
       <!-- Completion Message -->
       <v-alert v-if="item.type === 'complete'" class="mb-4" type="success" variant="tonal">
         <template #title>
@@ -224,11 +224,12 @@
     </template>
 
     <!-- No Results -->
-    <NoResultsCard v-if="!parsedResults.length" />
+    <NoResultsCard v-if="!result.length" />
   </div>
 </template>
 
 <script setup>
+import { copyToClipboard } from '@/utils/clipboard'
 import { computed, toRef } from 'vue'
 import { formatDate } from '@/composables/dateUtils'
 import { usePluginResults } from '@/composables/usePluginResults'
@@ -237,17 +238,14 @@ import NoResultsCard from './NoResultsCard.vue'
 
 const props = defineProps({
   result: {
-    type: [Object, Array],
+    type: Array,
     required: true,
   },
 })
 
-const { parsedResults, statusMessages } = usePluginResults(toRef(props, 'result'))
+const { statusMessages, dataResults } = usePluginResults(toRef(props, 'result'))
 
-// Extract platform data results
-const platformResults = computed(() => {
-  return parsedResults.value.filter((item) => item.type === 'data').map((item) => item.data)
-})
+const platformResults = computed(() => dataResults.value.map((item) => item.data))
 
 // Summary statistics
 const summaryData = computed(() => {
@@ -271,14 +269,6 @@ const foundPlatforms = computed(() => {
     .map((p) => p.platform)
     .sort()
 })
-
-const copyToClipboard = async (text) => {
-  try {
-    await navigator.clipboard.writeText(text)
-  } catch (err) {
-    console.error('Failed to copy text:', err)
-  }
-}
 </script>
 
 <style scoped>

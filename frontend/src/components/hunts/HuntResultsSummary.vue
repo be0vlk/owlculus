@@ -29,7 +29,7 @@
       <v-col cols="6" md="3">
         <v-card variant="tonal" color="info">
           <v-card-text class="text-center pa-3">
-            <div class="text-headline-large font-weight-bold">{{ evidenceCount }}</div>
+            <div class="text-headline-large font-weight-bold">{{ evidenceRefs.length }}</div>
             <div class="text-body-small">Evidence Created</div>
           </v-card-text>
         </v-card>
@@ -52,7 +52,7 @@
               icon="mdi-open-in-new"
               size="small"
               variant="text"
-              @click="viewEvidence(evidenceRef)"
+              @click="emit('view-evidence', evidenceRef)"
             />
           </template>
         </v-list-item>
@@ -65,7 +65,7 @@
       <v-table class="hunt-table" density="compact">
         <tbody>
           <tr v-for="(value, key) in contextMetadata" :key="key">
-            <td class="font-weight-medium">{{ formatMetadataKey(key) }}</td>
+            <td class="font-weight-medium">{{ formatParameterName(key) }}</td>
             <td>{{ formatMetadataValue(value) }}</td>
           </tr>
         </tbody>
@@ -73,7 +73,7 @@
     </div>
 
     <!-- Empty State -->
-    <div v-if="stepResults.length === 0" class="text-center pa-8">
+    <div v-if="!steps.length" class="text-center pa-8">
       <v-icon icon="mdi-information" size="64" color="grey" class="mb-4" />
       <div class="text-title-large mb-2">No Results Available</div>
       <div class="text-body-medium text-medium-emphasis">
@@ -86,7 +86,7 @@
 <script setup>
 import { computed } from 'vue'
 import { huntResultCount } from '@/utils/huntResults'
-import { formatMetadataValue } from '@/utils/huntDisplayUtils'
+import { formatMetadataValue, formatParameterName } from '@/utils/huntDisplayUtils'
 
 const props = defineProps({
   execution: {
@@ -102,31 +102,20 @@ const props = defineProps({
 const emit = defineEmits(['view-evidence'])
 
 // Computed properties
-const stepResults = computed(() => {
-  return props.execution.steps || []
-})
+const steps = computed(() => props.execution.steps || [])
 
-const completedSteps = computed(() => {
-  return stepResults.value.filter((step) => step.status === 'completed').length
-})
+const completedSteps = computed(
+  () => steps.value.filter((step) => step.status === 'completed').length,
+)
 
-const failedSteps = computed(() => {
-  return stepResults.value.filter((step) => step.status === 'failed').length
-})
+const failedSteps = computed(() => steps.value.filter((step) => step.status === 'failed').length)
 
-const totalResults = computed(() => {
-  return stepResults.value.reduce((total, step) => {
-    const count = huntResultCount(step)
-    return total + count
-  }, 0)
-})
+const totalResults = computed(() =>
+  steps.value.reduce((total, step) => total + huntResultCount(step), 0),
+)
 
 const evidenceRefs = computed(() => {
   return props.contextData?.evidence_refs || []
-})
-
-const evidenceCount = computed(() => {
-  return evidenceRefs.value.length
 })
 
 const contextMetadata = computed(() => {
@@ -140,15 +129,6 @@ const contextMetadata = computed(() => {
   })
   return filtered
 })
-
-// Methods
-const formatMetadataKey = (key) => {
-  return key.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
-}
-
-const viewEvidence = (evidenceRef) => {
-  emit('view-evidence', evidenceRef)
-}
 </script>
 
 <style scoped>

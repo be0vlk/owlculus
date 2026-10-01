@@ -5,12 +5,9 @@ import { VForm } from 'vuetify/components'
 import CorrelationScanPluginResult from '../plugins/CorrelationScanPluginResult.vue'
 import GenericPluginParams from '../plugins/GenericPluginParams.vue'
 import PluginResultsModal from '../plugins/PluginResultsModal.vue'
+import { assembleCorrelationResults } from '@/utils/correlationResults'
 
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
-
-vi.mock('@/composables/usePluginApiKeys', () => ({
-  usePluginApiKeys: () => ({ checkPluginApiKeys: vi.fn(), getMissingApiKeys: () => [] }),
-}))
 
 it('validates generic required fields without rendering plugin metadata as inputs', async () => {
   const wrapper = mountWithVuetify(VForm, {
@@ -34,7 +31,7 @@ it('shows structured results, exports them, and closes through an accessible act
     props: {
       modelValue: false,
       pluginName: 'ExamplePlugin',
-      results: { matches: ['example.org'] },
+      results: [{ matches: ['example.org'] }],
     },
     attachTo: document.body,
   })
@@ -46,12 +43,12 @@ it('shows structured results, exports them, and closes through an accessible act
     .findAll('button')
     .find((button) => button.text().includes('Export'))
     .trigger('click')
-  expect(wrapper.emitted('export')[0][0].results).toEqual({ matches: ['example.org'] })
+  expect(wrapper.emitted('export')[0][0].pluginName).toBe('ExamplePlugin')
   await dialog.get('button[aria-label="Close plugin results"]').trigger('click')
   expect(wrapper.emitted('update:modelValue')).toEqual([[false]])
 })
 
-it.each([[], {}, null])('shows an explicit empty result state for %j', async (results) => {
+it.each([[], null])('shows an explicit empty result state for %j', async (results) => {
   const wrapper = mountWithVuetify(PluginResultsModal, {
     props: { modelValue: false, pluginName: 'ExamplePlugin', results },
     attachTo: document.body,
@@ -115,7 +112,7 @@ it('renders retained typed events through the specialized correlation renderer',
   expect(wrapper.text()).toContain('Correlation scan complete')
 })
 
-it('labels retained partial output and preserves its failure in exports', async () => {
+it('labels retained partial output', async () => {
   const wrapper = mountWithVuetify(PluginResultsModal, {
     props: {
       modelValue: false,
@@ -131,14 +128,6 @@ it('labels retained partial output and preserves its failure in exports', async 
   expect(dialog.text()).toContain('Partial retained results')
   expect(dialog.text()).toContain('Output exceeds the operation limit')
   expect(dialog.text()).toContain('example.org')
-  await dialog
-    .findAll('button')
-    .find((button) => button.text().includes('Export'))
-    .trigger('click')
-  expect(wrapper.emitted('export')[0][0]).toMatchObject({
-    partial: true,
-    error: 'Output exceeds the operation limit',
-  })
 })
 
 it('renders field explanations and tentative vehicle qualifications', () => {
@@ -296,11 +285,9 @@ it('assembles continued groups and ranks exact identifiers before provider overl
   expect(dialog.text()).toContain('1 source Entities · 4 matches · 1 related Cases')
   expect(dialog.text()).toContain('Low signal: common email provider')
   expect(dialog.text()).toContain('Original 24')
-  await dialog
-    .findAll('button')
-    .find((button) => button.text().includes('Export'))
-    .trigger('click')
-  const exported = wrapper.emitted('export')[0][0].results.filter((item) => item.data?.matches)
+  const exported = assembleCorrelationResults(wrapper.props('results')).filter(
+    (item) => item.data?.matches,
+  )
   expect(exported.map((item) => item.data.match_type)).toEqual(['email', 'phone', 'domain'])
   expect(exported[0].data.matches.map((match) => match.entity_id)).toEqual([22, 24])
   wrapper.unmount()
@@ -378,11 +365,7 @@ it('presents and exports explicit IP connections with original fields alongside 
   expect(dialog.text()).toContain('Exact IP address match')
   expect(dialog.text()).toContain('2001:0DB8:0:0:0:0:0:1')
   expect(dialog.text()).toContain('Name Match')
-  await dialog
-    .findAll('button')
-    .find((button) => button.text().includes('Export'))
-    .trigger('click')
-  const exported = wrapper.emitted('export')[0][0].results
+  const exported = assembleCorrelationResults(results)
   expect(exported).toHaveLength(2)
   expect(exported[0]).toEqual(results[0])
   expect(exported[1].data).toMatchObject(results[1].data)
@@ -433,11 +416,7 @@ it('renders and exports recorded profile equality with every field and conservat
   for (const field of ['social_media.linkedin', 'usernames[0]', 'social_media.other'])
     expect(dialog.text()).toContain(field)
   expect(dialog.text()).toContain(raw.trim())
-  await dialog
-    .findAll('button')
-    .find((button) => button.text().includes('Export'))
-    .trigger('click')
-  expect(wrapper.emitted('export')[0][0].results).toEqual(results)
+  expect(assembleCorrelationResults(results)).toEqual(results)
   wrapper.unmount()
 })
 

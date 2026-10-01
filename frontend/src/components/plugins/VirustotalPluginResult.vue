@@ -309,11 +309,13 @@
     />
 
     <!-- No Results -->
-    <NoResultsCard v-if="!parsedResults.length" />
+    <NoResultsCard v-if="!result.length" />
   </div>
 </template>
 
 <script setup>
+import { copyToClipboard } from '@/utils/clipboard'
+import { formatFileSize } from '@/utils/huntDisplayUtils'
 import { computed, toRef } from 'vue'
 import { usePluginResults } from '@/composables/usePluginResults'
 import PluginStatusAlert from './PluginStatusAlert.vue'
@@ -321,82 +323,40 @@ import NoResultsCard from './NoResultsCard.vue'
 
 const props = defineProps({
   result: {
-    type: [Object, Array],
+    type: Array,
     required: true,
   },
 })
 
-const { parsedResults, statusMessages, errorMessages } = usePluginResults(toRef(props, 'result'))
+const { statusMessages, errorMessages, dataResults } = usePluginResults(toRef(props, 'result'))
 
-// Extract VirusTotal data results
-const virusTotalResults = computed(() => {
-  return parsedResults.value.filter((item) => item.type === 'data').map((item) => item.data)
-})
+const virusTotalResults = computed(() => dataResults.value.map((item) => item.data))
 
-// Helper functions
-const getTargetIcon = (targetType) => {
-  switch (targetType) {
-    case 'file':
-      return 'mdi-file-document-outline'
-    case 'url':
-      return 'mdi-link'
-    case 'domain':
-      return 'mdi-web'
-    case 'ip_address':
-      return 'mdi-ip-network'
-    default:
-      return 'mdi-magnify'
-  }
+const targetIcons = {
+  file: 'mdi-file-document-outline',
+  url: 'mdi-link',
+  domain: 'mdi-web',
+  ip_address: 'mdi-ip-network',
 }
+const getTargetIcon = (targetType) => targetIcons[targetType] ?? 'mdi-magnify'
 
-const formatTargetType = (targetType) => {
-  switch (targetType) {
-    case 'file':
-      return 'File Hash'
-    case 'url':
-      return 'URL'
-    case 'domain':
-      return 'Domain'
-    case 'ip_address':
-      return 'IP Address'
-    default:
-      return targetType
-  }
+const targetTypeLabels = {
+  file: 'File Hash',
+  url: 'URL',
+  domain: 'Domain',
+  ip_address: 'IP Address',
 }
+const formatTargetType = (targetType) => targetTypeLabels[targetType] ?? targetType
 
-const getVerdictColor = (verdict) => {
-  switch (verdict) {
-    case 'Clean':
-      return 'success'
-    case 'Likely Safe':
-      return 'success'
-    case 'Suspicious':
-      return 'warning'
-    case 'Likely Malicious':
-      return 'error'
-    case 'Malicious':
-      return 'error'
-    default:
-      return 'grey'
-  }
+const verdicts = {
+  Clean: { color: 'success', icon: 'mdi-shield-check' },
+  'Likely Safe': { color: 'success', icon: 'mdi-shield-check' },
+  Suspicious: { color: 'warning', icon: 'mdi-shield-alert' },
+  'Likely Malicious': { color: 'error', icon: 'mdi-shield-remove' },
+  Malicious: { color: 'error', icon: 'mdi-shield-off' },
 }
-
-const getVerdictIcon = (verdict) => {
-  switch (verdict) {
-    case 'Clean':
-      return 'mdi-shield-check'
-    case 'Likely Safe':
-      return 'mdi-shield-check'
-    case 'Suspicious':
-      return 'mdi-shield-alert'
-    case 'Likely Malicious':
-      return 'mdi-shield-remove'
-    case 'Malicious':
-      return 'mdi-shield-off'
-    default:
-      return 'mdi-shield-outline'
-  }
-}
+const getVerdictColor = (verdict) => verdicts[verdict]?.color ?? 'grey'
+const getVerdictIcon = (verdict) => verdicts[verdict]?.icon ?? 'mdi-shield-outline'
 
 const getDetectionPercentage = (ratio) => {
   if (!ratio) return 0
@@ -432,22 +392,6 @@ const getDetectionCategoryColor = (category) => {
     'type-unsupported': 'grey',
   }
   return categoryColors[category?.toLowerCase()] || 'info'
-}
-
-const formatFileSize = (bytes) => {
-  if (!bytes) return 'Unknown'
-  const sizes = ['Bytes', 'KB', 'MB', 'GB']
-  if (bytes === 0) return '0 Bytes'
-  const i = Math.floor(Math.log(bytes) / Math.log(1024))
-  return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + ' ' + sizes[i]
-}
-
-const copyToClipboard = async (text) => {
-  try {
-    await navigator.clipboard.writeText(text)
-  } catch (err) {
-    console.error('Failed to copy text:', err)
-  }
 }
 </script>
 

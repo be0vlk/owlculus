@@ -1,8 +1,7 @@
 <template>
   <div class="d-flex flex-column ga-4">
-    <template v-for="(item, index) in parsedResults" :key="index">
-      <!-- Data Results -->
-      <v-card v-if="item.type === 'data'" elevation="1" rounded="lg">
+    <template v-for="(item, index) in dataResults" :key="index">
+      <v-card elevation="1" rounded="lg">
         <v-card-title class="d-flex align-center">
           <v-icon icon="mdi-web" class="mr-2" />
           {{ item.data.domain || 'Whois Results' }}
@@ -70,7 +69,9 @@
                   <v-icon size="small" class="mr-2" color="green">mdi-calendar-plus</v-icon>
                   <div>
                     <span class="text-body-small text-medium-emphasis">Created</span>
-                    <div class="text-body-medium">{{ formatDate(item.data.creation_date) }}</div>
+                    <div class="text-body-medium">
+                      {{ formatResultDate(item.data.creation_date) }}
+                    </div>
                   </div>
                 </div>
               </v-col>
@@ -80,7 +81,9 @@
                   <v-icon size="small" class="mr-2" color="blue">mdi-calendar-edit</v-icon>
                   <div>
                     <span class="text-body-small text-medium-emphasis">Updated</span>
-                    <div class="text-body-medium">{{ formatDate(item.data.updated_date) }}</div>
+                    <div class="text-body-medium">
+                      {{ formatResultDate(item.data.updated_date) }}
+                    </div>
                   </div>
                 </div>
               </v-col>
@@ -96,7 +99,9 @@
                   </v-icon>
                   <div>
                     <span class="text-body-small text-medium-emphasis">Expires</span>
-                    <div class="text-body-medium">{{ formatDate(item.data.expiration_date) }}</div>
+                    <div class="text-body-medium">
+                      {{ formatResultDate(item.data.expiration_date) }}
+                    </div>
                   </div>
                 </div>
               </v-col>
@@ -239,15 +244,19 @@
           </div>
         </v-card-text>
       </v-card>
-
-      <!-- Error Messages -->
-      <v-alert v-else-if="item.type === 'error'" type="error" variant="outlined">
-        {{ item.data.message }}
-      </v-alert>
     </template>
 
+    <v-alert
+      v-for="(item, index) in errorMessages"
+      :key="`error-${index}`"
+      type="error"
+      variant="outlined"
+    >
+      {{ item.data.message }}
+    </v-alert>
+
     <!-- No Results -->
-    <v-card v-if="!parsedResults.length" elevation="1" rounded="lg">
+    <v-card v-if="!result.length" elevation="1" rounded="lg">
       <v-card-text class="text-center pa-8">
         <v-icon icon="mdi-web" size="48" color="grey-darken-1" class="mb-3" />
         <p class="text-body-medium text-medium-emphasis">No whois results available.</p>
@@ -257,65 +266,20 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { toRef } from 'vue'
+import { copyToClipboard } from '@/utils/clipboard'
+import { usePluginResults, formatResultDate } from '@/composables/usePluginResults'
 
 const props = defineProps({
   result: {
-    type: [Object, Array],
+    type: Array,
     required: true,
   },
 })
 
-// Parse streaming results
-const parsedResults = computed(() => {
-  if (!props.result) return []
-
-  if (Array.isArray(props.result)) {
-    return props.result
-  }
-
-  if (props.result.type) {
-    return [props.result]
-  }
-
-  return []
-})
-
-const formatDate = (dateString) => {
-  if (!dateString) return 'Unknown'
-
-  try {
-    // If it's already formatted, return as is
-    if (dateString.includes('UTC')) {
-      return dateString
-    }
-
-    // Try to parse and format
-    const date = new Date(dateString)
-    if (isNaN(date.getTime())) {
-      return dateString
-    }
-
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      timeZone: 'UTC',
-    })
-  } catch {
-    return dateString
-  }
-}
+const { dataResults, errorMessages } = usePluginResults(toRef(props, 'result'))
 
 const hasAdditionalDetails = (data) => {
   return data.whois_server || data.dnssec || data.admin_email || data.tech_email
-}
-
-const copyToClipboard = async (text) => {
-  try {
-    await navigator.clipboard.writeText(text)
-  } catch (err) {
-    console.error('Failed to copy text:', err)
-  }
 }
 </script>

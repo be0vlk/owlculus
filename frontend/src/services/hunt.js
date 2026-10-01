@@ -21,11 +21,6 @@ export const huntService = {
    * @param {number} huntId - Hunt ID
    * @returns {Promise<Object>} Hunt definition
    */
-  async getHunt(huntId, signal) {
-    const response = await api.get(`/api/hunts/${huntId}`, { signal })
-    return response.data
-  },
-
   /**
    * Execute a hunt workflow
    * @param {number} huntId - Hunt ID to execute
