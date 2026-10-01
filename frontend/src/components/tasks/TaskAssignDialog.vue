@@ -5,7 +5,7 @@
     <v-card-text>
       <v-select
         v-model="selectedUserId"
-        :items="assignableUsers"
+        :items="caseUsers"
         clearable
         hint="Leave empty to unassign"
         item-title="username"
@@ -17,7 +17,7 @@
     <v-card-actions>
       <v-spacer />
       <v-btn @click="$emit('cancel')">Cancel</v-btn>
-      <v-btn :loading="loading" color="primary" @click="assign">
+      <v-btn color="primary" @click="emit('assign', selectedUserId)">
         {{ selectedUserId ? 'Assign' : 'Unassign' }}
       </v-btn>
     </v-card-actions>
@@ -25,7 +25,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { caseService } from '@/services/case'
 
 const props = defineProps({
@@ -37,34 +37,12 @@ const props = defineProps({
 
 const emit = defineEmits(['assign', 'cancel'])
 
-const loading = ref(false)
 const selectedUserId = ref(props.task.assigned_to_id)
-const caseData = ref(null)
-const users = ref([])
-
-// Only show users who have access to the case
-const assignableUsers = computed(() => {
-  return users.value
-})
-
-async function assign() {
-  loading.value = true
-  try {
-    emit('assign', selectedUserId.value)
-  } finally {
-    loading.value = false
-  }
-}
+const caseUsers = ref([])
 
 onMounted(async () => {
   try {
-    // Load case and user data
-    const [caseResult, usersResult] = await Promise.all([
-      caseService.getCase(props.task.case_id),
-      caseService.getCaseUsers(props.task.case_id),
-    ])
-    caseData.value = caseResult
-    users.value = usersResult
+    caseUsers.value = await caseService.getCaseUsers(props.task.case_id)
   } catch (error) {
     console.error('Failed to load data:', error)
   }

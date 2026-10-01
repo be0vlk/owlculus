@@ -3,9 +3,9 @@
     <!-- String field (text input) -->
     <v-text-field
       v-if="field.type === 'string'"
-      v-model="localValue"
+      v-model="model"
       :label="field.label"
-      :rules="getRules()"
+      :rules="rules"
       :hint="field.description"
       :persistent-hint="!!field.description"
       :readonly="readonly"
@@ -16,9 +16,9 @@
     <!-- Number field -->
     <v-text-field
       v-else-if="field.type === 'number'"
-      v-model.number="localValue"
+      v-model.number="model"
       :label="field.label"
-      :rules="getRules()"
+      :rules="rules"
       :hint="field.description"
       :persistent-hint="!!field.description"
       :readonly="readonly"
@@ -30,9 +30,9 @@
     <!-- Date field -->
     <v-text-field
       v-else-if="field.type === 'date'"
-      v-model="localValue"
+      v-model="model"
       :label="field.label"
-      :rules="getRules()"
+      :rules="rules"
       :hint="field.description"
       :persistent-hint="!!field.description"
       :readonly="readonly"
@@ -44,7 +44,7 @@
     <!-- Boolean field (checkbox) -->
     <v-checkbox
       v-else-if="field.type === 'boolean'"
-      v-model="localValue"
+      v-model="model"
       :label="field.label"
       :hint="field.description"
       :persistent-hint="!!field.description"
@@ -55,9 +55,9 @@
     <!-- Text area field -->
     <v-textarea
       v-else-if="field.type === 'text'"
-      v-model="localValue"
+      v-model="model"
       :label="field.label"
-      :rules="getRules()"
+      :rules="rules"
       :hint="field.description"
       :persistent-hint="!!field.description"
       :readonly="readonly"
@@ -69,10 +69,10 @@
     <!-- Select field -->
     <v-select
       v-else-if="field.type === 'select'"
-      v-model="localValue"
+      v-model="model"
       :items="field.options || []"
       :label="field.label"
-      :rules="getRules()"
+      :rules="rules"
       :hint="field.description"
       :persistent-hint="!!field.description"
       :readonly="readonly"
@@ -88,53 +88,21 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { computed } from 'vue'
 
 const props = defineProps({
   field: {
     type: Object,
     required: true,
   },
-  modelValue: {
-    default: null,
-  },
   readonly: {
     type: Boolean,
     default: false,
   },
 })
+const model = defineModel({ default: null })
 
-const emit = defineEmits(['update:modelValue'])
-
-// Local value that syncs with v-model
-const localValue = ref(props.modelValue)
-
-// Watch for external changes
-watch(
-  () => props.modelValue,
-  (newValue) => {
-    localValue.value = newValue
-  },
+const rules = computed(() =>
+  props.field.required ? [(v) => !!v || `${props.field.label} is required`] : [],
 )
-
-// Emit changes
-watch(localValue, (newValue) => {
-  emit('update:modelValue', newValue)
-})
-
-// Get validation rules for the field
-function getRules() {
-  const rules = []
-
-  if (props.field.required) {
-    rules.push((v) => {
-      if (props.field.type === 'boolean') {
-        return true // Boolean fields don't need required validation
-      }
-      return !!v || `${props.field.label} is required`
-    })
-  }
-
-  return rules
-}
 </script>

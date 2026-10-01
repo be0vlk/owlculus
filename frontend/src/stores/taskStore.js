@@ -17,11 +17,6 @@ export const useTaskStore = defineStore('task', () => {
   const currentTask = ref(null)
   const loading = ref(false)
   const error = ref(null)
-  const filters = ref({
-    status: 'all',
-    priority: 'all',
-    assignee: 'all',
-  })
 
   watch(
     [() => activeCase.activeCaseId, () => authStore.user?.id],
@@ -33,7 +28,6 @@ export const useTaskStore = defineStore('task', () => {
       currentTask.value = null
       loading.value = false
       error.value = null
-      resetFilters()
     },
     { flush: 'sync' },
   )
@@ -41,48 +35,12 @@ export const useTaskStore = defineStore('task', () => {
   // Getters
   const currentUserId = computed(() => authStore.user?.id)
 
-  const filteredTasks = computed(() => {
-    let result = tasks.value
-
-    if (filters.value.status !== 'all') {
-      result = result.filter((t) => t.status === filters.value.status)
-    }
-
-    if (filters.value.priority !== 'all') {
-      result = result.filter((t) => t.priority === filters.value.priority)
-    }
-
-    if (filters.value.assignee !== 'all') {
-      if (filters.value.assignee === 'unassigned') {
-        result = result.filter((t) => !t.assigned_to_id)
-      } else if (filters.value.assignee === 'me') {
-        result = result.filter((t) => t.assigned_to_id === currentUserId.value)
-      } else {
-        result = result.filter((t) => t.assigned_to_id === parseInt(filters.value.assignee))
-      }
-    }
-
-    return result
-  })
-
-  const tasksByStatus = computed(() => {
-    const grouped = {}
-    Object.values(TASK_STATUS).forEach((status) => {
-      grouped[status] = filteredTasks.value.filter((t) => t.status === status)
-    })
-    return grouped
-  })
-
   const myTasks = computed(() =>
     tasks.value.filter((t) => t.assigned_to_id === currentUserId.value),
   )
 
-  const myOpenTasks = computed(() =>
-    myTasks.value.filter((t) => t.status !== TASK_STATUS.COMPLETED),
-  )
-
   const overdueTasks = computed(() =>
-    filteredTasks.value.filter((t) => {
+    tasks.value.filter((t) => {
       if (!t.due_date || t.status === TASK_STATUS.COMPLETED) return false
       return new Date(t.due_date) < new Date()
     }),
@@ -107,35 +65,14 @@ export const useTaskStore = defineStore('task', () => {
     }
   }
 
-  async function loadTasks(customFilters = null, isCurrent = () => true) {
+  async function loadTasks(isCurrent = () => true) {
     const caseId = activeCase.activeCaseId
     if (!caseId) return
     const request = ++listRequest
     try {
       loading.value = true
       error.value = null
-
-      const filterParams = customFilters || {
-        status: filters.value.status !== 'all' ? filters.value.status : undefined,
-        priority: filters.value.priority !== 'all' ? filters.value.priority : undefined,
-        assigned_to_id:
-          filters.value.assignee !== 'all' &&
-          filters.value.assignee !== 'unassigned' &&
-          filters.value.assignee !== 'me'
-            ? filters.value.assignee
-            : undefined,
-      }
-
-      filterParams.case_id = caseId
-
-      // Remove undefined values
-      Object.keys(filterParams).forEach((key) => {
-        if (filterParams[key] === undefined) {
-          delete filterParams[key]
-        }
-      })
-
-      const result = await taskService.getTasks(filterParams)
+      const result = await taskService.getTasks({ case_id: caseId })
       if (request === listRequest && isCurrent()) tasks.value = result
     } catch (err) {
       if (request !== listRequest || !isCurrent()) return
@@ -187,31 +124,25 @@ export const useTaskStore = defineStore('task', () => {
     }
   }
 
-  async function updateTask(taskId, updates) {
+  async function mutate(call, errorMessage) {
     try {
       loading.value = true
       error.value = null
-      const updated = await taskService.updateTask(taskId, updates)
-
-      // Update in tasks array
-      const index = tasks.value.findIndex((t) => t.id === taskId)
-      if (index !== -1) {
-        tasks.value[index] = updated
-      }
-
-      // Update current task if it's the same
-      if (currentTask.value?.id === taskId) {
-        currentTask.value = updated
-      }
-
+      const updated = await call()
+      const index = tasks.value.findIndex((t) => t.id === updated.id)
+      if (index !== -1) tasks.value[index] = updated
+      if (currentTask.value?.id === updated.id) currentTask.value = updated
       return updated
     } catch (err) {
-      error.value = err.response?.data?.detail || 'Failed to update task'
+      error.value = err.response?.data?.detail || errorMessage
       throw err
     } finally {
       loading.value = false
     }
   }
+
+  const updateTask = (taskId, updates) =>
+    mutate(() => taskService.updateTask(taskId, updates), 'Failed to update task')
 
   async function deleteTask(taskId) {
     try {
@@ -234,57 +165,11 @@ export const useTaskStore = defineStore('task', () => {
     }
   }
 
-  async function assignTask(taskId, userId) {
-    try {
-      loading.value = true
-      error.value = null
-      const updated = await taskService.assignTask(taskId, userId)
+  const assignTask = (taskId, userId) =>
+    mutate(() => taskService.assignTask(taskId, userId), 'Failed to assign task')
 
-      // Update in tasks array
-      const index = tasks.value.findIndex((t) => t.id === taskId)
-      if (index !== -1) {
-        tasks.value[index] = updated
-      }
-
-      // Update current task if it's the same
-      if (currentTask.value?.id === taskId) {
-        currentTask.value = updated
-      }
-
-      return updated
-    } catch (err) {
-      error.value = err.response?.data?.detail || 'Failed to assign task'
-      throw err
-    } finally {
-      loading.value = false
-    }
-  }
-
-  async function updateTaskStatus(taskId, status) {
-    try {
-      loading.value = true
-      error.value = null
-      const updated = await taskService.updateStatus(taskId, status)
-
-      // Update in tasks array
-      const index = tasks.value.findIndex((t) => t.id === taskId)
-      if (index !== -1) {
-        tasks.value[index] = updated
-      }
-
-      // Update current task if it's the same
-      if (currentTask.value?.id === taskId) {
-        currentTask.value = updated
-      }
-
-      return updated
-    } catch (err) {
-      error.value = err.response?.data?.detail || 'Failed to update task status'
-      throw err
-    } finally {
-      loading.value = false
-    }
-  }
+  const updateTaskStatus = (taskId, status) =>
+    mutate(() => taskService.updateStatus(taskId, status), 'Failed to update task status')
 
   async function applyBulk(operation, taskIds, value, isCurrent = () => true) {
     const generation = contextGeneration
@@ -323,18 +208,6 @@ export const useTaskStore = defineStore('task', () => {
     return applyBulk(taskService.bulkUpdateStatus, taskIds, status, isCurrent)
   }
 
-  function setFilters(newFilters) {
-    filters.value = { ...filters.value, ...newFilters }
-  }
-
-  function resetFilters() {
-    filters.value = {
-      status: 'all',
-      priority: 'all',
-      assignee: 'all',
-    }
-  }
-
   return {
     // State
     templates,
@@ -342,13 +215,9 @@ export const useTaskStore = defineStore('task', () => {
     currentTask,
     loading,
     error,
-    filters,
 
     // Getters
-    filteredTasks,
-    tasksByStatus,
     myTasks,
-    myOpenTasks,
     overdueTasks,
     stats,
 
@@ -363,7 +232,5 @@ export const useTaskStore = defineStore('task', () => {
     updateTaskStatus,
     bulkAssign,
     bulkUpdateStatus,
-    setFilters,
-    resetFilters,
   }
 })

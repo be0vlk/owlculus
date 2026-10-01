@@ -41,7 +41,7 @@
 
         <v-select
           v-model="formData.priority"
-          :items="priorityOptions"
+          :items="TASK_PRIORITY_OPTIONS"
           label="Priority"
           variant="outlined"
           density="comfortable"
@@ -106,7 +106,7 @@
 import { useId, computed, onMounted, ref, watch } from 'vue'
 import { useTaskStore } from '@/stores/taskStore'
 import { useActiveCaseStore } from '@/stores/activeCase'
-import { TASK_PRIORITY, TASK_PRIORITY_LABELS } from '@/constants/tasks'
+import { TASK_PRIORITY, TASK_PRIORITY_OPTIONS } from '@/constants/tasks'
 import CustomFieldInput from './CustomFieldInput.vue'
 
 const props = defineProps({
@@ -149,10 +149,6 @@ const formData = ref({
 
 const templates = computed(() => taskStore.templates)
 const customFields = ref([])
-
-const priorityOptions = computed(() =>
-  Object.entries(TASK_PRIORITY_LABELS).map(([value, title]) => ({ title, value })),
-)
 
 const filteredUsers = computed(() => {
   if (!formData.value.case_id) return []

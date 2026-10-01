@@ -48,7 +48,7 @@ const tasks = computed(() => taskStore.tasks.filter((t) => t.case_id === props.c
 
 // Methods
 async function loadTasks() {
-  await taskStore.loadTasks({ case_id: props.caseId })
+  await taskStore.loadTasks()
 }
 
 async function handleCreateTask(taskData) {

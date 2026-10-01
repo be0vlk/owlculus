@@ -56,21 +56,21 @@
             "branches": 100
         },
         "src/components/tasks/CustomFieldInput.vue": {
-            "lines": 56.52,
-            "statements": 56.52,
-            "functions": 41.66,
+            "lines": 50,
+            "statements": 46.15,
+            "functions": 22.22,
             "branches": 25
         },
         "src/components/tasks/TaskAssignDialog.vue": {
-            "lines": 96.15,
-            "statements": 92.85,
-            "functions": 91.66,
+            "lines": 94.11,
+            "statements": 89.47,
+            "functions": 90.9,
             "branches": 100
         },
         "src/components/tasks/TaskForm.vue": {
-            "lines": 75.67,
-            "statements": 73.8,
-            "functions": 81.81,
+            "lines": 75,
+            "statements": 72.83,
+            "functions": 80.64,
             "branches": 66.26
         },
         "src/components/tasks/TaskQuickEditDialog.vue": {
@@ -171,14 +171,14 @@
         },
         "src/views/cases/CaseTasks.vue": {
             "lines": 60.86,
-            "statements": 64.28,
+            "statements": 64,
             "functions": 57.14,
             "branches": 73.33
         },
         "src/views/tasks/TaskDetail.vue": {
-            "lines": 92.85,
-            "statements": 87.97,
-            "functions": 87.65,
+            "lines": 92.53,
+            "statements": 87.41,
+            "functions": 87.01,
             "branches": 79.08
         }
     },

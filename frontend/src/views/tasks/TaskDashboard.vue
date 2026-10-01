@@ -35,37 +35,13 @@
 
     <!-- Stats Cards -->
     <v-row class="mb-4">
-      <v-col cols="12" md="3" sm="6">
+      <v-col v-for="card in statCards" :key="card.label" cols="12" md="3" sm="6">
         <v-card variant="outlined">
           <v-card-text class="text-center pa-4">
-            <div class="text-headline-large font-weight-bold">{{ stats.total }}</div>
-            <div class="text-body-medium text-medium-emphasis">Total Tasks</div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-      <v-col cols="12" md="3" sm="6">
-        <v-card variant="outlined">
-          <v-card-text class="text-center pa-4">
-            <div class="text-headline-large font-weight-bold text-primary">{{ stats.myTasks }}</div>
-            <div class="text-body-medium text-medium-emphasis">My Tasks</div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-      <v-col cols="12" md="3" sm="6">
-        <v-card variant="outlined">
-          <v-card-text class="text-center pa-4">
-            <div class="text-headline-large font-weight-bold text-warning">{{ stats.overdue }}</div>
-            <div class="text-body-medium text-medium-emphasis">Overdue</div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-      <v-col cols="12" md="3" sm="6">
-        <v-card variant="outlined">
-          <v-card-text class="text-center pa-4">
-            <div class="text-headline-large font-weight-bold text-success">
-              {{ stats.completed }}
+            <div class="text-headline-large font-weight-bold" :class="card.color">
+              {{ card.value }}
             </div>
-            <div class="text-body-medium text-medium-emphasis">Completed</div>
+            <div class="text-body-medium text-medium-emphasis">{{ card.label }}</div>
           </v-card-text>
         </v-card>
       </v-col>
@@ -126,7 +102,6 @@
       <v-divider />
       <TaskTable
         v-model="selected"
-        :show-case="false"
         :loading="loading"
         :show-select="true"
         :tasks="filteredAndSearchedTasks"
@@ -188,7 +163,7 @@
             </v-alert>
             <v-select
               v-model="value"
-              :items="kind === 'assign' ? assigneeOptions : statusOptions"
+              :items="kind === 'assign' ? assigneeOptions : TASK_STATUS_OPTIONS"
               :label="kind === 'assign' ? 'Assign To' : 'New Status'"
               :disabled="pending || (kind === 'assign' && (usersLoading || !!usersError))"
               :loading="kind === 'assign' && usersLoading"
@@ -225,6 +200,7 @@ import { useActiveCaseStore } from '@/stores/activeCase'
 import { useTaskStore } from '@/stores/taskStore'
 import { useAuthStore } from '@/stores/auth'
 import { useTaskTable } from '@/composables/useTaskTable'
+import { TASK_STATUS_OPTIONS } from '@/constants/tasks'
 import TaskForm from '@/components/tasks/TaskForm.vue'
 import TaskTable from '@/components/tasks/TaskTable.vue'
 import BaseDashboard from '@/components/BaseDashboard.vue'
@@ -245,10 +221,15 @@ const activeQuickFilter = ref('me')
 // Computed
 const loading = computed(() => taskStore.loading)
 const error = computed(() => taskStore.error)
-const stats = computed(() => taskStore.stats)
+const statCards = computed(() => [
+  { label: 'Total Tasks', value: taskStore.stats.total },
+  { label: 'My Tasks', value: taskStore.stats.myTasks, color: 'text-primary' },
+  { label: 'Overdue', value: taskStore.stats.overdue, color: 'text-warning' },
+  { label: 'Completed', value: taskStore.stats.completed, color: 'text-success' },
+])
 
 const filteredAndSearchedTasks = computed(() => {
-  let result = taskStore.filteredTasks.filter((task) => task.case_id === context.activeCaseId)
+  let result = taskStore.tasks.filter((task) => task.case_id === context.activeCaseId)
 
   // Apply quick filter
   if (activeQuickFilter.value === 'me' && authStore.user) {
@@ -282,7 +263,6 @@ const {
   canUpdate,
   canSubmit,
   assigneeOptions,
-  statusOptions,
   snackbar,
   open,
   close,

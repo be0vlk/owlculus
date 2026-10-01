@@ -3,15 +3,7 @@ import { useRouter } from 'vue-router'
 import { useTaskStore } from '@/stores/taskStore'
 import { useAuthStore } from '@/stores/auth'
 import { useNotifications } from '@/composables/useNotifications'
-import {
-  TASK_PRIORITY_COLORS,
-  TASK_PRIORITY_ICONS,
-  TASK_PRIORITY_LABELS,
-  TASK_STATUS,
-  TASK_STATUS_COLORS,
-  TASK_STATUS_LABELS,
-} from '@/constants/tasks'
-import { formatDateOnly } from '@/composables/dateUtils'
+import { TASK_STATUS } from '@/constants/tasks'
 
 export function useTaskTable() {
   const router = useRouter()
@@ -30,24 +22,11 @@ export function useTaskTable() {
     return authStore.user?.role !== 'Analyst'
   })
 
-  // Check if user can assign tasks (Admin or Lead only)
-  // When passed a task, checks if user is admin or lead for that specific case
-  const canAssignTasks = (task = null) => {
-    if (authStore.user?.role === 'Admin') return true
-    if (task && task.is_lead === true) return true
-    return false
-  }
-
   // Check if user can delete a specific task
   const canDeleteTask = () => {
     // Only admins can delete tasks
     return authStore.user?.role === 'Admin'
   }
-
-  // Status options for the status update dialog
-  const statusOptions = computed(() =>
-    Object.entries(TASK_STATUS_LABELS).map(([value, title]) => ({ title, value })),
-  )
 
   // Common table headers
   const headers = [
@@ -59,22 +38,7 @@ export function useTaskTable() {
     { title: 'Actions', key: 'actions', sortable: false },
   ]
 
-  // Headers with case column for main dashboard
-  const headersWithCase = [
-    { title: 'Title', key: 'title', sortable: true },
-    { title: 'Case', key: 'case', sortable: true },
-    { title: 'Priority', key: 'priority', sortable: true },
-    { title: 'Status', key: 'status', sortable: true },
-    { title: 'Assigned To', key: 'assignee', sortable: true },
-    { title: 'Due Date', key: 'due_date', sortable: true },
-    { title: 'Actions', key: 'actions', sortable: false },
-  ]
-
   // Methods
-  function formatDate(date) {
-    return formatDateOnly(date)
-  }
-
   function isOverdue(task) {
     if (!task.due_date || task.status === TASK_STATUS.COMPLETED) return false
     return new Date(task.due_date) < new Date()
@@ -129,22 +93,6 @@ export function useTaskTable() {
     }
   }
 
-  // Note: Delete confirmation is handled by the component using ConfirmationDialog
-  // This returns the task to be deleted
-  function prepareDeleteTask(task) {
-    return task
-  }
-
-  async function deleteTask(taskId) {
-    try {
-      await taskStore.deleteTask(taskId)
-      return true
-    } catch (error) {
-      console.error('Failed to delete task:', error)
-      throw error
-    }
-  }
-
   return {
     snackbar,
     // State
@@ -155,28 +103,15 @@ export function useTaskTable() {
 
     // Computed
     canCreateTasks,
-    canAssignTasks,
     canDeleteTask,
-    statusOptions,
     headers,
-    headersWithCase,
 
     // Methods
-    formatDate,
     isOverdue,
     handleRowClick,
     openAssignDialog,
     openStatusDialog,
-    prepareDeleteTask,
-    deleteTask,
     handleAssign,
     handleStatusUpdate,
-
-    // Constants (for template access)
-    TASK_STATUS_COLORS,
-    TASK_STATUS_LABELS,
-    TASK_PRIORITY_COLORS,
-    TASK_PRIORITY_LABELS,
-    TASK_PRIORITY_ICONS,
   }
 }

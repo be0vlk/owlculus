@@ -59,14 +59,6 @@
               Details and metadata for this task
             </div>
           </div>
-          <v-chip
-            :color="isEditing ? 'warning' : 'primary'"
-            size="small"
-            variant="tonal"
-            class="me-3"
-          >
-            {{ isEditing ? 'Editing' : 'View Mode' }}
-          </v-chip>
         </v-card-title>
 
         <v-divider />
@@ -221,12 +213,12 @@
                       </span>
                       <span v-else class="text-body-medium text-medium-emphasis">Unassigned</span>
                       <v-btn
-                        v-if="canAssignTask"
+                        v-if="canEditTask"
                         class="ml-2"
                         icon="mdi-pencil"
                         size="x-small"
                         variant="text"
-                        @click="openAssignDialog"
+                        @click="showAssignDialog = true"
                         aria-label="Change assignee"
                       >
                         <v-tooltip activator="parent" location="top">Change assignee</v-tooltip>
@@ -291,7 +283,7 @@
       <v-card-text class="pa-4">
         <v-select
           v-model="newStatus"
-          :items="statusOptions"
+          :items="TASK_STATUS_OPTIONS"
           label="New Status"
           variant="outlined"
           density="comfortable"
@@ -326,6 +318,7 @@ import { useTaskStore } from '@/stores/taskStore'
 import { useAuthStore } from '@/stores/auth'
 import {
   TASK_STATUS_LABELS,
+  TASK_STATUS_OPTIONS,
   TASK_STATUS_COLORS,
   TASK_PRIORITY_LABELS,
   TASK_PRIORITY_COLORS,
@@ -350,7 +343,6 @@ const showStatusDialog = ref(false)
 const showQuickEditDialog = ref(false)
 const editingCustomField = ref(null)
 const newStatus = ref('')
-const isEditing = ref(false)
 const customFields = ref([])
 const customFieldValues = ref({})
 const isUserCaseLead = ref(false)
@@ -392,26 +384,12 @@ const canEditLimited = computed(() => {
   )
 })
 
-const canAssignTask = computed(() => {
-  return canEditTask.value
-})
-
 const isOverdue = computed(() => {
   if (!task.value?.due_date || task.value.status === 'completed') return false
   return new Date(task.value.due_date) < new Date()
 })
 
-const statusOptions = computed(() =>
-  Object.entries(TASK_STATUS_LABELS).map(([value, title]) => ({ title, value })),
-)
-
 // Methods
-// Remove local formatDate and formatDateTime - using imported ones from dateUtils
-
-function openAssignDialog() {
-  showAssignDialog.value = true
-}
-
 function openStatusDialog() {
   newStatus.value = task.value.status
   showStatusDialog.value = true
@@ -489,9 +467,3 @@ onMounted(async () => {
   }
 })
 </script>
-
-<style scoped>
-.cursor-pointer {
-  cursor: pointer;
-}
-</style>

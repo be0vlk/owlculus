@@ -5,7 +5,7 @@
       :cell-props="{ class: 'operations-cell' }"
       :header-props="{ class: 'operations-column' }"
       v-model="selectedItems"
-      :headers="computedHeaders"
+      :headers="headers"
       :items="tasks"
       :loading="loading"
       :show-select="showSelect"
@@ -20,9 +20,6 @@
           item.title
         }}</router-link>
       </template>
-
-      <!-- Case Column (only if showCase is true) -->
-      <template v-if="showCase" #[`item.case`]="{ item }"> Case #{{ item.case_id }} </template>
 
       <!-- Priority Column -->
       <template #[`item.priority`]="{ item }">
@@ -50,7 +47,7 @@
       <!-- Due Date Column -->
       <template #[`item.due_date`]="{ item }">
         <span v-if="item.due_date" :class="{ 'text-error': isOverdue(item) }">
-          {{ formatDate(item.due_date) }}
+          {{ formatDateOnly(item.due_date) }}
         </span>
       </template>
 
@@ -122,7 +119,7 @@
       <v-card v-if="selectedTask">
         <v-card-title>Update Status</v-card-title>
         <v-card-text>
-          <v-select v-model="newStatus" :items="statusOptions" label="New Status" />
+          <v-select v-model="newStatus" :items="TASK_STATUS_OPTIONS" label="New Status" />
         </v-card-text>
         <v-card-actions>
           <v-spacer />
@@ -145,6 +142,16 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { useTaskTable } from '@/composables/useTaskTable'
+import { useTaskStore } from '@/stores/taskStore'
+import { formatDateOnly } from '@/composables/dateUtils'
+import {
+  TASK_PRIORITY_COLORS,
+  TASK_PRIORITY_ICONS,
+  TASK_PRIORITY_LABELS,
+  TASK_STATUS_COLORS,
+  TASK_STATUS_LABELS,
+  TASK_STATUS_OPTIONS,
+} from '@/constants/tasks'
 import TaskAssignDialog from './TaskAssignDialog.vue'
 import ConfirmationDialog from '@/components/ConfirmationDialog.vue'
 
@@ -154,10 +161,6 @@ const props = defineProps({
     required: true,
   },
   loading: {
-    type: Boolean,
-    default: false,
-  },
-  showCase: {
     type: Boolean,
     default: false,
   },
@@ -173,7 +176,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 
-// Refs
+const taskStore = useTaskStore()
 const confirmDialog = ref(null)
 
 const selectedItems = computed({
@@ -188,32 +191,20 @@ const {
   selectedTask,
   newStatus,
   canDeleteTask,
-  statusOptions,
   headers,
-  headersWithCase,
-  formatDate,
   isOverdue,
   handleRowClick,
   openAssignDialog,
   openStatusDialog,
-  deleteTask,
   handleAssign,
   handleStatusUpdate,
-  TASK_STATUS_COLORS,
-  TASK_STATUS_LABELS,
-  TASK_PRIORITY_COLORS,
-  TASK_PRIORITY_LABELS,
-  TASK_PRIORITY_ICONS,
 } = useTaskTable()
-
-// Use appropriate headers based on showCase prop
-const computedHeaders = computed(() => (props.showCase ? headersWithCase : headers))
 
 // Handle delete with confirmation
 async function handleDeleteClick(task) {
   try {
     await confirmDialog.value.confirmDelete(`task "${task.title}"`)
-    await deleteTask(task.id)
+    await taskStore.deleteTask(task.id)
   } catch (error) {
     // User cancelled or delete failed
     if (error !== false) {

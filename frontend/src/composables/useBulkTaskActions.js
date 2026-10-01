@@ -3,7 +3,7 @@ import { useActiveCaseStore } from '@/stores/activeCase'
 import { useAuthStore } from '@/stores/auth'
 import { useTaskStore } from '@/stores/taskStore'
 import { caseService } from '@/services/case'
-import { TASK_STATUS_LABELS } from '@/constants/tasks'
+import { TASK_STATUS_OPTIONS } from '@/constants/tasks'
 import { useNotifications } from './useNotifications'
 
 export function useBulkTaskActions(displayedTasks) {
@@ -57,10 +57,6 @@ export function useBulkTaskActions(displayedTasks) {
   const canAssign = computed(
     () => canUpdate.value && (auth.user?.role === 'Admin' || member.value?.is_lead === true),
   )
-  const statusOptions = Object.entries(TASK_STATUS_LABELS).map(([value, title]) => ({
-    value,
-    title,
-  }))
   // A sentinel makes unassignment an explicit choice, distinct from an untouched field.
   const assigneeOptions = computed(() => [
     { value: 'unassigned', title: 'Unassigned' },
@@ -78,7 +74,7 @@ export function useBulkTaskActions(displayedTasks) {
           assigneeOptions.value.some((option) => option.value === value.value)
         : kind.value === 'status' &&
           canUpdate.value &&
-          statusOptions.some((option) => option.value === value.value)),
+          TASK_STATUS_OPTIONS.some((option) => option.value === value.value)),
   )
 
   async function loadUsers() {
@@ -123,7 +119,7 @@ export function useBulkTaskActions(displayedTasks) {
 
   async function reconcile(isCurrent) {
     try {
-      await store.loadTasks(null, isCurrent)
+      await store.loadTasks(isCurrent)
       if (!isCurrent()) return
       const detail = store.currentTask
       if (detail?.case_id === context.activeCaseId) {
@@ -222,7 +218,6 @@ export function useBulkTaskActions(displayedTasks) {
     canUpdate,
     canSubmit,
     assigneeOptions,
-    statusOptions,
     snackbar,
     open,
     close,
