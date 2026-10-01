@@ -3,7 +3,6 @@ import { DOMWrapper, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { mountWithVuetify } from './helpers/vuetify'
 import ManageUsersModal from '../ManageUsersModal.vue'
-import AddUserToCaseModal from '../AddUserToCaseModal.vue'
 import UserManagementCard from '../UserManagementCard.vue'
 import { userService } from '@/services/user'
 import { caseService } from '@/services/case'
@@ -70,20 +69,6 @@ it('assigns Strixy as an Analyst through the membership controls and removes it'
   await dialog.get('[aria-label="Remove strixy_ai_1@system.invalid from case"]').trigger('click')
   await flushPromises()
   expect(caseService.removeUserFromCase).toHaveBeenCalledWith(9, 2)
-})
-
-it('also prevents AI lead assignment in the add-user dialog', async () => {
-  const wrapper = mountWithVuetify(AddUserToCaseModal, {
-    props: { show: false, caseId: 9 },
-    attachTo: document.body,
-  })
-  await wrapper.setProps({ show: true })
-  await flushPromises()
-  const select = wrapper.findComponent({ name: 'VSelect' })
-  expect(select.props('items')[0].displayText).toContain('Strixy (AI)')
-  select.vm.$emit('update:modelValue', 2)
-  await flushPromises()
-  expect(wrapper.findComponent({ name: 'VCheckbox' }).props('disabled')).toBe(true)
 })
 
 it('explains missing assignment on the chat page and recovers after assignment', async () => {

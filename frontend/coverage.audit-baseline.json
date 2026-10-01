@@ -85,12 +85,6 @@
             "functions": 74,
             "branches": 88.46
         },
-        "src/composables/useEvidenceTemplates.js": {
-            "lines": 0,
-            "statements": 0,
-            "functions": 0,
-            "branches": 0
-        },
         "src/composables/useTaskTable.js": {
             "lines": 85.18,
             "statements": 81.03,

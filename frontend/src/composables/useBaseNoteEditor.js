@@ -4,7 +4,20 @@ import Highlight from '@tiptap/extension-highlight'
 import { TaskList, TaskItem } from '@tiptap/extension-list'
 import { Placeholder } from '@tiptap/extensions'
 import { ref, computed, onBeforeUnmount, onMounted } from 'vue'
-import { formatDistanceToNow } from 'date-fns'
+
+const relativeTime = new Intl.RelativeTimeFormat('en', { numeric: 'always' })
+const RELATIVE_UNITS = [
+  ['day', 86400],
+  ['hour', 3600],
+  ['minute', 60],
+]
+
+const formatTimeAgo = (date) => {
+  const seconds = Math.max(0, Math.round((Date.now() - date) / 1000))
+  const [unit, size] = RELATIVE_UNITS.find(([, size]) => seconds >= size) ?? ['second', 1]
+  // Negative zero keeps "0 seconds ago" instead of "in 0 seconds".
+  return relativeTime.format(-Math.floor(seconds / size), unit)
+}
 
 export function useBaseNoteEditor({
   initialContent = '',
@@ -21,7 +34,7 @@ export function useBaseNoteEditor({
 
   const formatLastSaved = computed(() => {
     if (!lastSavedTime.value) return ''
-    return formatDistanceToNow(lastSavedTime.value, { addSuffix: true })
+    return formatTimeAgo(lastSavedTime.value)
   })
 
   let saveTimeout

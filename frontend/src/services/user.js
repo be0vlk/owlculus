@@ -26,11 +26,6 @@ export const userService = {
     return response.data
   },
 
-  async updateUserRole(id, role) {
-    const response = await api.put(`/api/users/${id}/role`, { role })
-    return response.data
-  },
-
   async resetPassword(id, newPassword) {
     const response = await api.put(`/api/users/${id}/password`, { new_password: newPassword })
     return response.data

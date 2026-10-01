@@ -1,11 +1,6 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { setTimeout as delay } from 'node:timers/promises'
 import { ESLint } from 'eslint'
-import watcher from '@parcel/watcher'
-import * as sass from 'sass'
 import { isVue2, isVue3, version } from 'vue-demi'
 
 // Exercise rules against invalid examples, without writing fixtures into the source tree.
@@ -70,39 +65,4 @@ console.log(
 assert.equal(isVue3, true)
 assert.equal(isVue2, false)
 assert.match(version, /^3\./)
-assert.match(sass.compileString('$color: red; .probe { color: $color; }').css, /color: red/)
-
-// Watch real edits and compile their Sass contents using the installed native watcher.
-const directory = await mkdtemp(path.join(tmpdir(), 'owlculus-maintenance-'))
-const source = path.join(directory, 'probe.scss')
-let subscription
-try {
-  await writeFile(source, '$color: red; .probe { color: $color; }')
-  const events = []
-  let watchError
-  subscription = await watcher.subscribe(directory, (error, changes) => {
-    watchError = error
-    events.push(...changes)
-  })
-  for (const color of ['blue', 'green']) {
-    events.length = 0
-    await writeFile(source, `$color: ${color}; .probe { color: $color; }`)
-    for (
-      let attempt = 0;
-      attempt < 100 && !events.some((event) => event.path === source);
-      attempt++
-    ) {
-      await delay(50)
-      if (watchError) throw watchError
-    }
-    assert.ok(
-      events.some((event) => event.path === source && event.type === 'update'),
-      `Missing ${color} update`,
-    )
-    assert.match(sass.compile(source).css, new RegExp(`color: ${color}`))
-  }
-  console.log(`Vue ${version}, Sass compilation, and two native watcher updates passed`)
-} finally {
-  await subscription?.unsubscribe()
-  await rm(directory, { recursive: true, force: true })
-}
+console.log(`Vue ${version} passed`)

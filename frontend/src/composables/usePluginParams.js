@@ -1,31 +1,6 @@
 import { ipAddressRule } from '@/utils/ipAddress'
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 
-export function usePluginParams(initialParams = {}, emit) {
-  const localParams = ref({ ...initialParams })
-
-  const updateParams = () => {
-    emit('update:params', localParams.value)
-  }
-
-  const resetParams = () => {
-    localParams.value = { ...initialParams }
-    updateParams()
-  }
-
-  const setParam = (key, value) => {
-    localParams.value[key] = value
-    updateParams()
-  }
-
-  return {
-    localParams,
-    updateParams,
-    resetParams,
-    setParam,
-  }
-}
-
 /**
  * Enhanced composable for standardized plugin parameter management
  */

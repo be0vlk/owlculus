@@ -1,14 +1,5 @@
 <template>
-  <CaseWorkspacePrototype
-    v-if="prototypeVariant && caseData"
-    :case-data="caseData"
-    :client="client"
-    :evidence="evidence"
-    :hunt-executions="caseHuntExecutions"
-    @state="prototypeState = $event"
-  />
   <BaseDashboard
-    v-else
     :title="caseData ? `Case: ${caseData.case_number}` : 'Case Details'"
     :loading="loading"
     :error="error"
@@ -199,8 +190,6 @@
     </div>
   </BaseDashboard>
 
-  <PrototypeSwitcher v-if="prototypeEnabled" :state="prototypeState" />
-
   <v-snackbar
     v-model="snackbar.show"
     :color="snackbar.color"
@@ -332,7 +321,7 @@
 <script setup>
 import { getEntityDisplayName } from '@/composables/useEntityDisplay'
 import CaseExecutionHistory from '@/components/plugins/CaseExecutionHistory.vue'
-import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useActiveCaseStore } from '../stores/activeCase'
@@ -356,27 +345,14 @@ import { caseService } from '../services/case'
 import { clientService } from '../services/client'
 import { entityService } from '../services/entity'
 import { evidenceService } from '../services/evidence'
-import { useHuntStore } from '../stores/huntStore.js'
 import { downloadBlob } from '../utils/download'
 import { getErrorMessage } from '../utils/errorMessage'
 
 const route = useRoute()
-// THROWAWAY: enabled only by the isolated prototype task runner; absent from production.
-const prototypeEnabled =
-  import.meta.env.DEV && import.meta.env.VITE_CASE_WORKSPACE_PROTOTYPE === true
-const CaseWorkspacePrototype = prototypeEnabled
-  ? defineAsyncComponent(() => import('./cases/CaseWorkspacePrototype.vue'))
-  : null
-const PrototypeSwitcher = prototypeEnabled
-  ? defineAsyncComponent(() => import('@/components/PrototypeSwitcher.vue'))
-  : null
-const prototypeVariant = computed(() => prototypeEnabled && route.query.variant !== 'original')
-const prototypeState = ref({})
 const router = useRouter()
 const authStore = useAuthStore()
 const activeCase = useActiveCaseStore()
 const caseId = computed(() => activeCase.activeCaseId)
-const huntStore = useHuntStore()
 const { snackbar, showNotification, closeNotification } = useNotifications()
 const loading = ref(false)
 const error = ref(null)
@@ -423,9 +399,6 @@ const notesSaveStatus = ref('')
 const originalNotes = ref('')
 const entityServiceRef = entityService
 const exportingCase = ref(false)
-
-// History supplied only to the isolated design prototype.
-const caseHuntExecutions = ref([])
 
 const userRole = computed(() => authStore.user?.role || 'Analyst')
 
@@ -740,19 +713,6 @@ const handleViewFileContent = async (evidenceItem) => {
   showFileContentModal.value = true
 }
 
-// Preserve the isolated prototype fixture preview.
-const loadCaseHuntExecutions = async () => {
-  if (!caseId.value) return
-
-  try {
-    const executions = await huntStore.getCaseExecutions(caseId.value)
-    caseHuntExecutions.value = executions
-  } catch (error) {
-    console.error('Failed to load hunt executions:', error)
-    caseHuntExecutions.value = []
-  }
-}
-
 // Watch for entity query parameter changes
 watch(
   () => route.query.entity,
@@ -778,7 +738,6 @@ onMounted(async () => {
   await loadCaseData()
   if (disposed || !caseId.value) return
   loadEvidence()
-  if (prototypeEnabled) loadCaseHuntExecutions()
 
   // Check if entity ID is provided in query params
   if (route.query.entity) {

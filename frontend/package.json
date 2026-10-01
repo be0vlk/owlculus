@@ -10,7 +10,6 @@
     "packageManager": "npm@11.19.0",
     "scripts": {
         "dev": "vite",
-        "prototype:case-workspace": "node scripts/case-workspace-prototype.mjs",
         "build": "vite build",
         "preview": "vite preview",
         "test:unit": "vitest",
@@ -31,9 +30,7 @@
         "@tiptap/pm": "3.31.3",
         "@tiptap/starter-kit": "3.31.3",
         "@tiptap/vue-3": "3.31.3",
-        "@vueuse/core": "^12.0.0",
         "axios": "^1.12.0",
-        "date-fns": "^4.1.0",
         "markdown-it": "^14.1.0",
         "pinia": "^2.2.6",
         "vue": "3.5.42",
@@ -55,7 +52,6 @@
         "globals": "13.24.0",
         "jsdom": "^25.0.1",
         "prettier": "^3.3.3",
-        "sass": "^1.77.8",
         "stylelint": "^16.20.0",
         "stylelint-config-recommended-vue": "^1.6.0",
         "stylelint-config-standard": "^38.0.0",
@@ -65,7 +61,6 @@
         "vitest": "4.1.11"
     },
     "allowScripts": {
-        "vue-demi@0.14.10": true,
-        "@parcel/watcher@2.5.1": true
+        "vue-demi@0.14.10": true
     }
 }

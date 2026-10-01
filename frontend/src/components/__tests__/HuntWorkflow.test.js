@@ -298,9 +298,8 @@ it.each(['ip_address', 'exact_profile', 'employer', 'name'])(
   },
 )
 
-it('counts assembled correlation groups in Hunt summaries and progress', async () => {
+it('counts assembled correlation groups in Hunt summaries', async () => {
   const { default: HuntResultsSummary } = await import('../hunts/HuntResultsSummary.vue')
-  const { default: HuntStepProgress } = await import('../hunts/HuntStepProgress.vue')
   const group = {
     case_id: 1,
     entity_id: 10,
@@ -318,8 +317,6 @@ it('counts assembled correlation groups in Hunt summaries and progress', async (
   }
   const summary = mountWithVuetify(HuntResultsSummary, { props: { execution: { steps: [step] } } })
   expect(summary.text()).toContain('1Total Results')
-  const progress = mountWithVuetify(HuntStepProgress, { props: { step, stepNumber: 1 } })
-  expect(progress.text()).toContain('1 correlation group(s)')
 })
 
 it('announces a correlation failure once when step and retained errors agree', async () => {

@@ -213,7 +213,15 @@ describe('useBaseNoteEditor', () => {
     expect(result.formatLastSaved.value).toBe('')
 
     result.lastSavedTime.value = new Date()
+    expect(result.formatLastSaved.value).toBe('0 seconds ago')
 
-    expect(result.formatLastSaved.value).toMatch(/ago$/)
+    result.lastSavedTime.value = new Date(Date.now() - 5000)
+    expect(result.formatLastSaved.value).toBe('5 seconds ago')
+
+    result.lastSavedTime.value = new Date(Date.now() - 3 * 60 * 60 * 1000)
+    expect(result.formatLastSaved.value).toBe('3 hours ago')
+
+    result.lastSavedTime.value = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)
+    expect(result.formatLastSaved.value).toBe('2 days ago')
   })
 })

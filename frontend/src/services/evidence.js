@@ -2,11 +2,6 @@ import api from './api'
 import { createDownloadArtifact } from '@/utils/download'
 
 export const evidenceService = {
-  async getEvidenceForCase(caseId) {
-    const response = await api.get(`/api/evidence/case/${caseId}`)
-    return response.data
-  },
-
   async createEvidence({ description, category, caseId, files, folderPath, parentFolderId }) {
     const formData = new FormData()
     files.forEach((file) => {

@@ -151,25 +151,6 @@ export const taskService = {
     })
     return response.data
   },
-
-  /**
-   * Get tasks for a specific case
-   * @param {number} caseId - Case ID
-   * @returns {Promise<Array>} List of case tasks
-   */
-  async getCaseTasks(caseId) {
-    return this.getTasks({ case_id: caseId })
-  },
-
-  /**
-   * Create a task for a specific case
-   * @param {number} caseId - Case ID
-   * @param {Object} taskData - Task data
-   * @returns {Promise<Object>} Created task
-   */
-  async createCaseTask(caseId, taskData) {
-    return this.createTask({ ...taskData, case_id: caseId })
-  },
 }
 
 export default taskService

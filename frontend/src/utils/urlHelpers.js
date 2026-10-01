@@ -21,21 +21,3 @@ export function ensureProtocol(url) {
   // Otherwise, add https:// prefix
   return `https://${url}`
 }
-
-/**
- * Validates if a string looks like a URL
- * @param {string} url - The string to validate
- * @returns {boolean} - True if it looks like a URL
- */
-export function isValidUrl(url) {
-  if (!url || typeof url !== 'string') {
-    return false
-  }
-
-  try {
-    const urlObj = new URL(ensureProtocol(url))
-    return urlObj.protocol === 'http:' || urlObj.protocol === 'https:'
-  } catch {
-    return false
-  }
-}
