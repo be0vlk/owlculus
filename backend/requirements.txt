@@ -22,7 +22,6 @@ shodan
 pytest
 pytest-asyncio
 peopledatalabs
-aiohttp
 dnspython
 vt-py
 python-multipart

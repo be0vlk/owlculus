@@ -63,3 +63,54 @@ def test_evidence_formatter_receives_payloads():
     )
 
     assert "Ada Lovelace" in content
+
+
+@pytest.mark.asyncio
+async def test_company_search_sends_domain_as_website(session, test_admin, monkeypatch):
+    sent = {}
+
+    class Response:
+        ok = True
+        text = "ok"
+
+        def json(self):
+            return {"status": 200, "data": {"name": "Acme", "likelihood": 9}}
+
+    class Client:
+        def __init__(self, api_key):
+            self.company = self
+
+        def enrichment(self, **params):
+            sent.update(params)
+            return Response()
+
+    monkeypatch.setattr("peopledatalabs.PDLPY", Client)
+    ctx = context(session, test_admin, {Provider.PEOPLE_DATA_LABS: "key"})
+
+    events = [
+        event
+        async for event in PeopledatalabsPlugin().run(
+            {"search_type": "company", "name": "Acme", "domain": "acme.test"}, ctx
+        )
+    ]
+    missing = [
+        event
+        async for event in PeopledatalabsPlugin().run({"search_type": "company"}, ctx)
+    ]
+
+    assert sent == {"name": "Acme", "website": "acme.test", "pretty": True}
+    assert events == [
+        ResultEvent.data(
+            {
+                "search_type": "company",
+                "company": {"name": "Acme", "likelihood": 9},
+                "api_credits_used": 1,
+                "confidence": 9,
+            }
+        )
+    ]
+    assert missing == [
+        ResultEvent.error(
+            "At least one company identifier is required (name, website, domain, or LinkedIn)"
+        )
+    ]

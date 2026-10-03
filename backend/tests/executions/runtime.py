@@ -79,7 +79,6 @@ class AcceptancePlugin(BasePlugin):
                 raise RuntimeError("Test barrier timed out")
         if params.get("mode", "success") == "error":
             yield self.error("Deterministic failure")
-            yield self.complete()
 
     def entity_writes(self, payloads, params):
         if params.get("mode") == "sized":

@@ -2,7 +2,6 @@
 Analyze files, URLs, domains, and IPs using VirusTotal threat intelligence
 """
 
-import ipaddress
 import re
 import time
 from collections.abc import AsyncGenerator
@@ -13,6 +12,14 @@ import vt
 from app.services.api_key_vault import Provider
 
 from .base_plugin import BasePlugin, PluginRun, ResultEvent
+from .plugin_types import is_ip_address
+
+_ENDPOINTS = {
+    "file": "/files/",
+    "url": "/urls/",
+    "domain": "/domains/",
+    "ip": "/ip_addresses/",
+}
 
 
 class VirustotalPlugin(BasePlugin):
@@ -63,11 +70,8 @@ class VirustotalPlugin(BasePlugin):
             return "file"
         if target.startswith(("http://", "https://", "ftp://")):
             return "url"
-        try:
-            ipaddress.ip_address(target)
+        if is_ip_address(target):
             return "ip"
-        except ValueError:
-            pass
         if "." in target and "/" not in target and (" " not in target):
             domain_pattern = "^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"
             if re.match(domain_pattern, target):
@@ -80,21 +84,12 @@ class VirustotalPlugin(BasePlugin):
         total = sum(stats.values()) - stats.get("unsupported", 0)
         return f"{malicious}/{total}"
 
-    def _format_datetime(self, dt_obj: Any) -> str:
+    def _format_date(self, dt_obj: Any, fmt: str = "%Y-%m-%d %H:%M:%S") -> str:
         """Format a datetime object or timestamp to string"""
         if hasattr(dt_obj, "strftime"):
-            return dt_obj.strftime("%Y-%m-%d %H:%M:%S")
+            return dt_obj.strftime(fmt)
         elif isinstance(dt_obj, (int, float)):
-            return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(dt_obj))
-        else:
-            return str(dt_obj)
-
-    def _format_date(self, dt_obj: Any) -> str:
-        """Format a date object or timestamp to string (date only)"""
-        if hasattr(dt_obj, "strftime"):
-            return dt_obj.strftime("%Y-%m-%d")
-        elif isinstance(dt_obj, (int, float)):
-            return time.strftime("%Y-%m-%d", time.localtime(dt_obj))
+            return time.strftime(fmt, time.localtime(dt_obj))
         else:
             return str(dt_obj)
 
@@ -120,15 +115,6 @@ class VirustotalPlugin(BasePlugin):
     async def run(
         self, params: dict[str, Any], ctx: PluginRun
     ) -> AsyncGenerator[ResultEvent, None]:
-        """
-        Main plugin execution method
-
-        Args:
-            params: User-provided parameters
-
-        Yields:
-            Structured data results
-        """
         if not params or "target" not in params:
             yield self.error("Target parameter is required")
             return
@@ -140,201 +126,101 @@ class VirustotalPlugin(BasePlugin):
         if not api_key:
             yield ctx.missing_key(Provider.VIRUSTOTAL)
             return
+        if analysis_type == "auto":
+            analysis_type = self._detect_target_type(target)
+            if analysis_type == "unknown":
+                yield self.error(
+                    f"Could not auto-detect target type for '{target}'. Please specify analysis_type parameter."
+                )
+                return
+        if analysis_type not in _ENDPOINTS:
+            yield self.error(f"Invalid analysis type: {analysis_type}")
+            return
         try:
-            if analysis_type == "auto":
-                detected_type = self._detect_target_type(target)
-                if detected_type == "unknown":
-                    yield self.error(
-                        f"Could not auto-detect target type for '{target}'. Please specify analysis_type parameter."
-                    )
-                    return
-                analysis_type = detected_type
             async with vt.Client(api_key) as client:
-                try:
-                    client.timeout = timeout
-                    if analysis_type == "file":
-                        async for result in self._analyze_file(
-                            client, target, include_details
-                        ):
-                            yield result
-                    elif analysis_type == "url":
-                        async for result in self._analyze_url(
-                            client, target, include_details
-                        ):
-                            yield result
-                    elif analysis_type == "domain":
-                        async for result in self._analyze_domain(
-                            client, target, include_details
-                        ):
-                            yield result
-                    elif analysis_type == "ip":
-                        async for result in self._analyze_ip(
-                            client, target, include_details
-                        ):
-                            yield result
-                    else:
-                        yield self.error(f"Invalid analysis type: {analysis_type}")
-                        return
-                except vt.error.APIError as e:
-                    yield self.error(f"VirusTotal API error: {e!s}")
-                except TimeoutError:
-                    yield self.error(f"Request timed out after {timeout} seconds")
-                except Exception as e:
-                    yield self.error(f"Unexpected error: {e!s}")
-        except Exception as error:
-            yield self.error(f"Unexpected error: {error!s}")
+                client.timeout = timeout
+                result = await self._analyze(
+                    client, analysis_type, target, include_details
+                )
+        except vt.error.APIError as e:
+            yield self.error(f"VirusTotal API error: {e!s}")
+        except TimeoutError:
+            yield self.error(f"Request timed out after {timeout} seconds")
+        except Exception as e:
+            yield self.error(f"Unexpected error: {e!s}")
+        else:
+            yield self.data(result)
 
-    async def _analyze_file(
-        self, client: vt.Client, file_hash: str, include_details: bool
-    ) -> AsyncGenerator[ResultEvent, None]:
-        """Analyze a file hash"""
-        file_obj = await client.get_object_async(f"/files/{file_hash}")
+    async def _analyze(
+        self, client: vt.Client, kind: str, target: str, include_details: bool
+    ) -> dict[str, Any]:
+        """Look up one file hash, URL, domain or IP and shape the report."""
+        object_id = vt.url_id(target) if kind == "url" else target
+        obj = await client.get_object_async(_ENDPOINTS[kind] + object_id)
+        stats = obj.last_analysis_stats
         result: dict[str, Any] = {
-            "target": file_hash,
-            "target_type": "file",
-            "detection_ratio": self._format_detection_ratio(
-                file_obj.last_analysis_stats
-            ),
-            "verdict": self._calculate_verdict(file_obj.last_analysis_stats),
-            "last_analysis_date": self._format_datetime(file_obj.last_analysis_date),
-            "file_info": {
-                "sha256": file_obj.sha256,
-                "sha1": file_obj.sha1,
-                "md5": file_obj.md5,
-                "size": file_obj.size,
-                "type": file_obj.type_description,
-                "names": list(file_obj.names) if hasattr(file_obj, "names") else [],
-            },
+            "target": target,
+            "target_type": "ip_address" if kind == "ip" else kind,
+            "detection_ratio": self._format_detection_ratio(stats),
+            "verdict": self._calculate_verdict(stats),
+            "last_analysis_date": self._format_date(obj.last_analysis_date),
+            f"{kind}_info": self._info(kind, obj, target),
         }
         if include_details:
-            detections: list[dict[str, Any]] = []
-            for vendor, analysis in file_obj.last_analysis_results.items():
-                if analysis["result"]:
-                    detections.append(
-                        {
-                            "vendor": vendor,
-                            "result": analysis["result"],
-                            "category": analysis.get("category", "Unknown"),
-                        }
+            # Files list every vendor with any result; other kinds skip "clean".
+            result["detections"] = sorted(
+                (
+                    {
+                        "vendor": vendor,
+                        "result": analysis["result"],
+                        "category": analysis.get("category", "Unknown"),
+                    }
+                    for vendor, analysis in obj.last_analysis_results.items()
+                    if (
+                        analysis["result"]
+                        if kind == "file"
+                        else analysis["result"] != "clean"
                     )
-            result["detections"] = sorted(detections, key=lambda x: x["vendor"])
-            if hasattr(file_obj, "tags"):
-                result["tags"] = list(file_obj.tags)
-        yield self.data(result)
+                ),
+                key=lambda detection: detection["vendor"],
+            )
+            if kind == "file" and obj.get("tags") is not None:
+                result["tags"] = list(obj.tags)
+            if kind in {"url", "domain"} and obj.get("categories") is not None:
+                result["categories"] = dict(obj.categories)
+        return result
 
-    async def _analyze_url(
-        self, client: vt.Client, url: str, include_details: bool
-    ) -> AsyncGenerator[ResultEvent, None]:
-        """Analyze a URL"""
-        url_id = vt.url_id(url)
-        url_obj = await client.get_object_async(f"/urls/{url_id}")
-        result: dict[str, Any] = {
-            "target": url,
-            "target_type": "url",
-            "detection_ratio": self._format_detection_ratio(
-                url_obj.last_analysis_stats
-            ),
-            "verdict": self._calculate_verdict(url_obj.last_analysis_stats),
-            "last_analysis_date": self._format_datetime(url_obj.last_analysis_date),
-            "url_info": {
-                "final_url": (
-                    url_obj.last_final_url
-                    if hasattr(url_obj, "last_final_url")
-                    else url
-                ),
-                "title": url_obj.title if hasattr(url_obj, "title") else None,
-            },
-        }
-        if include_details:
-            detections: list[dict[str, Any]] = []
-            for vendor, analysis in url_obj.last_analysis_results.items():
-                if analysis["result"] != "clean":
-                    detections.append(
-                        {
-                            "vendor": vendor,
-                            "result": analysis["result"],
-                            "category": analysis.get("category", "Unknown"),
-                        }
-                    )
-            result["detections"] = sorted(detections, key=lambda x: x["vendor"])
-            if hasattr(url_obj, "categories"):
-                result["categories"] = dict(url_obj.categories)
-        yield self.data(result)
-
-    async def _analyze_domain(
-        self, client: vt.Client, domain: str, include_details: bool
-    ) -> AsyncGenerator[ResultEvent, None]:
-        """Analyze a domain"""
-        domain_obj = await client.get_object_async(f"/domains/{domain}")
-        result: dict[str, Any] = {
-            "target": domain,
-            "target_type": "domain",
-            "detection_ratio": self._format_detection_ratio(
-                domain_obj.last_analysis_stats
-            ),
-            "verdict": self._calculate_verdict(domain_obj.last_analysis_stats),
-            "last_analysis_date": self._format_datetime(domain_obj.last_analysis_date),
-            "domain_info": {
-                "reputation": (
-                    domain_obj.reputation if hasattr(domain_obj, "reputation") else 0
-                ),
-                "registrar": (
-                    domain_obj.registrar if hasattr(domain_obj, "registrar") else None
-                ),
+    def _info(self, kind: str, obj: vt.Object, target: str) -> dict[str, Any]:
+        if kind == "file":
+            return {
+                "sha256": obj.sha256,
+                "sha1": obj.sha1,
+                "md5": obj.md5,
+                "size": obj.size,
+                "type": obj.type_description,
+                "names": list(obj.get("names", [])),
+            }
+        if kind == "url":
+            return {
+                "final_url": obj.get("last_final_url", target),
+                "title": obj.get("title"),
+            }
+        if kind == "domain":
+            # Attribute access converts VirusTotal timestamps to UTC datetimes.
+            created = getattr(obj, "creation_date", None)
+            return {
+                "reputation": obj.get("reputation", 0),
+                "registrar": obj.get("registrar"),
                 "creation_date": (
-                    self._format_date(domain_obj.creation_date)
-                    if hasattr(domain_obj, "creation_date")
-                    else None
+                    None if created is None else self._format_date(created, "%Y-%m-%d")
                 ),
-            },
+            }
+        return {
+            "asn": obj.get("asn"),
+            "as_owner": obj.get("as_owner"),
+            "country": obj.get("country"),
+            "reputation": obj.get("reputation", 0),
         }
-        if include_details:
-            detections: list[dict[str, Any]] = []
-            for vendor, analysis in domain_obj.last_analysis_results.items():
-                if analysis["result"] != "clean":
-                    detections.append(
-                        {
-                            "vendor": vendor,
-                            "result": analysis["result"],
-                            "category": analysis.get("category", "Unknown"),
-                        }
-                    )
-            result["detections"] = sorted(detections, key=lambda x: x["vendor"])
-            if hasattr(domain_obj, "categories"):
-                result["categories"] = dict(domain_obj.categories)
-        yield self.data(result)
-
-    async def _analyze_ip(
-        self, client: vt.Client, ip: str, include_details: bool
-    ) -> AsyncGenerator[ResultEvent, None]:
-        """Analyze an IP address"""
-        ip_obj = await client.get_object_async(f"/ip_addresses/{ip}")
-        result: dict[str, Any] = {
-            "target": ip,
-            "target_type": "ip_address",
-            "detection_ratio": self._format_detection_ratio(ip_obj.last_analysis_stats),
-            "verdict": self._calculate_verdict(ip_obj.last_analysis_stats),
-            "last_analysis_date": self._format_datetime(ip_obj.last_analysis_date),
-            "ip_info": {
-                "asn": ip_obj.asn if hasattr(ip_obj, "asn") else None,
-                "as_owner": ip_obj.as_owner if hasattr(ip_obj, "as_owner") else None,
-                "country": ip_obj.country if hasattr(ip_obj, "country") else None,
-                "reputation": ip_obj.reputation if hasattr(ip_obj, "reputation") else 0,
-            },
-        }
-        if include_details:
-            detections: list[dict[str, Any]] = []
-            for vendor, analysis in ip_obj.last_analysis_results.items():
-                if analysis["result"] != "clean":
-                    detections.append(
-                        {
-                            "vendor": vendor,
-                            "result": analysis["result"],
-                            "category": analysis.get("category", "Unknown"),
-                        }
-                    )
-            result["detections"] = sorted(detections, key=lambda x: x["vendor"])
-        yield self.data(result)
 
     def format_evidence(
         self, results: list[dict[str, Any]], params: dict[str, Any]

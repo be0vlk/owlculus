@@ -1006,7 +1006,6 @@ name = "owlculus-backend"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
-    { name = "aiohttp" },
     { name = "bcrypt" },
     { name = "beautifulsoup4" },
     { name = "celery", extra = ["redis"] },
@@ -1053,7 +1052,6 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aiohttp", specifier = "==3.14.3" },
     { name = "bcrypt", specifier = "==5.0.0" },
     { name = "beautifulsoup4", specifier = "==4.15.0" },
     { name = "celery", extras = ["redis"], specifier = "==5.6.3" },
