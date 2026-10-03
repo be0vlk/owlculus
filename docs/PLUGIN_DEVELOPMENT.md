@@ -38,7 +38,7 @@ python scripts/create_plugin.py api_tool \
 ### Generator Features
 - **Automatic File Creation**: Backend plugin, frontend components (optional), and test files
 - **Automatic UI Generation**: GenericPluginParams and PluginResult handle 95% of UI needs
-- **Dependency Management**: Automatically adds packages to `requirements.txt`
+- **Dependency Management**: Appends packages to `backend/requirements.txt`; the Docker image installs from `backend/pyproject.toml` and `uv.lock`, so also run `uv add` (see [Dependencies](#7-dependencies))
 - **Category-Specific Templates**: Optimized templates based on plugin category
 - **Comprehensive Tests**: Generates test scaffolding with multiple test cases
 - **Best Practices**: Follows all plugin development patterns and conventions
@@ -113,9 +113,11 @@ Provides intelligent fallback display for any result data structure:
 Brief description of what your plugin does
 """
 
-import asyncio
-from typing import AsyncGenerator, Dict, Any, Optional
-from .base_plugin import BasePlugin
+from collections.abc import AsyncGenerator
+from typing import Any
+
+from .base_plugin import BasePlugin, PluginRun, ResultEvent
+
 
 class YourPluginNamePlugin(BasePlugin):
     """Plugin description for your tool"""
@@ -125,7 +127,6 @@ class YourPluginNamePlugin(BasePlugin):
         self.description = "Brief 1-2 sentence description of what this plugin does"
         self.category = "Person"  # Person, Network, Company, Other (for UI organization)
         self.evidence_category = "Social Media"  # Evidence category for case storage
-        self.save_to_case = False  # Whether to auto-save results as evidence (deprecated - use centralized system)
         self.parameters = {
             "required_param": {
                 "type": "string",  # string, float, boolean
@@ -141,46 +142,31 @@ class YourPluginNamePlugin(BasePlugin):
             # Note: save_to_case parameter is automatically added by BasePlugin
         }
 
-    def parse_output(self, line: str) -> Optional[Dict[str, Any]]:
-        """Parse command output - only needed for subprocess-based plugins"""
-        # For direct API/library calls, return None
-        return None
-
     async def run(
-        self, params: Optional[Dict[str, Any]] = None
-    ) -> AsyncGenerator[Dict[str, Any], None]:
-        """
-        Main plugin execution method
-        
-        Args:
-            params: User-provided parameters
-            
-        Yields:
-            Structured data results
-        """
-        if not params or "required_param" not in params:
-            yield {"type": "error", "data": {"message": "Required parameter missing"}}
+        self, params: dict[str, Any], ctx: PluginRun
+    ) -> AsyncGenerator[ResultEvent, None]:
+        if "required_param" not in params:
+            yield self.error("Required parameter missing")
             return
 
-        # Extract parameters
         input_value = params["required_param"]
         timeout = params.get("optional_param", 10.0)
 
-        # Your plugin logic here
-        # Example: API calls, tool execution, data processing
-        
-        # Yield results as they become available
-        yield {
-            "type": "data",
-            "data": {
-                "result_field": "some_value",
-                "timestamp": time.time(),
-            },
-        }
+        # Your plugin logic here: API calls, library calls, data processing.
 
-        # Evidence saving is handled automatically by BasePlugin
-        # No manual implementation needed - just yield data results
+        # Yield results as they become available.
+        yield self.data({"input": input_value, "result_field": "some_value"})
 ```
+
+`run()` receives the user's parameters and a `PluginRun` context. The context
+carries the database session, the acting user, the case and API keys
+(`ctx.key(...)`). Evidence and entity saving happen after `run()` finishes; see
+[Evidence Saving System](#6-evidence-saving-system).
+
+Plugins that wrap a command-line tool can also inherit `SubprocessPluginMixin`
+(from `.base_plugin`). They implement `parse_output(line)` to turn one stdout
+line into a payload dict, or `None` to skip it, and iterate
+`self.run_subprocess([...])`. The mixin terminates the process on cancellation.
 
 ### 3. Plugin Categories
 
@@ -201,9 +187,12 @@ class YourPluginNamePlugin(BasePlugin):
 **Note**: The `category` field controls UI organization, while `evidence_category` determines where evidence is stored in the case.
 
 ### 4. Result Types
-Your plugin should yield dictionaries with these `type` values:
-- **`"data"`**: Actual results (what users care about)
-- **`"error"`**: Error messages
+Yield `ResultEvent`s built with the `BasePlugin` helpers:
+- **`self.data({...})`**: Actual results (what users care about). Only data payloads become evidence.
+- **`self.error("message")`**: Error messages
+- **`self.status("message")`**: Optional progress messages; use them sparingly
+
+Don't yield a completion event. The plugin runner appends one when `run()` returns, and also turns any uncaught exception into an error event.
 
 ### 5. Evidence Categories
 
@@ -222,7 +211,7 @@ self.evidence_category = "Network Assets"  # Evidence storage category
 - `"Documents"` - Reports, files
 - `"Other"` - Default fallback
 
-**Category Validation**: The BasePlugin validates `evidence_category` on initialization and will raise an error for invalid categories.
+**Category Validation**: The plugin registry validates `evidence_category` when it loads plugins at startup and raises an error for invalid categories.
 
 ### 6. Evidence Saving System
 
@@ -258,68 +247,77 @@ Result #1:
 ```
 
 #### Custom Evidence Formatting
-Override `_format_evidence_content()` in your plugin for custom formatting:
+Override `format_evidence()` in your plugin for custom formatting. It receives the collected data payloads and the run parameters:
 
 ```python
-def _format_evidence_content(self, results: List[Dict[str, Any]], params: Dict[str, Any]) -> str:
+def format_evidence(self, payloads: list[dict[str, Any]], params: dict[str, Any]) -> str:
     """Custom formatting for evidence content"""
     content_lines = [
         f"{self.display_name} Investigation Results",
         "=" * 50,
         "",
         f"Target: {params.get('target', 'Unknown')}",
-        f"Total findings: {len(results)}",
+        f"Total findings: {len(payloads)}",
         "",
     ]
-    
-    for result in results:
+
+    for payload in payloads:
         content_lines.extend([
-            f"Finding: {result.get('description', 'N/A')}",
-            f"Confidence: {result.get('confidence', 'Unknown')}",
+            f"Finding: {payload.get('description', 'N/A')}",
+            f"Confidence: {payload.get('confidence', 'Unknown')}",
             "",
         ])
-    
+
     return "\n".join(content_lines)
+```
+
+#### Saving Entities
+To also save discovered IP addresses or subdomains as case entities, override `entity_writes()`. It returns write requests built from the payloads. `unique_ip_writes()` validates and deduplicates IP candidates given as `(address, description, sources)` tuples:
+
+```python
+from .base_plugin import unique_ip_writes
+
+def entity_writes(self, payloads, params):
+    return unique_ip_writes(
+        (payload.get("ip"), f"Seen by {self.display_name}", {"ip_address": self.display_name})
+        for payload in payloads
+    )
 ```
 
 ### 6. API Key Requirements
 
-Plugins can declare required API keys that will be automatically validated:
+Plugins declare the API keys they need as `Provider` values. Read the key from the run context, and yield `ctx.missing_key(...)` when it is absent:
 
 ```python
+from app.services.api_key_vault import Provider
+
+
 class MyPlugin(BasePlugin):
     def __init__(self):
         super().__init__()
-        self.api_key_requirements = ["provider_name"]  # e.g., ["openai", "shodan"]
+        self.api_key_requirements = [Provider.SHODAN]
 
-    async def run(self, params: Optional[Dict[str, Any]] = None) -> AsyncGenerator[Dict[str, Any], None]:
-        # Check API key requirements (automatically handled by BasePlugin)
-        if hasattr(self, 'api_key_requirements') and self.api_key_requirements:
-            missing_keys = self.check_api_key_requirements()
-            if missing_keys:
-                yield {
-                    "type": "error",
-                    "data": {
-                        "message": f"API key{'s' if len(missing_keys) > 1 else ''} required for: {', '.join(missing_keys)}. "
-                                  "Please add them in Admin → Configuration → API Keys"
-                    }
-                }
-                return
-        
+    async def run(self, params, ctx):
+        api_key = ctx.key(Provider.SHODAN)
+        if not api_key:
+            # "API key required for Shodan. Add it in Admin → Configuration → API Keys."
+            yield ctx.missing_key(Provider.SHODAN)
+            return
+
         # Your plugin logic here...
 ```
 
 The system will:
-- Check if required API keys are configured before execution
+- Reject a plugin at startup if it declares a provider that isn't a `Provider` member
+- Report each required key's configuration status in the plugin catalogue
 - Show warnings in the UI when keys are missing
-- Disable plugin execution until keys are configured
 - Direct admins to the configuration page
-- Provide simplified API key checking in generated plugins
 
 ### 7. Dependencies
-Add any required packages to `/backend/requirements.txt`:
-```txt
-your-package-name==version
+The backend image installs from `backend/pyproject.toml` and `backend/uv.lock`. Add a pinned dependency with uv, which updates both:
+```bash
+cd backend
+uv add "your-package-name==version"
 ```
 
 ## Frontend Components (Usually Not Needed - Automatic UI Available)
@@ -524,16 +522,13 @@ The generator handles all the boilerplate and follows best practices automatical
 
 #### 1. Create Backend Plugin
 ```bash
-# 1. Add dependencies to requirements.txt
-echo "your-tool==1.0.0" >> backend/requirements.txt
+# 1. Add a pinned dependency (updates pyproject.toml and uv.lock)
+(cd backend && uv add "your-tool==1.0.0")
 
 # 2. Create plugin file
 touch backend/app/plugins/mytool_plugin.py
 
 # 3. Implement plugin class (see structure above)
-
-# 4. Install dependencies in container
-docker compose exec backend pip install your-tool
 ```
 
 #### 2. Create Frontend Components (Usually Not Needed)
@@ -557,16 +552,34 @@ touch backend/tests/plugins/test_mytool_plugin.py
 # Implement test cases (see generated examples)
 ```
 
+Plugin tests can run a plugin directly with an in-memory context:
+
+```python
+from app.plugins.base_plugin import PluginRun
+from app.services.api_key_vault import Provider
+
+
+async def test_mytool_reports_finding(session, test_admin):
+    ctx = PluginRun.for_test(
+        session=session,
+        user=test_admin,
+        api_keys={Provider.SHODAN: "test-key"},
+        evidence=[],  # collects EvidenceWrite requests
+        entities=[],  # collects EntityWrite requests
+    )
+
+    events = [event async for event in MytoolPlugin().run({"target": "example.com"}, ctx)]
+
+    assert events[0].kind == "data"
+```
+
 ### Final Steps (Both Methods)
 ```bash
-# Install new dependencies
-docker compose exec backend pip install your-new-dependencies
+# Rebuild the backend image if you added dependencies, then restart it to load the plugin
+docker compose up -d --build backend
 
-# Restart backend to load new plugin
-docker compose restart backend
-
-# Run tests
-docker compose exec backend pytest backend/tests/plugins/test_mytool_plugin.py
+# Run the plugin's tests locally
+cd backend && uv run pytest tests/plugins/test_mytool_plugin.py
 
 # Plugin should appear in the frontend automatically
 # Navigate to Plugins dashboard to test
@@ -577,10 +590,10 @@ docker compose exec backend pytest backend/tests/plugins/test_mytool_plugin.py
 ### Backend
 - **Keep descriptions concise** (1-2 sentences)
 - **Set appropriate categories** - both UI category and evidence category
-- **Use valid evidence categories** - BasePlugin validates evidence_category on initialization
-- **Handle errors gracefully** - yield error results instead of throwing exceptions
+- **Use valid evidence categories** - the registry validates evidence_category at startup
+- **Handle expected errors gracefully** - yield error results with a clear message; the runner reports anything uncaught as a generic plugin error
 - **Add delays** between API calls to be respectful (`await asyncio.sleep(0.1)`)
-- **Only yield meaningful results** - filter out noise, no status/completion messages
+- **Only yield meaningful results** - filter out noise; keep status messages rare and never yield completion
 - **Use appropriate timeouts** for external API calls
 - **Evidence saving is automatic** - BasePlugin handles evidence saving automatically when `save_to_case=True`
 - **Keep output clean** - users want results, not progress updates
@@ -609,7 +622,15 @@ Owlculus provides a centralized, secure API key management system that plugins s
 ### 1. Retrieving API Keys in Plugins
 
 ```python
-from app.services.system_config_service import SystemConfigService
+from collections.abc import AsyncGenerator
+from typing import Any
+
+import shodan
+
+from app.services.api_key_vault import Provider
+
+from .base_plugin import BasePlugin, PluginRun, ResultEvent
+
 
 class ShodanPlugin(BasePlugin):
     """Example plugin that uses Shodan API"""
@@ -619,66 +640,50 @@ class ShodanPlugin(BasePlugin):
         self.description = "Search for hosts and services using Shodan"
         self.category = "Network"
         self.evidence_category = "Network Assets"
-        # No need to define API key parameters - handled centrally
+        self.api_key_requirements = [Provider.SHODAN]
+        self.parameters = {
+            "query": {"type": "string", "description": "Search query", "required": True}
+        }
 
-    async def run(self, params: Optional[Dict[str, Any]] = None) -> AsyncGenerator[Dict[str, Any], None]:
-        """Execute Shodan search"""
-        # Get database session (this should be passed in via dependency injection in practice)
-        from app.core.dependencies import get_db
-        db = next(get_db())
-        
+    async def run(
+        self, params: dict[str, Any], ctx: PluginRun
+    ) -> AsyncGenerator[ResultEvent, None]:
+        api_key = ctx.key(Provider.SHODAN)
+        if not api_key:
+            yield ctx.missing_key(Provider.SHODAN)
+            return
+
         try:
-            # Retrieve API key using the centralized system
-            config_service = SystemConfigService(db)
-            shodan_api_key = config_service.get_api_key("shodan")
-            
-            if not shodan_api_key:
-                yield {
-                    "type": "error", 
-                    "data": {"message": "Shodan API key not configured. Please add it in Admin → Configuration → API Keys"}
-                }
-                return
+            results = shodan.Shodan(api_key).search(params["query"])
+        except shodan.APIError as e:
+            yield self.error(f"Shodan API error: {e}")
+            return
 
-            # Use the API key for your service
-            import shodan
-            api = shodan.Shodan(shodan_api_key)
-            
-            # Your plugin logic here...
-            query = params.get("query", "")
-            results = api.search(query)
-            
-            for result in results['matches']:
-                yield {
-                    "type": "data",
-                    "data": {
-                        "ip": result.get("ip_str"),
-                        "port": result.get("port"),
-                        "organization": result.get("org"),
-                        "location": result.get("location", {}).get("country_name"),
-                        "timestamp": result.get("timestamp")
-                    }
+        for match in results["matches"]:
+            yield self.data(
+                {
+                    "ip": match.get("ip_str"),
+                    "port": match.get("port"),
+                    "organization": match.get("org"),
+                    "location": match.get("location", {}).get("country_name"),
+                    "timestamp": match.get("timestamp"),
                 }
-                
-        except Exception as e:
-            yield {
-                "type": "error",
-                "data": {"message": f"Shodan API error: {str(e)}"}
-            }
-        finally:
-            db.close()
+            )
 ```
+
+The context owns the database session, so plugins never open one themselves.
 
 ### 2. Supported API Key Providers
 
-The system supports any API provider. Common examples:
-- `openai` - OpenAI GPT APIs
-- `anthropic` - Claude APIs  
-- `shodan` - Shodan search API
-- `virustotal` - VirusTotal API
-- `censys` - Censys search API
-- `hunter` - Hunter.io email finder
-- `haveibeenpwned` - Have I Been Pwned API
-- `whoisxml` - WhoisXML API
+Providers are the members of `Provider` in `backend/app/services/api_key_vault.py`:
+- `Provider.OPENAI` (`openai`)
+- `Provider.PEOPLE_DATA_LABS` (`people_data_labs`)
+- `Provider.SECURITYTRAILS` (`securitytrails`)
+- `Provider.SHODAN` (`shodan`)
+- `Provider.VIRUSTOTAL` (`virustotal`)
+- `Provider.CUSTOM` (`custom`)
+
+To support a new provider, add a member to `Provider`.
 
 ### 3. API Key Configuration
 
@@ -687,38 +692,35 @@ The system supports any API provider. Common examples:
 - **API Endpoints**:
   - `PUT /api/admin/configuration/api-keys/{provider}` - Set/update key
   - `GET /api/admin/configuration/api-keys` - List configured keys
+  - `GET /api/admin/configuration/api-keys/{provider}/status` - Check whether a key is configured
   - `DELETE /api/admin/configuration/api-keys/{provider}` - Remove key
 
 **For Plugin Users**: If a plugin requires an API key that isn't configured, it will show a clear error message directing them to the admin configuration.
 
 ### 4. Environment Variable Fallback
 
-The system automatically falls back to environment variables if no database key is configured:
+The system falls back to a `{PROVIDER}_API_KEY` environment variable when no active database key is configured:
 - `SHODAN_API_KEY` → `shodan` provider
-- `OPENAI_API_KEY` → `openai` provider  
+- `OPENAI_API_KEY` → `openai` provider
 - `VIRUSTOTAL_API_KEY` → `virustotal` provider
+- `PEOPLE_DATA_LABS_API_KEY` → `people_data_labs` provider
 
 ### 5. Best Practices for API Key Usage
 
 ```python
-async def run(self, params: Optional[Dict[str, Any]] = None) -> AsyncGenerator[Dict[str, Any], None]:
-    # ✅ GOOD: Use centralized API key system
-    config_service = SystemConfigService(db)
-    api_key = config_service.get_api_key("provider_name")
-    
+async def run(self, params, ctx):
+    # ✅ GOOD: Read the key through the run context
+    api_key = ctx.key(Provider.SHODAN)
     if not api_key:
-        yield {
-            "type": "error", 
-            "data": {"message": "Provider API key not configured. Please add it in Admin → Configuration → API Keys"}
-        }
+        yield ctx.missing_key(Provider.SHODAN)
         return
-    
+
     # ❌ BAD: Hardcoded API keys
     # api_key = "sk-hardcoded-key-123"
-    
-    # ❌ BAD: Direct environment variable access
-    # api_key = os.environ.get("PROVIDER_API_KEY")
-    
+
+    # ❌ BAD: Direct environment variable access (the vault already falls back to it)
+    # api_key = os.environ.get("SHODAN_API_KEY")
+
     # Use the API key...
 ```
 
@@ -741,38 +743,19 @@ async def run(self, params: Optional[Dict[str, Any]] = None) -> AsyncGenerator[D
 ```python
 class MultiServicePlugin(BasePlugin):
     """Plugin that uses multiple external APIs"""
-    
-    async def run(self, params: Optional[Dict[str, Any]] = None) -> AsyncGenerator[Dict[str, Any], None]:
-        config_service = SystemConfigService(db)
-        
-        # Check multiple API keys
-        required_keys = {
-            "shodan": "Shodan API key",
-            "virustotal": "VirusTotal API key"
-        }
-        
-        missing_keys = []
-        api_keys = {}
-        
-        for provider, description in required_keys.items():
-            key = config_service.get_api_key(provider)
+
+    def __init__(self):
+        super().__init__()
+        self.api_key_requirements = [Provider.SHODAN, Provider.VIRUSTOTAL]
+
+    async def run(self, params, ctx):
+        keys = {provider: ctx.key(provider) for provider in self.api_key_requirements}
+        for provider, key in keys.items():
             if not key:
-                missing_keys.append(f"{description} ({provider})")
-            else:
-                api_keys[provider] = key
-        
-        if missing_keys:
-            yield {
-                "type": "error",
-                "data": {
-                    "message": f"Missing API keys: {', '.join(missing_keys)}. "
-                              "Please configure them in Admin → Configuration → API Keys"
-                }
-            }
-            return
-        
-        # Use the API keys...
-        # Your multi-service logic here
+                yield ctx.missing_key(provider)
+                return
+
+        # Use keys[Provider.SHODAN] and keys[Provider.VIRUSTOTAL]...
 ```
 
 ## Examples
@@ -795,9 +778,8 @@ Study these existing plugins for reference:
 - Check browser console for import errors
 
 ### Dependencies Not Available
-- Add to `requirements.txt`
-- Install in container: `docker compose exec backend pip install package-name`
-- For persistent dependencies, rebuild container
+- Add with `uv add` in `backend/` so `pyproject.toml` and `uv.lock` both change
+- Rebuild the backend image: `docker compose up -d --build backend`
 
 ---
 
