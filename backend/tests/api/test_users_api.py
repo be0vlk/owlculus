@@ -23,7 +23,7 @@ from app.core.dependencies import (
     get_optional_current_user,
 )
 from app.core.exception_handler import handle_domain_exception
-from app.core.exceptions import BaseException as DomainException
+from app.core.exceptions import DomainException
 from app.core.security import get_password_hash
 from app.database.connection import get_db
 from app.database.models import User
@@ -97,6 +97,7 @@ def bootstrap_test_app(session: Session) -> FastAPI:
 
     test_app = FastAPI()
     test_app.add_exception_handler(DomainException, handle_domain_exception)
+    test_app.add_exception_handler(Exception, handle_domain_exception)
     test_app.state.bootstrap_rate_limiter = rate_limiting.InMemoryClientRateLimiter(
         max_attempts=3, window_seconds=60 * 60
     )
@@ -527,17 +528,24 @@ class TestUsersAPI:
             "app.services.user_service.UserService._new_user",
             side_effect=RuntimeError("simulated insert failure"),
         ):
-            response = await self._post_bootstrap(
-                session,
-                {
-                    "username": "first_admin",
-                    "email": "first_admin@example.com",
-                    "password": "secure-passphrase",
-                    "setup_token": pending_setup_token,
-                },
-            )
+            async with AsyncClient(
+                transport=ASGITransport(
+                    app=bootstrap_test_app(session), raise_app_exceptions=False
+                ),
+                base_url="http://testserver",
+            ) as async_client:
+                response = await async_client.post(
+                    "/api/users/",
+                    json={
+                        "username": "first_admin",
+                        "email": "first_admin@example.com",
+                        "password": "secure-passphrase",
+                        "setup_token": pending_setup_token,
+                    },
+                )
 
         assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+        assert response.json() == {"detail": "Internal server error"}
         assert setup.validate_setup_token(pending_setup_token) is True
         assert setup.is_setup_required(session) is True
 

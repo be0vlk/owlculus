@@ -9,13 +9,12 @@ from app.core.dependencies import get_current_user
 from app.core.exceptions import (
     AuthenticationException,
     AuthorizationException,
+    DomainException,
     DuplicateResourceException,
+    RateLimitException,
     RelatedResourceException,
     ResourceNotFoundException,
     ValidationException,
-)
-from app.core.exceptions import (
-    BaseException as DomainException,
 )
 from app.main import app
 
@@ -29,6 +28,7 @@ from app.main import app
         (DuplicateResourceException("duplicate"), 400, "duplicate"),
         (ValidationException("invalid"), 422, "invalid"),
         (RelatedResourceException("conflict"), 409, "conflict"),
+        (RateLimitException("slow down"), 429, "slow down"),
         (DomainException("secret detail"), 500, "Internal server error"),
     ],
 )
@@ -80,3 +80,21 @@ def test_authorization_denial_is_audited_once_by_the_handler(
 
 def test_handler_is_registered_for_the_core_exception_family():
     assert DomainException in app.exception_handlers
+
+
+def test_unexpected_error_is_hidden_behind_the_same_json_500(test_admin):
+    app.dependency_overrides[get_current_user] = lambda: test_admin
+    try:
+        with (
+            patch(
+                "app.services.evidence_service.EvidenceService.get_case_evidence",
+                side_effect=ValueError("secret detail"),
+            ),
+            TestClient(app, raise_server_exceptions=False) as tolerant_client,
+        ):
+            response = tolerant_client.get("/api/evidence/case/1")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "Internal server error"}

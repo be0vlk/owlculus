@@ -13,14 +13,13 @@ from sqlmodel import Session, col, select
 
 from app import schemas
 from app.core.exceptions import (
-    AuthorizationException,
-    BaseException,
+    DomainException,
     DuplicateResourceException,
     ResourceNotFoundException,
     ValidationException,
 )
 from app.core.file_storage import create_case_directory
-from app.core.logging import get_security_logger
+from app.core.logging import audit_operation
 from app.core.utils import get_utc_now
 from app.database import models
 from app.database.db_utils import transaction
@@ -63,53 +62,30 @@ class CaseService:
         next_number = str(highest + 1).zfill(2)
         return f"{base_format}-{next_number}"
 
+    @audit_operation("case_creation")
     async def create_case(
         self, case: schemas.CaseCreate, current_user: models.User
     ) -> models.Case:
         self.case_access.require_admin(current_user)
-        case_logger = get_security_logger(
-            admin_user_id=current_user.id,
-            action="create_case",
-            case_name=case.title,
-            event_type="case_creation_attempt",
-        )
+        with transaction(self.db):
+            # Always generate a new case number, ignoring any provided value
+            case_data = case.model_dump()
+            current_time = get_utc_now()
+            case_data["case_number"] = await self._generate_case_number(current_time)
 
-        try:
-            with transaction(self.db):
-                # Always generate a new case number, ignoring any provided value
-                case_data = case.model_dump()
-                current_time = get_utc_now()
-                case_data["case_number"] = await self._generate_case_number(
-                    current_time
-                )
+            new_case = models.Case(
+                **schemas.CaseCreate(**case_data).model_dump(),
+                created_by_id=current_user.id,
+                created_at=current_time,
+                updated_at=current_time,
+            )
+            self.db.add(new_case)
+            self.db.flush()
 
-                new_case = models.Case(
-                    **schemas.CaseCreate(**case_data).model_dump(),
-                    created_by_id=current_user.id,
-                    created_at=current_time,
-                    updated_at=current_time,
-                )
-                self.db.add(new_case)
-                self.db.flush()
-
-            if new_case.id is None:
-                raise BaseException("Internal server error")
-            create_case_directory(new_case.id)
-
-            case_logger.bind(
-                case_id=new_case.id,
-                case_number=new_case.case_number,
-                client_id=new_case.client_id,
-                event_type="case_creation_success",
-            ).info("Case created successfully")
-
-            return new_case
-
-        except Exception as e:
-            case_logger.bind(
-                event_type="case_creation_error", error_type="system_error"
-            ).error(f"Case creation error: {e!s}")
-            raise BaseException("Internal server error")
+        if new_case.id is None:
+            raise DomainException("Case was not assigned an id")
+        create_case_directory(new_case.id)
+        return new_case
 
     async def get_cases(
         self,
@@ -143,64 +119,41 @@ class CaseService:
         case = self.case_access.readable(current_user, case_id)
         return self.load_cases_with_users([case])[0]
 
+    @audit_operation("case_update")
     async def update_case(
         self, case_id: int, case_update: schemas.CaseUpdate, current_user: models.User
     ) -> models.Case:
         db_case = self.case_access.writable(current_user, case_id)
+        if case_update.case_number and case_update.case_number != db_case.case_number:
+            existing_case = self.db.exec(
+                select(models.Case).where(
+                    models.Case.case_number == case_update.case_number
+                )
+            ).first()
+            if existing_case:
+                raise DuplicateResourceException("Case number already exists")
 
-        case_logger = get_security_logger(
-            user_id=current_user.id,
-            case_id=case_id,
-            action="update_case",
-            event_type="case_update_attempt",
-        )
+        with transaction(self.db):
+            update_data = case_update.model_dump(exclude_unset=True)
+            for field, value in update_data.items():
+                setattr(db_case, field, value)
+            db_case.updated_at = get_utc_now()
+            self.db.add(db_case)
+        self.db.refresh(db_case)
+        return db_case
 
-        try:
-            if (
-                case_update.case_number
-                and case_update.case_number != db_case.case_number
-            ):
-                existing_case = self.db.exec(
-                    select(models.Case).where(
-                        models.Case.case_number == case_update.case_number
-                    )
-                ).first()
-                if existing_case:
-                    case_logger.bind(
-                        event_type="case_update_failed",
-                        failure_reason="case_number_exists",
-                        requested_case_number=case_update.case_number,
-                    ).warning("Case update failed: case number already exists")
-                    raise DuplicateResourceException("Case number already exists")
+    def _case_and_user(
+        self, case_id: int, user_id: int
+    ) -> tuple[models.Case, models.User]:
+        db_case = self.db.get(models.Case, case_id)
+        if not db_case:
+            raise ResourceNotFoundException("Case not found")
+        db_user = self.db.get(models.User, user_id)
+        if not db_user:
+            raise ResourceNotFoundException("User not found")
+        return db_case, db_user
 
-            with transaction(self.db):
-                update_data = case_update.model_dump(exclude_unset=True)
-                for field, value in update_data.items():
-                    setattr(db_case, field, value)
-                db_case.updated_at = get_utc_now()
-                self.db.add(db_case)
-            self.db.refresh(db_case)
-            updated_case = db_case
-
-            case_logger.bind(
-                case_number=updated_case.case_number, event_type="case_update_success"
-            ).info("Case updated successfully")
-
-            return updated_case
-
-        except (
-            AuthorizationException,
-            DuplicateResourceException,
-            ResourceNotFoundException,
-            ValidationException,
-        ):
-            raise
-        except Exception as e:
-            case_logger.bind(
-                event_type="case_update_error", error_type="system_error"
-            ).error(f"Case update error: {e!s}")
-            raise BaseException("Internal server error")
-
+    @audit_operation("case_user_add")
     async def add_user_to_case(
         self,
         case_id: int,
@@ -209,213 +162,71 @@ class CaseService:
         is_lead: bool = False,
     ) -> models.Case:
         self.case_access.require_admin(current_user)
+        db_case, db_user = self._case_and_user(case_id, user_id)
+        self.case_access.validate_lead_assignment(db_user, is_lead=is_lead)
 
-        case_logger = get_security_logger(
-            admin_user_id=current_user.id,
-            case_id=case_id,
-            target_user_id=user_id,
-            action="add_user_to_case",
-            event_type="case_user_add_attempt",
-        )
-
-        try:
-            db_case = self.db.get(models.Case, case_id)
-            if not db_case:
-                case_logger.bind(
-                    event_type="case_user_add_failed", failure_reason="case_not_found"
-                ).warning("Add user to case failed: case not found")
-                raise ResourceNotFoundException("Case not found")
-
-            db_user = self.db.get(models.User, user_id)
-            if not db_user:
-                case_logger.bind(
-                    event_type="case_user_add_failed", failure_reason="user_not_found"
-                ).warning("Add user to case failed: user not found")
-                raise ResourceNotFoundException("User not found")
-
-            try:
-                self.case_access.validate_lead_assignment(db_user, is_lead=is_lead)
-            except ValidationException:
-                case_logger.bind(
-                    event_type="case_user_add_failed",
-                    failure_reason="analyst_cannot_be_lead",
-                ).warning("Add user to case failed: analyst cannot be set as lead")
-                raise
-
-            with transaction(self.db):
-                existing_link = self.db.exec(
-                    select(models.CaseUserLink).where(
-                        models.CaseUserLink.case_id == db_case.id,
-                        models.CaseUserLink.user_id == db_user.id,
+        with transaction(self.db):
+            existing_link = self.db.exec(
+                select(models.CaseUserLink).where(
+                    models.CaseUserLink.case_id == db_case.id,
+                    models.CaseUserLink.user_id == db_user.id,
+                )
+            ).first()
+            if existing_link:
+                existing_link.is_lead = is_lead
+                self.db.add(existing_link)
+            else:
+                self.db.add(
+                    models.CaseUserLink(
+                        case_id=db_case.id,
+                        user_id=db_user.id,
+                        is_lead=is_lead,
                     )
-                ).first()
-                if existing_link:
-                    existing_link.is_lead = is_lead
-                    self.db.add(existing_link)
-                else:
-                    self.db.add(
-                        models.CaseUserLink(
-                            case_id=db_case.id,
-                            user_id=db_user.id,
-                            is_lead=is_lead,
-                        )
-                    )
-                db_case.updated_at = get_utc_now()
-                self.db.add(db_case)
-            self.db.refresh(db_case)
-            updated_case = db_case
+                )
+            db_case.updated_at = get_utc_now()
+            self.db.add(db_case)
+        self.db.refresh(db_case)
+        return db_case
 
-            case_logger.bind(
-                case_number=db_case.case_number,
-                username=db_user.username,
-                event_type="case_user_add_success",
-            ).info("User added to case successfully")
-
-            return updated_case
-
-        except (AuthorizationException, ResourceNotFoundException, ValidationException):
-            raise
-        except Exception as e:
-            case_logger.bind(
-                event_type="case_user_add_error", error_type="system_error"
-            ).error(f"Add user to case error: {e!s}")
-            raise BaseException("Internal server error")
-
+    @audit_operation("case_user_remove")
     async def remove_user_from_case(
         self, case_id: int, user_id: int, current_user: models.User
     ) -> models.Case:
         self.case_access.require_admin(current_user)
+        db_case, db_user = self._case_and_user(case_id, user_id)
 
-        case_logger = get_security_logger(
-            admin_user_id=current_user.id,
-            case_id=case_id,
-            target_user_id=user_id,
-            action="remove_user_from_case",
-            event_type="case_user_remove_attempt",
-        )
+        with transaction(self.db):
+            db_case.users.remove(db_user)
+            db_case.updated_at = get_utc_now()
+            self.db.add(db_case)
+        self.db.refresh(db_case)
+        return db_case
 
-        try:
-            db_case = self.db.get(models.Case, case_id)
-            if not db_case:
-                case_logger.bind(
-                    event_type="case_user_remove_failed",
-                    failure_reason="case_not_found",
-                ).warning("Remove user from case failed: case not found")
-                raise ResourceNotFoundException("Case not found")
-
-            db_user = self.db.get(models.User, user_id)
-            if not db_user:
-                case_logger.bind(
-                    event_type="case_user_remove_failed",
-                    failure_reason="user_not_found",
-                ).warning("Remove user from case failed: user not found")
-                raise ResourceNotFoundException("User not found")
-
-            with transaction(self.db):
-                db_case.users.remove(db_user)
-                db_case.updated_at = get_utc_now()
-                self.db.add(db_case)
-            self.db.refresh(db_case)
-            updated_case = db_case
-
-            case_logger.bind(
-                case_number=db_case.case_number,
-                username=db_user.username,
-                event_type="case_user_remove_success",
-            ).info("User removed from case successfully")
-
-            return updated_case
-
-        except (AuthorizationException, ResourceNotFoundException):
-            raise
-        except Exception as e:
-            case_logger.bind(
-                event_type="case_user_remove_error", error_type="system_error"
-            ).error(f"Remove user from case error: {e!s}")
-            raise BaseException("Internal server error")
-
+    @audit_operation("case_user_lead_update")
     async def update_case_user_lead_status(
         self, case_id: int, user_id: int, is_lead: bool, current_user: models.User
     ) -> models.Case:
         self.case_access.require_admin(current_user)
+        db_case, db_user = self._case_and_user(case_id, user_id)
+        if db_user not in db_case.users:
+            raise ValidationException("User is not assigned to this case")
+        self.case_access.validate_lead_assignment(db_user, is_lead=is_lead)
 
-        case_logger = get_security_logger(
-            admin_user_id=current_user.id,
-            case_id=case_id,
-            target_user_id=user_id,
-            action="update_case_user_lead_status",
-            event_type="case_user_lead_update_attempt",
-        )
-
-        try:
-            db_case = self.db.get(models.Case, case_id)
-            if not db_case:
-                case_logger.bind(
-                    event_type="case_user_lead_update_failed",
-                    failure_reason="case_not_found",
-                ).warning("Update case user lead status failed: case not found")
-                raise ResourceNotFoundException("Case not found")
-
-            db_user = self.db.get(models.User, user_id)
-            if not db_user:
-                case_logger.bind(
-                    event_type="case_user_lead_update_failed",
-                    failure_reason="user_not_found",
-                ).warning("Update case user lead status failed: user not found")
-                raise ResourceNotFoundException("User not found")
-
-            if db_user not in db_case.users:
-                case_logger.bind(
-                    event_type="case_user_lead_update_failed",
-                    failure_reason="user_not_in_case",
-                ).warning(
-                    "Update case user lead status failed: user not assigned to case"
+        with transaction(self.db):
+            link = self.db.exec(
+                select(models.CaseUserLink).where(
+                    models.CaseUserLink.case_id == case_id,
+                    models.CaseUserLink.user_id == user_id,
                 )
+            ).first()
+            if link is None:
                 raise ValidationException("User is not assigned to this case")
-
-            try:
-                self.case_access.validate_lead_assignment(db_user, is_lead=is_lead)
-            except ValidationException:
-                case_logger.bind(
-                    event_type="case_user_lead_update_failed",
-                    failure_reason="analyst_cannot_be_lead",
-                ).warning(
-                    "Update case user lead status failed: analyst cannot be set as lead"
-                )
-                raise
-
-            with transaction(self.db):
-                link = self.db.exec(
-                    select(models.CaseUserLink).where(
-                        models.CaseUserLink.case_id == case_id,
-                        models.CaseUserLink.user_id == user_id,
-                    )
-                ).first()
-                if link is None:
-                    raise ValidationException("User is not assigned to this case")
-                link.is_lead = is_lead
-                db_case.updated_at = get_utc_now()
-                self.db.add(link)
-                self.db.add(db_case)
-            self.db.refresh(db_case)
-            updated_case = db_case
-
-            case_logger.bind(
-                case_number=db_case.case_number,
-                username=db_user.username,
-                is_lead=is_lead,
-                event_type="case_user_lead_update_success",
-            ).info("Case user lead status updated successfully")
-
-            return updated_case
-
-        except (AuthorizationException, ResourceNotFoundException, ValidationException):
-            raise
-        except Exception as e:
-            case_logger.bind(
-                event_type="case_user_lead_update_error", error_type="system_error"
-            ).error(f"Update case user lead status error: {e!s}")
-            raise BaseException("Internal server error")
+            link.is_lead = is_lead
+            db_case.updated_at = get_utc_now()
+            self.db.add(link)
+            self.db.add(db_case)
+        self.db.refresh(db_case)
+        return db_case
 
     def load_cases_with_users(self, cases: list[models.Case]) -> list[schemas.Case]:
         """Enrich cases and lead flags with one joined query for any list size."""

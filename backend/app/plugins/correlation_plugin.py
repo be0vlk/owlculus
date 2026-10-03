@@ -7,7 +7,7 @@ from collections.abc import AsyncGenerator
 from dataclasses import asdict
 from typing import Any
 
-from app.core.exceptions import BaseException as DomainException
+from app.core.exceptions import DomainException
 from app.core.utils import get_utc_now
 from app.database.models import Case
 from app.services.entity_correlation import (

@@ -6,15 +6,20 @@ configurable log levels, file rotation, and security-focused logging features.
 It includes context variables for tracking client IP and user agent across requests.
 """
 
+import inspect
 import logging
 import re
 import sys
+from collections.abc import Awaitable, Callable
 from contextvars import ContextVar
+from functools import wraps
 from pathlib import Path
+from typing import Any
 
 from loguru import logger
 
 from .config import logging_settings
+from .exceptions import DomainException
 
 # Context variables to store request info across async calls
 client_ip_context: ContextVar[str | None] = ContextVar("client_ip", default=None)
@@ -88,3 +93,54 @@ def get_security_logger(**context):
 
 def get_logger_with_context(**context):
     return logger.bind(**context)
+
+
+def audit_operation[**P, R](
+    action: str,
+) -> Callable[[Callable[P, Awaitable[R]]], Callable[P, Awaitable[R]]]:
+    """Record one structured attempt/failed/error/success outcome per call.
+
+    The actor is the operation's bound ``current_user`` argument; integer
+    ``*_id`` arguments and the result's ``id`` identify what was touched.
+    """
+
+    def decorate(operation: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
+        signature = inspect.signature(operation)
+
+        @wraps(operation)
+        async def audited(*args: P.args, **kwargs: P.kwargs) -> R:
+            arguments = signature.bind(*args, **kwargs).arguments
+            context: dict[str, Any] = {
+                "action": action,
+                "actor_user_id": getattr(arguments.get("current_user"), "id", None),
+            }
+            context.update(
+                (name, value)
+                for name, value in arguments.items()
+                if name.endswith("_id") and isinstance(value, int)
+            )
+            audit_logger = get_security_logger(
+                **context, event_type=f"{action}_attempt"
+            )
+            try:
+                result = await operation(*args, **kwargs)
+            except DomainException as error:
+                audit_logger.bind(
+                    event_type=f"{action}_failed",
+                    failure_reason=type(error).__name__,
+                ).warning(f"{action} failed")
+                raise
+            except Exception as error:
+                audit_logger.bind(
+                    event_type=f"{action}_error", error_type=type(error).__name__
+                ).error(f"{action} failed unexpectedly")
+                raise
+            success: dict[str, Any] = {"event_type": f"{action}_success"}
+            if isinstance(result_id := getattr(result, "id", None), int):
+                success["result_id"] = result_id
+            audit_logger.bind(**success).info(f"{action} succeeded")
+            return result
+
+        return audited
+
+    return decorate

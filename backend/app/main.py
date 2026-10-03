@@ -23,7 +23,7 @@ from app.core.config import settings
 from app.core.database_boundary import shutdown_database_workers
 from app.core.dependencies import get_client_ip, get_user_agent
 from app.core.exception_handler import handle_domain_exception
-from app.core.exceptions import BaseException as DomainException
+from app.core.exceptions import DomainException
 from app.core.logging import client_ip_context, setup_logging, user_agent_context
 from app.core.rate_limiting import is_rate_limit_storage_ready
 from app.core.setup import check_and_generate_setup_token
@@ -124,6 +124,7 @@ app = FastAPI(
 app.state.setup_token_check_complete = False
 app.state.hunt_sync_complete = False
 app.add_exception_handler(DomainException, handle_domain_exception)
+app.add_exception_handler(Exception, handle_domain_exception)
 
 
 # Set all CORS enabled origins

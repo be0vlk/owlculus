@@ -14,11 +14,9 @@ from sqlmodel import Session, select
 
 from app.core.exceptions import (
     AuthorizationException,
+    DomainException,
     ResourceNotFoundException,
     ValidationException,
-)
-from app.core.exceptions import (
-    BaseException as DomainException,
 )
 from app.core.file_storage import (
     UPLOAD_DIR,

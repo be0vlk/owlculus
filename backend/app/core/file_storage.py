@@ -9,8 +9,7 @@ from pathlib import Path
 from typing import Any, Optional, Tuple
 from uuid import UUID
 
-from .exceptions import BaseException as DomainException
-from .exceptions import ValidationException
+from .exceptions import DomainException, ValidationException
 from .logging import get_security_logger
 from .security import secure_filename_with_path, validate_file_security
 

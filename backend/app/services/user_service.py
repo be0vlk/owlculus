@@ -1,11 +1,8 @@
 """Session-backed user lifecycle and privilege policy."""
 
 import re
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from enum import StrEnum
-from functools import wraps
-from typing import Any, TypeVar
 
 from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
@@ -18,14 +15,12 @@ from app.core import security, setup
 from app.core.exceptions import (
     AuthenticationException,
     AuthorizationException,
+    DomainException,
     DuplicateResourceException,
     ResourceNotFoundException,
     ValidationException,
 )
-from app.core.exceptions import (
-    BaseException as DomainException,
-)
-from app.core.logging import get_security_logger
+from app.core.logging import audit_operation, get_security_logger
 from app.core.roles import UserRole
 from app.core.utils import get_utc_now
 from app.database.db_utils import transaction
@@ -33,7 +28,6 @@ from app.database.models import CaseUserLink, User
 from app.services.case_access import CaseAccess
 
 _BOOTSTRAP_USERNAME_PATTERN = re.compile(r"[A-Za-z0-9_]{3,50}\Z")
-_Result = TypeVar("_Result")
 
 
 def _validate_user_payload[T: BaseModel](schema: type[T], user_data: object) -> T:
@@ -63,52 +57,6 @@ class UserIdentity:
     username: str
     email: str
     excluded_user_id: int | None = None
-
-
-def _audit_user_operation(
-    action: str,
-) -> Callable[[Callable[..., Awaitable[_Result]]], Callable[..., Awaitable[_Result]]]:
-    """Record one structured outcome for every sensitive user operation."""
-
-    def decorate(
-        operation: Callable[..., Awaitable[_Result]],
-    ) -> Callable[..., Awaitable[_Result]]:
-        @wraps(operation)
-        async def audited(*args: Any, **kwargs: Any) -> _Result:
-            current_user = kwargs.get("current_user") or args[-1]
-            target = kwargs.get("user") or kwargs.get("user_id")
-            if target is None and len(args) > 1:
-                target = args[1]
-            context = {
-                "action": action,
-                "actor_user_id": getattr(current_user, "id", None),
-                "event_type": f"{action}_attempt",
-            }
-            if isinstance(target, int):
-                context["target_user_id"] = target
-            elif target is not None:
-                context["target_username"] = getattr(target, "username", None)
-            logger = get_security_logger(**context)
-            try:
-                result = await operation(*args, **kwargs)
-            except DomainException as error:
-                logger.bind(
-                    event_type=f"{action}_failed",
-                    failure_reason=type(error).__name__,
-                ).warning(f"{action} failed")
-                raise
-            except Exception as error:
-                logger.bind(
-                    event_type=f"{action}_error",
-                    error_type=type(error).__name__,
-                ).error(f"{action} failed unexpectedly")
-                raise
-            logger.bind(event_type=f"{action}_success").info(f"{action} succeeded")
-            return result
-
-        return audited
-
-    return decorate
 
 
 class UserService:
@@ -249,17 +197,13 @@ class UserService:
                 event_type="user_creation_success",
             ).info("Bootstrap administrator created successfully")
             return schemas.User.model_validate(new_user)
-        except (
-            AuthorizationException,
-            DuplicateResourceException,
-            ValidationException,
-        ):
+        except DomainException:
             raise
         except Exception as error:
             logger.bind(
-                event_type="user_creation_error", error_type="system_error"
-            ).error(f"Bootstrap user creation error: {error}")
-            raise DomainException("Internal server error") from error
+                event_type="user_creation_error", error_type=type(error).__name__
+            ).error("Bootstrap user creation failed unexpectedly")
+            raise
 
     async def create_user_from_payload(
         self, user_data: object, current_user: User
@@ -268,7 +212,7 @@ class UserService:
         user = _validate_user_payload(schemas.UserCreate, user_data)
         return await self.create_user(user, current_user)
 
-    @_audit_user_operation("user_creation")
+    @audit_operation("user_creation")
     async def create_user(
         self, user: schemas.UserCreate, current_user: User
     ) -> schemas.User:
@@ -298,7 +242,7 @@ class UserService:
         ).all()
         return [schemas.User.model_validate(user) for user in users]
 
-    @_audit_user_operation("user_update")
+    @audit_operation("user_update")
     async def update_user(
         self, user_id: int, user_update: schemas.UserUpdate, current_user: User
     ) -> schemas.User:
@@ -351,7 +295,7 @@ class UserService:
         )
         return schemas.User.model_validate(user)
 
-    @_audit_user_operation("password_change")
+    @audit_operation("password_change")
     async def change_password(
         self, user_id: int, current_password: str, new_password: str, current_user: User
     ) -> schemas.User:
@@ -366,7 +310,7 @@ class UserService:
         self._replace_password(user, new_password, expected_hash=user.password_hash)
         return schemas.User.model_validate(user)
 
-    @_audit_user_operation("admin_password_reset")
+    @audit_operation("admin_password_reset")
     async def admin_reset_password(
         self, user_id: int, new_password: str, current_user: User
     ) -> schemas.User:
@@ -404,7 +348,7 @@ class UserService:
                 raise ValidationException("Password changed concurrently; try again")
             self.db.refresh(user)
 
-    @_audit_user_operation("user_deletion")
+    @audit_operation("user_deletion")
     async def delete_user(self, user_id: int, current_user: User) -> dict:
         self.case_access.require_admin(current_user)
         user = self.db.get(User, user_id)

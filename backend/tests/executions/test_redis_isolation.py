@@ -179,7 +179,7 @@ async def test_bootstrap_http_uses_auth_store_under_pressure(
     from app.api.users import router
     from app.core import setup
     from app.core.exception_handler import handle_domain_exception
-    from app.core.exceptions import BaseException as DomainException
+    from app.core.exceptions import DomainException
     from app.database.connection import get_db
 
     monkeypatch.setattr(

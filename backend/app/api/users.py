@@ -92,6 +92,7 @@ async def change_password(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
+    assert current_user.id is not None
     user_service = UserService(db)
     return await user_service.change_password(
         user_id=current_user.id,

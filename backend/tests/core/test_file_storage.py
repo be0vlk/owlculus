@@ -11,8 +11,7 @@ import pytest
 from fastapi import UploadFile
 
 from app.core import file_storage
-from app.core.exceptions import BaseException as DomainException
-from app.core.exceptions import ValidationException
+from app.core.exceptions import DomainException, ValidationException
 
 
 @pytest.fixture

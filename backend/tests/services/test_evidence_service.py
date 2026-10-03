@@ -13,9 +13,7 @@ from fastapi import UploadFile
 from sqlmodel import Session
 
 from app.core.exceptions import (
-    BaseException as DomainException,
-)
-from app.core.exceptions import (
+    DomainException,
     ResourceNotFoundException,
     ValidationException,
 )

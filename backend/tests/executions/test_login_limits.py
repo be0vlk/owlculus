@@ -11,7 +11,7 @@ from sqlmodel import Session
 from app.api.auth import router
 from app.core.config import settings
 from app.core.exception_handler import handle_domain_exception
-from app.core.exceptions import BaseException as DomainException
+from app.core.exceptions import DomainException
 from app.database.connection import get_db
 
 

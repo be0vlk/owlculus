@@ -6,8 +6,7 @@ from openai import APIConnectionError
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, col, select
 
-from app.core.exceptions import BaseException as DomainException
-from app.core.exceptions import ValidationException
+from app.core.exceptions import DomainException, ValidationException
 from app.core.strixy_config import StrixyConfig
 from app.core.utils import get_utc_now
 from app.database.connection import engine

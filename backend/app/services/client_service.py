@@ -11,12 +11,12 @@ from sqlmodel import Session, select
 
 from app import schemas
 from app.core.exceptions import (
-    BaseException,
+    DomainException,
     DuplicateResourceException,
     ResourceNotFoundException,
     ValidationException,
 )
-from app.core.logging import get_security_logger
+from app.core.logging import audit_operation
 from app.core.utils import get_utc_now
 from app.database import models
 from app.database.db_utils import transaction
@@ -36,47 +36,22 @@ class ClientService:
             raise ValidationException("Skip and limit must be non-negative")
         return list(self.db.exec(select(models.Client).offset(skip).limit(limit)).all())
 
+    @audit_operation("client_creation")
     async def create_client(
         self, client: schemas.ClientCreate, *, current_user: models.User
     ) -> models.Client:
         self.case_access.require_admin(current_user)
-        client_logger = get_security_logger(
-            admin_user_id=current_user.id,
-            action="create_client",
-            client_name=client.name,
-            event_type="client_creation_attempt",
-        )
+        existing = self.db.exec(
+            select(models.Client).where(models.Client.email == client.email)
+        ).first()
+        if existing:
+            raise DuplicateResourceException("Email already registered")
 
-        try:
-            existing = self.db.exec(
-                select(models.Client).where(models.Client.email == client.email)
-            ).first()
-            if existing:
-                client_logger.bind(
-                    event_type="client_creation_failed", failure_reason="email_exists"
-                ).warning("Client creation failed: email already registered")
-                raise DuplicateResourceException("Email already registered")
-
-            new_client = models.Client(**client.model_dump())
-            with transaction(self.db):
-                self.db.add(new_client)
-            self.db.refresh(new_client)
-
-            client_logger.bind(
-                client_id=new_client.id,
-                client_email=new_client.email,
-                event_type="client_creation_success",
-            ).info("Client created successfully")
-
-            return new_client
-
-        except DuplicateResourceException:
-            raise
-        except Exception as e:
-            client_logger.bind(
-                event_type="client_creation_error", error_type="system_error"
-            ).error(f"Client creation error: {e!s}")
-            raise BaseException(f"Client creation error: {e!s}")
+        new_client = models.Client(**client.model_dump())
+        with transaction(self.db):
+            self.db.add(new_client)
+        self.db.refresh(new_client)
+        return new_client
 
     async def get_client(
         self, client_id: int, *, current_user: models.User
@@ -87,6 +62,7 @@ class ClientService:
             raise ResourceNotFoundException(f"Client with id {client_id} not found")
         return db_client
 
+    @audit_operation("client_update")
     async def update_client(
         self,
         client_id: int,
@@ -95,99 +71,33 @@ class ClientService:
         current_user: models.User,
     ) -> models.Client:
         self.case_access.require_admin(current_user)
-        client_logger = get_security_logger(
-            admin_user_id=current_user.id,
-            client_id=client_id,
-            action="update_client",
-            event_type="client_update_attempt",
-        )
+        db_client = await self.get_client(client_id, current_user=current_user)
+        if client_update.email and client_update.email != db_client.email:
+            existing = self.db.exec(
+                select(models.Client).where(models.Client.email == client_update.email)
+            ).first()
+            if existing:
+                raise DuplicateResourceException("Email already registered")
 
-        try:
-            db_client = self.db.get(models.Client, client_id)
-            if not db_client:
-                client_logger.bind(
-                    event_type="client_update_failed", failure_reason="client_not_found"
-                ).warning("Client update failed: client not found")
-                raise ResourceNotFoundException(f"Client with id {client_id} not found")
+        with transaction(self.db):
+            update_data = client_update.model_dump(exclude_unset=True)
+            for field, value in update_data.items():
+                setattr(db_client, field, value)
+            db_client.updated_at = get_utc_now()
+            self.db.add(db_client)
+        self.db.refresh(db_client)
+        return db_client
 
-            if client_update.email and client_update.email != db_client.email:
-                existing = self.db.exec(
-                    select(models.Client).where(
-                        models.Client.email == client_update.email
-                    )
-                ).first()
-                if existing:
-                    client_logger.bind(
-                        event_type="client_update_failed", failure_reason="email_taken"
-                    ).warning("Client update failed: email already registered")
-                    raise DuplicateResourceException("Email already registered")
-
-            with transaction(self.db):
-                update_data = client_update.model_dump(exclude_unset=True)
-                for field, value in update_data.items():
-                    setattr(db_client, field, value)
-                db_client.updated_at = get_utc_now()
-                self.db.add(db_client)
-            self.db.refresh(db_client)
-            updated_client = db_client
-
-            client_logger.bind(
-                client_name=updated_client.name, event_type="client_update_success"
-            ).info("Client updated successfully")
-
-            return updated_client
-
-        except (DuplicateResourceException, ResourceNotFoundException):
-            raise
-        except Exception as e:
-            client_logger.bind(
-                event_type="client_update_error", error_type="system_error"
-            ).error(f"Client update error: {e!s}")
-            raise BaseException(f"Client update error: {e!s}")
-
+    @audit_operation("client_deletion")
     async def delete_client(self, client_id: int, *, current_user: models.User) -> None:
         self.case_access.require_admin(current_user)
-        client_logger = get_security_logger(
-            admin_user_id=current_user.id,
-            client_id=client_id,
-            action="delete_client",
-            event_type="client_deletion_attempt",
-        )
+        db_client = await self.get_client(client_id, current_user=current_user)
+        if self.db.exec(
+            select(models.Case).where(models.Case.client_id == client_id)
+        ).first():
+            raise DomainException(
+                "Cannot delete client with associated cases. Please remove or reassign all cases first."
+            )
 
-        try:
-            db_client = self.db.get(models.Client, client_id)
-            if not db_client:
-                client_logger.bind(
-                    event_type="client_deletion_failed",
-                    failure_reason="client_not_found",
-                ).warning("Client deletion failed: client not found")
-                raise ResourceNotFoundException(f"Client with id {client_id} not found")
-
-            cases_for_client = self.db.exec(
-                select(models.Case).where(models.Case.client_id == client_id)
-            ).all()
-
-            if cases_for_client:
-                client_logger.bind(
-                    event_type="client_deletion_failed",
-                    failure_reason="has_associated_cases",
-                    case_count=len(cases_for_client),
-                ).warning("Client deletion failed: client has associated cases")
-                raise BaseException(
-                    "Cannot delete client with associated cases. Please remove or reassign all cases first."
-                )
-
-            with transaction(self.db):
-                self.db.delete(db_client)
-
-            client_logger.bind(
-                client_name=db_client.name, event_type="client_deletion_success"
-            ).info("Client deleted successfully")
-
-        except (ResourceNotFoundException, BaseException):
-            raise
-        except Exception as e:
-            client_logger.bind(
-                event_type="client_deletion_error", error_type="system_error"
-            ).error(f"Client deletion error: {e!s}")
-            raise BaseException(f"Client deletion error: {e!s}")
+        with transaction(self.db):
+            self.db.delete(db_client)
