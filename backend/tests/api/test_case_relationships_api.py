@@ -19,9 +19,6 @@ from tests.login_admission import admitted_login
 @pytest.fixture
 def relationship_api(engine, tmp_path, monkeypatch):
     monkeypatch.setattr(file_storage, "UPLOAD_DIR", tmp_path / "uploads")
-    monkeypatch.setattr(
-        "app.services.evidence_service.UPLOAD_DIR", tmp_path / "uploads"
-    )
     password_hash = get_password_hash("relationship-pass")
     with Session(engine) as db:
         people = {}

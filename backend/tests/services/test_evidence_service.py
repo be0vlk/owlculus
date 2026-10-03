@@ -10,10 +10,11 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from fastapi import UploadFile
+from loguru import logger
 from sqlmodel import Session
 
+from app.core import file_storage
 from app.core.exceptions import (
-    DomainException,
     ResourceNotFoundException,
     ValidationException,
 )
@@ -232,12 +233,62 @@ async def test_create_evidence_file_save_error_cleanup(
     with patch.object(
         evidence_service_instance.db, "commit", side_effect=Exception("DB Error")
     ):
-        with pytest.raises(DomainException) as excinfo:
+        with pytest.raises(Exception, match="DB Error"):
             await evidence_service_instance.create_evidence(
                 evidence_data, test_admin, file=mock_upload_file
             )
-        assert "Error creating evidence" in str(excinfo.value)
-        mock_delete_file.assert_called_once()
+        mock_delete_file.assert_called_once_with("uploads/case_1/test_file.txt")
+
+
+@pytest.mark.asyncio
+@patch("app.services.evidence_service.delete_folder")
+@patch("app.services.evidence_service.create_folder")
+async def test_create_folder_database_error_cleans_up_physical_folder(
+    mock_create_folder: Mock,
+    mock_delete_folder: Mock,
+    evidence_service_instance: evidence_service.EvidenceService,
+    sample_case: models.Case,
+    test_admin: models.User,
+):
+    case_id = sample_case.id
+    folder_data = schemas.FolderCreate(case_id=case_id, title="Orphan")
+
+    with (
+        patch.object(
+            evidence_service_instance.db, "commit", side_effect=Exception("DB Error")
+        ),
+        pytest.raises(Exception, match="DB Error"),
+    ):
+        await evidence_service_instance.create_folder(folder_data, test_admin)
+    mock_delete_folder.assert_called_once_with(case_id, "Orphan")
+
+
+@pytest.mark.asyncio
+async def test_create_evidence_failure_logs_event_and_reason(
+    evidence_service_instance: evidence_service.EvidenceService,
+    sample_case: models.Case,
+    sample_folder: models.Evidence,
+    test_admin: models.User,
+):
+    evidence_data = schemas.EvidenceCreate(
+        case_id=sample_case.id,
+        title="Missing upload",
+        evidence_type="file",
+        category="Other",
+    )
+
+    records: list[dict] = []
+    sink = logger.add(lambda message: records.append(message.record["extra"]))
+    try:
+        with pytest.raises(ValidationException):
+            await evidence_service_instance.create_evidence(evidence_data, test_admin)
+    finally:
+        logger.remove(sink)
+
+    assert {
+        "event_type": "evidence_creation_failed",
+        "failure_reason": "file_required",
+    }.items() <= records[-1].items()
 
 
 # Test get_case_evidence method
@@ -431,32 +482,6 @@ def test_update_evidence_not_found(
     assert str(excinfo.value) == "Evidence not found"
 
 
-def test_unexpected_service_error_rolls_back_logs_and_translates():
-    db = Mock(spec=Session)
-    logger = Mock()
-    service = evidence_service.EvidenceService(db)
-    original_error = RuntimeError("database unavailable")
-
-    with pytest.raises(DomainException, match="Error updating evidence") as excinfo:
-        service._raise_unexpected_error(
-            error=original_error,
-            logger=logger,
-            event_type="evidence_update_error",
-            log_message="Evidence update error",
-            public_message="Error updating evidence",
-            rollback=True,
-        )
-
-    assert excinfo.value.__cause__ is original_error
-    db.rollback.assert_called_once_with()
-    logger.bind.assert_called_once_with(
-        event_type="evidence_update_error", error_type="system_error"
-    )
-    logger.bind.return_value.error.assert_called_once_with(
-        "Evidence update error: database unavailable"
-    )
-
-
 # Test delete_evidence method
 @pytest.mark.asyncio
 @patch("app.services.evidence_service.delete_file")
@@ -614,16 +639,16 @@ async def test_create_folder_nonexistent_parent(
     assert str(excinfo.value) == "Parent folder not found"
 
 
-# Test get_folder_tree method
+# Test the unlimited folder tree listing
 @pytest.mark.asyncio
-async def test_get_folder_tree(
+async def test_get_case_evidence_without_limit(
     evidence_service_instance: evidence_service.EvidenceService,
     sample_case: models.Case,
     sample_folder: models.Evidence,
     test_admin: models.User,
 ):
-    folder_tree = await evidence_service_instance.get_folder_tree(
-        sample_case.id, test_admin
+    folder_tree = await evidence_service_instance.get_case_evidence(
+        sample_case.id, test_admin, limit=None
     )
 
     assert len(folder_tree) >= 1
@@ -631,12 +656,12 @@ async def test_get_folder_tree(
 
 
 @pytest.mark.asyncio
-async def test_get_folder_tree_nonexistent_case(
+async def test_get_case_evidence_without_limit_nonexistent_case(
     evidence_service_instance: evidence_service.EvidenceService,
     test_admin: models.User,
 ):
     with pytest.raises(ResourceNotFoundException) as excinfo:
-        await evidence_service_instance.get_folder_tree(999, test_admin)
+        await evidence_service_instance.get_case_evidence(999, test_admin, limit=None)
     assert str(excinfo.value) == "Case not found"
 
 
@@ -735,19 +760,18 @@ async def test_delete_folder_with_contents(
 
 # Test download_evidence method
 @pytest.mark.asyncio
-@patch("app.services.evidence_service.UPLOAD_DIR")
 async def test_download_evidence_file(
-    mock_upload_dir: Mock,
     evidence_service_instance: evidence_service.EvidenceService,
     sample_case: models.Case,
     sample_folder: models.Evidence,
     test_admin: models.User,
+    tmp_path,
+    monkeypatch,
 ):
-    # Mock the path object with exists method
-    mock_path = Mock()
-    mock_path.exists.return_value = True
-    mock_path.name = "test_file.txt"
-    mock_upload_dir.__truediv__ = Mock(return_value=mock_path)
+    monkeypatch.setattr(file_storage, "UPLOAD_DIR", tmp_path)
+    content = f"{sample_case.id}/test_folder/test_file.txt"
+    (tmp_path / content).parent.mkdir(parents=True)
+    (tmp_path / content).write_bytes(b"data")
 
     evidence = models.Evidence(
         case_id=sample_case.id,
@@ -755,7 +779,7 @@ async def test_download_evidence_file(
         description="File description",
         evidence_type="file",
         category="Other",
-        content="uploads/test_file.txt",
+        content=content,
         created_by_id=test_admin.id,
         created_at=get_utc_now(),
         updated_at=get_utc_now(),
@@ -766,7 +790,11 @@ async def test_download_evidence_file(
 
     result = await evidence_service_instance.download_evidence(evidence.id, test_admin)
 
-    assert result is mock_path
+    assert result == (tmp_path / content).resolve()
+
+    (tmp_path / content).unlink()
+    with pytest.raises(ResourceNotFoundException, match="File not found"):
+        await evidence_service_instance.download_evidence(evidence.id, test_admin)
 
 
 @pytest.mark.asyncio

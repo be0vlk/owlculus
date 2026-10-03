@@ -365,12 +365,8 @@ def test_attachment_citations_and_coverage_survive_repeated_sharing(
     engine,
     monkeypatch,
 ):
-    from app.core import file_storage
     from tests.api.test_strixy_attachments_api import upload
 
-    monkeypatch.setattr(
-        "app.services.evidence_service.UPLOAD_DIR", file_storage.UPLOAD_DIR
-    )
     evidence = upload(
         client, assigned, admin_token, "facts.txt", b"Verifiable attachment fact."
     )

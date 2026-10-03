@@ -113,15 +113,6 @@ def test_retained_partial_marks_changed_attachment_without_rewriting_history(
     assert client.get(reopened["citations"][0]["url"], headers=owner).status_code == 200
 
 
-@pytest.fixture(autouse=True)
-def storage_root(client, monkeypatch):
-    from app.core import file_storage
-
-    monkeypatch.setattr(
-        "app.services.evidence_service.UPLOAD_DIR", file_storage.UPLOAD_DIR
-    )
-
-
 def upload(client, case_id, token, name, content, mime="text/plain"):
     folders = client.get(
         f"/api/evidence/case/{case_id}", headers=fixtures.auth(token)

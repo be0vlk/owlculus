@@ -7,8 +7,9 @@ comprehensive evidence lifecycle management with file hashing, content viewing,
 template-based folder structures, and role-based access control for OSINT investigations.
 """
 
+from contextlib import suppress
 from pathlib import Path
-from typing import Any, List, NoReturn, Optional, cast
+from typing import Any, cast
 
 from sqlmodel import Session, select
 
@@ -19,10 +20,10 @@ from app.core.exceptions import (
     ValidationException,
 )
 from app.core.file_storage import (
-    UPLOAD_DIR,
     create_folder,
     delete_file,
     delete_folder,
+    evidence_file_path,
     normalize_folder_path,
     save_upload_file,
 )
@@ -68,29 +69,52 @@ class EvidenceService:
             return evidence.model_copy(update={"parent_folder_id": parent_id})
         return evidence
 
-    def _raise_unexpected_error(
+    @staticmethod
+    def _fail(log: Any, reason: str, error: DomainException, **fields: Any):
+        """Log a rejected operation on its ``*_failed`` logger and return the error."""
+        log.bind(failure_reason=reason, **fields).warning(str(error))
+        return error
+
+    def _stored_file(self, evidence: models.Evidence, failed: Any) -> Path:
+        try:
+            return evidence_file_path(evidence.case_id, evidence.content or "")
+        except ValueError:
+            raise self._fail(
+                failed,
+                "file_not_found",
+                ResourceNotFoundException("File not found"),
+                file_path=evidence.content,
+            ) from None
+
+    def _folder(
         self,
-        *,
-        error: Exception,
-        logger: Any,
-        event_type: str,
-        log_message: str,
-        public_message: str,
-        rollback: bool = False,
-    ) -> NoReturn:
-        """Translate an unexpected service error at an operation boundary."""
-        if rollback:
-            self.db.rollback()
-        logger.bind(event_type=event_type, error_type="system_error").error(
-            f"{log_message}: {error!s}"
+        case_id: int,
+        title: str,
+        description: str | None,
+        folder_path: str,
+        parent_folder_id: int | None,
+        current_user: models.User,
+    ) -> models.Evidence:
+        return models.Evidence(
+            case_id=case_id,
+            title=title,
+            description=description,
+            evidence_type="folder",
+            category="Other",
+            content="",
+            folder_path=folder_path,
+            is_folder=True,
+            parent_folder_id=parent_folder_id,
+            created_by_id=current_user.id,
+            created_at=get_utc_now(),
+            updated_at=get_utc_now(),
         )
-        raise DomainException(public_message) from error
 
     async def create_evidence(
         self,
         evidence: schemas.EvidenceCreate,
         current_user: models.User,
-        file: Optional[Any] = None,
+        file: Any | None = None,
         *,
         artifact_id: str | None = None,
         correlation_case_ids: tuple[int, ...] | None = None,
@@ -104,73 +128,58 @@ class EvidenceService:
             evidence_type=evidence.evidence_type,
             event_type="evidence_creation_attempt",
         )
+        failed = evidence_logger.bind(event_type="evidence_creation_failed")
+
+        saved_path = None
+        if evidence.evidence_type == "file" and not evidence.is_folder:
+            # Prevent file uploads when no folder structure exists for organization
+            if not self.db.exec(
+                select(models.Evidence).where(
+                    models.Evidence.case_id == evidence.case_id,
+                    models.Evidence.is_folder == True,
+                )
+            ).first():
+                raise self._fail(
+                    failed,
+                    "no_folders_exist",
+                    ValidationException(
+                        "Cannot upload files without any folders. Create a folder first to organize evidence."
+                    ),
+                )
+            if not file:
+                raise self._fail(
+                    failed,
+                    "file_required",
+                    ValidationException("File is required for file-type evidence"),
+                )
+            saved_path, evidence.file_hash = await save_upload_file(
+                upload_file=file,
+                case_id=evidence.case_id,
+                folder_path=evidence.folder_path,
+                artifact_id=artifact_id,
+            )
+            evidence.content = saved_path
+            # Update title to reflect actual saved filename after duplicate handling
+            if artifact_id is None:
+                evidence.title = saved_path.split("/")[-1]
+
+        db_evidence = models.Evidence(
+            case_id=evidence.case_id,
+            title=evidence.title,
+            description=evidence.description,
+            evidence_type=evidence.evidence_type,
+            category=evidence.category,
+            content=evidence.content,
+            file_hash=evidence.file_hash,
+            folder_path=evidence.folder_path,
+            is_folder=evidence.is_folder,
+            parent_folder_id=evidence.parent_folder_id,
+            created_by_id=current_user.id,
+            created_at=get_utc_now(),
+            updated_at=get_utc_now(),
+        )
 
         try:
-            # Prevent file uploads when no folder structure exists for organization
-            if evidence.evidence_type == "file" and not evidence.is_folder:
-                existing_folders = self.db.exec(
-                    select(models.Evidence).where(
-                        models.Evidence.case_id == evidence.case_id,
-                        models.Evidence.is_folder == True,
-                    )
-                ).first()
-                if not existing_folders:
-                    evidence_logger.bind(
-                        event_type="evidence_creation_failed",
-                        failure_reason="no_folders_exist",
-                    ).warning(
-                        "Evidence creation failed: no folders exist for file upload"
-                    )
-                    raise ValidationException(
-                        "Cannot upload files without any folders. Create a folder first to organize evidence."
-                    )
-
-            if evidence.evidence_type == "file" and not evidence.is_folder:
-                if not file:
-                    evidence_logger.bind(
-                        event_type="evidence_creation_failed",
-                        failure_reason="file_required",
-                    ).warning(
-                        "Evidence creation failed: file required for file-type evidence"
-                    )
-                    raise ValidationException("File is required for file-type evidence")
-                try:
-                    relative_path, file_hash = await save_upload_file(
-                        upload_file=file,
-                        case_id=evidence.case_id,
-                        folder_path=evidence.folder_path,
-                        artifact_id=artifact_id,
-                    )
-                    evidence.content = relative_path
-                    evidence.file_hash = file_hash
-                    # Update title to reflect actual saved filename after duplicate handling
-                    if artifact_id is None:
-                        evidence.title = relative_path.split("/")[-1]
-                except DomainException:
-                    raise
-                except Exception as e:
-                    evidence_logger.bind(
-                        event_type="evidence_creation_failed",
-                        failure_reason="file_save_error",
-                    ).warning(f"Evidence creation failed: error saving file: {str(e)}")
-                    raise DomainException("Error saving file") from e
-
-            db_evidence = models.Evidence(
-                case_id=evidence.case_id,
-                title=evidence.title,
-                description=evidence.description,
-                evidence_type=evidence.evidence_type,
-                category=evidence.category,
-                content=evidence.content,
-                file_hash=evidence.file_hash,
-                folder_path=evidence.folder_path,
-                is_folder=evidence.is_folder,
-                parent_folder_id=evidence.parent_folder_id,
-                created_by_id=current_user.id,
-                created_at=get_utc_now(),
-                updated_at=get_utc_now(),
-            )
-
             with transaction(self.db):
                 self.db.add(db_evidence)
                 if correlation_case_ids is not None:
@@ -186,44 +195,29 @@ class EvidenceService:
                         )
                     )
             self.db.refresh(db_evidence)
-
-            evidence_logger.bind(
-                evidence_id=db_evidence.id,
-                evidence_title=db_evidence.title,
-                evidence_category=db_evidence.category,
-                event_type="evidence_creation_success",
-            ).info("Evidence created successfully")
-
-            return self._response(db_evidence)
-
-        except DomainException:
+        except Exception:
+            # Don't orphan the uploaded file; execution artifacts are reconciled.
+            if saved_path and artifact_id is None:
+                with suppress(Exception):
+                    await delete_file(saved_path)
             raise
-        except Exception as e:
-            # Clean up uploaded file on database operation failure
-            if (
-                evidence.evidence_type == "file"
-                and evidence.content
-                and artifact_id is None
-            ):
-                try:
-                    await delete_file(evidence.content)
-                except Exception:
-                    pass
-            self._raise_unexpected_error(
-                error=e,
-                logger=evidence_logger,
-                event_type="evidence_creation_error",
-                log_message="Evidence creation error",
-                public_message="Error creating evidence",
-            )
+
+        evidence_logger.bind(
+            evidence_id=db_evidence.id,
+            evidence_title=db_evidence.title,
+            evidence_category=db_evidence.category,
+            event_type="evidence_creation_success",
+        ).info("Evidence created successfully")
+
+        return self._response(db_evidence)
 
     async def get_case_evidence(
         self,
         case_id: int,
         current_user: models.User,
         skip: int = 0,
-        limit: int = 100,
-    ) -> List[models.Evidence]:
+        limit: int | None = 100,
+    ) -> list[models.Evidence]:
         self.case_access.readable(current_user, case_id)
 
         query = (
@@ -261,74 +255,56 @@ class EvidenceService:
             action="update_evidence",
             event_type="evidence_update_attempt",
         )
+        failed = evidence_logger.bind(event_type="evidence_update_failed")
 
-        try:
-            db_evidence = self.db.get(models.Evidence, evidence_id)
-            if not db_evidence:
-                evidence_logger.bind(
-                    event_type="evidence_update_failed",
-                    failure_reason="evidence_not_found",
-                ).warning("Evidence update failed: evidence not found")
-                raise ResourceNotFoundException("Evidence not found")
-
-            self.require_read(db_evidence, current_user)
-            self.case_access.writable(current_user, db_evidence.case_id)
-            self.case_access.evidence_parent(
-                db_evidence.case_id, evidence_update.parent_folder_id
+        db_evidence = self.db.get(models.Evidence, evidence_id)
+        if not db_evidence:
+            raise self._fail(
+                failed,
+                "evidence_not_found",
+                ResourceNotFoundException("Evidence not found"),
             )
 
-            from app.database.correlation_provenance import report_provenance
+        self.require_read(db_evidence, current_user)
+        self.case_access.writable(current_user, db_evidence.case_id)
+        self.case_access.evidence_parent(
+            db_evidence.case_id, evidence_update.parent_folder_id
+        )
 
-            provenance = report_provenance(self.db, db_evidence)
-            if provenance is not None:
-                self.db.merge(provenance)
+        from app.database.correlation_provenance import report_provenance
 
-            if evidence_update.title is not None:
-                db_evidence.title = evidence_update.title
-            if evidence_update.description is not None:
-                db_evidence.description = evidence_update.description
-            if evidence_update.content is not None:
-                if db_evidence.evidence_type == "file":
-                    evidence_logger.bind(
-                        event_type="evidence_update_failed",
-                        failure_reason="file_content_not_updatable",
-                    ).warning(
-                        "Evidence update failed: cannot update content of file-type evidence"
-                    )
-                    raise ValidationException(
-                        "Cannot update content of file-type evidence"
-                    )
-                db_evidence.content = evidence_update.content
-            if evidence_update.folder_path is not None:
-                db_evidence.folder_path = evidence_update.folder_path
-            if evidence_update.parent_folder_id is not None:
-                db_evidence.parent_folder_id = evidence_update.parent_folder_id
+        provenance = report_provenance(self.db, db_evidence)
+        if provenance is not None:
+            self.db.merge(provenance)
 
-            db_evidence.updated_at = get_utc_now()
+        if evidence_update.title is not None:
+            db_evidence.title = evidence_update.title
+        if evidence_update.description is not None:
+            db_evidence.description = evidence_update.description
+        if evidence_update.content is not None:
+            if db_evidence.evidence_type == "file":
+                raise self._fail(
+                    failed,
+                    "file_content_not_updatable",
+                    ValidationException("Cannot update content of file-type evidence"),
+                )
+            db_evidence.content = evidence_update.content
+        if evidence_update.parent_folder_id is not None:
+            db_evidence.parent_folder_id = evidence_update.parent_folder_id
 
-            with transaction(self.db):
-                self.db.add(db_evidence)
-            self.db.refresh(db_evidence)
+        db_evidence.updated_at = get_utc_now()
 
-            evidence_logger.bind(
-                case_id=db_evidence.case_id,
-                evidence_title=db_evidence.title,
-                event_type="evidence_update_success",
-            ).info("Evidence updated successfully")
+        with transaction(self.db):
+            self.db.add(db_evidence)
+        self.db.refresh(db_evidence)
 
-            return self._response(db_evidence)
+        evidence_logger.bind(
+            case_id=db_evidence.case_id,
+            evidence_title=db_evidence.title,
+            event_type="evidence_update_success",
+        ).info("Evidence updated successfully")
 
-        except DomainException:
-            raise
-        except Exception as e:
-            self._raise_unexpected_error(
-                error=e,
-                logger=evidence_logger,
-                event_type="evidence_update_error",
-                log_message="Evidence update error",
-                public_message="Error updating evidence",
-                rollback=True,
-            )
+        return self._response(db_evidence)
 
     async def delete_evidence(
         self, evidence_id: int, current_user: models.User
@@ -339,57 +315,43 @@ class EvidenceService:
             action="delete_evidence",
             event_type="evidence_deletion_attempt",
         )
+        failed = evidence_logger.bind(event_type="evidence_deletion_failed")
 
-        try:
-            evidence = self.db.get(models.Evidence, evidence_id)
-            if not evidence:
-                # Handle race condition where evidence may already be deleted in bulk operations
-                evidence_logger.bind(
-                    event_type="evidence_already_deleted",
-                ).info("Evidence already deleted or not found")
-                return None
-
-            self.require_read(evidence, current_user)
-            self.case_access.writable(current_user, evidence.case_id)
-
-            if evidence.evidence_type == "file" and evidence.content:
-                try:
-                    await delete_file(evidence.content)
-                except Exception as e:
-                    evidence_logger.bind(
-                        event_type="evidence_deletion_failed",
-                        failure_reason="file_deletion_error",
-                    ).warning(
-                        f"Evidence deletion failed: error deleting file: {str(e)}"
-                    )
-                    raise DomainException("Error deleting file") from e
-
-            with transaction(self.db):
-                provenance = self.db.get(models.CorrelationEvidence, evidence.id)
-                if provenance is not None:
-                    self.db.delete(provenance)
-                self.db.delete(evidence)
-
+        evidence = self.db.get(models.Evidence, evidence_id)
+        if not evidence:
+            # Handle race condition where evidence may already be deleted in bulk operations
             evidence_logger.bind(
-                case_id=evidence.case_id,
-                evidence_title=evidence.title,
-                evidence_type=evidence.evidence_type,
-                event_type="evidence_deletion_success",
-            ).info("Evidence deleted successfully")
+                event_type="evidence_already_deleted",
+            ).info("Evidence already deleted or not found")
+            return None
 
-            return evidence
+        self.require_read(evidence, current_user)
+        self.case_access.writable(current_user, evidence.case_id)
 
-        except DomainException:
-            raise
-        except Exception as e:
-            self._raise_unexpected_error(
-                error=e,
-                logger=evidence_logger,
-                event_type="evidence_deletion_error",
-                log_message="Evidence deletion error",
-                public_message="Error deleting evidence",
-                rollback=True,
-            )
+        if evidence.evidence_type == "file" and evidence.content:
+            try:
+                await delete_file(evidence.content)
+            except Exception as e:
+                raise self._fail(
+                    failed,
+                    "file_deletion_error",
+                    DomainException("Error deleting file"),
+                ) from e
+
+        with transaction(self.db):
+            provenance = self.db.get(models.CorrelationEvidence, evidence.id)
+            if provenance is not None:
+                self.db.delete(provenance)
+            self.db.delete(evidence)
+
+        evidence_logger.bind(
+            case_id=evidence.case_id,
+            evidence_title=evidence.title,
+            evidence_type=evidence.evidence_type,
+            event_type="evidence_deletion_success",
+        ).info("Evidence deleted successfully")
+
+        return evidence
 
     async def download_evidence(
         self,
@@ -402,58 +364,26 @@ class EvidenceService:
             action="download_evidence",
             event_type="evidence_download_attempt",
         )
+        failed = evidence_logger.bind(event_type="evidence_download_failed")
 
-        try:
-            evidence = self.db.exec(
-                select(models.Evidence).where(models.Evidence.id == evidence_id)
-            ).first()
-            if not evidence:
-                evidence_logger.bind(
-                    event_type="evidence_download_failed",
-                    failure_reason="evidence_not_found",
-                ).warning("Evidence download failed: evidence not found")
-                raise ResourceNotFoundException("Evidence not found")
-
-            self.require_read(evidence, current_user)
-
-            if evidence.evidence_type == "file":
-                file_path = UPLOAD_DIR / evidence.content
-                if not file_path.exists():
-                    evidence_logger.bind(
-                        event_type="evidence_download_failed",
-                        failure_reason="file_not_found",
-                        file_path=str(file_path),
-                    ).warning("Evidence download failed: file not found on disk")
-                    raise ResourceNotFoundException("File not found")
-
-                evidence_logger.bind(
-                    case_id=evidence.case_id,
-                    evidence_title=evidence.title,
-                    filename=file_path.name,
-                    event_type="evidence_download_success",
-                ).info("Evidence downloaded successfully")
-
-                return file_path
-
-            evidence_logger.bind(
-                event_type="evidence_download_failed",
-                failure_reason="unsupported_evidence_type",
+        evidence = await self.get_evidence(evidence_id, current_user)
+        if evidence.evidence_type != "file":
+            raise self._fail(
+                failed,
+                "unsupported_evidence_type",
+                ValidationException("Evidence type does not support downloading"),
                 evidence_type=evidence.evidence_type,
-            ).warning(
-                "Evidence download failed: evidence type does not support downloading"
             )
-            raise ValidationException("Evidence type does not support downloading")
 
-        except DomainException:
-            raise
-        except Exception as e:
-            self._raise_unexpected_error(
-                error=e,
-                logger=evidence_logger,
-                event_type="evidence_download_error",
-                log_message="Evidence download error",
-                public_message="Evidence download failed",
-            )
+        file_path = self._stored_file(evidence, failed)
+        evidence_logger.bind(
+            case_id=evidence.case_id,
+            evidence_title=evidence.title,
+            filename=file_path.name,
+            event_type="evidence_download_success",
+        ).info("Evidence downloaded successfully")
+
+        return file_path
 
     async def get_evidence_content(
         self,
@@ -467,235 +397,109 @@ class EvidenceService:
             action="get_evidence_content",
             event_type="evidence_content_view_attempt",
         )
+        failed = evidence_logger.bind(event_type="evidence_content_view_failed")
 
-        try:
-            evidence = await self.get_evidence(evidence_id, current_user)
+        evidence = await self.get_evidence(evidence_id, current_user)
 
-            if evidence.is_folder:
-                evidence_logger.bind(
-                    event_type="evidence_content_view_failed",
-                    failure_reason="is_folder",
-                ).warning("Evidence content view failed: evidence is a folder")
-                raise ValidationException("Cannot view content of folders")
+        if evidence.is_folder:
+            raise self._fail(
+                failed,
+                "is_folder",
+                ValidationException("Cannot view content of folders"),
+            )
 
-            if evidence.evidence_type != "file":
-                evidence_logger.bind(
-                    event_type="evidence_content_view_failed",
-                    failure_reason="not_file_type",
-                    evidence_type=evidence.evidence_type,
-                ).warning("Evidence content view failed: evidence is not a file")
-                raise ValidationException(
-                    "Evidence type does not support content viewing"
-                )
+        if evidence.evidence_type != "file":
+            raise self._fail(
+                failed,
+                "not_file_type",
+                ValidationException("Evidence type does not support content viewing"),
+                evidence_type=evidence.evidence_type,
+            )
 
-            import chardet
+        import chardet
 
-            file_path = UPLOAD_DIR / evidence.content
-            if not file_path.exists():
-                evidence_logger.bind(
-                    event_type="evidence_content_view_failed",
-                    failure_reason="file_not_found",
-                    file_path=str(file_path),
-                ).warning("Evidence content view failed: file not found on disk")
-                raise ResourceNotFoundException("File not found")
+        file_path = self._stored_file(evidence, failed)
 
-            # Limit file size to prevent memory issues with large files
-            file_size = file_path.stat().st_size
-            max_size = 1024 * 1024
-            if file_size > max_size:
-                evidence_logger.bind(
-                    event_type="evidence_content_view_failed",
-                    failure_reason="file_too_large",
-                    file_size=file_size,
-                    max_size=max_size,
-                ).warning("Evidence content view failed: file too large")
-                raise ValidationException(
+        # Limit file size to prevent memory issues with large files
+        file_size = file_path.stat().st_size
+        max_size = 1024 * 1024
+        if file_size > max_size:
+            raise self._fail(
+                failed,
+                "file_too_large",
+                ValidationException(
                     f"File too large for viewing. Maximum size: {max_size // 1024}KB"
-                )
+                ),
+                file_size=file_size,
+                max_size=max_size,
+            )
 
-            viewable_extensions = {
-                ".txt",
-                ".log",
-                ".csv",
-                ".json",
-                ".md",
-                ".yaml",
-                ".yml",
-                ".xml",
-                ".html",
-                ".css",
-                ".js",
-                ".py",
-                ".sql",
-                ".conf",
-                ".ini",
-                ".cfg",
-            }
-            file_extension = file_path.suffix.lower()
+        viewable_extensions = {
+            ".txt",
+            ".log",
+            ".csv",
+            ".json",
+            ".md",
+            ".yaml",
+            ".yml",
+            ".xml",
+            ".html",
+            ".css",
+            ".js",
+            ".py",
+            ".sql",
+            ".conf",
+            ".ini",
+            ".cfg",
+        }
+        file_extension = file_path.suffix.lower()
 
-            if file_extension not in viewable_extensions:
-                evidence_logger.bind(
-                    event_type="evidence_content_view_failed",
-                    failure_reason="unsupported_file_type",
-                    file_extension=file_extension,
-                ).warning("Evidence content view failed: unsupported file type")
-                raise ValidationException(
+        if file_extension not in viewable_extensions:
+            raise self._fail(
+                failed,
+                "unsupported_file_type",
+                ValidationException(
                     f"File type '{file_extension}' is not supported for text viewing"
-                )
-
-            try:
-                with open(file_path, "rb") as f:
-                    raw_content = f.read()
-
-                encoding_result = chardet.detect(raw_content)
-                encoding = encoding_result.get("encoding") or "utf-8"
-                confidence = encoding_result.get("confidence", 0)
-
-                # Decode with detected encoding, fallback to utf-8 with error replacement
-                try:
-                    content = raw_content.decode(encoding)
-                except UnicodeDecodeError:
-                    content = raw_content.decode("utf-8", errors="replace")
-                    encoding = "utf-8 (with errors replaced)"
-                    confidence = 0
-
-                evidence_logger.bind(
-                    case_id=evidence.case_id,
-                    evidence_title=evidence.title,
-                    file_size=file_size,
-                    encoding_detected=encoding,
-                    encoding_confidence=confidence,
-                    event_type="evidence_content_view_success",
-                ).info("Evidence content viewed successfully")
-
-                return {
-                    "success": True,
-                    "content": content,
-                    "file_info": {
-                        "filename": evidence.title,
-                        "file_extension": file_extension,
-                        "file_size": file_size,
-                        "encoding": encoding,
-                        "encoding_confidence": confidence,
-                        "line_count": len(content.splitlines()),
-                        "char_count": len(content),
-                    },
-                }
-
-            except Exception as e:
-                evidence_logger.bind(
-                    event_type="evidence_content_view_failed",
-                    failure_reason="file_read_error",
-                ).warning(f"Evidence content view failed: error reading file: {str(e)}")
-                raise DomainException("Error reading file content") from e
-
-        except DomainException:
-            raise
-        except Exception as e:
-            self._raise_unexpected_error(
-                error=e,
-                logger=evidence_logger,
-                event_type="evidence_content_view_error",
-                log_message="Evidence content view error",
-                public_message="Evidence content view failed",
+                ),
+                file_extension=file_extension,
             )
 
-    async def get_evidence_image(
-        self,
-        evidence_id: int,
-        current_user: models.User,
-    ):
-        """Get image file for viewing."""
-        evidence_logger = get_security_logger(
-            user_id=current_user.id,
-            evidence_id=evidence_id,
-            action="get_evidence_image",
-            event_type="evidence_image_view_attempt",
-        )
+        raw_content = file_path.read_bytes()
 
+        encoding_result = chardet.detect(raw_content)
+        encoding = encoding_result.get("encoding") or "utf-8"
+        confidence = encoding_result.get("confidence", 0)
+
+        # Decode with detected encoding, fallback to utf-8 with error replacement
         try:
-            evidence = await self.get_evidence(evidence_id, current_user)
+            content = raw_content.decode(encoding)
+        except UnicodeDecodeError:
+            content = raw_content.decode("utf-8", errors="replace")
+            encoding = "utf-8 (with errors replaced)"
+            confidence = 0
 
-            if evidence.is_folder:
-                evidence_logger.bind(
-                    event_type="evidence_image_view_failed",
-                    failure_reason="is_folder",
-                ).warning("Evidence image view failed: evidence is a folder")
-                raise ValidationException("Cannot view images from folders")
+        evidence_logger.bind(
+            case_id=evidence.case_id,
+            evidence_title=evidence.title,
+            file_size=file_size,
+            encoding_detected=encoding,
+            encoding_confidence=confidence,
+            event_type="evidence_content_view_success",
+        ).info("Evidence content viewed successfully")
 
-            if evidence.evidence_type != "file":
-                evidence_logger.bind(
-                    event_type="evidence_image_view_failed",
-                    failure_reason="not_file_type",
-                    evidence_type=evidence.evidence_type,
-                ).warning("Evidence image view failed: evidence is not a file")
-                raise ValidationException(
-                    "Evidence type does not support image viewing"
-                )
-
-            file_path = UPLOAD_DIR / evidence.content
-            if not file_path.exists():
-                evidence_logger.bind(
-                    event_type="evidence_image_view_failed",
-                    failure_reason="file_not_found",
-                    file_path=str(file_path),
-                ).warning("Evidence image view failed: file not found on disk")
-                raise ResourceNotFoundException("File not found")
-
-            viewable_extensions = {
-                ".jpg",
-                ".jpeg",
-                ".png",
-                ".gif",
-                ".bmp",
-                ".webp",
-                ".svg",
-            }
-            file_extension = file_path.suffix.lower()
-
-            if file_extension not in viewable_extensions:
-                evidence_logger.bind(
-                    event_type="evidence_image_view_failed",
-                    failure_reason="unsupported_file_type",
-                    file_extension=file_extension,
-                ).warning("Evidence image view failed: unsupported file type")
-                raise ValidationException(
-                    f"File type '{file_extension}' is not supported for image viewing"
-                )
-
-            # Limit image size to prevent excessive memory usage
-            file_size = file_path.stat().st_size
-            max_size = 10 * 1024 * 1024
-            if file_size > max_size:
-                evidence_logger.bind(
-                    event_type="evidence_image_view_failed",
-                    failure_reason="file_too_large",
-                    file_size=file_size,
-                    max_size=max_size,
-                ).warning("Evidence image view failed: file too large")
-                raise ValidationException(
-                    f"Image too large for viewing. Maximum size: {max_size // 1024 // 1024}MB"
-                )
-
-            evidence_logger.bind(
-                case_id=evidence.case_id,
-                evidence_title=evidence.title,
-                filename=file_path.name,
-                event_type="evidence_image_view_success",
-            ).info("Evidence image viewed successfully")
-
-            return file_path
-
-        except DomainException:
-            raise
-        except Exception as e:
-            self._raise_unexpected_error(
-                error=e,
-                logger=evidence_logger,
-                event_type="evidence_image_view_error",
-                log_message="Evidence image view error",
-                public_message="Evidence image view failed",
-            )
+        return {
+            "success": True,
+            "content": content,
+            "file_info": {
+                "filename": evidence.title,
+                "file_extension": file_extension,
+                "file_size": file_size,
+                "encoding": encoding,
+                "encoding_confidence": confidence,
+                "line_count": len(content.splitlines()),
+                "char_count": len(content),
+            },
+        }
 
     async def create_folder(
         self,
@@ -715,84 +519,38 @@ class EvidenceService:
             event_type="folder_creation_attempt",
         )
 
+        folder_path = (
+            f"{parent_folder.folder_path}/{folder_data.title}"
+            if parent_folder is not None and parent_folder.folder_path
+            else folder_data.title
+        )
+        create_folder(folder_data.case_id, folder_path)
+
+        db_folder = self._folder(
+            folder_data.case_id,
+            folder_data.title,
+            folder_data.description,
+            folder_path,
+            folder_data.parent_folder_id,
+            current_user,
+        )
         try:
-            folder_path = folder_data.folder_path or ""
-            if parent_folder is not None:
-                if parent_folder.folder_path:
-                    folder_path = f"{parent_folder.folder_path}/{folder_data.title}"
-                else:
-                    folder_path = folder_data.title
-            else:
-                folder_path = folder_data.title
-
-            try:
-                create_folder(folder_data.case_id, folder_path)
-            except DomainException:
-                raise
-            except Exception as e:
-                folder_logger.bind(
-                    event_type="folder_creation_failed",
-                    failure_reason="physical_folder_error",
-                ).warning(
-                    f"Folder creation failed: error creating physical folder: {str(e)}"
-                )
-                raise DomainException("Error creating folder") from e
-
-            db_folder = models.Evidence(
-                case_id=folder_data.case_id,
-                title=folder_data.title,
-                description=folder_data.description,
-                evidence_type="folder",
-                category="Other",
-                content="",
-                folder_path=folder_path,
-                is_folder=True,
-                parent_folder_id=folder_data.parent_folder_id,
-                created_by_id=current_user.id,
-                created_at=get_utc_now(),
-                updated_at=get_utc_now(),
-            )
-
             with transaction(self.db):
                 self.db.add(db_folder)
             self.db.refresh(db_folder)
-
-            folder_logger.bind(
-                folder_id=db_folder.id,
-                folder_path=folder_path,
-                event_type="folder_creation_success",
-            ).info("Folder created successfully")
-
-            return self._response(db_folder)
-
-        except DomainException:
-            raise
-        except Exception as e:
-            # Clean up physical folder on database failure
-            try:
+        except Exception:
+            # Don't orphan the physical folder when its record fails.
+            with suppress(Exception):
                 delete_folder(folder_data.case_id, folder_path)
-            except Exception:
-                pass
-            self._raise_unexpected_error(
-                error=e,
-                logger=folder_logger,
-                event_type="folder_creation_error",
-                log_message="Folder creation error",
-                public_message="Error creating folder record",
-            )
+            raise
 
-    async def get_folder_tree(
-        self, case_id: int, current_user: models.User
-    ) -> List[models.Evidence]:
-        """Get the folder tree structure for a case."""
-        self.case_access.readable(current_user, case_id)
+        folder_logger.bind(
+            folder_id=db_folder.id,
+            folder_path=folder_path,
+            event_type="folder_creation_success",
+        ).info("Folder created successfully")
 
-        query = select(models.Evidence).where(models.Evidence.case_id == case_id)
-        return [
-            self._response(evidence)
-            for evidence in self.db.exec(query)
-            if self.can_read(evidence, current_user)
-        ]
+        return self._response(db_folder)
 
     async def update_folder(
         self,
@@ -807,52 +565,41 @@ class EvidenceService:
             action="update_folder",
             event_type="folder_update_attempt",
         )
+        failed = folder_logger.bind(event_type="folder_update_failed")
 
-        try:
-            db_folder = self.db.get(models.Evidence, folder_id)
-            if not db_folder or not db_folder.is_folder:
-                folder_logger.bind(
-                    event_type="folder_update_failed", failure_reason="folder_not_found"
-                ).warning("Folder update failed: folder not found")
-                raise ResourceNotFoundException("Folder not found")
-
-            self.case_access.writable(current_user, db_folder.case_id)
-            self.case_access.evidence_parent(
-                db_folder.case_id, folder_update.parent_folder_id
+        db_folder = self.db.get(models.Evidence, folder_id)
+        if not db_folder or not db_folder.is_folder:
+            raise self._fail(
+                failed,
+                "folder_not_found",
+                ResourceNotFoundException("Folder not found"),
             )
 
-            if folder_update.title is not None:
-                db_folder.title = folder_update.title
-            if folder_update.description is not None:
-                db_folder.description = folder_update.description
-            if folder_update.parent_folder_id is not None:
-                db_folder.parent_folder_id = folder_update.parent_folder_id
+        self.case_access.writable(current_user, db_folder.case_id)
+        self.case_access.evidence_parent(
+            db_folder.case_id, folder_update.parent_folder_id
+        )
 
-            db_folder.updated_at = get_utc_now()
+        if folder_update.title is not None:
+            db_folder.title = folder_update.title
+        if folder_update.description is not None:
+            db_folder.description = folder_update.description
+        if folder_update.parent_folder_id is not None:
+            db_folder.parent_folder_id = folder_update.parent_folder_id
 
-            with transaction(self.db):
-                self.db.add(db_folder)
-            self.db.refresh(db_folder)
+        db_folder.updated_at = get_utc_now()
 
-            folder_logger.bind(
-                case_id=db_folder.case_id,
-                folder_title=db_folder.title,
-                event_type="folder_update_success",
-            ).info("Folder updated successfully")
+        with transaction(self.db):
+            self.db.add(db_folder)
+        self.db.refresh(db_folder)
 
-            return self._response(db_folder)
+        folder_logger.bind(
+            case_id=db_folder.case_id,
+            folder_title=db_folder.title,
+            event_type="folder_update_success",
+        ).info("Folder updated successfully")
 
-        except DomainException:
-            raise
-        except Exception as e:
-            self._raise_unexpected_error(
-                error=e,
-                logger=folder_logger,
-                event_type="folder_update_error",
-                log_message="Folder update error",
-                public_message="Error updating folder",
-                rollback=True,
-            )
+        return self._response(db_folder)
 
     async def delete_folder(
         self, folder_id: int, current_user: models.User
@@ -864,92 +611,76 @@ class EvidenceService:
             action="delete_folder",
             event_type="folder_deletion_attempt",
         )
+        failed = folder_logger.bind(event_type="folder_deletion_failed")
 
-        try:
-            db_folder = self.db.get(models.Evidence, folder_id)
-            if not db_folder:
-                # Handle race condition in bulk delete operations
-                folder_logger.bind(
-                    event_type="folder_already_deleted",
-                ).info("Folder already deleted or not found")
-                return None
-
-            if not db_folder.is_folder:
-                folder_logger.bind(
-                    event_type="folder_deletion_failed",
-                    failure_reason="not_a_folder",
-                ).warning("Folder deletion failed: not a folder")
-                raise ResourceNotFoundException("Folder not found")
-
-            self.case_access.writable(current_user, db_folder.case_id)
-
-            # Storage normalizes paths, so aliases must share a deletion scope.
-            folder_path = normalize_folder_path(db_folder.folder_path or "")
-            affected_evidence = [db_folder]
-            if folder_path:
-                case_evidence = self.db.exec(
-                    select(models.Evidence).where(
-                        models.Evidence.case_id == db_folder.case_id,
-                        models.Evidence.id != db_folder.id,
-                    )
-                ).all()
-                for evidence in case_evidence:
-                    evidence_path = normalize_folder_path(evidence.folder_path or "")
-                    if evidence_path == folder_path or evidence_path.startswith(
-                        f"{folder_path}/"
-                    ):
-                        affected_evidence.append(evidence)
-
-            # Authorize the entire deletion set before touching files or records.
-            for evidence in affected_evidence:
-                self.require_read(evidence, current_user)
-
-            if db_folder.folder_path:
-                try:
-                    delete_folder(db_folder.case_id, db_folder.folder_path)
-                except Exception as e:
-                    folder_logger.bind(
-                        event_type="folder_deletion_failed",
-                        failure_reason="physical_folder_error",
-                    ).warning(
-                        f"Folder deletion failed: error deleting physical folder: {str(e)}"
-                    )
-                    raise DomainException("Error deleting folder") from e
-
-            with transaction(self.db):
-                for evidence in affected_evidence:
-                    provenance = self.db.get(models.CorrelationEvidence, evidence.id)
-                    if provenance is not None:
-                        self.db.delete(provenance)
-                    self.db.delete(evidence)
-
+        db_folder = self.db.get(models.Evidence, folder_id)
+        if not db_folder:
+            # Handle race condition in bulk delete operations
             folder_logger.bind(
-                case_id=db_folder.case_id,
-                folder_title=db_folder.title,
-                subfolder_count=len(affected_evidence),
-                event_type="folder_deletion_success",
-            ).info("Folder deleted successfully")
+                event_type="folder_already_deleted",
+            ).info("Folder already deleted or not found")
+            return None
 
-            return self._response(db_folder)
-
-        except DomainException:
-            raise
-        except Exception as e:
-            self._raise_unexpected_error(
-                error=e,
-                logger=folder_logger,
-                event_type="folder_deletion_error",
-                log_message="Folder deletion error",
-                public_message="Error deleting folder record",
-                rollback=True,
+        if not db_folder.is_folder:
+            raise self._fail(
+                failed, "not_a_folder", ResourceNotFoundException("Folder not found")
             )
+
+        self.case_access.writable(current_user, db_folder.case_id)
+
+        # Storage normalizes paths, so aliases must share a deletion scope.
+        folder_path = normalize_folder_path(db_folder.folder_path or "")
+        affected_evidence = [db_folder]
+        if folder_path:
+            case_evidence = self.db.exec(
+                select(models.Evidence).where(
+                    models.Evidence.case_id == db_folder.case_id,
+                    models.Evidence.id != db_folder.id,
+                )
+            ).all()
+            for evidence in case_evidence:
+                evidence_path = normalize_folder_path(evidence.folder_path or "")
+                if evidence_path == folder_path or evidence_path.startswith(
+                    f"{folder_path}/"
+                ):
+                    affected_evidence.append(evidence)
+
+        # Authorize the entire deletion set before touching files or records.
+        for evidence in affected_evidence:
+            self.require_read(evidence, current_user)
+
+        if db_folder.folder_path:
+            try:
+                delete_folder(db_folder.case_id, db_folder.folder_path)
+            except Exception as e:
+                raise self._fail(
+                    failed,
+                    "physical_folder_error",
+                    DomainException("Error deleting folder"),
+                ) from e
+
+        with transaction(self.db):
+            for evidence in affected_evidence:
+                provenance = self.db.get(models.CorrelationEvidence, evidence.id)
+                if provenance is not None:
+                    self.db.delete(provenance)
+                self.db.delete(evidence)
+
+        folder_logger.bind(
+            case_id=db_folder.case_id,
+            folder_title=db_folder.title,
+            subfolder_count=len(affected_evidence),
+            event_type="folder_deletion_success",
+        ).info("Folder deleted successfully")
+
+        return self._response(db_folder)
 
     async def create_folders_from_template(
         self,
         case_id: int,
         template_name: str,
         current_user: models.User,
-    ) -> List[models.Evidence]:
+    ) -> list[models.Evidence]:
         """Create folder structure from a template."""
         self.case_access.writable(current_user, case_id)
         template_logger = get_security_logger(
@@ -960,101 +691,61 @@ class EvidenceService:
             event_type="folder_template_apply_attempt",
         )
 
-        try:
-            from app.services.system_config_service import SystemConfigService
+        from app.services.system_config_service import SystemConfigService
 
-            config_service = SystemConfigService(self.db)
-            templates = await config_service.get_evidence_folder_templates()
+        templates = await SystemConfigService(self.db).get_evidence_folder_templates()
+        if template_name not in templates:
+            raise self._fail(
+                template_logger.bind(event_type="folder_template_apply_failed"),
+                "template_not_found",
+                ResourceNotFoundException(f"Template '{template_name}' not found"),
+                available_templates=list(templates.keys()),
+            )
 
-            if template_name not in templates:
-                template_logger.bind(
-                    event_type="folder_template_apply_failed",
-                    failure_reason="template_not_found",
-                    available_templates=list(templates.keys()),
-                ).warning(
-                    f"Folder template apply failed: template '{template_name}' not found"
+        created_folders: list[models.Evidence] = []
+
+        def create_folder_hierarchy(
+            folders: list, parent_path: str = "", parent_id: int | None = None
+        ):
+            for folder_info in folders:
+                folder_name = folder_info.get("name", "")
+                if not folder_name:
+                    continue
+
+                folder_path = normalize_folder_path(
+                    f"{parent_path}/{folder_name}" if parent_path else folder_name
                 )
-                raise ResourceNotFoundException(f"Template '{template_name}' not found")
-
-            template = templates[template_name]
-            created_folders = []
-
-            def create_folder_hierarchy(
-                folders: list, parent_path: str = "", parent_id: Optional[int] = None
-            ):
-                for folder_info in folders:
-                    folder_name = folder_info.get("name", "")
-                    if not folder_name:
-                        continue
-
-                    folder_path = (
-                        f"{parent_path}/{folder_name}" if parent_path else folder_name
-                    )
-
-                    folder_data = schemas.FolderCreate(
-                        title=folder_name,
-                        description=folder_info.get("description", ""),
-                        case_id=case_id,
-                        folder_path=folder_path,
-                        parent_folder_id=parent_id,
-                    )
-                    normalized_folder_path = normalize_folder_path(folder_path)
-
-                    new_folder = models.Evidence(
-                        case_id=folder_data.case_id,
-                        title=folder_data.title,
-                        description=folder_data.description,
-                        evidence_type="folder",
-                        category="Other",
-                        content="",
-                        is_folder=True,
-                        folder_path=normalized_folder_path,
-                        parent_folder_id=folder_data.parent_folder_id,
-                        created_by_id=current_user.id,
-                        created_at=get_utc_now(),
-                        updated_at=get_utc_now(),
-                    )
-                    self.db.add(new_folder)
-                    self.db.flush()
-
-                    create_folder(case_id, normalized_folder_path)
-
-                    created_folders.append(new_folder)
-
-                    subfolders = folder_info.get("subfolders", [])
-                    if subfolders:
-                        create_folder_hierarchy(
-                            subfolders,
-                            normalized_folder_path,
-                            cast(int, new_folder.id),
-                        )
-
-            template_folders = template.get("folders", [])
-            create_folder_hierarchy(template_folders)
-
-            with transaction(self.db):
+                new_folder = self._folder(
+                    case_id,
+                    folder_name,
+                    folder_info.get("description", ""),
+                    folder_path,
+                    parent_id,
+                    current_user,
+                )
+                self.db.add(new_folder)
                 self.db.flush()
 
-            for folder in created_folders:
-                self.db.refresh(folder)
+                create_folder(case_id, folder_path)
 
-            template_logger.bind(
-                folders_created=len(created_folders),
-                template_used=template_name,
-                event_type="folder_template_apply_success",
-            ).info(f"Folder template '{template_name}' applied successfully")
+                created_folders.append(new_folder)
 
-            return created_folders
+                subfolders = folder_info.get("subfolders", [])
+                if subfolders:
+                    create_folder_hierarchy(
+                        subfolders, folder_path, cast(int, new_folder.id)
+                    )
 
-        except DomainException:
-            self.db.rollback()
-            raise
-        except Exception as e:
-            self._raise_unexpected_error(
-                error=e,
-                logger=template_logger,
-                event_type="folder_template_apply_error",
-                log_message="Folder template apply error",
-                public_message="Error applying folder template",
-                rollback=True,
-            )
+        with transaction(self.db):
+            create_folder_hierarchy(templates[template_name].get("folders", []))
+
+        for folder in created_folders:
+            self.db.refresh(folder)
+
+        template_logger.bind(
+            folders_created=len(created_folders),
+            template_used=template_name,
+            event_type="folder_template_apply_success",
+        ).info(f"Folder template '{template_name}' applied successfully")
+
+        return created_folders

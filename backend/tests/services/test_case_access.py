@@ -142,7 +142,6 @@ def _case_access_calls(service: type, method_name: str) -> list[str]:
         ("delete_evidence", ["writable"]),
         ("download_evidence", ["readable"]),
         ("create_folder", ["writable", "evidence_parent"]),
-        ("get_folder_tree", ["readable"]),
         ("update_folder", ["writable", "evidence_parent"]),
         ("delete_folder", ["writable"]),
         ("create_folders_from_template", ["writable"]),

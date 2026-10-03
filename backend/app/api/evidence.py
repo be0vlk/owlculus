@@ -163,26 +163,6 @@ async def get_evidence_content(
     )
 
 
-@router.get("/{evidence_id}/image")
-async def get_evidence_image(
-    evidence_id: int,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
-):
-    evidence_service = EvidenceService(db)
-    file_path = await evidence_service.get_evidence_image(
-        evidence_id=evidence_id,
-        current_user=current_user,
-    )
-    return FileResponse(
-        path=str(file_path),
-        headers={
-            "Cache-Control": "max-age=3600",
-            "X-Content-Type-Options": "nosniff",
-        },
-    )
-
-
 @router.put("/{evidence_id}", response_model=schemas.Evidence)
 async def update_evidence(
     evidence_id: int,
@@ -231,8 +211,8 @@ async def get_folder_tree(
     current_user: models.User = Depends(get_current_user),
 ):
     evidence_service = EvidenceService(db)
-    return await evidence_service.get_folder_tree(
-        case_id=case_id, current_user=current_user
+    return await evidence_service.get_case_evidence(
+        case_id=case_id, current_user=current_user, limit=None
     )
 
 

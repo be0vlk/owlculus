@@ -675,7 +675,7 @@ class TestEvidenceAPI:
 
         try:
             with patch(
-                "app.services.evidence_service.EvidenceService.get_folder_tree"
+                "app.services.evidence_service.EvidenceService.get_case_evidence"
             ) as mock_get:
                 mock_get.return_value = [test_folder]
 

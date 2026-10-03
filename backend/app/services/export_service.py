@@ -304,7 +304,6 @@ class ExportService:
             {evidence.created_by_id for evidence in evidence_records}
         )
         manifest = []
-        upload_root = file_storage.UPLOAD_DIR.resolve()
 
         for evidence in evidence_records:
             if not EvidenceService(self.db).can_read(evidence, current_user):
@@ -331,16 +330,17 @@ class ExportService:
                 file_name = PurePosixPath(
                     (evidence.content or "").replace("\\", "/")
                 ).name or _safe_archive_component(evidence.title)
-                source_path = (
-                    file_storage.UPLOAD_DIR / (evidence.content or "")
-                ).resolve()
-                if not _is_stored_evidence_file(source_path, upload_root):
+                try:
+                    source_path = file_storage.evidence_file_path(
+                        evidence.case_id, evidence.content or ""
+                    )
+                except ValueError:
                     exported = False
                     reason = "File not found on disk"
                     get_security_logger(
                         case_id=case_id,
                         evidence_id=evidence.id,
-                        file_path=str(source_path),
+                        file_path=evidence.content,
                         event_type="case_export_evidence_missing",
                     ).warning("Case export evidence file not found on disk")
                 else:
@@ -876,11 +876,3 @@ def _safe_archive_component(value: str) -> str:
         for character in value
     ).strip()
     return component if component not in ("", ".", "..") else "evidence"
-
-
-def _is_stored_evidence_file(source_path: Path, upload_root: Path) -> bool:
-    try:
-        source_path.relative_to(upload_root)
-    except ValueError:
-        return False
-    return source_path.is_file()

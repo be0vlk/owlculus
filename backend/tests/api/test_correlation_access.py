@@ -260,12 +260,9 @@ async def test_saved_report_requires_every_case_and_keeps_original_bytes(
 ):
     import zipfile
 
-    from app.core import file_storage
-    from app.services import evidence_service
     from app.services.evidence_service import EvidenceService
     from app.services.export_service import ExportService
 
-    monkeypatch.setattr(evidence_service, "UPLOAD_DIR", file_storage.UPLOAD_DIR)
     related = Case(case_number="SECRET", title="SECRET")
     session.add(related)
     session.flush()
@@ -439,18 +436,15 @@ async def test_new_explanations_and_warning_only_cases_remain_protected(
 ):
     from dataclasses import replace
 
-    from app.core import file_storage
     from app.plugins.base_plugin import PluginRun
     from app.plugins.correlation_plugin import CorrelationScan
     from app.plugins.plugin_context import ServiceEvidenceSink
     from app.plugins.plugin_registry import PluginRegistry
     from app.plugins.plugin_runner import PluginRunner
     from app.schemas.entity_schema import EntityCreate
-    from app.services import evidence_service
     from app.services.entity_service import EntityService
     from app.services.evidence_service import EvidenceService
 
-    monkeypatch.setattr(evidence_service, "UPLOAD_DIR", file_storage.UPLOAD_DIR)
     related = Case(case_number="RELATED", title="Related")
     warning_case = Case(case_number="WARNING", title="Warning only")
     session.add_all([related, warning_case])
@@ -687,17 +681,14 @@ async def test_identifier_scan_retention_export_and_evidence_follow_membership(
 ):
     from dataclasses import replace
 
-    from app.core import file_storage
     from app.database.models import Entity
     from app.plugins.base_plugin import PluginRun
     from app.plugins.correlation_plugin import CorrelationScan
     from app.plugins.plugin_context import ServiceEvidenceSink
     from app.plugins.plugin_registry import PluginRegistry
     from app.plugins.plugin_runner import PluginRunner
-    from app.services import evidence_service
     from app.services.evidence_service import EvidenceService
 
-    monkeypatch.setattr(evidence_service, "UPLOAD_DIR", file_storage.UPLOAD_DIR)
     related = Case(case_number="IP-RELATED", title="Related IP")
     hidden = Case(case_number="IP-HIDDEN", title="Hidden IP")
     session.add_all([related, hidden])

@@ -75,7 +75,6 @@ class ServiceEvidenceSink:
                     case_id=request.case_id,
                     title="Plugin Results",
                     description="Auto-created folder for all plugin and hunt results",
-                    folder_path=None,
                     parent_folder_id=None,
                 ),
                 current_user=user,

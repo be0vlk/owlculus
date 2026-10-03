@@ -181,10 +181,8 @@ async def test_saved_report_preserves_explanations_counts_time_and_warning_scope
 
     from app.core import file_storage
     from app.plugins.plugin_context import ServiceEvidenceSink
-    from app.services import evidence_service
     from app.services.evidence_service import EvidenceService
 
-    monkeypatch.setattr(evidence_service, "UPLOAD_DIR", file_storage.UPLOAD_DIR)
     source, other = cases
     ada = await entity(
         session,
