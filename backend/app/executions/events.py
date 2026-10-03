@@ -21,6 +21,7 @@ from app.database.models import (
     ExecutionEvent,
     HuntExecution,
     PluginExecution,
+    associated_execution,
 )
 
 STREAM_LIMIT = max(1, int(os.environ.get("EXECUTION_STREAM_LIMIT", "10000")))
@@ -94,9 +95,7 @@ def publish_once(database_engine=engine, client=None) -> bool:
             .limit(1)
         ).one()
         kind, execution_id = control.execution_reference()
-        execution = db.get(
-            HuntExecution if kind == "hunt" else PluginExecution, execution_id
-        )
+        execution = associated_execution(db, control)
         assert isinstance(execution, (HuntExecution, PluginExecution))
         ttl = STREAM_TTL
         if execution.completed_at:

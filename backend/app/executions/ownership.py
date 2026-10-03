@@ -18,7 +18,9 @@ from app.database.models import (
     HuntStep,
     PluginExecution,
     PluginExecutionResult,
+    execution_kind,
 )
+from app.executions.build import implementation_build
 from app.executions.events import record_event
 from app.executions.limits import HUNT_SECONDS, PLUGIN_SECONDS, STEP_SECONDS
 from app.executions.service import authorize_execution
@@ -49,16 +51,8 @@ class Ownership:
                 .with_for_update()
                 .execution_options(populate_existing=True)
             ).one()
-            model = (
-                HuntExecution
-                if control.hunt_execution_id is not None
-                else PluginExecution
-            )
-            execution_id = (
-                control.hunt_execution_id
-                if model is HuntExecution
-                else control.plugin_execution_id
-            )
+            kind, execution_id = control.execution_reference()
+            model, _ = execution_kind(kind)
             status = db.exec(
                 select(model.status).where(model.id == execution_id)
             ).one_or_none()
@@ -74,7 +68,7 @@ class Ownership:
             now = get_utc_now()
             if control.deadline_at and control.deadline_at.replace(tzinfo=UTC) <= now:
                 raise OwnershipLost()
-            if control.hunt_execution_id:
+            if kind == "hunt":
                 overdue = db.exec(
                     select(HuntStep).where(
                         HuntStep.execution_id == control.hunt_execution_id,
@@ -92,13 +86,8 @@ class Ownership:
             return control, execution
 
 
-def claim(db: Session, execution_id: int, *, kind: str = "plugin") -> Ownership | None:
-    model = HuntExecution if kind == "hunt" else PluginExecution
-    association = (
-        ExecutionControl.hunt_execution_id
-        if kind == "hunt"
-        else ExecutionControl.plugin_execution_id
-    )
+def claim(db: Session, execution_id: int, *, kind: str) -> Ownership | None:
+    model, association = execution_kind(kind)
     with transaction(db):
         control = db.exec(
             select(ExecutionControl)
@@ -128,18 +117,18 @@ def claim(db: Session, execution_id: int, *, kind: str = "plugin") -> Ownership 
             execution.completed_at = get_utc_now()
             record_event(db, control)
             return None
-        if isinstance(execution, HuntExecution):
-            from app.executions.build import implementation_build
-
-            if execution.implementation_build != implementation_build():
-                execution.status = "failed"
-                execution.error = {
-                    "code": "incompatible_build",
-                    "message": "Hunt requires its accepted implementation build; deploy matching API and workers and submit a new run",
-                }
-                execution.completed_at = get_utc_now()
-                record_event(db, control)
-                return None
+        if (
+            isinstance(execution, HuntExecution)
+            and execution.implementation_build != implementation_build()
+        ):
+            execution.status = "failed"
+            execution.error = {
+                "code": "incompatible_build",
+                "message": "Hunt requires its accepted implementation build; deploy matching API and workers and submit a new run",
+            }
+            execution.completed_at = get_utc_now()
+            record_event(db, control)
+            return None
         control.generation += 1
         control.owner = str(uuid4())
         control.heartbeat_at = get_utc_now()
@@ -168,7 +157,7 @@ def append_result(
     ownership: Ownership,
     payload: dict,
     *,
-    operation_index: int | None = None
+    operation_index: int | None = None,
 ) -> None:
     with transaction(db):
         control, execution = ownership.lock(db)

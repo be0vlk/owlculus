@@ -21,8 +21,6 @@ app.conf.update(
     task_ignore_result=True,
     task_acks_late=True,
     task_reject_on_worker_lost=True,
-    visibility_timeout=VISIBILITY_SECONDS,
-    result_backend_transport_options={"visibility_timeout": VISIBILITY_SECONDS},
     task_serializer="json",
     accept_content=["json"],
     broker_connection_retry_on_startup=True,

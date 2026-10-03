@@ -7,7 +7,7 @@ system configuration. All models include proper relationships and constraints.
 """
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 from uuid import uuid4
 
 from pydantic import EmailStr
@@ -304,6 +304,23 @@ class ExecutionControl(SQLModel, table=True):
             return "hunt", self.hunt_execution_id
         assert self.plugin_execution_id is not None
         return "plugin", self.plugin_execution_id
+
+
+TERMINAL = {"completed", "partial", "failed", "cancelled"}
+
+
+def execution_kind(
+    kind: str,
+) -> tuple[type[HuntExecution] | type[PluginExecution], Any]:
+    """The execution model and its control foreign key for an execution kind."""
+    if kind == "hunt":
+        return HuntExecution, ExecutionControl.hunt_execution_id
+    return PluginExecution, ExecutionControl.plugin_execution_id
+
+
+def associated_execution(db, control: ExecutionControl):
+    kind, execution_id = control.execution_reference()
+    return db.get(execution_kind(kind)[0], execution_id)
 
 
 class ExecutionOutbox(SQLModel, table=True):

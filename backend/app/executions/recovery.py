@@ -10,12 +10,14 @@ from app.core.utils import get_utc_now
 from app.database.connection import engine
 from app.database.db_utils import transaction
 from app.database.models import (
+    TERMINAL,
     ExecutionControl,
     ExecutionOutbox,
     HuntExecution,
     PluginExecution,
+    associated_execution,
 )
-from app.executions.cancellation import TERMINAL, associated_execution, cancel_steps
+from app.executions.cancellation import cancel_steps
 from app.executions.events import record_event
 from app.executions.limits import CLEANUP_SECONDS
 

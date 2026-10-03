@@ -18,8 +18,13 @@ from app.database.models import (
 )
 from app.executions.effects import CaseEffects
 from app.executions.ownership import Ownership, OwnershipLost
+from app.executions.worker import WorkerVault
 from app.main import app
-from app.plugins.plugin_types import DomainSubdomainsWrite, IpAddressWrite
+from app.plugins.plugin_types import (
+    DomainSubdomainsWrite,
+    EvidenceWrite,
+    IpAddressWrite,
+)
 
 
 @pytest.mark.parametrize("kind", ["ip_address", "domain"])
@@ -163,7 +168,13 @@ async def test_entity_effect_scope_and_replay(
 
     def effects(ownership=owner, operation="copy"):
         return CaseEffects(
-            session_factory, ownership, operation, destination, initiator, True
+            session_factory,
+            ownership,
+            operation,
+            destination,
+            initiator,
+            True,
+            WorkerVault(session.get_bind()),
         )
 
     permitted = provenance in {
@@ -187,7 +198,13 @@ async def test_entity_effect_scope_and_replay(
     )
     execution.context_data = {"step_outputs": {"copy": copied_output}}
     session.commit()
-    warning = await effects().entity(request)
+    with pytest.raises(ValueError):
+        await effects().entity(request, destination + 1)
+    with pytest.raises(ValueError):
+        await effects().evidence(
+            EvidenceWrite("P", "P", "Other", destination + 1, "x", "x.txt")
+        )
+    warning = await effects().entity(request, destination)
     assert warning == (
         None
         if permitted
@@ -218,12 +235,12 @@ async def test_entity_effect_scope_and_replay(
     control.owner = "recovered"
     session.commit()
     recovered = Ownership(control.id, 2, "recovered")
-    assert await effects(recovered).entity(request) == warning
+    assert await effects(recovered).entity(request, destination) == warning
     assert client.get(url).json() == before
     with pytest.raises(OwnershipLost):
-        await effects().entity(request)
+        await effects().entity(request, destination)
     control.cancellation_requested_at = get_utc_now()
     session.commit()
     with pytest.raises(OwnershipLost):
-        await effects(recovered, "cancelled").entity(request)
+        await effects(recovered, "cancelled").entity(request, destination)
     assert client.get(url).json() == before

@@ -201,8 +201,6 @@ class PluginRun:
     api_keys: ApiKeyVault
     evidence: EvidenceSink
     entities: EntitySink
-    execution_control_id: int | None = None
-    operation_id: str = "plugin"
 
     @classmethod
     def for_test(
@@ -265,5 +263,4 @@ class ProductionPluginRunAdapter:
                 self._api_key_vault_factory(session),
                 ServiceEvidenceSink(session),
                 ServiceEntitySink(session),
-                operation_id=operation_id,
             )

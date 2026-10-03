@@ -2,6 +2,7 @@
 
 from sqlmodel import Session, col, select
 
+from app.database.db_utils import keyset_page
 from app.database.models import (
     ExecutionControl,
     ExecutionEffect,
@@ -24,17 +25,18 @@ from app.services.case_access import CaseAccess
 def _step_results(
     db: Session, step: HuntStep, cursor: int = 0, limit: int = 50
 ) -> dict:
-    rows = db.exec(
+    page, next_cursor = keyset_page(
+        db,
         select(HuntStepResult)
         .where(HuntStepResult.step_id == step.id, HuntStepResult.sequence > cursor)
-        .order_by(col(HuntStepResult.sequence))
-        .limit(limit + 1)
-    ).all()
-    page = rows[:limit]
+        .order_by(col(HuntStepResult.sequence)),
+        limit,
+        lambda row: row.sequence,
+    )
     return {
         "items": [row.payload for row in page],
         "cursor": page[-1].sequence if page else cursor,
-        "next_cursor": page[-1].sequence if len(rows) > limit else None,
+        "next_cursor": next_cursor,
     }
 
 

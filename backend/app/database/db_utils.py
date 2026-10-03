@@ -8,6 +8,7 @@ partially completed work.
 
 from collections.abc import Generator
 from contextlib import contextmanager
+from typing import Any
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session
@@ -67,3 +68,10 @@ def transaction(session: Session) -> Generator[Session, None, None]:
         raise
     finally:
         session.info["transaction_depth"] -= 1
+
+
+def keyset_page(session: Session, query, limit: int, cursor_of) -> tuple[list, Any]:
+    """One page of an ordered, cursor-filtered query, plus the next cursor if more rows follow."""
+    rows = session.exec(query.limit(limit + 1)).all()
+    page = rows[:limit]
+    return page, cursor_of(page[-1]) if len(rows) > limit else None

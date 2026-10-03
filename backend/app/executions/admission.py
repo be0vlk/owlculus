@@ -9,13 +9,13 @@ from sqlalchemy import func, text
 from sqlmodel import Session, col, select
 
 from app.database.models import (
+    TERMINAL,
     ExecutionControl,
     ExecutionSubmission,
     HuntExecution,
     PluginExecution,
+    associated_execution,
 )
-
-TERMINAL = {"completed", "partial", "failed", "cancelled"}
 
 
 def lock_acceptance(db: Session) -> None:
@@ -92,14 +92,7 @@ class SubmissionRequest:
             )
         control = db.get(ExecutionControl, submission.control_id)
         assert control is not None
-        return db.get(
-            HuntExecution if self.kind == "hunt" else PluginExecution,
-            (
-                control.hunt_execution_id
-                if self.kind == "hunt"
-                else control.plugin_execution_id
-            ),
-        )
+        return associated_execution(db, control)
 
     def remember(
         self,

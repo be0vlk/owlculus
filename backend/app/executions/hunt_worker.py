@@ -6,21 +6,14 @@ from sqlmodel import Session
 
 from app.database.models import HuntExecution, HuntStep
 from app.executions.events import record_event
-from app.executions.ownership import OwnershipLost, claim, fail_execution
+from app.executions.ownership import OwnershipLost, fail_execution
 from app.executions.service import authorize_execution
 from app.executions.worker import WorkerPluginRunner, worker_adapter, worker_resources
 from app.hunts.hunt_executor import HuntExecutor
 from app.plugins.plugin_registry import PluginRegistry
 
 
-async def execute(
-    engine: Engine, registry: PluginRegistry, execution_id: int, *, ownership=None
-) -> None:
-    if ownership is None:
-        with Session(engine) as db:
-            ownership = claim(db, execution_id, kind="hunt")
-    if ownership is None:
-        return
+async def execute(engine: Engine, registry: PluginRegistry, ownership) -> None:
     with (
         worker_resources(engine, ownership) as (vault, session_factory),
         Session(engine, expire_on_commit=False) as db,

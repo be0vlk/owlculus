@@ -1,18 +1,19 @@
 """Worker-owned loops, vault reads and fenced production case effects."""
 
+from collections.abc import Callable
 from contextlib import contextmanager
-from dataclasses import asdict, replace
+from dataclasses import dataclass, replace
+from typing import Any
 
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
 from sqlmodel import Session
 
-from app.database.models import PluginExecution, User
+from app.database.models import PluginExecution
 from app.executions.effects import CaseEffects
 from app.executions.ownership import (
     OwnershipLost,
     append_result,
-    claim,
     fail_execution,
     start_operation,
 )
@@ -23,7 +24,7 @@ from app.plugins.plugin_context import (
 )
 from app.plugins.plugin_registry import PluginRegistry
 from app.plugins.plugin_runner import PluginRunner
-from app.plugins.plugin_types import EntityWrite, EvidenceWrite, ResultEvent
+from app.plugins.plugin_types import ResultEvent
 from app.services.api_key_vault import ConfigurationApiKeyVault, Provider
 
 
@@ -56,30 +57,11 @@ class WorkerVault:
         return value
 
 
-class WorkerEvidenceSink:
-    """Sanitize evidence before it reaches case services or file storage."""
+@dataclass(frozen=True)
+class EffectSink:
+    """Expose one CaseEffects write as a PluginRun evidence or entity sink."""
 
-    def __init__(self, sink: CaseEffects, vault: WorkerVault, case_id: int):
-        self.sink, self.vault, self.case_id = sink, vault, case_id
-
-    async def write(self, request: EvidenceWrite, user: User) -> None:
-        if request.case_id != self.case_id:
-            raise ValueError("Evidence must belong to the execution case")
-        sanitized = EvidenceWrite(**self.vault.redact(asdict(request)))
-        await self.sink.evidence(sanitized)
-
-
-class WorkerEntitySink:
-    """Sanitize discovered entity fields while fixing case and attribution."""
-
-    def __init__(self, sink: CaseEffects, vault: WorkerVault, case_id: int):
-        self.sink, self.vault, self.case_id = sink, vault, case_id
-
-    async def write(self, request: EntityWrite, case_id: int, user: User) -> str | None:
-        if case_id != self.case_id:
-            raise ValueError("Entities must belong to the execution case")
-        sanitized = type(request)(**self.vault.redact(asdict(request)))
-        return await self.sink.entity(sanitized)
+    write: Callable[..., Any]
 
 
 @contextmanager
@@ -117,13 +99,12 @@ def worker_adapter(session_factory, vault, ownership):
                     case_id,
                     user,
                     save_to_case,
+                    vault,
                 )
                 yield replace(
                     run,
-                    execution_control_id=ownership.control_id,
-                    operation_id=operation_id,
-                    evidence=WorkerEvidenceSink(effects, vault, case_id),
-                    entities=WorkerEntitySink(effects, vault, case_id),
+                    evidence=EffectSink(effects.evidence),
+                    entities=EffectSink(effects.entity),
                 )
 
     return SanitizedAdapter(session_factory, lambda _: vault)
@@ -145,14 +126,7 @@ class WorkerPluginRunner(PluginRunner):
             yield result
 
 
-async def execute(
-    engine: Engine, registry: PluginRegistry, execution_id: int, *, ownership=None
-) -> None:
-    if ownership is None:
-        with Session(engine) as db:
-            ownership = claim(db, execution_id)
-    if ownership is None:
-        return
+async def execute(engine: Engine, registry: PluginRegistry, ownership) -> None:
     with worker_resources(engine, ownership) as (vault, session_factory):
         await execute_plugin_run(engine, registry, ownership, vault, session_factory)
 

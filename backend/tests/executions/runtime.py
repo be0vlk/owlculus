@@ -151,7 +151,7 @@ def install():
                 wait_at_boundary()
             return result
 
-        from app.executions.worker import WorkerEvidenceSink
+        from app.executions.effects import CaseEffects
         from app.hunts.hunt_executor import HuntExecutor
 
         original_step = HuntExecutor._execute_step
@@ -166,7 +166,7 @@ def install():
                 while not (root / "release-boundary").exists():
                     await asyncio.sleep(0.05)
 
-        original_evidence = WorkerEvidenceSink.write
+        original_evidence = CaseEffects.evidence
 
         async def evidence_boundary(self, *args, **kwargs):
             await original_evidence(self, *args, **kwargs)
@@ -177,7 +177,7 @@ def install():
                     await asyncio.sleep(0.05)
 
         HuntExecutor._execute_step = step_boundary
-        WorkerEvidenceSink.write = evidence_boundary
+        CaseEffects.evidence = evidence_boundary
 
         def stop_at_boundary(process):
             if boundary == "before-cleanup" and process.stdin is not None:

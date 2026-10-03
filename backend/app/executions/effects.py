@@ -1,17 +1,18 @@
 """Atomic, generation-fenced case effects through existing domain services."""
 
 from contextlib import contextmanager
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, field, replace
+from typing import Any
 from uuid import NAMESPACE_URL, uuid5
 
 from sqlmodel import Session, select
 
 from app.database.db_utils import transaction
-from app.database.models import Case, ExecutionEffect, HuntExecution
+from app.database.models import Case, ExecutionEffect, HuntExecution, User
 from app.executions.service import authorize_execution
 from app.hunts.correlation_scope import HuntCorrelationScope
 from app.plugins.plugin_context import ServiceEntitySink, ServiceEvidenceSink
-from app.plugins.plugin_types import ENTITY_SAVE_SKIPPED
+from app.plugins.plugin_types import ENTITY_SAVE_SKIPPED, EntityWrite, EvidenceWrite
 
 
 @dataclass
@@ -21,19 +22,21 @@ class EffectOperation:
     replayed: bool = False
 
 
+@dataclass
 class CaseEffects:
-    """One stable operation namespace per plugin invocation or hunt step."""
+    """One stable operation namespace per plugin invocation or hunt step.
 
-    def __init__(
-        self, session_factory, ownership, operation_id, case_id, user, enabled
-    ):
-        self.session_factory = session_factory
-        self.ownership = ownership
-        self.operation_id = operation_id
-        self.case_id = case_id
-        self.user = user
-        self.enabled = enabled
-        self.counts = {"evidence": 0, "entity": 0}
+    Writes are redacted and fixed to the execution's case and initiating user.
+    """
+
+    session_factory: Any
+    ownership: Any
+    operation_id: str
+    case_id: int
+    user: User
+    enabled: bool
+    vault: Any
+    counts: dict[str, int] = field(default_factory=lambda: {"evidence": 0, "entity": 0})
 
     @contextmanager
     def operation(self, kind):
@@ -74,7 +77,10 @@ class CaseEffects:
             db.add(receipt)
             yield EffectOperation(db, receipt)
 
-    async def evidence(self, request):
+    async def evidence(self, request: EvidenceWrite, user: User | None = None) -> None:
+        if request.case_id != self.case_id:
+            raise ValueError("Evidence must belong to the execution case")
+        request = EvidenceWrite(**self.vault.redact(asdict(request)))
         with self.operation("evidence") as operation:
             if operation is not None and not operation.replayed:
                 db, artifact_id = operation.db, operation.receipt.artifact_id
@@ -83,7 +89,12 @@ class CaseEffects:
                     request = replace(request, correlation_case_ids=scope)
                 await ServiceEvidenceSink(db, artifact_id).write(request, self.user)
 
-    async def entity(self, request) -> str | None:
+    async def entity(
+        self, request: EntityWrite, case_id: int, user: User | None = None
+    ) -> str | None:
+        if case_id != self.case_id:
+            raise ValueError("Entities must belong to the execution case")
+        request = type(request)(**self.vault.redact(asdict(request)))
         with self.operation("entity") as operation:
             if operation is None:
                 return None

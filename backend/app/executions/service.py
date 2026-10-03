@@ -1,5 +1,6 @@
 """Transactional acceptance, authorization and bounded durable observation."""
 
+from copy import deepcopy
 from datetime import UTC
 from typing import Any, cast
 
@@ -8,7 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session, col, select
 
 from app.core.utils import get_utc_now
-from app.database.db_utils import transaction
+from app.database.db_utils import keyset_page, transaction
 from app.database.models import (
     ExecutionControl,
     ExecutionOutbox,
@@ -19,11 +20,13 @@ from app.database.models import (
     User,
 )
 from app.executions import admission
+from app.executions.build import implementation_build
 from app.executions.correlation_visibility import (
     CORRELATION_PLUGIN,
     CorrelationVisibility,
     safe_error,
 )
+from app.executions.events import record_event
 from app.plugins.plugin_registry import PluginRegistry
 from app.services.case_access import CaseAccess
 
@@ -85,6 +88,25 @@ def authorize_execution(
     return user
 
 
+def enqueue(
+    db: Session, execution: PluginExecution | HuntExecution
+) -> tuple[ExecutionControl, ExecutionOutbox]:
+    """Persist accepted work with its control, first event and dispatch intent."""
+    db.add(execution)
+    db.flush()
+    control = (
+        ExecutionControl(hunt_execution_id=execution.id)
+        if isinstance(execution, HuntExecution)
+        else ExecutionControl(plugin_execution_id=execution.id)
+    )
+    db.add(control)
+    db.flush()
+    record_event(db, control, advance=False)
+    outbox = ExecutionOutbox(control_id=cast(int, control.id))
+    db.add(outbox)
+    return control, outbox
+
+
 def accept(
     db: Session,
     user: User,
@@ -126,16 +148,7 @@ def accept(
             )
             authorize_execution(db, execution)
             admission.require_capacity(db, case_id, cast(int, user.id))
-            db.add(execution)
-            db.flush()
-            control = ExecutionControl(plugin_execution_id=cast(int, execution.id))
-            db.add(control)
-            db.flush()
-            from app.executions.events import record_event
-
-            record_event(db, control, advance=False)
-            outbox = ExecutionOutbox(control_id=cast(int, control.id))
-            db.add(outbox)
+            control, outbox = enqueue(db, execution)
             submission.remember(db, control, normalized, definitions)
             # Build before commit so a post-commit read failure cannot hide acceptance.
             response = representation(execution, control, outbox)
@@ -247,15 +260,15 @@ def history(db: Session, user: User, case_id: int, cursor: int, limit: int) -> d
     )
     if cursor:
         query = query.where(col(PluginExecution.id) < cursor)
-    rows = db.exec(
-        query.order_by(col(PluginExecution.id).desc()).limit(limit + 1)
-    ).all()
+    page, next_cursor = keyset_page(
+        db, query.order_by(col(PluginExecution.id).desc()), limit, lambda row: row[0].id
+    )
     return {
         "items": [
             representation(execution, control, outbox)
-            for execution, control, outbox in rows[:limit]
+            for execution, control, outbox in page
         ],
-        "next_cursor": rows[limit - 1][0].id if len(rows) > limit else None,
+        "next_cursor": next_cursor,
     }
 
 
@@ -263,16 +276,17 @@ def results(
     db: Session, user: User, execution_id: int, cursor: int, limit: int
 ) -> dict:
     state = detail(db, user, execution_id)
-    rows = db.exec(
+    page, next_cursor = keyset_page(
+        db,
         select(PluginExecutionResult)
         .where(
             PluginExecutionResult.execution_id == execution_id,
             PluginExecutionResult.sequence > cursor,
         )
-        .order_by(col(PluginExecutionResult.sequence))
-        .limit(limit + 1)
-    ).all()
-    page = rows[:limit]
+        .order_by(col(PluginExecutionResult.sequence)),
+        limit,
+        lambda row: row.sequence,
+    )
     return {
         "items": (
             CorrelationVisibility(db, user, state["case_id"]).events(
@@ -282,7 +296,7 @@ def results(
             else [row.payload for row in page]
         ),
         "cursor": page[-1].sequence if page else cursor,
-        "next_cursor": page[-1].sequence if len(rows) > limit else None,
+        "next_cursor": next_cursor,
         "revision": state["revision"],
     }
 
@@ -308,10 +322,6 @@ def accept_hunt(
     submission: admission.SubmissionRequest,
 ) -> HuntExecution:
     """Persist accepted work and its dispatch intent in the same transaction."""
-    from copy import deepcopy
-
-    from app.executions.build import implementation_build
-
     execution = HuntExecution(
         hunt_id=hunt.id,
         case_id=params["case_id"],
@@ -330,15 +340,7 @@ def accept_hunt(
                 db.expunge(prior)
                 return prior
             admission.require_capacity(db, execution.case_id, cast(int, user.id))
-            db.add(execution)
-            db.flush()
-            control = ExecutionControl(hunt_execution_id=execution.id)
-            db.add(control)
-            db.flush()
-            from app.executions.events import record_event
-
-            record_event(db, control, advance=False)
-            db.add(ExecutionOutbox(control_id=control.id))
+            control, _ = enqueue(db, execution)
             submission.remember(
                 db,
                 control,

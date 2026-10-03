@@ -10,7 +10,7 @@ from app.plugins.plugin_registry import get_shipped_plugin_registry
 
 
 def main():
-    kind, execution_id, control_id, generation, owner = sys.argv[1:]
+    kind, _, control_id, generation, owner = sys.argv[1:]
     from app.executions.hunt_worker import execute as hunt
     from app.executions.worker import execute as plugin
 
@@ -23,8 +23,7 @@ def main():
         await (hunt if kind == "hunt" else plugin)(
             engine,
             get_shipped_plugin_registry(),
-            int(execution_id),
-            ownership=Ownership(int(control_id), int(generation), owner),
+            Ownership(int(control_id), int(generation), owner),
         )
 
     try:
