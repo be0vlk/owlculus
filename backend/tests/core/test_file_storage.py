@@ -40,37 +40,6 @@ def case_id():
     return 123
 
 
-class TestCalculateFileHash:
-    """Test the calculate_file_hash function."""
-
-    def test_calculate_file_hash_returns_correct_sha256(self):
-        """Test that file hash calculation returns correct SHA-256."""
-        content = b"test content"
-        expected_hash = hashlib.sha256(content).hexdigest()
-
-        result = file_storage.calculate_file_hash(content)
-
-        assert result == expected_hash
-
-    def test_calculate_file_hash_empty_content(self):
-        """Test hash calculation with empty content."""
-        content = b""
-        expected_hash = hashlib.sha256(content).hexdigest()
-
-        result = file_storage.calculate_file_hash(content)
-
-        assert result == expected_hash
-
-    def test_calculate_file_hash_large_content(self):
-        """Test hash calculation with large content."""
-        content = b"x" * 1024 * 1024  # 1MB of data
-        expected_hash = hashlib.sha256(content).hexdigest()
-
-        result = file_storage.calculate_file_hash(content)
-
-        assert result == expected_hash
-
-
 class TestNormalizeFolderPath:
     """Test the normalize_folder_path function."""
 
@@ -320,7 +289,7 @@ class TestSaveUploadFile:
         """Test that None case ID raises HTTPException."""
         with pytest.raises(ValidationException) as exc_info:
             await file_storage.save_upload_file(sample_upload_file, None)
-        assert "Case ID is required" in str(exc_info.value)
+        assert "Invalid case ID" in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_save_upload_file_invalid_case_id(
@@ -476,36 +445,6 @@ class TestDeleteFile:
         with pytest.raises(ValidationException) as exc_info:
             await file_storage.delete_file("test_case/../../../etc/passwd")
         assert "Invalid file path" in str(exc_info.value)
-
-
-class TestCreateCaseDirectory:
-    """Test the create_case_directory function."""
-
-    def test_create_case_directory_valid_id(self, temp_upload_dir, case_id):
-        """Test creating case directory with valid ID."""
-        result = file_storage.create_case_directory(case_id)
-
-        expected_path = temp_upload_dir / str(case_id)
-        assert result == expected_path
-        assert result.exists()
-        assert result.is_dir()
-
-    def test_create_case_directory_invalid_id(self, temp_upload_dir):
-        """Test that invalid case ID raises HTTPException."""
-        with pytest.raises(ValidationException) as exc_info:
-            file_storage.create_case_directory(0)
-        assert "Invalid case ID" in str(exc_info.value)
-
-    def test_create_case_directory_existing_directory(self, temp_upload_dir, case_id):
-        """Test that creating existing directory doesn't fail."""
-        # Create directory first
-        first_result = file_storage.create_case_directory(case_id)
-
-        # Create again - should not fail
-        second_result = file_storage.create_case_directory(case_id)
-
-        assert first_result == second_result
-        assert second_result.exists()
 
 
 class TestSecurityIntegration:

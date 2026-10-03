@@ -84,13 +84,13 @@ async def test_create_case_admin(
     assert created_case.status == "Open"
     assert created_case.notes == "Test Notes"
     assert created_case.case_number is not None
+    assert not (file_storage.UPLOAD_DIR / str(created_case.id)).exists()
 
 
 @pytest.mark.asyncio
 async def test_create_case_commits_once(
     case_service_instance: case_service.CaseService,
     test_admin: models.User,
-    monkeypatch: pytest.MonkeyPatch,
 ):
     client = models.Client(name="Test Client", contact_email="test@example.com")
     case_service_instance.db.add(client)
@@ -99,7 +99,6 @@ async def test_create_case_commits_once(
     case_data = schemas.CaseCreate(
         client_id=client.id, title="Test Case", status="Open", notes="Test Notes"
     )
-    monkeypatch.setattr(case_service, "create_case_directory", lambda _case_id: None)
 
     with patch.object(
         case_service_instance.db,

@@ -4,6 +4,7 @@ File storage utilities for handling evidence uploads
 
 import hashlib
 import os
+import shutil
 import urllib.parse
 from pathlib import Path
 from typing import Any, Optional, Tuple
@@ -14,18 +15,20 @@ from .logging import get_security_logger
 from .security import secure_filename_with_path, validate_file_security
 
 UPLOAD_DIR = Path("uploads")
-if not UPLOAD_DIR.exists():
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def calculate_file_hash(content: bytes) -> str:
-    """
-    Calculate SHA-256 hash of file content.
-    Returns the hash as a hexadecimal string.
-    """
-    hasher = hashlib.sha256()
-    hasher.update(content)
-    return hasher.hexdigest()
+def _case_dir(case_id: int) -> Path:
+    if not isinstance(case_id, int) or case_id <= 0:
+        raise ValidationException(f"Invalid case ID: {case_id}")
+    return UPLOAD_DIR / str(case_id)
+
+
+def _remove_empty_parents(path: Path, stop: Path) -> None:
+    parent = path.parent
+    while parent != stop and parent.exists() and not any(parent.iterdir()):
+        parent.rmdir()
+        parent = parent.parent
 
 
 def normalize_folder_path(folder_path: str) -> str:
@@ -63,9 +66,7 @@ def create_folder(case_id: int, folder_path: str) -> Path:
     Create a folder structure within a case directory.
     Returns the path to the created folder.
     """
-    if not isinstance(case_id, int) or case_id <= 0:
-        raise ValidationException(f"Invalid case ID: {case_id}")
-
+    case_dir = _case_dir(case_id)
     if not folder_path:
         raise ValidationException("Folder path is required")
 
@@ -73,7 +74,6 @@ def create_folder(case_id: int, folder_path: str) -> Path:
     if not normalized_path:
         raise ValidationException("Invalid folder path")
 
-    case_dir = UPLOAD_DIR / str(case_id)
     folder_dir = case_dir / normalized_path
     folder_dir.mkdir(parents=True, exist_ok=True)
     return folder_dir
@@ -83,25 +83,15 @@ def delete_folder(case_id: int, folder_path: str) -> None:
     """
     Delete a folder and all its contents from a case directory.
     """
-    if not isinstance(case_id, int) or case_id <= 0:
-        raise ValidationException(f"Invalid case ID: {case_id}")
-
+    case_dir = _case_dir(case_id)
     normalized_path = normalize_folder_path(folder_path)
     if not normalized_path:
         raise ValidationException("Invalid folder path")
 
-    case_dir = UPLOAD_DIR / str(case_id)
     folder_dir = case_dir / normalized_path
-
-    if folder_dir.exists() and folder_dir.is_dir():
-        import shutil
-
+    if folder_dir.is_dir():
         shutil.rmtree(folder_dir)
-
-    parent = folder_dir.parent
-    while parent != case_dir and parent.exists() and not any(parent.iterdir()):
-        parent.rmdir()
-        parent = parent.parent
+    _remove_empty_parents(folder_dir, case_dir)
 
 
 async def save_upload_file(
@@ -115,14 +105,7 @@ async def save_upload_file(
     Save an uploaded file to the uploads directory.
     Returns a tuple of (relative_path, file_hash).
     """
-    if case_id is None:
-        raise ValidationException("Case ID is required but was not provided")
-
-    if not isinstance(case_id, int) or case_id <= 0:
-        raise ValidationException(
-            f"Invalid case ID: {case_id}. Please ensure you're uploading to a valid case."
-        )
-
+    case_root = _case_dir(case_id)
     if upload_file is None:
         raise ValidationException("No file was provided for upload")
 
@@ -137,10 +120,7 @@ async def save_upload_file(
     security_logger.info(f"File upload validated: {upload_file.filename}")
 
     try:
-        case_dir = UPLOAD_DIR / str(case_id)
-        if folder_path:
-            normalized_path = normalize_folder_path(folder_path)
-            case_dir = case_dir / normalized_path
+        case_dir = case_root / normalize_folder_path(folder_path or "")
         case_dir.mkdir(parents=True, exist_ok=True)
 
         if artifact_id is not None:
@@ -150,7 +130,7 @@ async def save_upload_file(
             if not control_id.isdigit() or int(control_id) <= 0:
                 raise ValidationException("Invalid execution artifact identity")
             artifact_id = f"{int(control_id)}-{UUID(identity)}"
-            case_dir = UPLOAD_DIR / str(case_id) / ".execution-artifacts"
+            case_dir = case_root / ".execution-artifacts"
             case_dir.mkdir(parents=True, exist_ok=True)
             safe_filename = f"{artifact_id}.txt"
         else:
@@ -162,7 +142,7 @@ async def save_upload_file(
         if len(content) > 15 * 1024 * 1024:  # 15 MiB limit
             raise ValidationException("File too large. Maximum size is 15 MiB")
 
-        file_hash = calculate_file_hash(content)
+        file_hash = hashlib.sha256(content).hexdigest()
 
         staging_path = file_path.with_suffix(".staging") if artifact_id else file_path
         with open(staging_path, "wb") as buffer:
@@ -221,19 +201,6 @@ async def save_upload_file(
         ) from e
 
 
-def create_case_directory(case_id: int) -> Path:
-    """
-    Create the directory structure for a new case.
-    Returns the path to the created case directory.
-    """
-    if not isinstance(case_id, int) or case_id <= 0:
-        raise ValidationException(f"Invalid case ID: {case_id}")
-
-    case_dir = UPLOAD_DIR / str(case_id)
-    case_dir.mkdir(parents=True, exist_ok=True)
-    return case_dir
-
-
 async def delete_file(relative_path: str) -> None:
     """Delete a file from the uploads directory."""
     try:
@@ -271,14 +238,7 @@ async def delete_file(relative_path: str) -> None:
                 event="file_delete_complete", file_path=relative_path
             )
             security_logger.info(f"File deleted successfully: {relative_path}")
-        parent_dir = file_path.parent
-        while (
-            parent_dir != base_dir
-            and parent_dir.exists()
-            and not any(parent_dir.iterdir())
-        ):
-            parent_dir.rmdir()
-            parent_dir = parent_dir.parent
+        _remove_empty_parents(file_path, base_dir)
 
     except DomainException:
         raise

@@ -1026,7 +1026,6 @@ dependencies = [
     { name = "pillow" },
     { name = "psycopg2-binary" },
     { name = "pydantic-settings" },
-    { name = "pyexiftool" },
     { name = "pyjwt" },
     { name = "pypdfium2" },
     { name = "python-dotenv" },
@@ -1074,7 +1073,6 @@ requires-dist = [
     { name = "pillow", specifier = ">=12.0,<13" },
     { name = "psycopg2-binary", specifier = "==2.9.12" },
     { name = "pydantic-settings", specifier = "==2.15.0" },
-    { name = "pyexiftool", specifier = "==0.5.6" },
     { name = "pyjwt", specifier = "==2.13.0" },
     { name = "pypdfium2", specifier = "==5.13.0" },
     { name = "python-dotenv", specifier = "==1.2.3" },
@@ -1295,15 +1293,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/68/ca/31c57507b13119d7d3cfa1576dad2911a4861e3be07b579395f4e9d393f9/pydantic_settings-2.15.0.tar.gz", hash = "sha256:694b793e84f766ba76a90ebdefc01d0a9a045dab0382bee70393da93712ad117", size = 261253, upload-time = "2026-08-07T09:24:57.419Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/30/a4/2bffa9f8e804325a09867f0e9d30795c80ea9f8d62560bd1b6ad6220eb2f/pydantic_settings-2.15.0-py3-none-any.whl", hash = "sha256:0ba092c291c94baceb5eff768aa0d56400a457585bc0175925a5a5510303da42", size = 69413, upload-time = "2026-08-07T09:24:55.839Z" },
-]
-
-[[package]]
-name = "pyexiftool"
-version = "0.5.6"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/5e/48/406da6691d15abf3c8d399bce8bc588709a5b54e857fd7c22dad2f90c33c/PyExifTool-0.5.6.tar.gz", hash = "sha256:22a972c1c212d1ad5f61916fded5057333dcc48fb8e42eed12d2ff9665b367ae", size = 56365, upload-time = "2023-10-22T23:18:18.819Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/fc/b9/175e9a1f8f3f94b22f622f0fcac853ae2c43cb4ac6034f849269c6086dac/PyExifTool-0.5.6-py3-none-any.whl", hash = "sha256:ac7d7836d2bf373f20aa558528f6b2222c4c0d896ed28c951a3ff8e6cec05a87", size = 51243, upload-time = "2023-10-22T23:18:16.614Z" },
 ]
 
 [[package]]

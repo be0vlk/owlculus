@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, s
 from fastapi.responses import FileResponse
 from sqlmodel import Session
 
+from app.core import file_storage
 from app.core.database_boundary import DatabaseRoute
 from app.core.dependencies import get_current_user
 from app.core.exceptions import (
@@ -24,8 +25,8 @@ from app.core.exceptions import (
 from app.database import models
 from app.database.connection import get_db
 from app.schemas import evidence_schema as schemas
+from app.services.evidence_metadata import extract_metadata
 from app.services.evidence_service import EvidenceService
-from app.services.exiftool_service import ExifToolService
 
 router = APIRouter(route_class=DatabaseRoute)
 
@@ -247,47 +248,18 @@ async def extract_evidence_metadata(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    evidence_service = EvidenceService(db)
-    exiftool_service = ExifToolService()
-
-    evidence = await evidence_service.get_evidence(
+    evidence = await EvidenceService(db).get_evidence(
         evidence_id=evidence_id, current_user=current_user
     )
-
-    if not evidence:
-        raise ResourceNotFoundException("Evidence not found")
-
     if not evidence.content or evidence.is_folder:
         raise ValidationException(
             "Cannot extract metadata from folders or evidence without files"
         )
-
-    from app.core.file_storage import UPLOAD_DIR
-
-    full_file_path = UPLOAD_DIR / evidence.content
-
-    if not exiftool_service.is_supported_file(str(full_file_path)):
-        return {
-            "success": False,
-            "error": "Unsupported file type for metadata extraction",
-            "supported_file": False,
-            "file_extension": (
-                evidence.content.split(".")[-1]
-                if "." in evidence.content
-                else "unknown"
-            ),
-        }
-
-    metadata_result = await exiftool_service.extract_metadata(str(full_file_path))
-
-    if "error" in metadata_result:
-        return {
-            "success": False,
-            "error": metadata_result["error"],
-            "supported_file": True,
-        }
-
-    return metadata_result
+    try:
+        path = file_storage.evidence_file_path(evidence.case_id, evidence.content)
+    except ValueError as error:
+        raise ValidationException(str(error)) from error
+    return extract_metadata(path)
 
 
 @router.post(

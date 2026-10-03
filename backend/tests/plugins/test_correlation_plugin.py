@@ -1,5 +1,7 @@
 """Correlation behavior through accepted Entities and the PluginRunner boundary."""
 
+import hashlib
+
 import pytest
 
 from app.database.models import Case, Entity
@@ -179,7 +181,6 @@ async def test_saved_report_preserves_explanations_counts_time_and_warning_scope
 ):
     from dataclasses import replace
 
-    from app.core import file_storage
     from app.plugins.plugin_context import ServiceEvidenceSink
     from app.services.evidence_service import EvidenceService
 
@@ -255,7 +256,7 @@ async def test_saved_report_preserves_explanations_counts_time_and_warning_scope
     ):
         assert expected in text
     assert "[broken" not in text
-    assert report.file_hash == file_storage.calculate_file_hash(response.content)
+    assert report.file_hash == hashlib.sha256(response.content).hexdigest()
 
 
 @pytest.mark.asyncio

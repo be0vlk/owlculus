@@ -9,7 +9,7 @@ import re
 import tempfile
 import zipfile
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from types import UnionType
@@ -22,7 +22,7 @@ from sqlmodel import Session, col, select
 from app.core import file_storage
 from app.core.exceptions import ResourceNotFoundException
 from app.core.logging import get_security_logger
-from app.core.utils import get_utc_now
+from app.core.utils import get_utc_now, iso_utc, json_default, optional_iso_utc
 from app.database import models
 from app.executions.results import HuntResultReader
 from app.schemas.entity_schema import ENTITY_TYPE_SCHEMAS, NetworkAssets
@@ -157,14 +157,12 @@ class ExportService:
                     archive, root, case, current_user, exported_at
                 )
                 if case.notes:
-                    _write_zip_bytes(
-                        archive,
+                    archive.writestr(
                         f"{root}notes.html",
                         case.notes.encode("utf-8"),
                     )
                 entities = self._get_entities(persisted_case_id, None, None)
-                _write_zip_bytes(
-                    archive,
+                archive.writestr(
                     f"{root}entities/entities.json",
                     self.write_entity_json(entities),
                 )
@@ -175,8 +173,7 @@ class ExportService:
                         if entity.entity_type == entity_type
                     ]
                     if typed_entities:
-                        _write_zip_bytes(
-                            archive,
+                        archive.writestr(
                             f"{root}entities/{entity_type}.csv",
                             self.write_entity_csv(typed_entities),
                         )
@@ -188,13 +185,11 @@ class ExportService:
                         .order_by(col(models.Task.id))
                     )
                 )
-                _write_zip_bytes(
-                    archive,
+                archive.writestr(
                     f"{root}tasks/tasks.json",
                     self.write_task_json(tasks),
                 )
-                _write_zip_bytes(
-                    archive,
+                archive.writestr(
                     f"{root}tasks/tasks.csv",
                     self.write_task_csv(tasks),
                 )
@@ -251,9 +246,9 @@ class ExportService:
                 }
                 for user, is_lead in assigned_users
             ],
-            "created_at": _iso_utc(case.created_at),
-            "updated_at": _iso_utc(case.updated_at),
-            "exported_at": _iso_utc(exported_at),
+            "created_at": iso_utc(case.created_at),
+            "updated_at": iso_utc(case.updated_at),
+            "exported_at": iso_utc(exported_at),
             "exported_by": current_user.username,
         }
         _write_zip_json(archive, f"{root}case.json", metadata)
@@ -263,7 +258,7 @@ class ExportService:
         return json.dumps(
             self._task_records(tasks),
             ensure_ascii=False,
-            default=_json_default,
+            default=json_default,
         ).encode("utf-8")
 
     def write_task_csv(self, tasks: list[models.Task]) -> bytes:
@@ -318,11 +313,10 @@ class ExportService:
             reason: str | None = None
 
             if evidence.is_folder:
-                _write_zip_bytes(archive, destination_folder, b"")
+                archive.writestr(destination_folder, b"")
             elif evidence.evidence_type == "text":
                 file_name = f"{_safe_archive_component(evidence.title)}.txt"
-                _write_zip_bytes(
-                    archive,
+                archive.writestr(
                     f"{destination_folder}{file_name}",
                     (evidence.content or "").encode("utf-8"),
                 )
@@ -368,8 +362,8 @@ class ExportService:
                 "is_folder": evidence.is_folder,
                 "parent_folder_id": parent_id,
                 "created_by": creator_names.get(evidence.created_by_id, ""),
-                "created_at": _iso_utc(evidence.created_at),
-                "updated_at": _iso_utc(evidence.updated_at),
+                "created_at": iso_utc(evidence.created_at),
+                "updated_at": iso_utc(evidence.updated_at),
                 "exported": exported,
             }
             if reason is not None:
@@ -422,8 +416,8 @@ class ExportService:
                     assignee.username if (assignee := assignees[task.id]) else None
                 ),
                 "assigned_by": usernames.get(task.assigned_by_id),
-                "due_date": _optional_iso_utc(task.due_date),
-                "completed_at": _optional_iso_utc(task.completed_at),
+                "due_date": optional_iso_utc(task.due_date),
+                "completed_at": optional_iso_utc(task.completed_at),
                 "completed_by": (
                     usernames.get(task.completed_by_id)
                     if task.completed_by_id is not None
@@ -431,8 +425,8 @@ class ExportService:
                 ),
                 "template": templates.get(task.template_id),
                 "custom_fields": task.custom_fields,
-                "created_at": _iso_utc(task.created_at),
-                "updated_at": _iso_utc(task.updated_at),
+                "created_at": iso_utc(task.created_at),
+                "updated_at": iso_utc(task.updated_at),
             }
             for task in tasks
         ]
@@ -485,8 +479,7 @@ class ExportService:
                 HuntExecutionExportFormat.PDF,
             ):
                 rendered = render_hunt_execution(snapshot, exported_at, export_format)
-                _write_zip_bytes(
-                    archive,
+                archive.writestr(
                     f"{execution_root}execution.{export_format.value}",
                     rendered.content,
                 )
@@ -608,8 +601,8 @@ class ExportService:
                 "id": str(entity.id),
                 "entity_type": entity.entity_type,
                 "display_name": entity_display_name(entity),
-                "created_at": _iso_utc(entity.created_at),
-                "updated_at": _iso_utc(entity.updated_at),
+                "created_at": iso_utc(entity.created_at),
+                "updated_at": iso_utc(entity.updated_at),
                 "created_by": creator_names.get(entity.created_by_id, ""),
             }
             for column in columns[3:-3]:
@@ -635,8 +628,8 @@ class ExportService:
                 "case_id": entity.case_id,
                 "entity_type": entity.entity_type,
                 "data": entity.data,
-                "created_at": _iso_utc(entity.created_at),
-                "updated_at": _iso_utc(entity.updated_at),
+                "created_at": iso_utc(entity.created_at),
+                "updated_at": iso_utc(entity.updated_at),
                 "created_by_id": entity.created_by_id,
                 "created_by": creator_names.get(entity.created_by_id, ""),
             }
@@ -812,12 +805,6 @@ def _csv_value(value: Any) -> str:
     return str(value)
 
 
-def _iso_utc(value: datetime) -> str:
-    if value.tzinfo is None:
-        value = value.replace(tzinfo=UTC)
-    return value.astimezone(UTC).isoformat()
-
-
 TASK_CSV_COLUMNS = [
     "id",
     "title",
@@ -837,27 +824,10 @@ TASK_CSV_COLUMNS = [
 
 
 def _write_zip_json(archive: zipfile.ZipFile, member_name: str, value: Any) -> None:
-    _write_zip_bytes(
-        archive,
+    archive.writestr(
         member_name,
-        json.dumps(value, ensure_ascii=False, default=_json_default).encode("utf-8"),
+        json.dumps(value, ensure_ascii=False, default=json_default).encode("utf-8"),
     )
-
-
-def _write_zip_bytes(
-    archive: zipfile.ZipFile, member_name: str, content: bytes
-) -> None:
-    archive.writestr(member_name, content, compress_type=zipfile.ZIP_DEFLATED)
-
-
-def _optional_iso_utc(value: datetime | None) -> str | None:
-    return _iso_utc(value) if value is not None else None
-
-
-def _json_default(value: Any) -> str:
-    if isinstance(value, datetime):
-        return _iso_utc(value)
-    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
 
 
 def _safe_archive_path(value: str | None) -> str:

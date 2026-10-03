@@ -14,7 +14,6 @@ beautifulsoup4
 fpdf2
 python-dotenv
 holehe
-pyexiftool
 python-whois
 loguru
 cryptography

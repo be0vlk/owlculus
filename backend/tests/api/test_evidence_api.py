@@ -2,6 +2,7 @@
 Comprehensive tests for evidence API endpoints
 """
 
+import subprocess
 from unittest.mock import patch
 
 import pytest
@@ -917,5 +918,57 @@ def test_upload_file_count_rejected_before_saving(
         assert response.status_code == 413
         assert "No Evidence was saved" in response.json()["detail"]
         assert client.get(f"/api/evidence/case/{test_case.id}").json() == []
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_metadata_reads_the_stored_file_and_rejects_unusable_evidence(
+    session, test_admin, test_case, test_folder, client
+):
+    from app.core import file_storage
+    from app.services import evidence_metadata
+
+    stored = file_storage.UPLOAD_DIR / str(test_case.id) / "photo.jpg"
+    stored.parent.mkdir(parents=True)
+    stored.write_bytes(b"jpeg")
+    (stored.parent / "a.txt").write_text("text")
+    records = {}
+    for name, content in (
+        ("photo", "photo.jpg"),
+        ("gone", "gone.jpg"),
+        ("txt", "a.txt"),
+    ):
+        record = Evidence(
+            case_id=test_case.id,
+            title=name,
+            evidence_type="file",
+            category="Image",
+            content=f"{test_case.id}/{content}",
+            created_by_id=test_admin.id,
+        )
+        session.add(record)
+        session.commit()
+        records[name] = record.id
+    app.dependency_overrides[get_current_user] = override_get_current_user_factory(
+        test_admin
+    )
+    app.dependency_overrides[get_db] = override_get_db_factory(session)
+    try:
+        with patch.object(
+            evidence_metadata.subprocess,
+            "run",
+            return_value=subprocess.CompletedProcess(
+                [], 0, '[{"File:FileType": "JPEG"}]'
+            ),
+        ) as run:
+            response = client.get(f"/api/evidence/{records['photo']}/metadata")
+            assert response.status_code == status.HTTP_200_OK
+            assert response.json()["file_info"]["file_type"] == "JPEG"
+            assert run.call_args.args[0][-1] == str(stored.resolve())
+
+            for evidence_id in (records["gone"], records["txt"], test_folder.id):
+                response = client.get(f"/api/evidence/{evidence_id}/metadata")
+                assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+            assert run.call_count == 1
     finally:
         app.dependency_overrides.clear()

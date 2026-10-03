@@ -13,12 +13,10 @@ from sqlmodel import Session, col, select
 
 from app import schemas
 from app.core.exceptions import (
-    DomainException,
     DuplicateResourceException,
     ResourceNotFoundException,
     ValidationException,
 )
-from app.core.file_storage import create_case_directory
 from app.core.logging import audit_operation
 from app.core.utils import get_utc_now
 from app.database import models
@@ -82,9 +80,6 @@ class CaseService:
             self.db.add(new_case)
             self.db.flush()
 
-        if new_case.id is None:
-            raise DomainException("Case was not assigned an id")
-        create_case_directory(new_case.id)
         return new_case
 
     async def get_cases(
