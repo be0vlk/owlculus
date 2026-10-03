@@ -1,25 +1,19 @@
-"""Hunt executor contracts at the runner, database, and event seams."""
+"""Hunt executor contracts at the runner and database seams."""
 
 from collections.abc import AsyncGenerator
+from contextlib import nullcontext
 from typing import Any, ClassVar
 
 import pytest
 from sqlmodel import Session, select
 
 from app.database.models import Case, Hunt, HuntExecution, HuntStep, User
-from app.hunts.hunt_event import HuntEvent
 from app.hunts.hunt_executor import HuntExecutor
 from app.plugins.base_plugin import BasePlugin, PluginRun, ResultEvent
+from app.plugins.plugin_context import ProductionPluginRunAdapter
 from app.plugins.plugin_registry import PluginRegistry
 from app.plugins.plugin_runner import PluginRunner
-
-
-class EventRecorder:
-    def __init__(self):
-        self.events: list[HuntEvent] = []
-
-    async def broadcast(self, event: HuntEvent) -> None:
-        self.events.append(event)
+from app.services.api_key_vault import ConfigurationApiKeyVault
 
 
 class TrivialPlugin(BasePlugin):
@@ -90,23 +84,25 @@ def stored_execution(session: Session, user: User) -> HuntExecution:
     return execution
 
 
-def executor(
-    session: Session,
-    recorder: EventRecorder,
-    plugin_classes: list[type[BasePlugin]],
-) -> HuntExecutor:
-    runner = PluginRunner(PluginRegistry.from_classes(plugin_classes))
-    return HuntExecutor(session, recorder, plugin_runner=runner)
+def executor(session: Session, plugin_classes: list[type[BasePlugin]]) -> HuntExecutor:
+    return HuntExecutor(
+        session,
+        plugin_runner=PluginRunner(PluginRegistry.from_classes(plugin_classes)),
+        run_adapter=ProductionPluginRunAdapter(
+            lambda: nullcontext(session), ConfigurationApiKeyVault
+        ),
+        before_step=lambda: None,
+        sanitize=lambda value: value,
+    )
 
 
 @pytest.mark.asyncio
-async def test_executor_persists_declared_step_output_and_progress_events(
+async def test_executor_persists_declared_step_output_and_progress(
     session: Session, test_user: User
 ):
-    recorder = EventRecorder()
     execution = stored_execution(session, test_user)
 
-    await executor(session, recorder, [TrivialPlugin]).execute_hunt(
+    await executor(session, [TrivialPlugin]).execute_hunt(
         execution, {"steps": [step("lookup")]}, test_user
     )
 
@@ -120,22 +116,23 @@ async def test_executor_persists_declared_step_output_and_progress_events(
         "plugin": "TrivialPlugin",
         "errors": [],
     }
-    assert recorder.events == [
-        HuntEvent.progress(execution.id, 0.0, "lookup"),
-        HuntEvent.step_complete(execution.id, "lookup", 1.0),
-        HuntEvent.progress(execution.id, 1.0),
-        HuntEvent.complete(execution.id),
-    ]
+    assert execution.status == "completed"
+    assert execution.progress == 1.0
+    assert set(execution.context_data) == {
+        "initial_parameters",
+        "step_outputs",
+        "failed_steps",
+        "skipped_steps",
+    }
 
 
 @pytest.mark.asyncio
 async def test_throwing_plugin_is_a_persisted_failed_step(
     session: Session, test_user: User, throwing_plugin_class
 ):
-    recorder = EventRecorder()
     execution = stored_execution(session, test_user)
 
-    await executor(session, recorder, [throwing_plugin_class]).execute_hunt(
+    await executor(session, [throwing_plugin_class]).execute_hunt(
         execution,
         {"steps": [step("lookup", plugin_name="ThrowingPlugin")]},
         test_user,
@@ -153,24 +150,41 @@ async def test_throwing_plugin_is_a_persisted_failed_step(
         "errors": [{"message": "Plugin execution error: provider exploded"}],
     }
     assert execution.status == "partial"
-    assert HuntEvent.step_failed(execution.id, "lookup", 0.0) in recorder.events
+    assert execution.context_data["failed_steps"] == ["lookup"]
 
 
 @pytest.mark.asyncio
 async def test_optional_plugin_failure_is_terminal_and_hunt_completes(
     session: Session, test_user: User, throwing_plugin_class
 ):
-    recorder = EventRecorder()
     execution = stored_execution(session, test_user)
 
-    await executor(session, recorder, [throwing_plugin_class]).execute_hunt(
+    await executor(session, [throwing_plugin_class, TrivialPlugin]).execute_hunt(
         execution,
-        {"steps": [step("lookup", plugin_name="ThrowingPlugin", optional=True)]},
+        {
+            "steps": [
+                step("lookup", plugin_name="ThrowingPlugin", optional=True),
+                step("dependent", depends_on=["lookup"]),
+                step("independent"),
+            ]
+        },
         test_user,
     )
 
     assert execution.status == "completed"
-    assert recorder.events[-1] == HuntEvent.complete(execution.id)
+    assert execution.progress == 1.0
+    statuses = {
+        record.step_id: record.status
+        for record in session.exec(
+            select(HuntStep).where(HuntStep.execution_id == execution.id)
+        )
+    }
+    assert statuses == {
+        "lookup": "failed",
+        "dependent": "skipped",
+        "independent": "completed",
+    }
+    assert execution.context_data["skipped_steps"] == ["dependent"]
 
 
 @pytest.mark.asyncio
@@ -178,10 +192,9 @@ async def test_executor_resolves_a_prior_step_result_for_the_next_plugin(
     session: Session, test_user: User
 ):
     SecondPlugin.calls = []
-    recorder = EventRecorder()
     execution = stored_execution(session, test_user)
 
-    await executor(session, recorder, [FirstPlugin, SecondPlugin]).execute_hunt(
+    await executor(session, [FirstPlugin, SecondPlugin]).execute_hunt(
         execution,
         {
             "steps": [

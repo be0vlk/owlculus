@@ -4,7 +4,8 @@ import pytest
 from pydantic import ValidationError
 
 from app.hunts.base_hunt import BaseHunt, HuntStepDefinition
-from app.hunts.definitions import DomainHunt, PersonHunt
+from app.hunts.definitions.domain_hunt import DomainHunt
+from app.hunts.definitions.person_hunt import PersonHunt
 from app.hunts.hunt_definition_check import (
     HuntDefinitionCheck,
     HuntDefinitionError,

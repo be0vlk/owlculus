@@ -3,10 +3,9 @@ Hunt executor for orchestrating hunt workflows
 """
 
 from collections.abc import Callable
-from contextlib import nullcontext
 from copy import deepcopy
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, TypedDict
 
 from sqlmodel import Session, select
 
@@ -15,14 +14,20 @@ from app.database.db_utils import transaction
 from app.database.models import HuntExecution, HuntStep, HuntStepResult, User
 from app.executions.ownership import OwnershipLost
 from app.plugins.plugin_context import ProductionPluginRunAdapter
-from app.plugins.plugin_registry import get_shipped_plugin_registry
 from app.plugins.plugin_runner import PluginRunner
-from app.services.api_key_vault import ConfigurationApiKeyVault
+from app.plugins.plugin_types import Payload
 
 from .base_hunt import HuntStepDefinition
 from .hunt_context import HuntContext
-from .hunt_event import HuntEvent, HuntNotifier
-from .step_output import StepOutput
+
+
+class StepOutput(TypedDict):
+    """Persisted output of one hunt step, read by later steps' parameter mapping."""
+
+    results: list[Payload]
+    result_count: int
+    plugin: str
+    errors: list[Payload]
 
 
 @dataclass
@@ -41,12 +46,6 @@ class HuntStepState:
     def is_terminal(self, step_id: str) -> bool:
         return step_id in self.completed or step_id in self.failed
 
-    def dependencies_completed(self, step: HuntStepDefinition) -> bool:
-        return all(dependency in self.completed for dependency in step.depends_on)
-
-    def has_failed_required_dependency(self, step: HuntStepDefinition) -> bool:
-        return any(dependency in self.failed_required for dependency in step.depends_on)
-
 
 class HuntExecutor:
     """Executes hunt workflows with state management"""
@@ -54,23 +53,17 @@ class HuntExecutor:
     def __init__(
         self,
         db: Session,
-        notifier: HuntNotifier,
         *,
-        plugin_runner: PluginRunner | None = None,
-        run_adapter: ProductionPluginRunAdapter | None = None,
-        before_step: Callable[[], None] | None = None,
-        sanitize: Callable[[Any], Any] = lambda value: value,
+        plugin_runner: PluginRunner,
+        run_adapter: ProductionPluginRunAdapter,
+        before_step: Callable[[], None],
+        sanitize: Callable[[Any], Any],
     ):
         self.before_step = before_step
         self.sanitize = sanitize
         self.db = db
-        self.notifier = notifier
-        self.plugin_runner = plugin_runner or PluginRunner(
-            get_shipped_plugin_registry()
-        )
-        self.run_adapter = run_adapter or ProductionPluginRunAdapter(
-            lambda: nullcontext(self.db), ConfigurationApiKeyVault
-        )
+        self.plugin_runner = plugin_runner
+        self.run_adapter = run_adapter
 
     async def execute_hunt(
         self, execution: HuntExecution, hunt_definition: dict, current_user: User
@@ -135,12 +128,12 @@ class HuntExecutor:
             # Execute steps with dependency management
 
             while len(step_state.completed) < len(steps):
-                # Find executable steps (dependencies satisfied)
-                executable = self._find_executable_steps(
-                    steps,
-                    step_state,
-                    context,
-                )
+                executable = [
+                    step
+                    for step in steps
+                    if not step_state.is_terminal(step.step_id)
+                    and all(dep in step_state.completed for dep in step.depends_on)
+                ]
 
                 if not executable:
                     # No more steps can execute
@@ -150,37 +143,16 @@ class HuntExecutor:
                 for step_def in executable:
                     step_record = step_records[step_def.step_id]
 
-                    if self.before_step:
-                        self.before_step()
+                    self.before_step()
                     try:
                         await self._execute_step(
-                            step_def,
-                            step_record,
-                            context,
-                            execution,
-                            current_user,
-                            step_state.completed,
-                            len(steps),
+                            step_def, step_record, context, execution, current_user
                         )
                         if step_record.status == "failed":
                             step_state.record_failure(step_def)
                             context.mark_step_failed(step_def.step_id)
-                            progress = len(step_state.completed) / len(steps)
-                            await self.notifier.broadcast(
-                                HuntEvent.step_failed(
-                                    execution_id, step_def.step_id, progress
-                                )
-                            )
                             continue
                         step_state.completed.add(step_def.step_id)
-
-                        # Send step completion notification
-                        progress = len(step_state.completed) / len(steps)
-                        await self.notifier.broadcast(
-                            HuntEvent.step_complete(
-                                execution_id, step_def.step_id, progress
-                            )
-                        )
                     # Plugin adapters can fail with provider-specific exceptions.
                     except OwnershipLost:
                         raise
@@ -193,23 +165,10 @@ class HuntExecutor:
                         with transaction(self.db):
                             self.db.add(step_record)
 
-                        # Send step failure notification
-                        progress = len(step_state.completed) / len(steps)
-                        await self.notifier.broadcast(
-                            HuntEvent.step_failed(
-                                execution_id, step_def.step_id, progress
-                            )
-                        )
-
                 # Update progress
                 execution.progress = len(step_state.completed) / len(steps)
                 with transaction(self.db):
                     self.db.add(execution)
-
-                # Send WebSocket notification
-                await self.notifier.broadcast(
-                    HuntEvent.progress(execution_id, execution.progress)
-                )
 
             # Mark skipped steps
             for step_def in steps:
@@ -229,12 +188,9 @@ class HuntExecutor:
             with transaction(self.db):
                 self.db.add(execution)
 
-            # Send completion notification
-            await self.notifier.broadcast(HuntEvent.complete(execution_id))
-
         except OwnershipLost:
             raise
-        except Exception as e:
+        except Exception:
             # Handle catastrophic failure
             execution.status = "failed"
             execution.error = {
@@ -245,36 +201,7 @@ class HuntExecutor:
             execution.completed_at = get_utc_now()
             with transaction(self.db):
                 self.db.add(execution)
-
-            # Send error notification
-            await self.notifier.broadcast(
-                HuntEvent.error(execution_id, self.sanitize(str(e)))
-            )
             raise
-
-    def _find_executable_steps(
-        self,
-        steps: list[HuntStepDefinition],
-        step_state: HuntStepState,
-        context: HuntContext,
-    ) -> list[HuntStepDefinition]:
-        """Find steps that can be executed based on dependencies"""
-        executable = []
-
-        for step in steps:
-            if step_state.is_terminal(step.step_id):
-                continue
-
-            deps_satisfied = step_state.dependencies_completed(step)
-            deps_failed = step_state.has_failed_required_dependency(step)
-
-            if deps_satisfied and not deps_failed:
-                executable.append(step)
-            elif deps_failed:
-                # Skip this step since a required dependency failed
-                context.mark_step_skipped(step.step_id)
-
-        return executable
 
     async def _execute_step(
         self,
@@ -283,8 +210,6 @@ class HuntExecutor:
         context: HuntContext,
         execution: HuntExecution,
         current_user: User,
-        completed_steps: set,
-        total_steps: int,
     ):
         """Execute a single hunt step"""
         # Update step status
@@ -299,15 +224,6 @@ class HuntExecutor:
         step_record.parameters = parameters
         with transaction(self.db):
             self.db.add(step_record)
-
-        # Send notification that step is starting
-        # Include step_id so frontend knows which step is running
-        progress = len(completed_steps) / total_steps
-        if execution.id is None:
-            raise ValueError("Hunt execution must be stored before a step can run")
-        await self.notifier.broadcast(
-            HuntEvent.progress(execution.id, progress, step_def.step_id)
-        )
 
         # Bounded per-step materialization preserves StepOutput and parameter mapping.
         results = []

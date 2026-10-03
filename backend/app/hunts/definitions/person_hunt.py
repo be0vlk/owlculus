@@ -36,28 +36,4 @@ class PersonHunt(BaseHunt):
                 description="Find online accounts associated with the email address",
                 parameter_mapping={"email": parse_input_expression("initial.email")},
             ),
-            # Additional steps would be added here as plugins become available
-            # For example:
-            # HuntStepDefinition(
-            #     step_id="breach_check",
-            #     plugin_name="HIBPPlugin",
-            #     display_name="Check data breaches",
-            #     description="Search for email in known data breaches",
-            #     parameter_mapping={
-            #         "email": "initial.email"
-            #     },
-            #     optional=True
-            # ),
-            # HuntStepDefinition(
-            #     step_id="social_search",
-            #     plugin_name="SocialSearchPlugin",
-            #     display_name="Social media search",
-            #     description="Search for profiles on social platforms",
-            #     parameter_mapping={
-            #         "query": "initial.full_name",
-            #         "email_hint": "initial.email"
-            #     },
-            #     depends_on=["email_check"],
-            #     optional=True
-            # )
         ]

@@ -58,22 +58,6 @@ class BaseHunt(ABC):
     def get_steps(self) -> list[HuntStepDefinition]:
         """Return the ordered list of steps for this hunt"""
 
-    def validate_parameters(self, parameters: dict[str, Any]) -> dict[str, Any]:
-        """Validate and clean initial parameters"""
-        validated = {}
-
-        for param_name, param_def in self.initial_parameters.items():
-            if param_def.get("required", False) and param_name not in parameters:
-                raise ValueError(f"Required parameter '{param_name}' is missing")
-
-            if param_name in parameters:
-                # TODO: Add type validation based on param_def["type"]
-                validated[param_name] = parameters[param_name]
-            elif "default" in param_def:
-                validated[param_name] = param_def["default"]
-
-        return validated
-
     def to_definition(self) -> dict:
         """Convert hunt to JSON definition for storage"""
         return {
@@ -84,16 +68,4 @@ class BaseHunt(ABC):
             "version": self.version,
             "initial_parameters": self.initial_parameters,
             "steps": [step.model_dump() for step in self.get_steps()],
-        }
-
-    def get_metadata(self) -> dict:
-        """Get hunt metadata for listing"""
-        return {
-            "name": self.name,
-            "display_name": self.display_name,
-            "description": self.description,
-            "category": self.category,
-            "version": self.version,
-            "initial_parameters": self.initial_parameters,
-            "step_count": len(self.get_steps()),
         }

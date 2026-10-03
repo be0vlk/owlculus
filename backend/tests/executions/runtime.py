@@ -151,14 +151,16 @@ def install():
                 wait_at_boundary()
             return result
 
-        from app.executions.hunt_worker import DurableHuntNotifier
         from app.executions.worker import WorkerEvidenceSink
+        from app.hunts.hunt_executor import HuntExecutor
 
-        async def checkpoint(self, event):
-            if boundary == "hunt-boundary" and event.event_type in {
-                "step_complete",
-                "step_failed",
-            }:
+        original_step = HuntExecutor._execute_step
+
+        async def step_boundary(self, *args, **kwargs):
+            # A step's terminal record is committed once it returns; plugin
+            # exceptions already arrive as error results, not raises.
+            await original_step(self, *args, **kwargs)
+            if boundary == "hunt-boundary":
                 root = Path(os.environ["EXECUTION_TEST_DIR"])
                 (root / "boundary-reached").write_text(str(os.getpid()))
                 while not (root / "release-boundary").exists():
@@ -174,7 +176,7 @@ def install():
                 while not (root / "release-boundary").exists():
                     await asyncio.sleep(0.05)
 
-        DurableHuntNotifier.broadcast = checkpoint
+        HuntExecutor._execute_step = step_boundary
         WorkerEvidenceSink.write = evidence_boundary
 
         def stop_at_boundary(process):

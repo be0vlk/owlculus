@@ -157,12 +157,12 @@ def test_hunt_execution_pdf_is_a_readable_standalone_report(
         "Remote source timed out",
         "Partial retained results",
         "München Москва",
-        "Profile",
-        "People",
         "Page 1",
     ):
         assert expected in text
     assert "Full output is available in the JSON export" not in text
+    # Legacy context evidence references are no longer rendered.
+    assert "Evidence References" not in text
 
 
 def test_hunt_execution_pdf_truncates_oversized_step_output(

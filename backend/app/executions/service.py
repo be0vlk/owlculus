@@ -54,9 +54,9 @@ def normalize_parameters(definitions: dict, params: dict) -> dict:
         "list": (list,),
     }
     for key, definition in definitions.items():
-        if key not in normalized and "default" in definition:
-            normalized[key] = definition["default"]
         value = normalized.get(key)
+        if (value is None or value == "") and "default" in definition:
+            value = normalized[key] = definition["default"]
         if value is None or value == "":
             if definition.get("required"):
                 raise HTTPException(422, f"{key} is required")

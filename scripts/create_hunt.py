@@ -293,18 +293,6 @@ class {config['class_name']}Hunt(BaseHunt):
             #     optional=True,  # Hunt continues even if this step fails
             # ),
         ]
-
-    # Optional: Override parameter validation for custom logic
-    # def validate_parameters(self, parameters: Dict[str, Any]) -> Dict[str, Any]:
-    #     """Custom parameter validation"""
-    #     validated = super().validate_parameters(parameters)
-    #     
-    #     # Add custom validation logic here
-    #     # Example: ensure domain is properly formatted
-    #     if "domain" in validated:
-    #         validated["domain"] = validated["domain"].lower().strip()
-    #     
-    #     return validated
 '''
 
     return template
@@ -471,17 +459,6 @@ class Test{config['class_name']}Hunt:
             assert step.display_name
             assert step.description
 
-    def test_parameter_validation(self, hunt):
-        """Test parameter validation"""
-        # Test with valid parameters
-        valid_params = {{"target": "example.com"}}
-        validated = hunt.validate_parameters(valid_params)
-        assert validated["target"] == "example.com"
-        
-        # Test missing required parameter
-        with pytest.raises(ValueError, match="Required parameter 'target' is missing"):
-            hunt.validate_parameters({{}})
-
     def test_step_dependencies(self, hunt):
         """Test step dependency graph is valid"""
         steps = hunt.get_steps()
@@ -491,18 +468,6 @@ class Test{config['class_name']}Hunt:
         for step in steps:
             for dep in step.depends_on:
                 assert dep in step_ids, f"Step '{{step.step_id}}' depends on non-existent step '{{dep}}'"
-
-    def test_hunt_metadata(self, hunt):
-        """Test hunt metadata generation"""
-        metadata = hunt.get_metadata()
-        
-        assert metadata["name"] == hunt.name
-        assert metadata["display_name"] == hunt.display_name
-        assert metadata["description"] == hunt.description
-        assert metadata["category"] == hunt.category
-        assert metadata["version"] == hunt.version
-        assert metadata["step_count"] == len(hunt.get_steps())
-        assert metadata["initial_parameters"] == hunt.initial_parameters
 
     def test_hunt_definition_export(self, hunt):
         """Test hunt can be exported as definition"""
@@ -520,15 +485,6 @@ class Test{config['class_name']}Hunt:
             original_step = hunt.get_steps()[i]
             assert step_dict["step_id"] == original_step.step_id
             assert step_dict["plugin_name"] == original_step.plugin_name
-
-    # TODO: Add more specific tests for your hunt's logic
-    # Example:
-    # def test_custom_parameter_validation(self, hunt):
-    #     """Test custom parameter validation logic"""
-    #     # Test domain normalization
-    #     params = {{"domain": "EXAMPLE.COM  "}}
-    #     validated = hunt.validate_parameters(params)
-    #     assert validated["domain"] == "example.com"
 '''
 
     return template

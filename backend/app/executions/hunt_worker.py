@@ -13,18 +13,6 @@ from app.hunts.hunt_executor import HuntExecutor
 from app.plugins.plugin_registry import PluginRegistry
 
 
-class DurableHuntNotifier:
-    """Fenced commits journal revisions for the supervised Redis publisher.
-
-    HuntEvent is a presentation hint; publishing it directly would expose
-    provisional completion before worker cleanup has committed terminal state.
-    """
-
-    async def broadcast(self, event):
-        # Publication intent is already durable in the fenced commit below.
-        return None
-
-
 async def execute(
     engine: Engine, registry: PluginRegistry, execution_id: int, *, ownership=None
 ) -> None:
@@ -82,7 +70,6 @@ async def execute(
             db.commit()
             executor = HuntExecutor(
                 db,
-                DurableHuntNotifier(),
                 plugin_runner=WorkerPluginRunner(registry, vault),
                 run_adapter=worker_adapter(session_factory, vault, ownership),
                 before_step=before_step,

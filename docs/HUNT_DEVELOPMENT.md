@@ -154,7 +154,7 @@ def _build_parameters(self, db_session: Optional[Session] = None) -> dict:
 1. **Discovery**: HuntService loads all hunt classes from definitions directory
 2. **Registration**: Hunts are synced to database with their JSON definitions
 3. **Execution Request**: User selects hunt and provides initial parameters
-4. **Validation**: Hunt validates parameters using `validate_parameters()`
+4. **Validation**: Submitted parameters are checked against `initial_parameters` (required, type, options) and defaults fill absent or empty values
 5. **Execution**: HuntExecutor manages the workflow:
    - Creates HuntExecution and HuntStep records
    - Resolves step dependencies
@@ -263,12 +263,6 @@ Plugins used in hunts must:
    # tests/hunts/test_your_hunt.py
    from app.hunts.definitions.your_hunt import YourHunt
    
-   def test_hunt_parameters():
-       hunt = YourHunt()
-       params = {"target": "example.com"}
-       validated = hunt.validate_parameters(params)
-       assert validated["target"] == "example.com"
-   
    def test_hunt_steps():
        hunt = YourHunt()
        steps = hunt.get_steps()
@@ -281,7 +275,7 @@ Plugins used in hunts must:
 1. **Step Dependencies**: Only add dependencies when output from one step is needed by another
 2. **Optional Steps**: Mark steps as optional if their failure shouldn't stop the investigation
 3. **Timeouts**: Set realistic timeouts based on plugin behavior
-4. **Parameter Validation**: Implement thorough validation in `validate_parameters()`
+4. **Parameter Validation**: Declare `type`, `required`, `default` and `options` in `initial_parameters`
 5. **Error Messages**: Provide clear descriptions to help users understand failures
 6. **Evidence Storage**: Use `save_to_case=True` for steps that produce valuable evidence
 
@@ -289,7 +283,7 @@ Plugins used in hunts must:
 
 The frontend automatically:
 - Generates forms for initial parameters based on type definitions
-- Shows real-time progress via WebSocket connections
+- Shows real-time progress via the execution stream
 - Displays step results and errors
 - Allows viewing execution history
 - Provides access to saved evidence

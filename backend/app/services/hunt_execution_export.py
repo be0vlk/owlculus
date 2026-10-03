@@ -173,14 +173,6 @@ def _render_pdf(snapshot: HuntExecutionSnapshot, exported_at: datetime) -> bytes
     for index, step in enumerate(snapshot.steps, start=1):
         _render_step(pdf, step, index)
 
-    evidence_references = _evidence_references(snapshot.context_data)
-    if evidence_references:
-        _pdf_heading(pdf, "Evidence References")
-        pdf.set_font("DejaVu", size=10)
-        for title, folder_path in evidence_references:
-            suffix = f" - {folder_path}" if folder_path else ""
-            _pdf_text(pdf, f"• {title}{suffix}")
-
     return bytes(pdf.output())
 
 
@@ -326,23 +318,3 @@ def _truncate_utf8(value: str, max_bytes: int) -> tuple[str, bool]:
     if len(encoded) <= max_bytes:
         return value, False
     return encoded[:max_bytes].decode("utf-8", errors="ignore"), True
-
-
-def _evidence_references(context_data: Any) -> list[tuple[str, str]]:
-    if not isinstance(context_data, dict):
-        return []
-    references = context_data.get("evidence_refs")
-    if not isinstance(references, list):
-        return []
-    results: list[tuple[str, str]] = []
-    for reference in references:
-        if isinstance(reference, dict):
-            results.append(
-                (
-                    str(reference.get("title") or reference.get("id") or "Evidence"),
-                    str(reference.get("folder_path") or ""),
-                )
-            )
-        else:
-            results.append((str(reference), ""))
-    return results

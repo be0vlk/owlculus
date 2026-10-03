@@ -3,15 +3,14 @@ Tests for HuntService
 """
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock
 
 import pytest
+from fastapi import HTTPException
 from sqlmodel import Session, select
 
 from app.core.exceptions import (
     AuthorizationException,
     ResourceNotFoundException,
-    ValidationException,
 )
 from app.database.models import Case, Client, Hunt, HuntExecution, HuntStep, User
 from app.services.hunt_service import HuntService
@@ -360,3 +359,63 @@ class TestHuntService:
                 initial_parameters={},
                 current_user=test_analyst,
             )
+
+
+@pytest.fixture(name="defaulted_hunt")
+def defaulted_hunt_fixture(session: Session):
+    hunt = Hunt(
+        name="defaulted_hunt",
+        display_name="Defaulted Hunt",
+        description="Hunt with required and defaulted inputs",
+        category="test",
+        definition_json={
+            "steps": [],
+            "initial_parameters": {
+                "target": {"type": "string", "required": True},
+                "mode": {"type": "string", "default": "fast"},
+            },
+        },
+        is_active=True,
+    )
+    session.add(hunt)
+    session.commit()
+    session.refresh(hunt)
+    return hunt
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("sent", [{}, {"mode": ""}, {"mode": None}])
+async def test_create_execution_applies_defaults_for_absent_or_empty_inputs(
+    hunt_service: HuntService,
+    defaulted_hunt: Hunt,
+    test_case: Case,
+    test_user: User,
+    sent: dict,
+):
+    execution = await hunt_service.create_execution(
+        hunt_id=defaulted_hunt.id,
+        case_id=test_case.id,
+        initial_parameters={"target": "example.com", **sent},
+        current_user=test_user,
+    )
+
+    assert execution.initial_parameters == {"target": "example.com", "mode": "fast"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("target", [None, ""])
+async def test_create_execution_rejects_missing_required_input(
+    hunt_service: HuntService,
+    defaulted_hunt: Hunt,
+    test_case: Case,
+    test_user: User,
+    target: str | None,
+):
+    params = {} if target is None else {"target": target}
+    with pytest.raises(HTTPException, match="target is required"):
+        await hunt_service.create_execution(
+            hunt_id=defaulted_hunt.id,
+            case_id=test_case.id,
+            initial_parameters=params,
+            current_user=test_user,
+        )
