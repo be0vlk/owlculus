@@ -72,15 +72,10 @@ def engine_fixture(tmp_path):
 
 @pytest.fixture(name="session")
 def session_fixture(engine):
-    connection = engine.connect()
-    transaction = connection.begin()
-    session = Session(bind=connection)
-
-    yield session
-
-    session.close()
-    transaction.rollback()
-    connection.close()
+    # Each test owns a fresh database file, so commits are real; an outer
+    # rollback-only transaction would let any request rollback erase fixtures.
+    with Session(engine) as session:
+        yield session
 
 
 @pytest.fixture(name="client")
