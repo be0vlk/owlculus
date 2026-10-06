@@ -137,10 +137,8 @@ def _case_access_calls(service: type, method_name: str) -> list[str]:
     [
         ("create_evidence", ["writable", "evidence_parent"]),
         ("get_case_evidence", ["readable"]),
-        ("get_evidence", ["readable"]),
         ("update_evidence", ["writable", "evidence_parent"]),
         ("delete_evidence", ["writable"]),
-        ("download_evidence", ["readable"]),
         ("create_folder", ["writable", "evidence_parent"]),
         ("update_folder", ["writable", "evidence_parent"]),
         ("delete_folder", ["writable"]),
@@ -151,6 +149,41 @@ def test_evidence_service_declares_case_access_policy(
     method_name: str, policies: list[str]
 ) -> None:
     assert _case_access_calls(EvidenceService, method_name) == policies
+
+
+def _self_calls(service: type, method_name: str) -> list[str]:
+    tree = ast.parse(dedent(inspect.getsource(getattr(service, method_name))))
+    return [
+        node.func.attr
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "self"
+    ]
+
+
+def test_evidence_reads_delegate_to_report_aware_policy() -> None:
+    """Single-evidence reads also authorize every Case a report represents."""
+    assert _case_access_calls(EvidenceService, "require_read") == [
+        "readable",
+        "is_admin",
+        "readable_case_ids",
+    ]
+    assert _case_access_calls(EvidenceService, "get_evidence") == []
+    assert "require_read" in _self_calls(EvidenceService, "get_evidence")
+    assert _case_access_calls(EvidenceService, "download_evidence") == []
+    assert "get_evidence" in _self_calls(EvidenceService, "download_evidence")
+
+
+def test_hunt_cancellation_delegates_to_locked_writable_policy() -> None:
+    """Cancellation authorizes inside request_cancel's row-locked transaction."""
+    from app.executions import cancellation
+
+    assert "request_cancel(" in inspect.getsource(HuntService.cancel_execution)
+    source = inspect.getsource(cancellation.request_cancel)
+    assert "access.require_non_analyst(user)" in source
+    assert "access.writable(user, execution.case_id)" in source
 
 
 @pytest.mark.parametrize(
@@ -399,7 +432,6 @@ SERVICE_ACCESS_POLICIES = [
     (HuntService, "create_execution", "writable"),
     (HuntService, "get_execution", "readable"),
     (HuntService, "list_case_executions", "readable"),
-    (HuntService, "cancel_execution", "writable"),
     (HuntService, "get_execution_steps", "readable"),
 ]
 
@@ -443,7 +475,6 @@ def test_service_operation_uses_one_declared_case_access_policy(
     )
     parent_lookup_methods = {
         (HuntService, "get_execution"),
-        (HuntService, "cancel_execution"),
         (HuntService, "get_execution_steps"),
         (ExportService, "export_hunt_execution"),
     }

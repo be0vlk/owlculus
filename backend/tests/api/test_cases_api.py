@@ -798,22 +798,20 @@ def test_entity_validation_errors(
 def test_duplicate_entity_creation(
     override_dependencies, test_case: Case, client: TestClient
 ):
-    """Test creating duplicate entities"""
-    # Create first person
-    payload = {
+    """Same-name persons are advisory only; literal identities block."""
+    url = f"{settings.API_V1_STR}/cases/{test_case.id}/entities"
+    person = {
         "entity_type": "person",
         "data": {"first_name": "John", "last_name": "Doe"},
     }
-    response = client.post(
-        f"{settings.API_V1_STR}/cases/{test_case.id}/entities", json=payload
-    )
-    assert response.status_code == 201
+    first = client.post(url, json=person)
+    second = client.post(url, json=person)
+    assert first.status_code == second.status_code == 201
+    assert first.json()["id"] != second.json()["id"]
 
-    # Try to create duplicate
-    response = client.post(
-        f"{settings.API_V1_STR}/cases/{test_case.id}/entities", json=payload
-    )
-    assert response.status_code == 400  # Should fail with duplicate error
+    domain = {"entity_type": "domain", "data": {"domain": "example.com"}}
+    assert client.post(url, json=domain).status_code == 201
+    assert client.post(url, json=domain).status_code == 400
 
 
 def test_sql_injection_attempts(override_dependencies, client: TestClient):
