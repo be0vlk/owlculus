@@ -158,7 +158,7 @@ def test_evidence_service_declares_case_access_policy(
     [
         ("create_custom_template", ["require_admin"]),
         ("create_task", ["lead", "assignee"]),
-        ("get_tasks", ["readable", "is_admin"]),
+        ("get_tasks", ["readable", "is_admin", "readable_case_ids"]),
         ("get_task", ["readable"]),
         ("update_task", ["assignee", "writable", "lead"]),
         ("delete_task", ["require_admin"]),
@@ -391,8 +391,7 @@ SERVICE_ACCESS_POLICIES = [
     (EntityService, "create_entity", "writable"),
     (EntityService, "update_entity", "writable"),
     (EntityService, "delete_entity", "writable"),
-    (EntityService, "find_entity_by_ip_address", "readable"),
-    (EntityService, "find_entity_by_domain", "readable"),
+    (EntityService, "find_canonical_entity", "readable"),
     (EntityService, "enrich_entity_description", "writable"),
     (ExportService, "export_entities", "readable"),
     (ExportService, "export_case_bundle", "readable"),

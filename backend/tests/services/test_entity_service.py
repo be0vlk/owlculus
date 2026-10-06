@@ -245,7 +245,8 @@ class TestEntityService:
 
         # Try to create duplicate (case-insensitive)
         duplicate_data = EntityCreate(
-            entity_type="company", data={"name": "duplicate corp"}  # lowercase
+            entity_type="company",
+            data={"name": "duplicate corp"},  # lowercase
         )
         with pytest.raises(DuplicateResourceException) as exc_info:
             await self.service.create_entity(
@@ -453,8 +454,8 @@ class TestEntityService:
         )
 
         # Find the entity
-        found_entity = await self.service.find_entity_by_ip_address(
-            test_case_with_users.id, "10.0.0.1", test_user
+        found_entity = await self.service.find_canonical_entity(
+            test_case_with_users.id, "ip_address", "10.0.0.1", test_user
         )
 
         assert found_entity is not None
@@ -465,16 +466,16 @@ class TestEntityService:
         self, test_case_with_users, test_user
     ):
         """Test finding non-existent IP address entity"""
-        found_entity = await self.service.find_entity_by_ip_address(
-            test_case_with_users.id, "192.168.99.99", test_user
+        found_entity = await self.service.find_canonical_entity(
+            test_case_with_users.id, "ip_address", "192.168.99.99", test_user
         )
         assert found_entity is None
 
     async def test_find_entity_by_ip_address_case_not_found(self, test_user):
         """Test finding IP entity in non-existent case"""
         with pytest.raises(ResourceNotFoundException) as exc_info:
-            await self.service.find_entity_by_ip_address(
-                99999, "192.168.1.1", test_user
+            await self.service.find_canonical_entity(
+                99999, "ip_address", "192.168.1.1", test_user
             )
         assert "Case not found" in str(exc_info.value)
 
@@ -490,8 +491,8 @@ class TestEntityService:
         )
 
         # Find the entity (case-insensitive)
-        found_entity = await self.service.find_entity_by_domain(
-            test_case_with_users.id, "testdomain.com", test_user
+        found_entity = await self.service.find_canonical_entity(
+            test_case_with_users.id, "domain", "testdomain.com", test_user
         )
 
         assert found_entity is not None
@@ -502,15 +503,17 @@ class TestEntityService:
         self, test_case_with_users, test_user
     ):
         """Test finding non-existent domain entity"""
-        found_entity = await self.service.find_entity_by_domain(
-            test_case_with_users.id, "nonexistent.com", test_user
+        found_entity = await self.service.find_canonical_entity(
+            test_case_with_users.id, "domain", "nonexistent.com", test_user
         )
         assert found_entity is None
 
     async def test_find_entity_by_domain_case_not_found(self, test_user):
         """Test finding domain entity in non-existent case"""
         with pytest.raises(ResourceNotFoundException) as exc_info:
-            await self.service.find_entity_by_domain(99999, "example.com", test_user)
+            await self.service.find_canonical_entity(
+                99999, "domain", "example.com", test_user
+            )
         assert "Case not found" in str(exc_info.value)
 
     # =========================

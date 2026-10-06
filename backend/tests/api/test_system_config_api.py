@@ -30,6 +30,11 @@ def test_admin_can_read_and_update_configuration(client, test_admin):
     assert response.status_code == 200
     assert response.json()["case_number_prefix"] == "OWL"
 
+    response = client.put(
+        "/api/admin/configuration", json={"case_number_template": "invalid"}
+    )
+    assert response.status_code == 422
+
 
 def test_configuration_admin_routes_reject_non_admin(client, test_user):
     authenticate_as(test_user)

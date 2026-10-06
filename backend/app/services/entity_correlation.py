@@ -91,14 +91,6 @@ class EntityCorrelation:
         self.case_access = CaseAccess(db)
         self.skipped_references: list[SkippedReference] = []
 
-    def correlate(self, case: Case, user: User) -> list[CorrelationMatch]:
-        """Compatibility query for callers that need a materialized result."""
-        return [
-            item
-            for item in self.iter_correlations(case, user)
-            if isinstance(item, CorrelationMatch)
-        ]
-
     def iter_correlations(
         self, case: Case, user: User
     ) -> Iterator[CorrelationMatch | ScanProgress]:

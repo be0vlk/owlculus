@@ -5,7 +5,19 @@ from sqlmodel import Session
 
 from app.core.exceptions import AuthorizationException
 from app.database.models import Case, CaseUserLink, Entity, User
-from app.services.entity_correlation import CorrelationKind, EntityCorrelation
+from app.services.entity_correlation import (
+    CorrelationKind,
+    CorrelationMatch,
+    EntityCorrelation,
+)
+
+
+def _matches(session: Session, case: Case, user: User) -> list[CorrelationMatch]:
+    return [
+        item
+        for item in EntityCorrelation(session).iter_correlations(case, user)
+        if isinstance(item, CorrelationMatch)
+    ]
 
 
 def _case(session: Session, *, number: str, title: str, user: User) -> Case:
@@ -59,7 +71,7 @@ def test_correlate_returns_one_typed_name_match_for_two_seeded_cases(
     )
     session.commit()
 
-    matches = EntityCorrelation(session).correlate(source_case, test_user)
+    matches = _matches(session, source_case, test_user)
 
     assert len(matches) == 1
     match = matches[0]
@@ -101,9 +113,9 @@ def test_correlate_uses_case_access_for_source_and_other_cases(
     session.refresh(source_case)
     session.refresh(test_user)
 
-    assert EntityCorrelation(session).correlate(source_case, test_user) == []
+    assert _matches(session, source_case, test_user) == []
     with pytest.raises(AuthorizationException):
-        EntityCorrelation(session).correlate(hidden_case, test_user)
+        _matches(session, hidden_case, test_user)
 
 
 def test_correlate_returns_employer_and_domain_matches(
@@ -143,7 +155,7 @@ def test_correlate_returns_employer_and_domain_matches(
     )
     session.commit()
 
-    matches = EntityCorrelation(session).correlate(source_case, test_user)
+    matches = _matches(session, source_case, test_user)
 
     assert [(match.kind, match.value) for match in matches] == [
         (CorrelationKind.DOMAIN, "example.test"),
@@ -170,7 +182,7 @@ def test_correlate_matches_employer_for_unnamed_entities(
         )
     session.commit()
 
-    matches = EntityCorrelation(session).correlate(source_case, test_user)
+    matches = _matches(session, source_case, test_user)
     assert [match.kind for match in matches] == [CorrelationKind.EMPLOYER]
 
 
@@ -207,7 +219,7 @@ def test_correlate_normalizes_vehicle_identifiers(
     )
     session.commit()
 
-    matches = EntityCorrelation(session).correlate(source_case, test_user)
+    matches = _matches(session, source_case, test_user)
 
     assert [(match.kind, match.value) for match in matches] == [
         (CorrelationKind.VIN, "ABC123"),

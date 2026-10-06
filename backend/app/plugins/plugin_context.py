@@ -122,8 +122,8 @@ class ServiceEntitySink:
     async def _write_ip(
         self, request: IpAddressWrite, case_id: int, user: models.User
     ) -> None:
-        existing = await self._service.find_entity_by_ip_address(
-            case_id, request.address, current_user=user
+        existing = await self._service.find_canonical_entity(
+            case_id, "ip_address", request.address, current_user=user
         )
         if existing:
             await self._service.enrich_entity_description(
@@ -150,8 +150,8 @@ class ServiceEntitySink:
     async def _write_domain(
         self, request: DomainSubdomainsWrite, case_id: int, user: models.User
     ) -> None:
-        existing = await self._service.find_entity_by_domain(
-            case_id, request.domain, current_user=user
+        existing = await self._service.find_canonical_entity(
+            case_id, "domain", request.domain, current_user=user
         )
         if existing:
             current_data = existing.data.copy()

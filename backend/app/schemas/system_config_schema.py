@@ -3,15 +3,13 @@
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-class SystemConfigurationBase(BaseModel):
+class SystemConfigurationUpdate(BaseModel):
     case_number_template: str
-    case_number_prefix: Optional[str] = None
+    case_number_prefix: Optional[str] = Field(default=None, validate_default=True)
 
-
-class SystemConfigurationCreate(SystemConfigurationBase):
     @field_validator("case_number_template")
     @classmethod
     def validate_template(cls, v):
@@ -30,10 +28,6 @@ class SystemConfigurationCreate(SystemConfigurationBase):
                 if not v.isalnum() or len(v) < 2 or len(v) > 8:
                     raise ValueError("Prefix must be 2-8 alphanumeric characters")
         return v
-
-
-class SystemConfigurationUpdate(SystemConfigurationCreate):
-    pass
 
 
 class APIKeyUpdate(BaseModel):

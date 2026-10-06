@@ -7,7 +7,6 @@ entity operations with case access control, data enrichment capabilities,
 and specialized search functions for OSINT investigation workflows.
 """
 
-from dataclasses import dataclass
 from typing import Literal, cast
 
 from sqlmodel import Session, col, or_, select
@@ -26,33 +25,11 @@ from app.database.db_utils import transaction
 from app.schemas.entity_schema import DuplicateAdvisory, entity_display_name
 from app.services.case_access import CaseAccess
 
-
-@dataclass(frozen=True)
-class DuplicatePolicy:
-    """Describe one database-backed entity identity rule."""
-
-    entity_type: str
-    fields: tuple[str, ...]
-    error_template: str
-    case_sensitive: bool = False
-
-
-_DUPLICATE_POLICIES = (
-    DuplicatePolicy(
-        "company",
-        ("name",),
-        "A company with the name '{name}' already exists in this case",
-    ),
-    DuplicatePolicy(
-        "ip_address",
-        ("ip_address",),
-        "An IP address '{ip_address}' already exists in this case",
-        case_sensitive=True,
-    ),
-    DuplicatePolicy(
-        "domain", ("domain",), "A domain '{domain}' already exists in this case"
-    ),
-)
+_DUPLICATE_MESSAGES = {
+    "company": "A company with the name '{name}' already exists in this case",
+    "ip_address": "An IP address '{ip_address}' already exists in this case",
+    "domain": "A domain '{domain}' already exists in this case",
+}
 
 
 class EntityService:
@@ -153,15 +130,18 @@ class EntityService:
                     reason = "Same name; this may be a different Person."
                     blocking = False
             elif entity_type == "vehicle":
-                vin, other_vin = normalized(data.get("vin")), normalized(
-                    candidate.data.get("vin")
+                vin, other_vin = (
+                    normalized(data.get("vin")),
+                    normalized(candidate.data.get("vin")),
                 )
-                plate, other_plate = normalized(data.get("license_plate")), normalized(
-                    candidate.data.get("license_plate")
+                plate, other_plate = (
+                    normalized(data.get("license_plate")),
+                    normalized(candidate.data.get("license_plate")),
                 )
-                state, other_state = normalized(
-                    data.get("registration_state")
-                ), normalized(candidate.data.get("registration_state"))
+                state, other_state = (
+                    normalized(data.get("registration_state")),
+                    normalized(candidate.data.get("registration_state")),
+                )
                 if vin and vin == other_vin:
                     reason = "A vehicle with this VIN already exists in this case"
                 elif plate and plate == other_plate:
@@ -181,23 +161,15 @@ class EntityService:
                         if blocking
                         else "Same plate with missing/different jurisdiction or conflicting VINs; inspect before keeping a separate Vehicle."
                     )
-            else:
-                for policy in _DUPLICATE_POLICIES:
-                    if policy.entity_type != entity_type:
-                        continue
-                    if entity_type in {"domain", "ip_address"} or all(
-                        data.get(field)
-                        and (
-                            str(data[field]).strip()
-                            == str(candidate.data.get(field) or "").strip()
-                            if policy.case_sensitive
-                            else normalized(data[field])
-                            == normalized(candidate.data.get(field))
-                        )
-                        for field in policy.fields
-                    ):
-                        reason = policy.error_template.format(**data)
-                        break
+            elif entity_type in _DUPLICATE_MESSAGES and (
+                entity_type != "company"
+                or (
+                    data.get("name")
+                    and normalized(data["name"])
+                    == normalized(candidate.data.get("name"))
+                )
+            ):
+                reason = _DUPLICATE_MESSAGES[entity_type].format(**data)
             if reason:
                 summary_fields = (
                     ("email", "dob", "phone", "employer")
@@ -236,6 +208,12 @@ class EntityService:
             case_id, entity.entity_type, entity.data, exclude_id
         )[:20]
 
+    def _case_entity(self, case: models.Case, entity_id: int) -> models.Entity:
+        db_entity = self.db.get(models.Entity, entity_id)
+        if not db_entity or db_entity.case_id != case.id:
+            raise ResourceNotFoundException("Entity not found")
+        return db_entity
+
     async def get_case_entities(
         self,
         case_id: int,
@@ -262,11 +240,7 @@ class EntityService:
         current_user: models.User,
     ) -> models.Entity:
         case = self.case_access.readable(current_user, case_id)
-        db_entity = self.db.get(models.Entity, entity_id)
-        if not db_entity or db_entity.case_id != case.id:
-            raise ResourceNotFoundException("Entity not found")
-
-        return db_entity
+        return self._case_entity(case, entity_id)
 
     async def create_entity(
         self,
@@ -302,9 +276,7 @@ class EntityService:
         current_user: models.User,
     ) -> models.Entity:
         case = self.case_access.writable(current_user, case_id)
-        db_entity = self.db.get(models.Entity, entity_id)
-        if not db_entity or db_entity.case_id != case.id:
-            raise ResourceNotFoundException("Entity not found")
+        db_entity = self._case_entity(case, entity_id)
 
         # Add entity type to update data for validation
         entity_update_dict = entity_update.model_dump()
@@ -333,27 +305,20 @@ class EntityService:
         current_user: models.User,
     ) -> None:
         case = self.case_access.writable(current_user, case_id)
-        db_entity = self.db.get(models.Entity, entity_id)
-        if not db_entity or db_entity.case_id != case.id:
-            raise ResourceNotFoundException("Entity not found")
+        db_entity = self._case_entity(case, entity_id)
         with transaction(self.db):
             self.db.delete(db_entity)
 
-    async def find_entity_by_ip_address(
-        self, case_id: int, ip_address: str, current_user: models.User
+    async def find_canonical_entity(
+        self,
+        case_id: int,
+        entity_type: Literal["domain", "ip_address"],
+        value: str,
+        current_user: models.User,
     ) -> models.Entity | None:
-        """Find an existing IP address entity in the given case"""
-        self.case_access.readable(current_user, case_id)
-
-        return self._find_canonical_entity(case_id, "ip_address", ip_address)
-
-    async def find_entity_by_domain(
-        self, case_id: int, domain: str, current_user: models.User
-    ) -> models.Entity | None:
-        """Find an existing domain entity in the given case (case-insensitive)"""
-        self.case_access.readable(current_user, case_id)
-
-        return self._find_canonical_entity(case_id, "domain", domain)
+        """Find an existing domain or IP address entity in the given case."""
+        case = self.case_access.readable(current_user, case_id)
+        return self._find_canonical_entity(cast(int, case.id), entity_type, value)
 
     def _find_canonical_entity(
         self,
@@ -397,9 +362,7 @@ class EntityService:
     ) -> models.Entity:
         """Enrich an existing entity's description with additional information"""
         case = self.case_access.writable(current_user, case_id)
-        db_entity = self.db.get(models.Entity, entity_id)
-        if not db_entity or db_entity.case_id != case.id:
-            raise ResourceNotFoundException("Entity not found")
+        db_entity = self._case_entity(case, entity_id)
 
         current_description = db_entity.data.get("description", "")
 

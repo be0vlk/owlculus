@@ -2,32 +2,23 @@
 
 import secrets
 from datetime import UTC, timedelta
-from enum import StrEnum
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, col, select
 
 from app import schemas
-from app.core.exceptions import (
-    DuplicateResourceException,
-    ResourceNotFoundException,
-    ValidationException,
-)
+from app.core.exceptions import ResourceNotFoundException, ValidationException
 from app.core.logging import audit_operation
 from app.core.security import get_password_hash
 from app.core.utils import get_utc_now
 from app.database import models
 from app.database.db_utils import transaction
 from app.services.case_access import CaseAccess
+from app.services.user_service import duplicate_user_error
 
 TOKEN_LENGTH = 32
 INVITE_EXPIRATION_HOURS = 48
-
-
-class RegistrationConflict(StrEnum):
-    USERNAME = "username"
-    EMAIL = "email"
 
 
 def _is_expired(invite: models.Invite) -> bool:
@@ -59,29 +50,6 @@ class InviteService:
         return self.db.exec(
             select(models.Invite).where(models.Invite.token == token)
         ).first()
-
-    def _registration_conflict(
-        self, registration: schemas.UserRegistration
-    ) -> RegistrationConflict | None:
-        username_owner = self.db.exec(
-            select(models.User).where(models.User.username == registration.username)
-        ).first()
-        if username_owner is not None:
-            return RegistrationConflict.USERNAME
-        email_owner = self.db.exec(
-            select(models.User).where(models.User.email == registration.email)
-        ).first()
-        return RegistrationConflict.EMAIL if email_owner is not None else None
-
-    @staticmethod
-    def _duplicate_registration(
-        conflict: RegistrationConflict,
-    ) -> DuplicateResourceException:
-        messages = {
-            RegistrationConflict.USERNAME: "Username already taken",
-            RegistrationConflict.EMAIL: "Email already registered",
-        }
-        return DuplicateResourceException(messages[conflict], field=conflict.value)
 
     @audit_operation("invite_creation")
     async def create_invite(
@@ -140,9 +108,11 @@ class InviteService:
         if invite is None:
             raise ResourceNotFoundException("Invalid invite token")
 
-        conflict = self._registration_conflict(registration)
-        if conflict is not None:
-            raise self._duplicate_registration(conflict)
+        duplicate = duplicate_user_error(
+            self.db, registration.username, registration.email
+        )
+        if duplicate:
+            raise duplicate
 
         user = models.User(
             username=registration.username,
@@ -172,9 +142,11 @@ class InviteService:
                 self.db.add(invite)
                 self.db.flush()
         except IntegrityError as error:
-            conflict = self._registration_conflict(registration)
-            if conflict is not None:
-                raise self._duplicate_registration(conflict) from error
+            duplicate = duplicate_user_error(
+                self.db, registration.username, registration.email
+            )
+            if duplicate:
+                raise duplicate from error
             raise ValidationException("Invalid user registration") from error
 
         self.db.refresh(user)

@@ -89,24 +89,16 @@ class CaseService:
         limit: int = 100,
         status: str | None = None,
     ) -> list[schemas.Case]:
-        if self.case_access.is_admin(current_user):
-            stmt = select(models.Case)
-            if status:
-                stmt = stmt.where(models.Case.status == status)
-            stmt = stmt.offset(skip).limit(limit)
-            result = self.db.exec(stmt)
-            cases = result.all()
-        else:
-            stmt = (
-                select(models.Case)
-                .join(models.CaseUserLink)
-                .where(models.CaseUserLink.user_id == current_user.id)
-            )
-            if status:
-                stmt = stmt.where(models.Case.status == status)
-            stmt = stmt.offset(skip).limit(limit)
-            result = self.db.exec(stmt)
-            cases = result.all()
+        stmt = (
+            select(models.Case)
+            if self.case_access.is_admin(current_user)
+            else select(models.Case)
+            .join(models.CaseUserLink)
+            .where(models.CaseUserLink.user_id == current_user.id)
+        )
+        if status:
+            stmt = stmt.where(models.Case.status == status)
+        cases = self.db.exec(stmt.offset(skip).limit(limit)).all()
 
         return self.load_cases_with_users(list(cases))
 
@@ -161,12 +153,7 @@ class CaseService:
         self.case_access.validate_lead_assignment(db_user, is_lead=is_lead)
 
         with transaction(self.db):
-            existing_link = self.db.exec(
-                select(models.CaseUserLink).where(
-                    models.CaseUserLink.case_id == db_case.id,
-                    models.CaseUserLink.user_id == db_user.id,
-                )
-            ).first()
+            existing_link = self.db.get(models.CaseUserLink, (case_id, user_id))
             if existing_link:
                 existing_link.is_lead = is_lead
                 self.db.add(existing_link)
@@ -203,19 +190,12 @@ class CaseService:
     ) -> models.Case:
         self.case_access.require_admin(current_user)
         db_case, db_user = self._case_and_user(case_id, user_id)
-        if db_user not in db_case.users:
+        link = self.db.get(models.CaseUserLink, (case_id, user_id))
+        if link is None:
             raise ValidationException("User is not assigned to this case")
         self.case_access.validate_lead_assignment(db_user, is_lead=is_lead)
 
         with transaction(self.db):
-            link = self.db.exec(
-                select(models.CaseUserLink).where(
-                    models.CaseUserLink.case_id == case_id,
-                    models.CaseUserLink.user_id == user_id,
-                )
-            ).first()
-            if link is None:
-                raise ValidationException("User is not assigned to this case")
             link.is_lead = is_lead
             db_case.updated_at = get_utc_now()
             self.db.add(link)

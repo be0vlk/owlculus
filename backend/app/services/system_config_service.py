@@ -23,62 +23,10 @@ from .case_access import CaseAccess
 
 CASE_NUMBER_TEMPLATE_MONTHLY = "YYMM-NN"
 CASE_NUMBER_TEMPLATE_PREFIX = "PREFIX-YYMM-NN"
-VALID_CASE_NUMBER_TEMPLATES = [
-    CASE_NUMBER_TEMPLATE_MONTHLY,
-    CASE_NUMBER_TEMPLATE_PREFIX,
-]
-
-PREFIX_MIN_LENGTH = 2
-PREFIX_MAX_LENGTH = 8
 TEMPLATE_DISPLAY_NAMES = {
     CASE_NUMBER_TEMPLATE_MONTHLY: "Monthly Reset (YYMM-NN)",
     CASE_NUMBER_TEMPLATE_PREFIX: "Prefix + Monthly Reset (PREFIX-YYMM-NN)",
 }
-
-
-class SystemConfigValidator:
-    """Handles validation logic for system configuration"""
-
-    @staticmethod
-    def validate_case_number_template(template: str) -> None:
-        """Validate case number template format"""
-        if template not in VALID_CASE_NUMBER_TEMPLATES:
-            raise ValidationException(f"Invalid case number template: {template}")
-
-    @staticmethod
-    def validate_case_number_prefix(prefix: str | None, template: str) -> None:
-        """Validate case number prefix based on template"""
-        if template == CASE_NUMBER_TEMPLATE_PREFIX:
-            if not prefix:
-                raise ValidationException(
-                    "Prefix is required for PREFIX-YYMM-NN template"
-                )
-
-            if not prefix.isalnum():
-                raise ValidationException(
-                    "Prefix must contain only alphanumeric characters"
-                )
-
-            if len(prefix) < PREFIX_MIN_LENGTH or len(prefix) > PREFIX_MAX_LENGTH:
-                raise ValidationException(
-                    f"Prefix must be {PREFIX_MIN_LENGTH}-{PREFIX_MAX_LENGTH} characters"
-                )
-
-    @staticmethod
-    def validate_evidence_template(template_data: dict, template_key: str) -> None:
-        """Validate evidence folder template structure"""
-        if not isinstance(template_data, dict):
-            raise ValidationException(f"Invalid template structure for {template_key}")
-
-        required_fields = ["name", "description", "folders"]
-        for field in required_fields:
-            if field not in template_data:
-                raise ValidationException(f"Template {template_key} must have {field}")
-
-        if not isinstance(template_data["folders"], list):
-            raise ValidationException(
-                f"Template {template_key} must have folders array"
-            )
 
 
 class SystemConfigService:
@@ -132,10 +80,6 @@ class SystemConfigService:
         case_number_prefix: str | None = None,
     ) -> models.SystemConfiguration:
         self.case_access.require_admin(current_user)
-        SystemConfigValidator.validate_case_number_template(case_number_template)
-        SystemConfigValidator.validate_case_number_prefix(
-            case_number_prefix, case_number_template
-        )
         if case_number_template != CASE_NUMBER_TEMPLATE_PREFIX:
             case_number_prefix = None
 
@@ -170,30 +114,24 @@ class SystemConfigService:
     ) -> models.SystemConfiguration:
         self.case_access.require_admin(current_user)
         config = await self.get_configuration()
-        current_keys = config.api_keys.copy() if config.api_keys else {}
-        provider_name = provider.value
-        if provider_name not in current_keys:
-            if not api_key:
-                raise ValidationException("API key is required for new providers")
-            current_keys[provider_name] = StoredApiKey(
-                encrypted_key=encrypt_api_key(api_key),
-                name=name,
-                is_active=True,
-                created_at=self._clock().isoformat(),
-            ).to_mapping()
+        current_keys = dict(config.api_keys or {})
+        previous = (
+            StoredApiKey.from_mapping(provider.value, current_keys[provider.value])
+            if provider.value in current_keys
+            else None
+        )
+        if api_key:
+            encrypted_key: str | None = encrypt_api_key(api_key)
+        elif previous:
+            encrypted_key = previous.encrypted_key
         else:
-            existing_key = StoredApiKey.from_mapping(
-                provider_name, current_keys[provider_name]
-            )
-            current_keys[provider_name] = StoredApiKey(
-                encrypted_key=(
-                    encrypt_api_key(api_key) if api_key else existing_key.encrypted_key
-                ),
-                name=name,
-                is_active=True,
-                created_at=existing_key.created_at or self._clock().isoformat(),
-            ).to_mapping()
-
+            raise ValidationException("API key is required for new providers")
+        current_keys[provider.value] = StoredApiKey(
+            encrypted_key=encrypted_key,
+            name=name,
+            is_active=True,
+            created_at=(previous and previous.created_at) or self._clock().isoformat(),
+        ).to_mapping()
         config.api_keys = current_keys
         return self._persist_configuration(config)
 
@@ -203,49 +141,33 @@ class SystemConfigService:
     ) -> models.SystemConfiguration:
         self.case_access.require_admin(current_user)
         config = await self.get_configuration()
-        provider_name = provider.value
-        if config.api_keys and provider_name in config.api_keys:
-            current_keys = config.api_keys.copy()
-            del current_keys[provider_name]
-            config.api_keys = current_keys
-            config = self._persist_configuration(config)
-        return config
+        remaining = dict(config.api_keys or {})
+        if remaining.pop(provider.value, None) is None:
+            return config
+        config.api_keys = remaining
+        return self._persist_configuration(config)
 
     async def list_api_keys(self, current_user: models.User) -> dict[str, dict]:
         """List all configured API keys (admin only)"""
         self.case_access.require_admin(current_user)
-        try:
-            config = await self.get_configuration()
-
-            if not config.api_keys:
-                return {}
-
-            result = {}
-            for provider, key_data in config.api_keys.items():
-                stored_key = StoredApiKey.from_mapping(provider, key_data)
-                if stored_key.is_active:
-                    result[provider] = {
-                        "name": stored_key.name,
-                        "is_configured": True,
-                        "created_at": stored_key.created_at,
-                    }
-
-            return result
-
-        except Exception:
-            return {}
-
-    async def get_configured_providers(self, current_user: models.User) -> list[str]:
-        """Get list of configured providers (requires admin access)"""
-        api_keys = await self.list_api_keys(current_user=current_user)
-        return list(api_keys.keys())
+        config = await self.get_configuration()
+        return {
+            provider: {
+                "name": stored.name,
+                "is_configured": True,
+                "created_at": stored.created_at,
+            }
+            for provider, key_data in (config.api_keys or {}).items()
+            if (stored := StoredApiKey.from_mapping(provider, key_data)).is_active
+        }
 
     def preview_case_number_template(
         self, template: str, prefix: str | None, current_user: models.User
     ) -> tuple[str, str]:
         """Authorize and render an administrative case-number preview."""
         self.case_access.require_admin(current_user)
-        SystemConfigValidator.validate_case_number_template(template)
+        if template not in TEMPLATE_DISPLAY_NAMES:
+            raise ValidationException(f"Invalid case number template: {template}")
         return (
             self.generate_example_case_number(template, prefix),
             self.get_template_display_name(template),
@@ -263,11 +185,6 @@ class SystemConfigService:
         self, templates: dict, current_user: models.User
     ) -> models.SystemConfiguration:
         self.case_access.require_admin(current_user)
-        for template_key, template_data in templates.items():
-            SystemConfigValidator.validate_evidence_template(
-                template_data, template_key
-            )
-
         config = await self.get_configuration()
         config.evidence_folder_templates = templates
         return self._persist_configuration(config)

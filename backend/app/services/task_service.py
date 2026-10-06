@@ -36,6 +36,18 @@ class TaskService:
             raise ResourceNotFoundException("Task not found")
         return task
 
+    def _get_template(self, template_id: int) -> models.TaskTemplate:
+        template = self.db.get(models.TaskTemplate, template_id)
+        if not template:
+            raise ResourceNotFoundException(f"Task template {template_id} not found")
+        return template
+
+    @staticmethod
+    def _record_completion(task: models.Task, user: models.User) -> None:
+        completed = task.status == TaskStatus.COMPLETED.value
+        task.completed_at = datetime.utcnow() if completed else None
+        task.completed_by_id = user.id if completed else None
+
     def _response(self, task: models.Task) -> TaskResponse:
         assignee = self.case_access.eligible_assignee(task.case_id, task.assigned_to_id)
         return TaskResponse.model_validate(
@@ -105,19 +117,12 @@ class TaskService:
         if case_id:
             self.case_access.readable(current_user, case_id)
             query = query.where(models.Task.case_id == case_id)
-        else:
-            # Filter to only show tasks from cases the user has access to for non-admin users
-            if not self.case_access.is_admin(current_user):
-                user_case_ids = self.db.exec(
-                    select(models.CaseUserLink.case_id).where(
-                        models.CaseUserLink.user_id == current_user.id
-                    )
-                ).all()
-
-                if user_case_ids:
-                    query = query.where(col(models.Task.case_id).in_(user_case_ids))
-                else:
-                    return []
+        elif not self.case_access.is_admin(current_user):
+            query = query.where(
+                col(models.Task.case_id).in_(
+                    self.case_access.readable_case_ids(current_user)
+                )
+            )
 
         if assigned_to_id:
             query = query.where(models.Task.assigned_to_id == assigned_to_id)
@@ -164,12 +169,8 @@ class TaskService:
                 else:
                     setattr(task, key, value)
 
-        if "status" in updates and updates["status"] == TaskStatus.COMPLETED.value:
-            task.completed_at = datetime.utcnow()
-            task.completed_by_id = current_user.id
-        elif "status" in updates and updates["status"] != TaskStatus.COMPLETED.value:
-            task.completed_at = None
-            task.completed_by_id = None
+        if "status" in updates:
+            self._record_completion(task, current_user)
 
         task.updated_at = datetime.utcnow()
 
@@ -222,13 +223,7 @@ class TaskService:
 
         task.status = status
         task.updated_at = datetime.utcnow()
-
-        if status == TaskStatus.COMPLETED.value:
-            task.completed_at = datetime.utcnow()
-            task.completed_by_id = current_user.id
-        else:
-            task.completed_at = None
-            task.completed_by_id = None
+        self._record_completion(task, current_user)
 
         with transaction(self.db):
             self.db.add(task)
@@ -276,14 +271,7 @@ class TaskService:
     ) -> models.TaskTemplate:
         """Update a task template"""
         self.case_access.require_admin(current_user)
-        template = (
-            self.db.query(models.TaskTemplate)
-            .filter(col(models.TaskTemplate.id) == template_id)
-            .first()
-        )
-
-        if not template:
-            raise ResourceNotFoundException(f"Task template {template_id} not found")
+        template = self._get_template(template_id)
 
         for field, value in updates.items():
             if field in [
@@ -309,14 +297,7 @@ class TaskService:
     ) -> bool:
         """Delete a task template"""
         self.case_access.require_admin(current_user)
-        template = (
-            self.db.query(models.TaskTemplate)
-            .filter(col(models.TaskTemplate.id) == template_id)
-            .first()
-        )
-
-        if not template:
-            raise ResourceNotFoundException(f"Task template {template_id} not found")
+        template = self._get_template(template_id)
 
         tasks_using_template = (
             self.db.query(models.Task)
