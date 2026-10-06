@@ -15,7 +15,6 @@ from tests.attachment_fixtures import document, screenshot
 assigned = fixtures.assigned
 configured = fixtures.configured
 session = fixtures.session
-storage_root = fixtures.storage_root
 strixy = fixtures.strixy
 
 

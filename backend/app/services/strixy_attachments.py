@@ -79,9 +79,9 @@ def prepare(
     config: StrixyConfig,
     *,
     start: int = 0,
-    timeout: float | None = None,
+    timeout: float,
 ) -> PreparedAttachment:
-    if timeout is not None and timeout <= 0:
+    if timeout <= 0:
         return PreparedAttachment(reason="attachment_time_limit")
     if attachment.path is None:
         return PreparedAttachment(reason=attachment.reason)
@@ -132,19 +132,7 @@ def prepare(
                     },
                 )
                 try:
-                    process.wait(
-                        timeout=max(
-                            0.001,
-                            min(
-                                config.attachment_seconds,
-                                (
-                                    timeout
-                                    if timeout is not None
-                                    else config.attachment_seconds
-                                ),
-                            ),
-                        )
-                    )
+                    process.wait(timeout=max(0.001, timeout))
                 except subprocess.TimeoutExpired:
                     os.killpg(process.pid, signal.SIGKILL)
                     process.wait()

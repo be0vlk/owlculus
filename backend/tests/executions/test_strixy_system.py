@@ -8,7 +8,14 @@ from celery import Celery
 from sqlmodel import Session, select
 
 from app.core.security import encrypt_api_key
-from app.database.models import CaseUserLink, SystemConfiguration, User
+from app.database.models import (
+    CaseUserLink,
+    StrixyGrounding,
+    StrixyProgress,
+    StrixyRun,
+    SystemConfiguration,
+    User,
+)
 from app.database.upgrade_strixy import upgrade
 from tests.executions.conftest import eventually
 
@@ -173,6 +180,10 @@ def test_streamed_run_controls_across_real_worker_boundary(strixy_system, action
         assert client.post(observation + "/cancel").json() == cancelled
     elif action == "delete":
         assert client.delete(detail).status_code == 204
+        # Run-owned rows go through PostgreSQL foreign-key cascades.
+        with Session(system.engine) as db:
+            for model in (StrixyRun, StrixyProgress, StrixyGrounding):
+                assert db.exec(select(model)).all() == []
     elif action == "revoke":
         with Session(system.engine) as db:
             strixy = db.exec(select(User).where(User.system_identity == "strixy")).one()
@@ -211,7 +222,6 @@ def test_streamed_run_controls_across_real_worker_boundary(strixy_system, action
 
 def test_progress_schema_upgrade_preserves_existing_conversations(strixy_system):
     from app.database.init_db import initialize_database
-    from app.database.models import StrixyProgress
 
     system = strixy_system
     api, client = system.api()

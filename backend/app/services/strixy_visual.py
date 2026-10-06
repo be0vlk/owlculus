@@ -54,7 +54,11 @@ def prepare_visual(path, limits, start):
 
     def accept(index, image, text="", reduced=False):
         nonlocal budget
-        locator = f"page:{index + 1}" if path.suffix == ".pdf" else "image:1"
+        if path.suffix == ".pdf":
+            locator = f"page:{index + 1}"
+            field = f"attachment:{locator}:image"
+        else:
+            locator, field = "image:1", "attachment:image:1"
         if len(result["images"]) >= maximum:
             raise PreparationFailure("attachment_unit_limit")
         data, resized = image_data(image, limits)
@@ -62,11 +66,6 @@ def prepare_visual(path, limits, start):
         if size > budget:
             raise PreparationFailure("visual_input_limit")
         budget -= size
-        field = (
-            "attachment:" + locator + ":image"
-            if path.suffix == ".pdf"
-            else "attachment:image:1"
-        )
         result["images"].append({"field": field, "data": data})
         if text:
             result["fields"]["attachment:" + locator + ":text"] = text

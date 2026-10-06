@@ -7,7 +7,6 @@ import pytest
 from app.core.exceptions import ValidationException
 from app.core.strixy_config import StrixyConfig
 from app.schemas.strixy_schema import ChatMessage, ModelMessage, VisualInput
-from app.services.api_key_vault import Provider, StaticApiKeyVault
 from app.services.strixy_service import StrixyService
 
 
@@ -22,7 +21,7 @@ def test_responses_adapter_bounds_usage_and_withholds_incomplete_json(limited):
         output=[],
         usage=Mock(input_tokens=10, output_tokens=20),
     )
-    service = StrixyService(Mock(), StaticApiKeyVault({Provider.OPENAI: "fake"}))
+    service = StrixyService("fake")
     config = StrixyConfig()
     with patch("app.services.strixy_service.OpenAI", return_value=client) as factory:
         result = service.generate(
@@ -67,7 +66,7 @@ def test_responses_adapter_bounds_usage_and_withholds_incomplete_json(limited):
 
 
 def test_missing_vault_key_never_calls_provider():
-    service = StrixyService(Mock(), StaticApiKeyVault({}))
+    service = StrixyService(None)
     with patch("app.services.strixy_service.OpenAI") as factory:
         with pytest.raises(ValidationException):
             service.generate([], StrixyConfig(), 12)
@@ -85,7 +84,7 @@ def test_responses_adapter_translates_function_request_without_executing_it():
     client.responses.create.return_value = Mock(
         status="completed", output_text="", output=[request], usage=None
     )
-    service = StrixyService(Mock(), StaticApiKeyVault({Provider.OPENAI: "fake"}))
+    service = StrixyService("fake")
     with patch("app.services.strixy_service.OpenAI", return_value=client):
         reply = service.generate(
             [ChatMessage(role="user", content="Find Ada")], StrixyConfig(), 12
@@ -123,9 +122,7 @@ def test_streams_only_visible_answer_content_and_retains_incomplete_output():
     )
     client.responses.create.return_value = stream
     updates = []
-    service = StrixyService(
-        Mock(), StaticApiKeyVault({Provider.OPENAI: "fake"}), on_progress=updates.append
-    )
+    service = StrixyService("fake", on_progress=updates.append)
     with patch("app.services.strixy_service.OpenAI", return_value=client):
         result = service.generate(
             [ChatMessage(role="user", content="Question")], StrixyConfig(), 12
@@ -167,9 +164,7 @@ def test_streaming_preserves_complete_citations_before_output_limit():
     )
     client.responses.create.return_value = stream
     updates = []
-    service = StrixyService(
-        Mock(), StaticApiKeyVault({Provider.OPENAI: "fake"}), on_progress=updates.append
-    )
+    service = StrixyService("fake", on_progress=updates.append)
     with patch("app.services.strixy_service.OpenAI", return_value=client):
         reply = service.generate([], StrixyConfig(), 12)
     assert updates[0].citations == [citation]

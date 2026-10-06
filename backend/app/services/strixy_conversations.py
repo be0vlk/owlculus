@@ -3,7 +3,7 @@
 import builtins
 
 from fastapi import HTTPException
-from sqlalchemy import delete, func
+from sqlalchemy import delete
 from sqlmodel import Session, col, select
 
 from app.core.utils import get_utc_now
@@ -18,7 +18,10 @@ from app.database.models import (
     StrixyShare,
     User,
 )
+from app.schemas.strixy_schema import ChatMessage
+from app.services.api_key_vault import ConfigurationApiKeyVault, Provider
 from app.services.strixy_access import require_strixy_access
+from app.services.strixy_sources import CaseSources
 
 
 class StrixyConversations:
@@ -45,6 +48,20 @@ class StrixyConversations:
             raise HTTPException(404, "Conversation not found")
         return conversation
 
+    def owned_run(self, conversation_id: str, run_id: str) -> StrixyRun:
+        self.owned(conversation_id)
+        run = self.db.get(StrixyRun, run_id)
+        if run is None or run.conversation_id != conversation_id:
+            raise HTTPException(404, "Run not found")
+        return run
+
+    def messages(self, conversation_id: str):
+        return self.db.exec(
+            select(StrixyMessage)
+            .where(StrixyMessage.conversation_id == conversation_id)
+            .order_by(col(StrixyMessage.position))
+        ).all()
+
     def list(self):
         self.authorized()
         conversations = self.db.exec(
@@ -58,26 +75,13 @@ class StrixyConversations:
         ).all()
         if not conversations:
             return []
-        first_positions = (
-            select(
-                StrixyMessage.conversation_id,
-                func.min(StrixyMessage.position).label("position"),
-            )
-            .where(
+        titles = {}
+        for message in self.db.exec(
+            select(StrixyMessage).where(
                 col(StrixyMessage.conversation_id).in_(
                     [item.id for item in conversations]
                 ),
-                StrixyMessage.role == "user",
-            )
-            .group_by(StrixyMessage.conversation_id)
-            .subquery()
-        )
-        titles = {}
-        for message in self.db.exec(
-            select(StrixyMessage).join(
-                first_positions,
-                (StrixyMessage.conversation_id == first_positions.c.conversation_id)
-                & (StrixyMessage.position == first_positions.c.position),
+                StrixyMessage.position == 0,
             )
         ).all():
             # Copied user questions can carry inherited source restrictions too.
@@ -109,12 +113,7 @@ class StrixyConversations:
         return {
             **conversation.model_dump(exclude={"owner_id", "deleted_at"}),
             "messages": [
-                self.message_view(message)
-                for message in self.db.exec(
-                    select(StrixyMessage)
-                    .where(StrixyMessage.conversation_id == conversation_id)
-                    .order_by(col(StrixyMessage.position))
-                ).all()
+                self.message_view(message) for message in self.messages(conversation_id)
             ],
             "runs": [
                 self.run_view(run)
@@ -142,16 +141,9 @@ class StrixyConversations:
         ).first()
 
     def authorized_history(self, conversation_id: str):
-        from app.schemas.strixy_schema import ChatMessage
-        from app.services.strixy_sources import CaseSources
-
         reader = CaseSources(self.db, self.human, self.case_id)
         history, inherited = [], []
-        for message in self.db.exec(
-            select(StrixyMessage)
-            .where(StrixyMessage.conversation_id == conversation_id)
-            .order_by(col(StrixyMessage.position))
-        ).all():
+        for message in self.messages(conversation_id):
             grounding = self.grounding_for(message)
             if grounding:
                 if not reader.validate_provenance(grounding.provenance, current=True):
@@ -191,8 +183,6 @@ class StrixyConversations:
         )
 
     def grounded_view(self, data, provenance, saved_citations, coverage):
-        from app.services.strixy_sources import CaseSources
-
         reader = CaseSources(self.db, self.human, self.case_id)
         if not reader.validate_provenance(provenance):
             return data | {
@@ -250,9 +240,6 @@ class StrixyConversations:
             "configuration_version": run.configuration.get("version"),
             "instruction_version": run.configuration.get("instruction_version"),
         }
-
-        from app.services.strixy_sources import CaseSources
-
         progress = self.db.get(StrixyProgress, run.id)
         ledger = self.db.get(StrixyGrounding, run.id)
         data.update(
@@ -281,18 +268,11 @@ class StrixyConversations:
         return data
 
     def observe(self, conversation_id: str, run_id: str):
-        self.owned(conversation_id)
-        run = self.db.get(StrixyRun, run_id)
-        if run is None or run.conversation_id != conversation_id:
-            raise HTTPException(404, "Run not found")
-        return self.run_view(run)
+        return self.run_view(self.owned_run(conversation_id, run_id))
 
     def restart(self, conversation_id: str, run_id: str, action: str):
         with transaction(self.db):
-            self.owned(conversation_id)
-            prior = self.db.get(StrixyRun, run_id)
-            if prior is None or prior.conversation_id != conversation_id:
-                raise HTTPException(404, "Run not found")
+            prior = self.owned_run(conversation_id, run_id)
             latest = self.db.exec(
                 select(StrixyRun)
                 .where(StrixyRun.conversation_id == conversation_id)
@@ -337,10 +317,7 @@ class StrixyConversations:
         from app.executions.strixy_worker import finish
 
         with transaction(self.db):
-            self.owned(conversation_id)
-            run = self.db.get(StrixyRun, run_id)
-            if run is None or run.conversation_id != conversation_id:
-                raise HTTPException(404, "Run not found")
+            run = self.owned_run(conversation_id, run_id)
             if run.status in {"pending", "running"}:
                 finish(run, "cancelled")
                 self.db.add(run)
@@ -357,27 +334,10 @@ class StrixyConversations:
                     col(StrixyShare.conversation_id) == conversation_id
                 )
             )
-            message_ids = select(StrixyMessage.id).where(
-                StrixyMessage.conversation_id == conversation_id
-            )
-            self.db.execute(
-                delete(StrixyCopiedGrounding).where(
-                    col(StrixyCopiedGrounding.message_id).in_(message_ids)
-                )
-            )
             self.db.execute(
                 delete(StrixyMessage).where(
                     col(StrixyMessage.conversation_id) == conversation_id
                 )
-            )
-            run_ids = select(StrixyRun.id).where(
-                StrixyRun.conversation_id == conversation_id
-            )
-            self.db.execute(
-                delete(StrixyProgress).where(col(StrixyProgress.run_id).in_(run_ids))
-            )
-            self.db.execute(
-                delete(StrixyGrounding).where(col(StrixyGrounding.run_id).in_(run_ids))
             )
             self.db.execute(
                 delete(StrixyRun).where(
@@ -392,7 +352,6 @@ class StrixyConversations:
         focus: builtins.list[str] | None = None,
     ):
         from app.core.strixy_config import get_strixy_config
-        from app.services.api_key_vault import ConfigurationApiKeyVault, Provider
 
         with transaction(self.db):
             self.owned(conversation_id)
@@ -414,16 +373,10 @@ class StrixyConversations:
                 )
             config = get_strixy_config()
             if focus:
-                from app.services.strixy_sources import CaseSources
-
                 reader = CaseSources(self.db, self.human, self.case_id)
                 for source_id in focus:
                     reader.read(source_id)
-            messages = self.db.exec(
-                select(StrixyMessage)
-                .where(StrixyMessage.conversation_id == conversation_id)
-                .order_by(col(StrixyMessage.position))
-            ).all()
+            messages = self.messages(conversation_id)
             assert strixy.id is not None
             run = StrixyRun(
                 conversation_id=conversation_id,

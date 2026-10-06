@@ -10,7 +10,6 @@ from openai import OpenAI, Stream
 from openai.types.responses import Response, ResponseInputParam, ResponseStreamEvent
 from pydantic import ValidationError
 from pydantic_core import from_json
-from sqlmodel import Session
 
 from app.core.exceptions import ValidationException
 from app.core.strixy_config import StrixyConfig
@@ -21,7 +20,6 @@ from app.schemas.strixy_schema import (
     SourceCitation,
     SourceQuery,
 )
-from app.services.api_key_vault import ApiKeyVault, ConfigurationApiKeyVault, Provider
 
 
 def response_input(messages: list[ChatMessage]) -> ResponseInputParam:
@@ -68,13 +66,10 @@ class ProviderReply:
 class StrixyService:
     def __init__(
         self,
-        db: Session,
-        api_key_vault: ApiKeyVault | None = None,
+        api_key: str | None,
         on_progress: Callable[[ProviderReply], None] | None = None,
     ):
-        self.on_progress = on_progress
-        vault = api_key_vault or ConfigurationApiKeyVault(db)
-        self.api_key = vault.get_key(Provider.OPENAI)
+        self.api_key, self.on_progress = api_key, on_progress
 
     def generate(
         self, messages: list[ChatMessage], config: StrixyConfig, timeout: float

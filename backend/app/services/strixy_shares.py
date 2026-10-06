@@ -1,12 +1,20 @@
 """Fixed, authorized snapshots and independently owned conversation copies."""
 
 from copy import deepcopy
+from datetime import datetime
 
 from fastapi import HTTPException
+from fastapi.encoders import jsonable_encoder
 from sqlmodel import col, select
 
 from app.database.db_utils import transaction
-from app.database.models import StrixyConversation, StrixyMessage, StrixyShare
+from app.database.models import (
+    StrixyConversation,
+    StrixyCopiedGrounding,
+    StrixyGrounding,
+    StrixyMessage,
+    StrixyShare,
+)
 from app.services.strixy_conversations import StrixyConversations
 from app.services.strixy_sources import CaseSources, encoded
 
@@ -26,7 +34,6 @@ class StrixyShares:
 
     def create(self, conversation_id: str, through_message_id: str):
         with transaction(self.db):
-            self.conversations.owned(conversation_id)
             saved = self.conversations.read(conversation_id)
             messages = saved["messages"]
             # Progress is visible application content, but never a live share.
@@ -44,8 +51,6 @@ class StrixyShares:
                 raise HTTPException(404, "Message not found")
             messages = messages[: boundary + 1]
             provenance: list[dict] = []
-            from app.database.models import StrixyGrounding
-
             for message in messages:
                 if message.get("withheld"):
                     raise HTTPException(404, "Snapshot unavailable")
@@ -62,16 +67,13 @@ class StrixyShares:
                 self.db, self.conversations.human, self.conversations.case_id
             ).validate_provenance(provenance):
                 raise HTTPException(404, "Snapshot unavailable")
+            # JSON storage preserves timestamps independently of the original rows.
             share = StrixyShare(
                 conversation_id=conversation_id,
                 through_message_id=through_message_id,
-                messages=deepcopy(messages),
-                provenance=deepcopy(provenance),
+                messages=jsonable_encoder(messages),
+                provenance=jsonable_encoder(provenance),
             )
-            # JSON storage preserves timestamps independently of the original rows.
-            from fastapi.encoders import jsonable_encoder
-
-            share.messages = jsonable_encoder(share.messages)
             self.db.add(share)
             self.db.flush()
             result = self.metadata(share)
@@ -144,10 +146,6 @@ class StrixyShares:
             self.db.delete(self.locked(share_id, owner=True))
 
     def copy(self, share_id: str):
-        from datetime import datetime
-
-        from app.database.models import StrixyCopiedGrounding
-
         with transaction(self.db):
             share = self.authorized(share_id)
             created = self.conversations.create()

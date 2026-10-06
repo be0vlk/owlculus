@@ -32,10 +32,8 @@ class StrixyConfig(BaseModel):
     instruction_version: str = "grounded-visuals-v1"
     model: str = "gpt-6-astra"
     reasoning_effort: Literal["low", "medium", "high", "xhigh", "max"] = "low"
-    supports_tools: bool = True
     supports_streaming: bool = True
     supports_vision: bool = True
-    supports_documents: bool = True
     runtime_seconds: int = Field(default=120, ge=1, le=600)
     queue_seconds: int = Field(default=300, ge=1, le=3600)
     max_output_tokens: int = Field(default=2000, ge=16, le=16000)

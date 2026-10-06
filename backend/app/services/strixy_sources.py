@@ -57,13 +57,16 @@ class CaseSource:
     fields: dict[str, str]
     case_ids: list[int]
     version: str
-    attachment: bool = False
     stored_attachment: Attachment | None = None
     prepared: dict | None = None
 
     @property
     def source_id(self) -> str:
         return f"{self.kind}:{self.id}"
+
+    @property
+    def attachment(self) -> bool:
+        return self.stored_attachment is not None
 
     def reference(self) -> dict:
         return {
@@ -128,14 +131,8 @@ class MaterialCheckpoint(BaseModel):
     next_cursor: dict[str, int] = Field(default_factory=dict)
     enumeration_complete: bool = False
 
-    def exhausted(self) -> set[str]:
-        # Older checkpoints already identify completely supplied sources as read.
-        return set(self.exhausted_sources) | {
-            key for key, state in self.states.items() if state == "read"
-        }
-
     def batch_exhausted(self) -> bool:
-        return self.states.keys() <= self.exhausted()
+        return self.states.keys() <= set(self.exhausted_sources)
 
 
 @dataclass
@@ -169,7 +166,7 @@ class CaseSources:
         if row is None:
             raise ResourceNotFoundException("Source unavailable")
         scope = {self.case_id}
-        attachment = False
+        stored_attachment = None
         fields: dict
         if isinstance(row, m.PluginExecutionResult):
             execution = self.db.get(
@@ -251,7 +248,8 @@ class CaseSources:
                 provenance = report_provenance(self.db, row)
                 if provenance:
                     scope.update(provenance.case_ids or ())
-                attachment = not row.is_folder
+                if not row.is_folder:
+                    stored_attachment = Attachment.locate(self.case_id, row.content)
                 fields = {
                     "title": row.title,
                     "description": row.description,
@@ -273,11 +271,6 @@ class CaseSources:
             key: value if isinstance(value, str) else encoded(value)
             for key, value in fields.items()
         }
-        stored_attachment = (
-            Attachment.locate(self.case_id, row.content)
-            if isinstance(row, m.Evidence) and attachment
-            else None
-        )
         version = hashlib.sha256(
             encoded(
                 [
@@ -293,7 +286,6 @@ class CaseSources:
             rendered,
             sorted(scope),
             version,
-            attachment,
             stored_attachment,
         )
 
@@ -378,32 +370,25 @@ class GroundedMaterial:
 
     def __init__(
         self,
-        sources: list[CaseSource],
-        complete: bool,
+        catalog: SourceCatalog,
         config: StrixyConfig,
         focus: list[str],
         previous: MaterialCheckpoint | None = None,
-        catalog: SourceCatalog | None = None,
         cursor: dict[str, int] | None = None,
-        preparation_timeout: float | None = None,
+        preparation_timeout: float = float("inf"),
         before_attachment: Callable[[CaseSource], None] | None = None,
         attachment_start: int = 0,
     ):
         self.attachment_start = attachment_start
         self.before_attachment = before_attachment
         self.preparation_deadline = monotonic() + min(
-            config.attachment_seconds,
-            (
-                preparation_timeout
-                if preparation_timeout is not None
-                else config.attachment_seconds
-            ),
+            config.attachment_seconds, preparation_timeout
         )
-        self.sources = {s.source_id: s for s in sources}
+        self.sources = {s.source_id: s for s in catalog.sources}
         if set(focus) - self.sources.keys():
             raise ResourceNotFoundException("Focus source unavailable")
         self.focus = focus
-        self.complete = complete
+        self.complete = catalog.complete
         self.config = config
         self.inspected_at = get_utc_now().isoformat()
         self.supplied: dict[str, dict] = {}
@@ -412,8 +397,10 @@ class GroundedMaterial:
         self.previous = previous or MaterialCheckpoint()
         # Cumulative processing is independent of what fits this model input.
         # Incomplete but exhausted attachments still retain their honest coverage.
-        self.exhausted_sources = self.previous.exhausted() & self.sources.keys()
-        self.catalog = catalog or SourceCatalog(sources, complete)
+        self.exhausted_sources = (
+            set(self.previous.exhausted_sources) & self.sources.keys()
+        )
+        self.catalog = catalog
         self.cursor = cursor or {}
         self.limits = set(self.catalog.limits)
         self.offsets = {

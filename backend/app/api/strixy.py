@@ -13,14 +13,40 @@ from sqlmodel import Session
 
 from app.core.database_boundary import DatabaseRoute
 from app.core.dependencies import get_current_user
+from app.core.exceptions import ResourceNotFoundException
 from app.database import models
 from app.database.connection import get_db
-from app.schemas.strixy_schema import ChatRequest, ChatResponse, SubmitMessage
+from app.schemas.strixy_schema import (
+    ChatRequest,
+    ChatResponse,
+    CreateShare,
+    SubmitMessage,
+)
 from app.services.api_key_vault import ConfigurationApiKeyVault, Provider
 from app.services.strixy_access import require_strixy_access
 from app.services.strixy_conversations import StrixyConversations
+from app.services.strixy_shares import StrixyShares
+from app.services.strixy_sources import CaseSources, GroundedMaterial, SourceCatalog
 
 router = APIRouter(route_class=DatabaseRoute)
+
+
+async def get_conversations(
+    case_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[models.User, Depends(get_current_user)],
+) -> StrixyConversations:
+    return StrixyConversations(db, current_user, case_id)
+
+
+Conversations = Annotated[StrixyConversations, Depends(get_conversations)]
+
+
+async def get_shares(conversations: Conversations) -> StrixyShares:
+    return StrixyShares(conversations)
+
+
+Shares = Annotated[StrixyShares, Depends(get_shares)]
 
 
 @router.get("/availability")
@@ -46,55 +72,29 @@ async def chat_with_strixy(
 
 
 @router.post("/cases/{case_id}/conversations", status_code=201)
-async def create_conversation(
-    case_id: int,
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[models.User, Depends(get_current_user)],
-):
-    return StrixyConversations(db, current_user, case_id).create()
+async def create_conversation(conversations: Conversations):
+    return conversations.create()
 
 
 @router.get("/cases/{case_id}/conversations")
-async def list_conversations(
-    case_id: int,
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[models.User, Depends(get_current_user)],
-):
-    return StrixyConversations(db, current_user, case_id).list()
+async def list_conversations(conversations: Conversations):
+    return conversations.list()
 
 
 @router.get("/cases/{case_id}/conversations/{conversation_id}")
-async def read_conversation(
-    case_id: int,
-    conversation_id: str,
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[models.User, Depends(get_current_user)],
-):
-    return StrixyConversations(db, current_user, case_id).read(conversation_id)
+async def read_conversation(conversation_id: str, conversations: Conversations):
+    return conversations.read(conversation_id)
 
 
 @router.delete("/cases/{case_id}/conversations/{conversation_id}", status_code=204)
-async def delete_conversation(
-    case_id: int,
-    conversation_id: str,
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[models.User, Depends(get_current_user)],
-):
-    StrixyConversations(db, current_user, case_id).delete(conversation_id)
+async def delete_conversation(conversation_id: str, conversations: Conversations):
+    conversations.delete(conversation_id)
     return Response(status_code=204)
 
 
 @router.get("/cases/{case_id}/conversations/{conversation_id}/runs/{run_id}")
-async def observe_run(
-    case_id: int,
-    conversation_id: str,
-    run_id: str,
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[models.User, Depends(get_current_user)],
-):
-    return StrixyConversations(db, current_user, case_id).observe(
-        conversation_id, run_id
-    )
+async def observe_run(conversation_id: str, run_id: str, conversations: Conversations):
+    return conversations.observe(conversation_id, run_id)
 
 
 @router.post(
@@ -105,12 +105,9 @@ async def submit_message(
     conversation_id: str,
     request: SubmitMessage,
     response: Response,
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[models.User, Depends(get_current_user)],
+    conversations: Conversations,
 ):
-    run = StrixyConversations(db, current_user, case_id).submit(
-        conversation_id, request.content, request.focus
-    )
+    run = conversations.submit(conversation_id, request.content, request.focus)
     response.headers["Location"] = (
         f"/api/strixy/cases/{case_id}/conversations/{conversation_id}/runs/{run['id']}"
     )
@@ -118,15 +115,12 @@ async def submit_message(
 
 
 @router.get("/cases/{case_id}/sources")
-async def list_sources(
-    case_id: int,
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[models.User, Depends(get_current_user)],
-):
+async def list_sources(conversations: Conversations):
     from app.core.strixy_config import get_strixy_config
-    from app.services.strixy_sources import CaseSources
 
-    catalog = CaseSources(db, current_user, case_id).catalog(get_strixy_config())
+    catalog = CaseSources(
+        conversations.db, conversations.human, conversations.case_id
+    ).catalog(get_strixy_config())
     return {
         "sources": [source.catalog_entry() for source in catalog.sources],
         "enumeration_complete": catalog.complete,
@@ -135,44 +129,28 @@ async def list_sources(
 
 @router.get("/cases/{case_id}/sources/{source_id}")
 async def read_source(
-    case_id: int,
     source_id: str,
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[models.User, Depends(get_current_user)],
+    conversations: Conversations,
     unit: Annotated[int | None, Query(ge=1, le=100000)] = None,
 ):
     from app.core.strixy_config import get_strixy_config
-    from app.services.strixy_sources import CaseSources, GroundedMaterial
 
     config = get_strixy_config()
-    source = CaseSources(db, current_user, case_id).read(source_id)
+    reader = CaseSources(conversations.db, conversations.human, conversations.case_id)
     material = GroundedMaterial(
-        [source],
-        True,
+        SourceCatalog([reader.read(source_id)], True),
         config.model_copy(update={"visual_max_images": 1}),
         [],
         attachment_start=(unit or 1) - 1,
     )
-    if not CaseSources(db, current_user, case_id).validate_provenance(
-        material.provenance(), current=True
-    ):
-        from app.core.exceptions import ResourceNotFoundException
-
+    if not reader.validate_provenance(material.provenance(), current=True):
         raise ResourceNotFoundException("Source unavailable")
     return material.context() | {"images": [v.model_dump() for v in material.images]}
 
 
 @router.post("/cases/{case_id}/conversations/{conversation_id}/runs/{run_id}/cancel")
-async def cancel_run(
-    case_id: int,
-    conversation_id: str,
-    run_id: str,
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[models.User, Depends(get_current_user)],
-):
-    return StrixyConversations(db, current_user, case_id).cancel(
-        conversation_id, run_id
-    )
+async def cancel_run(conversation_id: str, run_id: str, conversations: Conversations):
+    return conversations.cancel(conversation_id, run_id)
 
 
 @router.post(
@@ -185,73 +163,36 @@ async def restart_run(
     run_id: str,
     action: Literal["continue", "retry", "reanalyze"],
     response: Response,
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[models.User, Depends(get_current_user)],
+    conversations: Conversations,
 ):
-    run = StrixyConversations(db, current_user, case_id).restart(
-        conversation_id, run_id, action
-    )
+    run = conversations.restart(conversation_id, run_id, action)
     response.headers["Location"] = (
         f"/api/strixy/cases/{case_id}/conversations/{conversation_id}/runs/{run['id']}"
     )
     return run
 
 
-from app.schemas.strixy_schema import CreateShare
-from app.services.strixy_shares import StrixyShares
-
-
 @router.post("/cases/{case_id}/conversations/{conversation_id}/shares", status_code=201)
-async def create_share(
-    case_id: int,
-    conversation_id: str,
-    request: CreateShare,
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[models.User, Depends(get_current_user)],
-):
-    return StrixyShares(StrixyConversations(db, current_user, case_id)).create(
-        conversation_id, request.through_message_id
-    )
+async def create_share(conversation_id: str, request: CreateShare, shares: Shares):
+    return shares.create(conversation_id, request.through_message_id)
 
 
 @router.get("/cases/{case_id}/conversations/{conversation_id}/shares")
-async def list_shares(
-    case_id: int,
-    conversation_id: str,
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[models.User, Depends(get_current_user)],
-):
-    return StrixyShares(StrixyConversations(db, current_user, case_id)).list(
-        conversation_id
-    )
+async def list_shares(conversation_id: str, shares: Shares):
+    return shares.list(conversation_id)
 
 
 @router.get("/cases/{case_id}/shares/{share_id}")
-async def read_share(
-    case_id: int,
-    share_id: str,
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[models.User, Depends(get_current_user)],
-):
-    return StrixyShares(StrixyConversations(db, current_user, case_id)).read(share_id)
+async def read_share(share_id: str, shares: Shares):
+    return shares.read(share_id)
 
 
 @router.delete("/cases/{case_id}/shares/{share_id}", status_code=204)
-async def revoke_share(
-    case_id: int,
-    share_id: str,
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[models.User, Depends(get_current_user)],
-):
-    StrixyShares(StrixyConversations(db, current_user, case_id)).revoke(share_id)
+async def revoke_share(share_id: str, shares: Shares):
+    shares.revoke(share_id)
     return Response(status_code=204)
 
 
 @router.post("/cases/{case_id}/shares/{share_id}/copy", status_code=201)
-async def copy_share(
-    case_id: int,
-    share_id: str,
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[models.User, Depends(get_current_user)],
-):
-    return StrixyShares(StrixyConversations(db, current_user, case_id)).copy(share_id)
+async def copy_share(share_id: str, shares: Shares):
+    return shares.copy(share_id)
