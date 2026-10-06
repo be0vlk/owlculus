@@ -42,22 +42,6 @@ def _write_private_temp_file(token: str, destination: Path) -> Path:
         raise
 
 
-def _write_setup_token(token: str, destination: Path) -> None:
-    """Atomically publish a token with owner-only permissions."""
-    temporary = _write_private_temp_file(token, destination)
-    try:
-        os.replace(temporary, destination)
-    finally:
-        temporary.unlink(missing_ok=True)
-
-
-def generate_setup_token() -> str:
-    """Generate and persist a new setup token with 32 bytes of entropy."""
-    token = secrets.token_urlsafe(32)
-    _write_setup_token(token, SETUP_TOKEN_FILE)
-    return token
-
-
 def create_setup_token_once() -> tuple[str, bool]:
     """Atomically create one shared token or return the already-persisted token."""
     token = secrets.token_urlsafe(32)

@@ -10,35 +10,10 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from typing import Any
 
-from sqlalchemy.exc import SQLAlchemyError
+from loguru import logger
 from sqlmodel import Session
 
-from app.core.logging import get_logger_with_context
-from app.database.connection import engine
-
-logger = get_logger_with_context(module="db_utils")
-
-
-@contextmanager
-def get_session() -> Generator[Session, None, None]:
-    """
-    Context manager for database sessions.
-    Ensures proper session cleanup and error handling.
-
-    Usage:
-        with get_session() as session:
-            with transaction(session):
-                session.add(model)
-    """
-    session = Session(engine)
-    try:
-        yield session
-    except SQLAlchemyError as e:
-        session.rollback()
-        logger.error(f"Database error: {e!s}")
-        raise
-    finally:
-        session.close()
+logger = logger.bind(module="db_utils")
 
 
 @contextmanager

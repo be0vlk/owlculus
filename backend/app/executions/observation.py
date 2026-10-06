@@ -88,7 +88,7 @@ def retained(client, key, cursor):
 
 
 async def observe(websocket: WebSocket, database_engine, kind: str, execution_id: int):
-    from app.core.security import ephemeral_token_manager
+    from app.core.security import validate_ephemeral_token
 
     token = websocket.query_params.get("token")
     cursor = websocket.query_params.get("cursor")
@@ -98,7 +98,7 @@ async def observe(websocket: WebSocket, database_engine, kind: str, execution_id
         ):
             raise ValueError("Invalid cursor")
         capability = await asyncio.to_thread(
-            ephemeral_token_manager.validate_token, token or "", execution_id, kind
+            validate_ephemeral_token, token or "", execution_id, kind
         )
         if capability is None:
             raise ValueError("Invalid token")

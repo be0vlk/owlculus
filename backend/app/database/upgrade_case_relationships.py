@@ -7,10 +7,8 @@ Task history, and all underlying investigation records are preserved.
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
-from app.database.connection import engine
 
-
-def upgrade(database_engine: Engine = engine) -> None:
+def upgrade(database_engine: Engine) -> None:
     """Normalize existing references using CaseAccess's folder and reader rules."""
     with database_engine.begin() as connection:
         if database_engine.dialect.name == "postgresql":
@@ -38,7 +36,3 @@ def upgrade(database_engine: Engine = engine) -> None:
                     )
                 )
             """))
-
-
-if __name__ == "__main__":
-    upgrade()

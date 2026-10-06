@@ -5,7 +5,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, EmailStr, field_validator
 
-from ..core.roles import UserRole
+from ..core.enums import UserRole
 
 
 class InviteCreate(BaseModel):

@@ -7,8 +7,11 @@ and ephemeral token management for WebSocket authentication.
 """
 
 import base64
+import json
 import os
+import re
 import secrets
+import unicodedata
 from datetime import timedelta
 from pathlib import Path
 from uuid import UUID
@@ -18,7 +21,6 @@ import filetype
 import jwt
 from cryptography.fernet import Fernet
 from fastapi import UploadFile
-from werkzeug.utils import secure_filename
 
 from .config import settings
 from .exceptions import ValidationException
@@ -152,13 +154,23 @@ async def validate_file_security(file: UploadFile) -> None:
     raise ValidationException("File type not allowed")
 
 
+UNSAFE_FILENAME_CHARACTERS = re.compile(r"[^A-Za-z0-9_.-]")
+
+
 def secure_filename_with_path(filename: str, base_path: Path) -> str:
     """
     Generate a secure filename and ensure it's safe within the given path.
-    Uses werkzeug's secure_filename for basic sanitization.
+    Reduces it to ASCII letters, digits, ``_``, ``.`` and ``-``.
     If the filename already exists, appends a counter.
     """
-    safe_name = secure_filename(filename)
+    ascii_name = (
+        unicodedata.normalize("NFKD", filename).encode("ascii", "ignore").decode()
+    )
+    for separator in (os.sep, os.path.altsep):
+        if separator:
+            ascii_name = ascii_name.replace(separator, " ")
+    safe_name = UNSAFE_FILENAME_CHARACTERS.sub("", "_".join(ascii_name.split()))
+    safe_name = safe_name.strip("._")
     if not safe_name:
         safe_name = "unnamed_file"
     abs_base = base_path.absolute().resolve()
@@ -208,58 +220,47 @@ def decrypt_api_key(encrypted_key: str) -> str:
 
 
 # Ephemeral Token Management for WebSocket Authentication
-class EphemeralTokenManager:
-    """Redis-backed, atomic single-use capabilities scoped to execution kind."""
+# Redis-backed, atomic single-use capabilities scoped to execution kind.
+EPHEMERAL_TOKEN_TTL_SECONDS = 30
 
-    def __init__(self, token_ttl: int = 30):
-        self.token_ttl = token_ttl
 
-    def create_token(
-        self,
-        user_id: int,
-        execution_id: int,
-        kind: str,
-        auth_identity: str,
-        session_version: int,
-    ) -> str:
-        import json
+def create_ephemeral_token(
+    user_id: int,
+    execution_id: int,
+    kind: str,
+    auth_identity: str,
+    session_version: int,
+) -> str:
+    from app.executions.events import redis_client
 
-        from app.executions.events import redis_client
-
-        token = secrets.token_urlsafe(32)
-        with redis_client() as client:
-            client.set(
-                f"owlculus:tokens:{token}",
-                json.dumps(
-                    [user_id, kind, execution_id, auth_identity, session_version]
-                ),
-                ex=self.token_ttl,
-                nx=True,
-            )
-        return token
-
-    def validate_token(
-        self, token: str, execution_id: int, kind: str = "hunt"
-    ) -> tuple[int, str, int] | None:
-        import json
-
-        from app.executions.events import redis_client
-
-        with redis_client() as client:
-            value = client.getdel(f"owlculus:tokens:{token}")
-        if value is None:
-            return None
-        try:
-            user_id, stored_kind, stored_id, identity, version = json.loads(value)
-            if type(user_id) is not int or not _valid_session_claims(identity, version):
-                return None
-        except (ValueError, TypeError):
-            return None
-        return (
-            (user_id, identity, version)
-            if (stored_kind, stored_id) == (kind, execution_id)
-            else None
+    token = secrets.token_urlsafe(32)
+    with redis_client() as client:
+        client.set(
+            f"owlculus:tokens:{token}",
+            json.dumps([user_id, kind, execution_id, auth_identity, session_version]),
+            ex=EPHEMERAL_TOKEN_TTL_SECONDS,
+            nx=True,
         )
+    return token
 
 
-ephemeral_token_manager = EphemeralTokenManager()
+def validate_ephemeral_token(
+    token: str, execution_id: int, kind: str
+) -> tuple[int, str, int] | None:
+    from app.executions.events import redis_client
+
+    with redis_client() as client:
+        value = client.getdel(f"owlculus:tokens:{token}")
+    if value is None:
+        return None
+    try:
+        user_id, stored_kind, stored_id, identity, version = json.loads(value)
+        if type(user_id) is not int or not _valid_session_claims(identity, version):
+            return None
+    except (ValueError, TypeError):
+        return None
+    return (
+        (user_id, identity, version)
+        if (stored_kind, stored_id) == (kind, execution_id)
+        else None
+    )

@@ -5,11 +5,12 @@ from unittest.mock import patch
 import pytest
 from sqlmodel import select
 
-from app.core import rate_limiting, setup
+from app.core import setup
 from app.core.security import create_access_token
 from app.database.models import User
 from app.database.upgrade_strixy import upgrade
 from app.main import app
+from tests.client_rate_limiter import InMemoryClientRateLimiter
 
 
 @pytest.fixture
@@ -23,10 +24,10 @@ def headers(token):
 
 
 def test_system_identity_leaves_first_administrator_setup_open(client, strixy):
-    app.state.bootstrap_rate_limiter = rate_limiting.InMemoryClientRateLimiter(
+    app.state.bootstrap_rate_limiter = InMemoryClientRateLimiter(
         max_attempts=3, window_seconds=3600
     )
-    token = setup.generate_setup_token()
+    token = setup.create_setup_token_once()[0]
     response = client.post(
         "/api/users/",
         json={

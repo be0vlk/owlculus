@@ -16,6 +16,7 @@ Example:
 
 import argparse
 import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -452,11 +453,11 @@ def display_completion_info(
         steps.append(f"Complete the test implementation in: {file_paths['test']}")
 
     if args.dependencies:
-        steps.append(
-            f"Install dependencies: docker compose exec backend pip install {' '.join(args.dependencies)}"
-        )
+        steps.append("Rebuild the backend image: docker compose build backend")
     else:
-        steps.append("Add any required dependencies to: backend/requirements.txt")
+        steps.append(
+            "Add any required dependencies with: cd backend && uv add <package>"
+        )
 
     steps.extend(
         [
@@ -521,9 +522,9 @@ def create_plugin(args):
     for content_type, content in content_map.items():
         files_to_write[file_paths[content_type]] = content
 
-    # Add dependencies to requirements.txt
+    # Add dependencies to the backend project
     if args.dependencies:
-        add_dependencies_to_requirements(args.dependencies)
+        add_dependencies_to_project(args.dependencies)
 
     # Write all files
     write_files_safely(files_to_write)
@@ -532,48 +533,21 @@ def create_plugin(args):
     display_completion_info(config, args, file_paths)
 
 
-def add_dependencies_to_requirements(dependencies):
-    """Add dependencies to requirements.txt file"""
+def add_dependencies_to_project(dependencies):
+    """Add dependencies to backend/pyproject.toml and uv.lock with uv."""
     if not dependencies:
         return
 
-    project_root = Path(__file__).parent.parent
-    requirements_path = project_root / "backend" / "requirements.txt"
-
+    backend_path = Path(__file__).parent.parent / "backend"
     try:
-        # Read existing requirements
-        existing_deps = set()
-        if requirements_path.exists():
-            with open(requirements_path, "r") as f:
-                existing_deps = {
-                    line.strip().split("==")[0].split(">=")[0].split("<=")[0]
-                    for line in f
-                    if line.strip() and not line.startswith("#")
-                }
-
-        # Add new dependencies
-        new_deps = []
-        for dep in dependencies:
-            dep = dep.strip()
-            if dep and dep not in existing_deps:
-                new_deps.append(dep)
-
-        if new_deps:
-            with open(requirements_path, "a") as f:
-                f.write("\n")
-                for dep in new_deps:
-                    f.write(f"{dep}\n")
-
-            print(
-                f"{Colors.GREEN}SUCCESS:{Colors.END} Added dependencies to requirements.txt: {', '.join(new_deps)}"
-            )
-        else:
-            print(
-                f"{Colors.YELLOW}INFO:{Colors.END} All dependencies already exist in requirements.txt"
-            )
-
-    except Exception as e:
-        print(f"{Colors.RED}ERROR:{Colors.END} Failed to update requirements.txt: {e}")
+        subprocess.run(
+            ["uv", "add", "--no-sync", *dependencies], cwd=backend_path, check=True
+        )
+        print(
+            f"{Colors.GREEN}SUCCESS:{Colors.END} Added dependencies to backend/pyproject.toml: {', '.join(dependencies)}"
+        )
+    except (OSError, subprocess.CalledProcessError) as e:
+        print(f"{Colors.RED}ERROR:{Colors.END} Failed to add dependencies with uv: {e}")
 
 
 def generate_test_file(config: dict[str, Any]) -> str:

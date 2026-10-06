@@ -2,39 +2,30 @@
 
 import os
 
-from sqlalchemy import text
 from sqlalchemy.engine import Engine
-from sqlmodel import Session, select
+from sqlmodel import Session, SQLModel, select
 
-from app.database.connection import create_db_and_tables, engine
+from app.database import (
+    upgrade_authorization,
+    upgrade_case_relationships,
+    upgrade_correlation,
+    upgrade_executions,
+    upgrade_strixy,
+)
+from app.database.connection import engine
 from app.database.db_utils import transaction
 from app.database.models import Client
 
 
 def initialize_database(database_engine: Engine = engine) -> None:
     """Create the schema and idempotently seed the default Personal client."""
+    SQLModel.metadata.create_all(database_engine)
+    upgrade_authorization.upgrade(database_engine)
+    upgrade_strixy.upgrade(database_engine)
     if database_engine.dialect.name == "postgresql":
-        with database_engine.begin() as connection:
-            connection.execute(text('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"'))
-    create_db_and_tables(database_engine)
-    from app.database.upgrade_authorization import upgrade as upgrade_authorization
-
-    upgrade_authorization(database_engine)
-    from app.database.upgrade_strixy import upgrade as upgrade_strixy
-
-    upgrade_strixy(database_engine)
-    if database_engine.dialect.name == "postgresql":
-        from app.database.upgrade_executions import upgrade
-
-        upgrade(database_engine)
-
-    from app.database.upgrade_case_relationships import upgrade as upgrade_relationships
-
-    upgrade_relationships(database_engine)
-
-    from app.database.upgrade_correlation import upgrade as upgrade_correlation
-
-    upgrade_correlation(database_engine)
+        upgrade_executions.upgrade(database_engine)
+    upgrade_case_relationships.upgrade(database_engine)
+    upgrade_correlation.upgrade(database_engine)
 
     with Session(database_engine) as session:
         personal_client = session.exec(

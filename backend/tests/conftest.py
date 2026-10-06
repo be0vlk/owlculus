@@ -29,7 +29,7 @@ from app import main as main_module
 from app.core import file_storage
 from app.core.config import settings
 from app.core.dependencies import get_current_user
-from app.core.login_rate_limiting import get_login_rate_limiter
+from app.core.rate_limiting import get_login_rate_limiter
 from app.core.security import (
     create_access_token,
     get_password_hash,

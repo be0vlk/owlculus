@@ -25,3 +25,9 @@ class ExecutionStatus(str, Enum):
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+
+
+class UserRole(str, Enum):
+    ADMIN = "Admin"
+    INVESTIGATOR = "Investigator"
+    ANALYST = "Analyst"

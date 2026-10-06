@@ -6,7 +6,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from redis.exceptions import ConnectionError
 
-from app.core.login_rate_limiting import RedisLoginRateLimiter, get_login_rate_limiter
+from app.core.rate_limiting import RedisLoginRateLimiter, get_login_rate_limiter
 from app.main import app
 from app.services.auth_service import AuthService
 

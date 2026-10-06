@@ -14,7 +14,6 @@ from app.core.dependencies import (
 )
 from app.core.exceptions import RateLimitException
 from app.core.logging import get_security_logger
-from app.core.rate_limiting import get_bootstrap_rate_limiter
 from app.core.setup import is_setup_required
 from app.database import models
 from app.database.connection import get_db
@@ -35,7 +34,7 @@ async def create_user(
         if is_setup_required(db):
             client_address = get_client_ip(request)
             if not await on_transport_loop(
-                lambda: get_bootstrap_rate_limiter(request).allow(client_address)
+                lambda: request.app.state.bootstrap_rate_limiter.allow(client_address)
             ):
                 get_security_logger(
                     action="create_user",

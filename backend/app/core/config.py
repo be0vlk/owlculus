@@ -8,14 +8,11 @@ It uses Pydantic for settings validation and environment variable handling.
 
 import os
 
-import dotenv
 from pydantic import AnyHttpUrl, Field, SecretStr
 from pydantic_settings import BaseSettings
 from sqlalchemy.engine import URL
 
 from .deployment import validate_deployment
-
-dotenv.load_dotenv()
 
 # Local Python tooling keeps its existing configuration; Compose sets this explicitly.
 if os.environ.get("OWLCULUS_ENV") == "production":
@@ -61,11 +58,8 @@ class Settings(BaseSettings):
         "http://localhost:8081",
     ]
     FORWARDED_ALLOW_IPS: str = os.environ.get("FORWARDED_ALLOW_IPS", "127.0.0.1,::1")
-    REDIS_URL: str = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
     AUTH_REDIS_URL: str = os.environ.get("AUTH_REDIS_URL", "redis://localhost:6380/0")
-    API_WORKERS: int = Field(default=1, ge=1, le=8)
     API_DATABASE_CONCURRENCY: int = Field(default=8, ge=1, le=32)
-    ALGORITHM: str = "HS256"
     LOGIN_IP_MAX_ATTEMPTS: int = Field(default=30, ge=1, le=10000)
     LOGIN_ACCOUNT_MAX_ATTEMPTS: int = Field(default=10, ge=1, le=10000)
     LOGIN_LIMIT_WINDOW_SECONDS: int = Field(default=300, ge=1, le=86400)

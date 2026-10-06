@@ -16,8 +16,10 @@ def test_backend_image_enables_proxy_headers_explicitly():
 
     development, production = contents.split("FROM runtime-base AS production")
     assert '"--proxy-headers"' in development
-    assert 'CMD ["python", "-m", "app.serve"]' in production
-    # Production's actual proxy/worker arguments are exercised in test_config.
+    assert (
+        'CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]'
+        in production
+    )
 
 
 def test_direct_backend_defaults_to_loopback_proxy_trust_only():

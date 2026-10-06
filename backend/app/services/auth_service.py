@@ -107,7 +107,7 @@ class AuthService:
             raise AuthenticationException("Could not validate credentials")
         try:
             token = await asyncio.to_thread(
-                security.ephemeral_token_manager.create_token,
+                security.create_ephemeral_token,
                 current_user.id,
                 execution_id,
                 kind,

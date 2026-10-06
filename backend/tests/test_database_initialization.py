@@ -1,7 +1,7 @@
 """Behavioral tests for deployment database initialization."""
 
 import pytest
-from sqlmodel import Session, create_engine, select
+from sqlmodel import Session, SQLModel, create_engine, select
 
 from app.core.setup import is_setup_required
 from app.database.init_db import initialize_database
@@ -172,9 +172,7 @@ def test_admin_bootstrap_variables_are_absent_from_every_compose_file(topology):
 
 def test_initialization_preserves_colliding_human_and_stable_system_identity(tmp_path):
     database_engine = create_engine(f"sqlite:///{tmp_path / 'existing.db'}")
-    from app.database.connection import create_db_and_tables
-
-    create_db_and_tables(database_engine)
+    SQLModel.metadata.create_all(database_engine)
     with Session(database_engine) as session:
         human = User(
             username="strixy",

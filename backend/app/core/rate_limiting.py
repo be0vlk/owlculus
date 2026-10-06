@@ -1,124 +1,19 @@
-"""Application rate limits for security-sensitive public endpoints."""
+"""Shared sliding-window admission budgets for security-sensitive public endpoints."""
 
-from collections import deque
-from collections.abc import Awaitable
+from collections.abc import AsyncIterator, Awaitable
+from hashlib import sha256
 from secrets import token_hex
-from threading import Lock
-from time import monotonic
-from typing import Any, Protocol, cast
+from typing import Any, cast
 
-from fastapi import HTTPException, Request
+from fastapi import HTTPException
 from redis import Redis as SyncRedis
 from redis.asyncio import Redis
-from redis.backoff import NoBackoff
 from redis.exceptions import RedisError
-from redis.retry import Retry
 
 from app.core.config import settings
-from app.core.redis_health import storage_ready
+from app.core.redis_health import bounded_redis, storage_ready
 
-
-class ClientRateLimiter(Protocol):
-    """Rate-limit storage boundary used by the bootstrap route."""
-
-    async def allow(self, client_address: str) -> bool:
-        """Return whether this attempt is within the configured limit."""
-
-
-class InMemoryClientRateLimiter:
-    """Track a bounded number of attempts per client in a sliding time window."""
-
-    def __init__(self, *, max_attempts: int, window_seconds: int) -> None:
-        self.max_attempts = max_attempts
-        self.window_seconds = window_seconds
-        self._attempts_by_client: dict[str, deque[float]] = {}
-        self._lock = Lock()
-        self._last_cleanup = monotonic()
-
-    async def allow(self, client_address: str) -> bool:
-        """Record an allowed attempt, or reject when the client's window is full."""
-        now = monotonic()
-        cutoff = now - self.window_seconds
-        with self._lock:
-            attempt_timestamps = self._attempts_by_client.setdefault(
-                client_address, deque()
-            )
-            while attempt_timestamps and attempt_timestamps[0] <= cutoff:
-                attempt_timestamps.popleft()
-
-            if len(attempt_timestamps) >= self.max_attempts:
-                return False
-
-            attempt_timestamps.append(now)
-            self._cleanup_expired_clients(cutoff, now)
-            return True
-
-    def _cleanup_expired_clients(self, cutoff: float, now: float) -> None:
-        if now - self._last_cleanup < self.window_seconds:
-            return
-
-        self._attempts_by_client = {
-            client: attempts
-            for client, attempts in self._attempts_by_client.items()
-            if attempts and attempts[-1] > cutoff
-        }
-        self._last_cleanup = now
-
-
-class RedisClientRateLimiter:
-    """Share sliding-window attempt counters across API processes and restarts."""
-
-    # Reject OOM before pruning counters, which legacy scripts can write past.
-    _ALLOW_ATTEMPT_SCRIPT = """#!lua
-local redis_time = redis.call('TIME')
-local now = redis_time[1] * 1000 + math.floor(redis_time[2] / 1000)
-local cutoff = now - tonumber(ARGV[1])
-redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', cutoff)
-if redis.call('ZCARD', KEYS[1]) >= tonumber(ARGV[2]) then
-    return 0
-end
-redis.call('ZADD', KEYS[1], now, ARGV[3])
-redis.call('PEXPIRE', KEYS[1], ARGV[1])
-return 1
-"""
-
-    def __init__(
-        self, redis_client: Redis, *, max_attempts: int, window_seconds: int
-    ) -> None:
-        self.redis_client = redis_client
-        self.max_attempts = max_attempts
-        self.window_milliseconds = window_seconds * 1000
-
-    async def allow(self, client_address: str) -> bool:
-        """Atomically record one attempt in a Redis-backed sliding window."""
-        try:
-            result = await cast(
-                Awaitable[Any],
-                self.redis_client.eval(
-                    self._ALLOW_ATTEMPT_SCRIPT,
-                    1,
-                    f"owlculus:bootstrap-rate-limit:{client_address}",
-                    str(self.window_milliseconds),
-                    str(self.max_attempts),
-                    token_hex(16),
-                ),
-            )
-        except (OSError, RedisError):
-            raise HTTPException(
-                503,
-                "Setup is temporarily unavailable. Please retry shortly.",
-                headers={"Retry-After": "5"},
-            ) from None
-        return bool(result)
-
-
-_limiter_creation_lock = Lock()
-_readiness_redis = SyncRedis.from_url(
-    settings.AUTH_REDIS_URL,
-    socket_connect_timeout=1,
-    socket_timeout=1,
-    retry=Retry(NoBackoff(), 0),
-)
+_readiness_redis = bounded_redis(settings.AUTH_REDIS_URL, SyncRedis)
 
 
 def is_rate_limit_storage_ready() -> bool:
@@ -126,24 +21,102 @@ def is_rate_limit_storage_ready() -> bool:
     return storage_ready(_readiness_redis, "authentication")
 
 
-def get_bootstrap_rate_limiter(request: Request) -> ClientRateLimiter:
-    """Return the limiter scoped to the current ASGI application instance."""
-    limiter = getattr(request.app.state, "bootstrap_rate_limiter", None)
-    if limiter is not None:
-        return limiter
+class SlidingWindowLimiter:
+    """Charge one attempt to every key only when all their windows have capacity."""
 
-    with _limiter_creation_lock:
-        limiter = getattr(request.app.state, "bootstrap_rate_limiter", None)
-        if limiter is None:
-            limiter = RedisClientRateLimiter(
-                Redis.from_url(
-                    settings.AUTH_REDIS_URL,
-                    socket_connect_timeout=1,
-                    socket_timeout=1,
-                    retry=Retry(NoBackoff(), 0),
-                ),
-                max_attempts=3,
-                window_seconds=60 * 60,
+    # Redis 7 flagged scripts reject OOM before any counter mutation.
+    _SCRIPT = """#!lua
+local clock = redis.call('TIME')
+local now = clock[1] * 1000 + math.floor(clock[2] / 1000)
+local window = tonumber(ARGV[1])
+local retry = 0
+for i = 1, #KEYS do
+    redis.call('ZREMRANGEBYSCORE', KEYS[i], '-inf', now - window)
+    if redis.call('ZCARD', KEYS[i]) >= tonumber(ARGV[i + 1]) then
+        local oldest = redis.call('ZRANGE', KEYS[i], 0, 0, 'WITHSCORES')
+        retry = math.max(retry, tonumber(oldest[2]) + window - now)
+    end
+end
+if retry > 0 then
+    return math.ceil(retry / 1000)
+end
+for i = 1, #KEYS do
+    redis.call('ZADD', KEYS[i], now, ARGV[#KEYS + 2])
+    redis.call('PEXPIRE', KEYS[i], window)
+end
+return 0
+"""
+    _UNAVAILABLE: str
+
+    def __init__(self, redis_client: Redis) -> None:
+        self.redis_client = redis_client
+
+    async def _retry_after(self, window_seconds: int, limits: dict[str, int]) -> int:
+        """Seconds until every key has capacity, or 0 once the attempt is charged."""
+        try:
+            return int(
+                await cast(
+                    Awaitable[Any],
+                    self.redis_client.eval(
+                        self._SCRIPT,
+                        len(limits),
+                        *limits,
+                        str(window_seconds * 1000),
+                        *map(str, limits.values()),
+                        token_hex(16),
+                    ),
+                )
             )
-            request.app.state.bootstrap_rate_limiter = limiter
-        return limiter
+        except (OSError, RedisError):
+            raise HTTPException(
+                503, self._UNAVAILABLE, headers={"Retry-After": "5"}
+            ) from None
+
+
+class RedisClientRateLimiter(SlidingWindowLimiter):
+    """Bootstrap attempts per client, shared across API processes and restarts."""
+
+    _UNAVAILABLE = "Setup is temporarily unavailable. Please retry shortly."
+
+    def __init__(
+        self, redis_client: Redis, *, max_attempts: int = 3, window_seconds: int = 3600
+    ) -> None:
+        super().__init__(redis_client)
+        self.max_attempts = max_attempts
+        self.window_seconds = window_seconds
+
+    async def allow(self, client_address: str) -> bool:
+        key = f"owlculus:bootstrap-rate-limit:{client_address}"
+        return not await self._retry_after(
+            self.window_seconds, {key: self.max_attempts}
+        )
+
+
+class RedisLoginRateLimiter(SlidingWindowLimiter):
+    """Admit login attempts only when both the IP and account windows have room."""
+
+    _UNAVAILABLE = "Login is temporarily unavailable. Please retry shortly."
+
+    async def check(self, client_address: str, username: str) -> None:
+        """Charge an admitted attempt, or raise a temporary HTTP rejection."""
+        # Login compares usernames exactly; do not trim or case-fold here.
+        account_key = sha256(username.encode("utf-8")).hexdigest()
+        retry_after = await self._retry_after(
+            settings.LOGIN_LIMIT_WINDOW_SECONDS,
+            {
+                f"owlculus:login-rate-limit:ip:{client_address}": settings.LOGIN_IP_MAX_ATTEMPTS,
+                f"owlculus:login-rate-limit:account:{account_key}": settings.LOGIN_ACCOUNT_MAX_ATTEMPTS,
+            },
+        )
+        if retry_after:
+            raise HTTPException(
+                429,
+                "Too many login attempts. Please retry later.",
+                headers={"Retry-After": str(retry_after)},
+            )
+
+
+async def get_login_rate_limiter() -> AsyncIterator[RedisLoginRateLimiter]:
+    """Bound Redis I/O and close request-owned connections on every exit path."""
+    async with bounded_redis(settings.AUTH_REDIS_URL, Redis) as redis:
+        yield RedisLoginRateLimiter(redis)

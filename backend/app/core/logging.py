@@ -24,6 +24,7 @@ from .exceptions import DomainException
 # Context variables to store request info across async calls
 client_ip_context: ContextVar[str | None] = ContextVar("client_ip", default=None)
 user_agent_context: ContextVar[str | None] = ContextVar("user_agent", default=None)
+OBSERVATION_TOKEN = re.compile(r"([?&]token=)[^&\s\"]+")
 
 
 class ObservationTokenFilter(logging.Filter):
@@ -33,13 +34,13 @@ class ObservationTokenFilter(logging.Filter):
         if isinstance(record.args, tuple):
             record.args = tuple(
                 (
-                    re.sub(r"([?&]token=)[^&\s\"]+", r"\1[redacted]", arg)
+                    OBSERVATION_TOKEN.sub(r"\1[redacted]", arg)
                     if isinstance(arg, str)
                     else arg
                 )
                 for arg in record.args
             )
-        record.msg = re.sub(r"([?&]token=)[^&\s\"]+", r"\1[redacted]", str(record.msg))
+        record.msg = OBSERVATION_TOKEN.sub(r"\1[redacted]", str(record.msg))
         return True
 
 
@@ -89,10 +90,6 @@ def get_security_logger(**context):
         context["user_agent"] = user_agent
 
     return logger.bind(log_type="security", **context)
-
-
-def get_logger_with_context(**context):
-    return logger.bind(**context)
 
 
 def audit_operation[**P, R](

@@ -14,6 +14,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from loguru import logger
+from redis.asyncio import Redis
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session, SQLModel
@@ -25,7 +26,8 @@ from app.core.dependencies import get_client_ip, get_user_agent
 from app.core.exception_handler import handle_domain_exception
 from app.core.exceptions import DomainException
 from app.core.logging import client_ip_context, setup_logging, user_agent_context
-from app.core.rate_limiting import is_rate_limit_storage_ready
+from app.core.rate_limiting import RedisClientRateLimiter, is_rate_limit_storage_ready
+from app.core.redis_health import bounded_redis
 from app.core.setup import check_and_generate_setup_token
 from app.database.connection import readiness_engine as engine
 from app.hunts.hunt_definition_check import HuntDefinitionCheck
@@ -93,6 +95,9 @@ async def lifespan(app: FastAPI):
     logger.info("Owlculus backend starting up")
     app.state.setup_token_check_complete = False
     app.state.hunt_sync_complete = False
+    app.state.bootstrap_rate_limiter = RedisClientRateLimiter(
+        bounded_redis(settings.AUTH_REDIS_URL, Redis)
+    )
     app.state.plugin_registry = get_shipped_plugin_registry()
     _check_hunt_definitions(app.state.plugin_registry)
     await _bounded_readiness()

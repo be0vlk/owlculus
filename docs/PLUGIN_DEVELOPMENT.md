@@ -38,7 +38,7 @@ python scripts/create_plugin.py api_tool \
 ### Generator Features
 - **Automatic File Creation**: Backend plugin, frontend components (optional), and test files
 - **Automatic UI Generation**: GenericPluginParams and PluginResult handle 95% of UI needs
-- **Dependency Management**: Appends packages to `backend/requirements.txt`; the Docker image installs from `backend/pyproject.toml` and `uv.lock`, so also run `uv add` (see [Dependencies](#7-dependencies))
+- **Dependency Management**: Runs `uv add` to add packages to `backend/pyproject.toml` and `uv.lock`, which the Docker image installs from (see [Dependencies](#7-dependencies))
 - **Category-Specific Templates**: Optimized templates based on plugin category
 - **Comprehensive Tests**: Generates test scaffolding with multiple test cases
 - **Best Practices**: Follows all plugin development patterns and conventions

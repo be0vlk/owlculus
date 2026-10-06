@@ -19,7 +19,7 @@ from app.core.exceptions import (
     ValidationException,
 )
 from app.core.logging import audit_operation, get_security_logger
-from app.core.roles import UserRole
+from app.core.enums import UserRole
 from app.core.utils import get_utc_now
 from app.database.db_utils import transaction
 from app.database.models import CaseUserLink, User

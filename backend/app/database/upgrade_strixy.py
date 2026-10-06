@@ -4,11 +4,10 @@ from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, select
 
-from app.database.connection import engine
 from app.database.models import User
 
 
-def upgrade(database_engine: Engine = engine) -> None:
+def upgrade(database_engine: Engine) -> None:
     """Upgrade existing accounts without identifying humans by name or email."""
     with database_engine.begin() as connection:
         if database_engine.dialect.name == "postgresql":
@@ -63,7 +62,3 @@ def upgrade(database_engine: Engine = engine) -> None:
                 )
             )
             session.flush()
-
-
-if __name__ == "__main__":
-    upgrade()

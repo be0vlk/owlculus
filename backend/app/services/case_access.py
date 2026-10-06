@@ -17,7 +17,7 @@ from app.core.exceptions import (
     ValidationException,
 )
 from app.core.logging import get_security_logger
-from app.core.roles import UserRole
+from app.core.enums import UserRole
 from app.database.models import Case, CaseUserLink, Evidence, User
 
 

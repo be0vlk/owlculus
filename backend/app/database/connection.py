@@ -12,11 +12,9 @@ from collections.abc import AsyncGenerator
 from fastapi import HTTPException
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError
-from sqlalchemy_utils import create_database, database_exists
 from sqlmodel import Session, create_engine
 
 from ..core.config import settings
-from .models import SQLModel
 
 
 def create_execution_engine(
@@ -52,12 +50,6 @@ observation_engine = create_execution_engine(default_pool_size=2, reserved=True)
 
 def get_observation_engine() -> Engine:
     return observation_engine
-
-
-def create_db_and_tables(database_engine: Engine = engine) -> None:
-    if not database_exists(database_engine.url):
-        create_database(database_engine.url)
-    SQLModel.metadata.create_all(database_engine)
 
 
 async def get_db() -> AsyncGenerator[Session, None]:

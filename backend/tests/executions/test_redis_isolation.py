@@ -11,7 +11,7 @@ from redis import Redis
 from redis.asyncio import Redis as AsyncRedis
 
 from app.core.config import settings
-from app.core.login_rate_limiting import RedisLoginRateLimiter
+from app.core.rate_limiting import RedisLoginRateLimiter
 from app.core.rate_limiting import RedisClientRateLimiter
 from app.core.redis_health import storage_ready
 from tests.executions.conftest import eventually
@@ -186,8 +186,11 @@ async def test_bootstrap_http_uses_auth_store_under_pressure(
         settings, "AUTH_REDIS_URL", execution_system.env["AUTH_REDIS_URL"]
     )
     monkeypatch.setattr(setup, "SETUP_TOKEN_FILE", tmp_path / "bootstrap-token")
-    token = setup.generate_setup_token()
+    token = setup.create_setup_token_once()[0]
     api = FastAPI()
+    api.state.bootstrap_rate_limiter = RedisClientRateLimiter(
+        AsyncRedis.from_url(execution_system.env["AUTH_REDIS_URL"])
+    )
     api.include_router(router, prefix="/users")
     api.add_exception_handler(DomainException, handle_domain_exception)
 

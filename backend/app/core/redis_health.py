@@ -3,6 +3,7 @@
 from secrets import token_hex
 
 from redis import Redis
+from redis.asyncio import Redis as AsyncRedis
 from redis.backoff import NoBackoff
 from redis.exceptions import RedisError
 from redis.retry import Retry
@@ -34,6 +35,13 @@ return count == 1 and token == 'probe' and 1 or 0
 }
 
 
+def bounded_redis[R: (Redis, AsyncRedis)](url: str, client: type[R]) -> R:
+    """Fail fast: one-second connect and socket timeouts, and no retries."""
+    return client.from_url(
+        url, socket_connect_timeout=1, socket_timeout=1, retry=Retry(NoBackoff(), 0)
+    )
+
+
 def storage_ready(client: Redis, role: str) -> bool:
     """Check the store's required data structure without leaking connection errors."""
     try:
@@ -49,11 +57,6 @@ def execution_storage_status() -> dict[str, str]:
 
     checks = {}
     for role, url in (("broker", app.conf.broker_url), ("events", event_redis_url())):
-        with Redis.from_url(
-            url,
-            socket_connect_timeout=1,
-            socket_timeout=1,
-            retry=Retry(NoBackoff(), 0),
-        ) as client:
+        with bounded_redis(url, Redis) as client:
             checks[role] = "ok" if storage_ready(client, role) else "unavailable"
     return checks

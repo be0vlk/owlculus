@@ -96,8 +96,6 @@ class Evidence(SQLModel, table=True):
     created_at: datetime = Field(default_factory=get_utc_now)
     updated_at: datetime = Field(default_factory=get_utc_now)
     created_by_id: int = Field(foreign_key="user.id")
-    case: "Case" = Relationship(back_populates="evidence")
-    creator: "User" = Relationship()
     parent_folder: Optional["Evidence"] = Relationship(
         back_populates="subfolders",
         sa_relationship_kwargs={"remote_side": "Evidence.id"},
@@ -125,9 +123,6 @@ class Entity(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=get_utc_now)
     created_by_id: int = Field(foreign_key="user.id")
 
-    case: "Case" = Relationship(back_populates="entities")
-    creator: "User" = Relationship()
-
 
 class SystemConfiguration(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -152,10 +147,6 @@ class Case(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=get_utc_now)
     client: Optional[Client] = Relationship(back_populates="cases")
     users: List["User"] = Relationship(back_populates="cases", link_model=CaseUserLink)
-    evidence: List["Evidence"] = Relationship(back_populates="case")
-    entities: List["Entity"] = Relationship(back_populates="case")
-    hunt_executions: List["HuntExecution"] = Relationship(back_populates="case")
-    tasks: List["Task"] = Relationship(back_populates="case")
 
 
 class Hunt(SQLModel, table=True):
@@ -169,8 +160,6 @@ class Hunt(SQLModel, table=True):
     is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=get_utc_now)
     updated_at: datetime = Field(default_factory=get_utc_now)
-
-    executions: List["HuntExecution"] = Relationship(back_populates="hunt")
 
 
 class HuntExecution(SQLModel, table=True):
@@ -189,8 +178,8 @@ class HuntExecution(SQLModel, table=True):
     created_at: datetime = Field(default_factory=get_utc_now)
     created_by_id: int = Field(foreign_key="user.id")
 
-    hunt: Hunt = Relationship(back_populates="executions")
-    case: Case = Relationship(back_populates="hunt_executions")
+    hunt: Hunt = Relationship()
+    case: Case = Relationship()
     creator: User = Relationship()
     steps: List["HuntStep"] = Relationship(back_populates="execution")
 
@@ -224,7 +213,6 @@ class TaskTemplate(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=get_utc_now)
 
     creator: Optional[User] = Relationship()
-    tasks: List["Task"] = Relationship(back_populates="template")
 
 
 class Task(SQLModel, table=True):
@@ -244,8 +232,7 @@ class Task(SQLModel, table=True):
     created_at: datetime = Field(default_factory=get_utc_now)
     updated_at: datetime = Field(default_factory=get_utc_now)
 
-    case: Case = Relationship(back_populates="tasks")
-    template: Optional[TaskTemplate] = Relationship(back_populates="tasks")
+    template: Optional[TaskTemplate] = Relationship()
     assigned_to: Optional[User] = Relationship(
         sa_relationship_kwargs={"foreign_keys": "[Task.assigned_to_id]"}
     )

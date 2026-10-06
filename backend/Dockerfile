@@ -62,4 +62,5 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-
 
 FROM runtime-base AS production
 
-CMD ["python", "-m", "app.serve"]
+# Uvicorn reads WEB_CONCURRENCY and FORWARDED_ALLOW_IPS from the environment.
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]

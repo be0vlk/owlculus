@@ -3,10 +3,8 @@
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
-from app.database.connection import engine
 
-
-def upgrade(database_engine: Engine = engine) -> None:
+def upgrade(database_engine: Engine) -> None:
     """Preserve users and relationships while enforcing identity and role invariants."""
     with database_engine.begin() as connection:
         if database_engine.dialect.name == "postgresql":
@@ -52,7 +50,3 @@ def upgrade(database_engine: Engine = engine) -> None:
             WHERE user_id IN (SELECT id FROM "user" WHERE role = 'Analyst') AND is_lead = true"""
             )
         )
-
-
-if __name__ == "__main__":
-    upgrade()

@@ -28,6 +28,8 @@ from app.core.security import get_password_hash
 from app.database.connection import get_db
 from app.database.models import User
 from app.main import app
+from tests import client_rate_limiter
+from tests.client_rate_limiter import InMemoryClientRateLimiter
 
 
 @pytest.fixture
@@ -98,7 +100,7 @@ def bootstrap_test_app(session: Session) -> FastAPI:
     test_app = FastAPI()
     test_app.add_exception_handler(DomainException, handle_domain_exception)
     test_app.add_exception_handler(Exception, handle_domain_exception)
-    test_app.state.bootstrap_rate_limiter = rate_limiting.InMemoryClientRateLimiter(
+    test_app.state.bootstrap_rate_limiter = InMemoryClientRateLimiter(
         max_attempts=3, window_seconds=60 * 60
     )
     test_app.include_router(auth_api.router, prefix="/api/auth")
@@ -134,7 +136,7 @@ async def submit_bootstrap_attempts(
 def pending_setup_token(tmp_path, monkeypatch) -> str:
     """Persist a pending token behind the setup store's public boundary."""
     monkeypatch.setattr(setup, "SETUP_TOKEN_FILE", tmp_path / ".setup_token")
-    return setup.generate_setup_token()
+    return setup.create_setup_token_once()[0]
 
 
 @pytest.fixture
@@ -282,7 +284,7 @@ class TestUsersAPI:
     ):
         """The deployed limiter atomically prunes, counts, stores, and expires attempts."""
         redis_client = AsyncMock()
-        redis_client.eval.side_effect = [1, 1, 1, 0]
+        redis_client.eval.side_effect = [0, 0, 0, 3600]
         test_app = bootstrap_test_app(session)
         test_app.state.bootstrap_rate_limiter = rate_limiting.RedisClientRateLimiter(
             redis_client, max_attempts=3, window_seconds=60 * 60
@@ -395,7 +397,7 @@ class TestUsersAPI:
     ):
         """A client may retry once its one-hour attempt window has elapsed."""
         current_time = [1000.0]
-        monkeypatch.setattr(rate_limiting, "monotonic", lambda: current_time[0])
+        monkeypatch.setattr(client_rate_limiter, "monotonic", lambda: current_time[0])
         test_app = bootstrap_test_app(session)
         initial_responses = await submit_bootstrap_attempts(
             test_app, invalid_bootstrap_payload, "198.51.100.30"
