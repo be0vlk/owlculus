@@ -13,17 +13,20 @@ def upgrade(database_engine: Engine) -> None:
     with database_engine.begin() as connection:
         if database_engine.dialect.name == "postgresql":
             connection.execute(text("SELECT pg_advisory_xact_lock(827104001)"))
-        connection.execute(text("""
+        connection.execute(
+            text("""
                 UPDATE evidence SET parent_folder_id = NULL
                 WHERE parent_folder_id IS NOT NULL AND NOT EXISTS (
                     SELECT 1 FROM evidence AS parent
                     WHERE parent.id = evidence.parent_folder_id
                     AND parent.case_id = evidence.case_id AND parent.is_folder = TRUE
                 )
-            """))
+            """)
+        )
         # Match CaseAccess.readable: Admin bypass or membership, with no extra
         # activity/role restrictions. Use only columns predating the account upgrade.
-        connection.execute(text("""
+        connection.execute(
+            text("""
                 UPDATE task SET assigned_to_id = NULL
                 WHERE assigned_to_id IS NOT NULL AND NOT EXISTS (
                     SELECT 1 FROM "user" AS assignee
@@ -35,4 +38,5 @@ def upgrade(database_engine: Engine) -> None:
                         )
                     )
                 )
-            """))
+            """)
+        )

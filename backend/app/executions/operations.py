@@ -20,7 +20,9 @@ def snapshot():
             ("plugin", "pluginexecution", QUEUE),
             ("hunt", "huntexecution", HUNT_QUEUE),
         ):
-            row = db.execute(text(f"""
+            row = (
+                db.execute(
+                    text(f"""
                 SELECT count(*) FILTER (WHERE e.status IN ('queued','pending')) AS pending,
                   count(*) FILTER (WHERE e.status IN ('running','cancelling')) AS active,
                   count(*) FILTER (WHERE e.status='failed') AS failures,
@@ -32,7 +34,11 @@ def snapshot():
                   coalesce(sum(c.recovery_attempts),0) AS recoveries
                 FROM {table} e LEFT JOIN executioncontrol c ON c.{kind}_execution_id=e.id
                 LEFT JOIN executionoutbox o ON o.control_id=c.id
-            """)).mappings().one()
+            """)
+                )
+                .mappings()
+                .one()
+            )
             metrics = dict(row)
             oldest = metrics.pop("oldest_pending")
             metrics["oldest_pending_seconds"] = (
@@ -57,7 +63,9 @@ def snapshot():
                 else (
                     "failed_dispatch"
                     if metrics["dispatch_errors"]
-                    else "waiting_for_capacity" if metrics["pending"] else "ready"
+                    else "waiting_for_capacity"
+                    if metrics["pending"]
+                    else "ready"
                 )
             )
             if metrics["condition"] in {"missing_workers", "failed_dispatch"}:

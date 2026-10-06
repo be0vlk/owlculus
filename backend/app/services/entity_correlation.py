@@ -321,7 +321,7 @@ def _profile(value: str) -> str | None:
     # beyond the shared scheme/hostname representation are implied here.
     authority_and_suffix = text.split("://", 1)[1]
     authority = re.split(r"[/\?#]", authority_and_suffix, maxsplit=1)[0]
-    return f"{parsed.scheme}://{parsed.netloc}{authority_and_suffix[len(authority):]}"
+    return f"{parsed.scheme}://{parsed.netloc}{authority_and_suffix[len(authority) :]}"
 
 
 def _email(value: str) -> str:

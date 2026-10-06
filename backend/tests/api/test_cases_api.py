@@ -403,8 +403,8 @@ def test_read_cases_as_investigator(
     client: TestClient,
 ):
     # Remove the default admin user from the override
-    app.dependency_overrides[get_current_user] = (
-        lambda: test_user
+    app.dependency_overrides[get_current_user] = lambda: (
+        test_user
     )  # Override to return the test user
 
     # Link user to case
@@ -477,8 +477,8 @@ def test_update_case_as_analyst(
     session: Session,
     client: TestClient,
 ):
-    app.dependency_overrides[get_current_user] = (
-        lambda: test_analyst
+    app.dependency_overrides[get_current_user] = lambda: (
+        test_analyst
     )  # Return test analyst
 
     # Link analyst to case

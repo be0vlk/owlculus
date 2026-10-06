@@ -275,9 +275,10 @@ def test_stale_owner_cannot_commit_results_state_or_case_effects(
 ):
     from datetime import timedelta
 
+    from sqlmodel import Session, select
+
     from app.core.utils import get_utc_now
     from app.database.models import ExecutionControl
-    from sqlmodel import Session, select
 
     system = execution_system
     _, client = system.api()

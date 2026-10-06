@@ -28,11 +28,11 @@ for key, value in {
 }.items():
     os.environ.setdefault(key, value)
 
-from sqlmodel import Session, SQLModel, create_engine
+from sqlmodel import Session, SQLModel, create_engine  # noqa: E402
 
-from app.database.models import Case, Entity, User
-from app.schemas.entity_schema import EntityCreate
-from app.services import entity_correlation
+from app.database.models import Case, Entity, User  # noqa: E402
+from app.schemas.entity_schema import EntityCreate  # noqa: E402
+from app.services import entity_correlation  # noqa: E402
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--baseline", type=Path)
@@ -57,8 +57,9 @@ with TemporaryDirectory(prefix="correlation-benchmark-") as directory:
             role="Admin",
             is_superadmin=True,
         )
-        source, related = Case(case_number="A", title="A"), Case(
-            case_number="B", title="B"
+        source, related = (
+            Case(case_number="A", title="A"),
+            Case(case_number="B", title="B"),
         )
         db.add_all([user, source, related])
         db.flush()

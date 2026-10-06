@@ -36,16 +36,26 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "black==26.5.1",
     "mypy>=1.17,<2",
     "pypdf==6.16.2",
     "pytest==9.1.1",
     "pytest-asyncio==1.4.0",
+    "pytest-timeout==2.4.0",
     "ruff==0.16.5",
 ]
 
 [tool.uv]
 package = false
+
+[tool.ruff.lint]
+# Pinned so ruff upgrades cannot silently widen the pre-commit gate.
+select = ["E4", "E7", "E9", "F", "I"]
+# `== None`/`== True` build SQLAlchemy expressions.
+ignore = ["E711", "E712"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/**" = ["E402"]
 
 [tool.mypy]
 python_version = "3.12"

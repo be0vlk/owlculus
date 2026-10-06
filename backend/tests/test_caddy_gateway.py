@@ -55,21 +55,24 @@ def test_caddy_applies_asset_caching_compression_and_security_headers():
 
     assert "@fingerprintedAssets path_regexp" in contents
     assert (
-        'header @fingerprintedAssets Cache-Control '
+        "header @fingerprintedAssets Cache-Control "
         '"public, max-age=31536000, immutable"'
     ) in contents
     assert "header /index.html Cache-Control" not in contents
     assert "encode gzip zstd" in contents
     assert "-Server" in contents
     assert "handle_errors {" in contents
-    assert "respond \"\" {http.error.status_code}" in contents
+    assert 'respond "" {http.error.status_code}' in contents
     assert "X-Content-Type-Options nosniff" in contents
     assert "X-Frame-Options DENY" in contents
     assert "Referrer-Policy strict-origin-when-cross-origin" in contents
     assert "Strict-Transport-Security" in contents
     assert "Permissions-Policy" in contents
     assert "Content-Security-Policy" in contents
-    assert "connect-src 'self' ws://{http.request.host} wss://{http.request.host}" in contents
+    assert (
+        "connect-src 'self' ws://{http.request.host} wss://{http.request.host}"
+        in contents
+    )
 
 
 @pytest.mark.parametrize("topology", ("direct", "reverse-proxy"))
@@ -95,8 +98,13 @@ def test_production_exposes_only_the_caddy_gateway(topology):
         },
     ]
     assert services["frontend"]["build"]["dockerfile"] == "frontend/Dockerfile"
-    assert services["frontend"]["depends_on"]["backend"]["condition"] == "service_healthy"
-    assert "http://127.0.0.1:8080/health/ready" in services["frontend"]["healthcheck"]["test"]
+    assert (
+        services["frontend"]["depends_on"]["backend"]["condition"] == "service_healthy"
+    )
+    assert (
+        "http://127.0.0.1:8080/health/ready"
+        in services["frontend"]["healthcheck"]["test"]
+    )
 
 
 def test_default_and_explicit_domain_modes_use_the_same_gateway_stack():
@@ -109,8 +117,7 @@ def test_default_and_explicit_domain_modes_use_the_same_gateway_stack():
 
     assert default["services"]["frontend"]["environment"]["DOMAIN"] == ":80"
     assert (
-        named["services"]["frontend"]["environment"]["DOMAIN"]
-        == "owlculus.example.com"
+        named["services"]["frontend"]["environment"]["DOMAIN"] == "owlculus.example.com"
     )
     assert default["services"].keys() == named["services"].keys()
 
@@ -119,7 +126,9 @@ def test_development_keeps_vite_and_direct_backend_access():
     """The Caddy production image does not replace the Vite development seam."""
     configuration = load_compose_configuration("development")
 
-    assert configuration["services"]["frontend"]["build"]["dockerfile"] == "Dockerfile.dev"
+    assert (
+        configuration["services"]["frontend"]["build"]["dockerfile"] == "Dockerfile.dev"
+    )
     assert configuration["services"]["frontend"]["ports"][0]["published"] == "5173"
     assert configuration["services"]["backend"]["ports"][0]["published"] == "8000"
 
@@ -128,7 +137,7 @@ def test_setup_script_preserves_same_origin_gateway_defaults():
     """Generated deployment settings do not reintroduce host or port coupling."""
     contents = (REPOSITORY_ROOT / "setup.sh").read_text()
 
-    assert 'DEFAULT_FRONTEND_PORT=80\n' in contents
+    assert "DEFAULT_FRONTEND_PORT=80\n" in contents
     assert 'CADDY_DOMAIN=""' in contents
     assert "DOMAIN=$CADDY_DOMAIN" in contents
     assert "BACKEND_API_URL=" not in contents

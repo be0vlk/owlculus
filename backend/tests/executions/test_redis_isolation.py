@@ -11,8 +11,7 @@ from redis import Redis
 from redis.asyncio import Redis as AsyncRedis
 
 from app.core.config import settings
-from app.core.rate_limiting import RedisLoginRateLimiter
-from app.core.rate_limiting import RedisClientRateLimiter
+from app.core.rate_limiting import RedisClientRateLimiter, RedisLoginRateLimiter
 from app.core.redis_health import storage_ready
 from tests.executions.conftest import eventually
 from tests.executions.test_login_limits import login_app
@@ -161,8 +160,10 @@ async def test_maintenance_waits_for_old_budgets_and_preserves_persisted_queue(
     eventually(restarted)
     assert old.lindex("migration-fixture-queue", 0) == b"retained-work"
     eventually(
-        lambda: not list(old.scan_iter("owlculus:login-rate-limit:*"))
-        and not list(old.scan_iter("owlculus:bootstrap-rate-limit:*"))
+        lambda: (
+            not list(old.scan_iter("owlculus:login-rate-limit:*"))
+            and not list(old.scan_iter("owlculus:bootstrap-rate-limit:*"))
+        )
     )
     async with AsyncRedis.from_url(system.env["AUTH_REDIS_URL"]) as shared:
         await RedisLoginRateLimiter(shared).check("198.51.100.4", "acceptance")

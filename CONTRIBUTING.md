@@ -35,8 +35,13 @@ Run the backend checks from the repository root:
 
 ```bash
 make typecheck
-cd backend && uv run --locked black --check app tests
-cd backend && uv run --locked ruff check app tests
+make lint
+```
+
+Enable the pre-commit hook, which runs `make lint`, once per clone:
+
+```bash
+git config core.hooksPath .githooks
 ```
 
 ## Naming & Documentation

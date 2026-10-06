@@ -8,8 +8,10 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Barrier
 
-import app.main as main_module
 import pytest
+from fastapi.testclient import TestClient
+
+import app.main as main_module
 from app.core.setup import (
     check_and_generate_setup_token,
     clear_setup_token,
@@ -17,7 +19,6 @@ from app.core.setup import (
     get_setup_token,
     validate_setup_token,
 )
-from fastapi.testclient import TestClient
 
 
 def test_generated_setup_token_is_persisted(tmp_path, monkeypatch):

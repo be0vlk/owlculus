@@ -119,7 +119,7 @@ def write_files_safely(file_contents_map: Dict[Path, str]) -> None:
         for written_file in written_files:
             try:
                 written_file.unlink()
-            except:
+            except OSError:
                 pass
         sys.exit(1)
 
@@ -235,24 +235,28 @@ def generate_hunt_definition(config: Dict[str, Any]) -> str:
         db_session_param = ", db_session: Optional[Session] = None"
 
     template = f'''"""
-{config['description']}
+{config["description"]}
 """
 
 from typing import List{", Optional" if config.get("needs_db_session") else ""}
-{"""
-from sqlmodel import Session""" if config.get("needs_db_session") else ""}
+{
+        """
+from sqlmodel import Session"""
+        if config.get("needs_db_session")
+        else ""
+    }
 
 from ..base_hunt import BaseHunt, HuntStepDefinition
 
 
-class {config['class_name']}Hunt(BaseHunt):
-    """{config['description']}"""
+class {config["class_name"]}Hunt(BaseHunt):
+    """{config["description"]}"""
 
     def __init__(self{db_session_param}):
         super().__init__()
-        self.display_name = "{config['display_name']}"
-        self.description = "{config['description']}"
-        self.category = "{config['category']}"
+        self.display_name = "{config["display_name"]}"
+        self.description = "{config["description"]}"
+        self.category = "{config["category"]}"
         self.version = "1.0.0"
         
         # Define initial parameters that users will provide
@@ -411,27 +415,27 @@ def generate_test_file(config: Dict[str, Any]) -> str:
     """Generate a basic test file for the hunt"""
 
     template = f'''"""
-Tests for {config['display_name']} hunt
+Tests for {config["display_name"]} hunt
 """
 
 import pytest
-from app.hunts.definitions.{config['name']}_hunt import {config['class_name']}Hunt
+from app.hunts.definitions.{config["name"]}_hunt import {config["class_name"]}Hunt
 from app.hunts.base_hunt import HuntStepDefinition
 
 
-class Test{config['class_name']}Hunt:
-    """Test cases for {config['class_name']}Hunt"""
+class Test{config["class_name"]}Hunt:
+    """Test cases for {config["class_name"]}Hunt"""
 
     @pytest.fixture
     def hunt(self):
         """Create hunt instance for testing"""
-        return {config['class_name']}Hunt()
+        return {config["class_name"]}Hunt()
 
     def test_hunt_initialization(self, hunt):
         """Test hunt initializes correctly"""
-        assert hunt.display_name == "{config['display_name']}"
-        assert hunt.description == "{config['description']}"
-        assert hunt.category == "{config['category']}"
+        assert hunt.display_name == "{config["display_name"]}"
+        assert hunt.description == "{config["description"]}"
+        assert hunt.category == "{config["category"]}"
         assert hunt.version == "1.0.0"
         assert isinstance(hunt.initial_parameters, dict)
 

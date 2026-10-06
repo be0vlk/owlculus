@@ -398,8 +398,6 @@ async def test_concurrent_case_number_generation(
     case_service_instance.db.refresh(client)
 
     # Create multiple cases in same month
-    current_time = datetime(2023, 1, 15, 12, 0, 0)
-
     case_numbers = []
     for i in range(5):
         case_data = schemas.CaseCreate(
@@ -573,7 +571,7 @@ async def test_invalid_status_values(
     from pydantic import ValidationError
 
     with pytest.raises(ValidationError):
-        case_update = schemas.CaseUpdate(status="InvalidStatus")
+        schemas.CaseUpdate(status="InvalidStatus")
 
 
 @pytest.mark.asyncio
@@ -762,7 +760,7 @@ async def test_add_duplicate_user_to_case(
     assert user_dict[test_user.id].is_lead is False
 
     # Try to add them again with is_lead=True - should update is_lead instead of failing
-    updated_case = await case_service_instance.add_user_to_case(
+    await case_service_instance.add_user_to_case(
         sample_case.id, test_user.id, current_user=test_admin, is_lead=True
     )
 
@@ -1012,7 +1010,7 @@ async def test_investigator_can_be_set_as_lead(
 ):
     """Test that investigators can be set as leads"""
     # Add investigator as lead - should succeed
-    updated_case = await case_service_instance.add_user_to_case(
+    await case_service_instance.add_user_to_case(
         sample_case.id, test_user.id, current_user=test_admin, is_lead=True
     )
 
@@ -1043,7 +1041,7 @@ async def test_admin_can_be_set_as_lead(
     session.refresh(another_admin)
 
     # Add admin as lead - should succeed
-    updated_case = await case_service_instance.add_user_to_case(
+    await case_service_instance.add_user_to_case(
         sample_case.id, another_admin.id, current_user=test_admin, is_lead=True
     )
 

@@ -113,11 +113,14 @@ def test_execution_processes_share_configuration_and_have_role_healthchecks(
     assert "--concurrency=2" in worker["command"]
     assert "--prefetch-multiplier=1" in worker["command"]
     assert "worker-egress" in worker["networks"]
-    uploads = lambda service: next(
-        volume["source"]
-        for volume in service["volumes"]
-        if volume["target"] == "/app/uploads"
-    )
+
+    def uploads(service):
+        return next(
+            volume["source"]
+            for volume in service["volumes"]
+            if volume["target"] == "/app/uploads"
+        )
+
     assert uploads(worker) == uploads(api)
 
 

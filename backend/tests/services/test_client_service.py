@@ -31,7 +31,6 @@ async def create_client_helper(db: Session, client_data: dict) -> models.Client:
 
 @pytest.mark.asyncio
 class TestClientService:
-
     async def test_get_clients_success(self, session, test_user, test_admin):
         # Create some clients
         await create_client_helper(

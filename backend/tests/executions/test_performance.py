@@ -321,10 +321,9 @@ def test_fault_and_limits_acceptance_under_load(execution_system):
         began = time.monotonic()
         assert client.delete(accepted["links"]["detail"]).status_code == 200
         eventually(
-            lambda accepted=accepted: client.get(accepted["links"]["detail"]).json()[
-                "status"
-            ]
-            == "cancelled",
+            lambda accepted=accepted: (
+                client.get(accepted["links"]["detail"]).json()["status"] == "cancelled"
+            ),
             timeout=30,
         )
         measurements[f"{mode}_cancellation_seconds"] = time.monotonic() - began

@@ -39,11 +39,13 @@ def upgrade(database_engine: Engine) -> None:
                     'CREATE UNIQUE INDEX IF NOT EXISTS user_auth_identity_unique ON "user" (auth_identity)'
                 )
             )
-            connection.execute(text("""DO $$ BEGIN
+            connection.execute(
+                text("""DO $$ BEGIN
                 IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = '"user"'::regclass AND conname = 'user_session_version_nonnegative') THEN
                     ALTER TABLE "user" ADD CONSTRAINT user_session_version_nonnegative CHECK (session_version >= 0);
                 END IF;
-            END $$"""))
+            END $$""")
+            )
         connection.execute(
             text(
                 """UPDATE caseuserlink SET is_lead = false

@@ -241,10 +241,13 @@ class TestEvidenceAPI:
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
         try:
-            with patch(
-                "app.services.evidence_service.EvidenceService.create_evidence",
-                return_value=invalid_response_model,
-            ), pytest.raises(ValidationError, match="id"):
+            with (
+                patch(
+                    "app.services.evidence_service.EvidenceService.create_evidence",
+                    return_value=invalid_response_model,
+                ),
+                pytest.raises(ValidationError, match="id"),
+            ):
                 client.post(
                     f"/api/evidence?title=Invalid&case_id={test_case.id}&category=Other",
                     files=[("files", ("invalid.txt", b"invalid", "text/plain"))],

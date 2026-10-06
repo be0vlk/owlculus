@@ -22,8 +22,7 @@ def test_make_test_uses_the_locked_local_environment():
 
 def test_minimal_synchronous_testclient_request_has_a_bounded_runtime():
     """A standalone synchronous ASGI request cannot hang the test process."""
-    probe = textwrap.dedent(
-        """
+    probe = textwrap.dedent("""
         from fastapi import FastAPI
         from fastapi.testclient import TestClient
 
@@ -38,8 +37,7 @@ def test_minimal_synchronous_testclient_request_has_a_bounded_runtime():
 
         assert response.status_code == 200
         assert response.json() == {"ok": True}
-        """
-    )
+        """)
 
     subprocess.run(
         [sys.executable, "-c", probe],

@@ -218,12 +218,14 @@ def test_concurrent_plugin_and_hunt_share_one_results_folder(execution_system):
             ],
         )
         eventually(
-            lambda: (system.root / "provider-starts").exists()
-            and (system.root / "provider-starts")
-            .read_text()
-            .splitlines()
-            .count("both-save")
-            == 2
+            lambda: (
+                (system.root / "provider-starts").exists()
+                and (system.root / "provider-starts")
+                .read_text()
+                .splitlines()
+                .count("both-save")
+                == 2
+            )
         )
         assert contents(client, system) == []
         (system.root / "both-save").touch()

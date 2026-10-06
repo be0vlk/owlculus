@@ -1,6 +1,7 @@
 """Login fails closed while asynchronous shared storage is unavailable."""
 
 import asyncio
+import threading
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -15,12 +16,14 @@ from app.services.auth_service import AuthService
 async def test_unavailable_storage_precedes_authentication_without_blocking(
     monkeypatch,
 ):
-    started, release = asyncio.Event(), asyncio.Event()
+    # DatabaseRoute runs the request on a worker thread's own loop, so the
+    # handshake must be thread-safe.
+    started, release = threading.Event(), threading.Event()
 
     class UnavailableRedis:
         async def eval(self, *args):
             started.set()
-            await release.wait()
+            await asyncio.to_thread(release.wait)
             raise ConnectionError("private Redis credentials must not escape")
 
     def forbidden(*args, **kwargs):
@@ -39,7 +42,7 @@ async def test_unavailable_storage_precedes_authentication_without_blocking(
             )
         )
         try:
-            await asyncio.wait_for(started.wait(), 3)
+            assert await asyncio.to_thread(started.wait, 3)
             assert (
                 await asyncio.wait_for(api.get("/health/live"), 3)
             ).status_code == 200

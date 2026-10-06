@@ -344,8 +344,9 @@ def test_missing_heartbeat_keeps_cancellation_pending_until_cleanup_bound(
         assert client.get(accepted["links"]["detail"]).json()["status"] == "cancelling"
         expire_owner(system, accepted)
         eventually(
-            lambda: client.get(accepted["links"]["detail"]).json()["status"]
-            == "cancelled"
+            lambda: (
+                client.get(accepted["links"]["detail"]).json()["status"] == "cancelled"
+            )
         )
         result = client.get(accepted["links"]["detail"]).json()
         assert client.delete(accepted["links"]["detail"]).json() == result

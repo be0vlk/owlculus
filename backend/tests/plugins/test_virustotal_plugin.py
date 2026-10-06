@@ -42,9 +42,7 @@ ANALYSIS = {
     },
 }
 OBJECTS = {
-    "/files/"
-    + "a"
-    * 32: {
+    "/files/" + "a" * 32: {
         **ANALYSIS,
         "sha256": "s256",
         "sha1": "s1",
@@ -53,8 +51,7 @@ OBJECTS = {
         "type_description": "PE32",
         "tags": ["peexe"],
     },
-    "/urls/"
-    + vt.url_id("https://example.com/x"): {
+    "/urls/" + vt.url_id("https://example.com/x"): {
         **ANALYSIS,
         "title": "X",
         "categories": {},

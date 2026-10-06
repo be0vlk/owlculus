@@ -199,8 +199,8 @@ def install():
     original = plugin_registry.get_shipped_plugin_registry
     registry = original()
     # Keep shipped definitions for startup hunt validation.
-    plugin_registry.get_shipped_plugin_registry = (
-        lambda: plugin_registry.PluginRegistry.from_classes(
+    plugin_registry.get_shipped_plugin_registry = lambda: (
+        plugin_registry.PluginRegistry.from_classes(
             [type(registry.create(name)) for name in registry.metadata()]
             + [AcceptancePlugin]
         )

@@ -197,11 +197,19 @@ def test_main_cutover_preserves_records_and_runs_new_work(execution_system):
     system = execution_system
     metadata, baseline, report, contents = install_main_database(system)
     # Exercise the actual deployment entry point with only the old schema present.
+    # Like compose's db-init: the owner migrates, then re-grants the runtime role.
+    owner_env = {
+        **system.env,
+        "POSTGRES_USER": "postgres",
+        "POSTGRES_PASSWORD": "acceptance",
+        "RUNTIME_POSTGRES_USER": system.env["POSTGRES_USER"],
+        "RUNTIME_POSTGRES_PASSWORD": system.env["POSTGRES_PASSWORD"],
+    }
     for _ in range(2):
         subprocess.run(
             [sys.executable, "-m", "app.database.init_db"],
             cwd=system.root,
-            env=system.env,
+            env=owner_env,
             check=True,
             capture_output=True,
             text=True,
@@ -216,7 +224,19 @@ def test_main_cutover_preserves_records_and_runs_new_work(execution_system):
                 ).mappings()
             ]
             expected = [dict(row) for row in old_rows]
-            if name == "caseuserlink":
+            if name == "user":
+                # The Strixy upgrade provisions its system Analyst on old installs.
+                strixy = rows.pop()
+                assert (
+                    strixy["username"],
+                    strixy["role"],
+                    strixy["password_hash"],
+                ) == (
+                    "strixy",
+                    "Analyst",
+                    "!",
+                )
+            elif name == "caseuserlink":
                 expected[1]["is_lead"] = False
             elif name == "evidence":
                 expected[1]["parent_folder_id"] = None

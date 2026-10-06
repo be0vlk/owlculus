@@ -146,8 +146,9 @@ class OfficeDocument:
                         )
                         self.warnings.add("display_formatting_unexamined")
                     values[cell.attrib["r"]] = value
-                yield f"sheet:{sheet.attrib['name']}:row:{row.attrib['r']}", json.dumps(
-                    values, ensure_ascii=False
+                yield (
+                    f"sheet:{sheet.attrib['name']}:row:{row.attrib['r']}",
+                    json.dumps(values, ensure_ascii=False),
                 )
 
     def presentation(self):

@@ -25,14 +25,16 @@ def upgrade(database_engine: Engine) -> None:
             )
         )
         if database_engine.dialect.name == "postgresql":
-            connection.execute(text("""DO $$ BEGIN
+            connection.execute(
+                text("""DO $$ BEGIN
                 IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = '"user"'::regclass AND conname = 'user_system_identity_policy') THEN
                     ALTER TABLE "user" ADD CONSTRAINT user_system_identity_policy CHECK (
                         system_identity IS NULL OR (system_identity = 'strixy'
                         AND role = 'Analyst' AND is_superadmin = false AND password_hash = '!')
                     );
                 END IF;
-            END $$"""))
+            END $$""")
+            )
         with Session(bind=connection) as session:
             if session.exec(
                 select(User).where(User.system_identity == "strixy")

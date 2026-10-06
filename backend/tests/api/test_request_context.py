@@ -1,13 +1,14 @@
 """API middleware tests for trusted request context."""
 
 import pytest
-from app.core.config import settings
-from app.core.logging import get_security_logger
-from app.main import request_info_middleware
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from loguru import logger
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
+from app.core.config import settings
+from app.core.logging import get_security_logger
+from app.main import request_info_middleware
 
 
 @pytest.mark.asyncio

@@ -5,8 +5,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict
 
-from .user_schema import User
 from ..core.enums import TaskPriority, TaskStatus
+from .user_schema import User
 
 
 # TaskTemplate Schemas

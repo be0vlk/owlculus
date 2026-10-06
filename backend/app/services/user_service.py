@@ -10,6 +10,7 @@ from sqlmodel import Session, col, select
 
 from app import schemas
 from app.core import security, setup
+from app.core.enums import UserRole
 from app.core.exceptions import (
     AuthenticationException,
     AuthorizationException,
@@ -19,7 +20,6 @@ from app.core.exceptions import (
     ValidationException,
 )
 from app.core.logging import audit_operation, get_security_logger
-from app.core.enums import UserRole
 from app.core.utils import get_utc_now
 from app.database.db_utils import transaction
 from app.database.models import CaseUserLink, User

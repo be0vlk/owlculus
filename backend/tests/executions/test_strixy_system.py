@@ -65,8 +65,9 @@ def test_accepted_reply_survives_restart_and_duplicate_delivery(strixy_system):
     )
     (system.root / "strixy-release").touch()
     eventually(
-        lambda: reopened.get(accepted.headers["location"]).json()["status"]
-        == "completed"
+        lambda: (
+            reopened.get(accepted.headers["location"]).json()["status"] == "completed"
+        )
     )
     saved = reopened.get(detail).json()
     assert [m["content"] for m in saved["messages"]] == [
@@ -205,8 +206,9 @@ def test_streamed_run_controls_across_real_worker_boundary(strixy_system, action
         resumed = client.post(observation + "/continue")
         assert resumed.status_code == 202
         eventually(
-            lambda: client.get(resumed.headers["location"]).json()["status"]
-            == "completed"
+            lambda: (
+                client.get(resumed.headers["location"]).json()["status"] == "completed"
+            )
         )
         assert len(client.get(detail).json()["messages"]) == 3
     elif action == "failure":
@@ -215,8 +217,9 @@ def test_streamed_run_controls_across_real_worker_boundary(strixy_system, action
         retried = client.post(observation + "/retry")
         assert retried.status_code == 202
         eventually(
-            lambda: client.get(retried.headers["location"]).json()["status"]
-            == "completed"
+            lambda: (
+                client.get(retried.headers["location"]).json()["status"] == "completed"
+            )
         )
 
 

@@ -247,20 +247,9 @@ def test_container_test_data_runner_forwards_username_without_password_argument(
     assert "--password" not in calls
 
 
-def test_operator_documentation_explains_the_first_run_lifecycle():
-    """The README makes fresh installs and upgrades operable without defaults."""
+def test_operator_documentation_has_no_insecure_defaults():
+    """First-run guidance lives in the Wiki; the README must not undo it."""
     readme = (REPOSITORY_ROOT / "README.md").read_text()
-
-    for required_guidance in (
-        "/setup",
-        "docker compose logs backend",
-        "same setup token",
-        "token is consumed",
-        "already has users",
-        "DOMAIN",
-        "same-origin",
-    ):
-        assert required_guidance in readme
 
     browser_docs = readme + (REPOSITORY_ROOT / "extension/README.md").read_text()
     assert "http://localhost:8000" not in browser_docs

@@ -75,8 +75,10 @@ def test_publication_failure_repairs_without_api_traffic_and_retention_recovers(
     redis.delete(key)
     # No HTTP requests drive event repair.
     eventually(
-        lambda: redis.xlen(key) == 3
-        and redis.xrevrange(key, count=1)[0][0] == f"{state['revision']}-0"
+        lambda: (
+            redis.xlen(key) == 3
+            and redis.xrevrange(key, count=1)[0][0] == f"{state['revision']}-0"
+        )
     )
     assert 0 < redis.ttl(key) <= 86400
     with connect(stream(client, accepted, cursor="1-0")) as ws:
@@ -123,9 +125,10 @@ def test_two_api_observers_receive_hunt_progress_and_revocation(execution_system
         user = db.get(User, system.user_id)
         user.role = "Analyst"
         db.commit()
-    with connect(stream(first, accepted, kind="hunt")) as left, connect(
-        stream(second, accepted, kind="hunt")
-    ) as right:
+    with (
+        connect(stream(first, accepted, kind="hunt")) as left,
+        connect(stream(second, accepted, kind="hunt")) as right,
+    ):
         a, b = receive(left), receive(right)
         assert a["revision"] == b["revision"]
         assert a["state"]["status"] == b["state"]["status"] == "running"
@@ -403,9 +406,10 @@ def test_both_observers_receive_same_updates_and_active_retention_expires_only_a
     eventually(lambda: first.get(accepted["links"]["results"]).json()["items"])
     revision = first.get(accepted["links"]["detail"]).json()["revision"]
     eventually(lambda: redis.xrevrange(key, count=1)[0][0] == f"{revision}-0")
-    with connect(stream(first, accepted)) as left, connect(
-        stream(second, accepted)
-    ) as right:
+    with (
+        connect(stream(first, accepted)) as left,
+        connect(stream(second, accepted)) as right,
+    ):
         assert receive(left)["revision"] == receive(right)["revision"] == revision
         time.sleep(4)  # Longer than the configured TTL; provider has no new events.
         assert redis.exists(key)

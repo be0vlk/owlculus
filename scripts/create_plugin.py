@@ -142,7 +142,7 @@ def write_files_safely(file_contents_map: dict[Path, str]) -> None:
         for written_file in written_files:
             try:
                 written_file.unlink()
-            except:
+            except OSError:
                 pass
         sys.exit(1)
 
@@ -174,7 +174,7 @@ def pascal_to_title(name: str) -> str:
 def generate_backend_plugin(config: dict[str, Any]) -> str:
     """Generate the backend plugin Python file content"""
     template = f'''"""
-{config['description']}
+{config["description"]}
 """
 
 import asyncio
@@ -182,14 +182,14 @@ from typing import Any, AsyncGenerator
 
 from .base_plugin import BasePlugin, PluginRun, ResultEvent
 
-class {config['class_name']}Plugin(BasePlugin):
-    """{config['description']}"""
+class {config["class_name"]}Plugin(BasePlugin):
+    """{config["description"]}"""
 
     def __init__(self):
-        super().__init__(display_name="{config['display_name']}")
-        self.description = "{config['description']}"
-        self.category = "{config['category']}"  # {', '.join(UI_CATEGORIES)}
-        self.evidence_category = "{config['evidence_category']}"  # {', '.join(EVIDENCE_CATEGORIES)}
+        super().__init__(display_name="{config["display_name"]}")
+        self.description = "{config["description"]}"
+        self.category = "{config["category"]}"  # {", ".join(UI_CATEGORIES)}
+        self.evidence_category = "{config["evidence_category"]}"  # {", ".join(EVIDENCE_CATEGORIES)}
         self.parameters = {{
             # TODO: Define your plugin parameters here
             "target": {{
@@ -275,7 +275,7 @@ def generate_params_component(config: dict[str, Any]) -> str:
   <GenericPluginParams
     :parameters="parameters"
     :model-value="modelValue"
-    :plugin-name="'{config['class_name']}Plugin'"
+    :plugin-name="'{config["class_name"]}Plugin'"
     @update:model-value="$emit('update:modelValue', $event)"
   />
 </template>
@@ -341,7 +341,7 @@ def generate_result_component(config: dict[str, Any]) -> str:
       <v-card v-if="item.type === 'data'" elevation="2" rounded="lg">
         <v-card-title class="d-flex align-center">
           <v-icon icon="{icon}" class="mr-2" />
-          {{{{ item.data.target || '{config['display_name']} Results' }}}}
+          {{{{ item.data.target || '{config["display_name"]} Results' }}}}
         </v-card-title>
         <v-card-text>
           <!-- Example: Display your plugin's specific data structure -->

@@ -1,6 +1,7 @@
 """Entity website identity across persistence, export and PluginRunner."""
 
 import pytest
+
 from app.core.config import settings
 from app.core.dependencies import get_current_user
 from app.database.models import Case, Entity

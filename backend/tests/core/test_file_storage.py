@@ -186,7 +186,7 @@ class TestDeleteFolder:
         """Test that empty parent directories are cleaned up."""
         # Create nested folder structure
         folder_path = "parent/child/grandchild"
-        created_folder = file_storage.create_folder(case_id, folder_path)
+        file_storage.create_folder(case_id, folder_path)
 
         # Delete the deepest folder
         file_storage.delete_folder(case_id, folder_path)
@@ -236,12 +236,10 @@ class TestSaveUploadFile:
         self, temp_upload_dir, case_id, sample_upload_file
     ):
         """Test saving upload file with valid case ID."""
-        with patch(
-            "app.core.file_storage.validate_file_security"
-        ) as mock_validate, patch(
-            "app.core.file_storage.secure_filename_with_path"
-        ) as mock_secure:
-
+        with (
+            patch("app.core.file_storage.validate_file_security") as mock_validate,
+            patch("app.core.file_storage.secure_filename_with_path") as mock_secure,
+        ):
             mock_validate.return_value = None  # No exception
             mock_secure.return_value = "test_file.txt"
 
@@ -261,12 +259,10 @@ class TestSaveUploadFile:
         self, temp_upload_dir, case_id, sample_upload_file
     ):
         """Test saving upload file with folder path."""
-        with patch(
-            "app.core.file_storage.validate_file_security"
-        ) as mock_validate, patch(
-            "app.core.file_storage.secure_filename_with_path"
-        ) as mock_secure:
-
+        with (
+            patch("app.core.file_storage.validate_file_security") as mock_validate,
+            patch("app.core.file_storage.secure_filename_with_path") as mock_secure,
+        ):
             mock_validate.return_value = None
             mock_secure.return_value = "test_file.txt"
             folder_path = "evidence/documents"
@@ -324,12 +320,10 @@ class TestSaveUploadFile:
         self, temp_upload_dir, case_id, sample_upload_file
     ):
         """Test that generic exceptions are handled properly."""
-        with patch(
-            "app.core.file_storage.validate_file_security"
-        ) as mock_validate, patch(
-            "app.core.file_storage.secure_filename_with_path"
-        ) as mock_secure:
-
+        with (
+            patch("app.core.file_storage.validate_file_security") as mock_validate,
+            patch("app.core.file_storage.secure_filename_with_path") as mock_secure,
+        ):
             mock_validate.return_value = None
             mock_secure.side_effect = Exception("Unexpected error")
 
