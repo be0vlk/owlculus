@@ -1,9 +1,4 @@
-"""
-Case Management API for Owlculus OSINT Platform.
-
-This module provides comprehensive case management endpoints for digital investigations,
-supporting the complete lifecycle of OSINT cases from creation to completion.
-"""
+"""Case, case membership and case entity routes."""
 
 from typing import Annotated, List, Optional
 
@@ -31,8 +26,7 @@ async def create_case(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    case_service = CaseService(db)
-    return await case_service.create_case(case=case, current_user=current_user)
+    return await CaseService(db).create_case(case=case, current_user=current_user)
 
 
 @router.get("/", response_model=list[schemas.Case])
@@ -43,8 +37,7 @@ async def read_cases(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    case_service = CaseService(db)
-    return await case_service.get_cases(
+    return await CaseService(db).get_cases(
         current_user=current_user, skip=skip, limit=limit, status=status
     )
 
@@ -55,8 +48,7 @@ async def read_case(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    case_service = CaseService(db)
-    return await case_service.get_case(case_id=case_id, current_user=current_user)
+    return await CaseService(db).get_case(case_id=case_id, current_user=current_user)
 
 
 @router.put("/{case_id}", response_model=schemas.Case)
@@ -66,8 +58,7 @@ async def update_case(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    case_service = CaseService(db)
-    return await case_service.update_case(
+    return await CaseService(db).update_case(
         case_id=case_id, case_update=case, current_user=current_user
     )
 
@@ -80,9 +71,8 @@ async def add_user_to_case(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    case_service = CaseService(db)
     is_lead = body.get("is_lead", False) if body else False
-    return await case_service.add_user_to_case(
+    return await CaseService(db).add_user_to_case(
         case_id=case_id, user_id=user_id, current_user=current_user, is_lead=is_lead
     )
 
@@ -95,8 +85,7 @@ async def update_case_user_lead_status(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    case_service = CaseService(db)
-    return await case_service.update_case_user_lead_status(
+    return await CaseService(db).update_case_user_lead_status(
         case_id=case_id,
         user_id=user_id,
         is_lead=update_data.is_lead,
@@ -111,8 +100,7 @@ async def remove_user_from_case(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    case_service = CaseService(db)
-    return await case_service.remove_user_from_case(
+    return await CaseService(db).remove_user_from_case(
         case_id=case_id, user_id=user_id, current_user=current_user
     )
 
@@ -124,8 +112,7 @@ async def get_case_users(
     current_user: models.User = Depends(get_current_user),
 ):
     """Get all users assigned to a case"""
-    case_service = CaseService(db)
-    case = await case_service.get_case(case_id=case_id, current_user=current_user)
+    case = await CaseService(db).get_case(case_id=case_id, current_user=current_user)
     return case.users
 
 
@@ -135,8 +122,7 @@ async def export_case(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    export_service = ExportService(db)
-    artifact = export_service.export_case_bundle(case_id, current_user)
+    artifact = ExportService(db).export_case_bundle(case_id, current_user)
 
     return FileResponse(
         path=artifact.path,
@@ -156,8 +142,7 @@ async def export_case_entities(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    export_service = ExportService(db)
-    artifact = export_service.export_entities(
+    artifact = ExportService(db).export_entities(
         case_id=case_id,
         current_user=current_user,
         export_format=format,
@@ -183,8 +168,7 @@ async def get_case_entities(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    entity_service = EntityService(db)
-    return await entity_service.get_case_entities(
+    return await EntityService(db).get_case_entities(
         case_id=case_id,
         current_user=current_user,
         entity_type=entity_type,
@@ -205,8 +189,7 @@ async def create_entity(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    entity_service = EntityService(db)
-    return await entity_service.create_entity(
+    return await EntityService(db).create_entity(
         case_id=case_id, entity=entity, current_user=current_user
     )
 
@@ -240,8 +223,7 @@ async def update_entity(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    entity_service = EntityService(db)
-    return await entity_service.update_entity(
+    return await EntityService(db).update_entity(
         case_id=case_id,
         entity_id=entity_id,
         entity_update=entity,
@@ -260,8 +242,7 @@ async def get_entity(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    entity_service = EntityService(db)
-    return await entity_service.get_entity(
+    return await EntityService(db).get_entity(
         case_id=case_id, entity_id=entity_id, current_user=current_user
     )
 
@@ -277,7 +258,6 @@ async def delete_entity(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    entity_service = EntityService(db)
-    await entity_service.delete_entity(
+    await EntityService(db).delete_entity(
         case_id=case_id, entity_id=entity_id, current_user=current_user
     )

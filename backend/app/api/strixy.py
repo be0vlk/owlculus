@@ -1,10 +1,4 @@
-"""
-API endpoints for Strixy service integration (external OSINT service).
-
-This module handles Strixy-specific OSINT data retrieval and processing,
-providing chat interface functionality for interacting with the Strixy
-service for intelligence gathering operations.
-"""
+"""Strixy conversation, run, source and share routes."""
 
 from typing import Annotated, Literal
 

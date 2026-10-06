@@ -1,6 +1,4 @@
-"""
-Evidence schemas for the application.
-"""
+"""Evidence schemas."""
 
 from datetime import datetime
 from typing import ClassVar, List, Optional

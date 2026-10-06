@@ -1,6 +1,4 @@
-"""
-Task-related Pydantic schemas for request/response validation
-"""
+"""Task and task template schemas."""
 
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -12,17 +10,13 @@ from ..core.enums import TaskPriority, TaskStatus
 
 
 # TaskTemplate Schemas
-class TaskTemplateBase(BaseModel):
+class TaskTemplateCreate(BaseModel):
     name: str
     display_name: str
     description: str
     category: str
     is_active: bool = True
     definition_json: Dict[str, Any]
-
-
-class TaskTemplateCreate(TaskTemplateBase):
-    pass
 
 
 class TaskTemplateUpdate(BaseModel):
@@ -34,7 +28,7 @@ class TaskTemplateUpdate(BaseModel):
     definition_json: Optional[Dict[str, Any]] = None
 
 
-class TaskTemplateResponse(TaskTemplateBase):
+class TaskTemplateResponse(TaskTemplateCreate):
     model_config = ConfigDict(from_attributes=True)
 
     id: int

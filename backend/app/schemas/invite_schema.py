@@ -1,9 +1,4 @@
-"""
-Pydantic schemas for user invitation data validation.
-
-This module defines request and response models for invite creation, acceptance,
-management, and user registration through invitation tokens with role validation.
-"""
+"""Invite schemas."""
 
 from datetime import datetime
 from typing import Literal, Optional

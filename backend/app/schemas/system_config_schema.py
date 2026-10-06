@@ -1,10 +1,4 @@
-"""
-Pydantic schemas for system configuration data validation.
-
-This module defines request and response models for system settings,
-configuration updates, API key management, case number templates,
-and evidence folder template management.
-"""
+"""System configuration schemas."""
 
 from datetime import datetime
 from typing import Dict, List, Optional
@@ -45,13 +39,6 @@ class SystemConfigurationUpdate(SystemConfigurationCreate):
 class APIKeyUpdate(BaseModel):
     api_key: Optional[str] = None
     name: Optional[str] = None
-
-
-class APIKeyResponse(BaseModel):
-    provider: str
-    name: str
-    is_configured: bool
-    created_at: Optional[str] = None
 
 
 class APIKeyStatusResponse(BaseModel):

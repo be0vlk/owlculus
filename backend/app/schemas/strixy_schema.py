@@ -1,9 +1,4 @@
-"""
-Pydantic schemas for Strixy service data validation.
-
-This module defines request and response models for Strixy OSINT service
-integration, including chat message structures and conversation handling.
-"""
+"""Strixy schemas."""
 
 from datetime import datetime
 from typing import Literal

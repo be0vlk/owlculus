@@ -1,17 +1,11 @@
-"""
-Pydantic schemas for user data validation.
-
-This module defines request and response models for user management,
-profiles, authentication, password changes, and role-based access control.
-"""
+"""User schemas."""
 
 from datetime import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr
 
 from ..core.roles import UserRole
-from ..core.utils import get_utc_now
 
 
 class UserBase(BaseModel):
@@ -43,7 +37,6 @@ class UserUpdate(BaseModel):
     )
     is_active: Optional[bool] = None
     is_superadmin: Optional[bool] = None
-    updated_at: datetime = Field(default_factory=get_utc_now)
 
 
 class PasswordChange(BaseModel):
@@ -61,5 +54,5 @@ class User(UserBase):
 
     id: int
     email: str
-    created_at: datetime = Field(default_factory=get_utc_now)
-    updated_at: datetime = Field(default_factory=get_utc_now)
+    created_at: datetime
+    updated_at: datetime

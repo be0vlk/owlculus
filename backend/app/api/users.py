@@ -1,9 +1,4 @@
-"""
-User Management API for Owlculus OSINT Platform.
-
-This module provides comprehensive user account management for the Owlculus platform,
-supporting role-based access control and secure user administration for investigation teams.
-"""
+"""User account routes."""
 
 from typing import Any
 
@@ -67,8 +62,7 @@ async def read_users(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    user_service = UserService(db)
-    return await user_service.get_users(
+    return await UserService(db).get_users(
         current_user=current_user, skip=skip, limit=limit
     )
 
@@ -80,8 +74,7 @@ async def update_user(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    user_service = UserService(db)
-    return await user_service.update_user(
+    return await UserService(db).update_user(
         user_id=user_id, user_update=user, current_user=current_user
     )
 
@@ -93,8 +86,7 @@ async def change_password(
     current_user: models.User = Depends(get_current_user),
 ):
     assert current_user.id is not None
-    user_service = UserService(db)
-    return await user_service.change_password(
+    return await UserService(db).change_password(
         user_id=current_user.id,
         current_password=password_change.current_password,
         new_password=password_change.new_password,
@@ -109,8 +101,7 @@ async def admin_reset_password(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    user_service = UserService(db)
-    return await user_service.admin_reset_password(
+    return await UserService(db).admin_reset_password(
         user_id=user_id,
         new_password=password_reset.new_password,
         current_user=current_user,
@@ -123,8 +114,7 @@ async def delete_user(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    user_service = UserService(db)
-    return await user_service.delete_user(
+    return await UserService(db).delete_user(
         user_id=user_id,
         current_user=current_user,
     )

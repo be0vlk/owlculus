@@ -1,6 +1,4 @@
-"""
-Pydantic schemas for hunt operations
-"""
+"""Hunt schemas."""
 
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -22,9 +20,6 @@ class HuntResponse(BaseModel):
     step_count: Optional[int] = None
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        orm_mode = True
 
 
 class HuntExecuteRequest(BaseModel):
@@ -50,44 +45,6 @@ class HuntStepResponse(BaseModel):
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 
-    class Config:
-        orm_mode = True
-
-
-class HuntExecutionResponse(BaseModel):
-    """Response model for hunt execution details"""
-
-    id: int
-    hunt_id: int
-    case_id: int
-    status: str
-    progress: float
-    initial_parameters: Dict[str, Any]
-    context_data: Optional[Dict[str, Any]] = None
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    created_at: datetime
-    created_by_id: int
-
-    kind: str = "hunt"
-    revision: int = 0
-    dispatch_state: str = "legacy"
-    waiting_reason: str | None = None
-    dispatch_attempts: int = 0
-    last_dispatch_at: datetime | None = None
-    next_dispatch_at: datetime | None = None
-    links: dict[str, str] = Field(default_factory=dict)
-    error: dict[str, Any] | None = None
-
-    # Related data
-    hunt: Optional[HuntResponse] = None
-    steps: Optional[List[HuntStepResponse]] = None
-    case: Optional[Dict[str, Any]] = None  # Simple case info
-    created_by: Optional[Dict[str, Any]] = None  # Simple user info
-
-    class Config:
-        orm_mode = True
-
 
 class HuntExecutionListResponse(BaseModel):
     """Response model for listing hunt executions"""
@@ -107,5 +64,23 @@ class HuntExecutionListResponse(BaseModel):
     hunt_display_name: Optional[str] = None
     hunt_category: Optional[str] = None
 
-    class Config:
-        orm_mode = True
+
+class HuntExecutionResponse(HuntExecutionListResponse):
+    """Response model for hunt execution details"""
+
+    context_data: Optional[Dict[str, Any]] = None
+    kind: str = "hunt"
+    revision: int = 0
+    dispatch_state: str = "legacy"
+    waiting_reason: str | None = None
+    dispatch_attempts: int = 0
+    last_dispatch_at: datetime | None = None
+    next_dispatch_at: datetime | None = None
+    links: dict[str, str] = Field(default_factory=dict)
+    error: dict[str, Any] | None = None
+
+    # Related data
+    hunt: Optional[HuntResponse] = None
+    steps: Optional[List[HuntStepResponse]] = None
+    case: Optional[Dict[str, Any]] = None  # Simple case info
+    created_by: Optional[Dict[str, Any]] = None  # Simple user info

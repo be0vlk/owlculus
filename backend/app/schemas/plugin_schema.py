@@ -1,6 +1,4 @@
-"""
-Plugin schemas for request/response validation
-"""
+"""Plugin schemas."""
 
 from typing import Any, Dict, List
 
