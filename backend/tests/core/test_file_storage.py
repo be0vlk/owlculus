@@ -140,6 +140,17 @@ class TestCreateFolder:
             file_storage.create_folder(case_id, "../../../")
         assert "Invalid folder path" in str(exc_info.value)
 
+    def test_create_folder_rejects_execution_artifact_directory(
+        self, temp_upload_dir, case_id
+    ):
+        """Only the Case-root execution artifact directory is reserved."""
+        for folder_path in (".execution-artifacts", "/.execution-artifacts/sub"):
+            with pytest.raises(ValidationException, match="Invalid folder path"):
+                file_storage.create_folder(case_id, folder_path)
+        assert file_storage.create_folder(
+            case_id, "notes/.execution-artifacts"
+        ).is_dir()
+
     def test_create_folder_nested_path(self, temp_upload_dir, case_id):
         """Test creating nested folder structure."""
         folder_path = "level1/level2/level3"
@@ -222,6 +233,17 @@ class TestDeleteFolder:
             file_storage.delete_folder(case_id, "../../../")
         assert "Invalid folder path" in str(exc_info.value)
 
+    def test_delete_folder_preserves_execution_artifacts(
+        self, temp_upload_dir, case_id
+    ):
+        """A user folder delete cannot remove execution-owned artifacts."""
+        artifact = temp_upload_dir / str(case_id) / ".execution-artifacts" / "1-a.txt"
+        artifact.parent.mkdir(parents=True)
+        artifact.write_text("artifact")
+        with pytest.raises(ValidationException, match="Invalid folder path"):
+            file_storage.delete_folder(case_id, ".execution-artifacts")
+        assert artifact.exists()
+
     def test_delete_folder_nonexistent_folder(self, temp_upload_dir, case_id):
         """Test deleting non-existent folder doesn't raise error."""
         # Should not raise an exception
@@ -277,6 +299,47 @@ class TestSaveUploadFile:
             # Verify file was created in correct location
             file_path = temp_upload_dir / relative_path
             assert file_path.exists()
+
+    @pytest.mark.asyncio
+    async def test_save_upload_file_rejects_execution_artifact_directory(
+        self, temp_upload_dir, case_id, sample_upload_file
+    ):
+        """User uploads cannot land in the execution artifact directory."""
+        with patch("app.core.file_storage.validate_file_security"):
+            with pytest.raises(ValidationException, match="Invalid folder path"):
+                await file_storage.save_upload_file(
+                    sample_upload_file, case_id, ".execution-artifacts"
+                )
+        assert not (temp_upload_dir / str(case_id) / ".execution-artifacts").exists()
+
+    @pytest.mark.asyncio
+    async def test_save_upload_file_keeps_concurrent_upload_with_same_name(
+        self, temp_upload_dir, case_id, sample_upload_file
+    ):
+        """A same-name file created after the name was chosen is not overwritten."""
+        real_secure = file_storage.secure_filename_with_path
+
+        def concurrent_upload_takes_name(filename, base_path):
+            name = real_secure(filename, base_path)
+            if not (base_path / "test_file.txt").exists():
+                (base_path / name).write_bytes(b"other upload")
+            return name
+
+        with (
+            patch("app.core.file_storage.validate_file_security"),
+            patch(
+                "app.core.file_storage.secure_filename_with_path",
+                side_effect=concurrent_upload_takes_name,
+            ),
+        ):
+            relative_path, _ = await file_storage.save_upload_file(
+                sample_upload_file, case_id
+            )
+
+        case_dir = temp_upload_dir / str(case_id)
+        assert relative_path == f"{case_id}/test_file_1.txt"
+        assert (case_dir / "test_file.txt").read_bytes() == b"other upload"
+        assert (case_dir / "test_file_1.txt").read_bytes() == b"test content"
 
     @pytest.mark.asyncio
     async def test_save_upload_file_none_case_id(

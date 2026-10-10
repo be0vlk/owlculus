@@ -16,6 +16,7 @@ from .security import secure_filename_with_path, validate_file_security
 
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+EXECUTION_ARTIFACT_DIR = ".execution-artifacts"
 
 
 def _case_dir(case_id: int) -> Path:
@@ -61,6 +62,14 @@ def normalize_folder_path(folder_path: str) -> str:
     return "/".join(parts) if parts else ""
 
 
+def _user_folder_path(folder_path: str | None) -> str:
+    """Normalize a user folder path; the Case's execution artifact directory is reserved."""
+    normalized = normalize_folder_path(folder_path or "")
+    if normalized.partition("/")[0] == EXECUTION_ARTIFACT_DIR:
+        raise ValidationException("Invalid folder path")
+    return normalized
+
+
 def create_folder(case_id: int, folder_path: str) -> Path:
     """
     Create a folder structure within a case directory.
@@ -70,7 +79,7 @@ def create_folder(case_id: int, folder_path: str) -> Path:
     if not folder_path:
         raise ValidationException("Folder path is required")
 
-    normalized_path = normalize_folder_path(folder_path)
+    normalized_path = _user_folder_path(folder_path)
     if not normalized_path:
         raise ValidationException("Invalid folder path")
 
@@ -84,7 +93,7 @@ def delete_folder(case_id: int, folder_path: str) -> None:
     Delete a folder and all its contents from a case directory.
     """
     case_dir = _case_dir(case_id)
-    normalized_path = normalize_folder_path(folder_path)
+    normalized_path = _user_folder_path(folder_path)
     if not normalized_path:
         raise ValidationException("Invalid folder path")
 
@@ -120,7 +129,7 @@ async def save_upload_file(
     security_logger.info(f"File upload validated: {upload_file.filename}")
 
     try:
-        case_dir = case_root / normalize_folder_path(folder_path or "")
+        case_dir = case_root / _user_folder_path(folder_path)
         case_dir.mkdir(parents=True, exist_ok=True)
 
         if artifact_id is not None:
@@ -130,7 +139,7 @@ async def save_upload_file(
             if not control_id.isdigit() or int(control_id) <= 0:
                 raise ValidationException("Invalid execution artifact identity")
             artifact_id = f"{int(control_id)}-{UUID(identity)}"
-            case_dir = case_root / ".execution-artifacts"
+            case_dir = case_root / EXECUTION_ARTIFACT_DIR
             case_dir.mkdir(parents=True, exist_ok=True)
             safe_filename = f"{artifact_id}.txt"
         else:
@@ -144,19 +153,29 @@ async def save_upload_file(
 
         file_hash = hashlib.sha256(content).hexdigest()
 
-        staging_path = file_path.with_suffix(".staging") if artifact_id else file_path
-        with open(staging_path, "wb") as buffer:
-            buffer.write(content)
-            if artifact_id:
+        if artifact_id:
+            staging_path = file_path.with_suffix(".staging")
+            with open(staging_path, "wb") as buffer:
+                buffer.write(content)
                 buffer.flush()
                 os.fsync(buffer.fileno())
-        if artifact_id:
             os.replace(staging_path, file_path)
             directory_fd = os.open(case_dir, os.O_RDONLY)
             try:
                 os.fsync(directory_fd)
             finally:
                 os.close(directory_fd)
+        else:
+            # Exclusive create: a concurrent upload that took this name gets the next one.
+            while True:
+                try:
+                    with open(file_path, "xb") as buffer:
+                        buffer.write(content)
+                    break
+                except FileExistsError:
+                    file_path = case_dir / secure_filename_with_path(
+                        upload_file.filename, case_dir
+                    )
 
         relative_path = str(file_path.relative_to(UPLOAD_DIR))
 
