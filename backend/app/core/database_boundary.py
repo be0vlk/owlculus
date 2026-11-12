@@ -8,6 +8,7 @@ keep their existing short, independently owned snapshot sessions.
 import asyncio
 from collections.abc import Awaitable, Callable, Coroutine
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import AsyncExitStack
 from contextvars import ContextVar, copy_context
 from threading import BoundedSemaphore
 from typing import Any
@@ -74,10 +75,21 @@ class DatabaseRoute(APIRoute):
             async def receive():
                 return await on_transport_loop(request.receive)
 
+            async def serve() -> Response:
+                # FastAPI parks dependency exit stacks in the scope, owned by the
+                # transport loop; finalizers must unwind here, in the worker loop.
+                async with AsyncExitStack() as inner, AsyncExitStack() as function:
+                    scope = {
+                        **request.scope,
+                        "fastapi_inner_astack": inner,
+                        "fastapi_function_astack": function,
+                    }
+                    return await handler(Request(scope, receive))
+
             def run() -> Response:
                 token = _transport_loop.set(loop)
                 try:
-                    return asyncio.run(handler(Request(request.scope, receive)))
+                    return asyncio.run(serve())
                 finally:
                     _transport_loop.reset(token)
                     _request_slots.release()
