@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { createMemoryHistory } from 'vue-router'
 import { flushPromises, shallowMount } from '@vue/test-utils'
 import { createAppRouter, routes } from '@/router'
+import { createTestVuetify } from '@/components/__tests__/helpers/vuetify'
 import { useAuthStore } from '@/stores/auth'
 import { useActiveCaseStore } from '@/stores/activeCase'
 import { useHuntStore } from '@/stores/huntStore'
@@ -97,7 +98,7 @@ async function open(path) {
     { template: '<router-view />' },
     {
       global: {
-        plugins: [pinia, router],
+        plugins: [pinia, router, createTestVuetify()],
         renderStubDefaultSlot: true,
         stubs: {
           RouterView: false,

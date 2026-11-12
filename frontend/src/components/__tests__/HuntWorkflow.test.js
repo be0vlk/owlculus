@@ -1,10 +1,21 @@
 import { expect, it } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
+import { createMemoryHistory, createRouter } from 'vue-router'
 import { mountWithVuetify } from './helpers/vuetify'
 import HuntParameterForm from '../hunts/HuntParameterForm.vue'
 
+const testRouter = () =>
+  createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/:pathMatch(.*)*', component: { template: '<div />' } }],
+  })
+
+// Correlation results link to entities, so mounts get a router unless the test brings its own.
+const mountHunt = (component, options = {}) =>
+  mountWithVuetify(component, { global: { plugins: [testRouter()] }, ...options })
+
 it('accepts zero, preserves defaults, and renders multiline and validation errors accessibly', async () => {
-  const wrapper = mountWithVuetify(HuntParameterForm, {
+  const wrapper = mountHunt(HuntParameterForm, {
     props: {
       parameters: {
         limit: { type: 'number', required: true, min: 0, default: 0 },
@@ -27,7 +38,7 @@ it('accepts zero, preserves defaults, and renders multiline and validation error
 it('validates before execution, submits defaults, and retains failure feedback while open', async () => {
   const { default: HuntExecutionModal } = await import('../hunts/HuntExecutionModal.vue')
   const { DOMWrapper } = await import('@vue/test-utils')
-  const wrapper = mountWithVuetify(HuntExecutionModal, {
+  const wrapper = mountHunt(HuntExecutionModal, {
     props: {
       modelValue: false,
       caseId: 4,
@@ -70,7 +81,7 @@ it('validates before execution, submits defaults, and retains failure feedback w
 it('has no case selector and blocks execution without resolved context', async () => {
   const { default: HuntExecutionModal } = await import('../hunts/HuntExecutionModal.vue')
   const { DOMWrapper } = await import('@vue/test-utils')
-  const wrapper = mountWithVuetify(HuntExecutionModal, {
+  const wrapper = mountHunt(HuntExecutionModal, {
     props: { modelValue: false, hunt: { id: 7 } },
     attachTo: document.body,
   })
@@ -87,7 +98,7 @@ it.each(['failed', 'running', 'cancelled'])(
   'shows useful partial results from a %s hunt step',
   async (status) => {
     const { default: HuntStepResults } = await import('../hunts/HuntStepResults.vue')
-    const wrapper = mountWithVuetify(HuntStepResults, {
+    const wrapper = mountHunt(HuntStepResults, {
       props: {
         stepNumber: 1,
         step: {
@@ -105,7 +116,7 @@ it.each(['failed', 'running', 'cancelled'])(
 
 it('shows a skipped Entity save explanation in a completed Hunt step', async () => {
   const { default: HuntStepResults } = await import('../hunts/HuntStepResults.vue')
-  const wrapper = mountWithVuetify(HuntStepResults, {
+  const wrapper = mountHunt(HuntStepResults, {
     props: {
       stepNumber: 2,
       step: {
@@ -137,11 +148,7 @@ it('assembles Hunt correlation portions like standalone results and retains navi
   const { default: CorrelationScanPluginResult } = await import(
     '../plugins/CorrelationScanPluginResult.vue'
   )
-  const { createRouter, createMemoryHistory } = await import('vue-router')
-  const router = createRouter({
-    history: createMemoryHistory(),
-    routes: [{ path: '/:pathMatch(.*)*', component: { template: '<div />' } }],
-  })
+  const router = testRouter()
   const part = (matches) => ({
     case_id: 1,
     entity_id: 10,
@@ -167,7 +174,7 @@ it('assembles Hunt correlation portions like standalone results and retains navi
     status: 'running',
     output: { results, errors: [], partial: true },
   }
-  const wrapper = mountWithVuetify(HuntStepResults, {
+  const wrapper = mountHunt(HuntStepResults, {
     props: { step, stepNumber: 1 },
     global: { plugins: [router] },
   })
@@ -177,7 +184,7 @@ it('assembles Hunt correlation portions like standalone results and retains navi
   expect(wrapper.text()).toContain('Source email: ada@gmail.com')
   expect(wrapper.text()).toContain('Related domain: gmail.com')
   expect(wrapper.text()).toContain('Execution running')
-  const standalone = mountWithVuetify(CorrelationScanPluginResult, {
+  const standalone = mountHunt(CorrelationScanPluginResult, {
     props: {
       result: results.map((data) => ({ type: 'data', data })),
       executionStatus: 'running',
@@ -209,7 +216,7 @@ it.each(['pending', 'running', 'failed', 'cancelled', 'skipped', 'completed'])(
   'keeps %s correlation state separate from retrieval and partial output',
   async (status) => {
     const { default: HuntStepResults } = await import('../hunts/HuntStepResults.vue')
-    const wrapper = mountWithVuetify(HuntStepResults, {
+    const wrapper = mountHunt(HuntStepResults, {
       props: {
         stepNumber: 1,
         step: {
@@ -279,9 +286,9 @@ it.each(['ip_address', 'exact_profile', 'employer', 'name'])(
       status: 'failed',
       output: { results, errors: [error], partial: true },
     }
-    const wrapper = mountWithVuetify(HuntStepResults, { props: { step, stepNumber: 1 } })
+    const wrapper = mountHunt(HuntStepResults, { props: { step, stepNumber: 1 } })
     await flushPromises()
-    const standalone = mountWithVuetify(CorrelationScanPluginResult, {
+    const standalone = mountHunt(CorrelationScanPluginResult, {
       props: {
         result: [
           ...results.map((data) => ({ type: 'data', data })),
@@ -317,7 +324,7 @@ it('counts assembled correlation groups in Hunt summaries', async () => {
       result_count: 3,
     },
   }
-  const summary = mountWithVuetify(HuntResultsSummary, { props: { execution: { steps: [step] } } })
+  const summary = mountHunt(HuntResultsSummary, { props: { execution: { steps: [step] } } })
   expect(summary.text()).toContain('1Total Results')
 })
 
@@ -331,7 +338,7 @@ it('announces a correlation failure once when step and retained errors agree', a
     error_details: message,
     output: { results: [], errors: [] },
   }
-  const wrapper = mountWithVuetify(HuntStepResults, { props: { step, stepNumber: 1 } })
+  const wrapper = mountHunt(HuntStepResults, { props: { step, stepNumber: 1 } })
   await flushPromises()
   expect(wrapper.text().split(message)).toHaveLength(2)
   await wrapper.setProps({ step: { ...step, output: { results: [], errors: [{ message }] } } })

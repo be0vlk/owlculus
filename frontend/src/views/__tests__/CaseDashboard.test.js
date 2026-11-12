@@ -6,6 +6,7 @@ import * as components from 'vuetify/components'
 import * as directives from 'vuetify/directives'
 
 import CaseDashboard from '../CaseDashboard.vue'
+import { createTestVuetify } from '@/components/__tests__/helpers/vuetify'
 
 enableAutoUnmount(afterEach)
 
@@ -115,6 +116,7 @@ const mountDashboard = async (global = {}, keyedWorkspace = false) => {
     : CaseDashboard
   const wrapper = shallowMount(root, {
     global: {
+      plugins: [createTestVuetify()],
       ...global,
       stubs: {
         CaseDashboard: false,

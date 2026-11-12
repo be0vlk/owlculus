@@ -31,14 +31,14 @@ uv sync --locked
 uv run --locked pytest
 ```
 
-Run the backend checks from the repository root:
+Run the backend and frontend checks from the repository root:
 
 ```bash
 make typecheck
 make lint
 ```
 
-Enable the pre-commit hook, which runs `make lint`, once per clone:
+Enable the pre-commit hook, which runs `make lint` and the frontend unit tests your change affects, once per clone:
 
 ```bash
 git config core.hooksPath .githooks

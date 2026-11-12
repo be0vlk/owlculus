@@ -7,6 +7,10 @@ import { useActiveCaseStore } from '@/stores/activeCase'
 import api from '@/services/api'
 
 vi.mock('@/services/api', () => ({ default: { get: vi.fn(), post: vi.fn() } }))
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ query: {}, params: {} }),
+  useRouter: () => ({ replace: vi.fn() }),
+}))
 let wrapper
 const citation = {
   source_id: 'entity:7',

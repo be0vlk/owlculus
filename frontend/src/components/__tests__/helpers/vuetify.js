@@ -26,15 +26,15 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+export const createTestVuetify = () =>
+  createVuetify({ components, directives, defaults, theme: false })
+
 export function mountWithVuetify(component, options = {}) {
   const wrapper = mount(component, {
     ...options,
     global: {
       ...options.global,
-      plugins: [
-        ...(options.global?.plugins || []),
-        createVuetify({ components, directives, defaults, theme: false }),
-      ],
+      plugins: [...(options.global?.plugins || []), createTestVuetify()],
     },
   })
   wrappers.push(wrapper)

@@ -6,6 +6,7 @@ import { flushPromises, shallowMount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import HuntExecution from '../HuntExecution.vue'
+import { createTestVuetify } from '@/components/__tests__/helpers/vuetify'
 
 const mocks = vi.hoisted(() => ({
   execution: null,
@@ -74,6 +75,7 @@ const mountExecution = async (status, caseId = 42, detail = {}) => {
   mocks.getExecution.mockResolvedValue(mocks.execution)
   const wrapper = shallowMount(HuntExecution, {
     global: {
+      plugins: [createTestVuetify()],
       renderStubDefaultSlot: true,
       stubs: {
         BaseDashboard: BaseDashboardStub,

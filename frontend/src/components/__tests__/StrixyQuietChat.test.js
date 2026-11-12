@@ -7,6 +7,10 @@ import { useActiveCaseStore } from '@/stores/activeCase'
 import api from '@/services/api'
 
 vi.mock('@/services/api', () => ({ default: { get: vi.fn(), post: vi.fn(), delete: vi.fn() } }))
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ query: {}, params: {} }),
+  useRouter: () => ({ replace: vi.fn() }),
+}))
 let wrapper, history, transcript
 const base = '/api/strixy/cases/2/conversations'
 beforeEach(() => {

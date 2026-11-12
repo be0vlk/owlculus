@@ -3,6 +3,7 @@ import { flushPromises, shallowMount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 
 import MainDashboard from '../MainDashboard.vue'
+import { createTestVuetify } from '@/components/__tests__/helpers/vuetify'
 
 const mocks = vi.hoisted(() => ({ refresh: vi.fn(), selectCase: vi.fn() }))
 
@@ -43,6 +44,7 @@ describe('MainDashboard case creation', () => {
   it('refreshes the dashboard and warns when a created case has incomplete assignments', async () => {
     const wrapper = shallowMount(MainDashboard, {
       global: {
+        plugins: [createTestVuetify()],
         stubs: {
           BaseDashboard: BaseDashboardStub,
           NewCaseModal: NewCaseModalStub,

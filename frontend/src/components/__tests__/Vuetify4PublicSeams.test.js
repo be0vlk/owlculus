@@ -46,11 +46,14 @@ const vuetifyStubs = {
   VListItem: ListItemStub,
   VListItemSubtitle: PassthroughStub,
   VListItemTitle: PassthroughStub,
+  VProgressLinear: PassthroughStub,
   VRow: PassthroughStub,
   VSelect: SelectStub,
+  VSkeletonLoader: PassthroughStub,
   VSpacer: PassthroughStub,
   VTable: PassthroughStub,
   VTextField: TextFieldStub,
+  VTooltip: PassthroughStub,
 }
 
 describe('Vuetify 4 public component seams', () => {

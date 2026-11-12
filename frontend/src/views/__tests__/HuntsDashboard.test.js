@@ -1,10 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { flushPromises, shallowMount } from '@vue/test-utils'
-import { createVuetify } from 'vuetify'
-import * as components from 'vuetify/components'
-import * as directives from 'vuetify/directives'
-import { defaults } from '@/plugins/vuetify'
+import { createTestVuetify } from '@/components/__tests__/helpers/vuetify'
 import { useHuntStore } from '@/stores/huntStore'
 import { useActiveCaseStore } from '@/stores/activeCase'
 import { huntService } from '@/services/hunt'
@@ -34,7 +31,7 @@ const execution = (id, case_id) => ({ id, case_id, status: 'completed', created_
 const mountDashboard = (stubs = {}) =>
   shallowMount(HuntsDashboard, {
     global: {
-      plugins: [createVuetify({ components, directives, defaults, theme: false })],
+      plugins: [createTestVuetify()],
       renderStubDefaultSlot: true,
       stubs: {
         BaseDashboard: { template: '<div><slot /></div>' },

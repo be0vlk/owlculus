@@ -9,6 +9,7 @@ import { authService } from '../services/auth'
 vi.mock('../composables/useDarkMode', () => ({
   useDarkMode: vi.fn(),
 }))
+vi.mock('vue-router', () => ({ useRoute: () => ({ name: 'Login', params: {}, meta: {} }) }))
 
 vi.mock('../services/auth')
 

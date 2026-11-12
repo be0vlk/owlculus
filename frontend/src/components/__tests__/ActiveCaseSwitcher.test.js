@@ -5,7 +5,7 @@ import ActiveCaseSwitcher from '../ActiveCaseSwitcher.vue'
 import { useActiveCaseStore } from '../../stores/activeCase'
 import { useAuthStore } from '../../stores/auth'
 import { caseService } from '../../services/case'
-import { mountWithVuetify } from './helpers/vuetify'
+import { createTestVuetify, mountWithVuetify } from './helpers/vuetify'
 
 vi.mock('../../services/case', () => ({ caseService: { getCases: vi.fn() } }))
 beforeEach(() => {
@@ -24,7 +24,7 @@ it('announces loading and an empty accessible-case list with assignment guidance
   )
   const store = useActiveCaseStore()
   const pending = store.initialize()
-  const wrapper = shallowMount(ActiveCaseSwitcher)
+  const wrapper = shallowMount(ActiveCaseSwitcher, { global: { plugins: [createTestVuetify()] } })
   expect(wrapper.get('[role="status"]').text()).toContain('Loading cases')
   finish([])
   await pending
@@ -38,6 +38,7 @@ it('shows failed resolution and offers a retry', async () => {
   await useActiveCaseStore().initialize()
   const wrapper = shallowMount(ActiveCaseSwitcher, {
     global: {
+      plugins: [createTestVuetify()],
       stubs: {
         VBtn: { template: '<button><slot /></button>' },
       },

@@ -12,6 +12,10 @@ import { useActiveCaseStore } from '@/stores/activeCase'
 import { strixyService } from '@/services/strixy'
 
 vi.mock('@/services/strixy', () => ({ strixyService: { getAvailability: vi.fn() } }))
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ query: {}, params: {} }),
+  useRouter: () => ({ replace: vi.fn() }),
+}))
 
 vi.mock('@/services/user', () => ({ userService: { getUsers: vi.fn() } }))
 vi.mock('@/services/case', () => ({
