@@ -8,7 +8,6 @@
     <v-divider />
     <v-card-text class="pa-4">
       <v-form ref="form" :id="formId" v-model="valid" :disabled="loading" @submit.prevent="save">
-        <!-- Status Update -->
         <v-select
           v-model="formData.status"
           :items="TASK_STATUS_OPTIONS"
@@ -26,7 +25,6 @@
           class="mb-4"
         />
 
-        <!-- Custom Fields -->
         <div v-if="customFields.length > 0">
           <v-divider class="mb-4" />
           <div class="text-title-small text-medium-emphasis mb-3">Additional Fields</div>
@@ -88,19 +86,16 @@ const valid = ref(false)
 const validating = ref(false)
 const loading = computed(() => validating.value || props.saving)
 
-// Check if user can edit due date (admin or lead)
 const canEditDueDate = computed(() => {
   return authStore.user?.role === 'Admin' || props.isUserCaseLead
 })
 
-// Initialize form data with current task values
 const formData = ref({
   status: props.task.status,
   due_date: props.task.due_date ? props.task.due_date.split('T')[0] : null,
   custom_fields: { ...props.task.custom_fields },
 })
 
-// Track original values to detect changes
 const originalData = {
   status: props.task.status,
   due_date: props.task.due_date ? props.task.due_date.split('T')[0] : null,
@@ -143,7 +138,6 @@ async function save() {
   }
 }
 
-// Reset form data when task prop changes
 watch(
   () => props.task,
   (newTask) => {

@@ -37,7 +37,6 @@
             class="mb-4"
           />
 
-          <!-- Add Users Section -->
           <v-card variant="outlined" class="mb-4">
             <v-card-title class="text-body-large pb-2">
               <v-icon start>mdi-account-group</v-icon>
@@ -116,14 +115,12 @@ const formData = reactive({
 })
 
 const loadClients = async () => {
-  // Only load clients if user is admin
   if (!authStore.requiresAdmin()) {
     return
   }
 
   try {
     clients.value = await clientService.getClients()
-    // Auto-select client when only one exists
     if (clients.value.length === 1 && !formData.client_id) formData.client_id = clients.value[0].id
   } catch (error) {
     console.error('Error loading clients:', error)
@@ -147,7 +144,6 @@ const removeUser = (user) => {
 }
 
 const closeModal = () => {
-  // Reset form
   formData.title = ''
   formData.client_id = ''
   formData.status = 'Open'

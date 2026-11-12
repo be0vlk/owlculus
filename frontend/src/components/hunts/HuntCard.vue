@@ -1,6 +1,5 @@
 <template>
   <v-card class="hunt-card" elevation="1" hover rounded="lg" @click="$emit('view-details', hunt)">
-    <!-- Hunt Category Header -->
     <v-card-title class="d-flex align-center pa-3 header-gradient text-white">
       <v-icon :icon="getCategoryIcon(hunt.category)" color="white" size="small" class="me-2" />
       <span class="text-body-small text-uppercase font-weight-bold">{{ displayCategory }}</span>
@@ -12,14 +11,12 @@
 
     <v-divider />
 
-    <!-- Hunt Details -->
     <v-card-text class="pa-4">
       <div class="text-title-large font-weight-bold mb-2">{{ hunt.display_name }}</div>
       <div class="text-body-medium text-medium-emphasis mb-3 hunt-description">
         {{ hunt.description }}
       </div>
 
-      <!-- Hunt Stats -->
       <div class="d-flex align-center justify-space-between mb-3">
         <div class="d-flex align-center">
           <v-icon icon="mdi-play-box-multiple" size="small" class="me-1" />
@@ -32,7 +29,6 @@
       </div>
     </v-card-text>
 
-    <!-- Actions -->
     <v-card-actions class="pa-3 pt-0">
       <v-btn
         color="primary"
@@ -62,7 +58,6 @@ const props = defineProps({
 
 defineEmits(['execute', 'view-details'])
 
-// Computed properties
 const displayCategory = computed(() => {
   return getDisplayCategory(props.hunt.category)
 })

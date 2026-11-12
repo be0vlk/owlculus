@@ -11,24 +11,19 @@ export function useTaskTable() {
   const authStore = useAuthStore()
   const { snackbar, showError, showSuccess } = useNotifications()
 
-  // Dialog states
   const showAssignDialog = ref(false)
   const showStatusDialog = ref(false)
   const selectedTask = ref(null)
   const newStatus = ref('')
 
-  // Permissions
   const canCreateTasks = computed(() => {
     return authStore.user?.role !== 'Analyst'
   })
 
-  // Check if user can delete a specific task
   const canDeleteTask = () => {
-    // Only admins can delete tasks
     return authStore.user?.role === 'Admin'
   }
 
-  // Common table headers
   const headers = [
     { title: 'Title', key: 'title', sortable: true },
     { title: 'Priority', key: 'priority', sortable: true },
@@ -38,7 +33,6 @@ export function useTaskTable() {
     { title: 'Actions', key: 'actions', sortable: false },
   ]
 
-  // Methods
   function isOverdue(task) {
     if (!task.due_date || task.status === TASK_STATUS.COMPLETED) return false
     return new Date(task.due_date) < new Date()
@@ -95,18 +89,15 @@ export function useTaskTable() {
 
   return {
     snackbar,
-    // State
     showAssignDialog,
     showStatusDialog,
     selectedTask,
     newStatus,
 
-    // Computed
     canCreateTasks,
     canDeleteTask,
     headers,
 
-    // Methods
     isOverdue,
     handleRowClick,
     openAssignDialog,

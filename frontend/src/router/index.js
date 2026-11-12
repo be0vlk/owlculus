@@ -282,7 +282,6 @@ export function createAppRouter(history = createWebHistory(), appRoutes = routes
 
 const router = createAppRouter()
 
-// Listen for unauthorized API responses and redirect to login
 // This prevents circular dependency with the API service
 let isHandlingUnauthorized = false
 window.addEventListener('api:unauthorized', () => {

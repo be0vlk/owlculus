@@ -1,6 +1,5 @@
 <template>
   <div class="d-flex flex-column ga-4">
-    <!-- Status Messages -->
     <PluginStatusAlert
       v-for="(item, index) in statusMessages"
       :key="`status-${index}`"
@@ -8,7 +7,6 @@
       :message="item.data.status"
     />
 
-    <!-- Summary Card -->
     <v-card v-if="summaryData" elevation="1" rounded="lg" class="summary-card">
       <v-card-title class="bg-gradient-primary">
         <v-icon icon="mdi-chart-donut" class="mr-3" />
@@ -63,7 +61,6 @@
       </v-card-text>
     </v-card>
 
-    <!-- Subdomain Results Grid -->
     <div v-if="subdomainResults.length" class="subdomain-results-grid">
       <v-row>
         <v-col
@@ -97,7 +94,6 @@
             </v-card-title>
 
             <v-card-text class="pa-3">
-              <!-- IP Address -->
               <div v-if="subdomain.ip" class="d-flex align-center mb-2">
                 <v-icon icon="mdi-ip-network" size="small" class="mr-2" color="success" />
                 <code class="text-body-medium flex-grow-1">{{ subdomain.ip }}</code>
@@ -111,7 +107,6 @@
                 </v-btn>
               </div>
 
-              <!-- Sources -->
               <div class="d-flex align-center flex-wrap ga-1">
                 <v-icon icon="mdi-source-merge" size="small" class="mr-1" />
                 <v-chip
@@ -130,7 +125,6 @@
         </v-col>
       </v-row>
 
-      <!-- Export Actions -->
       <div class="d-flex justify-center mt-4 ga-2">
         <v-btn variant="outlined" @click="copyAllSubdomains">
           <v-icon start>mdi-content-copy</v-icon>
@@ -149,7 +143,6 @@
       </div>
     </div>
 
-    <!-- Completion Messages -->
     <PluginStatusAlert
       v-for="(item, index) in completionMessages"
       :key="`complete-${index}`"
@@ -158,7 +151,6 @@
       plugin-name="Subdomain Enumeration"
     />
 
-    <!-- Error Messages -->
     <PluginStatusAlert
       v-for="(item, index) in errorMessages"
       :key="`error-${index}`"
@@ -167,7 +159,6 @@
       plugin-name="Subdomain Enumeration"
     />
 
-    <!-- No Results -->
     <NoResultsCard v-if="!hasResults && !statusMessages.length" />
   </div>
 </template>
@@ -190,20 +181,17 @@ const { statusMessages, completionMessages, errorMessages, dataResults } = usePl
   toRef(props, 'result'),
 )
 
-// Extract subdomain results
 const subdomainResults = computed(() => {
   return dataResults.value.filter(
     (item) => item.data.subdomain && item.data.subdomain !== undefined,
   )
 })
 
-// Extract summary data
 const summaryData = computed(() => {
   const summary = dataResults.value.find((item) => item.data.phase === 'summary')
   return summary ? summary.data : null
 })
 
-// Sort subdomains: resolved first, then alphabetically
 const sortedSubdomains = computed(() => {
   return [...subdomainResults.value]
     .map((item) => item.data)
@@ -218,7 +206,6 @@ const hasResults = computed(() => {
   return subdomainResults.value.length > 0 || summaryData.value !== null
 })
 
-// Helper functions
 const getSourceColor = (source) => {
   const colors = {
     'crt.sh': 'primary',
@@ -312,7 +299,6 @@ code {
   font-size: 0.875rem;
 }
 
-/* Custom scrollbar for better UX */
 .subdomain-results-grid::-webkit-scrollbar {
   width: 8px;
 }

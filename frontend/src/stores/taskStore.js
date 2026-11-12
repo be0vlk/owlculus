@@ -11,7 +11,6 @@ export const useTaskStore = defineStore('task', () => {
   let listRequest = 0
   let detailRequest = 0
   let contextGeneration = 0
-  // State
   const templates = ref([])
   const tasks = ref([])
   const currentTask = ref(null)
@@ -32,7 +31,6 @@ export const useTaskStore = defineStore('task', () => {
     { flush: 'sync' },
   )
 
-  // Getters
   const currentUserId = computed(() => authStore.user?.id)
 
   const myTasks = computed(() =>
@@ -53,7 +51,6 @@ export const useTaskStore = defineStore('task', () => {
     completed: tasks.value.filter((t) => t.status === TASK_STATUS.COMPLETED).length,
   }))
 
-  // Actions
   async function loadTemplates() {
     try {
       // Don't set the global loading state for template loading
@@ -150,10 +147,8 @@ export const useTaskStore = defineStore('task', () => {
       error.value = null
       await taskService.deleteTask(taskId)
 
-      // Remove from tasks array
       tasks.value = tasks.value.filter((t) => t.id !== taskId)
 
-      // Clear current task if it was deleted
       if (currentTask.value?.id === taskId) {
         currentTask.value = null
       }
@@ -209,19 +204,16 @@ export const useTaskStore = defineStore('task', () => {
   }
 
   return {
-    // State
     templates,
     tasks,
     currentTask,
     loading,
     error,
 
-    // Getters
     myTasks,
     overdueTasks,
     stats,
 
-    // Actions
     loadTemplates,
     loadTasks,
     loadTask,

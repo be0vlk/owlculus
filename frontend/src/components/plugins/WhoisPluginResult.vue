@@ -6,7 +6,6 @@
           <v-icon icon="mdi-web" class="mr-2" />
           {{ item.data.domain || 'Whois Results' }}
 
-          <!-- Expiration warning badge -->
           <v-chip v-if="item.data.expiration_warning" class="ml-2" color="warning" size="small">
             <v-icon start icon="mdi-alert" />
             Expires Soon
@@ -14,7 +13,6 @@
         </v-card-title>
 
         <v-card-text>
-          <!-- Basic Registration Info -->
           <div class="mb-4">
             <h4 class="text-subtitle1 mb-2">Registration Information</h4>
             <v-row density="compact">
@@ -60,7 +58,6 @@
             </v-row>
           </div>
 
-          <!-- Important Dates -->
           <div class="mb-4">
             <h4 class="text-subtitle1 mb-2">Important Dates</h4>
             <v-row density="compact">
@@ -134,7 +131,6 @@
             </v-row>
           </div>
 
-          <!-- Technical Information -->
           <div v-if="item.data.name_servers && item.data.name_servers.length" class="mb-4">
             <h4 class="text-subtitle1 mb-2">Name Servers</h4>
             <v-chip-group>
@@ -151,7 +147,6 @@
             </v-chip-group>
           </div>
 
-          <!-- Status Information -->
           <div v-if="item.data.status && item.data.status.length" class="mb-4">
             <h4 class="text-subtitle1 mb-2">Status</h4>
             <v-chip-group>
@@ -167,7 +162,6 @@
             </v-chip-group>
           </div>
 
-          <!-- Contact Information -->
           <div v-if="item.data.emails && item.data.emails.length" class="mb-4">
             <h4 class="text-subtitle1 mb-2">Contact Emails</h4>
             <v-chip-group>
@@ -184,7 +178,6 @@
             </v-chip-group>
           </div>
 
-          <!-- Additional Technical Details -->
           <v-expansion-panels v-if="hasAdditionalDetails(item.data)" class="mt-3">
             <v-expansion-panel>
               <v-expansion-panel-title>
@@ -224,7 +217,6 @@
             </v-expansion-panel>
           </v-expansion-panels>
 
-          <!-- Copy domain button -->
           <div class="d-flex align-center mt-4">
             <v-btn size="small" variant="outlined" @click="copyToClipboard(item.data.domain)">
               <v-icon start>mdi-content-copy</v-icon>
@@ -255,7 +247,6 @@
       {{ item.data.message }}
     </v-alert>
 
-    <!-- No Results -->
     <v-card v-if="!result.length" elevation="1" rounded="lg">
       <v-card-text class="text-center pa-8">
         <v-icon icon="mdi-web" size="48" color="grey-darken-1" class="mb-3" />

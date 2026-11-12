@@ -1,6 +1,5 @@
 <template>
   <v-card class="hunt-progress-card" elevation="1" rounded="lg">
-    <!-- Header -->
     <v-card-title class="d-flex align-center pa-3 pa-sm-4 text-no-wrap">
       <v-avatar :color="statusColor" size="40" class="me-3">
         <v-icon :icon="statusIcon" color="white" />
@@ -19,10 +18,8 @@
 
     <v-divider />
 
-    <!-- Progress Section -->
     <v-card-text class="pa-3 pa-sm-4">
       <ExecutionWaiting :execution="execution" />
-      <!-- Timing Information -->
       <div class="timing-info mb-4">
         <div class="d-flex align-center flex-wrap">
           <div class="d-flex align-center me-4 mb-1">
@@ -43,7 +40,6 @@
         </div>
       </div>
 
-      <!-- Step Progress -->
       <div v-if="execution.steps && execution.steps.length > 0" class="mb-4">
         <div class="text-body-medium font-weight-medium mb-3">Hunt Steps</div>
         <div class="step-list">
@@ -52,12 +48,10 @@
             :key="step.id"
             class="step-item d-flex align-center mb-2"
           >
-            <!-- Step Status Icon -->
             <v-avatar :color="getStatusColor(step.status)" size="24" class="me-3">
               <v-icon :icon="getStatusIcon(step.status)" color="white" size="small" />
             </v-avatar>
 
-            <!-- Step Info -->
             <div class="flex-grow-1 text-truncate">
               <div class="text-body-medium text-truncate">
                 {{ step.step_id || `Step ${index + 1}` }}
@@ -67,7 +61,6 @@
               </div>
             </div>
 
-            <!-- Step Status -->
             <v-chip :color="getStatusColor(step.status)" variant="flat" size="x-small">
               {{ step.status }}
             </v-chip>
@@ -75,7 +68,6 @@
         </div>
       </div>
 
-      <!-- Error Display -->
       <v-alert
         v-if="execution.status === 'failed' || hasFailedSteps"
         type="error"
@@ -90,7 +82,6 @@
         </div>
       </v-alert>
 
-      <!-- Results Summary -->
       <div v-if="execution.status === 'completed' || execution.status === 'partial'" class="mb-4">
         <div class="text-body-medium font-weight-medium mb-2">Results Summary</div>
         <div class="d-flex align-center flex-wrap">
@@ -106,7 +97,6 @@
       </div>
     </v-card-text>
 
-    <!-- Actions -->
     <v-card-actions class="pa-3 pa-sm-4 pt-0 flex-wrap">
       <v-btn
         v-if="['pending', 'running'].includes(execution.status)"
@@ -182,7 +172,6 @@ defineEmits(['cancel', 'view-details'])
 
 const now = useNow(() => props.execution.status === 'running')
 
-// Computed properties
 const statusColor = computed(() => getStatusColor(props.execution.status))
 const statusIcon = computed(() => getStatusIcon(props.execution.status))
 
@@ -234,7 +223,6 @@ const huntDisplayTitle = computed(() => {
   background-color: rgb(var(--v-theme-surface-variant), 0.1);
 }
 
-/* Responsive adjustments */
 @media (width <= 600px) {
   .hunt-progress-card {
     min-height: 280px;

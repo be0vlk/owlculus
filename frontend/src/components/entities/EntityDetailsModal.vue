@@ -22,7 +22,6 @@
       <v-divider />
 
       <v-card-text class="pa-0">
-        <!-- Error Alert -->
         <EntityDuplicateAdvisory
           :candidates="advisories.candidates.value"
           :case-id="caseId"
@@ -34,7 +33,6 @@
           {{ error }}
         </v-alert>
 
-        <!-- Tabs -->
         <v-tabs v-model="activeTab" align-tabs="start" class="border-b" color="primary">
           <v-tab
             v-for="(section, key) in entitySchema"
@@ -48,7 +46,6 @@
 
         <v-tabs-window v-model="activeTab" class="pa-4">
           <v-tabs-window-item v-for="(section, key) in entitySchema" :key="key" :value="key">
-            <!-- Notes Tab -->
             <div v-if="section.isNoteEditor && !notesExpanded" ref="notesTab">
               <EditorToolbar
                 v-if="noteEditor"
@@ -74,7 +71,6 @@
               </v-card>
             </div>
 
-            <!-- Edit Mode Form -->
             <v-form v-else-if="isEditing" @submit.prevent="handleSubmit()">
               <v-container fluid class="pa-0">
                 <v-row>
@@ -92,7 +88,6 @@
               </v-container>
             </v-form>
 
-            <!-- View Mode -->
             <v-container v-else fluid class="pa-0">
               <v-row>
                 <EntityViewField
@@ -142,7 +137,6 @@
     </v-card>
   </v-dialog>
 
-  <!-- Fullscreen Notes Editor -->
   <EntityNotesFullscreen
     v-model:show="notesExpanded"
     :title="entityTitle"

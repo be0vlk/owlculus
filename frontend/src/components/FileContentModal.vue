@@ -95,14 +95,14 @@ const fileContent = ref(null)
 const fileInfo = ref(null)
 const contentPreviewRef = ref(null)
 
-// This computed property determines the *initial* request strategy (extension-based)
+// Initial request strategy, inferred from the file extension
 const requestContentType = computed(() => {
   if (!props.evidenceItem) return null
   const fileExtension = props.evidenceItem.title.split('.').pop()
   return getFileTypeByExtension(fileExtension)
 })
 
-// This computed property determines the *actual display type* (MIME-type preferred)
+// Actual display type, preferring the MIME type
 const displayContentType = computed(() => {
   if (fileInfo.value && fileInfo.value.mime_type) {
     const mimeTypeGroup = getFileTypeByMime(fileInfo.value.mime_type)
@@ -135,7 +135,6 @@ const cleanupBlobUrl = () => {
 }
 
 const fetchFileContent = async (item) => {
-  // Determine the content type *for the request*
   const currentRequestType = requestContentType.value
 
   loading.value = true

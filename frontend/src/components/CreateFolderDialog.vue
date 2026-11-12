@@ -63,7 +63,6 @@ const props = defineProps({
 
 const emit = defineEmits(['folderCreated'])
 
-// Reactive data
 const form = ref()
 const valid = ref(false)
 const loading = ref(false)
@@ -73,7 +72,6 @@ const description = ref('')
 
 const dialog = defineModel({ type: Boolean, default: false })
 
-// Methods
 const createFolder = async () => {
   if (loading.value) return
   const { valid: isValid } = await form.value.validate()

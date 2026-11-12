@@ -1,8 +1,5 @@
 import { reactive, computed, watch } from 'vue'
 
-/**
- * Enhanced composable for standardized plugin parameter management
- */
 export function usePluginParamsAdvanced(props, emit, config = {}) {
   const { parameterDefaults = {}, customUpdateLogic = null } = config
 
@@ -33,7 +30,6 @@ export function usePluginParamsAdvanced(props, emit, config = {}) {
     emit('update:modelValue', updatedValue)
   }
 
-  // Watch for external changes to modelValue
   watch(
     () => props.modelValue,
     (newValue) => {

@@ -23,7 +23,6 @@
       :retrieval-complete="retrievalComplete"
     />
     <div v-else class="fallback-result">
-      <!-- Fallback for plugins without custom components -->
       <v-card v-for="(item, index) in result" :key="index" class="mb-2" elevation="1" rounded="lg">
         <v-card-text>
           <pre class="text-body-medium font-mono">{{ formatValue(item) }}</pre>

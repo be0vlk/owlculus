@@ -14,9 +14,7 @@
       {{ counts.cases }} related Cases
     </p>
     <template v-for="resultItem in cardResults" :key="resultKey(resultItem)">
-      <!-- Entity Match Card -->
       <v-card v-if="isGroup(resultItem)" elevation="1" rounded="lg">
-        <!-- Entity Header -->
         <v-card-text class="border-b">
           <div class="d-flex align-center">
             <v-icon icon="mdi-link" class="mr-2" color="grey-darken-1" />
@@ -36,7 +34,6 @@
             </v-chip>
           </div>
 
-          <!-- Correlation Context -->
           <div class="mt-2 text-body-medium text-medium-emphasis">
             Shared {{ getMatchTypeLabel(resultItem.data.match_type).toLowerCase() }} value:
             <span class="font-weight-medium">{{
@@ -55,7 +52,6 @@
           </div>
         </v-card-text>
 
-        <!-- Matches List -->
         <v-card-text>
           <component
             v-for="section in matchSections(resultItem.data.matches)"
@@ -124,12 +120,10 @@
         }}, {{ resultItem.data.field }}
       </v-alert>
 
-      <!-- Error Message -->
       <v-alert v-else-if="resultItem.type === 'error'" border="start" elevation="1" type="error">
         {{ resultItem.data.message }}
       </v-alert>
 
-      <!-- Completion Message -->
       <v-alert
         v-else-if="resultItem.type === 'complete' && completedSuccessfully"
         type="success"
@@ -146,7 +140,6 @@
       </v-alert>
     </template>
 
-    <!-- No Results -->
     <v-card
       v-if="normalizedResult.length === 0 && completedSuccessfully"
       elevation="1"
@@ -268,7 +261,6 @@ const getMatchTypeColor = (matchType) => {
 }
 
 const viewEntity = (match) => {
-  // Navigate to the case with entity query parameter
   router.push({
     path: `/case/${match.case_id}`,
     query: { entity: match.entity_id },

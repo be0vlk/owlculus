@@ -16,19 +16,15 @@
       </v-card-title>
 
       <v-card-text class="pa-0">
-        <!-- Loading State -->
         <div v-if="loading" class="d-flex justify-center pa-8">
           <v-progress-circular :size="50" :width="6" color="primary" indeterminate />
         </div>
 
-        <!-- Error State -->
         <v-alert v-else-if="error" class="ma-4" type="error" variant="outlined">
           {{ error }}
         </v-alert>
 
-        <!-- Metadata Content -->
         <div v-else-if="metadata" class="pa-4">
-          <!-- File Information -->
           <v-card v-if="metadata.file_info" class="mb-4" variant="outlined">
             <v-card-title class="d-flex align-center ga-2">
               <v-icon icon="mdi-file" />
@@ -48,7 +44,6 @@
             </v-card-text>
           </v-card>
 
-          <!-- GPS Information (highlighted if available) -->
           <v-card
             v-if="metadata.gps_info && Object.keys(metadata.gps_info).length > 0"
             class="mb-4"
@@ -97,7 +92,6 @@
             </v-card-text>
           </v-card>
 
-          <!-- Camera Information -->
           <v-card
             v-if="metadata.camera_info && Object.keys(metadata.camera_info).length > 0"
             class="mb-4"
@@ -119,7 +113,6 @@
                 </template>
               </v-row>
 
-              <!-- Camera Settings -->
               <div v-if="metadata.camera_info.settings" class="mt-3">
                 <div class="text-body-small text-medium-emphasis mb-2">Camera Settings</div>
                 <v-row density="compact">
@@ -138,7 +131,6 @@
             </v-card-text>
           </v-card>
 
-          <!-- Timestamp Information -->
           <v-card
             v-if="metadata.timestamp_info && Object.keys(metadata.timestamp_info).length > 0"
             class="mb-4"
@@ -160,7 +152,6 @@
             </v-card-text>
           </v-card>
 
-          <!-- Detailed Metadata (Expandable) -->
           <v-expansion-panels v-if="metadata.categories" variant="accordion">
             <v-expansion-panel
               v-for="(categoryData, categoryName) in metadata.categories"
@@ -208,7 +199,6 @@
             </v-expansion-panel>
           </v-expansion-panels>
 
-          <!-- Summary -->
           <v-card v-if="metadata.total_fields" class="mt-4" variant="outlined">
             <v-card-text class="text-center">
               <v-icon icon="mdi-information" class="mr-2" />
@@ -265,7 +255,6 @@ const CAMERA_FIELDS = [
 ]
 const TIMESTAMP_NAMES = { taken: 'Date Taken', created: 'Date Created', modified: 'Date Modified' }
 
-// Get category icon
 const getCategoryIcon = (categoryName) => {
   const icons = {
     camera: 'mdi-camera',
@@ -277,28 +266,22 @@ const getCategoryIcon = (categoryName) => {
   return icons[categoryName] || 'mdi-information-outline'
 }
 
-// Format field names for better readability
 const formatFieldName = (fieldName) => {
-  // Remove prefixes like "EXIF:", "File:", etc.
   const cleanName = fieldName.replace(/^(EXIF|File|Composite|GPS):/i, '')
 
-  // Add spaces before capital letters and format
   return cleanName
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/([A-Z])([A-Z][a-z])/g, '$1 $2')
     .trim()
 }
 
-// Format field values for better display
 const formatFieldValue = (fieldName, value) => {
   if (value === null || value === undefined) return 'N/A'
 
-  // Handle boolean values
   if (typeof value === 'boolean') {
     return value ? 'Yes' : 'No'
   }
 
-  // Truncate very long strings
   const stringValue = String(value)
   if (stringValue.length > 200) {
     return stringValue.substring(0, 200) + '...'
@@ -307,7 +290,6 @@ const formatFieldValue = (fieldName, value) => {
   return stringValue
 }
 
-// Open GPS coordinates in Google Maps
 const openInMaps = (coordinates) => {
   if (coordinates) {
     const mapsUrl = `https://www.google.com/maps?q=${encodeURIComponent(coordinates)}`

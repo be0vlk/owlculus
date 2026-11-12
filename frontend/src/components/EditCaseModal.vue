@@ -9,13 +9,11 @@
     <v-card prepend-icon="mdi-briefcase-edit">
       <v-card-title id="edit-case-dialog-title">Edit Case</v-card-title>
       <v-card-text>
-        <!-- Error Alert -->
         <v-alert v-if="error" type="error" variant="tonal" class="mb-4">
           {{ error }}
         </v-alert>
 
         <v-form ref="formRef" v-model="isFormValid" @submit.prevent="handleSubmit">
-          <!-- Case Details Section -->
           <v-card variant="outlined" class="mb-6">
             <v-card-title class="text-body-large pb-2">
               <v-icon start>mdi-information</v-icon>
@@ -46,7 +44,6 @@
             </v-card-text>
           </v-card>
 
-          <!-- Case Metadata (Read-only info) -->
           <v-card variant="outlined" v-if="caseData.created_at">
             <v-card-title class="text-body-large pb-2">
               <v-icon start>mdi-clock</v-icon>
@@ -121,13 +118,11 @@ useDialogFocusRestore(() => props.show)
 
 const emit = defineEmits(['close', 'update'])
 
-// Reactive variables
 const formRef = ref(null)
 const isFormValid = ref(false)
 const updating = ref(false)
 const error = ref(null)
 
-// Status options with icons and colors
 const statusOptions = [
   {
     value: 'Open',
@@ -147,7 +142,6 @@ const statusOptions = [
   },
 ]
 
-// Validation rules
 const rules = {
   required: (value) => !!value || 'This field is required',
   titleLength: (value) => {
@@ -170,7 +164,6 @@ const formData = ref({
   status: '',
 })
 
-// Watch for caseData changes and update form
 watch(
   () => props.caseData,
   (newValue) => {
@@ -184,7 +177,6 @@ watch(
   { immediate: true },
 )
 
-// Reset form validation when dialog opens
 watch(
   () => props.show,
   (show) => {
@@ -197,7 +189,6 @@ watch(
 )
 
 const handleSubmit = async () => {
-  // Validate form before submission
   if (!formRef.value) return
 
   const { valid } = await formRef.value.validate()

@@ -214,7 +214,6 @@ export function useEntityDetails(entity, caseId, emit) {
     )
   }
 
-  // Watch for entity changes and update editor content
   watch(
     () => acknowledgedEntity.value?.data?.notes,
     (newNotes) => {
@@ -227,7 +226,6 @@ export function useEntityDetails(entity, caseId, emit) {
     { immediate: true },
   )
 
-  // Watch for editing state changes and update editor editability
   watch(
     () => isEditing.value,
     (newEditingState, oldEditingState) => {

@@ -2,7 +2,6 @@
   <div class="d-flex flex-column ga-3">
     <PluginDescriptionCard :description="pluginDescription" />
 
-    <!-- Target Input -->
     <v-text-field
       v-model="localParams.target"
       :label="targetText[localParams.analysis_type].label"
@@ -11,7 +10,6 @@
       @update:model-value="updateParams"
     />
 
-    <!-- Analysis Type Selection -->
     <v-select
       v-model="localParams.analysis_type"
       label="Analysis Type"
@@ -22,7 +20,6 @@
       @update:model-value="updateParams"
     />
 
-    <!-- Include Extended Details -->
     <v-switch
       v-model="localParams.include_details"
       label="Include Extended Details"
@@ -31,7 +28,6 @@
       @update:model-value="updateParams"
     />
 
-    <!-- Timeout -->
     <v-text-field
       v-model.number="localParams.timeout"
       label="API Timeout (seconds)"
@@ -43,7 +39,6 @@
       @update:model-value="updateParams"
     />
 
-    <!-- Save to Case Option -->
     <CaseEvidenceToggle
       :model-value="props.modelValue"
       @update:model-value="emit('update:modelValue', $event)"
@@ -69,7 +64,6 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 
-// Use advanced plugin params composable
 const { pluginDescription, localParams, updateParams } = usePluginParamsAdvanced(props, emit, {
   parameterDefaults: {
     target: '',
@@ -79,7 +73,6 @@ const { pluginDescription, localParams, updateParams } = usePluginParamsAdvanced
   },
 })
 
-// Analysis type options
 const analysisTypes = [
   { title: 'Auto-detect', value: 'auto' },
   { title: 'File Hash', value: 'file' },

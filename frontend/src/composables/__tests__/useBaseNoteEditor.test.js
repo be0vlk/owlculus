@@ -82,7 +82,6 @@ describe('useBaseNoteEditor', () => {
 
     useBaseNoteEditor({ onUpdate })
 
-    // Simulate editor update
     updateCallback({ editor: mockEditor })
 
     expect(onUpdate).toHaveBeenCalledWith(mockEditor)

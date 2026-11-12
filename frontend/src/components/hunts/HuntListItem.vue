@@ -8,7 +8,6 @@
   >
     <v-card-text class="pa-3">
       <v-row class="align-center">
-        <!-- Hunt Icon and Basic Info -->
         <v-col cols="12" md="5" class="d-flex align-center">
           <v-avatar :color="categoryColor" size="40" class="me-3">
             <v-icon :icon="getCategoryIcon(hunt.category)" size="small" color="white" />
@@ -29,20 +28,17 @@
           </div>
         </v-col>
 
-        <!-- Description -->
         <v-col cols="12" md="3">
           <div class="text-body-medium text-medium-emphasis hunt-description">
             {{ hunt.description }}
           </div>
         </v-col>
 
-        <!-- Stats and Actions -->
         <v-col cols="12" md="4" class="d-flex align-center justify-md-end justify-start">
           <div class="text-body-small text-medium-emphasis me-3">
             {{ hunt.step_count || 0 }} steps
           </div>
 
-          <!-- Execute Button -->
           <v-btn
             color="primary"
             variant="tonal"
@@ -72,7 +68,6 @@ const props = defineProps({
 
 defineEmits(['execute', 'view-details'])
 
-// Computed properties
 const categoryColor = computed(() => {
   return getCategoryColor(props.hunt.category)
 })
@@ -104,7 +99,6 @@ const displayCategory = computed(() => {
   line-height: 1.5;
 }
 
-/* Add subtle background on hover */
 .hunt-list-item:hover::before {
   content: '';
   position: absolute;

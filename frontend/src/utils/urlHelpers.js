@@ -8,16 +8,13 @@ export function ensureProtocol(url) {
     return url
   }
 
-  // If URL already has a protocol, return as is
   if (url.match(/^https?:\/\//)) {
     return url
   }
 
-  // If URL starts with '//', add https:
   if (url.startsWith('//')) {
     return `https:${url}`
   }
 
-  // Otherwise, add https:// prefix
   return `https://${url}`
 }

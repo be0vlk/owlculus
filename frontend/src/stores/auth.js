@@ -13,7 +13,6 @@ export const useAuthStore = defineStore('auth', () => {
   // Router and App both call init(); share the in-flight run.
   let initPromise = null
 
-  // Initialize user data if already authenticated
   async function init() {
     if (isInitialized.value) return
     initPromise ??= (async () => {
@@ -33,12 +32,10 @@ export const useAuthStore = defineStore('auth', () => {
           return
         }
 
-        // Refresh authentication status from localStorage
         isAuthenticated.value = authService.isAuthenticated()
         user.value = isAuthenticated.value ? await authService.getCurrentUser() : null
       } catch (err) {
         console.error('Failed to initialize user data:', err)
-        // Clear authentication state on initialization failure
         user.value = null
         isAuthenticated.value = false
         authService.logout()
@@ -62,7 +59,6 @@ export const useAuthStore = defineStore('auth', () => {
     authService.logout()
     user.value = null
     isAuthenticated.value = false
-    // Reset initialization state to allow re-initialization
     isInitialized.value = false
     initPromise = null
   }
@@ -78,7 +74,6 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated.value = false
   }
 
-  // Helper function to check if user is admin
   function requiresAdmin() {
     return user.value?.role === 'Admin'
   }

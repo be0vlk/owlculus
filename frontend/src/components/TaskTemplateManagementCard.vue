@@ -21,15 +21,12 @@
     <v-divider />
 
     <v-card-text class="pa-0">
-      <!-- Loading state -->
       <div v-if="loading" class="pa-6">
         <v-skeleton-loader type="table-row@5" />
       </div>
 
-      <!-- Error state -->
       <v-alert v-else-if="error" :text="error" class="ma-4" type="error" variant="tonal" />
 
-      <!-- Empty state -->
       <div v-else-if="!sortedTemplates.length" class="pa-8 text-center">
         <v-icon icon="mdi-clipboard-off" size="64" color="grey-darken-1" class="mb-4" />
         <div class="text-title-large text-medium-emphasis mb-2">No Task Templates</div>
@@ -41,7 +38,6 @@
         </v-btn>
       </div>
 
-      <!-- Templates Table -->
       <v-table v-else class="admin-dashboard-table">
         <thead>
           <tr>

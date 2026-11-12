@@ -1,7 +1,6 @@
 import { ref } from 'vue'
 
 export function useNotifications() {
-  // Snackbar state
   const snackbar = ref({
     show: false,
     text: '',
@@ -9,7 +8,6 @@ export function useNotifications() {
     timeout: 4000,
   })
 
-  // Helper function to show notifications
   const showNotification = (text, color = 'success', timeout = 4000) => {
     snackbar.value.text = text
     snackbar.value.color = color
@@ -17,7 +15,6 @@ export function useNotifications() {
     snackbar.value.show = true
   }
 
-  // Convenience methods for common notification types
   const showSuccess = (text, timeout = 4000) => {
     showNotification(text, 'success', timeout)
   }
@@ -26,16 +23,13 @@ export function useNotifications() {
     showNotification(text, 'error', timeout)
   }
 
-  // Close the snackbar
   const closeNotification = () => {
     snackbar.value.show = false
   }
 
   return {
-    // State
     snackbar,
 
-    // Methods
     showNotification,
     showSuccess,
     showError,

@@ -47,7 +47,6 @@ export function useEntityForm(caseId) {
   return { state, advisories, submitEntity, reset }
 }
 
-// Shared props and emit definitions for entity form components
 export const entityFormProps = {
   modelValue: {
     type: Object,
@@ -57,7 +56,6 @@ export const entityFormProps = {
 
 export const entityFormEmits = ['update:modelValue']
 
-// Shared updateField function for entity form components
 export function useEntityFormField(props, emit) {
   const updateField = (field, value) => {
     emit('update:modelValue', {

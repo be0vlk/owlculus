@@ -20,7 +20,6 @@
       @update:model-value="updateParams"
     />
 
-    <!-- Save to Case Option -->
     <CaseEvidenceToggle
       :model-value="props.modelValue"
       @update:model-value="emit('update:modelValue', $event)"
@@ -47,7 +46,6 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 
-// Use advanced plugin params composable with domain configuration
 const { pluginDescription, localParams, updateParams } = usePluginParamsAdvanced(props, emit, {
   parameterDefaults: {
     domain: '',

@@ -8,12 +8,10 @@
     <v-card prepend-icon="mdi-cloud-upload" title="Upload Evidence">
       <v-card-text>
         <v-form @submit.prevent="handleSubmit">
-          <!-- Target Folder Alert -->
           <v-alert v-if="targetFolder" class="mb-4" icon="mdi-folder" type="info" variant="tonal">
             Uploading to: <strong>{{ targetFolder.title }}</strong>
           </v-alert>
 
-          <!-- Destination Folder Selection -->
           <v-select
             v-if="!targetFolder"
             v-model="selectedFolder"
@@ -31,7 +29,6 @@
             </template>
           </v-select>
 
-          <!-- Category Selection -->
           <v-select
             v-model="form.category"
             :items="CATEGORIES"
@@ -41,7 +38,6 @@
             class="mb-4"
           />
 
-          <!-- Description -->
           <v-textarea
             v-model="form.description"
             label="Description (Optional)"
@@ -49,7 +45,6 @@
             class="mb-4"
           />
 
-          <!-- File Upload Area -->
           <v-card
             variant="outlined"
             class="upload-area mb-4"
@@ -84,7 +79,6 @@
             </v-card-text>
           </v-card>
 
-          <!-- Selected Files Display -->
           <v-card v-if="selectedFiles.length > 0" variant="outlined" class="mb-4">
             <v-card-title class="text-body-large">
               Selected Files ({{ selectedFiles.length }})
@@ -122,7 +116,6 @@
             </v-list>
           </v-card>
 
-          <!-- Error Display -->
           <v-alert v-if="fileError" class="mb-4" type="error" variant="tonal">
             {{ fileError }}
           </v-alert>
@@ -204,7 +197,6 @@ const fileError = ref(null)
 const selectedFolder = ref(null)
 const isDragOver = ref(false)
 
-// Computed properties
 const folderOptions = computed(() => {
   const buildFolderTree = (folders, parentId = null, prefix = '') => {
     const options = []
@@ -214,7 +206,6 @@ const folderOptions = computed(() => {
       const label = prefix + '📁 ' + folder.title
       options.push({ label, value: folder })
 
-      // Add nested folders with indentation
       const nestedOptions = buildFolderTree(folders, folder.id, prefix + '  ')
       options.push(...nestedOptions)
     })
@@ -303,7 +294,6 @@ async function handleSubmit() {
   }
 }
 
-// Helper function to get appropriate file icon
 const getFileIcon = (item) => {
   const fileExtension = item.split('.').pop().toLowerCase()
 

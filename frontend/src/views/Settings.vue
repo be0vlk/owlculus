@@ -3,7 +3,6 @@
   <div>
     <v-main>
       <v-container class="pa-6">
-        <!-- Page Header -->
         <div class="mb-6">
           <v-row class="align-center justify-space-between">
             <v-col>
@@ -12,7 +11,6 @@
           </v-row>
         </div>
 
-        <!-- Password Reset Section -->
         <v-card>
           <v-card-title>
             <span class="text-headline-small">Change Password</span>
@@ -52,7 +50,6 @@
                     class="mb-4"
                   />
 
-                  <!-- Error Alert -->
                   <v-alert v-if="error" :text="error" class="mb-4" type="error" />
 
                   <v-btn

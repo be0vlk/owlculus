@@ -6,7 +6,6 @@
         <v-col cols="12" lg="4" md="6" sm="8" xl="3">
           <v-card class="rounded-xl" elevation="3">
             <v-card-text class="pa-8">
-              <!-- Logo -->
               <div class="text-center mb-8">
                 <v-img
                   :src="isDark ? '/owl_logo_white.png' : '/owl_logo.png'"
@@ -23,7 +22,6 @@
                 text="Password changed successfully. Sign in with your new password."
               />
 
-              <!-- Login Form -->
               <v-form ref="form" @submit.prevent="handleLogin">
                 <v-text-field
                   v-model="formData.username"
@@ -44,10 +42,8 @@
                   type="password"
                 />
 
-                <!-- Error Alert -->
                 <v-alert v-if="error" :text="error" class="mb-4" type="error" />
 
-                <!-- Login Button -->
                 <v-btn
                   :disabled="isLoading"
                   :loading="isLoading"

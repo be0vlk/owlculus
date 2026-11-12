@@ -18,13 +18,11 @@
         <p v-if="!formValid" class="mb-4">
           {{ entityIdentityGuidance[entityForm.state.entityType] }}
         </p>
-        <!-- Error Alert -->
         <v-alert v-if="entityForm.state.error" type="error" variant="tonal" class="mb-4">
           {{ entityForm.state.error }}
         </v-alert>
 
         <v-form @submit.prevent="handleSubmit">
-          <!-- Entity Type Selector -->
           <v-card variant="outlined" class="mb-6">
             <v-card-title class="text-body-large pb-2">
               <v-icon start>mdi-shape</v-icon>
@@ -45,7 +43,6 @@
             </v-card-text>
           </v-card>
 
-          <!-- Entity Form Content -->
           <v-tabs-window v-model="entityForm.state.entityType">
             <v-tabs-window-item value="person">
               <PersonForm v-model="entityForm.state.data" />
@@ -118,7 +115,6 @@ const emit = defineEmits(['close', 'created'])
 
 const entityForm = useEntityForm(props.caseId)
 
-// Dialog visibility
 const dialogVisible = computed({
   get: () => props.show,
   set: (value) => {

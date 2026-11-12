@@ -10,7 +10,6 @@ export const useHuntStore = defineStore('hunt', () => {
   const reads = new Map()
   const deniedExecutionIds = new Set()
   const terminalDetailRevisions = new Map()
-  // State
   const availableHunts = ref([])
   const records = ref({})
   const historyIds = ref([])
@@ -146,7 +145,6 @@ export const useHuntStore = defineStore('hunt', () => {
   }
   const observations = new Map()
 
-  // Getters
   const runningExecutions = computed(() => {
     return Object.values(activeExecutions.value).filter((execution) =>
       ['pending', 'running', 'cancelling'].includes(execution.status),
@@ -159,7 +157,6 @@ export const useHuntStore = defineStore('hunt', () => {
     )
   })
 
-  // Actions
   async function fetchHunts() {
     const request = generation
     try {
@@ -405,18 +402,15 @@ export const useHuntStore = defineStore('hunt', () => {
   }
 
   return {
-    // State
     availableHunts,
     activeExecutions,
     executionHistory,
     cancellationPending,
     error: visibleError,
 
-    // Getters
     runningExecutions,
     completedExecutions,
 
-    // Actions
     openWorkflow,
     fetchHunts,
     executeHunt,

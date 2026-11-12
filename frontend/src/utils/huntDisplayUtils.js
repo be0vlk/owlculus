@@ -69,7 +69,6 @@ export function getHuntTargetSummary(initialParameters, huntCategory) {
     return 'N/A'
   }
 
-  // Truncate long values for table display
   if (target.length > 30) {
     return target.substring(0, 27) + '...'
   }
@@ -77,7 +76,6 @@ export function getHuntTargetSummary(initialParameters, huntCategory) {
   return target
 }
 
-// Status color mapping
 export const getStatusColor = (status) => {
   const statusColors = {
     pending: 'grey',
@@ -92,7 +90,6 @@ export const getStatusColor = (status) => {
   return statusColors[status] || 'grey'
 }
 
-// Status icon mapping
 export const getStatusIcon = (status) => {
   const statusIcons = {
     pending: 'mdi-clock-outline',
@@ -107,7 +104,6 @@ export const getStatusIcon = (status) => {
   return statusIcons[status] || 'mdi-help'
 }
 
-// Status text mapping
 export const getStatusText = (status, compact = false) => {
   const statusTexts = {
     pending: 'Queued',
@@ -122,7 +118,6 @@ export const getStatusText = (status, compact = false) => {
   return statusTexts[status] || 'Unknown'
 }
 
-// Category icon mapping
 export const getCategoryIcon = (category) => {
   const iconMap = {
     person: 'mdi-account',
@@ -136,7 +131,6 @@ export const getCategoryIcon = (category) => {
   return iconMap[category] || iconMap.general
 }
 
-// Category color mapping
 export const getCategoryColor = (category) => {
   const colorMap = {
     person: 'primary',
@@ -150,7 +144,6 @@ export const getCategoryColor = (category) => {
   return colorMap[category] || colorMap.general
 }
 
-// Calculate and format duration
 // Hunt timestamps are UTC but may arrive without a zone designator.
 const parseUtc = (value) =>
   new Date(typeof value === 'string' && !/(Z|[+-]\d\d:?\d\d)$/i.test(value) ? `${value}Z` : value)
@@ -174,7 +167,6 @@ export const calculateDuration = (startTime, endTime) => {
   }
 }
 
-// Format file size
 export const formatFileSize = (bytes) => {
   if (!bytes) return '0 B'
   const k = 1024
@@ -183,12 +175,10 @@ export const formatFileSize = (bytes) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
-// Format parameter names (snake_case to Title Case)
 export const formatParameterName = (paramName) => {
   return paramName.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
 }
 
-// Format metadata values
 export const formatMetadataValue = (value) => {
   if (value === null || value === undefined) return 'N/A'
   if (typeof value === 'object') return JSON.stringify(value)
@@ -196,7 +186,6 @@ export const formatMetadataValue = (value) => {
   return String(value)
 }
 
-// Get display category name
 export const getDisplayCategory = (category) => {
   if (!category) return 'Other'
 

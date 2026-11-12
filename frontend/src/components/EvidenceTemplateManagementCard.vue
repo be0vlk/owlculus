@@ -17,12 +17,10 @@
         >Save Changes</v-btn
       >
     </v-card-title>
-    <!-- Loading state -->
     <div v-if="loading" class="pa-6">
       <v-skeleton-loader type="table-row@3" />
     </div>
 
-    <!-- Error state -->
     <v-alert v-else-if="error" :text="error" class="ma-4" type="error" variant="tonal">
       <template v-slot:append>
         <v-btn size="small" variant="text" @click="loadTemplates">Retry</v-btn>
@@ -31,14 +29,11 @@
 
     <v-alert v-if="saveError" :text="saveError" class="ma-4" type="error" variant="tonal" />
 
-    <!-- Success notification -->
     <v-alert v-if="saveSuccess" class="ma-4" closable type="success" variant="tonal">
       Templates saved successfully!
     </v-alert>
 
-    <!-- Main content -->
     <div v-if="!loading && !error">
-      <!-- Tabs section with proper padding -->
       <div class="pa-4 pb-0">
         <v-tabs v-model="activeTab" bg-color="surface" class="mb-4">
           <v-tab
@@ -53,7 +48,6 @@
 
       <v-divider />
 
-      <!-- Tab content with consistent padding -->
       <div class="pa-4">
         <v-window v-model="activeTab">
           <v-window-item
@@ -120,7 +114,6 @@ const loadTemplates = async () => {
     const response = await systemService.getEvidenceFolderTemplates()
     templates.value = response.templates || {}
 
-    // Set default active tab if templates exist
     const templateKeys = Object.keys(templates.value)
     if (templateKeys.length > 0) {
       activeTab.value = templateKeys[0]

@@ -1,6 +1,5 @@
 <template>
   <div>
-    <!-- String field (text input) -->
     <v-text-field
       v-if="field.type === 'string'"
       v-model="model"
@@ -11,7 +10,6 @@
       :readonly="readonly"
     />
 
-    <!-- Number field -->
     <v-text-field
       v-else-if="field.type === 'number'"
       v-model.number="model"
@@ -23,7 +21,6 @@
       type="number"
     />
 
-    <!-- Date field -->
     <v-text-field
       v-else-if="field.type === 'date'"
       v-model="model"
@@ -35,7 +32,6 @@
       type="date"
     />
 
-    <!-- Boolean field (checkbox) -->
     <v-checkbox
       v-else-if="field.type === 'boolean'"
       v-model="model"
@@ -46,7 +42,6 @@
       density="comfortable"
     />
 
-    <!-- Text area field -->
     <v-textarea
       v-else-if="field.type === 'text'"
       v-model="model"
@@ -58,7 +53,6 @@
       rows="3"
     />
 
-    <!-- Select field -->
     <v-select
       v-else-if="field.type === 'select'"
       v-model="model"
@@ -70,7 +64,6 @@
       :readonly="readonly"
     />
 
-    <!-- Fallback for unknown field type -->
     <v-alert v-else type="warning" variant="tonal" density="compact">
       Unknown field type: {{ field.type }}
     </v-alert>

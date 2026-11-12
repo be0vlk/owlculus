@@ -2,7 +2,6 @@
   <div class="d-flex flex-column ga-3">
     <PluginDescriptionCard :description="pluginDescription" />
 
-    <!-- Domain -->
     <v-text-field
       v-model="localParams.domain"
       label="Domain"
@@ -12,7 +11,6 @@
       @update:model-value="updateParams"
     />
 
-    <!-- Concurrency -->
     <v-text-field
       v-model.number="localParams.concurrency"
       label="Concurrency"
@@ -24,7 +22,6 @@
       @update:model-value="updateParams"
     />
 
-    <!-- SecurityTrails Option -->
     <v-switch
       v-model="localParams.use_securitytrails"
       label="Enable SecurityTrails API"
@@ -35,7 +32,6 @@
       @update:model-value="updateParams"
     />
 
-    <!-- Case Evidence Toggle -->
     <CaseEvidenceToggle
       :model-value="props.modelValue"
       @update:model-value="emit('update:modelValue', $event)"
@@ -62,7 +58,6 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 
-// Use advanced plugin params composable with domain/concurrency/securitytrails configuration
 const { pluginDescription, localParams, updateParams } = usePluginParamsAdvanced(props, emit, {
   parameterDefaults: { domain: '', concurrency: 5, use_securitytrails: false },
 })

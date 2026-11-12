@@ -1,5 +1,5 @@
 // Time format utilities - standardized to UTC with 24-hour format
-// My non-US friends, you can change the date format here to match your locale
+// Change the locale here to match a different date format.
 // For example change en-US to en-GB and that's all you need to do!
 // Note: Times are always displayed in UTC to ensure consistency across timezones
 

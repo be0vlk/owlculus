@@ -1,6 +1,5 @@
 <template>
   <div class="hunt-step-results">
-    <!-- Step Information -->
     <div class="mb-4">
       <v-row>
         <v-col cols="12" md="6">
@@ -13,7 +12,6 @@
         </v-col>
       </v-row>
 
-      <!-- Parameters -->
       <div v-if="step.parameters && Object.keys(step.parameters).length > 0" class="mt-3">
         <div class="text-body-small font-weight-medium mb-2">Parameters</div>
         <v-chip
@@ -27,7 +25,6 @@
         </v-chip>
       </div>
 
-      <!-- Error Details -->
       <div
         v-if="
           step.plugin_name !== 'CorrelationScan' && step.status === 'failed' && step.error_details
@@ -69,12 +66,10 @@
         @retry="$emit('retry')"
       />
     </template>
-    <!-- Display other Plugins' results as before -->
     <div v-else-if="displayResults.length > 0">
       <div v-for="(result, index) in displayResults" :key="index" class="result-item mb-3">
         <v-card variant="outlined" density="compact">
           <v-card-text class="pa-3">
-            <!-- Generic result display -->
             <div v-if="typeof result === 'object'">
               <div v-for="(value, key) in result" :key="key" class="mb-1">
                 <span class="text-body-small font-weight-medium"
@@ -83,7 +78,6 @@
                 <span class="text-body-small ml-2">{{ formatValue(value) }}</span>
               </div>
             </div>
-            <!-- Simple value display -->
             <div v-else class="text-body-medium">
               {{ result }}
             </div>
@@ -92,25 +86,21 @@
       </div>
     </div>
 
-    <!-- Empty state for completed steps -->
     <div v-else-if="step.status === 'completed'" class="text-center pa-4">
       <v-icon icon="mdi-information-outline" color="grey" class="mb-2" />
       <div class="text-body-small text-medium-emphasis">No results to display</div>
     </div>
 
-    <!-- Pending state -->
     <div v-else-if="step.status === 'pending'" class="text-center pa-4">
       <v-icon icon="mdi-clock-outline" color="grey" class="mb-2" />
       <div class="text-body-small text-medium-emphasis">Step not yet executed</div>
     </div>
 
-    <!-- Running state -->
     <div v-else-if="step.status === 'running'" class="text-center pa-4">
       <v-progress-circular indeterminate size="32" color="primary" />
       <div class="text-body-small text-medium-emphasis mt-2">Step is currently running...</div>
     </div>
 
-    <!-- Skipped state -->
     <div v-else-if="step.status === 'skipped'" class="text-center pa-4">
       <v-icon icon="mdi-skip-next" color="warning" class="mb-2" />
       <div class="text-body-small text-medium-emphasis">Step was skipped</div>
@@ -144,11 +134,9 @@ const correlationExecutionError = computed(() =>
     : props.step.error_details,
 )
 
-// Computed properties
 const displayResults = computed(() => {
   if (!props.step?.output) return []
 
-  // Handle different output formats
   if (Array.isArray(props.step.output)) {
     return props.step.output
   } else if (props.step.output.results && Array.isArray(props.step.output.results)) {
@@ -161,7 +149,6 @@ const displayResults = computed(() => {
   return []
 })
 
-// Methods
 const formatValue = (value) => {
   if (value === null || value === undefined) return 'N/A'
   if (typeof value === 'boolean') return value ? 'Yes' : 'No'

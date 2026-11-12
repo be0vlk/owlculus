@@ -25,7 +25,6 @@ export const authService = {
       localStorage.setItem('access_token', response.data.access_token)
       localStorage.setItem('token_type', response.data.token_type || 'bearer')
 
-      // Fetch and return user data along with the token
       const userData = await this.getCurrentUser()
       return { ...response.data, user: userData }
     }

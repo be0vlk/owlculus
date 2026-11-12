@@ -8,7 +8,6 @@
     @keydown.esc="handleCancel"
   >
     <v-card>
-      <!-- Header -->
       <v-card-title class="d-flex align-center pa-4 bg-primary text-white">
         <v-icon :icon="getCategoryIcon(hunt?.category)" class="me-3" />
         <div class="flex-grow-1">
@@ -28,7 +27,6 @@
       <v-divider />
 
       <v-card-text class="pa-4">
-        <!-- Hunt Description -->
         <div class="mb-4">
           <div class="text-body-large mb-2">{{ hunt?.description }}</div>
           <div class="d-flex align-center text-body-small text-medium-emphasis">
@@ -40,7 +38,6 @@
           </div>
         </div>
 
-        <!-- Parameters Form -->
         <div v-if="hunt" class="mb-4">
           <div class="text-title-large mb-3">Hunt Parameters</div>
 
@@ -54,13 +51,11 @@
           />
         </div>
 
-        <!-- Error Display -->
         <v-alert v-if="error" type="error" class="mb-4">
           {{ error }}
         </v-alert>
       </v-card-text>
 
-      <!-- Actions -->
       <v-card-actions class="pa-4 pt-0">
         <v-spacer />
         <v-btn :disabled="executing" variant="text" @click="handleCancel"> Cancel </v-btn>
@@ -100,17 +95,14 @@ const props = defineProps({
 
 const emit = defineEmits(['execute', 'cancel'])
 
-// Local state
 const parameterForm = ref(null)
 const parameterFormId = useId()
 const parameterValues = ref({})
 
 const dialog = defineModel({ type: Boolean, default: false })
 
-// Computed properties
 const isFormValid = computed(() => !!props.caseId)
 
-// Methods
 const handleExecute = async () => {
   if (!isFormValid.value || props.executing) return
   if (parameterForm.value && !(await parameterForm.value.validate())) return

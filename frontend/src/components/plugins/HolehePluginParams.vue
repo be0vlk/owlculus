@@ -2,7 +2,6 @@
   <div class="d-flex flex-column ga-3">
     <PluginDescriptionCard :description="pluginDescription" />
 
-    <!-- Email -->
     <v-text-field
       v-model="localParams.email"
       label="Email Address"
@@ -13,7 +12,6 @@
       @update:model-value="updateParams"
     />
 
-    <!-- Timeout -->
     <v-text-field
       v-model.number="localParams.timeout"
       label="Timeout"
@@ -25,7 +23,6 @@
       @update:model-value="updateParams"
     />
 
-    <!-- Save to Case Option -->
     <CaseEvidenceToggle
       :model-value="props.modelValue"
       @update:model-value="emit('update:modelValue', $event)"
@@ -52,7 +49,6 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 
-// Use advanced plugin params composable with email configuration
 const { pluginDescription, localParams, updateParams } = usePluginParamsAdvanced(props, emit, {
   parameterDefaults: {
     email: '',
