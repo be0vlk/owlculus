@@ -56,7 +56,6 @@
       </v-card>
     </template>
 
-    <!-- Case Content -->
     <div v-if="caseData">
       <v-tabs v-model="activeCaseTab" color="on-surface" show-arrows aria-label="Case workspaces">
         <v-tab v-for="tab in availableTabs" :key="tab.name" :text="tab.label" :value="tab.name" />
@@ -73,7 +72,6 @@
               </v-col>
             </v-row>
 
-            <!-- Entity Data Table -->
             <EntityDataTable
               ref="entityTableRef"
               :case-id="caseId"
@@ -203,7 +201,6 @@
     @manage-users="showManageUsersModal = true"
   />
 
-  <!-- Modals -->
   <EditCaseModal
     v-if="caseData"
     :case-data="caseData"
@@ -258,7 +255,6 @@
 
   <FileContentModal v-model="showFileContentModal" :evidence-item="selectedEvidenceForContent" />
 
-  <!-- Entity Creation Success Dialog -->
   <v-dialog
     v-model="showEntityCreationSuccess"
     aria-label="Entity Created Successfully"
@@ -435,12 +431,10 @@ function openNewEntityModal(event) {
 }
 
 async function handleEditEntity(updatedEntity) {
-  // Update selectedEntity if it's the one being edited
   if (selectedEntity.value?.id === updatedEntity.id) {
     selectedEntity.value = { ...updatedEntity }
   }
 
-  // Always refresh the EntityDataTable to show updated data
   if (entityTableRef.value) {
     entityTableRef.value.refresh()
   }
@@ -562,8 +556,6 @@ const loadCaseData = async ({ refresh = false } = {}) => {
     loading.value = false
   }
 }
-
-// Entities are now handled by EntityDataTable component
 
 const loadEvidence = async () => {
   if (!caseId.value) return

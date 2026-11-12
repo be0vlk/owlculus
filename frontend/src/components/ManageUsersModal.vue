@@ -9,7 +9,6 @@
     <v-card prepend-icon="mdi-account-group">
       <v-card-title id="manage-case-users-dialog-title">Manage Case Users</v-card-title>
       <v-card-text>
-        <!-- Loading State -->
         <v-row class="justify-center" v-if="loading">
           <v-col class="text-center" cols="12">
             <v-card class="pa-8" variant="outlined">
@@ -22,7 +21,6 @@
           </v-col>
         </v-row>
 
-        <!-- Error State -->
         <v-alert
           v-else-if="error"
           border="start"

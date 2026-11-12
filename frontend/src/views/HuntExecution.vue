@@ -1,6 +1,5 @@
 <template>
   <BaseDashboard :loading="loading && !execution" :title="pageTitle">
-    <!-- Header Actions -->
     <template #header-actions>
       <div class="d-flex align-center ga-2">
         <v-btn
@@ -54,7 +53,6 @@
       </div>
     </template>
 
-    <!-- Loading State -->
     <v-alert v-if="huntStore.error" type="error" role="alert" class="mb-4">
       {{ huntStore.error }}
     </v-alert>
@@ -64,13 +62,11 @@
       </v-card>
     </template>
 
-    <!-- Main Content -->
     <div v-if="execution">
       <ExecutionWaiting :execution="execution" />
       <v-alert v-if="execution.error" type="error" role="alert" class="mb-4">
         {{ execution.error.message }}
       </v-alert>
-      <!-- Execution Overview Card -->
       <v-card variant="outlined" class="mb-6">
         <v-card-title class="d-flex align-center pa-4 bg-surface">
           <v-icon icon="mdi-information" color="primary" size="large" class="me-3" />
@@ -85,7 +81,6 @@
         <v-divider />
 
         <v-card-text class="pa-6">
-          <!-- Execution Details -->
           <v-row>
             <v-col cols="12" md="6">
               <div class="mb-4">
@@ -170,7 +165,6 @@
             </v-col>
           </v-row>
 
-          <!-- Initial Parameters -->
           <div
             v-if="
               execution.initial_parameters && Object.keys(execution.initial_parameters).length > 0
@@ -192,7 +186,6 @@
         </v-card-text>
       </v-card>
 
-      <!-- Hunt Results -->
       <v-card class="mb-6" variant="outlined">
         <v-card-title class="pa-4">
           <v-icon class="me-2" icon="mdi-chart-box" />
@@ -202,14 +195,12 @@
         <v-divider />
 
         <v-card-text class="pa-4">
-          <!-- Summary Statistics -->
           <HuntResultsSummary
             :context-data="execution.context_data"
             :execution="execution"
             @view-evidence="viewEvidence"
           />
 
-          <!-- Step Results Section -->
           <v-divider class="my-4" />
 
           <div class="text-title-large mb-3">Step Results</div>
@@ -283,13 +274,11 @@ import BaseDashboard from '@/components/BaseDashboard.vue'
 import HuntResultsSummary from '@/components/hunts/HuntResultsSummary.vue'
 import HuntStepResults from '@/components/hunts/HuntStepResults.vue'
 
-// Route and store
 const route = useRoute()
 const router = useRouter()
 const huntStore = useHuntStore()
 const { showNotification } = useNotifications()
 
-// Local state
 const loading = ref(true)
 const execution = computed(() => {
   const record = huntStore.activeExecutions[executionId.value]
@@ -301,7 +290,6 @@ const exportError = ref(null)
 let workflow = null
 let loadGeneration = 0
 
-// Computed properties
 const executionId = computed(() => parseInt(route.params.id))
 const now = useNow(() => execution.value?.status === 'running')
 
@@ -313,7 +301,6 @@ const canExport = computed(() => {
   return execution.value && !['pending', 'running', 'cancelling'].includes(execution.value.status)
 })
 
-// Methods
 const loadExecution = async () => {
   const owner = workflow
   const request = ++loadGeneration
@@ -363,7 +350,6 @@ const exportExecution = async (format) => {
 }
 
 const viewEvidence = (evidence) => {
-  // Navigate to evidence view
   router.push(`/case/${execution.value.case_id}?tab=evidence&highlight=${evidence.id}`)
 }
 
@@ -372,7 +358,6 @@ const formatDuration = (step) => {
   return calculateDuration(step.started_at, step.completed_at)
 }
 
-// Lifecycle
 watch(
   () => [route.params.caseId, route.params.id],
   () => {

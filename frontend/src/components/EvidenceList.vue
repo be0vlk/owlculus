@@ -208,7 +208,6 @@
 
     <ConfirmationDialog ref="confirmDialog" />
 
-    <!-- Template Selection Modal -->
     <evidence-template-selection-modal
       v-model="showTemplateSelection"
       :case-id="caseId"
@@ -453,7 +452,6 @@ watch(
   min-height: 200px;
 }
 
-/* Responsive adjustments */
 @media (width <= 599px) {
   .evidence-container {
     max-height: 50vh;
@@ -466,7 +464,6 @@ watch(
   }
 }
 
-/* Drag and Drop Styles */
 .evidence-dragging {
   opacity: 0.5;
   background-color: rgb(var(--v-theme-primary), 0.1);
@@ -481,7 +478,6 @@ watch(
   box-shadow: 0 2px 8px rgb(var(--v-theme-success), 0.3);
 }
 
-/* Tree item title wrapper */
 .tree-item-title-wrapper {
   width: 100%;
   min-width: 0;

@@ -1,6 +1,5 @@
 <template>
   <div class="d-flex flex-column ga-4">
-    <!-- Status Messages -->
     <PluginStatusAlert
       v-for="(item, index) in statusMessages"
       :key="`status-${index}`"
@@ -8,7 +7,6 @@
       :message="item.data.message"
     />
 
-    <!-- DNS Results Grid -->
     <div v-if="dnsResults.length" class="dns-results-grid">
       <v-row>
         <v-col v-for="(dnsData, index) in dnsResults" :key="`dns-${index}`" cols="12" lg="6">
@@ -27,7 +25,6 @@
             </v-card-title>
 
             <v-card-text class="pa-0">
-              <!-- Record Results Grid -->
               <div class="pa-4">
                 <div class="d-flex flex-column ga-3">
                   <div
@@ -35,7 +32,6 @@
                     :key="rIndex"
                     class="record-result"
                   >
-                    <!-- Success Result -->
                     <div v-if="recordResult.records" class="mb-3">
                       <div class="d-flex align-center mb-2">
                         <v-chip class="mr-2" color="success" size="small" variant="tonal">
@@ -67,7 +63,6 @@
                       </v-card>
                     </div>
 
-                    <!-- Error Result -->
                     <v-alert
                       v-else-if="recordResult.error"
                       type="error"
@@ -94,7 +89,6 @@
       </v-row>
     </div>
 
-    <!-- Completion and Error Messages -->
     <PluginStatusAlert
       v-for="(item, index) in completionMessages"
       :key="`complete-${index}`"
@@ -111,7 +105,6 @@
       plugin-name="DNS Lookup"
     />
 
-    <!-- No Results -->
     <NoResultsCard v-if="!result.length" />
   </div>
 </template>

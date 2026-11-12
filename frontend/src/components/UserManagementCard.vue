@@ -1,6 +1,5 @@
 <template>
   <v-card :elevation="0" variant="flat">
-    <!-- Header -->
     <v-card-title class="operations-heading d-flex flex-wrap ga-3 align-center pa-4 bg-surface">
       <div class="flex-grow-1">
         <h2 class="text-title-large font-weight-bold">Users</h2>
@@ -35,17 +34,14 @@
 
     <v-divider />
 
-    <!-- Search Toolbar -->
     <v-card-text class="pa-4">
       <v-row class="mb-0 align-center">
         <v-col cols="12" md="4">
           <v-select v-model="roleFilter" :items="roleOptions" label="Filter by role" hide-details />
         </v-col>
 
-        <!-- Search Controls -->
         <v-col cols="12" md="8">
           <div class="d-flex align-center ga-4 justify-end">
-            <!-- Search Field -->
             <v-text-field
               v-model="searchQuery"
               prepend-inner-icon="mdi-magnify"
@@ -86,7 +82,6 @@
         </div>
       </template>
 
-      <!-- Role column -->
       <template #[`item.role`]="{ item }">
         <div class="d-flex align-center ga-2">
           <v-chip color="grey-darken-1" size="small" variant="tonal">
@@ -99,14 +94,12 @@
         </div>
       </template>
 
-      <!-- Created date -->
       <template #[`item.created_at`]="{ item }">
         <span class="text-body-medium">
           {{ formatDate(item.created_at) }}
         </span>
       </template>
 
-      <!-- Actions column -->
       <template #[`item.actions`]="{ item }">
         <div class="d-flex ga-2">
           <v-btn
@@ -149,7 +142,6 @@
         </div>
       </template>
 
-      <!-- Empty state -->
       <template #no-data>
         <div class="text-center pa-12">
           <v-icon class="mb-4" color="grey-lighten-1" icon="mdi-account-group-outline" size="64" />
@@ -183,7 +175,6 @@
       </template>
     </v-data-table>
 
-    <!-- User Modal -->
     <UserModal
       :show="showNewUserModal"
       :user="editingUser"
@@ -191,7 +182,6 @@
       @saved="handleUserSaved"
     />
 
-    <!-- Password Reset Modal -->
     <PasswordResetModal
       :show="showPasswordResetModal"
       :userId="selectedUserForPasswordReset?.id ?? null"
@@ -244,7 +234,6 @@ watch([loading, error, () => users.value.length], () => {
   if (!loading.value) emit('count', error.value ? null : users.value.length)
 })
 
-// Permission checks
 const canDeleteUser = (targetUser) => {
   const currentUser = authStore.user
   if (!currentUser || targetUser.system_identity) return false

@@ -1,4 +1,3 @@
-// Common field templates to reduce duplication
 const commonFields = {
   address: [
     {

@@ -2,9 +2,7 @@
   <div class="d-flex flex-column ga-3">
     <PluginDescriptionCard :description="pluginDescription" />
 
-    <!-- Generic parameter fields -->
     <template v-for="(param, paramName) in filteredParameters" :key="paramName">
-      <!-- Boolean type - Switch -->
       <v-switch
         v-if="param.type === 'boolean'"
         v-model="localParams[paramName]"
@@ -28,7 +26,6 @@
         @update:model-value="updateParams"
       />
 
-      <!-- Number/Float type - Number field -->
       <v-text-field
         v-else-if="param.type === 'number' || param.type === 'float'"
         v-model.number="localParams[paramName]"
@@ -42,7 +39,6 @@
         @update:model-value="updateParams"
       />
 
-      <!-- String type - Text field -->
       <v-text-field
         v-else
         v-model="localParams[paramName]"
@@ -56,7 +52,6 @@
       />
     </template>
 
-    <!-- Save to Case Option (if available) -->
     <CaseEvidenceToggle
       v-if="parameters.save_to_case"
       :model-value="props.modelValue"
@@ -83,12 +78,10 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 
-// Plugin description from backend
 const pluginDescription = computed(() => {
   return props.parameters?.description || ''
 })
 
-// Filter out special parameters (save_to_case, case_id) from the displayed parameters
 const filteredParameters = computed(() => {
   const params = { ...props.parameters }
   delete params.save_to_case
@@ -107,10 +100,8 @@ const parameterRules = (param, name) =>
       ]
     : []
 
-// Local parameter state for plugin-specific params
 const localParams = reactive({})
 
-// Initialize local params
 const initializeParams = () => {
   Object.keys(filteredParameters.value).forEach((paramName) => {
     const param = filteredParameters.value[paramName]
@@ -134,7 +125,6 @@ const initializeParams = () => {
 
 onMounted(initializeParams)
 
-// Emit parameter updates for plugin-specific params
 const updateParams = () => {
   emit('update:modelValue', {
     ...props.modelValue,
@@ -142,7 +132,6 @@ const updateParams = () => {
   })
 }
 
-// Watch for external changes to modelValue
 watch(
   () => props.modelValue,
   (newValue) => {

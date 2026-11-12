@@ -1,6 +1,5 @@
 <template>
   <div class="hunt-execution-history">
-    <!-- Search and Filter Bar -->
     <v-card variant="outlined" class="mb-4">
       <v-card-text>
         <v-row class="align-center">
@@ -40,13 +39,11 @@
       </v-card-text>
     </v-card>
 
-    <!-- Loading State -->
     <div v-if="loading" class="text-center pa-8">
       <v-progress-circular indeterminate size="64" />
       <div class="text-title-large mt-4">Loading execution history...</div>
     </div>
 
-    <!-- Empty State -->
     <v-card v-else-if="filteredExecutions.length === 0" variant="outlined" class="text-center pa-8">
       <v-icon icon="mdi-history" size="64" color="grey" class="mb-4" />
       <div class="text-title-large mb-2">No executions found</div>
@@ -59,7 +56,6 @@
       </div>
     </v-card>
 
-    <!-- Execution History Table -->
     <v-card v-else variant="outlined">
       <v-data-table
         :headers="headers"
@@ -70,7 +66,6 @@
         density="comfortable"
         item-value="id"
       >
-        <!-- Hunt Name Column -->
         <template #[`item.hunt_display_name`]="{ item }">
           <div class="d-flex align-center">
             <v-avatar
@@ -85,14 +80,12 @@
           </div>
         </template>
 
-        <!-- Target Column -->
         <template #[`item.target`]="{ item }">
           <div class="text-body-medium">
             {{ getTargetDisplay(item) }}
           </div>
         </template>
 
-        <!-- Status Column -->
         <template #[`item.status`]="{ item }">
           <v-chip
             :color="getStatusColor(item.status)"
@@ -104,7 +97,6 @@
           </v-chip>
         </template>
 
-        <!-- Progress Column -->
         <template #[`item.progress`]="{ item }">
           <div class="d-flex align-center">
             <v-progress-linear
@@ -119,19 +111,16 @@
           </div>
         </template>
 
-        <!-- Created At Column -->
         <template #[`item.created_at`]="{ item }">
           <div class="text-body-medium">{{ formatDate(item.created_at) }}</div>
         </template>
 
-        <!-- Duration Column -->
         <template #[`item.duration`]="{ item }">
           <span class="text-body-medium">{{
             calculateDuration(item.started_at, item.completed_at)
           }}</span>
         </template>
 
-        <!-- Actions Column -->
         <template #[`item.actions`]="{ item }">
           <v-btn
             icon="mdi-eye"
@@ -172,13 +161,11 @@ const props = defineProps({
 
 defineEmits(['view-details'])
 
-// Local state
 const searchQuery = ref('')
 const statusFilter = ref(null)
 const categoryFilter = ref(null)
 const itemsPerPage = ref(25)
 
-// Table headers
 const headers = [
   { title: 'Hunt', key: 'hunt_display_name', sortable: true },
   { title: 'Target', key: 'target', sortable: true, width: 200 },
@@ -189,7 +176,6 @@ const headers = [
   { title: 'Actions', key: 'actions', sortable: false, width: 80 },
 ]
 
-// Filter options
 const statusOptions = ['completed', 'failed', 'partial', 'cancelled', 'running', 'pending'].map(
   (value) => ({ title: formatStatusText(value, true), value }),
 )
@@ -204,7 +190,6 @@ const categoryOptions = computed(() => {
   }))
 })
 
-// Computed properties
 const hasActiveFilters = computed(() => {
   return !!(searchQuery.value || statusFilter.value || categoryFilter.value)
 })
@@ -212,7 +197,6 @@ const hasActiveFilters = computed(() => {
 const filteredExecutions = computed(() => {
   let filtered = props.executions
 
-  // Filter by search query
   if (searchQuery.value) {
     const query = searchQuery.value.toLowerCase()
     filtered = filtered.filter((exec) => {
@@ -229,24 +213,20 @@ const filteredExecutions = computed(() => {
     })
   }
 
-  // Filter by status
   if (statusFilter.value) {
     filtered = filtered.filter((exec) => exec.status === statusFilter.value)
   }
 
-  // Filter by category
   if (categoryFilter.value) {
     filtered = filtered.filter((exec) => exec.hunt_category === categoryFilter.value)
   }
 
-  // Add computed properties for sorting
   return filtered.map((exec) => ({
     ...exec,
-    target: getTargetDisplay(exec), // Add target as a sortable property
+    target: getTargetDisplay(exec),
   }))
 })
 
-// Methods
 const getStatusText = (status) => formatStatusText(status, true)
 
 const clearFilters = () => {

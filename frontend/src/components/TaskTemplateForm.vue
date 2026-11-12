@@ -1,7 +1,6 @@
 <template>
   <v-form :disabled="disabled" ref="formRef" @submit.prevent="emit('submit')">
     <v-row>
-      <!-- Basic Information -->
       <v-col cols="12">
         <div class="text-title-large mb-4">Basic Information</div>
       </v-col>
@@ -69,7 +68,6 @@
         </v-switch>
       </v-col>
 
-      <!-- Custom Fields -->
       <v-col cols="12">
         <v-divider class="my-4" />
         <div class="d-flex flex-wrap ga-3 align-center justify-space-between mb-4">
@@ -92,7 +90,6 @@
         </div>
       </v-col>
 
-      <!-- Field List -->
       <v-col cols="12">
         <div v-if="form.definition_json.fields.length === 0" class="empty-fields text-center py-8">
           <v-icon icon="mdi-form-textbox" size="48" color="grey-lighten-1" class="mb-2" />

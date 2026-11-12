@@ -2,7 +2,6 @@
   <div class="d-flex flex-column ga-3">
     <PluginDescriptionCard :description="pluginDescription" />
 
-    <!-- Search Type Selection -->
     <v-radio-group v-model="searchType" inline density="compact">
       <template #label>
         <span class="text-subtitle2">Search Type</span>
@@ -12,7 +11,6 @@
       <v-radio label="Hostname" value="hostname" />
     </v-radio-group>
 
-    <!-- Search Query Input -->
     <v-text-field
       v-model="localParams.query"
       :label="queryText[searchType].label"
@@ -23,7 +21,6 @@
       @update:model-value="updateParams"
     />
 
-    <!-- Result Limit -->
     <div>
       <div class="d-flex align-center justify-space-between mb-2">
         <span class="text-subtitle2">Result Limit</span>
@@ -49,7 +46,6 @@
       </v-slider>
     </div>
 
-    <!-- Save to Case Option -->
     <CaseEvidenceToggle
       :model-value="props.modelValue"
       @update:model-value="emit('update:modelValue', $event)"
@@ -76,7 +72,6 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 
-// Use advanced plugin params composable with search configuration
 const { pluginDescription, localParams, updateParams } = usePluginParamsAdvanced(props, emit, {
   parameterDefaults: {
     query: '',
@@ -85,7 +80,6 @@ const { pluginDescription, localParams, updateParams } = usePluginParamsAdvanced
   },
 })
 
-// Search type state (computed from localParams)
 const searchType = computed({
   get: () => localParams.search_type,
   set: (value) => {

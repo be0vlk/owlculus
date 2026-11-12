@@ -14,14 +14,12 @@
         {{ field.label }}
       </v-card-subtitle>
 
-      <!-- Associates Section -->
       <div v-if="section.parentField === 'associates'">
         <v-chip variant="text" color="grey" size="small">
           {{ value || 'Not specified' }}
         </v-chip>
       </div>
 
-      <!-- URL Fields -->
       <div v-else-if="field.type === 'url'">
         <v-btn
           v-if="value"
@@ -39,7 +37,6 @@
         </v-btn>
         <v-chip v-else color="grey" size="small" variant="text"> Not provided </v-chip>
 
-        <!-- Source for URL fields -->
         <div v-if="field.hasSource && sourceValue" class="mt-2">
           <v-chip color="blue-grey" prepend-icon="mdi-source-branch" size="small" variant="tonal">
             Source: {{ sourceValue }}
@@ -47,7 +44,6 @@
         </div>
       </div>
 
-      <!-- Array Fields -->
       <div v-else-if="field.type === 'array' && field.isArray">
         <div v-if="value?.length">
           <v-data-table
@@ -109,14 +105,12 @@
         <v-chip v-else color="grey" size="small" variant="text"> No subdomains discovered </v-chip>
       </div>
 
-      <!-- Regular Fields -->
       <div v-else class="text-body-large">
         <span v-if="value">
           {{ value }}
         </span>
         <v-chip v-else color="grey" size="small" variant="text"> Not provided </v-chip>
 
-        <!-- Source for regular fields -->
         <div v-if="field.hasSource && sourceValue" class="mt-2">
           <v-chip color="blue-grey" prepend-icon="mdi-source-branch" size="small" variant="tonal">
             Source: {{ sourceValue }}

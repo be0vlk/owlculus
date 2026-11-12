@@ -1,7 +1,6 @@
 <template>
   <v-form ref="form" @submit.prevent="emit('submit')">
     <div v-for="(paramDef, paramName) in parameters" :key="paramName" class="mb-4">
-      <!-- String/Text Parameters -->
       <v-text-field
         v-if="paramDef.type === 'string' && !paramDef.multiline"
         v-model="localValues[paramName]"
@@ -12,7 +11,6 @@
         </template>
       </v-text-field>
 
-      <!-- Number Parameters -->
       <v-text-field
         v-else-if="paramDef.type === 'number' || paramDef.type === 'float'"
         v-model.number="localValues[paramName]"
@@ -24,7 +22,6 @@
         </template>
       </v-text-field>
 
-      <!-- Boolean Parameters -->
       <v-switch
         v-else-if="paramDef.type === 'boolean'"
         v-model="localValues[paramName]"
@@ -36,7 +33,6 @@
         </template>
       </v-switch>
 
-      <!-- Select/Choice Parameters -->
       <v-select
         v-else-if="paramDef.type === 'select' && paramDef.options"
         v-model="localValues[paramName]"
@@ -48,7 +44,6 @@
         </template>
       </v-select>
 
-      <!-- Textarea for long text -->
       <v-textarea
         v-else-if="paramDef.type === 'text' || paramDef.multiline"
         v-model="localValues[paramName]"
@@ -60,7 +55,6 @@
         </template>
       </v-textarea>
 
-      <!-- Fallback to text field -->
       <v-text-field
         v-else
         v-model="localValues[paramName]"
@@ -71,7 +65,6 @@
         </template>
       </v-text-field>
 
-      <!-- Parameter Description -->
       <div v-if="paramDef.description" class="text-body-small text-medium-emphasis ml-4 mt-1">
         {{ paramDef.description }}
       </div>
@@ -96,12 +89,10 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue', 'submit'])
 
-// Local state
 const form = ref()
 const localValues = ref({})
 const validationErrors = ref({})
 
-// Initialize local values
 const initializeValues = () => {
   const values = {}
   Object.keys(props.parameters).forEach((paramName) => {
@@ -111,7 +102,6 @@ const initializeValues = () => {
     } else if (paramDef.default !== undefined) {
       values[paramName] = paramDef.default
     } else {
-      // Set appropriate default based on type
       switch (paramDef.type) {
         case 'boolean':
           values[paramName] = false
@@ -128,13 +118,11 @@ const initializeValues = () => {
   localValues.value = values
 }
 
-// Methods
 const getParameterLabel = (paramName, paramDef) => {
   const label = paramDef.label || formatParameterName(paramName)
   return paramDef.required ? `${label} *` : label
 }
 
-// Attributes shared by every field type
 const fieldAttrs = (paramName, paramDef) => ({
   label: getParameterLabel(paramName, paramDef),
   required: paramDef.required,
@@ -143,7 +131,6 @@ const fieldAttrs = (paramName, paramDef) => ({
   'onUpdate:modelValue': (value) => handleValueChange(paramName, value),
 })
 
-// Attributes shared by the text-like fields
 const inputAttrs = (paramName, paramDef) => ({
   ...fieldAttrs(paramName, paramDef),
   placeholder: paramDef.description,
@@ -153,10 +140,8 @@ const inputAttrs = (paramName, paramDef) => ({
 })
 
 const getParameterIcon = (paramName, paramDef) => {
-  // Check for custom icon
   if (paramDef.icon) return paramDef.icon
 
-  // Infer icon from parameter name or type
   const name = paramName.toLowerCase()
   if (name.includes('email')) return 'mdi-email'
   if (name.includes('domain') || name.includes('url')) return 'mdi-web'
@@ -177,7 +162,6 @@ const isEmptyValue = (value) => value === null || value === undefined || value =
 const getValidationRules = (paramName, paramDef) => {
   const rules = []
 
-  // Required validation
   if (paramDef.required) {
     rules.push((value) => {
       if (paramDef.type === 'boolean') return true
@@ -188,7 +172,6 @@ const getValidationRules = (paramName, paramDef) => {
     })
   }
 
-  // Type-specific validation
   if (paramDef.type === 'email' || paramName.toLowerCase().includes('email')) {
     rules.push((value) => {
       if (isEmptyValue(value) && !paramDef.required) return true
@@ -224,7 +207,6 @@ const getValidationRules = (paramName, paramDef) => {
     })
   }
 
-  // Length validation
   if (paramDef.minLength) {
     rules.push((value) => {
       if (isEmptyValue(value) && !paramDef.required) return true
@@ -243,7 +225,6 @@ const getValidationRules = (paramName, paramDef) => {
     })
   }
 
-  // Pattern validation
   if (paramDef.pattern) {
     rules.push((value) => {
       if (isEmptyValue(value) && !paramDef.required) return true
@@ -259,7 +240,6 @@ const handleValueChange = (paramName, value) => {
   localValues.value[paramName] = value
   emit('update:modelValue', { ...localValues.value })
 
-  // Clear previous validation error for this field
   delete validationErrors.value[paramName]
 }
 
@@ -296,7 +276,6 @@ const validateAll = async () => {
 
 watch(() => [props.parameters, props.modelValue], initializeValues, { immediate: true })
 
-// Expose validation method
 defineExpose({
   validate: validateAll,
 })

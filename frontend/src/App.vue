@@ -44,7 +44,6 @@ import { useDarkMode } from '@/composables/useDarkMode'
 import FullPageLoading from '@/components/FullPageLoading.vue'
 import { useAuthStore } from '@/stores/auth'
 
-// Initialize dark mode
 useDarkMode()
 const authStore = useAuthStore()
 const activeCase = useActiveCaseStore()
@@ -68,7 +67,6 @@ authStore.init()
 // Global session expiration notification
 const sessionSnackbar = ref({ show: false, text: '' })
 
-// Handle session expiration notification
 const handleSessionExpired = (event) => {
   sessionSnackbar.value.text = event.detail.message
   sessionSnackbar.value.show = true

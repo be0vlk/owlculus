@@ -30,7 +30,6 @@
         <v-form :id="formId" :disabled="loading" ref="formRef" @submit.prevent="handleSubmit">
           <v-container fluid class="pa-0">
             <v-row>
-              <!-- Role Selection -->
               <v-col cols="12">
                 <v-select
                   v-model="formData.role"
@@ -55,7 +54,6 @@
                 </v-select>
               </v-col>
 
-              <!-- Invite Link Display (when created) -->
               <v-col cols="12" v-if="inviteLink">
                 <v-text-field
                   :model-value="inviteLink"

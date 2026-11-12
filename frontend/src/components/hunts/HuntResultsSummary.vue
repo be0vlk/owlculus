@@ -1,6 +1,5 @@
 <template>
   <div class="hunt-results-summary">
-    <!-- Summary Stats -->
     <v-row class="mb-4">
       <v-col cols="6" md="3">
         <v-card variant="tonal" color="success">
@@ -36,7 +35,6 @@
       </v-col>
     </v-row>
 
-    <!-- Evidence References -->
     <div v-if="evidenceRefs.length > 0" class="mb-4">
       <div class="text-title-large mb-3">Created Evidence</div>
       <v-list density="compact">
@@ -59,7 +57,6 @@
       </v-list>
     </div>
 
-    <!-- Context Metadata -->
     <div v-if="contextMetadata && Object.keys(contextMetadata).length > 0" class="mb-4">
       <div class="text-title-large mb-3">Hunt Metadata</div>
       <v-table class="hunt-table" density="compact">
@@ -72,7 +69,6 @@
       </v-table>
     </div>
 
-    <!-- Empty State -->
     <div v-if="!steps.length" class="text-center pa-8">
       <v-icon icon="mdi-information" size="64" color="grey" class="mb-4" />
       <div class="text-title-large mb-2">No Results Available</div>
@@ -101,7 +97,6 @@ const props = defineProps({
 
 const emit = defineEmits(['view-evidence'])
 
-// Computed properties
 const steps = computed(() => props.execution.steps || [])
 
 const completedSteps = computed(
@@ -120,7 +115,6 @@ const evidenceRefs = computed(() => {
 
 const contextMetadata = computed(() => {
   const metadata = props.contextData?.metadata || {}
-  // Filter out internal keys
   const filtered = {}
   Object.keys(metadata).forEach((key) => {
     if (!key.startsWith('_') && key !== 'evidence_refs' && key !== 'step_outputs') {

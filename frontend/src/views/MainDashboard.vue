@@ -4,9 +4,7 @@
       {{ error }}
     </v-alert>
 
-    <!-- Cases data table -->
     <v-card variant="outlined">
-      <!-- Header -->
       <v-card-title class="d-flex flex-wrap align-center ga-3 pa-4 bg-surface">
         <v-icon class="me-3" color="primary" icon="mdi-briefcase" size="large" />
         <div class="flex-grow-1">
@@ -43,10 +41,8 @@
 
       <v-divider />
 
-      <!-- Filters and Search Toolbar -->
       <v-card-text class="pa-4">
         <v-row class="mb-0 align-center">
-          <!-- Quick Filter Chips -->
           <v-col cols="12" md="8">
             <div class="d-flex align-center ga-2 flex-wrap">
               <span class="text-body-medium font-weight-medium me-2">Filter:</span>
@@ -63,10 +59,8 @@
             </div>
           </v-col>
 
-          <!-- Controls -->
           <v-col cols="12" md="4">
             <div class="d-flex align-center ga-2 justify-end flex-wrap">
-              <!-- Show Closed Cases Switch -->
               <div class="d-flex align-center flex-shrink-0">
                 <v-switch
                   v-model="showClosedCases"
@@ -78,7 +72,6 @@
                 <span class="text-body-medium text-no-wrap">Show Closed</span>
               </div>
 
-              <!-- Search Field -->
               <v-text-field
                 v-model="searchQuery"
                 class="flex-grow-1"
@@ -106,7 +99,6 @@
         item-key="id"
         @click:row="handleRowClick"
       >
-        <!-- Status chip -->
         <template #[`item.status`]="{ item }">
           <v-chip
             :color="item.status === 'Open' ? 'success' : 'default'"
@@ -117,7 +109,6 @@
           </v-chip>
         </template>
 
-        <!-- Users column -->
         <template #[`item.users`]="{ item }">
           <div v-if="item.users?.length" class="d-flex flex-wrap ga-1">
             <v-chip
@@ -134,19 +125,16 @@
           <v-chip v-else color="grey" size="small" variant="outlined"> Unassigned </v-chip>
         </template>
 
-        <!-- Client name -->
         <template #[`item.client_id`]="{ item }">
           {{ getClientName(item.client_id) }}
         </template>
 
-        <!-- Created date -->
         <template #[`item.created_at`]="{ item }">
           <span class="text-body-medium">
             {{ formatDate(item.created_at) }}
           </span>
         </template>
 
-        <!-- Empty state -->
         <template #no-data>
           <div class="text-center pa-12">
             <v-icon class="mb-4" color="grey-lighten-1" icon="mdi-folder-open-outline" size="64" />

@@ -33,7 +33,6 @@
       </div>
     </template>
 
-    <!-- Stats Cards -->
     <v-row class="mb-4">
       <v-col v-for="card in statCards" :key="card.label" cols="12" md="3" sm="6">
         <v-card variant="outlined">
@@ -47,9 +46,7 @@
       </v-col>
     </v-row>
 
-    <!-- Tasks Table Card -->
     <v-card variant="outlined">
-      <!-- Header -->
       <v-card-title class="operations-heading d-flex flex-wrap ga-3 align-center pa-4 bg-surface">
         <v-icon class="me-3" color="primary" icon="mdi-format-list-checks" size="large" />
         <div class="flex-grow-1">
@@ -62,10 +59,8 @@
 
       <v-divider />
 
-      <!-- Filters and Search Toolbar -->
       <v-card-text class="pa-4">
         <v-row class="mb-0 align-center">
-          <!-- Quick Filter Chips -->
           <v-col cols="12" md="8">
             <div class="d-flex align-center ga-2 flex-wrap">
               <span class="text-body-medium font-weight-medium me-2">Filter:</span>
@@ -81,7 +76,6 @@
             </div>
           </v-col>
 
-          <!-- Search Field -->
           <v-col cols="12" md="4">
             <div class="d-flex align-center ga-2 justify-end">
               <v-text-field
@@ -120,7 +114,6 @@
       </TaskTable>
     </v-card>
 
-    <!-- Bulk Actions -->
     <v-row v-if="selected.length > 0" class="mt-4">
       <v-col>
         <span class="mr-3" role="status">{{ selected.length }} Tasks selected</span>
@@ -184,7 +177,6 @@
       <template #actions><v-btn @click="snackbar.show = false">Close</v-btn></template>
     </v-snackbar>
 
-    <!-- Create Task Dialog -->
     <v-dialog aria-label="Create Task" v-model="showCreateDialog" max-width="600">
       <TaskForm :saving="loading" @cancel="showCreateDialog = false" @save="handleCreateTask" />
     </v-dialog>
@@ -207,7 +199,6 @@ const taskStore = useTaskStore()
 const authStore = useAuthStore()
 const { canCreateTasks } = useTaskTable()
 
-// Data
 const showCreateDialog = ref(false)
 const context = useActiveCaseStore()
 const refreshButton = ref(null)
@@ -216,7 +207,6 @@ let bulkCaseId
 const searchQuery = ref('')
 const activeQuickFilter = ref('me')
 
-// Computed
 const loading = computed(() => taskStore.loading)
 const error = computed(() => taskStore.error)
 const statCards = computed(() => [
@@ -229,12 +219,10 @@ const statCards = computed(() => [
 const filteredAndSearchedTasks = computed(() => {
   let result = taskStore.tasks.filter((task) => task.case_id === context.activeCaseId)
 
-  // Apply quick filter
   if (activeQuickFilter.value === 'me' && authStore.user) {
     result = result.filter((task) => task.assigned_to?.id === authStore.user.id)
   }
 
-  // Apply search
   if (searchQuery.value) {
     const query = searchQuery.value.toLowerCase()
     result = result.filter(
@@ -282,7 +270,6 @@ function restoreBulkFocus() {
   target?.focus()
 }
 
-// Methods
 async function loadTasks() {
   await taskStore.loadTasks()
 }
@@ -299,7 +286,6 @@ async function handleCreateTask(taskData) {
   }
 }
 
-// Empty state helper functions
 const getEmptyStateTitle = () => {
   if (searchQuery.value) {
     return 'No tasks found'
@@ -324,7 +310,6 @@ const shouldShowCreateButton = () => {
   return !searchQuery.value && activeQuickFilter.value === 'all' && canCreateTasks.value
 }
 
-// Lifecycle
 onMounted(async () => {
   try {
     await loadTasks()

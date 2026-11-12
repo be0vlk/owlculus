@@ -1,7 +1,6 @@
 <template>
   <v-dialog v-model="dialog" max-width="800px" @keydown.esc="handleClose">
     <v-card>
-      <!-- Header -->
       <v-card-title class="d-flex align-center pa-4 header-gradient text-white">
         <v-icon
           :icon="getCategoryIcon(hunt?.category)"
@@ -23,11 +22,9 @@
       <v-divider />
 
       <v-card-text class="pa-4">
-        <!-- Hunt Metadata -->
         <div class="mb-4">
           <div class="text-title-large mb-3">Hunt Information</div>
 
-          <!-- Hunt Description -->
           <div v-if="hunt?.description" class="mb-4">
             <div class="text-body-large text-medium-emphasis">{{ hunt.description }}</div>
           </div>
@@ -63,7 +60,6 @@
           </v-row>
         </div>
 
-        <!-- Parameters -->
         <div
           v-if="hunt?.initial_parameters && Object.keys(hunt.initial_parameters).length > 0"
           class="mb-4"
@@ -101,7 +97,6 @@
           </v-table>
         </div>
 
-        <!-- Hunt Steps (if available) -->
         <div v-if="huntSteps && huntSteps.length > 0" class="mb-4">
           <div class="text-title-large mb-3">Hunt Workflow</div>
           <v-timeline density="compact" side="end">
@@ -128,13 +123,11 @@
           </v-timeline>
         </div>
 
-        <!-- Warning for inactive hunts -->
         <v-alert v-if="!hunt?.is_active" type="warning" variant="tonal">
           This hunt is currently inactive and cannot be executed.
         </v-alert>
       </v-card-text>
 
-      <!-- Actions -->
       <v-card-actions class="pa-4 pt-0">
         <v-spacer />
         <v-btn variant="text" @click="handleClose"> Close </v-btn>
@@ -167,7 +160,6 @@ const emit = defineEmits(['execute', 'close'])
 
 const dialog = defineModel({ type: Boolean, default: false })
 
-// Computed properties
 const categoryColor = computed(() => {
   const colorMap = {
     person: 'primary',
@@ -186,7 +178,6 @@ const huntSteps = computed(() => {
   return props.hunt.definition_json.steps
 })
 
-// Methods
 const getStepColor = (index) => {
   const colors = ['primary', 'secondary', 'success', 'info', 'warning', 'error']
   return colors[index % colors.length]

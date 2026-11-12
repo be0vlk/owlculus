@@ -9,7 +9,6 @@
     scrollable
   >
     <v-card :height="mdAndDown ? '100dvh' : '90vh'" class="d-flex flex-column">
-      <!-- Header -->
       <v-card-title class="d-flex flex-wrap align-center ga-3 px-6 py-4">
         <v-icon :icon="getPluginIcon(pluginName)" size="24" />
         <div class="flex-grow-1 text-wrap">
@@ -21,7 +20,6 @@
           </div>
         </div>
 
-        <!-- Action buttons -->
         <div class="d-flex ga-2">
           <v-btn
             v-if="hasResults"
@@ -43,10 +41,8 @@
 
       <v-divider />
 
-      <!-- Content -->
       <v-card-text class="flex-grow-1 pa-0">
         <v-container class="py-6 px-6" style="max-width: none">
-          <!-- Plugin Parameters Display -->
           <v-card
             v-if="parameters && Object.keys(parameters).length"
             variant="outlined"
@@ -82,7 +78,6 @@
             <strong>Partial retained results</strong>
             <div>{{ error }}</div>
           </v-alert>
-          <!-- Results Display -->
           <div
             v-if="
               hasResults || executionStatus || retrievalError || retrievalLoading || exportError
@@ -103,7 +98,6 @@
             />
           </div>
 
-          <!-- Error Display -->
           <v-alert v-else-if="error" class="ma-0" prominent type="error" variant="tonal">
             <template #title>
               <div class="d-flex align-center">
@@ -114,7 +108,6 @@
             <div class="text-body-large">{{ error }}</div>
           </v-alert>
 
-          <!-- No Results State -->
           <v-card v-else variant="outlined" class="text-center pa-8">
             <v-icon class="mb-4" color="grey-darken-1" icon="mdi-file-search-outline" size="64" />
             <h3 class="text-title-large mb-2">No Results Available</h3>
@@ -178,7 +171,6 @@ const closeModal = () => {
 const getPluginDisplayName = (name) => {
   if (!name) return 'Unknown Plugin'
 
-  // Remove 'Plugin' suffix and capitalize
   return name
     .replace(/Plugin$/, '')
     .replace(/([A-Z])/g, ' $1')
@@ -222,7 +214,6 @@ const exportResults = () => {
   width: 100%;
 }
 
-/* Enhanced styles for modal plugin results */
 :deep(.modal-plugin-result) {
   /* Remove any width restrictions from the modal context */
   width: 100%;

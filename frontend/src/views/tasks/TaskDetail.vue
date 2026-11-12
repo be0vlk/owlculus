@@ -46,11 +46,8 @@
       </v-card>
     </template>
 
-    <!-- Task Content -->
     <div v-if="task">
-      <!-- Task Information Card -->
       <v-card variant="outlined">
-        <!-- Header -->
         <v-card-title class="operations-heading d-flex flex-wrap ga-3 align-center pa-4 bg-surface">
           <v-icon icon="mdi-checkbox-marked-circle" color="primary" size="large" class="me-3" />
           <div class="flex-grow-1">
@@ -73,7 +70,6 @@
                 </div>
               </div>
 
-              <!-- Additional Details -->
               <div class="mt-6">
                 <v-row>
                   <v-col cols="12" sm="6">
@@ -107,7 +103,6 @@
                 </v-row>
               </div>
 
-              <!-- Custom Fields -->
               <div v-if="customFields.length > 0" class="mt-6">
                 <v-divider class="mb-4" />
                 <div class="text-body-large font-weight-medium mb-3">Additional Information</div>
@@ -181,7 +176,6 @@
             <v-col cols="12" lg="4">
               <v-card variant="outlined">
                 <v-card-text class="pa-4">
-                  <!-- Status -->
                   <div class="mb-4">
                     <div class="text-body-medium text-medium-emphasis mb-1">Status</div>
                     <v-chip
@@ -194,7 +188,6 @@
                     </v-chip>
                   </div>
 
-                  <!-- Priority -->
                   <div class="mb-4">
                     <div class="text-body-medium text-medium-emphasis mb-1">Priority</div>
                     <v-chip :color="TASK_PRIORITY_COLORS[task.priority]" size="small">
@@ -203,7 +196,6 @@
                     </v-chip>
                   </div>
 
-                  <!-- Assignee -->
                   <div class="mb-4">
                     <div class="text-body-medium text-medium-emphasis mb-1">Assigned To</div>
                     <div class="d-flex align-center">
@@ -225,7 +217,6 @@
                     </div>
                   </div>
 
-                  <!-- Case -->
                   <div class="mb-4">
                     <div class="text-body-medium text-medium-emphasis mb-1">Case</div>
                     <v-btn
@@ -238,7 +229,6 @@
                     </v-btn>
                   </div>
 
-                  <!-- Due Date -->
                   <div v-if="task.due_date" class="mb-4">
                     <div class="text-body-medium text-medium-emphasis mb-1">Due Date</div>
                     <div :class="{ 'text-error': isOverdue }" class="text-body-medium">
@@ -261,17 +251,14 @@
     </div>
   </BaseDashboard>
 
-  <!-- Edit Dialog -->
   <v-dialog aria-label="Edit Task" v-model="editMode" max-width="600" persistent>
     <TaskForm :saving="loading" :task="task" @cancel="editMode = false" @save="handleUpdate" />
   </v-dialog>
 
-  <!-- Assign Dialog -->
   <v-dialog aria-label="Assign Task" v-model="showAssignDialog" max-width="400">
     <TaskAssignDialog :task="task" @assign="handleAssign" @cancel="showAssignDialog = false" />
   </v-dialog>
 
-  <!-- Status Dialog -->
   <v-dialog aria-label="Update Status" v-model="showStatusDialog" max-width="400">
     <v-card>
       <v-card-title class="d-flex align-center">
@@ -291,7 +278,6 @@
     </v-card>
   </v-dialog>
 
-  <!-- Quick Edit Dialog -->
   <v-dialog aria-label="Quick Edit Task" v-model="showQuickEditDialog" max-width="600" persistent>
     <TaskQuickEditDialog
       :saving="loading"
@@ -329,7 +315,6 @@ const route = useRoute()
 const taskStore = useTaskStore()
 const authStore = useAuthStore()
 
-// Data
 const editMode = ref(false)
 const showAssignDialog = ref(false)
 const showStatusDialog = ref(false)
@@ -340,7 +325,6 @@ const customFields = ref([])
 const customFieldValues = ref({})
 const isUserCaseLead = ref(false)
 
-// Computed
 const taskId = computed(() => parseInt(route.params.id))
 const task = computed(() =>
   taskStore.currentTask?.id === taskId.value &&
@@ -353,7 +337,6 @@ const error = computed(() => taskStore.error)
 
 const canEditTask = computed(() => {
   if (!task.value) return false
-  // Admin, case lead, or assigned user can edit
   return (
     authStore.user?.role === 'Admin' ||
     isUserCaseLead.value ||
@@ -363,13 +346,11 @@ const canEditTask = computed(() => {
 
 const canEditFull = computed(() => {
   if (!task.value) return false
-  // Only admin or case lead can do full edits
   return authStore.user?.role === 'Admin' || isUserCaseLead.value
 })
 
 const canEditLimited = computed(() => {
   if (!task.value) return false
-  // Assigned users have limited edit capabilities
   return (
     task.value.assigned_to_id === authStore.user?.id &&
     authStore.user?.role !== 'Admin' &&
@@ -382,7 +363,6 @@ const isOverdue = computed(() => {
   return new Date(task.value.due_date) < new Date()
 })
 
-// Methods
 function openStatusDialog() {
   newStatus.value = task.value.status
   showStatusDialog.value = true
@@ -433,12 +413,10 @@ async function saveFieldEdit(field) {
   customFieldValues.value = {}
 }
 
-// Lifecycle
 onMounted(async () => {
   await taskStore.loadTask(taskId.value)
   await taskStore.loadTemplates()
 
-  // Check if user is a case lead
   if (task.value?.case_id && authStore.user) {
     try {
       const caseData = await caseService.getCase(task.value.case_id)
@@ -450,7 +428,6 @@ onMounted(async () => {
     }
   }
 
-  // Load custom fields from template if task has one
   if (task.value?.template_id) {
     const templates = taskStore.templates
     const template = templates.find((t) => t.id === task.value.template_id)

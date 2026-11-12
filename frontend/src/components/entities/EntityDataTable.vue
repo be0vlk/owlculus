@@ -1,6 +1,5 @@
 <template>
   <div>
-    <!-- Quick Filters -->
     <v-row class="mb-4" no-gutters>
       <v-col cols="12">
         <v-chip-group v-model="selectedTypes" filter multiple selected-class="text-primary">
@@ -37,7 +36,6 @@
       </v-btn>
     </v-alert>
 
-    <!-- Data Table -->
     <v-data-table
       v-if="!loadErrorMessage"
       v-model="selected"
@@ -57,7 +55,6 @@
       return-object
       @click:row="(event, { item }) => emit('view', item, event)"
     >
-      <!-- Toolbar -->
       <template v-slot:top>
         <div class="entity-table-toolbar d-flex flex-wrap align-center ga-2 pa-2">
           <v-text-field
@@ -72,7 +69,6 @@
             class="entity-search flex-grow-1"
           />
 
-          <!-- Bulk Actions -->
           <v-btn
             v-if="selected.length > 0"
             color="error"
@@ -86,7 +82,6 @@
             Delete ({{ selected.length }})
           </v-btn>
 
-          <!-- Export Button -->
           <v-menu>
             <template #activator="{ props: menuProps }">
               <v-btn
@@ -119,7 +114,6 @@
         </div>
       </template>
 
-      <!-- Type Column -->
       <template #[`item.entity_type`]="{ item }">
         <v-chip :color="entityType(item.entity_type)?.color || 'grey'" size="small" variant="flat">
           <v-icon start size="small">{{ entityType(item.entity_type)?.icon || 'mdi-help' }}</v-icon>
@@ -127,7 +121,6 @@
         </v-chip>
       </template>
 
-      <!-- Name Column -->
       <template #[`item.name`]="{ item }">
         <div class="d-flex align-center">
           <div>
@@ -139,21 +132,18 @@
         </div>
       </template>
 
-      <!-- Description Column -->
       <template #[`item.description`]="{ item }">
         <span class="text-body-medium">
           {{ item.data.description || '' }}
         </span>
       </template>
 
-      <!-- Created Date Column -->
       <template #[`item.created_at`]="{ item }">
         <span class="text-body-medium">
           {{ formatDate(item.created_at) }}
         </span>
       </template>
 
-      <!-- Actions Column -->
       <template #[`item.actions`]="{ item }">
         <v-btn
           :aria-label="`View ${getEntityName(item)}`"
@@ -174,7 +164,6 @@
         />
       </template>
 
-      <!-- No Data -->
       <template v-slot:no-data>
         <v-container class="text-center pa-8">
           <v-icon class="mb-4" color="grey-lighten-1" size="64"> mdi-account-group-outline </v-icon>
@@ -193,7 +182,6 @@
         </v-container>
       </template>
 
-      <!-- Loading -->
       <template v-slot:loading>
         <v-skeleton-loader v-for="i in 25" :key="i" class="border-b" type="table-row" />
       </template>

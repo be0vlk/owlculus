@@ -1,6 +1,5 @@
 <template>
   <div class="d-flex flex-column ga-4">
-    <!-- Status Messages -->
     <PluginStatusAlert
       v-for="(item, index) in statusMessages"
       :key="`status-${index}`"
@@ -8,12 +7,10 @@
       :message="item.data.message"
     />
 
-    <!-- VirusTotal Results -->
     <div v-if="virusTotalResults.length" class="vt-results-grid">
       <v-row>
         <v-col v-for="(result, index) in virusTotalResults" :key="`vt-${index}`" cols="12">
           <v-card elevation="1" rounded="lg" class="result-card">
-            <!-- Result Header -->
             <v-card-title class="d-flex align-center result-heading pa-4">
               <v-icon :icon="getTargetIcon(result.target_type)" size="large" class="mr-3" />
               <div class="flex-grow-1">
@@ -33,7 +30,6 @@
                 </div>
               </div>
 
-              <!-- Verdict Chip -->
               <v-chip
                 :color="getVerdictColor(result.verdict)"
                 variant="elevated"
@@ -47,7 +43,6 @@
 
             <v-card-text class="pa-0">
               <div class="pa-4">
-                <!-- Detection Summary -->
                 <div class="mb-4">
                   <div class="d-flex align-center justify-space-between mb-2">
                     <span class="text-subtitle1 font-weight-medium">Detection Ratio</span>
@@ -71,7 +66,6 @@
                   </div>
                 </div>
 
-                <!-- Target-specific Information -->
                 <div v-if="result.file_info" class="mb-4">
                   <div class="text-subtitle2 font-weight-medium mb-2">File Information</div>
                   <v-list density="compact" class="pa-0">
@@ -111,7 +105,6 @@
                     </v-list-item>
                   </v-list>
 
-                  <!-- File Names -->
                   <div v-if="result.file_info.names && result.file_info.names.length" class="mt-3">
                     <div class="text-body-medium font-weight-medium mb-1">Known Filenames:</div>
                     <div class="d-flex flex-wrap ga-1">
@@ -136,7 +129,6 @@
                   </div>
                 </div>
 
-                <!-- URL Information -->
                 <div v-if="result.url_info" class="mb-4">
                   <div class="text-subtitle2 font-weight-medium mb-2">URL Information</div>
                   <v-list density="compact" class="pa-0">
@@ -159,7 +151,6 @@
                   </v-list>
                 </div>
 
-                <!-- Domain Information -->
                 <div v-if="result.domain_info" class="mb-4">
                   <div class="text-subtitle2 font-weight-medium mb-2">Domain Information</div>
                   <v-list density="compact" class="pa-0">
@@ -190,7 +181,6 @@
                   </v-list>
                 </div>
 
-                <!-- IP Information -->
                 <div v-if="result.ip_info" class="mb-4">
                   <div class="text-subtitle2 font-weight-medium mb-2">IP Information</div>
                   <v-list density="compact" class="pa-0">
@@ -221,7 +211,6 @@
                   </v-list>
                 </div>
 
-                <!-- Categories -->
                 <div v-if="result.categories && Object.keys(result.categories).length" class="mb-4">
                   <div class="text-subtitle2 font-weight-medium mb-2">Categories</div>
                   <div class="d-flex flex-wrap ga-1">
@@ -238,7 +227,6 @@
                   </div>
                 </div>
 
-                <!-- Tags -->
                 <div v-if="result.tags && result.tags.length" class="mb-4">
                   <div class="text-subtitle2 font-weight-medium mb-2">Tags</div>
                   <div class="d-flex flex-wrap ga-1">
@@ -254,7 +242,6 @@
                   </div>
                 </div>
 
-                <!-- Vendor Detections -->
                 <div v-if="result.detections && result.detections.length">
                   <v-divider class="mb-3" />
                   <v-expansion-panels variant="accordion">
@@ -299,7 +286,6 @@
       </v-row>
     </div>
 
-    <!-- Error Messages -->
     <PluginStatusAlert
       v-for="(item, index) in errorMessages"
       :key="`error-${index}`"
@@ -308,7 +294,6 @@
       plugin-name="VirusTotal"
     />
 
-    <!-- No Results -->
     <NoResultsCard v-if="!result.length" />
   </div>
 </template>

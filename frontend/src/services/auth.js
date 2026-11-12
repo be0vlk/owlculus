@@ -49,7 +49,6 @@ export const authService = {
       return response.data
     } catch (error) {
       console.error('Failed to fetch user data:', error)
-      // Throw the error instead of silently returning null
       // This allows calling code to handle auth failures properly
       throw error
     }

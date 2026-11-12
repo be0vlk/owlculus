@@ -1,6 +1,5 @@
 <template>
   <div>
-    <!-- Tasks Table -->
     <v-data-table
       :cell-props="{ class: 'operations-cell' }"
       :header-props="{ class: 'operations-column' }"
@@ -14,7 +13,6 @@
       item-value="id"
       @click:row="handleRowClick"
     >
-      <!-- Title Column -->
       <template #[`item.title`]="{ item }">
         <router-link
           :to="`/case/${item.case_id}/tasks/${item.id}`"
@@ -24,7 +22,6 @@
         >
       </template>
 
-      <!-- Priority Column -->
       <template #[`item.priority`]="{ item }">
         <v-chip :color="TASK_PRIORITY_COLORS[item.priority]" size="small">
           <v-icon size="small" start>{{ TASK_PRIORITY_ICONS[item.priority] }}</v-icon>
@@ -32,14 +29,12 @@
         </v-chip>
       </template>
 
-      <!-- Status Column -->
       <template #[`item.status`]="{ item }">
         <v-chip :color="TASK_STATUS_COLORS[item.status]" size="small">
           {{ TASK_STATUS_LABELS[item.status] }}
         </v-chip>
       </template>
 
-      <!-- Assignee Column -->
       <template #[`item.assignee`]="{ item }">
         <span v-if="item.assigned_to">
           {{ item.assigned_to.username }}
@@ -47,14 +42,12 @@
         <span v-else class="text-grey"> Unassigned </span>
       </template>
 
-      <!-- Due Date Column -->
       <template #[`item.due_date`]="{ item }">
         <span v-if="item.due_date" :class="{ 'text-error': isOverdue(item) }">
           {{ formatDateOnly(item.due_date) }}
         </span>
       </template>
 
-      <!-- Actions Column -->
       <template #[`item.actions`]="{ item }">
         <div class="d-flex ga-1">
           <v-btn
@@ -92,7 +85,6 @@
         </div>
       </template>
 
-      <!-- Empty state -->
       <template #no-data>
         <div class="text-center pa-12">
           <v-icon class="mb-4" color="grey-lighten-1" icon="mdi-format-list-checks" size="64" />
@@ -107,7 +99,6 @@
       </template>
     </v-data-table>
 
-    <!-- Assign Dialog -->
     <v-dialog aria-label="Assign Task" v-model="showAssignDialog" max-width="400">
       <TaskAssignDialog
         v-if="selectedTask"
@@ -117,7 +108,6 @@
       />
     </v-dialog>
 
-    <!-- Status Dialog -->
     <v-dialog aria-label="Update Status" v-model="showStatusDialog" max-width="400">
       <v-card v-if="selectedTask">
         <v-card-title>Update Status</v-card-title>
@@ -137,7 +127,6 @@
       <template #actions><v-btn @click="snackbar.show = false">Close</v-btn></template>
     </v-snackbar>
 
-    <!-- Confirmation Dialog -->
     <ConfirmationDialog ref="confirmDialog" />
   </div>
 </template>
@@ -194,7 +183,6 @@ const {
   handleStatusUpdate,
 } = useTaskTable()
 
-// Handle delete with confirmation
 async function handleDeleteClick(task) {
   try {
     await confirmDialog.value.confirmDelete(`task "${task.title}"`)
@@ -202,7 +190,6 @@ async function handleDeleteClick(task) {
   } catch (error) {
     // User cancelled or delete failed
     if (error !== false) {
-      // Only log if it's not a user cancellation
       console.error('Delete operation failed:', error)
     }
   }

@@ -1,6 +1,5 @@
 <template>
   <v-card :elevation="0" variant="flat">
-    <!-- Header -->
     <v-card-title class="operations-heading d-flex flex-wrap ga-3 align-center pa-4 bg-surface">
       <div class="flex-grow-1">
         <h2 class="text-title-large font-weight-bold">Invites</h2>
@@ -33,7 +32,6 @@
 
     <v-divider />
 
-    <!-- Search Toolbar -->
     <v-card-text class="pa-4">
       <v-row class="mb-0 align-center">
         <v-col cols="12" md="4">
@@ -60,10 +58,8 @@
           />
         </v-col>
 
-        <!-- Search Controls -->
         <v-col cols="12" md="4">
           <div class="d-flex align-center ga-4 justify-end">
-            <!-- Search Field -->
             <v-text-field
               v-model="searchQuery"
               prepend-inner-icon="mdi-magnify"
@@ -97,35 +93,30 @@
       class="elevation-0 admin-dashboard-table"
       hover
     >
-      <!-- Role column -->
       <template #[`item.role`]="{ item }">
         <v-chip color="grey-darken-1" size="small" variant="tonal">
           {{ item.role }}
         </v-chip>
       </template>
 
-      <!-- Status column -->
       <template #[`item.status`]="{ item }">
         <v-chip :color="inviteStatus(item).color" size="small" variant="tonal">
           {{ inviteStatus(item).label }}
         </v-chip>
       </template>
 
-      <!-- Created date -->
       <template #[`item.created_at`]="{ item }">
         <span class="text-body-medium">
           {{ formatDate(item.created_at) }}
         </span>
       </template>
 
-      <!-- Expires date -->
       <template #[`item.expires_at`]="{ item }">
         <span class="text-body-medium">
           {{ formatDate(item.expires_at) }}
         </span>
       </template>
 
-      <!-- Actions column -->
       <template #[`item.actions`]="{ item }">
         <div class="d-flex ga-2">
           <v-btn
@@ -155,7 +146,6 @@
         </div>
       </template>
 
-      <!-- Empty state -->
       <template #no-data>
         <div class="text-center pa-12">
           <v-icon class="mb-4" color="grey-lighten-1" icon="mdi-email-outline" size="64" />
@@ -189,7 +179,6 @@
       </template>
     </v-data-table>
 
-    <!-- Invite Modal -->
     <NewInviteModal
       :show="showNewInviteModal"
       @close="showNewInviteModal = false"

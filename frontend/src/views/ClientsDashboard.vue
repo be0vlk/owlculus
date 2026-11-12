@@ -3,9 +3,7 @@
     <v-alert v-if="error" type="error" variant="tonal" class="mb-6" role="alert">
       {{ error }}
     </v-alert>
-    <!-- Clients Data Table -->
     <v-card variant="outlined">
-      <!-- Header -->
       <v-card-title class="operations-heading d-flex flex-wrap ga-3 align-center pa-4 bg-surface">
         <v-icon class="me-3" color="primary" icon="mdi-account-group" size="large" />
         <div class="flex-grow-1">
@@ -36,15 +34,12 @@
 
       <v-divider />
 
-      <!-- Search Toolbar -->
       <v-card-text class="pa-4">
         <v-row class="mb-0 align-center">
           <v-col cols="12" md="8" />
 
-          <!-- Search Controls -->
           <v-col cols="12" md="4">
             <div class="d-flex align-center ga-4 justify-end">
-              <!-- Search Field -->
               <v-text-field
                 v-model="searchQuery"
                 clearable
@@ -74,14 +69,12 @@
         item-value="id"
         @dblclick:row="handleRowDoubleClick"
       >
-        <!-- Created date -->
         <template #[`item.created_at`]="{ item }">
           <span class="text-body-medium">
             {{ formatDate(item.created_at) }}
           </span>
         </template>
 
-        <!-- Actions column -->
         <template #[`item.actions`]="{ item }">
           <div class="d-flex ga-2">
             <v-btn
@@ -109,7 +102,6 @@
           </div>
         </template>
 
-        <!-- Empty state -->
         <template #no-data>
           <div class="text-center pa-12">
             <v-icon

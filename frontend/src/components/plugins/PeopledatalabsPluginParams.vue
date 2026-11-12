@@ -2,7 +2,6 @@
   <div class="d-flex flex-column ga-3">
     <PluginDescriptionCard :description="pluginDescription" />
 
-    <!-- Search Type Selection -->
     <v-radio-group v-model="searchType" inline density="compact">
       <template #label>
         <span class="text-subtitle2">Search Type</span>
@@ -11,7 +10,6 @@
       <v-radio label="Company Search" value="company" />
     </v-radio-group>
 
-    <!-- Person Search Fields -->
     <div v-if="searchType === 'person'" class="d-flex flex-column ga-3">
       <v-text-field
         v-model="localParams.email"
@@ -74,7 +72,6 @@
       </div>
     </div>
 
-    <!-- Company Search Fields -->
     <div v-if="searchType === 'company'" class="d-flex flex-column ga-3">
       <v-text-field
         v-model="localParams.name"
@@ -115,7 +112,6 @@
       />
     </div>
 
-    <!-- Search Requirements Info -->
     <v-alert density="compact" type="info" variant="text">
       <div v-if="searchType === 'person'">
         <strong>Person Search:</strong> At least one field is required (email, name, phone, company,
@@ -130,7 +126,6 @@
       <div v-else>Please select a search type above to get started.</div>
     </v-alert>
 
-    <!-- Case Evidence Toggle -->
     <CaseEvidenceToggle
       :model-value="props.modelValue"
       @update:model-value="emit('update:modelValue', $event)"
@@ -157,7 +152,6 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 
-// Use advanced plugin params composable with multi-search configuration
 const { pluginDescription, localParams, updateParams } = usePluginParamsAdvanced(props, emit, {
   parameterDefaults: {
     search_type: 'person',
@@ -172,7 +166,6 @@ const { pluginDescription, localParams, updateParams } = usePluginParamsAdvanced
   },
 })
 
-// Search type state (computed from localParams)
 const searchType = computed({
   get: () => localParams.search_type,
   set: (value) => {

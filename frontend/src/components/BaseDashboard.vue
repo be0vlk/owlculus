@@ -62,7 +62,3 @@ defineProps({
   },
 })
 </script>
-
-<style scoped>
-/* Styles are now in main.css for shared usage */
-</style>

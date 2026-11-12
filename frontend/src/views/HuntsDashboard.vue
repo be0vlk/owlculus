@@ -1,6 +1,5 @@
 <template>
   <BaseDashboard :loading="loading && !huntStore.executionHistory.length" title="Hunt Management">
-    <!-- Header Actions -->
     <template #header-actions>
       <div class="d-flex align-center ga-2">
         <v-btn
@@ -16,7 +15,6 @@
       </div>
     </template>
 
-    <!-- Loading State -->
     <template #loading>
       <v-card variant="outlined">
         <v-skeleton-loader type="table" />
@@ -26,10 +24,8 @@
     <v-alert v-if="error || huntStore.error" type="error" role="alert" class="mb-4">
       {{ error || huntStore.error }}
     </v-alert>
-    <!-- Main Content -->
     <v-alert v-if="!caseId" type="info">Resolve an accessible case to use Hunts.</v-alert>
     <v-card v-else variant="outlined">
-      <!-- Tabs -->
       <v-tabs v-model="activeTab" bg-color="surface" class="px-4">
         <v-tab value="catalog" prepend-icon="mdi-view-grid">
           Available Hunts
@@ -53,9 +49,7 @@
 
       <v-divider />
 
-      <!-- Tab Content -->
       <v-tabs-window v-model="activeTab">
-        <!-- Available Hunts Tab -->
         <v-tabs-window-item value="catalog">
           <div class="pa-4">
             <HuntCatalog
@@ -69,10 +63,8 @@
           </div>
         </v-tabs-window-item>
 
-        <!-- Active Executions Tab -->
         <v-tabs-window-item value="active">
           <div class="pa-4">
-            <!-- Active Executions -->
             <div v-if="huntStore.runningExecutions.length > 0">
               <div class="text-title-large mb-4">Running Executions</div>
               <v-row density="compact">
@@ -97,7 +89,6 @@
               </v-row>
             </div>
 
-            <!-- Recently Completed -->
             <div v-if="huntStore.completedExecutions.length > 0" class="mt-6">
               <div class="text-title-large mb-4">Recently Completed</div>
               <v-row density="compact">
@@ -120,7 +111,6 @@
               </v-row>
             </div>
 
-            <!-- Empty State -->
             <div
               v-if="
                 huntStore.runningExecutions.length === 0 &&
@@ -138,7 +128,6 @@
           </div>
         </v-tabs-window-item>
 
-        <!-- Execution History Tab -->
         <v-tabs-window-item value="history">
           <div class="pa-4">
             <HuntExecutionHistory
@@ -154,7 +143,6 @@
       </v-tabs-window>
     </v-card>
 
-    <!-- Hunt Execution Modal -->
     <HuntExecutionModal
       v-model="showExecutionModal"
       :hunt="selectedHunt"
@@ -165,7 +153,6 @@
       @cancel="handleExecutionModalCancel"
     />
 
-    <!-- Hunt Details Modal -->
     <HuntDetailsModal
       v-model="showDetailsModal"
       :hunt="selectedHunt"
@@ -189,7 +176,6 @@ import HuntDetailsModal from '@/components/hunts/HuntDetailsModal.vue'
 import HuntExecutionHistory from '@/components/hunts/HuntExecutionHistory.vue'
 import { useActiveCaseStore } from '@/stores/activeCase'
 
-// Store and router
 const router = useRouter()
 const authStore = useAuthStore()
 const huntStore = useHuntStore()
@@ -197,7 +183,6 @@ const activeCase = useActiveCaseStore()
 const caseId = computed(() => activeCase.activeCaseId)
 const { showNotification } = useNotifications()
 
-// Local state
 const loading = ref(true)
 const error = ref(null)
 const activeTab = ref('catalog')
@@ -209,10 +194,8 @@ const showDetailsModal = ref(false)
 let loadGeneration = 0
 let workflow = null
 
-// Computed properties
 const userRole = computed(() => authStore.user?.role)
 
-// Check access permissions
 const checkAccess = () => {
   if (userRole.value === 'Analyst') {
     showNotification('Access denied. Analysts cannot access hunt management.', 'error')
@@ -222,7 +205,6 @@ const checkAccess = () => {
   return true
 }
 
-// Methods
 const loadData = async () => {
   const request = ++loadGeneration
   const id = caseId.value
@@ -266,10 +248,8 @@ const handleExecuteHuntSubmit = async (executionData) => {
     if (!owner?.isCurrent()) return execution
     showNotification(`Hunt "${huntName}" accepted`, 'success')
 
-    // Switch to active executions tab
     activeTab.value = 'active'
 
-    // Close modal
     showExecutionModal.value = false
     selectedHunt.value = null
 

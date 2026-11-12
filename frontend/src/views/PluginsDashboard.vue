@@ -15,10 +15,7 @@
       </v-card>
     </template>
 
-    <!-- Main Content -->
-    <!-- Plugin Management Card -->
     <v-card variant="outlined">
-      <!-- Header -->
       <v-card-title class="d-flex flex-wrap ga-2 align-center pa-4 bg-surface text-wrap">
         <v-icon class="me-3" color="primary" icon="mdi-tools" size="large" />
         <div class="flex-grow-1">
@@ -46,7 +43,6 @@
 
       <v-divider />
 
-      <!-- Category Tabs -->
       <v-tabs v-model="selectedTab" align-tabs="start" class="border-b" color="primary">
         <v-tab value="all">
           <v-icon class="me-2" icon="mdi-view-grid" />
@@ -58,7 +54,6 @@
         </v-tab>
       </v-tabs>
 
-      <!-- Plugin Grid -->
       <v-card-text class="pa-4">
         <v-row v-if="Object.keys(filteredPlugins).length">
           <v-col v-for="(plugin, name) in filteredPlugins" :key="name" cols="12" lg="4" md="6">
@@ -105,7 +100,6 @@
                   </div>
                 </div>
 
-                <!-- Plugin description preview -->
                 <div
                   v-if="plugin.description && !expandedCards[name]"
                   class="text-body-medium text-medium-emphasis mb-3"
@@ -127,13 +121,11 @@
                       :missing-providers="missingKeys(plugin)"
                     />
 
-                    <!-- Parameters Section -->
                     <div
                       v-if="plugin.parameters && Object.keys(plugin.parameters).length"
                       class="mb-4"
                     >
                       <div class="d-flex flex-column ga-3" @click.stop>
-                        <!-- Custom Plugin Parameter Component -->
                         <component
                           :is="pluginParamComponents[name]"
                           v-if="pluginParamComponents[name]"
@@ -141,7 +133,6 @@
                           :parameters="{ ...plugin.parameters, description: plugin.description }"
                         />
 
-                        <!-- Default Parameter Rendering -->
                         <GenericPluginParams
                           v-else
                           v-model="pluginParams[name]"
@@ -150,7 +141,6 @@
                       </div>
                     </div>
 
-                    <!-- Execute Button -->
                     <v-btn
                       :disabled="
                         !activeCase.ready ||
@@ -172,7 +162,6 @@
                       </template>
                     </v-btn>
 
-                    <!-- Results Available Indicator -->
                     <div v-if="pluginErrors[name]" class="mb-4" @click.stop>
                       <v-alert
                         v-if="pluginErrors[name]"
@@ -189,7 +178,6 @@
           </v-col>
         </v-row>
 
-        <!-- Empty state -->
         <div v-else class="text-center pa-12">
           <v-icon class="mb-4" color="grey-lighten-1" icon="mdi-puzzle-outline" size="64" />
           <h3 class="text-title-large font-weight-medium mb-2">No plugins available</h3>
@@ -238,7 +226,6 @@ const missingKeys = (plugin) =>
     ? (plugin.api_key_requirements ?? []).filter((provider) => !plugin.api_key_status[provider])
     : []
 
-// Helper function to get category icons
 const getCategoryIcon = (category) => {
   const iconMap = {
     Person: 'mdi-account',
@@ -270,8 +257,8 @@ const toggleCard = (name) => {
 
 const loadPluginParamComponent = async (pluginName) => {
   const name = pluginName
-    .replace(/Plugin$/, '') // Remove 'Plugin' suffix if present
-    .replace(/^[a-z]/, (c) => c.toUpperCase()) // Ensure first letter is uppercase
+    .replace(/Plugin$/, '')
+    .replace(/^[a-z]/, (c) => c.toUpperCase())
 
   const componentName = `${name}PluginParams`
 
@@ -288,18 +275,14 @@ const loadPlugins = async () => {
   try {
     error.value = null
     plugins.value = await pluginService.listPlugins()
-    // Initialize parameters for each plugin and load custom parameter components
     const loadPromises = Object.keys(plugins.value).map(async (name) => {
-      // Load custom parameter component
       await loadPluginParamComponent(name)
 
-      // Initialize parameters
       pluginParams[name] = {}
       if (plugins.value[name].parameters) {
         Object.keys(plugins.value[name].parameters).forEach((paramName) => {
           if (paramName === 'case_id') return
           const param = plugins.value[name].parameters[paramName]
-          // Set default value based on type
           if (param.type === 'boolean') {
             pluginParams[name][paramName] = param.default !== undefined ? param.default : true
           } else {

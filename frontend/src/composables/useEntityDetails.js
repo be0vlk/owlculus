@@ -230,7 +230,6 @@ export function useEntityDetails(entity, caseId, emit) {
     () => isEditing.value,
     (newEditingState, oldEditingState) => {
       if (editor.value) {
-        // If exiting edit mode, save any pending changes first
         if (oldEditingState && !newEditingState) {
           saveNotes()
         }

@@ -1,6 +1,5 @@
 <template>
   <div class="d-flex flex-column ga-4">
-    <!-- Status Messages -->
     <PluginStatusAlert
       v-for="(item, index) in statusMessages"
       :key="`status-${index}`"
@@ -9,7 +8,6 @@
     />
 
     <template v-for="(item, index) in result" :key="index">
-      <!-- Person Results -->
       <v-card
         v-if="item.type === 'data' && item.data.search_type === 'person'"
         elevation="1"
@@ -27,7 +25,6 @@
 
         <v-card-text>
           <div class="d-flex flex-column ga-2">
-            <!-- Basic Information -->
             <div class="d-flex align-center ga-2" v-if="item.data.person?.location_name">
               <v-icon icon="mdi-map-marker" size="small" />
               <span class="text-body-medium">{{ item.data.person.location_name }}</span>
@@ -70,7 +67,6 @@
               </v-btn>
             </div>
 
-            <!-- Contact Information -->
             <div v-if="item.data.person?.emails?.length">
               <div
                 v-for="email in item.data.person.emails.slice(0, 3)"
@@ -111,7 +107,6 @@
               </div>
             </div>
 
-            <!-- Social Profiles -->
             <div v-if="item.data.person?.linkedin_url" class="d-flex align-center ga-2">
               <v-icon icon="mdi-linkedin" size="small" />
               <a
@@ -132,7 +127,6 @@
               </v-btn>
             </div>
 
-            <!-- Education Summary -->
             <div v-if="item.data.person?.education?.length" class="d-flex align-center ga-2">
               <v-icon icon="mdi-school" size="small" />
               <span class="text-body-medium">{{
@@ -143,7 +137,6 @@
               </v-chip>
             </div>
 
-            <!-- Work Experience Summary -->
             <div v-if="item.data.person?.experience?.length" class="d-flex align-center ga-2">
               <v-icon icon="mdi-briefcase-variant" size="small" />
               <span class="text-body-medium"
@@ -152,7 +145,6 @@
               >
             </div>
 
-            <!-- API Usage -->
             <div
               class="d-flex justify-space-between align-center text-body-small text-medium-emphasis mt-2"
             >
@@ -163,7 +155,6 @@
         </v-card-text>
       </v-card>
 
-      <!-- Company Results -->
       <v-card
         v-else-if="item.type === 'data' && item.data.search_type === 'company'"
         elevation="1"
@@ -181,7 +172,6 @@
 
         <v-card-text>
           <div class="d-flex flex-column ga-2">
-            <!-- Basic Company Information -->
             <div class="d-flex align-center ga-2" v-if="item.data.company?.website">
               <v-icon icon="mdi-web" size="small" />
               <a
@@ -222,7 +212,6 @@
               <span class="text-body-medium">{{ item.data.company.employee_count }} employees</span>
             </div>
 
-            <!-- Location Information -->
             <div class="d-flex align-center ga-2" v-if="item.data.company?.location_name">
               <v-icon icon="mdi-map-marker" size="small" />
               <span class="text-body-medium">{{ item.data.company.location_name }}</span>
@@ -237,7 +226,6 @@
               </v-btn>
             </div>
 
-            <!-- Social Profiles -->
             <div v-if="item.data.company?.linkedin_url" class="d-flex align-center ga-2">
               <v-icon icon="mdi-linkedin" size="small" />
               <a
@@ -258,7 +246,6 @@
               </v-btn>
             </div>
 
-            <!-- Technologies -->
             <div v-if="item.data.company?.technologies?.length" class="d-flex align-center ga-2">
               <v-icon icon="mdi-code-tags" size="small" />
               <span class="text-body-medium"
@@ -283,7 +270,6 @@
               </div>
             </div>
 
-            <!-- API Usage -->
             <div
               class="d-flex justify-space-between align-center text-body-small text-medium-emphasis mt-2"
             >
@@ -294,7 +280,6 @@
         </v-card-text>
       </v-card>
 
-      <!-- Error Messages -->
       <v-alert v-else-if="item.type === 'error'" prominent type="error" variant="tonal">
         <template #title>
           <div class="d-flex align-center">
@@ -306,7 +291,6 @@
       </v-alert>
     </template>
 
-    <!-- No Results -->
     <NoResultsCard v-if="!result.length" />
   </div>
 </template>
@@ -327,7 +311,6 @@ const props = defineProps({
 
 const { statusMessages } = usePluginResults(toRef(props, 'result'))
 
-// Helper function to get confidence color
 const getConfidenceColor = (confidence) => {
   if (!confidence || confidence === 'unknown') return 'grey'
 

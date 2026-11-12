@@ -105,10 +105,8 @@
     </div>
   </BaseDashboard>
 
-  <!-- Confirmation Dialog -->
   <ConfirmationDialog ref="confirmDialog" />
 
-  <!-- Snackbar for notifications -->
   <v-snackbar
     v-model="snackbar.show"
     :color="snackbar.color"
@@ -161,13 +159,10 @@ const inviteUser = async () => {
   inviteCard.value[0]?.openCreateDialog()
 }
 
-// Notifications
 const { snackbar, showNotification, closeNotification } = useNotifications()
 
-// Confirmation dialog reference
 const confirmDialog = ref(null)
 
-// Event handlers
 const handleNotification = ({ text, color }) => {
   showNotification(text, color)
 }
@@ -184,7 +179,6 @@ const handleConfirmDelete = async ({ title, message, warning, onConfirm }) => {
       iconColor: 'error',
     })
 
-    // Execute the confirmation action
     await onConfirm()
   } catch {
     // User cancelled or action failed

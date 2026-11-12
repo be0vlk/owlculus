@@ -1,7 +1,3 @@
-/**
- * Hunt display utilities for extracting meaningful information from hunt executions
- */
-
 const parameterPriority = {
   domain: ['domain', 'hostname', 'url'],
   person: ['username', 'email', 'full_name', 'first_name', 'last_name'],

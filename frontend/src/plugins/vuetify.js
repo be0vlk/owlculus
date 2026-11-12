@@ -4,7 +4,6 @@ import { createVuetify } from 'vuetify'
 import * as components from 'vuetify/components'
 import * as directives from 'vuetify/directives'
 
-// Custom theme to match current Owlculus color scheme
 const owlculusTheme = {
   dark: false,
   colors: {
@@ -22,7 +21,6 @@ const owlculusTheme = {
     info: '#00838F',
     success: '#26A69A',
     warning: '#FB8C00',
-    // OSINT-specific colors
     'case-status': '#26A69A',
     evidence: '#FF9800',
     entity: '#9C27B0',
