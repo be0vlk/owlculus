@@ -278,7 +278,6 @@ class EntityService:
         case = self.case_access.writable(current_user, case_id)
         db_entity = self._case_entity(case, entity_id)
 
-        # Add entity type to update data for validation
         entity_update_dict = entity_update.model_dump()
         entity_update_dict["__entity_type"] = db_entity.entity_type
 

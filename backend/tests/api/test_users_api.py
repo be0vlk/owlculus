@@ -153,8 +153,6 @@ def invalid_bootstrap_payload() -> dict:
 class TestUsersAPI:
     """Test cases for users API endpoints"""
 
-    # POST /api/users/ tests
-
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
         "privilege_fields",
@@ -778,7 +776,6 @@ class TestUsersAPI:
         )
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
-        # Missing required fields
         user_data = {"username": "newuser"}
 
         try:
@@ -797,7 +794,7 @@ class TestUsersAPI:
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
         user_data = {
-            "username": "admin",  # Duplicate username
+            "username": "admin",
             "email": "newadmin@example.com",
             "password": "password123",
             "role": "Admin",
@@ -810,8 +807,6 @@ class TestUsersAPI:
             assert response.json() == {"detail": "Username already registered"}
         finally:
             app.dependency_overrides.clear()
-
-    # GET /api/users/me tests
 
     def test_read_self_success(
         self, session: Session, test_user: User, client: TestClient
@@ -881,8 +876,6 @@ class TestUsersAPI:
         """Test self profile retrieval without authentication"""
         response = client.get("/api/users/me")
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
-
-    # GET /api/users/ tests
 
     def test_get_users_success_admin(
         self,
@@ -994,8 +987,6 @@ class TestUsersAPI:
                 assert response.status_code == status.HTTP_403_FORBIDDEN
         finally:
             app.dependency_overrides.clear()
-
-    # PUT /api/users/{user_id} tests
 
     def test_update_user_success_admin(
         self,
@@ -1118,8 +1109,6 @@ class TestUsersAPI:
         finally:
             app.dependency_overrides.clear()
 
-    # PUT /api/users/me/password tests
-
     def test_change_password_success(
         self, session: Session, test_user: User, client: TestClient
     ):
@@ -1187,7 +1176,7 @@ class TestUsersAPI:
 
         password_data = {
             "current_password": "oldpassword",
-            "new_password": "123",  # Weak password
+            "new_password": "123",
         }
 
         try:
@@ -1204,8 +1193,6 @@ class TestUsersAPI:
                 assert response.status_code == status.HTTP_400_BAD_REQUEST
         finally:
             app.dependency_overrides.clear()
-
-    # PUT /api/users/{user_id}/password tests
 
     def test_admin_reset_password_success(
         self,
@@ -1298,8 +1285,6 @@ class TestUsersAPI:
         finally:
             app.dependency_overrides.clear()
 
-    # Authentication and authorization tests
-
     def test_users_api_unauthorized(self, client: TestClient):
         """Test users API endpoints without authentication"""
         endpoints = [
@@ -1325,8 +1310,6 @@ class TestUsersAPI:
 
             assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
-    # Edge cases and validation tests
-
     def test_users_api_pagination_edge_cases(
         self, session: Session, test_admin: User, client: TestClient
     ):
@@ -1340,11 +1323,9 @@ class TestUsersAPI:
             with patch("app.services.user_service.UserService.get_users") as mock_get:
                 mock_get.return_value = []
 
-                # Test with very large values
                 response = client.get("/api/users/?skip=999999&limit=999999")
                 assert response.status_code == status.HTTP_200_OK
 
-                # Test with zero limit
                 response = client.get("/api/users/?skip=0&limit=0")
                 assert response.status_code == status.HTTP_200_OK
         finally:
@@ -1363,7 +1344,7 @@ class TestUsersAPI:
             "username": "newuser",
             "email": "newuser@example.com",
             "password": "password123",
-            "role": "InvalidRole",  # Invalid role
+            "role": "InvalidRole",
             "is_active": True,
         }
 
@@ -1384,7 +1365,7 @@ class TestUsersAPI:
 
         user_data = {
             "username": "newuser",
-            "email": "invalid-email",  # Invalid email format
+            "email": "invalid-email",
             "password": "password123",
             "role": "Analyst",
             "is_active": True,

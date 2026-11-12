@@ -21,7 +21,6 @@ from loguru import logger
 from .config import logging_settings
 from .exceptions import DomainException
 
-# Context variables to store request info across async calls
 client_ip_context: ContextVar[str | None] = ContextVar("client_ip", default=None)
 user_agent_context: ContextVar[str | None] = ContextVar("user_agent", default=None)
 OBSERVATION_TOKEN = re.compile(r"([?&]token=)[^&\s\"]+")
@@ -80,7 +79,6 @@ def setup_logging():
 
 
 def get_security_logger(**context):
-    # Automatically include client IP and user agent from context if available
     client_ip = client_ip_context.get()
     if client_ip:
         context["client_ip"] = client_ip

@@ -60,7 +60,6 @@ class HuntExecutionListResponse(BaseModel):
     created_at: datetime
     created_by_id: int
 
-    # Basic hunt info
     hunt_display_name: Optional[str] = None
     hunt_category: Optional[str] = None
 
@@ -79,8 +78,7 @@ class HuntExecutionResponse(HuntExecutionListResponse):
     links: dict[str, str] = Field(default_factory=dict)
     error: dict[str, Any] | None = None
 
-    # Related data
     hunt: Optional[HuntResponse] = None
     steps: Optional[List[HuntStepResponse]] = None
-    case: Optional[Dict[str, Any]] = None  # Simple case info
-    created_by: Optional[Dict[str, Any]] = None  # Simple user info
+    case: Optional[Dict[str, Any]] = None
+    created_by: Optional[Dict[str, Any]] = None

@@ -18,7 +18,6 @@ from app.core.exceptions import DomainException, ValidationException
 def temp_upload_dir():
     """Create a temporary upload directory for testing."""
     with tempfile.TemporaryDirectory() as temp_dir:
-        # Mock the UPLOAD_DIR for testing
         with patch.object(file_storage, "UPLOAD_DIR", Path(temp_dir)):
             yield Path(temp_dir)
 
@@ -159,7 +158,6 @@ class TestCreateFolder:
 
         assert result.exists()
         assert result.is_dir()
-        # Check all parent directories were created
         assert (temp_upload_dir / str(case_id) / "level1").exists()
         assert (temp_upload_dir / str(case_id) / "level1" / "level2").exists()
 
@@ -169,25 +167,21 @@ class TestDeleteFolder:
 
     def test_delete_folder_valid_case_and_path(self, temp_upload_dir, case_id):
         """Test deleting existing folder."""
-        # Create folder first
         folder_path = "test_folder"
         created_folder = file_storage.create_folder(case_id, folder_path)
         assert created_folder.exists()
 
-        # Delete the folder
         file_storage.delete_folder(case_id, folder_path)
 
         assert not created_folder.exists()
 
     def test_delete_folder_with_contents(self, temp_upload_dir, case_id):
         """Test deleting folder with files inside."""
-        # Create folder and add a file
         folder_path = "test_folder"
         created_folder = file_storage.create_folder(case_id, folder_path)
         test_file = created_folder / "test.txt"
         test_file.write_text("test content")
 
-        # Delete the folder
         file_storage.delete_folder(case_id, folder_path)
 
         assert not created_folder.exists()
@@ -195,28 +189,22 @@ class TestDeleteFolder:
 
     def test_delete_folder_removes_empty_parents(self, temp_upload_dir, case_id):
         """Test that empty parent directories are cleaned up."""
-        # Create nested folder structure
         folder_path = "parent/child/grandchild"
         file_storage.create_folder(case_id, folder_path)
 
-        # Delete the deepest folder
         file_storage.delete_folder(case_id, folder_path)
 
         case_dir = temp_upload_dir / str(case_id)
-        # All empty parent directories should be removed
         assert not (case_dir / "parent").exists()
 
     def test_delete_folder_preserves_nonempty_parents(self, temp_upload_dir, case_id):
         """Test that non-empty parent directories are preserved."""
-        # Create nested structure with sibling
         file_storage.create_folder(case_id, "parent/child1")
         file_storage.create_folder(case_id, "parent/child2")
 
-        # Delete one child
         file_storage.delete_folder(case_id, "parent/child1")
 
         case_dir = temp_upload_dir / str(case_id)
-        # Parent should still exist because child2 exists
         assert (case_dir / "parent").exists()
         assert (case_dir / "parent" / "child2").exists()
         assert not (case_dir / "parent" / "child1").exists()
@@ -246,7 +234,6 @@ class TestDeleteFolder:
 
     def test_delete_folder_nonexistent_folder(self, temp_upload_dir, case_id):
         """Test deleting non-existent folder doesn't raise error."""
-        # Should not raise an exception
         file_storage.delete_folder(case_id, "nonexistent_folder")
 
 
@@ -262,7 +249,7 @@ class TestSaveUploadFile:
             patch("app.core.file_storage.validate_file_security") as mock_validate,
             patch("app.core.file_storage.secure_filename_with_path") as mock_secure,
         ):
-            mock_validate.return_value = None  # No exception
+            mock_validate.return_value = None
             mock_secure.return_value = "test_file.txt"
 
             result = await file_storage.save_upload_file(sample_upload_file, case_id)
@@ -271,7 +258,6 @@ class TestSaveUploadFile:
             assert relative_path == f"{case_id}/test_file.txt"
             assert file_hash == hashlib.sha256(b"test content").hexdigest()
 
-            # Verify file was created
             file_path = temp_upload_dir / relative_path
             assert file_path.exists()
             assert file_path.read_bytes() == b"test content"
@@ -296,7 +282,6 @@ class TestSaveUploadFile:
             relative_path, file_hash = result
             assert relative_path == f"{case_id}/evidence/documents/test_file.txt"
 
-            # Verify file was created in correct location
             file_path = temp_upload_dir / relative_path
             assert file_path.exists()
 
@@ -401,7 +386,6 @@ class TestDeleteFile:
     @pytest.mark.asyncio
     async def test_delete_file_valid_path(self, temp_upload_dir):
         """Test deleting a valid file."""
-        # Create a test file
         test_file = temp_upload_dir / "test_case" / "test_file.txt"
         test_file.parent.mkdir(parents=True)
         test_file.write_text("test content")
@@ -448,39 +432,32 @@ class TestDeleteFile:
     @pytest.mark.asyncio
     async def test_delete_file_nonexistent_file(self, temp_upload_dir):
         """Test deleting non-existent file doesn't raise error."""
-        # Should not raise an exception
         await file_storage.delete_file("test_case/nonexistent.txt")
 
     @pytest.mark.asyncio
     async def test_delete_file_directory_not_file(self, temp_upload_dir):
         """Test that attempting to delete directory (not file) is safe."""
-        # Create a directory
         test_dir = temp_upload_dir / "test_case" / "test_dir"
         test_dir.mkdir(parents=True)
 
-        # Should not delete directory, only files
         await file_storage.delete_file("test_case/test_dir")
 
-        # Directory should still exist
         assert test_dir.exists()
 
     @pytest.mark.asyncio
     async def test_delete_file_cleans_empty_parents(self, temp_upload_dir):
         """Test that empty parent directories are cleaned up."""
-        # Create nested file structure
         test_file = temp_upload_dir / "test_case" / "level1" / "level2" / "file.txt"
         test_file.parent.mkdir(parents=True)
         test_file.write_text("content")
 
         await file_storage.delete_file("test_case/level1/level2/file.txt")
 
-        # Empty parent directories should be cleaned up
         assert not (temp_upload_dir / "test_case" / "level1").exists()
 
     @pytest.mark.asyncio
     async def test_delete_file_preserves_nonempty_parents(self, temp_upload_dir):
         """Test that non-empty parent directories are preserved."""
-        # Create files in same directory
         file1 = temp_upload_dir / "test_case" / "level1" / "file1.txt"
         file2 = temp_upload_dir / "test_case" / "level1" / "file2.txt"
         file1.parent.mkdir(parents=True)
@@ -489,7 +466,6 @@ class TestDeleteFile:
 
         await file_storage.delete_file("test_case/level1/file1.txt")
 
-        # Parent directory should still exist because file2 exists
         assert (temp_upload_dir / "test_case" / "level1").exists()
         assert file2.exists()
         assert not file1.exists()
@@ -516,9 +492,9 @@ class TestSecurityIntegration:
             "test/../../../sensitive",
             "./../../etc/hosts",
             "test/../../etc/passwd",
-            "%2e%2e%2f%2e%2e%2f%2e%2e%2fpasswd",  # URL encoded
-            "....//....//....//etc/passwd",  # Double dots
-            "../\x00/etc/passwd",  # Null byte injection attempt
+            "%2e%2e%2f%2e%2e%2f%2e%2e%2fpasswd",
+            "....//....//....//etc/passwd",
+            "../\x00/etc/passwd",
         ]
 
         for attack_vector in attack_vectors:
@@ -543,7 +519,6 @@ class TestSecurityIntegration:
 
         for dangerous_input in dangerous_inputs:
             result = file_storage.normalize_folder_path(dangerous_input)
-            # Should either be empty or not contain dangerous patterns
             assert not result or not any(
                 dangerous in result for dangerous in ["../", "..\\", "/.."]
             )
@@ -553,7 +528,6 @@ class TestSecurityIntegration:
         """Test that all file operations respect upload directory boundaries."""
         base_dir = temp_upload_dir.resolve()
 
-        # Test that resolved paths always stay within base directory
         valid_paths = [
             "case123/document.txt",
             "case456/folder/subfolder/file.pdf",
@@ -562,7 +536,6 @@ class TestSecurityIntegration:
 
         for path in valid_paths:
             normalized = file_storage.normalize_folder_path(path)
-            if normalized:  # Only test non-empty normalized paths
+            if normalized:
                 resolved_path = (base_dir / normalized).resolve()
-                # Verify the resolved path is within the base directory
                 assert str(resolved_path).startswith(str(base_dir))

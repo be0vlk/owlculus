@@ -132,7 +132,6 @@ app.add_exception_handler(DomainException, handle_domain_exception)
 app.add_exception_handler(Exception, handle_domain_exception)
 
 
-# Set all CORS enabled origins
 if settings.BACKEND_CORS_ORIGINS:
     app.add_middleware(
         CORSMiddleware,
@@ -143,7 +142,6 @@ if settings.BACKEND_CORS_ORIGINS:
     )
 
 
-# Middleware to capture client IP and user agent for logging
 @app.middleware("http")
 async def request_info_middleware(request: Request, call_next):
     client_ip = get_client_ip(request)

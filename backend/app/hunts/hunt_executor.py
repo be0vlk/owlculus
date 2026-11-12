@@ -83,7 +83,6 @@ class HuntExecutor:
         execution_id = execution.id
 
         try:
-            # Update execution status
             execution.status = "running"
             execution.started_at = execution.started_at or get_utc_now()
             with transaction(self.db):
@@ -125,8 +124,6 @@ class HuntExecutor:
                     self.db.add(step_record)
                     step_records[step_def.step_id] = step_record
 
-            # Execute steps with dependency management
-
             while len(step_state.completed) < len(steps):
                 executable = [
                     step
@@ -136,10 +133,9 @@ class HuntExecutor:
                 ]
 
                 if not executable:
-                    # No more steps can execute
                     break
 
-                # Execute steps (could be parallelized in future)
+                # Could be parallelized in future
                 for step_def in executable:
                     step_record = step_records[step_def.step_id]
 
@@ -165,12 +161,10 @@ class HuntExecutor:
                         with transaction(self.db):
                             self.db.add(step_record)
 
-                # Update progress
                 execution.progress = len(step_state.completed) / len(steps)
                 with transaction(self.db):
                     self.db.add(execution)
 
-            # Mark skipped steps
             for step_def in steps:
                 if not step_state.is_terminal(step_def.step_id):
                     context.mark_step_skipped(step_def.step_id)
@@ -178,7 +172,6 @@ class HuntExecutor:
                     step_record.status = "skipped"
                     step_record.completed_at = get_utc_now()
 
-            # Complete execution
             execution.status = (
                 "completed" if not step_state.failed_required else "partial"
             )
@@ -191,7 +184,6 @@ class HuntExecutor:
         except OwnershipLost:
             raise
         except Exception:
-            # Handle catastrophic failure
             execution.status = "failed"
             execution.error = {
                 "code": "hunt_error",
@@ -212,11 +204,9 @@ class HuntExecutor:
         current_user: User,
     ):
         """Execute a single hunt step"""
-        # Update step status
         step_record.status = "running"
         step_record.started_at = get_utc_now()
 
-        # Resolve parameters
         parameters = context.resolve_parameters(step_def)
         parameters["case_id"] = execution.case_id
         parameters["save_to_case"] = step_def.save_to_case
@@ -253,7 +243,6 @@ class HuntExecutor:
                 elif result.kind == "error":
                     errors.append(self.sanitize(result.payload))
 
-        # Store output in context
         output: StepOutput = {
             "results": results,
             "result_count": len(results),
@@ -266,7 +255,6 @@ class HuntExecutor:
             )
         context.set_step_output(step_def.step_id, output)
 
-        # Update step record
         step_record.status = "failed" if errors else "completed"
         step_record.output = dict(output)
         step_record.completed_at = get_utc_now()

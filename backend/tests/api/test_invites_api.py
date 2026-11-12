@@ -241,7 +241,6 @@ class TestInvitesAPI:
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
         try:
-            # First create an invite to delete
             invite = Invite(
                 token="test_token",
                 role="Investigator",
@@ -384,7 +383,6 @@ class TestInvitesAPI:
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
         try:
-            # First create a valid invite
             invite = Invite(
                 token="valid_token",
                 role="Investigator",
@@ -394,7 +392,6 @@ class TestInvitesAPI:
             session.add(invite)
             session.commit()
 
-            # Register with existing admin username
             registration_data = {
                 "token": "valid_token",
                 "username": test_admin.username,
@@ -414,7 +411,6 @@ class TestInvitesAPI:
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
         try:
-            # First create a valid invite
             invite = Invite(
                 token="valid_token2",
                 role="Investigator",
@@ -424,7 +420,6 @@ class TestInvitesAPI:
             session.add(invite)
             session.commit()
 
-            # Register with existing admin email
             registration_data = {
                 "token": "valid_token2",
                 "username": "differentuser",

@@ -25,13 +25,8 @@ class TestEntityService:
         self.service = EntityService(db_session)
         self.db = db_session
 
-    # =========================
-    # get_case_entities tests
-    # =========================
-
     async def test_get_case_entities_success(self, test_case, test_admin):
         """Test retrieving entities for a case"""
-        # Create test entities
         entity1 = models.Entity(
             case_id=test_case.id,
             entity_type="person",
@@ -57,7 +52,6 @@ class TestEntityService:
 
     async def test_get_case_entities_with_pagination(self, test_case, test_admin):
         """Test pagination of entity results"""
-        # Create 5 test entities
         for i in range(5):
             entity = models.Entity(
                 case_id=test_case.id,
@@ -68,7 +62,6 @@ class TestEntityService:
             self.db.add(entity)
         self.db.commit()
 
-        # Test pagination
         page1 = await self.service.get_case_entities(
             test_case.id, current_user=test_admin, skip=0, limit=2
         )
@@ -86,7 +79,6 @@ class TestEntityService:
 
     async def test_get_case_entities_by_type_filter(self, test_case, test_admin):
         """Test filtering entities by type"""
-        # Create entities of different types
         person_entity = models.Entity(
             case_id=test_case.id,
             entity_type="person",
@@ -110,14 +102,12 @@ class TestEntityService:
         self.db.add(domain_entity)
         self.db.commit()
 
-        # Test filtering by person type
         persons = await self.service.get_case_entities(
             test_case.id, current_user=test_admin, entity_type="person"
         )
         assert len(persons) == 1
         assert persons[0].entity_type == "person"
 
-        # Test filtering by company type
         companies = await self.service.get_case_entities(
             test_case.id, current_user=test_admin, entity_type="company"
         )
@@ -134,10 +124,6 @@ class TestEntityService:
         """Test retrieving entities when none exist"""
         entities = await self.service.get_case_entities(test_case.id, test_admin)
         assert entities == []
-
-    # =========================
-    # create_entity tests
-    # =========================
 
     async def test_create_entity_person_success(self, test_case_with_users, test_user):
         """Test creating a person entity"""
@@ -217,7 +203,6 @@ class TestEntityService:
         self, test_case_with_users, test_user
     ):
         """Test creating duplicate person entity"""
-        # Create first person
         entity_data = EntityCreate(
             entity_type="person", data={"first_name": "John", "last_name": "Doe"}
         )
@@ -235,7 +220,6 @@ class TestEntityService:
         self, test_case_with_users, test_user
     ):
         """Test creating duplicate company entity"""
-        # Create first company
         entity_data = EntityCreate(
             entity_type="company", data={"name": "Duplicate Corp"}
         )
@@ -246,7 +230,7 @@ class TestEntityService:
         # Try to create duplicate (case-insensitive)
         duplicate_data = EntityCreate(
             entity_type="company",
-            data={"name": "duplicate corp"},  # lowercase
+            data={"name": "duplicate corp"},
         )
         with pytest.raises(DuplicateResourceException) as exc_info:
             await self.service.create_entity(
@@ -271,7 +255,6 @@ class TestEntityService:
         self, test_case_with_users, test_analyst
     ):
         """Analysts cannot update assigned-case entities."""
-        # Create entity
         entity = models.Entity(
             case_id=test_case_with_users.id,
             entity_type="person",
@@ -295,7 +278,6 @@ class TestEntityService:
         self, test_case_with_users, test_analyst
     ):
         """Analysts cannot delete assigned-case entities."""
-        # Create entity
         entity = models.Entity(
             case_id=test_case_with_users.id,
             entity_type="person",
@@ -316,7 +298,6 @@ class TestEntityService:
         self, test_case_with_users, test_user
     ):
         """Test deleting one entity doesn't affect others in same case"""
-        # Create multiple entities
         entity1 = models.Entity(
             case_id=test_case_with_users.id,
             entity_type="person",
@@ -333,19 +314,13 @@ class TestEntityService:
         self.db.add(entity2)
         self.db.commit()
 
-        # Delete only entity1
         await self.service.delete_entity(
             test_case_with_users.id, entity1.id, current_user=test_user
         )
 
-        # Verify entity2 still exists
         remaining = self.db.get(models.Entity, entity2.id)
         assert remaining is not None
         assert remaining.data["last_name"] == "Two"
-
-    # =========================
-    # Edge cases and performance tests
-    # =========================
 
     async def test_concurrent_entity_creation(
         self, test_case_with_users, test_user, test_admin
@@ -357,13 +332,11 @@ class TestEntityService:
             entity_type="company", data={"name": "Concurrent Corp"}
         )
 
-        # Create entity as first user
         entity1 = await self.service.create_entity(
             test_case_with_users.id, entity_data, current_user=test_user
         )
         assert entity1.data["name"] == "Concurrent Corp"
 
-        # Second creation should fail
         with pytest.raises(DuplicateResourceException) as exc_info:
             await self.service.create_entity(
                 test_case_with_users.id, entity_data, current_user=test_admin
@@ -372,7 +345,7 @@ class TestEntityService:
 
     async def test_entity_with_very_long_data(self, test_case_with_users, test_user):
         """Test creating entity with very long text fields"""
-        long_text = "A" * 10000  # 10k characters
+        long_text = "A" * 10000
         entity_data = EntityCreate(
             entity_type="person",
             data={"first_name": "Test", "last_name": "User", "other": long_text},
@@ -407,7 +380,6 @@ class TestEntityService:
 
     async def test_bulk_entity_retrieval_performance(self, test_case, test_admin):
         """Test performance with large number of entities"""
-        # Create 100 entities
         for i in range(100):
             entity = models.Entity(
                 case_id=test_case.id,
@@ -422,7 +394,6 @@ class TestEntityService:
             self.db.add(entity)
         self.db.commit()
 
-        # Test retrieval with pagination
         import time
 
         start_time = time.time()
@@ -434,17 +405,12 @@ class TestEntityService:
         elapsed_time = time.time() - start_time
 
         assert len(entities) == 50
-        assert elapsed_time < 1.0  # Should complete within 1 second
-
-    # =========================
-    # Entity lookup tests
-    # =========================
+        assert elapsed_time < 1.0
 
     async def test_find_entity_by_ip_address_success(
         self, test_case_with_users, test_user
     ):
         """Test finding an existing IP address entity"""
-        # Create IP entity
         entity_data = EntityCreate(
             entity_type="ip_address",
             data={"ip_address": "10.0.0.1", "description": "Test IP"},
@@ -453,7 +419,6 @@ class TestEntityService:
             test_case_with_users.id, entity_data, current_user=test_user
         )
 
-        # Find the entity
         found_entity = await self.service.find_canonical_entity(
             test_case_with_users.id, "ip_address", "10.0.0.1", test_user
         )
@@ -481,7 +446,6 @@ class TestEntityService:
 
     async def test_find_entity_by_domain_success(self, test_case_with_users, test_user):
         """Test finding an existing domain entity"""
-        # Create domain entity
         entity_data = EntityCreate(
             entity_type="domain",
             data={"domain": "TestDomain.Com", "description": "Test domain"},
@@ -516,15 +480,10 @@ class TestEntityService:
             )
         assert "Case not found" in str(exc_info.value)
 
-    # =========================
-    # Entity enrichment tests
-    # =========================
-
     async def test_enrich_entity_description_new_description(
         self, test_case_with_users, test_user
     ):
         """Test enriching entity with new description"""
-        # Create entity without description
         entity_data = EntityCreate(
             entity_type="ip_address", data={"ip_address": "172.16.0.1"}
         )
@@ -532,13 +491,9 @@ class TestEntityService:
             test_case_with_users.id, entity_data, current_user=test_user
         )
 
-        # Store original state
         original_created_at = created_entity.created_at
-        assert (
-            created_entity.data.get("description") is None
-        )  # Verify no description initially
+        assert created_entity.data.get("description") is None
 
-        # Enrich with description
         enriched_entity = await self.service.enrich_entity_description(
             test_case_with_users.id,
             created_entity.id,
@@ -546,23 +501,18 @@ class TestEntityService:
             current_user=test_user,
         )
 
-        # Verify enrichment worked
         assert (
             enriched_entity.data["description"]
             == "Discovered via Shodan: Apache server on port 80"
         )
-        # Verify it's the same entity
         assert enriched_entity.id == created_entity.id
-        # Created_at should remain the same
         assert enriched_entity.created_at == original_created_at
-        # Updated_at should be set (at least equal to or after created_at)
         assert enriched_entity.updated_at >= enriched_entity.created_at
 
     async def test_enrich_entity_description_append_to_existing(
         self, test_case_with_users, test_user
     ):
         """Test enriching entity that already has a description"""
-        # Create entity with existing description
         entity_data = EntityCreate(
             entity_type="ip_address",
             data={
@@ -574,7 +524,6 @@ class TestEntityService:
             test_case_with_users.id, entity_data, current_user=test_user
         )
 
-        # Enrich with additional description
         enriched_entity = await self.service.enrich_entity_description(
             test_case_with_users.id,
             created_entity.id,
@@ -602,7 +551,6 @@ class TestEntityService:
         self, test_case_with_users, test_analyst
     ):
         """Analysts cannot enrich assigned-case entities."""
-        # Create entity
         entity = models.Entity(
             case_id=test_case_with_users.id,
             entity_type="ip_address",

@@ -8,12 +8,9 @@ from typing import Any
 from app.core.exceptions import ValidationException
 
 SUPPORTED_EXTENSIONS = {
-    # Images
     *(".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".tif", ".webp"),
     *(".heic", ".heif", ".raw", ".cr2", ".nef", ".arw", ".dng"),
-    # Video
     *(".mp4", ".avi", ".mov", ".wmv", ".flv", ".webm", ".mkv", ".m4v", ".3gp"),
-    # Documents
     *(".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx"),
 }
 

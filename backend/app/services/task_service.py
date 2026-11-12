@@ -161,7 +161,6 @@ class TaskService:
 
         for key, value in updates.items():
             if hasattr(task, key):
-                # Merge custom_fields rather than replace
                 if key == "custom_fields" and task.custom_fields:
                     existing_custom_fields = task.custom_fields or {}
                     merged_custom_fields = {**existing_custom_fields, **value}

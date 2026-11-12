@@ -84,7 +84,6 @@ def mock_upload_file_fixture():
     return mock_file
 
 
-# Test create_evidence method
 @pytest.mark.asyncio
 async def test_create_evidence_text_type(
     evidence_service_instance: evidence_service.EvidenceService,
@@ -229,7 +228,6 @@ async def test_create_evidence_file_save_error_cleanup(
         folder_path="test_folder",
     )
 
-    # Mock database error during commit
     with patch.object(
         evidence_service_instance.db, "commit", side_effect=Exception("DB Error")
     ):
@@ -291,14 +289,12 @@ async def test_create_evidence_failure_logs_event_and_reason(
     }.items() <= records[-1].items()
 
 
-# Test get_case_evidence method
 @pytest.mark.asyncio
 async def test_get_case_evidence(
     evidence_service_instance: evidence_service.EvidenceService,
     sample_case: models.Case,
     test_admin: models.User,
 ):
-    # Create some evidence
     for i in range(3):
         evidence = models.Evidence(
             case_id=sample_case.id,
@@ -338,7 +334,6 @@ async def test_get_case_evidence_pagination(
     sample_case: models.Case,
     test_admin: models.User,
 ):
-    # Create 10 evidence items
     for i in range(10):
         evidence = models.Evidence(
             case_id=sample_case.id,
@@ -354,7 +349,6 @@ async def test_get_case_evidence_pagination(
         evidence_service_instance.db.add(evidence)
     evidence_service_instance.db.commit()
 
-    # Test pagination
     first_page = await evidence_service_instance.get_case_evidence(
         sample_case.id, test_admin, skip=0, limit=5
     )
@@ -367,7 +361,6 @@ async def test_get_case_evidence_pagination(
     assert first_page[0].id != second_page[0].id
 
 
-# Test get_evidence method
 @pytest.mark.asyncio
 async def test_get_evidence(
     evidence_service_instance: evidence_service.EvidenceService,
@@ -407,7 +400,6 @@ async def test_get_evidence_not_found(
     assert str(excinfo.value) == "Evidence not found"
 
 
-# Test update_evidence method
 def test_update_evidence(
     evidence_service_instance: evidence_service.EvidenceService,
     sample_case: models.Case,
@@ -482,7 +474,6 @@ def test_update_evidence_not_found(
     assert str(excinfo.value) == "Evidence not found"
 
 
-# Test delete_evidence method
 @pytest.mark.asyncio
 @patch("app.services.evidence_service.delete_file")
 async def test_delete_evidence_file(
@@ -514,7 +505,6 @@ async def test_delete_evidence_file(
     assert deleted_evidence.id == evidence.id
     mock_delete_file.assert_called_once_with("uploads/test_file.txt")
 
-    # Verify evidence is deleted from database
     db_evidence = evidence_service_instance.db.get(models.Evidence, evidence.id)
     assert db_evidence is None
 
@@ -546,12 +536,10 @@ async def test_delete_evidence_text(
 
     assert deleted_evidence.id == evidence.id
 
-    # Verify evidence is deleted from database
     db_evidence = evidence_service_instance.db.get(models.Evidence, evidence.id)
     assert db_evidence is None
 
 
-# Test create_folder method
 @pytest.mark.asyncio
 @patch("app.services.evidence_service.create_folder")
 async def test_create_folder(
@@ -639,7 +627,6 @@ async def test_create_folder_nonexistent_parent(
     assert str(excinfo.value) == "Parent folder not found"
 
 
-# Test the unlimited folder tree listing
 @pytest.mark.asyncio
 async def test_get_case_evidence_without_limit(
     evidence_service_instance: evidence_service.EvidenceService,
@@ -665,7 +652,6 @@ async def test_get_case_evidence_without_limit_nonexistent_case(
     assert str(excinfo.value) == "Case not found"
 
 
-# Test update_folder method
 @pytest.mark.asyncio
 async def test_update_folder(
     evidence_service_instance: evidence_service.EvidenceService,
@@ -696,7 +682,6 @@ async def test_update_folder_not_found(
     assert str(excinfo.value) == "Folder not found"
 
 
-# Test delete_folder method
 @pytest.mark.asyncio
 @patch("app.services.evidence_service.delete_folder")
 async def test_delete_folder(
@@ -714,7 +699,6 @@ async def test_delete_folder(
         sample_folder.case_id, sample_folder.folder_path
     )
 
-    # Verify folder is deleted from database
     db_folder = evidence_service_instance.db.get(models.Evidence, sample_folder.id)
     assert db_folder is None
 
@@ -728,7 +712,6 @@ async def test_delete_folder_with_contents(
     sample_folder: models.Evidence,
     test_admin: models.User,
 ):
-    # Create evidence in the folder
     evidence = models.Evidence(
         case_id=sample_case.id,
         title="Evidence in folder",
@@ -751,14 +734,12 @@ async def test_delete_folder_with_contents(
     assert deleted_folder.id == sample_folder.id
     mock_delete_folder_func.assert_called_once()
 
-    # Verify folder and its contents are deleted
     db_folder = evidence_service_instance.db.get(models.Evidence, sample_folder.id)
     assert db_folder is None
     db_evidence = evidence_service_instance.db.get(models.Evidence, evidence.id)
     assert db_evidence is None
 
 
-# Test download_evidence method
 @pytest.mark.asyncio
 async def test_download_evidence_file(
     evidence_service_instance: evidence_service.EvidenceService,
@@ -823,14 +804,12 @@ async def test_download_evidence_text_fails(
     assert "Evidence type does not support downloading" in str(excinfo.value)
 
 
-# Edge cases and additional tests
 @pytest.mark.asyncio
 async def test_evidence_categories_validation(
     evidence_service_instance: evidence_service.EvidenceService,
     sample_case: models.Case,
     test_admin: models.User,
 ):
-    # Test all valid categories
     valid_categories = [
         "Social Media",
         "Associates",
@@ -888,7 +867,6 @@ async def test_bulk_evidence_operations(
     sample_case: models.Case,
     test_admin: models.User,
 ):
-    # Create multiple evidence items
     evidence_list = []
     for i in range(50):
         evidence_data = schemas.EvidenceCreate(
@@ -905,7 +883,6 @@ async def test_bulk_evidence_operations(
         )
         evidence_list.append(evidence)
 
-    # Verify all evidence was created
     case_evidence = await evidence_service_instance.get_case_evidence(
         sample_case.id, test_admin, limit=100
     )

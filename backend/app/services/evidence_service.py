@@ -132,7 +132,6 @@ class EvidenceService:
 
         saved_path = None
         if evidence.evidence_type == "file" and not evidence.is_folder:
-            # Prevent file uploads when no folder structure exists for organization
             if not self.db.exec(
                 select(models.Evidence).where(
                     models.Evidence.case_id == evidence.case_id,
@@ -420,7 +419,7 @@ class EvidenceService:
 
         file_path = self._stored_file(evidence, failed)
 
-        # Limit file size to prevent memory issues with large files
+        # Whole file is read into memory below, so cap its size.
         file_size = file_path.stat().st_size
         max_size = 1024 * 1024
         if file_size > max_size:
@@ -470,7 +469,6 @@ class EvidenceService:
         encoding = encoding_result.get("encoding") or "utf-8"
         confidence = encoding_result.get("confidence", 0)
 
-        # Decode with detected encoding, fallback to utf-8 with error replacement
         try:
             content = raw_content.decode(encoding)
         except UnicodeDecodeError:

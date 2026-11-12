@@ -36,7 +36,6 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(plain_password.encode(), hashed_password.encode())
 
 
-# JWT Authentication
 ALGORITHM = "HS256"
 
 
@@ -146,7 +145,6 @@ async def validate_file_security(file: UploadFile) -> None:
     ):
         try:
             content.decode("utf-8")
-            # If we got here, it's valid UTF-8 text
             return
         except UnicodeDecodeError:
             pass
@@ -183,7 +181,6 @@ def secure_filename_with_path(filename: str, base_path: Path) -> str:
         final_name = f"{name}_{counter}{ext}"
         counter += 1
 
-    # Create full path and verify it's within base_path
     full_path = (abs_base / final_name).resolve()
     if not str(full_path).startswith(str(abs_base)):
         raise ValidationException("Invalid file path")
@@ -191,7 +188,6 @@ def secure_filename_with_path(filename: str, base_path: Path) -> str:
     return final_name
 
 
-# API Key Encryption
 def _get_encryption_key() -> bytes:
     """Get or generate encryption key from secret."""
     secret = settings.SECRET_KEY.get_secret_value()
@@ -219,7 +215,6 @@ def decrypt_api_key(encrypted_key: str) -> str:
     return decrypted.decode()
 
 
-# Ephemeral Token Management for WebSocket Authentication
 # Redis-backed, atomic single-use capabilities scoped to execution kind.
 EPHEMERAL_TOKEN_TTL_SECONDS = 30
 

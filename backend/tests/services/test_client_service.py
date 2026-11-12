@@ -19,7 +19,6 @@ from app.database import models
 from app.services.client_service import ClientService
 
 
-# Helper function to create a client
 async def create_client_helper(db: Session, client_data: dict) -> models.Client:
     client_create = schemas.ClientCreate(**client_data)
     client = models.Client(**client_create.model_dump())
@@ -32,7 +31,6 @@ async def create_client_helper(db: Session, client_data: dict) -> models.Client:
 @pytest.mark.asyncio
 class TestClientService:
     async def test_get_clients_success(self, session, test_user, test_admin):
-        # Create some clients
         await create_client_helper(
             session, {"name": "Client 1", "email": "client1@test.com"}
         )
@@ -40,19 +38,16 @@ class TestClientService:
             session, {"name": "Client 2", "email": "client2@test.com"}
         )
 
-        # Test with admin user
         client_service = ClientService(session)
         clients = await client_service.get_clients(current_user=test_admin)
         assert len(clients) == 2
         assert clients[0].name == "Client 1"
         assert clients[1].name == "Client 2"
 
-        # Test with regular user
         clients = await client_service.get_clients(current_user=test_user)
         assert len(clients) == 2
 
     async def test_get_clients_pagination(self, session, test_user):
-        # Create some clients
         await create_client_helper(
             session, {"name": "Client 1", "email": "client1@test.com"}
         )
@@ -63,7 +58,6 @@ class TestClientService:
             session, {"name": "Client 3", "email": "client3@test.com"}
         )
 
-        # Test pagination
         client_service = ClientService(session)
         clients = await client_service.get_clients(
             skip=1, limit=1, current_user=test_user
@@ -155,13 +149,8 @@ class TestClientService:
             )
         assert "Client with id 999 not found" in str(excinfo.value)
 
-    # ========================================
-    # Additional edge case and validation tests
-    # ========================================
-
     async def test_create_client_invalid_email_format(self, session, test_admin):
         """Test creating client with invalid email format"""
-        # Test various invalid email formats
         invalid_emails = [
             "notanemail",
             "@example.com",
@@ -187,7 +176,6 @@ class TestClientService:
         client_data = schemas.ClientCreate(name="", email="valid@email.com")
         client_service = ClientService(session)
 
-        # This should succeed with current implementation
         created_client = await client_service.create_client(
             client_data, current_user=test_admin
         )
@@ -195,7 +183,7 @@ class TestClientService:
 
     async def test_create_client_very_long_name(self, session, test_admin):
         """Test creating client with very long name"""
-        long_name = "A" * 1000  # 1000 characters
+        long_name = "A" * 1000
         client_data = schemas.ClientCreate(name=long_name, email="longname@test.com")
         client_service = ClientService(session)
         created_client = await client_service.create_client(
@@ -246,7 +234,6 @@ class TestClientService:
             },
         )
 
-        # Update only name, keep email and phone
         client_update = schemas.ClientUpdate(name="New Name")
         client_service = ClientService(session)
         updated_client = await client_service.update_client(
@@ -254,14 +241,13 @@ class TestClientService:
         )
 
         assert updated_client.name == "New Name"
-        assert updated_client.email == "original@test.com"  # Unchanged
-        assert updated_client.phone == "+1234567890"  # Unchanged
+        assert updated_client.email == "original@test.com"
+        assert updated_client.phone == "+1234567890"
 
     async def test_get_client_with_associated_cases(
         self, session, test_admin, test_client
     ):
         """Test getting client with associated cases"""
-        # Create cases for the client
         case1 = models.Case(
             case_number="CASE-001",
             title="Test Case 1",
@@ -304,7 +290,6 @@ class TestClientService:
         # Delete should work since no cases are associated
         await client_service.delete_client(created_client.id, current_user=test_admin)
 
-        # Verify client is deleted
         with pytest.raises(ResourceNotFoundException):
             await client_service.get_client(created_client.id, current_user=test_admin)
 
@@ -312,12 +297,10 @@ class TestClientService:
         """Test handling of concurrent client creation with same email"""
         email = "concurrent@test.com"
 
-        # Create first client
         client_data1 = schemas.ClientCreate(name="Client 1", email=email)
         client_service = ClientService(session)
         await client_service.create_client(client_data1, current_user=test_admin)
 
-        # Try to create second client with same email
         client_data2 = schemas.ClientCreate(name="Client 2", email=email)
         with pytest.raises(DuplicateResourceException) as excinfo:
             await client_service.create_client(client_data2, current_user=test_admin)
@@ -327,7 +310,6 @@ class TestClientService:
         self, session, test_admin
     ):
         """Test that email uniqueness check is case-sensitive (current implementation)"""
-        # Create two clients
         await create_client_helper(
             session, {"name": "Client 1", "email": "test@example.com"}
         )
@@ -335,11 +317,9 @@ class TestClientService:
             session, {"name": "Client 2", "email": "other@example.com"}
         )
 
-        # Try to update client2 with client1's exact email (same case)
         client_update = schemas.ClientUpdate(email="test@example.com")
         client_service = ClientService(session)
 
-        # This should fail
         with pytest.raises(DuplicateResourceException) as excinfo:
             await client_service.update_client(
                 client2.id, client_update, current_user=test_admin
@@ -348,7 +328,6 @@ class TestClientService:
 
     async def test_client_search_functionality(self, session, test_admin):
         """Test searching/filtering clients (if implemented)"""
-        # Create multiple clients
         await create_client_helper(
             session, {"name": "ABC Corporation", "email": "abc@test.com"}
         )
@@ -361,14 +340,12 @@ class TestClientService:
 
         client_service = ClientService(session)
 
-        # Test if search functionality exists
         # This is a placeholder - adjust based on actual implementation
         all_clients = await client_service.get_clients(current_user=test_admin)
         assert len(all_clients) == 3
 
     async def test_client_sorting_order(self, session, test_admin):
         """Test that clients are returned in consistent order"""
-        # Create clients with different names
         await create_client_helper(
             session, {"name": "Zeta Corp", "email": "zeta@test.com"}
         )
@@ -382,9 +359,7 @@ class TestClientService:
         client_service = ClientService(session)
         clients = await client_service.get_clients(current_user=test_admin)
 
-        # Check if all clients are returned
         assert len(clients) >= 3
-        # Verify all created clients are in the result
         client_names = [c.name for c in clients]
         assert "Zeta Corp" in client_names
         assert "Alpha Inc" in client_names
@@ -392,11 +367,9 @@ class TestClientService:
 
     async def test_client_with_null_optional_fields(self, session, test_admin):
         """Test creating and updating client with null optional fields"""
-        # Create client with minimal data
         client_data = schemas.ClientCreate(
             name="Minimal Client",
             email="minimal@test.com",
-            # phone is optional and not provided
         )
         client_service = ClientService(session)
         created_client = await client_service.create_client(
@@ -407,7 +380,6 @@ class TestClientService:
         assert created_client.email == "minimal@test.com"
         assert created_client.phone is None
 
-        # Update with explicit None values
         client_update = schemas.ClientUpdate(phone=None)
         updated_client = await client_service.update_client(
             created_client.id, client_update, current_user=test_admin
@@ -416,7 +388,6 @@ class TestClientService:
 
     async def test_get_clients_performance_with_many_records(self, session, test_admin):
         """Test performance with large number of clients"""
-        # Create 100 clients
         import time
 
         for i in range(100):
@@ -426,7 +397,6 @@ class TestClientService:
 
         client_service = ClientService(session)
 
-        # Test retrieval performance
         start_time = time.time()
         clients = await client_service.get_clients(
             skip=0, limit=50, current_user=test_admin
@@ -434,9 +404,8 @@ class TestClientService:
         elapsed_time = time.time() - start_time
 
         assert len(clients) == 50
-        assert elapsed_time < 1.0  # Should complete within 1 second
+        assert elapsed_time < 1.0
 
-        # Test pagination performance
         start_time = time.time()
         page2 = await client_service.get_clients(
             skip=50, limit=50, current_user=test_admin

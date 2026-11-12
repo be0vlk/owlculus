@@ -81,7 +81,6 @@ def test_case(session: Session, test_admin: User) -> Case:
     session.commit()
     session.refresh(case)
 
-    # Add admin to the case
     case_link = CaseUserLink(case_id=case.id, user_id=test_admin.id)
     session.add(case_link)
     session.commit()
@@ -498,7 +497,6 @@ class TestTasksAPI:
         client: TestClient,
     ):
         """Test task deletion forbidden for non-admin"""
-        # Create task in case where user has access
         task = Task(
             case_id=test_case_with_user.id,
             title="To Delete",
@@ -675,7 +673,6 @@ class TestBulkTaskOperationsAPI:
         client: TestClient,
     ):
         """Test successful bulk task assignment"""
-        # Create multiple tasks
         tasks = []
         for i in range(3):
             task = Task(
@@ -721,7 +718,6 @@ class TestBulkTaskOperationsAPI:
         client: TestClient,
     ):
         """Test successful bulk task status update"""
-        # Create multiple tasks
         tasks = []
         for i in range(3):
             task = Task(
@@ -770,7 +766,6 @@ class TestTaskAccessControl:
         client: TestClient,
     ):
         """Test analyst can view tasks when they have case access"""
-        # Give analyst access to the case
         case_link = CaseUserLink(case_id=test_case.id, user_id=test_analyst.id)
         session.add(case_link)
         session.commit()
@@ -781,11 +776,9 @@ class TestTaskAccessControl:
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
         try:
-            # List tasks
             response = client.get(f"/api/tasks/?case_id={test_case.id}")
             assert response.status_code == status.HTTP_200_OK
 
-            # Get specific task
             response = client.get(f"/api/tasks/{test_task.id}")
             assert response.status_code == status.HTTP_200_OK
         finally:
@@ -800,7 +793,6 @@ class TestTaskAccessControl:
         client: TestClient,
     ):
         """Test analyst cannot modify tasks even with case access"""
-        # Give analyst access to the case
         case_link = CaseUserLink(case_id=test_case.id, user_id=test_analyst.id)
         session.add(case_link)
         session.commit()
@@ -837,7 +829,6 @@ class TestTaskPagination:
         self, session: Session, test_admin: User, test_case: Case, client: TestClient
     ):
         """Test task listing with pagination"""
-        # Create 15 tasks
         for i in range(15):
             task = Task(
                 case_id=test_case.id,
@@ -855,13 +846,11 @@ class TestTaskPagination:
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
         try:
-            # Get first page
             response = client.get(f"/api/tasks/?case_id={test_case.id}&skip=0&limit=10")
             assert response.status_code == status.HTTP_200_OK
             data = response.json()
             assert len(data) == 10
 
-            # Get second page
             response = client.get(
                 f"/api/tasks/?case_id={test_case.id}&skip=10&limit=10"
             )

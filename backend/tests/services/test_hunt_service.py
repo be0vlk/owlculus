@@ -97,7 +97,6 @@ def test_case_fixture(session: Session, test_client: Client, test_user: User):
     session.commit()
     session.refresh(case)
 
-    # Add the test user to the case
     from app.database.models import CaseUserLink
 
     case_user_link = CaseUserLink(case_id=case.id, user_id=test_user.id)
@@ -162,7 +161,6 @@ class TestHuntService:
         """Test listing available hunts."""
         hunts = await hunt_service.list_hunts(current_user=test_user)
         assert len(hunts) >= 1
-        # Check that our test hunt is in the list
         hunt_names = [hunt.name for hunt in hunts]
         assert test_hunt.name in hunt_names
 
@@ -245,7 +243,6 @@ class TestHuntService:
         test_user: User,
     ):
         """Test canceling a running execution."""
-        # Setup test execution in running state
         test_hunt_execution.status = "running"
         hunt_service.db.add(test_hunt_execution)
         hunt_service.db.commit()
@@ -271,7 +268,6 @@ class TestHuntService:
         session: Session,
     ):
         """Test getting steps for an execution."""
-        # Add test steps
         step1 = HuntStep(
             execution_id=test_hunt_execution.id,
             step_id="step1",
@@ -285,12 +281,10 @@ class TestHuntService:
         session.add(step1)
         session.commit()
 
-        # Get steps
         steps = await hunt_service.get_execution_steps(
             test_hunt_execution.id, current_user=test_user
         )
 
-        # Verify steps
         assert len(steps) == 1
         assert steps[0].step_id == "step1"
         assert steps[0].status == "completed"

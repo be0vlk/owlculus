@@ -103,7 +103,6 @@ def multiple_tasks_fixture(
     """Create multiple tasks with different statuses and priorities"""
     tasks = []
 
-    # Task 1: High priority, not started
     task1 = models.Task(
         case_id=test_case.id,
         title="High Priority Task",
@@ -115,7 +114,6 @@ def multiple_tasks_fixture(
     )
     tasks.append(task1)
 
-    # Task 2: Medium priority, in progress
     task2 = models.Task(
         case_id=test_case.id,
         title="In Progress Task",
@@ -127,7 +125,6 @@ def multiple_tasks_fixture(
     )
     tasks.append(task2)
 
-    # Task 3: Low priority, completed
     task3 = models.Task(
         case_id=test_case.id,
         title="Completed Task",
@@ -141,7 +138,6 @@ def multiple_tasks_fixture(
     )
     tasks.append(task3)
 
-    # Task 4: Blocked task
     task4 = models.Task(
         case_id=test_case.id,
         title="Blocked Task",
@@ -233,7 +229,6 @@ class TestTaskCRUDOperations:
         task_template: models.TaskTemplate,
     ):
         """Test creating a new task"""
-        # Ensure admin is assigned to the case
         case_link = models.CaseUserLink(case_id=test_case.id, user_id=test_admin.id)
         task_service.db.add(case_link)
         task_service.db.commit()
@@ -319,7 +314,6 @@ class TestTaskCRUDOperations:
         assert updated_task.title == "Updated Task Title"
         assert updated_task.description == "Updated description"
         assert updated_task.priority == TaskPriority.HIGH.value
-        # The updated_at should be changed
         assert updated_task.updated_at is not None
 
     @pytest.mark.asyncio
@@ -333,7 +327,6 @@ class TestTaskCRUDOperations:
         result = await task_service.delete_task(sample_task.id, current_user=test_admin)
         assert result is True
 
-        # Verify task is deleted
         deleted_task = task_service.db.get(models.Task, sample_task.id)
         assert deleted_task is None
 
@@ -382,14 +375,12 @@ class TestTaskFiltering:
         self, task_service: TaskService, multiple_tasks: list, test_admin: models.User
     ):
         """Test getting tasks filtered by status"""
-        # Get completed tasks
         tasks = await task_service.get_tasks(
             current_user=test_admin, status=TaskStatus.COMPLETED.value
         )
         assert len(tasks) == 1
         assert tasks[0].status == TaskStatus.COMPLETED.value
 
-        # Get in-progress tasks
         tasks = await task_service.get_tasks(
             current_user=test_admin, status=TaskStatus.IN_PROGRESS.value
         )
@@ -413,11 +404,9 @@ class TestTaskFiltering:
         self, task_service: TaskService, multiple_tasks: list, test_admin: models.User
     ):
         """Test task pagination"""
-        # Get first 2 tasks
         tasks = await task_service.get_tasks(current_user=test_admin, skip=0, limit=2)
         assert len(tasks) == 2
 
-        # Get next 2 tasks
         tasks = await task_service.get_tasks(current_user=test_admin, skip=2, limit=2)
         assert len(tasks) == 2
 
@@ -442,7 +431,6 @@ class TestTaskAssignment:
         test_investigator: models.User,
     ):
         """Test assigning a task to a user"""
-        # First ensure investigator has access to the case
         case_link = models.CaseUserLink(
             case_id=sample_task.case_id, user_id=test_investigator.id
         )
@@ -491,7 +479,6 @@ class TestTaskAssignment:
         test_investigator: models.User,
     ):
         """Test bulk assigning tasks"""
-        # Ensure investigator has case access
         case_link = models.CaseUserLink(
             case_id=multiple_tasks[0].case_id, user_id=test_investigator.id
         )
@@ -532,7 +519,6 @@ class TestTaskStatusOperations:
         self, task_service: TaskService, test_case: models.Case, test_admin: models.User
     ):
         """Test moving task away from completed status"""
-        # Create a completed task
         task = models.Task(
             case_id=test_case.id,
             title="Completed Task",
@@ -547,7 +533,6 @@ class TestTaskStatusOperations:
         task_service.db.commit()
         task_service.db.refresh(task)
 
-        # Move to in-progress
         updated_task = await task_service.update_status(
             task.id, TaskStatus.IN_PROGRESS.value, current_user=test_admin
         )
@@ -574,7 +559,6 @@ class TestTaskStatusOperations:
         self, task_service: TaskService, multiple_tasks: list, test_admin: models.User
     ):
         """Test bulk updating task status"""
-        # Get tasks that are not completed
         task_ids = [
             task.id
             for task in multiple_tasks
@@ -601,7 +585,6 @@ class TestTaskAccessControl:
         test_analyst: models.User,
     ):
         """Test analyst can read tasks they have access to"""
-        # Give analyst access to the case
         case_link = models.CaseUserLink(
             case_id=sample_task.case_id, user_id=test_analyst.id
         )
@@ -619,14 +602,12 @@ class TestTaskAccessControl:
         test_investigator: models.User,
     ):
         """Test investigator can create and modify tasks"""
-        # Give investigator access to the case
         case_link = models.CaseUserLink(
             case_id=test_case.id, user_id=test_investigator.id, is_lead=True
         )
         task_service.db.add(case_link)
         task_service.db.commit()
 
-        # Create task
         task_data = {
             "title": "Investigator Task",
             "description": "Created by investigator",
@@ -638,7 +619,6 @@ class TestTaskAccessControl:
         )
         assert task.assigned_by_id == test_investigator.id
 
-        # Update task
         updates = {"title": "Updated by Investigator"}
         updated_task = await task_service.update_task(
             task.id, updates, current_user=test_investigator
@@ -658,7 +638,6 @@ class TestTaskWithCustomFields:
         task_template: models.TaskTemplate,
     ):
         """Test creating task with custom fields from template"""
-        # Ensure admin has case access
         case_link = models.CaseUserLink(case_id=test_case.id, user_id=test_admin.id)
         task_service.db.add(case_link)
         task_service.db.commit()
@@ -710,7 +689,6 @@ class TestTaskDueDates:
         self, task_service: TaskService, test_case: models.Case, test_admin: models.User
     ):
         """Test creating task with due date"""
-        # Ensure admin has case access
         case_link = models.CaseUserLink(case_id=test_case.id, user_id=test_admin.id)
         task_service.db.add(case_link)
         task_service.db.commit()

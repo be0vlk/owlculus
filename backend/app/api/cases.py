@@ -132,7 +132,6 @@ async def export_case(
     )
 
 
-# Entity endpoints
 @router.get("/{case_id}/entities/export", tags=["entities"])
 async def export_case_entities(
     case_id: int,

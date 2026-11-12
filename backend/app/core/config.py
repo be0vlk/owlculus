@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api"
     SECRET_KEY: SecretStr
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 4  # 4 hours, adjust if you want
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 4  # 4 hours in minutes
     DB_USER: str = Field(validation_alias="POSTGRES_USER")
     DB_PASSWORD: SecretStr = Field(validation_alias="POSTGRES_PASSWORD")
     DB_HOST: str = Field(validation_alias="POSTGRES_HOST")

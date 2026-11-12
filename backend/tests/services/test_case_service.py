@@ -308,11 +308,6 @@ async def test_remove_user_from_case_user_not_found(
     assert "User not found" in str(excinfo.value)
 
 
-# ========================================
-# Additional edge case and validation tests
-# ========================================
-
-
 @pytest.mark.asyncio
 async def test_case_status_transitions(
     case_service_instance: case_service.CaseService,
@@ -339,7 +334,6 @@ async def test_case_with_entities_and_evidence(
     session: Session,
 ):
     """Test case with associated entities and evidence"""
-    # Add entities to case
     entity1 = models.Entity(
         case_id=sample_case.id,
         entity_type="person",
@@ -355,7 +349,6 @@ async def test_case_with_entities_and_evidence(
     session.add(entity1)
     session.add(entity2)
 
-    # Add evidence to case
     evidence = models.Evidence(
         case_id=sample_case.id,
         title="test_doc.pdf",
@@ -367,11 +360,9 @@ async def test_case_with_entities_and_evidence(
     session.add(evidence)
     session.commit()
 
-    # Retrieve case and verify associations
     retrieved_case = await case_service_instance.get_case(sample_case.id, test_admin)
     assert retrieved_case.id == sample_case.id
 
-    # Check if entities exist
     from sqlmodel import select
 
     entities = session.exec(
@@ -379,7 +370,6 @@ async def test_case_with_entities_and_evidence(
     ).all()
     assert len(entities) == 2
 
-    # Check if evidence exists
     evidence_items = session.exec(
         select(models.Evidence).where(models.Evidence.case_id == retrieved_case.id)
     ).all()
@@ -397,7 +387,6 @@ async def test_concurrent_case_number_generation(
     case_service_instance.db.commit()
     case_service_instance.db.refresh(client)
 
-    # Create multiple cases in same month
     case_numbers = []
     for i in range(5):
         case_data = schemas.CaseCreate(
@@ -411,10 +400,7 @@ async def test_concurrent_case_number_generation(
         )
         case_numbers.append(created_case.case_number)
 
-    # Verify all case numbers are unique
     assert len(set(case_numbers)) == 5
-    # Verify sequential numbering (numbers should increment)
-    # Extract the numeric parts after the dash
     numbers = [int(cn.split("-")[1]) for cn in case_numbers]
     assert numbers == [1, 2, 3, 4, 5]
 
@@ -426,17 +412,13 @@ async def test_case_soft_delete_vs_hard_delete(
     test_admin: models.User,
 ):
     """Test case deletion behavior (if implemented)"""
-    # Check if delete method exists
     if hasattr(case_service_instance, "delete_case"):
-        # Test soft delete (if implemented)
         await case_service_instance.delete_case(sample_case.id, current_user=test_admin)
 
-        # Case should still exist but be marked as deleted
         deleted_case = case_service_instance.db.get(models.Case, sample_case.id)
         if hasattr(deleted_case, "is_deleted"):
             assert deleted_case.is_deleted == True
         else:
-            # Hard delete - case should not exist
             assert deleted_case is None
 
 
@@ -447,14 +429,13 @@ async def test_case_archival_functionality(
     test_admin: models.User,
 ):
     """Test case closure functionality"""
-    # Update case to closed status (archival is achieved through "Closed" status)
+    # Archival is modeled as the "Closed" status.
     case_update = schemas.CaseUpdate(status="Closed")
     updated_case = await case_service_instance.update_case(
         sample_case.id, case_update, current_user=test_admin
     )
     assert updated_case.status == "Closed"
 
-    # Verify closed cases are filtered correctly
     active_cases = await case_service_instance.get_cases(test_admin, status="Open")
     assert sample_case.id not in [case.id for case in active_cases]
 
@@ -470,7 +451,6 @@ async def test_case_search_with_multiple_filters(
     session.add(client)
     session.commit()
 
-    # Create various cases
     for i in range(10):
         case_data = schemas.CaseCreate(
             client_id=client.id,
@@ -480,7 +460,6 @@ async def test_case_search_with_multiple_filters(
         )
         await case_service_instance.create_case(case_data, current_user=test_admin)
 
-    # Test filtering by status
     open_cases = await case_service_instance.get_cases(test_admin, status="Open")
     assert len(open_cases) == 5
 
@@ -499,8 +478,7 @@ async def test_case_with_very_long_notes(
     case_service_instance.db.commit()
     case_service_instance.db.refresh(client)
 
-    # Create case with very long notes
-    long_notes = "A" * 50000  # 50k characters
+    long_notes = "A" * 50000
     case_data = schemas.CaseCreate(
         client_id=client.id, title="Long Notes Case", status="Open", notes=long_notes
     )
@@ -519,22 +497,18 @@ async def test_removing_last_user_from_case(
     session: Session,
 ):
     """Test removing the last user from a case"""
-    # Add admin as the only user to the case
     link = models.CaseUserLink(case_id=sample_case.id, user_id=test_admin.id)
     session.add(link)
     session.commit()
 
-    # Try to remove the last user
     # This should either fail or handle gracefully
     try:
         await case_service_instance.remove_user_from_case(
             sample_case.id, test_admin.id, current_user=test_admin
         )
-        # If it succeeds, verify case has no users
         case = await case_service_instance.get_case(sample_case.id, test_admin)
         assert len(case.users) == 0
     except ValidationException as e:
-        # If it fails, verify appropriate error
         assert "last user" in str(e).lower() or "cannot remove" in str(e).lower()
 
 
@@ -545,14 +519,12 @@ async def test_case_reopening_after_closure(
     test_admin: models.User,
 ):
     """Test reopening a closed case"""
-    # First close the case
     case_update = schemas.CaseUpdate(status="Closed")
     closed_case = await case_service_instance.update_case(
         sample_case.id, case_update, current_user=test_admin
     )
     assert closed_case.status == "Closed"
 
-    # Reopen the case
     case_update = schemas.CaseUpdate(status="Open")
     reopened_case = await case_service_instance.update_case(
         sample_case.id, case_update, current_user=test_admin
@@ -567,7 +539,7 @@ async def test_invalid_status_values(
     test_admin: models.User,
 ):
     """Test updating case with invalid status values"""
-    # Try to set invalid status - this should raise a ValidationError from Pydantic
+    # Pydantic rejects the status at construction.
     from pydantic import ValidationError
 
     with pytest.raises(ValidationError):
@@ -585,7 +557,6 @@ async def test_case_date_filtering(
     session.add(client)
     session.commit()
 
-    # Create cases with different dates
     import time
 
     cases = []
@@ -602,9 +573,7 @@ async def test_case_date_filtering(
         cases.append(case)
         time.sleep(0.1)  # Small delay to ensure different timestamps
 
-    # Verify all cases were created
     assert len(cases) == 3
-    # Case numbers should be sequential
     assert cases[0].case_number < cases[1].case_number < cases[2].case_number
 
 
@@ -618,28 +587,23 @@ async def test_case_user_permissions_matrix(
     session: Session,
 ):
     """Test comprehensive permission matrix for different user roles"""
-    # Add all users to the case
     for user in [test_admin, test_user, test_analyst]:
         link = models.CaseUserLink(case_id=sample_case.id, user_id=user.id)
         session.add(link)
     session.commit()
 
-    # Test read permissions - all should succeed
     for user in [test_admin, test_user, test_analyst]:
         case = await case_service_instance.get_case(sample_case.id, user)
         assert case.id == sample_case.id
 
-    # Test update permissions
     case_update = schemas.CaseUpdate(notes="Updated by different roles")
 
-    # Admin and Investigator should succeed
     for user in [test_admin, test_user]:
         updated = await case_service_instance.update_case(
             sample_case.id, case_update, current_user=user
         )
         assert updated.notes == "Updated by different roles"
 
-    # Analyst should fail
     with pytest.raises(AuthorizationException) as excinfo:
         await case_service_instance.update_case(
             sample_case.id, case_update, current_user=test_analyst
@@ -698,7 +662,6 @@ async def test_case_bulk_operations_performance(
     session.add(client)
     session.commit()
 
-    # Measure time to create 100 cases
     start_time = time.time()
 
     for i in range(100):
@@ -711,15 +674,14 @@ async def test_case_bulk_operations_performance(
         await case_service_instance.create_case(case_data, current_user=test_admin)
 
     creation_time = time.time() - start_time
-    assert creation_time < 10.0  # Should complete within 10 seconds
+    assert creation_time < 10.0
 
-    # Measure time to retrieve all cases
     start_time = time.time()
     all_cases = await case_service_instance.get_cases(test_admin)
     retrieval_time = time.time() - start_time
 
     assert len(all_cases) >= 100
-    assert retrieval_time < 1.0  # Should complete within 1 second
+    assert retrieval_time < 1.0
 
 
 @pytest.mark.asyncio
@@ -733,15 +695,13 @@ async def test_case_number_year_rollover(
     case_service_instance.db.commit()
     case_service_instance.db.refresh(client)
 
-    # Create case in December 2023
     dec_2023 = datetime(2023, 12, 15, 12, 0, 0)
     case_number_dec = await case_service_instance._generate_case_number(dec_2023)
     assert case_number_dec.startswith("2312-")
 
-    # Create case in January 2024
     jan_2024 = datetime(2024, 1, 15, 12, 0, 0)
     case_number_jan = await case_service_instance._generate_case_number(jan_2024)
-    assert case_number_jan == "2401-01"  # Should reset to 01
+    assert case_number_jan == "2401-01"
 
 
 @pytest.mark.asyncio
@@ -754,7 +714,6 @@ async def test_add_duplicate_user_to_case(
 ):
     """Test adding a user who is already assigned to the case"""
     # User is already assigned via sample_case_link (not a lead)
-    # Verify initial state
     case = await case_service_instance.get_case(sample_case.id, test_admin)
     user_dict = {u.id: u for u in case.users}
     assert user_dict[test_user.id].is_lead is False
@@ -764,7 +723,6 @@ async def test_add_duplicate_user_to_case(
         sample_case.id, test_user.id, current_user=test_admin, is_lead=True
     )
 
-    # Verify user is still there but now as lead
     case = await case_service_instance.get_case(sample_case.id, test_admin)
     user_dict = {u.id: u for u in case.users}
     assert test_user.id in user_dict
@@ -780,27 +738,22 @@ async def test_get_case_with_is_lead_info(
     session: Session,
 ):
     """Test that is_lead information is properly included in case response"""
-    # Add test_user as case lead
     case_link = models.CaseUserLink(
         case_id=sample_case.id, user_id=test_user.id, is_lead=True
     )
     session.add(case_link)
     session.commit()
 
-    # Add admin as non-lead
     admin_link = models.CaseUserLink(
         case_id=sample_case.id, user_id=test_admin.id, is_lead=False
     )
     session.add(admin_link)
     session.commit()
 
-    # Get case with user info
     case = await case_service_instance.get_case(sample_case.id, test_admin)
 
-    # Verify the case has users with is_lead info
     assert len(case.users) == 2
 
-    # Find each user and check their is_lead status
     user_dict = {u.id: u for u in case.users}
 
     assert test_user.id in user_dict
@@ -818,19 +771,15 @@ async def test_add_user_to_case_with_is_lead(
     test_admin: models.User,
 ):
     """Test adding a user to a case with is_lead=True"""
-    # Add user as lead
     updated_case = await case_service_instance.add_user_to_case(
         sample_case.id, test_user.id, current_user=test_admin, is_lead=True
     )
 
-    # Verify user was added
     user_ids = [u.id for u in updated_case.users]
     assert test_user.id in user_ids
 
-    # Get the case with is_lead info
     case_with_users = await case_service_instance.get_case(sample_case.id, test_admin)
 
-    # Find the user and verify is_lead is True
     user_dict = {u.id: u for u in case_with_users.users}
     assert test_user.id in user_dict
     assert user_dict[test_user.id].is_lead is True
@@ -845,27 +794,22 @@ async def test_update_case_user_lead_status(
     sample_case_link: models.CaseUserLink,
 ):
     """Test updating a user's is_lead status"""
-    # Verify initial state (not lead)
     case_with_users = await case_service_instance.get_case(sample_case.id, test_admin)
     user_dict = {u.id: u for u in case_with_users.users}
     assert user_dict[test_user.id].is_lead is False
 
-    # Update to lead
     await case_service_instance.update_case_user_lead_status(
         sample_case.id, test_user.id, is_lead=True, current_user=test_admin
     )
 
-    # Verify update
     case_with_users = await case_service_instance.get_case(sample_case.id, test_admin)
     user_dict = {u.id: u for u in case_with_users.users}
     assert user_dict[test_user.id].is_lead is True
 
-    # Update back to non-lead
     await case_service_instance.update_case_user_lead_status(
         sample_case.id, test_user.id, is_lead=False, current_user=test_admin
     )
 
-    # Verify update
     case_with_users = await case_service_instance.get_case(sample_case.id, test_admin)
     user_dict = {u.id: u for u in case_with_users.users}
     assert user_dict[test_user.id].is_lead is False
@@ -925,19 +869,15 @@ async def test_analyst_can_be_added_as_non_lead(
     test_admin: models.User,
 ):
     """Test that analysts can be added to cases as non-leads"""
-    # This should succeed
     updated_case = await case_service_instance.add_user_to_case(
         sample_case.id, test_analyst.id, current_user=test_admin, is_lead=False
     )
 
-    # Verify analyst was added
     user_ids = [u.id for u in updated_case.users]
     assert test_analyst.id in user_ids
 
-    # Get the case with is_lead info
     case_with_users = await case_service_instance.get_case(sample_case.id, test_admin)
 
-    # Find the analyst and verify is_lead is False
     user_dict = {u.id: u for u in case_with_users.users}
     assert test_analyst.id in user_dict
     assert user_dict[test_analyst.id].is_lead is False
@@ -952,14 +892,12 @@ async def test_analyst_cannot_be_updated_to_lead(
     session: Session,
 ):
     """Test that analysts cannot be updated to lead status"""
-    # First add analyst as non-lead
     link = models.CaseUserLink(
         case_id=sample_case.id, user_id=test_analyst.id, is_lead=False
     )
     session.add(link)
     session.commit()
 
-    # Try to update to lead - should fail
     with pytest.raises(ValidationException) as excinfo:
         await case_service_instance.update_case_user_lead_status(
             sample_case.id, test_analyst.id, is_lead=True, current_user=test_admin
@@ -976,7 +914,6 @@ async def test_existing_analyst_lead_can_be_removed_as_lead(
     session: Session,
 ):
     """Test that existing analyst leads (legacy data) can be removed as leads"""
-    # Simulate legacy data: analyst already set as lead
     link = models.CaseUserLink(
         case_id=sample_case.id,
         user_id=test_analyst.id,
@@ -985,17 +922,14 @@ async def test_existing_analyst_lead_can_be_removed_as_lead(
     session.add(link)
     session.commit()
 
-    # Verify initial state
     case_with_users = await case_service_instance.get_case(sample_case.id, test_admin)
     user_dict = {u.id: u for u in case_with_users.users}
     assert user_dict[test_analyst.id].is_lead is True
 
-    # Should be able to remove lead status
     await case_service_instance.update_case_user_lead_status(
         sample_case.id, test_analyst.id, is_lead=False, current_user=test_admin
     )
 
-    # Verify update
     case_with_users = await case_service_instance.get_case(sample_case.id, test_admin)
     user_dict = {u.id: u for u in case_with_users.users}
     assert user_dict[test_analyst.id].is_lead is False
@@ -1009,12 +943,10 @@ async def test_investigator_can_be_set_as_lead(
     test_admin: models.User,
 ):
     """Test that investigators can be set as leads"""
-    # Add investigator as lead - should succeed
     await case_service_instance.add_user_to_case(
         sample_case.id, test_user.id, current_user=test_admin, is_lead=True
     )
 
-    # Verify investigator was added as lead
     case_with_users = await case_service_instance.get_case(sample_case.id, test_admin)
     user_dict = {u.id: u for u in case_with_users.users}
     assert user_dict[test_user.id].is_lead is True
@@ -1028,7 +960,6 @@ async def test_admin_can_be_set_as_lead(
     session: Session,
 ):
     """Test that admins can be set as leads"""
-    # Create another admin user
     another_admin = models.User(
         username="admin2",
         email="admin2@example.com",
@@ -1040,12 +971,10 @@ async def test_admin_can_be_set_as_lead(
     session.commit()
     session.refresh(another_admin)
 
-    # Add admin as lead - should succeed
     await case_service_instance.add_user_to_case(
         sample_case.id, another_admin.id, current_user=test_admin, is_lead=True
     )
 
-    # Verify admin was added as lead
     case_with_users = await case_service_instance.get_case(sample_case.id, test_admin)
     user_dict = {u.id: u for u in case_with_users.users}
     assert user_dict[another_admin.id].is_lead is True

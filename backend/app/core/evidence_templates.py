@@ -100,7 +100,6 @@ PERSON_TEMPLATE = {
     ],
 }
 
-# Template registry
 DEFAULT_TEMPLATES = {
     "ThreatIntel": THREAT_INTEL_TEMPLATE,
     "Company": COMPANY_TEMPLATE,

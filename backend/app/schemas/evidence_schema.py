@@ -25,7 +25,7 @@ class EvidenceBase(BaseModel):
 class EvidenceCreate(EvidenceBase):
     """Schema for creating evidence."""
 
-    case_id: int = Field(..., gt=0)  # Ensure case_id is provided and positive
+    case_id: int = Field(..., gt=0)
 
     VALID_CATEGORIES: ClassVar[List[str]] = [
         "Social Media",
@@ -41,13 +41,11 @@ class EvidenceCreate(EvidenceBase):
         if self.evidence_type not in ["file", "text"]:
             raise ValueError("evidence_type must be either 'file' or 'text'")
 
-        # Make category validation case-insensitive
         if self.category.lower() not in [cat.lower() for cat in self.VALID_CATEGORIES]:
             raise ValueError(
                 f"category must be one of: {', '.join(self.VALID_CATEGORIES)}"
             )
 
-        # Ensure consistent casing with VALID_CATEGORIES
         self.category = next(
             cat for cat in self.VALID_CATEGORIES if cat.lower() == self.category.lower()
         )

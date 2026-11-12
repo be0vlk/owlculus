@@ -84,7 +84,6 @@ def test_case(session: Session, test_client: Client, test_admin: User) -> Case:
     session.commit()
     session.refresh(case)
 
-    # Link admin to case
     case_user_link = CaseUserLink(case_id=case.id, user_id=test_admin.id)
     session.add(case_user_link)
     session.commit()
@@ -130,14 +129,13 @@ def test_create_case(override_dependencies, test_client: Client, client: TestCli
     data = response.json()
     assert data["title"] == payload["title"]
     assert data["status"] == "Open"
-    assert data["case_number"] is not None  # Check that case number is generated
+    assert data["case_number"] is not None
 
 
 def test_create_case_missing_fields(override_dependencies, client: TestClient):
-    # Test missing required fields
     payload = {"title": "Test Case"}
     response = client.post(f"{settings.API_V1_STR}/cases/", json=payload)
-    assert response.status_code == 422  # Unprocessable Entity
+    assert response.status_code == 422
 
 
 def test_read_cases(override_dependencies, test_case: Case, client: TestClient):
@@ -196,7 +194,6 @@ def test_update_case_duplicate_case_number(
     session: Session,
     client: TestClient,
 ):
-    # Create a second case with a different case number
     second_case = Case(
         client_id=test_case.client_id,
         case_number="TEST-002",
@@ -206,10 +203,9 @@ def test_update_case_duplicate_case_number(
     session.add(second_case)
     session.commit()
 
-    # Attempt to update the first case's number to match the second
     payload = {"case_number": "TEST-002"}
     response = client.put(f"{settings.API_V1_STR}/cases/{test_case.id}", json=payload)
-    assert response.status_code == 400  # Bad Request
+    assert response.status_code == 400
 
 
 def test_add_user_to_case(
@@ -242,7 +238,6 @@ def test_remove_user_from_case(
     session: Session,
     client: TestClient,
 ):
-    # First add the user to the case
     link = CaseUserLink(case_id=test_case.id, user_id=test_user.id)
     session.add(link)
     session.commit()
@@ -314,7 +309,6 @@ def test_create_entity(override_dependencies, test_case: Case, client: TestClien
 def test_create_entity_missing_fields(
     override_dependencies, test_case: Case, client: TestClient
 ):
-    # Missing data field
     payload = {"entity_type": "person"}
     response = client.post(
         f"{settings.API_V1_STR}/cases/{test_case.id}/entities", json=payload
@@ -402,23 +396,17 @@ def test_read_cases_as_investigator(
     session: Session,
     client: TestClient,
 ):
-    # Remove the default admin user from the override
-    app.dependency_overrides[get_current_user] = lambda: (
-        test_user
-    )  # Override to return the test user
+    app.dependency_overrides[get_current_user] = lambda: test_user
 
-    # Link user to case
     case_user_link = CaseUserLink(case_id=test_case.id, user_id=test_user.id)
     session.add(case_user_link)
     session.commit()
 
-    # User should be able to see the case they are linked to
     response = client.get(f"{settings.API_V1_STR}/cases/")
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 1  # Should only see the case they are linked to
+    assert len(data) == 1
 
-    # Create a new case not linked to the user
     new_case = Case(
         client_id=test_case.client_id,
         case_number="TEST-002",
@@ -428,11 +416,10 @@ def test_read_cases_as_investigator(
     session.add(new_case)
     session.commit()
 
-    # User should still only see the case they are linked to
     response = client.get(f"{settings.API_V1_STR}/cases/")
     assert response.status_code == 200
     data = response.json()
-    assert len(data) == 1  # Still only one case accessible
+    assert len(data) == 1
 
 
 def test_update_case_as_investigator(
@@ -442,19 +429,16 @@ def test_update_case_as_investigator(
     session: Session,
     client: TestClient,
 ):
-    app.dependency_overrides[get_current_user] = lambda: test_user  # Return test user
+    app.dependency_overrides[get_current_user] = lambda: test_user
 
-    # Link user to case
     case_user_link = CaseUserLink(case_id=test_case.id, user_id=test_user.id)
     session.add(case_user_link)
     session.commit()
 
-    # User should be able to update the case they are linked to
     payload = {"status": "Closed"}
     response = client.put(f"{settings.API_V1_STR}/cases/{test_case.id}", json=payload)
     assert response.status_code == 200
 
-    # Create a new case not linked to the user
     new_case = Case(
         client_id=test_case.client_id,
         case_number="TEST-002",
@@ -464,10 +448,9 @@ def test_update_case_as_investigator(
     session.add(new_case)
     session.commit()
 
-    # User should not be able to update a case they are not linked to
     payload = {"status": "Closed"}
     response = client.put(f"{settings.API_V1_STR}/cases/{new_case.id}", json=payload)
-    assert response.status_code == 403  # Forbidden
+    assert response.status_code == 403
 
 
 def test_update_case_as_analyst(
@@ -477,37 +460,27 @@ def test_update_case_as_analyst(
     session: Session,
     client: TestClient,
 ):
-    app.dependency_overrides[get_current_user] = lambda: (
-        test_analyst
-    )  # Return test analyst
+    app.dependency_overrides[get_current_user] = lambda: test_analyst
 
-    # Link analyst to case
     case_user_link = CaseUserLink(case_id=test_case.id, user_id=test_analyst.id)
     session.add(case_user_link)
     session.commit()
 
-    # Analyst should not be able to update a case even if linked to
     payload = {"status": "Closed"}
     response = client.put(f"{settings.API_V1_STR}/cases/{test_case.id}", json=payload)
-    assert response.status_code == 403  # Forbidden
-
-
-# ========================================
-# Additional comprehensive API tests
-# ========================================
+    assert response.status_code == 403
 
 
 def test_invalid_json_payload(
     override_dependencies, test_case: Case, client: TestClient
 ):
     """Test handling of invalid JSON payloads"""
-    # Send invalid JSON
     response = client.put(
         f"{settings.API_V1_STR}/cases/{test_case.id}",
         data="invalid json {",
         headers={"Content-Type": "application/json"},
     )
-    assert response.status_code == 422  # Unprocessable Entity
+    assert response.status_code == 422
 
 
 def test_missing_content_type_header(
@@ -518,9 +491,8 @@ def test_missing_content_type_header(
     response = client.put(
         f"{settings.API_V1_STR}/cases/{test_case.id}",
         json=payload,
-        headers={},  # No content-type header
+        headers={},
     )
-    # Should still work with JSON payload
     assert response.status_code == 200
 
 
@@ -528,11 +500,9 @@ def test_malformed_request_body(
     override_dependencies, test_case: Case, client: TestClient
 ):
     """Test handling of malformed request bodies"""
-    # Empty body
     response = client.post(f"{settings.API_V1_STR}/cases/", json={})
     assert response.status_code == 422
 
-    # None values for required fields
     response = client.post(
         f"{settings.API_V1_STR}/cases/", json={"client_id": None, "title": None}
     )
@@ -546,7 +516,6 @@ def test_response_pagination_headers(
     client: TestClient,
 ):
     """Test pagination headers in list responses"""
-    # Create multiple cases
     for i in range(25):
         case = Case(
             client_id=test_case.client_id,
@@ -557,13 +526,11 @@ def test_response_pagination_headers(
         session.add(case)
     session.commit()
 
-    # Request with pagination
     response = client.get(f"{settings.API_V1_STR}/cases/?skip=0&limit=10")
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 10
 
-    # Request next page
     response = client.get(f"{settings.API_V1_STR}/cases/?skip=10&limit=10")
     assert response.status_code == 200
     data = response.json()
@@ -572,20 +539,17 @@ def test_response_pagination_headers(
 
 def test_api_rate_limiting(override_dependencies, test_case: Case, client: TestClient):
     """Test API rate limiting (if implemented)"""
-    # Make multiple rapid requests
     responses = []
     for _ in range(100):
         response = client.get(f"{settings.API_V1_STR}/cases/{test_case.id}")
         responses.append(response.status_code)
 
-    # All should succeed if no rate limiting
     assert all(status == 200 for status in responses)
 
 
 def test_cors_headers(override_dependencies, client: TestClient):
     """Test CORS headers are properly set"""
     response = client.options(f"{settings.API_V1_STR}/cases/")
-    # Check if CORS headers are present
     assert (
         "access-control-allow-origin" in response.headers or response.status_code == 405
     )
@@ -595,7 +559,6 @@ def test_bulk_operations(
     override_dependencies, test_client: Client, client: TestClient
 ):
     """Test bulk creation/update operations"""
-    # Create multiple cases at once
     cases_data = [
         {
             "client_id": test_client.id,
@@ -605,7 +568,6 @@ def test_bulk_operations(
         for i in range(5)
     ]
 
-    # Create cases one by one (bulk endpoint if available)
     created_ids = []
     for case_data in cases_data:
         response = client.post(f"{settings.API_V1_STR}/cases/", json=case_data)
@@ -619,7 +581,6 @@ def test_partial_update_vs_full_update(
     override_dependencies, test_case: Case, client: TestClient
 ):
     """Test PATCH vs PUT behavior"""
-    # Full update with PUT
     full_update = {
         "title": "Fully Updated Case",
         "status": "Closed",
@@ -630,7 +591,6 @@ def test_partial_update_vs_full_update(
     )
     assert response.status_code == 200
 
-    # Partial update (if PATCH is supported)
     partial_update = {"status": "Open"}
     response = client.patch(
         f"{settings.API_V1_STR}/cases/{test_case.id}", json=partial_update
@@ -649,34 +609,28 @@ def test_field_level_permissions(
     """Test field-level access control"""
     app.dependency_overrides[get_current_user] = lambda: test_user
 
-    # Link user to case
     link = CaseUserLink(case_id=test_case.id, user_id=test_user.id)
     session.add(link)
     session.commit()
 
-    # Try to update restricted fields
     response = client.put(
         f"{settings.API_V1_STR}/cases/{test_case.id}",
         json={"case_number": "RESTRICTED-001"},  # Might be admin-only
     )
-    # Should either succeed or fail based on permissions
     assert response.status_code in [200, 403]
 
 
 def test_api_versioning(override_dependencies, client: TestClient):
     """Test API versioning support"""
-    # Test current version
     response = client.get(f"{settings.API_V1_STR}/cases/")
     assert response.status_code == 200
 
-    # Test non-existent version
     response = client.get("/api/v2/cases/")
     assert response.status_code == 404
 
 
 def test_error_response_format(override_dependencies, client: TestClient):
     """Test consistent error response format"""
-    # 404 error
     response = client.get(f"{settings.API_V1_STR}/cases/999999")
     assert response.status_code == 404
     try:
@@ -686,7 +640,6 @@ def test_error_response_format(override_dependencies, client: TestClient):
         # Response might be text in some cases
         assert response.text is not None
 
-    # 422 validation error
     response = client.post(f"{settings.API_V1_STR}/cases/", json={"invalid": "data"})
     assert response.status_code == 422
     try:
@@ -696,7 +649,6 @@ def test_error_response_format(override_dependencies, client: TestClient):
         # Response might be text in some cases
         assert response.text is not None
 
-    # 403 forbidden error
     def raise_forbidden():
         raise HTTPException(status_code=403, detail="Forbidden")
 
@@ -719,7 +671,6 @@ def test_concurrent_api_calls(
     # we'll simulate concurrent calls by making multiple sequential calls rapidly
     # This still tests the API's ability to handle multiple requests
 
-    # Create a fresh admin user for this test
     admin = User(
         username="concurrent_admin",
         email="concurrent@example.com",
@@ -743,7 +694,6 @@ def test_concurrent_api_calls(
     try:
         results = []
 
-        # Simulate concurrent calls by making rapid sequential requests
         for i in range(10):
             payload = {
                 "client_id": test_client.id,
@@ -753,12 +703,10 @@ def test_concurrent_api_calls(
             response = client.post(f"{settings.API_V1_STR}/cases/", json=payload)
             results.append(response.status_code)
 
-        # All requests should succeed
         if not all(status == 201 for status in results):
             print(f"Status codes: {results}")
         assert all(status == 201 for status in results)
     finally:
-        # Clean up overrides
         app.dependency_overrides = {}
 
 
@@ -766,17 +714,15 @@ def test_entity_validation_errors(
     override_dependencies, test_case: Case, client: TestClient
 ):
     """Test entity creation with various validation errors"""
-    # Invalid entity type
     payload = {"entity_type": "invalid_type", "data": {"some": "data"}}
     response = client.post(
         f"{settings.API_V1_STR}/cases/{test_case.id}/entities", json=payload
     )
     assert response.status_code == 422
 
-    # Missing required fields for person
     payload = {
         "entity_type": "person",
-        "data": {"first_name": "John"},  # Missing last_name
+        "data": {"first_name": "John"},
     }
     response = client.post(
         f"{settings.API_V1_STR}/cases/{test_case.id}/entities", json=payload
@@ -784,7 +730,6 @@ def test_entity_validation_errors(
     # Should succeed as last_name might be optional
     assert response.status_code in [201, 422]
 
-    # Invalid email format
     payload = {
         "entity_type": "person",
         "data": {"first_name": "John", "last_name": "Doe", "email": "invalid-email"},
@@ -816,7 +761,6 @@ def test_duplicate_entity_creation(
 
 def test_sql_injection_attempts(override_dependencies, client: TestClient):
     """Test protection against SQL injection"""
-    # Try SQL injection in search parameters
     malicious_inputs = [
         "'; DROP TABLE cases; --",
         "1' OR '1'='1",
@@ -826,7 +770,6 @@ def test_sql_injection_attempts(override_dependencies, client: TestClient):
 
     for malicious_input in malicious_inputs:
         response = client.get(f"{settings.API_V1_STR}/cases/?status={malicious_input}")
-        # Should handle safely without SQL errors
         assert response.status_code in [200, 400, 422]
 
 
@@ -844,10 +787,9 @@ def test_xss_prevention(override_dependencies, test_client: Client, client: Test
         response = client.post(f"{settings.API_V1_STR}/cases/", json=case_data)
 
         if response.status_code == 201:
-            # If created, verify the payload is properly escaped
             data = response.json()
-            assert data["title"] == payload  # Should be stored as-is
-            assert data["notes"] == payload  # But rendered safely
+            assert data["title"] == payload
+            assert data["notes"] == payload
 
 
 def test_path_traversal_prevention(
@@ -862,7 +804,6 @@ def test_path_traversal_prevention(
 
     for malicious_id in malicious_ids:
         response = client.get(f"{settings.API_V1_STR}/cases/{malicious_id}")
-        # Should handle safely
         assert response.status_code in [400, 404, 422]
 
 
@@ -870,7 +811,6 @@ def test_large_payload_handling(
     override_dependencies, test_client: Client, client: TestClient
 ):
     """Test handling of very large payloads"""
-    # Create case with very large notes
     large_notes = "A" * 1000000  # 1MB of text
     payload = {
         "client_id": test_client.id,
@@ -879,7 +819,6 @@ def test_large_payload_handling(
     }
 
     response = client.post(f"{settings.API_V1_STR}/cases/", json=payload)
-    # Should either succeed or fail with appropriate error
     assert response.status_code in [201, 413, 422]
 
 
@@ -888,11 +827,11 @@ def test_unicode_handling(
 ):
     """Test proper Unicode character handling"""
     unicode_strings = [
-        "测试案例",  # Chinese
-        "Тестовый случай",  # Russian
-        "حالة اختبار",  # Arabic
-        "🎉 Test Case 🎉",  # Emojis
-        "Ñoño's Test Case",  # Special characters
+        "测试案例",
+        "Тестовый случай",
+        "حالة اختبار",
+        "🎉 Test Case 🎉",
+        "Ñoño's Test Case",
     ]
 
     for unicode_string in unicode_strings:
@@ -923,23 +862,20 @@ def test_api_response_time(override_dependencies, test_case: Case, client: TestC
         elapsed_time = time.time() - start_time
 
         assert response.status_code == 200
-        assert elapsed_time < 1.0  # Should respond within 1 second
+        assert elapsed_time < 1.0
 
 
 def test_authentication_edge_cases(session: Session, client: TestClient):
     """Test authentication edge cases without override"""
-    # No authentication
     response = client.get(f"{settings.API_V1_STR}/cases/")
     assert response.status_code == 401
 
-    # Invalid token
     response = client.get(
         f"{settings.API_V1_STR}/cases/",
         headers={"Authorization": "Bearer invalid_token"},
     )
     assert response.status_code == 401
 
-    # Malformed authorization header
     response = client.get(
         f"{settings.API_V1_STR}/cases/", headers={"Authorization": "NotBearer token"}
     )
@@ -959,8 +895,6 @@ def test_case_number_format_validation(
             "case_number": case_number,
         }
         response = client.post(f"{settings.API_V1_STR}/cases/", json=payload)
-        # Should either accept or validate format
         if response.status_code == 201:
             data = response.json()
-            # If accepted, it might have been reformatted
             assert data["case_number"] is not None

@@ -204,7 +204,6 @@ class VehicleData(EntityData):
     sources: Optional[Dict[str, str]] = None
 
 
-# Map entity types to their respective data schemas
 ENTITY_TYPE_SCHEMAS = {
     "person": PersonData,
     "company": CompanyData,

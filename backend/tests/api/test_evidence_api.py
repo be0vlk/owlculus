@@ -84,7 +84,6 @@ def test_case(session: Session, test_client_data: Client, test_admin: User) -> C
     session.commit()
     session.refresh(case)
 
-    # Link admin to case
     case_user_link = CaseUserLink(case_id=case.id, user_id=test_admin.id)
     session.add(case_user_link)
     session.commit()
@@ -143,8 +142,6 @@ def override_get_current_user_factory(user: User):
 
 class TestEvidenceAPI:
     """Test cases for evidence API endpoints"""
-
-    # GET /api/evidence/case/{case_id} tests
 
     @pytest.mark.parametrize("path_suffix", ["", "/folder-tree"])
     def test_unassigned_case_is_forbidden_through_real_router(
@@ -337,8 +334,6 @@ class TestEvidenceAPI:
         finally:
             app.dependency_overrides.clear()
 
-    # GET /api/evidence/{evidence_id} tests
-
     def test_get_evidence_success(
         self,
         session: Session,
@@ -390,8 +385,6 @@ class TestEvidenceAPI:
         finally:
             app.dependency_overrides.clear()
 
-    # GET /api/evidence/{evidence_id}/download tests
-
     def test_download_evidence_success(
         self,
         session: Session,
@@ -442,8 +435,6 @@ class TestEvidenceAPI:
                 assert response.status_code == status.HTTP_404_NOT_FOUND
         finally:
             app.dependency_overrides.clear()
-
-    # PUT /api/evidence/{evidence_id} tests
 
     def test_update_evidence_success(
         self,
@@ -540,8 +531,6 @@ class TestEvidenceAPI:
         finally:
             app.dependency_overrides.clear()
 
-    # DELETE /api/evidence/{evidence_id} tests
-
     def test_delete_evidence_success(
         self,
         session: Session,
@@ -617,8 +606,6 @@ class TestEvidenceAPI:
                 assert response.status_code == status.HTTP_403_FORBIDDEN
         finally:
             app.dependency_overrides.clear()
-
-    # Folder management tests
 
     def test_create_folder_success(
         self,
@@ -748,11 +735,8 @@ class TestEvidenceAPI:
         finally:
             app.dependency_overrides.clear()
 
-    # Authentication and authorization tests
-
     def test_evidence_api_unauthorized(self, client: TestClient):
         """Test evidence API endpoints without authentication"""
-        # Test various endpoints without auth
         endpoints = [
             ("GET", "/api/evidence/case/1"),
             ("GET", "/api/evidence/1"),
@@ -777,8 +761,6 @@ class TestEvidenceAPI:
 
             assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
-    # Edge cases and validation tests
-
     def test_evidence_api_pagination_edge_cases(
         self,
         session: Session,
@@ -798,13 +780,11 @@ class TestEvidenceAPI:
             ) as mock_get:
                 mock_get.return_value = []
 
-                # Test with very large values
                 response = client.get(
                     f"/api/evidence/case/{test_case.id}?skip=999999&limit=999999"
                 )
                 assert response.status_code == status.HTTP_200_OK
 
-                # Test with zero limit
                 response = client.get(
                     f"/api/evidence/case/{test_case.id}?skip=0&limit=0"
                 )
