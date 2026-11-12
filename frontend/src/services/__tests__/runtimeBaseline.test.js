@@ -35,7 +35,7 @@ describe('frontend runtime baseline', () => {
     const packageJson = JSON.parse(packageJsonText)
 
     expect(packageJson.engines).toEqual({ node: '>=24 <25', npm: '>=11 <12' })
-    expect(npmConfig).toMatch(/^engine-strict=true\s*$/)
+    expect(npmConfig).toMatch(/^engine-strict=true\s*$/m)
     expect(nodeVersion.trim()).toBe('24')
     expect(productionDockerfile).toContain('FROM node:24-alpine AS frontend-builder')
     expect(developmentDockerfile).toContain('FROM node:24-alpine')
