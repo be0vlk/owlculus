@@ -61,7 +61,6 @@ const props = defineProps({
 
 const emit = defineEmits(['renamed'])
 
-// Reactive data
 const form = ref()
 const valid = ref(false)
 const loading = ref(false)
@@ -70,7 +69,6 @@ const newName = ref('')
 
 const dialog = defineModel({ type: Boolean, default: false })
 
-// Methods
 const rename = async () => {
   if (loading.value) return
   const { valid: isValid } = await form.value.validate()

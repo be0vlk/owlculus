@@ -38,7 +38,6 @@
         >
           <v-container fluid class="pa-0">
             <v-row>
-              <!-- Username -->
               <v-col cols="12">
                 <v-text-field
                   v-model="formData.username"
@@ -54,7 +53,6 @@
                 />
               </v-col>
 
-              <!-- Email -->
               <v-col cols="12">
                 <v-text-field
                   v-model="formData.email"
@@ -68,7 +66,6 @@
                 />
               </v-col>
 
-              <!-- Password (only for new users) -->
               <v-col cols="12" v-if="!user">
                 <v-text-field
                   v-model="formData.password"
@@ -84,7 +81,6 @@
                 />
               </v-col>
 
-              <!-- Role -->
               <v-col cols="12">
                 <v-select
                   v-model="formData.role"
@@ -162,7 +158,6 @@ const formData = ref({
   is_active: true,
 })
 
-// Validation rules
 const usernameRules = [
   (v) => !!v || 'Username is required',
   (v) => v.length >= 3 || 'Username must be at least 3 characters',
@@ -215,14 +210,12 @@ const handleSubmit = async () => {
 
     let result
     if (props.user) {
-      // Update existing user
       result = await userService.updateUser(props.user.id, {
         email: formData.value.email,
         role: formData.value.role,
         is_active: formData.value.is_active,
       })
     } else {
-      // Create new user
       result = await userService.createUser({
         username: formData.value.username,
         email: formData.value.email,
@@ -233,7 +226,7 @@ const handleSubmit = async () => {
     }
 
     emit('saved', result)
-    resetForm() // Reset form before closing
+    resetForm()
     emit('close')
   } catch (err) {
     error.value = err.response?.data?.detail || 'Failed to save user. Please try again.'

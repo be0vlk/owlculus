@@ -63,7 +63,6 @@
                 />
               </v-col>
 
-              <!-- Password strength indicator -->
               <v-col cols="12" v-if="newPassword">
                 <v-card variant="outlined" class="pa-3">
                   <v-card-subtitle class="pa-0 pb-2">
@@ -145,7 +144,6 @@ const valid = ref(false)
 const formId = useId()
 const formRef = ref(null)
 
-// One check set drives the rules, the requirement chips and the strength meter.
 const REQUIREMENTS = [
   {
     text: '8+ characters',

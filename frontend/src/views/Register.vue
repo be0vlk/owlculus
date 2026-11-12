@@ -7,7 +7,6 @@
           <v-col cols="12" sm="8" md="6" lg="4" xl="3">
             <v-card elevation="3" class="rounded-xl">
               <v-card-text class="pa-8">
-                <!-- Logo -->
                 <div class="text-center mb-8">
                   <v-img
                     :src="isDark ? '/owl_logo_white.png' : '/owl_logo.png'"
@@ -17,7 +16,6 @@
                   />
                 </div>
 
-                <!-- Title -->
                 <div class="text-center mb-6">
                   <h2 class="text-headline-small font-weight-bold mb-2">Create Account</h2>
                   <p class="text-body-medium text-medium-emphasis">
@@ -25,13 +23,11 @@
                   </p>
                 </div>
 
-                <!-- Loading State -->
                 <div v-if="isValidatingToken" class="text-center py-8">
                   <v-progress-circular :size="50" :width="6" color="primary" indeterminate />
                   <p class="text-body-medium text-medium-emphasis mt-4">Validating invite...</p>
                 </div>
 
-                <!-- Invalid Token State -->
                 <div v-else-if="tokenValidation && !tokenValidation.valid" class="text-center py-4">
                   <v-alert class="mb-4" type="error" variant="tonal">
                     <div class="d-flex align-center">
@@ -52,14 +48,12 @@
                   </v-btn>
                 </div>
 
-                <!-- Registration Form -->
                 <v-form
                   v-else-if="tokenValidation && tokenValidation.valid"
                   ref="formRef"
                   v-model="valid"
                   @submit.prevent="handleRegister"
                 >
-                  <!-- Role Info Card -->
                   <v-card :color="role?.color" class="mb-6" variant="tonal">
                     <v-card-text class="py-3">
                       <div class="d-flex align-center">
@@ -76,7 +70,6 @@
                     </v-card-text>
                   </v-card>
 
-                  <!-- Username Field -->
                   <v-text-field
                     v-model="formData.username"
                     label="Username"
@@ -92,7 +85,6 @@
                     persistent-hint
                   />
 
-                  <!-- Email Field -->
                   <v-text-field
                     v-model="formData.email"
                     label="Email Address"
@@ -109,7 +101,6 @@
                     persistent-hint
                   />
 
-                  <!-- Password Field -->
                   <v-text-field
                     v-model="formData.password"
                     label="Password"
@@ -128,7 +119,6 @@
                     @click:append-inner="showPassword = !showPassword"
                   />
 
-                  <!-- Confirm Password Field -->
                   <v-text-field
                     v-model="formData.confirmPassword"
                     label="Confirm Password"
@@ -142,12 +132,10 @@
                     @click:append-inner="showConfirmPassword = !showConfirmPassword"
                   />
 
-                  <!-- Error Alert -->
                   <v-alert v-if="error" class="mb-4" type="error" variant="tonal">
                     {{ error }}
                   </v-alert>
 
-                  <!-- Success Alert -->
                   <v-alert v-if="registrationSuccess" class="mb-4" type="success" variant="tonal">
                     <div class="font-weight-bold">Registration Successful!</div>
                     <div class="text-body-medium">
@@ -155,7 +143,6 @@
                     </div>
                   </v-alert>
 
-                  <!-- Register Button -->
                   <v-btn
                     type="submit"
                     color="primary"
@@ -169,7 +156,6 @@
                     {{ isLoading ? 'Creating Account...' : 'Create Account' }}
                   </v-btn>
 
-                  <!-- Back to Login -->
                   <v-btn
                     color="primary"
                     variant="text"
