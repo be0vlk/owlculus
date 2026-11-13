@@ -102,3 +102,27 @@ it('refreshes and searches named history before reopening its transcript', async
   expect(api.get).toHaveBeenCalledWith(`${base}/one`)
   expect(wrapper.find('.user-message').text()).toContain('Who is Ada?')
 })
+it('keeps the conversation and raises no error when deletion is cancelled', async () => {
+  const rejections = []
+  const onRejection = (reason) => rejections.push(reason)
+  globalThis.process.on('unhandledRejection', onRejection)
+  history = [{ id: 'one', title: 'Who is Ada?', created_at: '2026-09-12T12:00:00Z' }]
+  await mountChat()
+  const body = new DOMWrapper(document.body)
+  await wrapper.get('[aria-label="Conversation actions"]').trigger('click')
+  await flushPromises()
+  await body
+    .findAll('.v-list-item')
+    .find((item) => item.text() === 'Delete conversation')
+    .trigger('click')
+  await flushPromises()
+  await body
+    .get('[aria-label="Delete conversation"]')
+    .findAll('button')
+    .find((button) => button.text() === 'Cancel')
+    .trigger('click')
+  await flushPromises()
+  globalThis.process.off('unhandledRejection', onRejection)
+  expect(api.delete).not.toHaveBeenCalled()
+  expect(rejections).toEqual([])
+})

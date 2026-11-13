@@ -762,18 +762,20 @@ function askAboutSource() {
   nextTick(() => messageInput.value?.focus())
 }
 async function handleDelete() {
-  const confirmed = await confirmDialog.value.confirm({
-    title: 'Delete conversation',
-    message:
-      'Remove this conversation, its replies, and all its shared snapshots from Owlculus? Independent follow-ups remain. This does not change the provider’s retention policies.',
-    icon: 'mdi-delete',
-    confirmText: 'Delete',
-    confirmColor: 'error',
-  })
-  if (confirmed) {
-    closeDialogs()
-    await deleteConversation()
+  try {
+    await confirmDialog.value.confirm({
+      title: 'Delete conversation',
+      message:
+        'Remove this conversation, its replies, and all its shared snapshots from Owlculus? Independent follow-ups remain. This does not change the provider’s retention policies.',
+      icon: 'mdi-delete',
+      confirmText: 'Delete',
+      confirmColor: 'error',
+    })
+  } catch {
+    return
   }
+  closeDialogs()
+  await deleteConversation()
 }
 async function exportChat() {
   if (!hasUserMessages.value) return
