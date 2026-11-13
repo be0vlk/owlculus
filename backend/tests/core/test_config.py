@@ -61,3 +61,24 @@ def test_authentication_endpoint_is_independent_of_legacy_execution_url(monkeypa
     monkeypatch.setenv("AUTH_REDIS_URL", "redis://authentication.example:6379/0")
     configured = Settings(_env_file=None)
     assert configured.AUTH_REDIS_URL == "redis://authentication.example:6379/0"
+
+
+def test_strixy_model_defaults_to_the_built_in_and_can_be_overridden(monkeypatch):
+    from app.core.config import settings
+    from app.core.strixy_config import StrixyConfig, get_strixy_config
+
+    assert Settings(_env_file=None).STRIXY_MODEL == StrixyConfig().model
+    assert get_strixy_config() == StrixyConfig()
+
+    monkeypatch.setenv("STRIXY_MODEL", "gpt-next")
+    overridden = Settings(_env_file=None)
+    assert overridden.STRIXY_MODEL == "gpt-next"
+    monkeypatch.setattr(settings, "STRIXY_MODEL", overridden.STRIXY_MODEL)
+    assert get_strixy_config().model == "gpt-next"
+    assert get_strixy_config().reasoning_effort == StrixyConfig().reasoning_effort
+
+
+def test_strixy_model_rejects_an_empty_value(monkeypatch):
+    monkeypatch.setenv("STRIXY_MODEL", "")
+    with pytest.raises(ValidationError, match="STRIXY_MODEL"):
+        Settings(_env_file=None)

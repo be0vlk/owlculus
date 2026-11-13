@@ -80,4 +80,6 @@ class StrixyConfig(BaseModel):
 
 
 def get_strixy_config() -> StrixyConfig:
-    return StrixyConfig()
+    from app.core.config import settings
+
+    return StrixyConfig(model=settings.STRIXY_MODEL)

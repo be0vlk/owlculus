@@ -59,6 +59,7 @@ class Settings(BaseSettings):
     ]
     FORWARDED_ALLOW_IPS: str = os.environ.get("FORWARDED_ALLOW_IPS", "127.0.0.1,::1")
     AUTH_REDIS_URL: str = os.environ.get("AUTH_REDIS_URL", "redis://localhost:6380/0")
+    STRIXY_MODEL: str = Field(default="gpt-6-astra", min_length=1)
     API_DATABASE_CONCURRENCY: int = Field(default=8, ge=1, le=32)
     LOGIN_IP_MAX_ATTEMPTS: int = Field(default=30, ge=1, le=10000)
     LOGIN_ACCOUNT_MAX_ATTEMPTS: int = Field(default=10, ge=1, le=10000)
