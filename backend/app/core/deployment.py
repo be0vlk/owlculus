@@ -57,3 +57,9 @@ def validate_deployment(
                 f"{name} must be explicitly set to a non-placeholder production secret; "
                 f"{guidance}"
             )
+    workers = environment.get("WEB_CONCURRENCY")
+    if workers is not None and workers not in map(str, range(1, 9)):
+        raise ValueError(
+            f"API_WORKERS (passed to uvicorn as WEB_CONCURRENCY) must be an "
+            f"integer from 1 to 8, not {workers!r}"
+        )

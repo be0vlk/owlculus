@@ -145,3 +145,49 @@ def test_production_process_rejects_invalid_secrets_before_database_access(secre
     if result.returncode:
         assert "SECRET_KEY must be explicitly set" in result.stderr
     assert "explicit-runtime-password" not in result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "9", "16", "invalid", "1.5", ""])
+def test_production_rejects_out_of_range_api_workers(value):
+    with pytest.raises(ValueError, match="API_WORKERS"):
+        validate_deployment(
+            {
+                "SECRET_KEY": "explicit-auth-secret",
+                "POSTGRES_PASSWORD": "explicit-bootstrap-password",
+                "WEB_CONCURRENCY": value,
+            }
+        )
+
+
+@pytest.mark.parametrize("value", ["1", "8"])
+def test_production_accepts_api_workers_within_bounds(value):
+    validate_deployment(
+        {
+            "SECRET_KEY": "explicit-auth-secret",
+            "POSTGRES_PASSWORD": "explicit-bootstrap-password",
+            "WEB_CONCURRENCY": value,
+        }
+    )
+
+
+def test_setup_preflight_rejects_api_workers_that_compose_hands_to_uvicorn():
+    config = load_compose_configuration(
+        "direct",
+        environment_overrides={
+            "SECRET_KEY": "explicit-auth-secret",
+            "POSTGRES_PASSWORD": "explicit-bootstrap-password",
+            "RUNTIME_POSTGRES_PASSWORD": "explicit-runtime-password",
+            "API_WORKERS": "16",
+        },
+    )
+    assert config["services"]["backend"]["environment"]["WEB_CONCURRENCY"] == "16"
+    result = subprocess.run(
+        [sys.executable, "scripts/validate-deployment.py"],
+        input=json.dumps(config),
+        cwd=REPOSITORY_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "API_WORKERS" in result.stderr
