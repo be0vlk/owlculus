@@ -71,9 +71,16 @@ def extract_metadata(path: Path) -> dict[str, Any]:
             encoding="utf-8",
             timeout=30,
         ).stdout
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+        raw: dict[str, Any] = json.loads(output)[0]
+    except (
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        OSError,
+        ValueError,
+        LookupError,
+        TypeError,
+    ) as error:
         raise ValidationException("Could not read metadata from this file") from error
-    raw: dict[str, Any] = json.loads(output)[0]
 
     categories: dict[str, dict[str, Any]] = {
         name: {} for name in (*CATEGORY_KEYS, "other")
@@ -95,8 +102,8 @@ def extract_metadata(path: Path) -> dict[str, Any]:
         settings["focal_length"] = f"{raw['EXIF:FocalLength']}mm"
     if "EXIF:FNumber" in raw:
         settings["aperture"] = f"f/{raw['EXIF:FNumber']}"
-    if "EXIF:ExposureTime" in raw:
-        exposure = raw["EXIF:ExposureTime"]
+    exposure = raw.get("EXIF:ExposureTime")
+    if isinstance(exposure, (int, float)) and exposure > 0:
         settings["shutter_speed"] = (
             f"1/{int(1 / exposure)}s" if exposure < 1 else f"{exposure}s"
         )

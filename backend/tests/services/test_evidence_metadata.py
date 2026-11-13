@@ -176,3 +176,38 @@ def test_extract_metadata_reports_unreadable_files_as_validation_errors(
 
     with pytest.raises(ValidationException, match="Could not read metadata"):
         extract_metadata(Path("broken.jpg"))
+
+
+@pytest.mark.parametrize("exposure", [0, "fast"])
+def test_extract_metadata_omits_shutter_speed_for_unusable_exposure(
+    monkeypatch, exposure
+):
+    _fake_exiftool(monkeypatch, {"EXIF:Make": "Canon", "EXIF:ExposureTime": exposure})
+
+    result = extract_metadata(Path("photo.jpg"))
+
+    assert result["camera_info"] == {"make": "Canon"}
+
+
+@pytest.mark.parametrize("stdout", ["not json", "", "[]"])
+def test_extract_metadata_reports_unparseable_output_as_validation_error(
+    monkeypatch, stdout
+):
+    monkeypatch.setattr(
+        evidence_metadata.subprocess,
+        "run",
+        lambda args, **kwargs: subprocess.CompletedProcess(args, 0, stdout=stdout),
+    )
+
+    with pytest.raises(ValidationException, match="Could not read metadata"):
+        extract_metadata(Path("photo.jpg"))
+
+
+def test_extract_metadata_reports_missing_exiftool_as_validation_error(monkeypatch):
+    def run(args, **kwargs):
+        raise FileNotFoundError("exiftool")
+
+    monkeypatch.setattr(evidence_metadata.subprocess, "run", run)
+
+    with pytest.raises(ValidationException, match="Could not read metadata"):
+        extract_metadata(Path("photo.jpg"))
