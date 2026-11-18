@@ -5,7 +5,6 @@ from unittest.mock import Mock
 from sqlalchemy.exc import OperationalError
 
 from app.core.security import encrypt_api_key
-from app.core.strixy_config import StrixyConfig
 from app.database.models import SystemConfiguration
 from app.services.api_key_vault import (
     ConfigurationApiKeyVault,
@@ -130,6 +129,7 @@ def test_provider_enum_covers_every_current_consumer():
         "custom",
         "openai",
         "openai_compatible",
+        "openrouter",
         "people_data_labs",
         "securitytrails",
         "shodan",
@@ -141,20 +141,18 @@ def test_strixy_key_reads_the_configured_providers_key(session, monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "openai-key")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "anthropic-key")
 
-    assert strixy_key(session, StrixyConfig()) == "openai-key"
-    assert strixy_key(session, StrixyConfig(provider="anthropic")) == "anthropic-key"
+    assert strixy_key(session, "openai") == "openai-key"
+    assert strixy_key(session, "anthropic") == "anthropic-key"
 
 
 def test_openai_compatible_without_a_key_gets_a_placeholder(session, monkeypatch):
     monkeypatch.delenv("OPENAI_COMPATIBLE_API_KEY", raising=False)
-    local = StrixyConfig(provider="openai_compatible", base_url="http://x/v1")
-
-    assert strixy_key(session, local) == "not-needed"
+    assert strixy_key(session, "openai_compatible") == "not-needed"
     monkeypatch.setenv("OPENAI_COMPATIBLE_API_KEY", "router-key")
-    assert strixy_key(session, local) == "router-key"
+    assert strixy_key(session, "openai_compatible") == "router-key"
 
 
 def test_strixy_key_is_absent_for_unconfigured_hosted_providers(session, monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
-    assert strixy_key(session, StrixyConfig(provider="anthropic")) is None
+    assert strixy_key(session, "anthropic") is None

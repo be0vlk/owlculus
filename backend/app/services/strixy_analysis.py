@@ -183,7 +183,7 @@ def analyze(
             progress.model_calls += 1
             db.add(progress)
             service = StrixyService(
-                strixy_key(db, config),
+                strixy_key(db, config.provider),
                 on_progress=checkpoint,
             )
         reply = service.generate(

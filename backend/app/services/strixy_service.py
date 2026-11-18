@@ -29,6 +29,19 @@ https://developers.openai.com/api/reference/resources/chat/subresources/completi
   with empty choices and usage. max_tokens is deprecated by OpenAI in favor of
   max_completion_tokens, but OpenAI-compatible servers honor max_tokens
   universally; no reasoning parameters are sent because many reject them.
+https://openrouter.ai/docs/features/provider-routing
+  openrouter reuses Chat Completions at https://openrouter.ai/api/v1.
+  provider.require_parameters=true routes only to endpoints that honor every
+  request parameter (tools, response_format), instead of silently ignoring them.
+  No data_collection or zdr preference is sent: the account's own privacy
+  settings decide.
+https://openrouter.ai/docs/use-cases/reasoning-tokens
+  reasoning={"effort": ..., "exclude": true} sets effort and keeps reasoning
+  out of the response; OpenRouter maps it to the nearest level the model has.
+https://openrouter.ai/docs/features/structured-outputs
+  response_format json_schema is passed through to endpoints that support it.
+  A reply can end with finish_reason "error" when the upstream failed midway.
+A reasoning_effort of None means the model default: no effort parameter is sent.
 """
 
 import json
@@ -195,7 +208,7 @@ class StrixyService:
             )
         if config.provider == "anthropic":
             return self.generate_anthropic(messages, config, timeout)
-        if config.provider == "openai_compatible":
+        if config.provider in {"openai_compatible", "openrouter"}:
             return self.generate_chat_completions(messages, config, timeout)
         return self.generate_responses(messages, config, timeout)
 
@@ -206,10 +219,15 @@ class StrixyService:
         # No SDK retries: an uncertain completion must require explicit human action.
         partial = ProviderReply("")
         streaming = bool(self.on_progress and config.supports_streaming)
+        effort: dict[str, Any] = (
+            {"reasoning": {"effort": config.reasoning_effort}}
+            if config.reasoning_effort
+            else {}
+        )
         with OpenAI(api_key=key, max_retries=0, timeout=timeout) as client:
             result = client.responses.create(
                 model=config.model,
-                reasoning={"effort": config.reasoning_effort},
+                **effort,
                 instructions=config.instructions,
                 input=response_input(messages),
                 max_output_tokens=config.max_output_tokens,
@@ -276,6 +294,14 @@ class StrixyService:
             extra: dict[str, Any] = (
                 {"stream_options": {"include_usage": True}} if streaming else {}
             )
+            if config.provider == "openrouter":
+                body: dict[str, Any] = {"provider": {"require_parameters": True}}
+                if config.reasoning_effort:
+                    body["reasoning"] = {
+                        "effort": config.reasoning_effort,
+                        "exclude": True,
+                    }
+                extra["extra_body"] = body
             result = client.chat.completions.create(
                 model=config.model,
                 messages=chat_messages(messages, config),
@@ -323,7 +349,7 @@ class StrixyService:
                 finish, usage = choice.finish_reason, completion.usage
         if finish == "length":
             calls, limit = {}, "output_limit"
-        elif finish == "content_filter":
+        elif finish in {"content_filter", "error"}:
             raise RuntimeError("Provider did not complete the response")
         else:
             limit = None
@@ -401,7 +427,11 @@ class StrixyService:
             ],
             "tool_choice": {"type": "auto", "disable_parallel_tool_use": True},
             "output_config": {
-                "effort": config.reasoning_effort,
+                **(
+                    {"effort": config.reasoning_effort}
+                    if config.reasoning_effort
+                    else {}
+                ),
                 "format": {
                     "type": "json_schema",
                     "schema": transform_schema(GroundedAnswer.model_json_schema()),

@@ -1,5 +1,7 @@
 """HTTP contract tests for system configuration administration."""
 
+from unittest.mock import patch
+
 from sqlmodel import select
 
 from app.core.dependencies import get_current_user
@@ -151,7 +153,8 @@ def test_preview_and_evidence_templates_are_public_behaviour(client, test_admin)
     assert update.json()["templates"] == templates
 
 
-def test_admin_can_read_and_update_strixy_settings(client, test_admin):
+def test_admin_can_read_and_update_strixy_settings(client, test_admin, monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     authenticate_as(test_admin)
 
     response = client.get("/api/admin/configuration/strixy")
@@ -163,6 +166,13 @@ def test_admin_can_read_and_update_strixy_settings(client, test_admin):
     assert body["providers"]["anthropic"] == {
         "name": "Anthropic",
         "default_model": "claude-sonnet-5-5",
+        "key_configured": False,
+    }
+    assert set(body["providers"]) == {
+        "openai",
+        "openai_compatible",
+        "anthropic",
+        "openrouter",
     }
 
     saved = {
@@ -198,3 +208,154 @@ def test_strixy_settings_routes_reject_non_admin(client, test_user):
     assert client.get("/api/admin/configuration/strixy").status_code == 403
     response = client.put("/api/admin/configuration/strixy", json={})
     assert response.status_code == 403
+
+
+def test_strixy_put_stores_the_key_in_the_vault_and_never_returns_it(
+    client, session, test_admin, monkeypatch
+):
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    authenticate_as(test_admin)
+    saved = {
+        "provider": "openrouter",
+        "model": "vendor/model",
+        "base_url": None,
+        "supports_vision": True,
+        "reasoning_effort": None,
+    }
+
+    before = client.get("/api/admin/configuration/strixy").json()
+    assert before["providers"]["openrouter"]["key_configured"] is False
+
+    response = client.put(
+        "/api/admin/configuration/strixy", json=saved | {"api_key": "or-secret"}
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "or-secret" not in response.text
+    assert {k: body[k] for k in saved} == saved
+    assert body["providers"]["openrouter"]["key_configured"] is True
+    assert ConfigurationApiKeyVault(session).get_key(Provider.OPENROUTER) == "or-secret"
+    stored = session.exec(select(SystemConfiguration)).one()
+    assert "api_key" not in stored.strixy_settings
+
+
+def test_strixy_put_with_a_blank_key_keeps_the_stored_key(client, session, test_admin):
+    authenticate_as(test_admin)
+    saved = {"provider": "openrouter", "model": "vendor/model"}
+    client.put("/api/admin/configuration/strixy", json=saved | {"api_key": "kept"})
+
+    response = client.put(
+        "/api/admin/configuration/strixy", json=saved | {"api_key": "  "}
+    )
+
+    assert response.status_code == 200
+    assert ConfigurationApiKeyVault(session).get_key(Provider.OPENROUTER) == "kept"
+
+
+def test_strixy_models_route_lists_models_with_the_typed_key(client, test_admin):
+    authenticate_as(test_admin)
+    listed = [{"id": "m", "name": "M", "vision": True, "efforts": None}]
+
+    with patch(
+        "app.services.strixy_setup.list_models", return_value=listed
+    ) as list_models:
+        response = client.post(
+            "/api/admin/configuration/strixy/models",
+            json={"provider": "openrouter", "api_key": "typed"},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"models": listed}
+    list_models.assert_called_once_with("openrouter", None, "typed")
+
+
+def test_strixy_models_route_falls_back_to_the_stored_key(
+    client, test_admin, monkeypatch
+):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "env-key")
+    authenticate_as(test_admin)
+
+    with patch("app.services.strixy_setup.list_models", return_value=[]) as list_models:
+        client.post(
+            "/api/admin/configuration/strixy/models", json={"provider": "anthropic"}
+        )
+
+    list_models.assert_called_once_with("anthropic", None, "env-key")
+
+
+def test_strixy_models_route_reports_provider_failures_as_422(client, test_admin):
+    authenticate_as(test_admin)
+
+    with patch(
+        "app.services.strixy_setup.list_models", side_effect=RuntimeError("boom")
+    ):
+        response = client.post(
+            "/api/admin/configuration/strixy/models",
+            json={"provider": "openrouter", "api_key": "k"},
+        )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "boom"
+
+
+def test_strixy_models_route_without_any_key_is_a_422(client, test_admin, monkeypatch):
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    authenticate_as(test_admin)
+
+    response = client.post(
+        "/api/admin/configuration/strixy/models", json={"provider": "openrouter"}
+    )
+
+    assert response.status_code == 422
+    assert "API key not configured" in response.json()["detail"]
+
+
+def test_strixy_models_route_rejects_an_invalid_query(client, test_admin):
+    authenticate_as(test_admin)
+
+    response = client.post(
+        "/api/admin/configuration/strixy/models", json={"provider": "openai_compatible"}
+    )
+
+    assert response.status_code == 422
+
+
+def test_strixy_test_route_checks_the_unsaved_form_with_the_typed_key(
+    client, test_admin
+):
+    authenticate_as(test_admin)
+    result = {"ok": True, "model": "vendor/model", "seconds": 1.2}
+
+    with patch(
+        "app.services.strixy_setup.test_connection", return_value=result
+    ) as test_connection:
+        response = client.post(
+            "/api/admin/configuration/strixy/test",
+            json={
+                "provider": "openrouter",
+                "model": "vendor/model",
+                "reasoning_effort": None,
+                "api_key": "typed",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json() == result
+    config, key = test_connection.call_args.args
+    assert (config.provider, config.model) == ("openrouter", "vendor/model")
+    assert config.base_url == "https://openrouter.ai/api/v1"
+    assert config.reasoning_effort is None
+    assert key == "typed"
+
+
+def test_strixy_setup_routes_reject_non_admin(client, test_user):
+    authenticate_as(test_user)
+    bodies = {
+        "models": {"provider": "openrouter", "api_key": "k"},
+        "test": {"provider": "openrouter", "model": "vendor/model", "api_key": "k"},
+    }
+
+    for route, body in bodies.items():
+        response = client.post(f"/api/admin/configuration/strixy/{route}", json=body)
+        assert response.status_code == 403

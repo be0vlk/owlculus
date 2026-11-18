@@ -25,20 +25,23 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlmodel import Session
 
-Provider = Literal["openai", "openai_compatible", "anthropic"]
+Provider = Literal["openai", "openai_compatible", "anthropic", "openrouter"]
 ReasoningEffort = Literal["low", "medium", "high", "xhigh", "max"]
 
 DEFAULT_MODELS = {
     "openai": "gpt-6-astra",
     "openai_compatible": "",
     "anthropic": "claude-sonnet-5-5",
+    "openrouter": "",
 }
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 
 PROVIDER_NAMES = {
     "openai": "OpenAI",
     "openai_compatible": "OpenAI-compatible",
     "anthropic": "Anthropic",
+    "openrouter": "OpenRouter",
 }
 
 
@@ -51,7 +54,7 @@ class StrixySettings(BaseModel):
     model: str | None = None
     base_url: str | None = None
     supports_vision: bool = True
-    reasoning_effort: ReasoningEffort = "low"
+    reasoning_effort: ReasoningEffort | None = "low"
 
     @field_validator("model", "base_url", mode="before")
     @classmethod
@@ -62,6 +65,8 @@ class StrixySettings(BaseModel):
     def check_endpoint(self) -> "StrixySettings":
         if self.provider == "openai_compatible" and not (self.model and self.base_url):
             raise ValueError("openai_compatible requires a model and base URL")
+        if self.provider == "openrouter" and not self.model:
+            raise ValueError("openrouter requires a model")
         if self.base_url and not self.base_url.startswith(("http://", "https://")):
             raise ValueError("base URL must start with http:// or https://")
         return self
@@ -75,7 +80,7 @@ class StrixyConfig(BaseModel):
     provider: Provider = "openai"
     base_url: str | None = None
     model: str = "gpt-6-astra"
-    reasoning_effort: ReasoningEffort = "low"
+    reasoning_effort: ReasoningEffort | None = "low"
     supports_streaming: bool = True
     supports_vision: bool = True
     runtime_seconds: int = Field(default=300, ge=1, le=600)
@@ -123,17 +128,58 @@ class StrixyConfig(BaseModel):
     )
 
 
+class StrixySetup(StrixySettings):
+    """Settings plus a write-only API key; blank means keep the stored key."""
+
+    api_key: str | None = None
+
+    @field_validator("api_key", mode="before")
+    @classmethod
+    def blank_key_means_none(cls, value: object) -> object:
+        return None if isinstance(value, str) and not value.strip() else value
+
+
+class StrixyModelQuery(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider: Provider = "openai"
+    base_url: str | None = None
+    api_key: str | None = None
+
+    @field_validator("base_url", "api_key", mode="before")
+    @classmethod
+    def blank_means_unset(cls, value: object) -> object:
+        return None if isinstance(value, str) and not value.strip() else value
+
+    @model_validator(mode="after")
+    def check_base_url(self) -> "StrixyModelQuery":
+        if self.provider == "openai_compatible" and not self.base_url:
+            raise ValueError("openai_compatible requires a base URL")
+        if self.base_url and not self.base_url.startswith(("http://", "https://")):
+            raise ValueError("base URL must start with http:// or https://")
+        return self
+
+
+def strixy_config_from(saved: StrixySettings) -> StrixyConfig:
+    base_url = {
+        "openai_compatible": saved.base_url,
+        "openrouter": OPENROUTER_BASE_URL,
+    }.get(saved.provider)
+    return StrixyConfig(
+        provider=saved.provider,
+        base_url=base_url,
+        model=saved.model or DEFAULT_MODELS[saved.provider],
+        supports_vision=saved.supports_vision,
+        reasoning_effort=saved.reasoning_effort,
+    )
+
+
 def get_strixy_config(db: Session) -> StrixyConfig:
     from sqlmodel import select
 
     from app.database.models import SystemConfiguration
 
     row = db.exec(select(SystemConfiguration)).first()
-    saved = StrixySettings.model_validate((row and row.strixy_settings) or {})
-    return StrixyConfig(
-        provider=saved.provider,
-        base_url=saved.base_url,
-        model=saved.model or DEFAULT_MODELS[saved.provider],
-        supports_vision=saved.supports_vision,
-        reasoning_effort=saved.reasoning_effort,
+    return strixy_config_from(
+        StrixySettings.model_validate((row and row.strixy_settings) or {})
     )
