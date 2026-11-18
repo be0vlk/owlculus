@@ -530,6 +530,28 @@ it('hides weak matches by default and keeps filter, expansion and open groups th
   expect(wrapper.text()).toContain('Source Email: ada@gmail.com')
 })
 
+it('finds a source entity by the name shown in its group header and renders no empty Group column', async () => {
+  const group = (id, name) => ({
+    type: 'data',
+    data: {
+      case_id: 1,
+      entity_id: id,
+      entity_name: name,
+      entity_type: 'person',
+      match_type: 'email',
+      normalized_value: `${id}@example.org`,
+      matches: [{ case_id: 2, entity_id: id + 10, entity_name: `Related ${id}`, signal_rank: 0 }],
+    },
+  })
+  const wrapper = mountWithVuetify(CorrelationScanPluginResult, {
+    props: { result: [group(1, 'Ada Lovelace'), group(2, 'Grace Hopper')] },
+  })
+  expect(wrapper.findAll('thead th').map((th) => th.text())).not.toContain('Group')
+  await wrapper.get('input[type="text"]').setValue('lovelace')
+  expect(wrapper.findAll('h3').map((h) => h.text())).toContain('Ada Lovelace')
+  expect(wrapper.findAll('h3').map((h) => h.text())).not.toContain('Grace Hopper')
+})
+
 it('shows the latest progress once without repeated status keys and hides it at durable termination', async () => {
   const warn = vi.spyOn(console, 'warn')
   const status = (count) => ({ type: 'status', data: { message: 'Indexed Entities', count } })

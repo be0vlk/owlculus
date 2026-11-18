@@ -18,12 +18,9 @@
       plugin-name="Correlation Scan"
       :message="error.data.message"
     />
-    <PluginStatusAlert
-      v-if="completionMessage"
-      type="complete"
-      plugin-name="Correlation Scan"
-      :message="completionMessage"
-    />
+    <v-alert v-if="completionMessage" type="success" variant="tonal" density="compact">
+      {{ completionMessage }}
+    </v-alert>
 
     <v-alert v-if="notices.length" type="warning" variant="tonal">
       {{ notices.length }} malformed
@@ -48,11 +45,11 @@
 
     <template v-if="rows.length">
       <div class="d-flex flex-column ga-2">
-        <h3 class="text-title-large font-weight-medium">
+        <h3 class="text-title-large font-weight-medium mb-0">
           {{ counts.entities }} source Entities · {{ counts.matches }} matches ·
           {{ counts.cases }} related Cases
         </h3>
-        <p class="text-body-medium text-medium-emphasis">
+        <p class="text-body-medium text-medium-emphasis mb-0">
           Connections are investigative leads; they do not establish identity.
         </p>
         <div class="d-flex flex-wrap align-center ga-2">
@@ -109,7 +106,7 @@
                   variant="text"
                   @click="toggleGroup(group)"
                 />
-                <h3 class="text-title-medium font-weight-medium">
+                <h3 class="text-title-medium font-weight-medium mb-0">
                   {{ groupSource(group).sourceLabel }}
                 </h3>
                 <v-chip size="small" variant="tonal" color="primary">
@@ -173,14 +170,14 @@
           <tr>
             <td :colspan="columns.length" class="py-3">
               <div class="d-flex flex-column ga-1 text-body-medium">
-                <p v-for="field in item.sourceFields" :key="field.field + field.value">
+                <p v-for="field in item.sourceFields" class="mb-0" :key="field.field + field.value">
                   Source {{ fieldLabel(field.field) }}: {{ field.value }}
                 </p>
-                <p v-for="field in item.fields" :key="field.field + field.value">
+                <p v-for="field in item.fields" class="mb-0" :key="field.field + field.value">
                   Related {{ fieldLabel(field.field) }}: {{ field.value }}
                 </p>
-                <p v-if="!item.fields.length && item.foundIn">{{ item.foundIn }}</p>
-                <p v-if="item.signal">{{ item.signal }}</p>
+                <p v-if="!item.fields.length && item.foundIn" class="mb-0">{{ item.foundIn }}</p>
+                <p v-if="item.signal" class="mb-0">{{ item.signal }}</p>
               </div>
             </td>
           </tr>
@@ -227,7 +224,9 @@ const STRENGTHS = [
   { value: 1, title: 'Association', color: 'info' },
   { value: 2, title: 'Weak', color: 'grey' },
 ]
+// Vuetify treats a titleless zero-width group column as empty, so rows get no spacer cell.
 const HEADERS = [
+  { key: 'data-table-group', title: '', width: 0 },
   { title: 'Match', key: 'matchType' },
   { title: 'Shared value', key: 'sharedValue' },
   { title: 'Related entity', key: 'relatedLabel' },
@@ -297,6 +296,8 @@ const strengthCounts = computed(() =>
 const searchText = (row) =>
   [
     getMatchTypeLabel(row.matchType),
+    row.sourceLabel,
+    row.sourceType,
     row.sharedValue,
     row.relatedLabel,
     row.relatedType,
