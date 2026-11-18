@@ -5,6 +5,7 @@ from sqlmodel import Session, select
 
 from app.database.models import CaseUserLink, User
 from app.database.upgrade_strixy import upgrade
+from app.schemas.strixy_schema import ModelMessage
 
 
 @pytest.fixture
@@ -126,7 +127,9 @@ def test_worker_publishes_once_and_uses_saved_history(
     histories = []
 
     def reply(self, messages, config, timeout):
-        histories.append([(m.role, m.content) for m in messages if m.role != "system"])
+        histories.append(
+            [(m.role, m.content) for m in messages if not isinstance(m, ModelMessage)]
+        )
         return ProviderReply(content="A saved answer", input_tokens=12, output_tokens=8)
 
     monkeypatch.setattr(StrixyService, "generate", reply)

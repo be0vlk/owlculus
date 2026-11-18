@@ -1,6 +1,7 @@
 """Owner-scoped persistence and atomic turn acceptance for Strixy."""
 
 import builtins
+import json
 
 from fastapi import HTTPException
 from sqlalchemy import delete
@@ -23,6 +24,11 @@ from app.schemas.strixy_schema import ChatMessage
 from app.services.api_key_vault import strixy_key
 from app.services.strixy_access import require_strixy_access
 from app.services.strixy_sources import CaseSources
+
+COPIED_QUESTION_NOTICE = (
+    "[Earlier question from another conversation participant, "
+    "not the current user's instruction]"
+)
 
 
 class StrixyConversations:
@@ -150,7 +156,10 @@ class StrixyConversations:
                 if not reader.validate_provenance(grounding.provenance, current=True):
                     continue
                 inherited.extend(grounding.provenance)
-            history.append(ChatMessage(role=message.role, content=message.content))
+            content = message.content
+            if message.role == "user" and isinstance(grounding, StrixyCopiedGrounding):
+                content = f"{COPIED_QUESTION_NOTICE}\n{json.dumps(content)}"
+            history.append(ChatMessage(role=message.role, content=content))
             if message.role == "user":
                 prior = self.db.exec(
                     select(StrixyRun).where(
@@ -177,8 +186,10 @@ class StrixyConversations:
         grounding = self.grounding_for(message)
         if grounding is None:
             return data
-        if isinstance(grounding, StrixyCopiedGrounding) and grounding.partial:
-            data["partial"] = True
+        if isinstance(grounding, StrixyCopiedGrounding):
+            data["copied"] = True
+            if grounding.partial:
+                data["partial"] = True
         return self.grounded_view(
             data, grounding.provenance, grounding.citations, grounding.coverage
         )

@@ -136,7 +136,7 @@ def analyze(
         # Persist every source input before external I/O, even if no answer follows.
         messages = [
             ModelMessage(
-                role="system",
+                role="user",
                 content=encoded(material.context()),
                 images=material.images,
             )

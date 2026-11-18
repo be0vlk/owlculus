@@ -1,5 +1,6 @@
 """Fixed snapshots and independent follow-ups at the authenticated HTTP seam."""
 
+from app.services.strixy_conversations import COPIED_QUESTION_NOTICE
 from app.services.strixy_service import ProviderReply, StrixyService
 from tests.api import test_strixy_sources_api as fixtures
 
@@ -85,8 +86,13 @@ def test_copy_preserves_sources_and_survives_original_deletion(
     assert client.delete(detail, headers=owner).status_code == 204
     assert client.get(url, headers=viewer).status_code == 404
     assert client.post(f"{url}/copy", headers=viewer).status_code == 404
+    assert [m.get("copied") for m in copied_messages] == [True, True]
     fixtures.turn(client, copy_url, viewer, engine, content="Explore this further")
-    assert "Independent finding" in histories[-1]
+    first, answer, current = histories[-1][1:]
+    assert first == f'{COPIED_QUESTION_NOTICE}\n"Brief this Case"'
+    assert (answer, current) == ("Independent finding", "Explore this further")
+    own = client.get(copy_url, headers=viewer).json()["messages"]
+    assert [m.get("copied") for m in own] == [True, True, None, None]
 
 
 import pytest

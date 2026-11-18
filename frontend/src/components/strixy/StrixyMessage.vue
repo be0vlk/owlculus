@@ -5,7 +5,11 @@
   >
     <div class="message-heading">
       <span>{{
-        message.role === 'assistant' ? 'Strixy' : shared ? 'Conversation participant' : 'You'
+        message.role === 'assistant'
+          ? 'Strixy'
+          : shared || message.copied
+            ? 'Conversation participant'
+            : 'You'
       }}</span
       ><time v-if="message.timestamp" :datetime="message.timestamp">{{ time }}</time
       ><v-menu v-if="!message.withheld && !shared && message.id" location="bottom end"

@@ -43,6 +43,7 @@ A reasoning_effort of None means the model default: no effort parameter is sent.
 """
 
 import json
+import secrets
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from time import monotonic
@@ -65,10 +66,22 @@ from app.schemas.strixy_schema import (
 )
 
 
+def message_text(message: ChatMessage, marker: str) -> str:
+    """Case material is the only ModelMessage; the per-request marker keeps source
+    text from closing the block it sits in."""
+    if not isinstance(message, ModelMessage):
+        return message.content
+    return (
+        f"BEGIN UNTRUSTED CASE MATERIAL {marker}\n{message.content}\n"
+        f"END UNTRUSTED CASE MATERIAL {marker}"
+    )
+
+
 def response_input(messages: list[ChatMessage]) -> ResponseInputParam:
     items: list[dict] = []
+    marker = secrets.token_hex(16)
     for message in messages:
-        items.append({"role": message.role, "content": message.content})
+        items.append({"role": message.role, "content": message_text(message, marker)})
         if isinstance(message, ModelMessage):
             for image in message.images:
                 items.append(
@@ -109,9 +122,8 @@ def visual_label(image) -> str:
 def chat_messages(
     messages: list[ChatMessage], config: StrixyConfig
 ) -> list[ChatCompletionMessageParam]:
-    system, turns = merged_turns(
+    turns = merged_turns(
         messages,
-        config,
         lambda data: {
             "type": "image_url",
             "image_url": {"url": "data:image/png;base64," + data},
@@ -123,45 +135,43 @@ def chat_messages(
             turn["content"] = "\n\n".join(part["text"] for part in turn["content"])
     return cast(
         list[ChatCompletionMessageParam],
-        [{"role": "system", "content": system}] + turns,
+        [{"role": "system", "content": config.instructions}] + turns,
     )
 
 
 def anthropic_messages(
     messages: list[ChatMessage], config: StrixyConfig
 ) -> tuple[str, list[dict]]:
-    return merged_turns(
+    turns = merged_turns(
         messages,
-        config,
         lambda data: {
             "type": "image",
             "source": {"type": "base64", "media_type": "image/png", "data": data},
         },
     )
+    return config.instructions, turns
 
 
 def merged_turns(
-    messages: list[ChatMessage],
-    config: StrixyConfig,
-    image_part: Callable[[str], dict],
-) -> tuple[str, list[dict]]:
-    system = [config.instructions]
+    messages: list[ChatMessage], image_part: Callable[[str], dict]
+) -> list[dict]:
+    marker = secrets.token_hex(16)
     turns: list[dict] = []
 
     def add(role: str, blocks: list[dict]) -> None:
-        # Anthropic and strict local chat templates require one system message and
-        # alternating roles; visual inputs are extra user turns.
+        # Anthropic and strict local chat templates require alternating roles;
+        # visual inputs are extra user turns.
         if turns and turns[-1]["role"] == role:
             turns[-1]["content"].extend(blocks)
         else:
             turns.append({"role": role, "content": blocks})
 
     for message in messages:
-        if message.role == "system":
-            system.append(message.content)
-            continue
         if message.content:
-            add(message.role, [{"type": "text", "text": message.content}])
+            add(
+                message.role,
+                [{"type": "text", "text": message_text(message, marker)}],
+            )
         if isinstance(message, ModelMessage):
             for image in message.images:
                 add(
@@ -171,7 +181,7 @@ def merged_turns(
                         image_part(image.data),
                     ],
                 )
-    return "\n\n".join(system), turns
+    return turns
 
 
 @dataclass(frozen=True)
