@@ -368,7 +368,7 @@ class StrixyConversations:
                     409, "Wait for the current reply before sending another message"
                 )
             config = get_strixy_config(self.db)
-            if not strixy_key(self.db, config):
+            if not strixy_key(self.db, config.provider):
                 raise HTTPException(
                     422,
                     f"{PROVIDER_NAMES[config.provider]} API key not configured. "

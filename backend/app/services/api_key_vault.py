@@ -12,7 +12,6 @@ from sqlmodel import Session, select
 
 from app.core.logging import get_security_logger
 from app.core.security import decrypt_api_key
-from app.core.strixy_config import StrixyConfig
 from app.database.models import SystemConfiguration
 
 
@@ -23,6 +22,7 @@ class Provider(StrEnum):
     CUSTOM = "custom"
     OPENAI = "openai"
     OPENAI_COMPATIBLE = "openai_compatible"
+    OPENROUTER = "openrouter"
     PEOPLE_DATA_LABS = "people_data_labs"
     SECURITYTRAILS = "securitytrails"
     SHODAN = "shodan"
@@ -132,9 +132,9 @@ class StaticApiKeyVault:
         return self.get_key(provider) is not None
 
 
-def strixy_key(db: Session, config: StrixyConfig) -> str | None:
-    key = ConfigurationApiKeyVault(db).get_key(Provider(config.provider))
+def strixy_key(db: Session, provider: str) -> str | None:
+    key = ConfigurationApiKeyVault(db).get_key(Provider(provider))
     # Local OpenAI-compatible servers often need no key, but the SDK requires one.
-    if key is None and config.provider == "openai_compatible":
+    if key is None and provider == "openai_compatible":
         return "not-needed"
     return key

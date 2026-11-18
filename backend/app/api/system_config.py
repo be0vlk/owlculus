@@ -7,7 +7,13 @@ from app.core.database_boundary import DatabaseRoute
 
 from ..core.dependencies import get_current_user
 from ..core.exceptions import ValidationException
-from ..core.strixy_config import DEFAULT_MODELS, PROVIDER_NAMES, StrixySettings
+from ..core.strixy_config import (
+    DEFAULT_MODELS,
+    PROVIDER_NAMES,
+    StrixyModelQuery,
+    StrixySettings,
+    StrixySetup,
+)
 from ..database import models
 from ..database.connection import get_db
 from ..schemas import system_config_schema
@@ -157,10 +163,15 @@ async def update_evidence_folder_templates(
     )
 
 
-def _strixy_response(settings: StrixySettings) -> dict:
+def _strixy_response(settings: StrixySettings, db: Session) -> dict:
+    vault = ConfigurationApiKeyVault(db)
     return settings.model_dump() | {
         "providers": {
-            key: {"name": name, "default_model": DEFAULT_MODELS[key]}
+            key: {
+                "name": name,
+                "default_model": DEFAULT_MODELS[key],
+                "key_configured": vault.is_configured(Provider(key)),
+            }
             for key, name in PROVIDER_NAMES.items()
         }
     }
@@ -172,16 +183,45 @@ async def get_strixy_settings(
     db: Session = Depends(get_db),
 ):
     return _strixy_response(
-        await SystemConfigService(db).get_strixy_settings(current_user)
+        await SystemConfigService(db).get_strixy_settings(current_user), db
     )
 
 
 @router.put("/configuration/strixy")
 async def update_strixy_settings(
-    settings: StrixySettings,
+    setup: StrixySetup,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    service = SystemConfigService(db)
+    if setup.api_key:
+        await service.set_api_key(
+            provider=Provider(setup.provider),
+            api_key=setup.api_key,
+            name=f"{PROVIDER_NAMES[setup.provider]} API",
+            current_user=current_user,
+        )
+    settings = StrixySettings.model_validate(setup.model_dump(exclude={"api_key"}))
     return _strixy_response(
-        await SystemConfigService(db).update_strixy_settings(settings, current_user)
+        await service.update_strixy_settings(settings, current_user), db
     )
+
+
+@router.post("/configuration/strixy/models")
+async def list_strixy_models(
+    query: StrixyModelQuery,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return {
+        "models": await SystemConfigService(db).list_strixy_models(query, current_user)
+    }
+
+
+@router.post("/configuration/strixy/test")
+async def test_strixy_connection(
+    setup: StrixySetup,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return await SystemConfigService(db).test_strixy_connection(setup, current_user)

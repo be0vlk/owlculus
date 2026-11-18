@@ -15,11 +15,18 @@ from ..core.evidence_templates import DEFAULT_TEMPLATES
 from ..core.exceptions import ValidationException
 from ..core.logging import audit_operation
 from ..core.security import encrypt_api_key
-from ..core.strixy_config import StrixySettings
+from ..core.strixy_config import (
+    PROVIDER_NAMES,
+    StrixyModelQuery,
+    StrixySettings,
+    StrixySetup,
+    strixy_config_from,
+)
 from ..core.utils import get_utc_now
 from ..database import models
 from ..database.db_utils import transaction
-from .api_key_vault import Provider, StoredApiKey
+from . import strixy_setup
+from .api_key_vault import Provider, StoredApiKey, strixy_key
 from .case_access import CaseAccess
 
 CASE_NUMBER_TEMPLATE_MONTHLY = "YYMM-NN"
@@ -204,3 +211,30 @@ class SystemConfigService:
         config.strixy_settings = settings.model_dump()
         self._persist_configuration(config)
         return settings
+
+    def _strixy_setup_key(self, provider: str, typed: str | None) -> str | None:
+        return typed or strixy_key(self.db, provider)
+
+    async def list_strixy_models(
+        self, query: StrixyModelQuery, current_user: models.User
+    ) -> list[dict]:
+        self.case_access.require_admin(current_user)
+        key = self._strixy_setup_key(query.provider, query.api_key)
+        if not key:
+            raise ValidationException(
+                f"{PROVIDER_NAMES[query.provider]} API key not configured"
+            )
+        try:
+            return strixy_setup.list_models(query.provider, query.base_url, key)
+        except Exception as error:
+            raise ValidationException(strixy_setup.provider_error(error)) from error
+
+    @audit_operation("strixy_connection_test")
+    async def test_strixy_connection(
+        self, setup: StrixySetup, current_user: models.User
+    ) -> dict:
+        self.case_access.require_admin(current_user)
+        return strixy_setup.test_connection(
+            strixy_config_from(setup),
+            self._strixy_setup_key(setup.provider, setup.api_key),
+        )

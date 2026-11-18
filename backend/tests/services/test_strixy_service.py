@@ -492,3 +492,75 @@ def test_anthropic_streaming_turn_that_calls_the_tool_returns_the_request():
 def test_missing_key_message_names_the_configured_provider():
     with pytest.raises(ValidationException, match="Anthropic API key not configured"):
         StrixyService(None).generate([], ANTHROPIC, 12)
+
+
+OPENROUTER = StrixyConfig(
+    provider="openrouter",
+    base_url="https://openrouter.ai/api/v1",
+    model="vendor/model",
+    reasoning_effort="medium",
+)
+ANSWER = '{"content":"Useful text","citations":[]}'
+QUESTION = [ChatMessage(role="user", content="Q")]
+
+
+def test_openrouter_requires_parameters_and_sends_effort_without_echoing_it():
+    client = context_client()
+    client.chat.completions.create.return_value = completion(ANSWER)
+    with patch("app.services.strixy_service.OpenAI", return_value=client) as factory:
+        StrixyService("or-key").generate(QUESTION, OPENROUTER, 12)
+    assert factory.call_args.kwargs["base_url"] == "https://openrouter.ai/api/v1"
+    sent = client.chat.completions.create.call_args.kwargs
+    assert sent["extra_body"] == {
+        "provider": {"require_parameters": True},
+        "reasoning": {"effort": "medium", "exclude": True},
+    }
+    client.responses.create.assert_not_called()
+
+
+def test_openrouter_without_an_effort_sends_no_reasoning():
+    client = context_client()
+    client.chat.completions.create.return_value = completion(ANSWER)
+    config = OPENROUTER.model_copy(update={"reasoning_effort": None})
+    with patch("app.services.strixy_service.OpenAI", return_value=client):
+        StrixyService("or-key").generate(QUESTION, config, 12)
+    sent = client.chat.completions.create.call_args.kwargs
+    assert sent["extra_body"] == {"provider": {"require_parameters": True}}
+
+
+def test_compatible_adapter_sends_no_extra_body():
+    client = context_client()
+    client.chat.completions.create.return_value = completion(ANSWER)
+    with patch("app.services.strixy_service.OpenAI", return_value=client):
+        StrixyService("k").generate(QUESTION, COMPAT, 12)
+    assert "extra_body" not in client.chat.completions.create.call_args.kwargs
+
+
+def test_responses_adapter_omits_reasoning_without_an_effort():
+    client = context_client()
+    client.responses.create.return_value = Mock(
+        status="completed", output_text=ANSWER, output=[], usage=None
+    )
+    config = StrixyConfig(reasoning_effort=None)
+    with patch("app.services.strixy_service.OpenAI", return_value=client):
+        StrixyService("k").generate(QUESTION, config, 12)
+    assert "reasoning" not in client.responses.create.call_args.kwargs
+
+
+def test_anthropic_adapter_omits_effort_without_one():
+    client = context_client()
+    client.messages.create.return_value = message("end_turn", [text_block(ANSWER)])
+    config = ANTHROPIC.model_copy(update={"reasoning_effort": None})
+    with patch("app.services.strixy_service.Anthropic", return_value=client):
+        StrixyService("k").generate(QUESTION, config, 12)
+    sent = client.messages.create.call_args.kwargs
+    assert "effort" not in sent["output_config"]
+    assert sent["output_config"]["format"]["type"] == "json_schema"
+
+
+def test_chat_completions_error_finish_reason_fails_the_run():
+    client = context_client()
+    client.chat.completions.create.return_value = completion("", finish="error")
+    with patch("app.services.strixy_service.OpenAI", return_value=client):
+        with pytest.raises(RuntimeError, match="did not complete"):
+            StrixyService("k").generate(QUESTION, OPENROUTER, 12)

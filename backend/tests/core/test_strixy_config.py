@@ -3,7 +3,15 @@
 import pytest
 from pydantic import ValidationError
 
-from app.core.strixy_config import StrixyConfig, StrixySettings, get_strixy_config
+from app.core.strixy_config import (
+    OPENROUTER_BASE_URL,
+    StrixyConfig,
+    StrixyModelQuery,
+    StrixySettings,
+    StrixySetup,
+    get_strixy_config,
+    strixy_config_from,
+)
 from app.database.models import SystemConfiguration
 
 
@@ -66,3 +74,44 @@ def test_blank_strings_mean_unset() -> None:
     settings = StrixySettings(model=" ", base_url="")
 
     assert settings.model is None and settings.base_url is None
+
+
+def test_openrouter_requires_a_model() -> None:
+    with pytest.raises(ValidationError, match="requires a model"):
+        StrixySettings(provider="openrouter")
+
+
+def test_openrouter_config_uses_the_fixed_base_url() -> None:
+    config = strixy_config_from(
+        StrixySettings(provider="openrouter", model="vendor/model")
+    )
+
+    assert (config.provider, config.model) == ("openrouter", "vendor/model")
+    assert config.base_url == OPENROUTER_BASE_URL
+
+
+@pytest.mark.parametrize("provider", ["openai", "anthropic", "openrouter"])
+def test_a_saved_base_url_only_applies_to_openai_compatible(provider) -> None:
+    saved = StrixySettings(
+        provider=provider, model="m", base_url="http://stale.example/v1"
+    )
+
+    assert strixy_config_from(saved).base_url != "http://stale.example/v1"
+
+
+def test_reasoning_effort_none_passes_through() -> None:
+    assert (
+        strixy_config_from(StrixySettings(reasoning_effort=None)).reasoning_effort
+        is None
+    )
+
+
+def test_setup_blank_key_means_none() -> None:
+    assert StrixySetup(api_key="  ").api_key is None
+    assert StrixySetup(api_key="k").api_key == "k"
+
+
+def test_model_query_needs_a_base_url_for_openai_compatible() -> None:
+    with pytest.raises(ValidationError, match="requires a base URL"):
+        StrixyModelQuery(provider="openai_compatible")
+    assert StrixyModelQuery(provider="openrouter").base_url is None

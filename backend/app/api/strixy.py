@@ -53,7 +53,7 @@ async def strixy_availability(
     require_strixy_access(db, current_user, case_id)
     config = get_strixy_config(db)
     return {
-        "is_configured": bool(strixy_key(db, config)),
+        "is_configured": bool(strixy_key(db, config.provider)),
         "provider": PROVIDER_NAMES[config.provider],
     }
 
