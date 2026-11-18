@@ -251,8 +251,8 @@ def test_visual_citations_require_a_supplied_page_and_never_verify_ocr(
     )
     detail, owner = new_conversation(client, assigned, analyst_token)
     saved = turn(client, detail, owner, engine)
-    assert saved["runs"][-1]["error_code"] == "invalid_citation"
-    assert all(m["role"] == "user" for m in saved["messages"])
+    assert saved["messages"][-1]["citations"] == []
+    assert saved["messages"][-1]["coverage"]["unverified_citations"] == 1
 
 
 @pytest.mark.parametrize(

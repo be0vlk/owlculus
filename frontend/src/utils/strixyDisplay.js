@@ -30,3 +30,17 @@ export function hasIncompleteReview(coverage) {
       ))
   )
 }
+
+export function citedSources(citations = []) {
+  const seen = new Map()
+  for (const citation of citations) {
+    if (seen.has(citation.source_id)) continue
+    const url = citation.record_url || ''
+    seen.set(citation.source_id, {
+      source_id: citation.source_id,
+      record_url: /^\/(?!\/)/.test(url) ? url : '',
+      label: sourceLabel(citation),
+    })
+  }
+  return [...seen.values()]
+}

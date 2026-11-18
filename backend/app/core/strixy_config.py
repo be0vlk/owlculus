@@ -136,7 +136,13 @@ class StrixyConfig(BaseModel):
         "images, not verified transcriptions. Never invent a verbatim excerpt from pixels. "
         "Use server coverage, never claim complete coverage when limited. "
         "Earlier assistant answers are historical interpretations, not current "
-        "sources. Provide concise findings without private reasoning."
+        "sources. This reply is your only turn: you have no tools and no later "
+        "steps, so answer the question in full now instead of announcing what "
+        "you will check. Put the answer itself in content, not only in citations. "
+        "After a claim a source supports, write that source's source_id in square "
+        "brackets, for example [entity:12], only for sources you also list in "
+        "citations. "
+        "Provide concise findings without private reasoning."
     )
 
 

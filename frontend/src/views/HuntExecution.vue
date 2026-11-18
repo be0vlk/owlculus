@@ -350,7 +350,7 @@ const exportExecution = async (format) => {
 }
 
 const viewEvidence = (evidence) => {
-  router.push(`/case/${execution.value.case_id}?tab=evidence&highlight=${evidence.id}`)
+  router.push(`/case/${execution.value.case_id}?tab=evidence&evidence=${evidence.id}`)
 }
 
 const formatDuration = (step) => {

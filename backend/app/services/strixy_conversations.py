@@ -230,6 +230,7 @@ class StrixyConversations:
                         else "changed"
                     ),
                     "url": f"/api/strixy/cases/{self.case_id}/sources/{citation['source_id']}{page_query}",
+                    "record_url": f"/case/{self.case_id}{source.record_path}",
                 }
             )
         return data | {

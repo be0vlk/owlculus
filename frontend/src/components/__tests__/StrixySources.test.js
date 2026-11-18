@@ -7,9 +7,10 @@ import { useActiveCaseStore } from '@/stores/activeCase'
 import api from '@/services/api'
 
 vi.mock('@/services/api', () => ({ default: { get: vi.fn(), post: vi.fn() } }))
+const push = vi.hoisted(() => vi.fn())
 vi.mock('vue-router', () => ({
   useRoute: () => ({ query: {}, params: {} }),
-  useRouter: () => ({ replace: vi.fn() }),
+  useRouter: () => ({ replace: vi.fn(), push }),
 }))
 let wrapper
 const citation = {
@@ -50,6 +51,7 @@ it('shows coverage, changed-source citations and authorized previews without mod
                     complete: false,
                     enumeration_complete: false,
                     counts: { read: 1, partly_read: 2, unexamined: 3 },
+                    unverified_citations: 2,
                   },
                 },
               ],
@@ -62,14 +64,20 @@ it('shows coverage, changed-source citations and authorized previews without mod
   })
   await flushPromises()
   expect(wrapper.text()).toContain('Some records or attachments were not fully reviewed.')
+  expect(wrapper.text()).toContain(
+    '2 quotes didn’t match the case records and were removed. Check this answer against the sources.',
+  )
   expect(wrapper.text()).toContain('Source changed since this answer.')
   expect(wrapper.find('.message-content a').exists()).toBe(false)
   expect(wrapper.find('.message-content img').exists()).toBe(false)
-  const button = wrapper.find('[aria-label="Open source 1: Ada Lovelace"]')
-  await button.trigger('click')
+  await wrapper.find('.review-button').trigger('click')
   await flushPromises()
   const body = new DOMWrapper(document.body)
-  const dialog = body.find('[role="dialog"]')
+  await body.find('[role="dialog"] .v-list-item').trigger('click')
+  await flushPromises()
+  const dialog = new DOMWrapper(
+    document.querySelector('[aria-label="Close source preview"]').closest('[role="dialog"]'),
+  )
   expect(dialog.text()).toContain('Ada in current record')
   expect(api.get.mock.calls.some(([url]) => url.endsWith('/sources'))).toBe(false)
   await dialog
@@ -173,10 +181,9 @@ it('distinguishes examined attachment lines from partial and unavailable attachm
       images: [{ source_id: 'evidence:8', field: 'attachment:page:2:image', data: 'cGl4ZWxz' }],
     },
   })
-  await wrapper
-    .findAll('button')
-    .find((b) => b.text().includes('Collected PDF'))
-    .trigger('click')
+  await wrapper.find('.review-button').trigger('click')
+  await flushPromises()
+  await new DOMWrapper(document.body).find('[role="dialog"] .v-list-item').trigger('click')
   await flushPromises()
   expect(api.get).toHaveBeenLastCalledWith('/api/strixy/cases/2/sources/evidence%3A8', {
     params: { unit: 2 },
@@ -187,4 +194,69 @@ it('distinguishes examined attachment lines from partial and unavailable attachm
   expect(dialog.text()).toContain('Current file shown')
   expect(dialog.find('img').attributes('src')).toBe('data:image/png;base64,cGl4ZWxz')
   expect(wrapper.text()).not.toContain('Attachments unexamined.')
+})
+
+it('links cited records from numbered inline markers and chips, dropping unmatched markers', async () => {
+  setActivePinia(createPinia())
+  const active = useActiveCaseStore()
+  Object.assign(active, { initialized: true, accessibleCases: [{ id: 2, case_number: 'CASE-2' }] })
+  active.resolve(2)
+  const cited = (source_id, record_url, field = 'data') => ({
+    source_id,
+    field,
+    excerpt: 'x',
+    record_url,
+    source_status: 'current',
+  })
+  api.get.mockImplementation(async (url) => ({
+    data: url.endsWith('availability')
+      ? { is_configured: true }
+      : url.endsWith('conversations')
+        ? [{ id: 'one' }]
+        : {
+            messages: [
+              {
+                role: 'assistant',
+                content:
+                  'Ada [entity:7] owns a file [evidence:8], again [entity:7]; invented [entity:99].',
+                timestamp: '2026-01-01T12:00:00Z',
+                citations: [
+                  cited('entity:7', '/case/2?entity=7'),
+                  cited('evidence:8', '/case/2?tab=evidence&evidence=8'),
+                  cited('entity:7', '/case/2?entity=7', 'data.name'),
+                  cited('entity:5', '/case/2?entity=5'),
+                  cited('case:2', '/case/2'),
+                ],
+                source_labels: { 'entity:7': { title: 'Ada Lovelace', subtitle: 'Person' } },
+              },
+            ],
+            runs: [],
+          },
+  }))
+  wrapper = mountWithVuetify({
+    components: { StrixyChat },
+    template: '<v-app><StrixyChat /></v-app>',
+  })
+  await flushPromises()
+  const inline = wrapper.findAll('.message-content a.citation-ref')
+  expect(inline.map((a) => [a.text(), a.attributes('href')])).toEqual([
+    ['1', '/case/2?entity=7'],
+    ['2', '/case/2?tab=evidence&evidence=8'],
+    ['1', '/case/2?entity=7'],
+  ])
+  expect(wrapper.find('.message-content').text()).not.toContain('[entity:99]')
+  const chips = wrapper.findAll('.message-citations a')
+  expect(chips.map((a) => a.attributes('href'))).toEqual([
+    '/case/2?entity=7',
+    '/case/2?tab=evidence&evidence=8',
+    '/case/2?entity=5',
+    '/case/2',
+  ])
+  expect(chips[0].text()).toContain('Ada Lovelace')
+  inline[1].element.addEventListener('click', (event) => event.preventDefault(), { once: true })
+  await inline[1].trigger('click', { ctrlKey: true })
+  expect(push).not.toHaveBeenCalled()
+  await inline[1].trigger('click')
+  await chips[2].trigger('click')
+  expect(push.mock.calls).toEqual([['/case/2?tab=evidence&evidence=8'], ['/case/2?entity=5']])
 })

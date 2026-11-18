@@ -58,12 +58,13 @@ def analyze(
             assert ledger is not None and material is not None
             if not reader.validate_provenance(ledger.provenance, current=True):
                 raise GroundingError("sources_changed")
-            try:
-                citations = material.citations(reply.citations)
-                if reply.content:
-                    ledger.citations = citations
-            except (ValueError, TypeError, KeyError):
-                raise GroundingError("invalid_citation") from None
+            citations, unverified = material.citations(reply.citations)
+            if reply.content:
+                ledger.citations = citations
+                ledger.coverage = {
+                    **(ledger.coverage or {}),
+                    "unverified_citations": unverified,
+                }
             progress = db.get(StrixyProgress, run_id)
             assert progress is not None
             if reply.content:

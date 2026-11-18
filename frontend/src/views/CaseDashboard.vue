@@ -653,6 +653,19 @@ watch(
   { immediate: true },
 )
 
+let openedEvidenceId = null
+watch(
+  [() => route.query.evidence, evidence],
+  ([evidenceId, items]) => {
+    if (!evidenceId || evidenceId === openedEvidenceId) return
+    const item = items.find((candidate) => candidate.id === Number(evidenceId))
+    if (!item) return
+    openedEvidenceId = evidenceId
+    if (!item.is_folder) handleViewFileContent(item)
+  },
+  { immediate: true },
+)
+
 onMounted(async () => {
   await loadCaseData()
   if (disposed || !caseId.value) return

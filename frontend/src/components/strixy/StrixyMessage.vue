@@ -32,10 +32,16 @@
     <p v-if="message.withheld" class="message-notice" role="status">
       This answer is unavailable because a required source is unavailable or access changed.
     </p>
-    <div v-else class="message-content" v-html="renderedContent" />
+    <div v-else class="message-content" @click="followLink" v-html="renderedContent" />
     <template v-if="!message.withheld && message.role === 'assistant'">
       <p v-if="hasIncompleteReview(message.coverage)" class="message-notice">
         Some records or attachments were not fully reviewed.
+      </p>
+      <p v-if="message.coverage?.unverified_citations" class="message-notice">
+        {{ message.coverage.unverified_citations }}
+        {{ message.coverage.unverified_citations === 1 ? 'quote' : 'quotes' }} didn’t match the case
+        records and {{ message.coverage.unverified_citations === 1 ? 'was' : 'were' }}
+        removed. Check this answer against the sources.
       </p>
       <p
         v-if="message.citations?.some((citation) => citation.source_status === 'changed')"
@@ -43,16 +49,16 @@
       >
         Source changed since this answer.
       </p>
-      <div v-if="message.citations?.length" class="message-citations" aria-label="Sources">
-        <button
-          v-for="(citation, index) in message.citations.slice(0, 3)"
-          :key="`${citation.source_id}:${citation.field}:${index}`"
-          :aria-label="`Open source ${index + 1}: ${sourceLabel(citation)}`"
-          @click="$emit('source', citation)"
+      <div v-if="sources.length" class="message-citations" aria-label="Sources" @click="followLink">
+        <a
+          v-for="(source, index) in sources"
+          :key="source.source_id"
+          :href="source.record_url || undefined"
+          :aria-label="`Open source ${index + 1}: ${source.label}`"
         >
           <span class="citation-number">{{ index + 1 }}</span
-          ><span>{{ sourceLabel(citation) }}</span>
-        </button>
+          ><span>{{ source.label }}</span>
+        </a>
       </div>
       <button
         v-if="message.coverage || message.citations?.length"
@@ -74,16 +80,45 @@
 <script setup>
 import { computed } from 'vue'
 import MarkdownIt from 'markdown-it'
-import { hasIncompleteReview, sourceLabel } from '@/utils/strixyDisplay'
+import { useRouter } from 'vue-router'
+import { citedSources, hasIncompleteReview } from '@/utils/strixyDisplay'
 const props = defineProps({
   message: { type: Object, required: true },
   shared: Boolean,
   sharing: Boolean,
 })
-defineEmits(['source', 'review', 'share'])
+defineEmits(['review', 'share'])
+const router = useRouter()
 const markdown = new MarkdownIt({ html: false, linkify: false, typographer: true, breaks: true })
 markdown.disable(['link', 'image', 'autolink'])
-const renderedContent = computed(() => markdown.render(props.message.content || ''))
+const sources = computed(() => citedSources(props.message.citations))
+const escapeAttribute = (value) =>
+  value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
+const renderedContent = computed(() => {
+  const numbers = new Map(sources.value.map((source, index) => [source.source_id, index + 1]))
+  const urls = new Map(sources.value.map((source) => [source.source_id, source.record_url]))
+  return markdown
+    .render(props.message.content || '')
+    .replace(/\[((?:case|entity|evidence|plugin_result|hunt_result|hunt_step):\d+)\]/g, (_, id) =>
+      urls.get(id)
+        ? `<a class="citation-ref" href="${escapeAttribute(urls.get(id))}">${numbers.get(id)}</a>`
+        : '',
+    )
+})
+function followLink(event) {
+  const link = event.target.closest?.('a[href]')
+  if (
+    !link ||
+    event.button !== 0 ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.shiftKey ||
+    event.altKey
+  )
+    return
+  event.preventDefault()
+  router.push(link.getAttribute('href'))
+}
 const time = computed(() =>
   new Date(props.message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
 )
@@ -212,7 +247,7 @@ const time = computed(() =>
   margin-top: 22px;
 }
 
-.message-citations button {
+.message-citations a {
   display: flex;
   align-items: center;
   gap: 7px;
@@ -224,12 +259,27 @@ const time = computed(() =>
   color: var(--strixy-accent);
   font-size: 12px;
   text-align: left;
+  text-decoration: none;
 }
 
-.message-citations button > span:last-child {
+.message-citations a > span:last-child {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+.message-content :deep(.citation-ref) {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  margin: 0 2px;
+  background: var(--strixy-soft);
+  border-radius: 5px;
+  color: var(--strixy-accent);
+  font-size: 11px;
+  line-height: 1;
+  text-decoration: none;
 }
 
 .citation-number {

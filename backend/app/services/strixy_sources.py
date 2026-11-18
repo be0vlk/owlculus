@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from time import monotonic
@@ -51,7 +52,11 @@ def encoded(value) -> str:
 
 
 def object_field_with_key(fields: dict[str, str], key: str) -> str:
-    """Models cite keys inside JSON-object fields (Entity data) as if they were fields."""
+    """Models cite keys inside JSON-object fields (Entity data) as if they were fields,
+    bare (notes) or dotted (data.notes)."""
+    head = key.split(".", 1)[0]
+    if head != key and head in fields:
+        return head
     for name, text in fields.items():
         try:
             value = json.loads(text)
@@ -71,6 +76,7 @@ class CaseSource:
     version: str
     stored_attachment: Attachment | None = None
     prepared: dict | None = None
+    record_path: str = ""
 
     @property
     def source_id(self) -> str:
@@ -179,6 +185,7 @@ class CaseSources:
             raise ResourceNotFoundException("Source unavailable")
         scope = {self.case_id}
         stored_attachment = None
+        record_path = ""
         fields: dict
         if isinstance(row, m.PluginExecutionResult):
             execution = self.db.get(
@@ -193,6 +200,7 @@ class CaseSources:
             if payload.get("type") != "data":
                 raise ResourceNotFoundException("Source unavailable")
             fields = {"plugin": execution.plugin_name, "result": payload["data"]}
+            record_path = "?tab=runs"
         elif isinstance(row, (m.HuntStep, m.HuntStepResult)):
             step = (
                 row
@@ -251,6 +259,7 @@ class CaseSources:
             if payload.get("type") != "data":
                 raise ResourceNotFoundException("Source unavailable")
             fields = {"plugin": step.plugin_name, "result": payload["data"]}
+            record_path = f"/hunts/execution/{hunt_execution.id}"
         else:
             if (row.id if isinstance(row, m.Case) else row.case_id) != self.case_id:
                 raise ResourceNotFoundException("Source unavailable")
@@ -260,6 +269,7 @@ class CaseSources:
                 provenance = report_provenance(self.db, row)
                 if provenance:
                     scope.update(provenance.case_ids or ())
+                record_path = f"?tab=evidence&evidence={row.id}"
                 if not row.is_folder:
                     stored_attachment = Attachment.locate(self.case_id, row.content)
                 fields = {
@@ -271,6 +281,7 @@ class CaseSources:
                 }
             elif isinstance(row, m.Entity):
                 fields = {"entity_type": row.entity_type, "data": row.data}
+                record_path = f"?entity={row.id}"
             else:
                 assert isinstance(row, m.Case)
                 fields = {
@@ -299,6 +310,7 @@ class CaseSources:
             sorted(scope),
             version,
             stored_attachment,
+            record_path=record_path,
         )
 
     def _correlation(self, payload: dict) -> tuple[dict, set[int]]:
@@ -608,38 +620,46 @@ class GroundedMaterial:
         # Catalog IDs and coverage are model inputs too, even when uncited/unread.
         return [s.reference() for s in self.sources.values()]
 
-    def citations(self, citations: list[dict]) -> list[dict]:
+    def citations(self, citations: list[dict]) -> tuple[list[dict], int]:
+        """Verified citations, plus how many were dropped because they did not verify."""
         result = []
         for citation in citations:
-            if set(citation) != {"source_id", "field", "excerpt"}:
+            try:
+                result.append(self.verified(citation))
+            except (ValueError, TypeError, KeyError):
+                continue
+        return result, len(citations) - len(result)
+
+    def verified(self, citation: dict) -> dict:
+        if set(citation) != {"source_id", "field", "excerpt"}:
+            raise ValueError("Invalid citation")
+        source = self.supplied.get(citation["source_id"])
+        excerpt = citation["excerpt"]
+        visual = any(
+            v.source_id == citation["source_id"] and v.field == citation["field"]
+            for v in self.images
+        )
+        if source is None or not isinstance(excerpt, str):
+            raise ValueError("Invalid citation")
+        if visual:
+            if excerpt != "":
+                raise ValueError("Visual references cannot verify transcriptions")
+        else:
+            if citation["field"] not in source["fields"]:
+                citation = citation | {
+                    "field": object_field_with_key(source["fields"], citation["field"])
+                }
+            if citation["field"] not in source["fields"] or not excerpt:
                 raise ValueError("Invalid citation")
-            source = self.supplied.get(citation["source_id"])
-            excerpt = citation["excerpt"]
-            visual = any(
-                v.source_id == citation["source_id"] and v.field == citation["field"]
-                for v in self.images
+            # Models miscopy capitalization; store the source's own text so excerpts stay verbatim.
+            match = re.search(
+                re.escape(excerpt), source["fields"][citation["field"]], re.IGNORECASE
             )
-            if source is None or not isinstance(excerpt, str):
+            if match is None:
                 raise ValueError("Invalid citation")
-            if visual:
-                if excerpt != "":
-                    raise ValueError("Visual references cannot verify transcriptions")
-            else:
-                if citation["field"] not in source["fields"]:
-                    citation = citation | {
-                        "field": object_field_with_key(
-                            source["fields"], citation["field"]
-                        )
-                    }
-                if (
-                    citation["field"] not in source["fields"]
-                    or not excerpt
-                    or excerpt not in source["fields"][citation["field"]]
-                ):
-                    raise ValueError("Invalid citation")
-            result.append(
-                citation
-                | {"version": source["version"], "inspected_at": self.inspected_at}
-                | ({"kind": "visual"} if visual else {})
-            )
-        return result
+            citation = citation | {"excerpt": match.group()}
+        return (
+            citation
+            | {"version": source["version"], "inspected_at": self.inspected_at}
+            | ({"kind": "visual"} if visual else {})
+        )

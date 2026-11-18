@@ -3,7 +3,6 @@
     <template #header>
       <header class="d-flex flex-wrap align-center ga-4 mb-6">
         <div class="d-flex align-center ga-3">
-          <v-icon icon="mdi-owl" color="primary" size="28" />
           <div>
             <h1 class="text-headline-small font-weight-bold">Strixy</h1>
             <p class="text-body-medium text-medium-emphasis mb-0">
@@ -136,7 +135,6 @@
             :message="message"
             :shared="!!sharedSnapshot"
             :sharing="sharing"
-            @source="openSource"
             @review="reviewIndex = index"
             @share="openSharing"
           />

@@ -41,6 +41,7 @@ def test_briefing_reads_case_records_and_returns_verified_citations(
     session.add_all([entity, evidence])
     session.commit()
     session.refresh(entity)
+    session.refresh(evidence)
     owner = auth(analyst_token)
     url = f"/api/strixy/cases/{assigned}/conversations"
     detail = f"{url}/{client.post(url, headers=owner).json()['id']}"
@@ -56,7 +57,19 @@ def test_briefing_reads_case_records_and_returns_verified_citations(
                     "source_id": source["source_id"],
                     "field": "data",
                     "excerpt": "ada@example.test",
-                }
+                },
+                {
+                    "source_id": f"evidence:{evidence.id}",
+                    "field": "description",
+                    "excerpt": "employer disputed",
+                },
+                {
+                    "source_id": f"case:{assigned}",
+                    "field": "case_number",
+                    "excerpt": next(s for s in supplied if s["kind"] == "case")[
+                        "fields"
+                    ]["case_number"],
+                },
             ],
         )
 
@@ -74,6 +87,11 @@ def test_briefing_reads_case_records_and_returns_verified_citations(
     assert "private/path.txt" not in json.dumps(supplied)
     assert answer["citations"][0]["source_id"] == f"entity:{entity.id}"
     assert answer["citations"][0]["source_status"] == "current"
+    assert [c["record_url"] for c in answer["citations"]] == [
+        f"/case/{assigned}?entity={entity.id}",
+        f"/case/{assigned}?tab=evidence&evidence={evidence.id}",
+        f"/case/{assigned}",
+    ]
     assert answer["source_labels"][f"entity:{entity.id}"]["title"] == "ada@example.test"
     assert answer["source_labels"][f"entity:{entity.id}"]["subtitle"] == "Person"
     assert answer["coverage"]["attachments"] == "incomplete"
@@ -278,18 +296,19 @@ def test_both_readers_filter_protected_evidence_and_retained_results(
 
 
 @pytest.mark.parametrize("bad", ["foreign", "unprovided", "locator", "excerpt", "url"])
-def test_invented_citations_never_publish_answer(
+def test_invented_citations_are_dropped_and_counted(
     client, assigned, configured, analyst_token, engine, monkeypatch, bad
 ):
     detail, owner = new_conversation(client, assigned, analyst_token)
 
     def reply(self, messages, config, timeout):
         source = json.loads(messages[0].content)["sources"][0]
-        citation = {
+        good = {
             "source_id": source["source_id"],
             "field": "case_number",
             "excerpt": source["fields"]["case_number"],
         }
+        citation = dict(good)
         if bad == "foreign":
             citation["source_id"] = "case:99999"
         elif bad == "unprovided":
@@ -300,17 +319,23 @@ def test_invented_citations_never_publish_answer(
             citation["excerpt"] = "invented text"
         else:
             citation["url"] = "https://untrusted.invalid"
-        return ProviderReply("Unverified answer", citations=[citation])
+        return ProviderReply("Partly verified answer", citations=[good, citation])
 
     monkeypatch.setattr(StrixyService, "generate", reply)
     saved = turn(client, detail, owner, engine)
-    assert saved["runs"][-1]["error_code"] == "invalid_citation"
-    assert len(saved["messages"]) == 1
-    assert "Unverified answer" not in json.dumps(saved)
+    answer = saved["messages"][-1]
+    assert saved["runs"][-1]["status"] == "completed"
+    assert answer["content"] == "Partly verified answer"
+    assert [c["field"] for c in answer["citations"]] == ["case_number"]
+    assert answer["coverage"]["unverified_citations"] == 1
+    assert "invented text" not in json.dumps(saved)
+    assert "untrusted.invalid" not in json.dumps(saved)
 
 
+@pytest.mark.parametrize("field", ["notes", "data.notes"])
 @pytest.mark.parametrize(
-    "excerpt,status", [("Victim", "completed"), ("Suspect", "failed")]
+    "excerpt,unverified",
+    [("Victim", 0), ("victim", 0), ("Suspect", 1)],
 )
 def test_entity_data_key_cited_as_field_is_checked_against_data(
     client,
@@ -322,7 +347,8 @@ def test_entity_data_key_cited_as_field_is_checked_against_data(
     engine,
     monkeypatch,
     excerpt,
-    status,
+    unverified,
+    field,
 ):
     session.add(
         Entity(
@@ -340,16 +366,18 @@ def test_entity_data_key_cited_as_field_is_checked_against_data(
         source = next(s for s in sources if s["kind"] == "entity")
         citation = {
             "source_id": source["source_id"],
-            "field": "notes",
+            "field": field,
             "excerpt": excerpt,
         }
         return ProviderReply("Mina is the victim.", citations=[citation])
 
     monkeypatch.setattr(StrixyService, "generate", reply)
     saved = turn(client, detail, owner, engine)
-    assert saved["runs"][-1]["status"] == status
-    if status == "completed":
-        assert saved["messages"][-1]["citations"][0]["field"] == "data"
+    answer = saved["messages"][-1]
+    assert answer["coverage"]["unverified_citations"] == unverified
+    if not unverified:
+        assert answer["citations"][0]["field"] == "data"
+        assert answer["citations"][0]["excerpt"] == "Victim"
 
 
 def test_source_updates_keep_old_answers_but_invalidate_reused_context(
@@ -555,12 +583,24 @@ def test_hunt_derived_results_keep_correlation_scope(
 
     def reply(self, messages, config, timeout):
         seen.append(messages[0].content)
-        return ProviderReply("Hunt inference")
+        return ProviderReply(
+            "Hunt inference",
+            citations=[
+                {
+                    "source_id": f"hunt_step:{derived.id}",
+                    "field": "result",
+                    "excerpt": "derived-restricted.test",
+                }
+            ],
+        )
 
     monkeypatch.setattr(StrixyService, "generate", reply)
     first = turn(client, detail, owner, engine)
     assert "derived-restricted.test" in seen[-1]
     assert first["runs"][-1]["status"] == "completed"
+    assert first["messages"][-1]["citations"][0]["record_url"] == (
+        f"/case/{assigned}/hunts/execution/{execution.id}"
+    )
     if revoke:
         session.delete(session.get(CaseUserLink, (restricted[0], strixy.id)))
         session.commit()

@@ -665,8 +665,8 @@ def test_office_processing_limits_and_untrusted_contents(
     detail, owner = new_conversation(client, assigned, analyst_token)
     saved = turn(client, detail, owner, engine)
     if variant == "invalid_locator":
-        assert saved["runs"][-1]["error_code"] == "invalid_citation"
-        assert len(saved["messages"]) == 1
+        assert saved["messages"][-1]["citations"] == []
+        assert saved["messages"][-1]["coverage"]["unverified_citations"] == 1
         return
     assert saved["runs"][-1]["status"] == "completed", saved
     outcome = saved["messages"][-1]["coverage"]["attachment_outcomes"][0]

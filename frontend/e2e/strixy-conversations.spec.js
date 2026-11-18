@@ -189,7 +189,8 @@ for (const mode of ['limit', 'cancel', 'failure']) {
       await expect(
         page.getByText(`Partial Strixy reply ${fixture.marker}`, { exact: true }),
       ).toHaveCount(1)
-      await page.getByRole('button', { name: /^Open source 1:/ }).click()
+      await page.getByRole('button', { name: /Review details/ }).click()
+      await page.getByRole('dialog').locator('.v-list-item').first().click()
       await expect(page.getByRole('dialog')).toContainText(fixture.cases[0].case_number)
       await page.getByRole('button', { name: 'Close source' }).click()
       await beforeRelease[mode]?.(page)

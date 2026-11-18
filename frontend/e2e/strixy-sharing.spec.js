@@ -63,7 +63,8 @@ test('two readers share a fixed snapshot and keep an independent follow-up after
     await loginUi(viewer, administrator)
     await viewer.goto(sharePath)
     await expect(viewer.getByText('Read-only snapshot', { exact: false }).first()).toBeVisible()
-    await viewer.getByRole('button', { name: /^Open source 1:/ }).click()
+    await viewer.getByRole('button', { name: /Review details/ }).click()
+    await viewer.getByRole('dialog').locator('.v-list-item').first().click()
     await expect(viewer.getByRole('dialog')).toContainText(fixture.cases[0].case_number)
     await viewer.getByRole('button', { name: 'Close source' }).click()
     await json(

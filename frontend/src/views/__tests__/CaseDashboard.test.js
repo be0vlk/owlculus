@@ -285,6 +285,26 @@ describe('CaseDashboard', () => {
     expect(wrapper.get('[data-testid="case-tabs"]').attributes('data-model-value')).toBe('entities')
   })
 
+  it('opens the evidence file named in the URL once evidence has loaded', async () => {
+    const file = { id: 9, title: 'Witness note', is_folder: false }
+    mocks.getFolderTree.mockResolvedValue([{ id: 3, title: 'Folder', is_folder: true }, file])
+    mocks.route.query = { tab: 'evidence', evidence: '9' }
+
+    const wrapper = await mountDashboard()
+
+    const modal = wrapper.findComponent({ name: 'FileContentModal' })
+    expect(modal.props()).toMatchObject({ evidenceItem: file, modelValue: true })
+  })
+
+  it('only shows the Evidence tab when the URL names a folder', async () => {
+    mocks.getFolderTree.mockResolvedValue([{ id: 3, title: 'Folder', is_folder: true }])
+    mocks.route.query = { tab: 'evidence', evidence: '3' }
+
+    const wrapper = await mountDashboard()
+
+    expect(wrapper.findComponent({ name: 'FileContentModal' }).props('modelValue')).toBe(false)
+  })
+
   it('opens the entity named in the URL once the case has loaded', async () => {
     const { entityService } = await import('@/services/entity')
     const entity = { id: 5, entity_type: 'person', data: { first_name: 'Ada' } }
