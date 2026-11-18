@@ -67,7 +67,6 @@ def test_strixy_model_defaults_to_the_built_in_and_can_be_overridden(monkeypatch
     from app.core.config import settings
     from app.core.strixy_config import StrixyConfig, get_strixy_config
 
-    assert Settings(_env_file=None).STRIXY_MODEL == StrixyConfig().model
     assert get_strixy_config() == StrixyConfig()
 
     monkeypatch.setenv("STRIXY_MODEL", "gpt-next")
@@ -78,7 +77,76 @@ def test_strixy_model_defaults_to_the_built_in_and_can_be_overridden(monkeypatch
     assert get_strixy_config().reasoning_effort == StrixyConfig().reasoning_effort
 
 
-def test_strixy_model_rejects_an_empty_value(monkeypatch):
-    monkeypatch.setenv("STRIXY_MODEL", "")
-    with pytest.raises(ValidationError, match="STRIXY_MODEL"):
+def strixy_env(monkeypatch, **values) -> None:
+    for name, value in {
+        "SECRET_KEY": "secret",
+        "POSTGRES_USER": "owlculus",
+        "POSTGRES_PASSWORD": "password",
+        "POSTGRES_HOST": "database",
+        "POSTGRES_PORT": "5432",
+        "POSTGRES_DB": "owlculus",
+        **values,
+    }.items():
+        monkeypatch.setenv(name, value)
+
+
+@pytest.mark.parametrize(
+    ("provider", "model"),
+    [
+        ("openai", "gpt-6-astra"),
+        ("anthropic", "claude-sonnet-5-5"),
+    ],
+)
+def test_strixy_model_defaults_per_provider(monkeypatch, provider, model) -> None:
+    from app.core.strixy_config import get_strixy_config
+
+    strixy_env(monkeypatch, STRIXY_PROVIDER=provider)
+    monkeypatch.setattr("app.core.config.settings", Settings(_env_file=None))
+
+    config = get_strixy_config()
+
+    assert (config.provider, config.model, config.base_url) == (provider, model, None)
+    assert config.supports_vision is True
+
+
+def test_strixy_openai_compatible_settings_pass_through(monkeypatch) -> None:
+    from app.core.strixy_config import get_strixy_config
+
+    strixy_env(
+        monkeypatch,
+        STRIXY_PROVIDER="openai_compatible",
+        STRIXY_MODEL="llama3",
+        STRIXY_BASE_URL="http://10.0.0.5:11434/v1",
+        STRIXY_SUPPORTS_VISION="false",
+    )
+    monkeypatch.setattr("app.core.config.settings", Settings(_env_file=None))
+
+    config = get_strixy_config()
+
+    assert config.provider == "openai_compatible"
+    assert config.model == "llama3"
+    assert config.base_url == "http://10.0.0.5:11434/v1"
+    assert config.supports_vision is False
+
+
+@pytest.mark.parametrize(
+    "given",
+    [{"STRIXY_MODEL": "llama3"}, {"STRIXY_BASE_URL": "http://x/v1"}, {}],
+)
+def test_strixy_openai_compatible_requires_model_and_base_url(
+    monkeypatch, given
+) -> None:
+    monkeypatch.delenv("STRIXY_MODEL", raising=False)
+    monkeypatch.delenv("STRIXY_BASE_URL", raising=False)
+    strixy_env(monkeypatch, STRIXY_PROVIDER="openai_compatible", **given)
+
+    with pytest.raises(ValidationError, match="STRIXY_"):
         Settings(_env_file=None)
+
+
+def test_blank_strixy_overrides_from_compose_mean_unset(monkeypatch) -> None:
+    strixy_env(monkeypatch, STRIXY_MODEL="", STRIXY_BASE_URL="")
+
+    configured = Settings(_env_file=None)
+
+    assert configured.STRIXY_MODEL is None and configured.STRIXY_BASE_URL is None

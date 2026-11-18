@@ -245,7 +245,23 @@ def test_missing_configuration_preserves_conversation(client, assigned, analyst_
     )
     assert response.status_code == 422
     assert "API key not configured" in response.json()["detail"]
+    assert "OpenAI" in response.json()["detail"]
     assert client.get(detail, headers=owner).json()["messages"] == []
+
+
+def test_missing_configuration_names_the_configured_provider(
+    client, assigned, analyst_token, monkeypatch
+):
+    monkeypatch.setattr("app.core.config.settings.STRIXY_PROVIDER", "anthropic")
+    monkeypatch.setenv("OPENAI_API_KEY", "openai-only")
+    owner = auth(analyst_token)
+    url = f"/api/strixy/cases/{assigned}/conversations"
+    detail = f"{url}/{client.post(url, headers=owner).json()['id']}"
+    response = client.post(
+        f"{detail}/messages", headers=owner, json={"content": "Question"}
+    )
+    assert response.status_code == 422
+    assert "Anthropic API key not configured" in response.json()["detail"]
 
 
 def test_run_limits_are_distinct_from_execution_failure(
@@ -285,11 +301,15 @@ def test_run_limits_are_distinct_from_execution_failure(
     assert len(client.get(detail, headers=owner).json()["messages"]) == 3
 
 
+@pytest.mark.parametrize("sdk", ["openai", "anthropic"])
 def test_transport_loss_reports_uncertain_completion(
-    client, assigned, configured, analyst_token, engine, monkeypatch
+    client, assigned, configured, analyst_token, engine, monkeypatch, sdk
 ):
+    import importlib
+
     import httpx
-    from openai import APIConnectionError
+
+    APIConnectionError = importlib.import_module(sdk).APIConnectionError
 
     from app.executions.strixy_worker import execute
     from app.services.strixy_service import StrixyService

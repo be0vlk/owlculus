@@ -80,7 +80,7 @@
           <p>
             {{
               apiKeyError
-                ? 'Ask an administrator to configure the OpenAI API key in system settings.'
+                ? `Ask an administrator to configure the ${providerName} API key in system settings.`
                 : availabilityError
             }}
           </p>
@@ -294,6 +294,7 @@ const {
   loading,
   currentMessage,
   apiKeyError,
+  providerName,
   sendMessage,
   initializeChat,
   createConversation,

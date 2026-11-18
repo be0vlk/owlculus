@@ -2,6 +2,7 @@
 
 from datetime import timedelta
 
+from anthropic import APIConnectionError as AnthropicConnectionError
 from openai import APIConnectionError
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, col, select
@@ -98,7 +99,7 @@ def execute(run_id: str, database_engine: Engine = engine):
         error = "provider_not_configured"
     except DomainException:
         error = "access_revoked"
-    except APIConnectionError:
+    except (APIConnectionError, AnthropicConnectionError):
         error = "completion_uncertain"
     except Exception:  # noqa: BLE001 - sanitized external failures
         error = "provider_failed"

@@ -7,8 +7,9 @@ It uses Pydantic for settings validation and environment variable handling.
 """
 
 import os
+from typing import Literal
 
-from pydantic import AnyHttpUrl, Field, SecretStr
+from pydantic import AnyHttpUrl, Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings
 from sqlalchemy.engine import URL
 
@@ -59,11 +60,29 @@ class Settings(BaseSettings):
     ]
     FORWARDED_ALLOW_IPS: str = os.environ.get("FORWARDED_ALLOW_IPS", "127.0.0.1,::1")
     AUTH_REDIS_URL: str = os.environ.get("AUTH_REDIS_URL", "redis://localhost:6380/0")
-    STRIXY_MODEL: str = Field(default="gpt-6-astra", min_length=1)
+    STRIXY_PROVIDER: Literal["openai", "openai_compatible", "anthropic"] = "openai"
+    STRIXY_MODEL: str | None = Field(default=None, min_length=1)
+    STRIXY_BASE_URL: str | None = Field(default=None, min_length=1)
+    STRIXY_SUPPORTS_VISION: bool = True
     API_DATABASE_CONCURRENCY: int = Field(default=8, ge=1, le=32)
     LOGIN_IP_MAX_ATTEMPTS: int = Field(default=30, ge=1, le=10000)
     LOGIN_ACCOUNT_MAX_ATTEMPTS: int = Field(default=10, ge=1, le=10000)
     LOGIN_LIMIT_WINDOW_SECONDS: int = Field(default=300, ge=1, le=86400)
+
+    @field_validator("STRIXY_MODEL", "STRIXY_BASE_URL", mode="before")
+    @classmethod
+    def blank_means_unset(cls, value: object) -> object:
+        return None if isinstance(value, str) and not value.strip() else value
+
+    @model_validator(mode="after")
+    def openai_compatible_needs_endpoint(self) -> "Settings":
+        if self.STRIXY_PROVIDER == "openai_compatible" and not (
+            self.STRIXY_MODEL and self.STRIXY_BASE_URL
+        ):
+            raise ValueError(
+                "STRIXY_PROVIDER=openai_compatible requires STRIXY_MODEL and STRIXY_BASE_URL"
+            )
+        return self
 
     def get_database_url(self) -> str:
         return self.DATABASE_URI

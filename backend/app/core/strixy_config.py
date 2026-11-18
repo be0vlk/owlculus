@@ -24,12 +24,27 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+DEFAULT_MODELS = {
+    "openai": "gpt-6-astra",
+    "openai_compatible": "",
+    "anthropic": "claude-sonnet-5-5",
+}
+
+
+PROVIDER_NAMES = {
+    "openai": "OpenAI",
+    "openai_compatible": "OpenAI-compatible",
+    "anthropic": "Anthropic",
+}
+
 
 class StrixyConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     version: str = "strixy-6-v2"
     instruction_version: str = "grounded-visuals-v1"
+    provider: Literal["openai", "openai_compatible", "anthropic"] = "openai"
+    base_url: str | None = None
     model: str = "gpt-6-astra"
     reasoning_effort: Literal["low", "medium", "high", "xhigh", "max"] = "low"
     supports_streaming: bool = True
@@ -82,4 +97,10 @@ class StrixyConfig(BaseModel):
 def get_strixy_config() -> StrixyConfig:
     from app.core.config import settings
 
-    return StrixyConfig(model=settings.STRIXY_MODEL)
+    provider = settings.STRIXY_PROVIDER
+    return StrixyConfig(
+        provider=provider,
+        base_url=settings.STRIXY_BASE_URL,
+        model=settings.STRIXY_MODEL or DEFAULT_MODELS[provider],
+        supports_vision=settings.STRIXY_SUPPORTS_VISION,
+    )

@@ -10,7 +10,7 @@ from app.core.utils import get_utc_now
 from app.database.db_utils import transaction
 from app.database.models import StrixyGrounding, StrixyProgress, StrixyRun, User
 from app.schemas.strixy_schema import ModelMessage, SourceQuery
-from app.services.api_key_vault import ConfigurationApiKeyVault, Provider
+from app.services.api_key_vault import strixy_key
 from app.services.strixy_conversations import StrixyConversations
 from app.services.strixy_service import ProviderReply, StrixyService
 from app.services.strixy_sources import (
@@ -183,7 +183,7 @@ def analyze(
             progress.model_calls += 1
             db.add(progress)
             service = StrixyService(
-                ConfigurationApiKeyVault(db).get_key(Provider.OPENAI),
+                strixy_key(db, config),
                 on_progress=checkpoint,
             )
         reply = service.generate(

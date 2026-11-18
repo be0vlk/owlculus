@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from sqlalchemy import delete
 from sqlmodel import Session, col, select
 
+from app.core.strixy_config import PROVIDER_NAMES
 from app.core.utils import get_utc_now
 from app.database.db_utils import transaction
 from app.database.models import (
@@ -19,7 +20,7 @@ from app.database.models import (
     User,
 )
 from app.schemas.strixy_schema import ChatMessage
-from app.services.api_key_vault import ConfigurationApiKeyVault, Provider
+from app.services.api_key_vault import strixy_key
 from app.services.strixy_access import require_strixy_access
 from app.services.strixy_sources import CaseSources
 
@@ -366,12 +367,13 @@ class StrixyConversations:
                 raise HTTPException(
                     409, "Wait for the current reply before sending another message"
                 )
-            if not ConfigurationApiKeyVault(self.db).get_key(Provider.OPENAI):
+            config = get_strixy_config()
+            if not strixy_key(self.db, config):
                 raise HTTPException(
                     422,
-                    "OpenAI API key not configured. Ask an administrator to configure it.",
+                    f"{PROVIDER_NAMES[config.provider]} API key not configured. "
+                    "Ask an administrator to configure it.",
                 )
-            config = get_strixy_config()
             if focus:
                 reader = CaseSources(self.db, self.human, self.case_id)
                 for source_id in focus:

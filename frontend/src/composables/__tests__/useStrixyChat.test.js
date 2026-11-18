@@ -263,3 +263,32 @@ it('opens fixed read-only content and creates an independent private follow-up',
   expect(chat.conversationId.value).toBe('copy')
   expect(chat.sharedSnapshot.value).toBeNull()
 })
+
+it('names the configured provider when its API key is missing', async () => {
+  const availability = (is_configured) =>
+    api.get.mockImplementation(async (url) => ({
+      data: url.endsWith('availability')
+        ? { is_configured, provider: 'Anthropic' }
+        : url.endsWith('conversations')
+          ? [{ id: 'one' }]
+          : saved,
+    }))
+  availability(false)
+  await chat.initializeChat()
+  expect(chat.apiKeyError.value).toBe(true)
+  expect(chat.providerName.value).toBe('Anthropic')
+  availability(true)
+  await chat.initializeChat()
+  api.post.mockRejectedValueOnce({
+    response: { status: 422, data: { detail: 'Anthropic API key not configured. Ask.' } },
+  })
+  chat.currentMessage.value = 'Question'
+  await chat.sendMessage()
+  expect(chat.operationError.value).toBe(
+    'Ask an administrator to configure the Anthropic API key, then try again.',
+  )
+})
+
+it('falls back to a generic provider name when availability omits it', () => {
+  expect(chat.providerName.value).toBe('LLM provider')
+})

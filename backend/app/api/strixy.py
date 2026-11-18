@@ -8,6 +8,7 @@ from sqlmodel import Session
 from app.core.database_boundary import DatabaseRoute
 from app.core.dependencies import get_current_user
 from app.core.exceptions import ResourceNotFoundException
+from app.core.strixy_config import PROVIDER_NAMES, get_strixy_config
 from app.database import models
 from app.database.connection import get_db
 from app.schemas.strixy_schema import (
@@ -16,7 +17,7 @@ from app.schemas.strixy_schema import (
     CreateShare,
     SubmitMessage,
 )
-from app.services.api_key_vault import ConfigurationApiKeyVault, Provider
+from app.services.api_key_vault import strixy_key
 from app.services.strixy_access import require_strixy_access
 from app.services.strixy_conversations import StrixyConversations
 from app.services.strixy_shares import StrixyShares
@@ -48,10 +49,12 @@ async def strixy_availability(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[models.User, Depends(get_current_user)],
     case_id: Annotated[int, Query(gt=0)],
-) -> dict[str, bool]:
+) -> dict[str, bool | str]:
     require_strixy_access(db, current_user, case_id)
+    config = get_strixy_config()
     return {
-        "is_configured": bool(ConfigurationApiKeyVault(db).get_key(Provider.OPENAI))
+        "is_configured": bool(strixy_key(db, config)),
+        "provider": PROVIDER_NAMES[config.provider],
     }
 
 

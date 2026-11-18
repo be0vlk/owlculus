@@ -18,6 +18,7 @@ export function useStrixyChat() {
   const sending = ref(false)
   const currentMessage = ref('')
   const apiKeyError = ref(false)
+  const providerName = ref('LLM provider')
   const availabilityError = ref('')
   const operationError = ref('')
   const checkingAvailability = ref(false)
@@ -102,7 +103,7 @@ export function useStrixyChat() {
       await activeCase.recoverUnavailable(caseId)
     } else if (status === 422 && error.response?.data?.detail?.includes('API key not configured')) {
       apiKeyError.value = true
-      operationError.value = 'Ask an administrator to configure the OpenAI API key, then try again.'
+      operationError.value = `Ask an administrator to configure the ${providerName.value} API key, then try again.`
     } else {
       operationError.value =
         status === 409
@@ -166,6 +167,7 @@ export function useStrixyChat() {
       const status = await strixyService.getAvailability(caseId)
       if (token !== generation) return
       apiKeyError.value = !status.is_configured
+      providerName.value = status.provider || 'LLM provider'
       availabilityError.value = ''
       availabilityChecked.value = true
     } catch (error) {
@@ -436,6 +438,7 @@ export function useStrixyChat() {
     loading,
     currentMessage,
     apiKeyError,
+    providerName,
     sendMessage,
     initializeChat,
     createConversation,

@@ -240,4 +240,27 @@ def test_availability_exposes_configuration_boolean_to_assigned_analyst(
         headers=headers(analyst_token),
     )
     assert response.status_code == 200
-    assert response.json() == {"is_configured": False}
+    assert response.json() == {"is_configured": False, "provider": "OpenAI"}
+
+
+def test_availability_follows_the_configured_provider(
+    client, strixy, analyst_token, test_case_with_users, session, monkeypatch
+):
+    from app.database.models import CaseUserLink
+
+    case_id = test_case_with_users.id
+    session.add(CaseUserLink(case_id=case_id, user_id=strixy.id))
+    session.commit()
+    monkeypatch.setattr("app.core.config.settings.STRIXY_PROVIDER", "anthropic")
+    monkeypatch.setenv("OPENAI_API_KEY", "openai-only")
+
+    def availability():
+        return client.get(
+            "/api/strixy/availability",
+            params={"case_id": case_id},
+            headers=headers(analyst_token),
+        ).json()
+
+    assert availability() == {"is_configured": False, "provider": "Anthropic"}
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "anthropic-key")
+    assert availability() == {"is_configured": True, "provider": "Anthropic"}
