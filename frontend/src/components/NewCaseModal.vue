@@ -53,6 +53,16 @@
               />
             </v-card-text>
           </v-card>
+
+          <v-switch
+            v-if="strixy"
+            v-model="strixyEnabled"
+            label="Enable Strixy"
+            hint="Let the Strixy AI assistant read this case"
+            persistent-hint
+            color="primary"
+            inset
+          />
         </v-form>
       </v-card-text>
 
@@ -77,6 +87,7 @@ import { userService } from '../services/user'
 import { useAuthStore } from '../stores/auth'
 import { useDialogFocusRestore } from '../composables/useDialogFocusRestore'
 import { getErrorMessage } from '../utils/errorMessage'
+import { isStrixy } from '../utils/userDisplay'
 import ModalActions from './ModalActions.vue'
 import CaseUserList from './CaseUserList.vue'
 
@@ -104,6 +115,8 @@ const authStore = useAuthStore()
 const clients = ref([])
 const allUsers = ref([])
 const selectedUsers = ref([])
+const strixy = computed(() => allUsers.value.find(isStrixy))
+const strixyEnabled = ref(false)
 const isSubmitting = ref(false)
 const submissionError = ref('')
 const isFormValid = ref(false)
@@ -148,6 +161,7 @@ const closeModal = () => {
   formData.client_id = ''
   formData.status = 'Open'
   selectedUsers.value = []
+  strixyEnabled.value = false
   submissionError.value = ''
   if (form.value) {
     form.value.reset()
@@ -170,10 +184,11 @@ const handleSubmit = async () => {
 
   try {
     const newCase = await caseService.createCase(formData)
+    const assignments = strixyEnabled.value
+      ? [...selectedUsers.value, { id: strixy.value.id, is_lead: false }]
+      : selectedUsers.value
     const assignmentResults = await Promise.allSettled(
-      selectedUsers.value.map((user) =>
-        caseService.addUserToCase(newCase.id, user.id, user.is_lead),
-      ),
+      assignments.map((user) => caseService.addUserToCase(newCase.id, user.id, user.is_lead)),
     )
     const failedAssignments = assignmentResults.filter((result) => result.status === 'rejected')
     const assignmentWarning = failedAssignments.length

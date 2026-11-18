@@ -47,32 +47,28 @@ it('marks the permanent AI account and hides human account actions', async () =>
   expect(wrapper.find('[aria-label="More actions for strixy_ai_1"]').exists()).toBe(false)
 })
 
-it('assigns Strixy as an Analyst through the membership controls and removes it', async () => {
+it('enables and disables Strixy through the case switch, not the member list', async () => {
   const wrapper = mountWithVuetify(ManageUsersModal, {
     props: { show: false, caseId: 9, caseData: { users: [] } },
     attachTo: document.body,
   })
   await wrapper.setProps({ show: true })
   await flushPromises()
-  const select = wrapper.findComponent({ name: 'VSelect' })
-  expect(select.props('items')[0].displayText).toContain('Strixy (AI)')
-  select.vm.$emit('update:modelValue', 2)
-  await flushPromises()
-  expect(wrapper.findComponent({ name: 'VCheckbox' }).props('disabled')).toBe(true)
-  let dialog = new DOMWrapper(document.querySelector('[role="dialog"]'))
-  await dialog
-    .findAll('button')
-    .find((button) => button.text() === 'Add User')
-    .trigger('click')
+  expect(wrapper.findComponent({ name: 'VSelect' }).props('items')).toEqual([])
+  const strixySwitch = wrapper.findComponent({ name: 'VSwitch' })
+  expect(strixySwitch.props('modelValue')).toBe(false)
+  strixySwitch.vm.$emit('update:modelValue', true)
   await flushPromises()
   expect(caseService.addUserToCase).toHaveBeenCalledWith(9, 2, false)
   await wrapper.setProps({ caseData: { users: [strixy] } })
-  dialog = new DOMWrapper(document.querySelector('[role="dialog"]'))
-  expect(dialog.text()).toContain('Strixy (AI)')
-  vi.spyOn(window, 'confirm').mockReturnValue(true)
-  await dialog.get('[aria-label="Remove strixy_ai_1@system.invalid from case"]').trigger('click')
+  expect(wrapper.findComponent({ name: 'VSwitch' }).props('modelValue')).toBe(true)
+  const dialog = new DOMWrapper(document.querySelector('[role="dialog"]'))
+  expect(dialog.text()).not.toContain('strixy_ai_1')
+  const confirm = vi.spyOn(window, 'confirm')
+  wrapper.findComponent({ name: 'VSwitch' }).vm.$emit('update:modelValue', false)
   await flushPromises()
   expect(caseService.removeUserFromCase).toHaveBeenCalledWith(9, 2)
+  expect(confirm).not.toHaveBeenCalled()
 })
 
 it('explains missing assignment on the chat page and recovers after assignment', async () => {
@@ -87,7 +83,7 @@ it('explains missing assignment on the chat page and recovers after assignment',
       status: 403,
       data: {
         code: 'strixy_not_assigned',
-        detail: 'Strixy is not assigned to this case. Ask an administrator to assign Strixy.',
+        detail: 'Strixy is not enabled on this case. Ask an administrator to enable it.',
       },
     },
   })
@@ -98,7 +94,7 @@ it('explains missing assignment on the chat page and recovers after assignment',
   await flushPromises()
   expect(wrapper.find('h1').text()).toBe('Strixy')
   expect(wrapper.text()).toContain('CASE-9')
-  expect(wrapper.text()).toContain('Strixy is not assigned to this case')
+  expect(wrapper.text()).toContain('Strixy is not enabled on this case')
   expect(wrapper.get('[aria-label="Message input"]').element.disabled).toBe(true)
   strixyService.getAvailability.mockResolvedValueOnce({ is_configured: true })
   await wrapper
@@ -106,6 +102,6 @@ it('explains missing assignment on the chat page and recovers after assignment',
     .find((button) => button.text() === 'Check again')
     .trigger('click')
   await flushPromises()
-  expect(wrapper.text()).not.toContain('Strixy is not assigned')
+  expect(wrapper.text()).not.toContain('Strixy is not enabled')
   expect(wrapper.get('[aria-label="Message input"]').element.disabled).toBe(false)
 })

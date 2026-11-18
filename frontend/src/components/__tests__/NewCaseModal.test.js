@@ -35,7 +35,7 @@ const TextFieldStub = defineComponent({
     '<input :aria-label="label" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
 })
 const SelectStub = defineComponent({
-  props: { label: String, modelValue: [String, Number] },
+  props: { label: String, modelValue: [String, Number], items: Array },
   emits: ['update:modelValue'],
   template: '<div :data-label="label"><slot /></div>',
 })
@@ -54,6 +54,13 @@ const TooltipStub = defineComponent({
 })
 const PassthroughStub = defineComponent({
   template: '<div><slot name="prepend" /><slot /><slot name="append" /></div>',
+})
+
+const SwitchStub = defineComponent({
+  props: { label: String, modelValue: Boolean },
+  emits: ['update:modelValue'],
+  template:
+    '<input type="checkbox" :aria-label="label" :checked="modelValue" @change="$emit(\'update:modelValue\', $event.target.checked)" />',
 })
 
 const global = {
@@ -79,6 +86,7 @@ const global = {
     VListItemSubtitle: PassthroughStub,
     VListItemTitle: PassthroughStub,
     VRow: PassthroughStub,
+    VSwitch: SwitchStub,
     ModalActions: ModalActionsStub,
   },
 }
@@ -137,5 +145,42 @@ describe('NewCaseModal', () => {
       ],
     ])
     expect(wrapper.emitted('close')).toHaveLength(1)
+  })
+
+  it('hides Strixy from the picker and assigns it only when the switch is on', async () => {
+    mocks.getUsers.mockResolvedValue([
+      { id: 9, email: 'analyst@example.org', username: 'analyst', role: 'Analyst' },
+      {
+        id: 2,
+        email: 's@system.invalid',
+        username: 'strixy_ai_1',
+        role: 'Analyst',
+        system_identity: 'strixy',
+      },
+    ])
+    caseService.createCase.mockResolvedValue({ id: 42 })
+    caseService.addUserToCase.mockResolvedValue({})
+    const open = async () => {
+      const wrapper = mount(NewCaseModal, { props: { isOpen: true }, global })
+      await flushPromises()
+      return wrapper
+    }
+
+    const wrapper = await open()
+    const picker = wrapper
+      .findAllComponents(SelectStub)
+      .find((select) => select.props('label') === 'Select User')
+    expect(picker.props('items').map((user) => user.id)).toEqual([9])
+    const switchEl = wrapper.get('[aria-label="Enable Strixy"]')
+    expect(switchEl.element.checked).toBe(false)
+    await wrapper.get('[data-testid="submit"]').trigger('click')
+    await flushPromises()
+    expect(caseService.addUserToCase).not.toHaveBeenCalled()
+
+    const second = await open()
+    await second.get('[aria-label="Enable Strixy"]').setValue(true)
+    await second.get('[data-testid="submit"]').trigger('click')
+    await flushPromises()
+    expect(caseService.addUserToCase).toHaveBeenCalledWith(42, 2, false)
   })
 })

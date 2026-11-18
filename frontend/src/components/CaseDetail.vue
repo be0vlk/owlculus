@@ -17,9 +17,9 @@
           <v-list-item-subtitle class="text-title-small font-weight-medium mb-1">
             Assigned Users
           </v-list-item-subtitle>
-          <div v-if="caseData?.users?.length" class="d-flex flex-wrap ga-1">
+          <div v-if="members.length" class="d-flex flex-wrap ga-1">
             <v-chip
-              v-for="user in caseData.users"
+              v-for="user in members"
               :key="user.id"
               size="small"
               :variant="user.is_lead ? 'outlined' : 'tonal'"
@@ -40,17 +40,25 @@
 <script setup>
 import { computed } from 'vue'
 import { formatDate } from '../composables/dateUtils'
+import { isStrixy } from '../utils/userDisplay'
 
 const props = defineProps({
   caseData: { type: Object, required: true },
   client: { type: Object, default: () => ({}) },
 })
 
+const members = computed(() => props.caseData?.users?.filter((u) => !isStrixy(u)) ?? [])
+
 const fields = computed(() => [
   { label: 'Title', value: props.caseData.title || 'N/A' },
   { label: 'Status', value: props.caseData.status || 'N/A', chip: true },
   { label: 'Client', value: props.client?.name || 'No client assigned' },
   { label: 'Created Date', value: formatDate(props.caseData.created_at) || 'N/A' },
+  {
+    label: 'Strixy',
+    value: props.caseData.users?.some(isStrixy) ? 'Enabled' : 'Disabled',
+    chip: true,
+  },
 ])
 </script>
 

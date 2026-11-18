@@ -110,9 +110,9 @@
         </template>
 
         <template #[`item.users`]="{ item }">
-          <div v-if="item.users?.length" class="d-flex flex-wrap ga-1">
+          <div v-if="members(item).length" class="d-flex flex-wrap ga-1">
             <v-chip
-              v-for="user in item.users"
+              v-for="user in members(item)"
               :key="user.id"
               :color="user.is_lead ? 'primary' : 'grey-lighten-1'"
               size="small"
@@ -184,6 +184,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useActiveCaseStore } from '../stores/activeCase'
 import { useAuthStore } from '../stores/auth'
 import { useClientsStore } from '../stores/clients'
+import { isStrixy } from '../utils/userDisplay'
 
 const route = useRoute()
 const router = useRouter()
@@ -211,6 +212,8 @@ watch(
   { immediate: true },
 )
 
+const members = (item) => item.users?.filter((u) => !isStrixy(u)) ?? []
+
 const headers = [
   { title: 'Case Number', key: 'case_number' },
   { title: 'Title', key: 'title' },
@@ -233,12 +236,12 @@ const filteredCases = computed(() => {
     if (activeQuickFilter.value === 'my-cases' && userId) {
       if (!item.users?.some((user) => user.id === userId)) return false
     }
-    if (activeQuickFilter.value === 'unassigned' && item.users?.length) return false
+    if (activeQuickFilter.value === 'unassigned' && members(item).length) return false
     if (!query) return true
     return (
       [item.case_number, item.title, getClientName(item.client_id), item.status].some((value) =>
         (value || '').toLowerCase().includes(query),
-      ) || !!item.users?.some((user) => (user.username || '').toLowerCase().includes(query))
+      ) || members(item).some((user) => (user.username || '').toLowerCase().includes(query))
     )
   })
 })

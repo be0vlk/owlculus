@@ -33,7 +33,23 @@
           {{ error }}
         </v-alert>
 
-        <v-card v-else variant="outlined">
+        <v-card v-if="strixy && !loading && !error" class="mb-4" variant="outlined">
+          <v-card-text>
+            <v-switch
+              :model-value="strixyEnabled"
+              :loading="settingStrixy"
+              :disabled="settingStrixy"
+              label="Enable Strixy"
+              hint="Let the Strixy AI assistant read this case"
+              persistent-hint
+              color="primary"
+              inset
+              @update:model-value="setStrixy"
+            />
+          </v-card-text>
+        </v-card>
+
+        <v-card v-if="!loading && !error" variant="outlined">
           <v-card-title class="text-body-large pb-2">
             <v-icon start>mdi-account-check</v-icon>
             Case Users
@@ -79,6 +95,7 @@ import { userService } from '@/services/user'
 import { caseService } from '@/services/case'
 import { useDialogFocusRestore } from '@/composables/useDialogFocusRestore'
 import { getErrorMessage } from '@/utils/errorMessage'
+import { isStrixy } from '@/utils/userDisplay'
 import ModalActions from './ModalActions.vue'
 import CaseUserList from './CaseUserList.vue'
 
@@ -106,6 +123,7 @@ const error = ref(null)
 const allUsers = ref([])
 const addingUser = ref(false)
 const busyUserId = ref(null)
+const settingStrixy = ref(false)
 
 const dialogVisible = computed({
   get: () => props.show,
@@ -117,6 +135,8 @@ const dialogVisible = computed({
 })
 
 const caseUsers = computed(() => props.caseData?.users || [])
+const strixy = computed(() => allUsers.value.find(isStrixy))
+const strixyEnabled = computed(() => caseUsers.value.some(isStrixy))
 
 const loadUsers = async () => {
   try {
@@ -157,6 +177,20 @@ const removeUser = async (user) => {
     error.value = getErrorMessage(err, 'Failed to remove user from case')
   } finally {
     busyUserId.value = null
+  }
+}
+
+const setStrixy = async (on) => {
+  try {
+    settingStrixy.value = true
+    error.value = null
+    if (on) await caseService.addUserToCase(props.caseId, strixy.value.id, false)
+    else await caseService.removeUserFromCase(props.caseId, strixy.value.id)
+    emit('updated')
+  } catch (err) {
+    error.value = getErrorMessage(err, 'Failed to update Strixy')
+  } finally {
+    settingStrixy.value = false
   }
 }
 

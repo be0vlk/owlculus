@@ -146,7 +146,7 @@ def test_assignment_controls_chat_for_admin_and_human_analyst(
             "/api/strixy/chat", json=payload, headers=headers(admin_token)
         )
         assert denied.status_code == 403
-        assert "not assigned" in denied.json()["detail"]
+        assert "not enabled" in denied.json()["detail"]
         assert denied.json()["code"] == "strixy_not_assigned"
         provider.assert_not_called()
 

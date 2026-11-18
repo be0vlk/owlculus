@@ -1,6 +1,6 @@
 <template>
-  <v-list v-if="users.length" density="compact" class="mb-4">
-    <v-list-item v-for="user in users" :key="user.id" class="px-0">
+  <v-list v-if="members.length" density="compact" class="mb-4">
+    <v-list-item v-for="user in members" :key="user.id" class="px-0">
       <template #prepend>
         <v-avatar color="grey-lighten-1" size="32">
           <v-icon>mdi-account</v-icon>
@@ -111,7 +111,7 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { userDisplayName } from '@/utils/userDisplay'
+import { isStrixy, userDisplayName } from '@/utils/userDisplay'
 
 const props = defineProps({
   users: { type: Array, required: true },
@@ -127,9 +127,11 @@ const emit = defineEmits(['add', 'toggle-lead', 'remove'])
 const userToAdd = ref(null)
 const isLead = ref(false)
 
+const members = computed(() => props.users.filter((user) => !isStrixy(user)))
+
 const availableUsers = computed(() =>
   props.allUsers
-    .filter((user) => !props.users.some(({ id }) => id === user.id))
+    .filter((user) => !isStrixy(user) && !props.users.some(({ id }) => id === user.id))
     .map((user) => ({
       ...user,
       displayText: `${user.email} - ${userDisplayName(user)} (${user.role})`,

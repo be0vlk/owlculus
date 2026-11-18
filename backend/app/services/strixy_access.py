@@ -28,7 +28,7 @@ def require_strixy_access(db: Session, current_user: User, case_id: int) -> User
         access.readable(strixy, case_id)
     except AuthorizationException as error:
         raise AuthorizationException(
-            "Strixy is not assigned to this case. Ask an administrator to assign Strixy.",
+            "Strixy is not enabled on this case. Ask an administrator to enable it.",
             code="strixy_not_assigned",
         ) from error
     return strixy

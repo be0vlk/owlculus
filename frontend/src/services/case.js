@@ -1,4 +1,5 @@
 import api from './api'
+import { isStrixy } from '../utils/userDisplay'
 
 export const caseService = {
   async getCases(params = {}) {
@@ -37,6 +38,6 @@ export const caseService = {
   },
 
   async getCaseUsers(caseId) {
-    return (await api.get(`/api/cases/${caseId}/users`)).data
+    return (await api.get(`/api/cases/${caseId}/users`)).data.filter((user) => !isStrixy(user))
   },
 }
