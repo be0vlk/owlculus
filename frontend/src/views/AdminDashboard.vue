@@ -96,6 +96,10 @@
               />
             </section>
           </template>
+          <StrixySettingsCard
+            v-else-if="tab.value === 'strixy'"
+            @notification="handleNotification"
+          />
           <SystemConfigurationCard
             v-else-if="tab.value === 'configuration'"
             @notification="handleNotification"
@@ -126,6 +130,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useNotifications } from '@/composables/useNotifications'
 import BaseDashboard from '@/components/BaseDashboard.vue'
 import SystemConfigurationCard from '@/components/SystemConfigurationCard.vue'
+import StrixySettingsCard from '@/components/StrixySettingsCard.vue'
 import ApiKeyManagementCard from '@/components/ApiKeyManagementCard.vue'
 import EvidenceTemplateManagementCard from '@/components/EvidenceTemplateManagementCard.vue'
 import TaskTemplateManagementCard from '@/components/TaskTemplateManagementCard.vue'
@@ -140,6 +145,7 @@ const tabs = [
   { value: 'invites', label: 'Invites' },
   { value: 'keys', label: 'API keys' },
   { value: 'templates', label: 'Templates' },
+  { value: 'strixy', label: 'Strixy' },
   { value: 'configuration', label: 'Case numbering' },
 ]
 const activeTab = computed({
