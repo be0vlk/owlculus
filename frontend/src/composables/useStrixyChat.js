@@ -78,8 +78,7 @@ export function useStrixyChat() {
   }
   onScopeDispose(invalidate)
   const scrollToBottom = () => {
-    const container = document.querySelector('.chat-messages')
-    if (container) container.scrollTop = container.scrollHeight
+    window.scrollTo({ top: document.documentElement.scrollHeight })
   }
   const clearPrivateContent = () => {
     messages.value = []

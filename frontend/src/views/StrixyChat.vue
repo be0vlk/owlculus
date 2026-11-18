@@ -1,78 +1,82 @@
 <template>
-  <v-main class="strixy-page">
-    <header class="strixy-header">
-      <div class="strixy-brand">
-        <div>
-          <h1 class="text-headline-small font-weight-bold">Strixy</h1>
-          <p class="text-body-medium text-medium-emphasis">
-            {{ activeCase.activeCase?.case_number }}
-            <span class="strixy-brand-role">· Case assistant</span>
-          </p>
+  <BaseDashboard compact title="Strixy" class="strixy-page">
+    <template #header>
+      <header class="d-flex flex-wrap align-center ga-4 mb-6">
+        <div class="d-flex align-center ga-3">
+          <v-icon icon="mdi-owl" color="primary" size="28" />
+          <div>
+            <h1 class="text-headline-small font-weight-bold">Strixy</h1>
+            <p class="text-body-medium text-medium-emphasis mb-0">
+              {{ activeCase.activeCase?.case_number }}
+              <span class="strixy-brand-role">· Case assistant</span>
+            </p>
+          </div>
         </div>
-      </div>
-      <div class="strixy-header-actions">
-        <v-btn
-          variant="text"
-          prepend-icon="mdi-history"
-          aria-label="Conversations"
-          @click="openHistory"
-          ><span>Conversations</span></v-btn
-        >
-        <v-btn
-          v-if="!sharedSnapshot && shareableMessages.length"
-          variant="text"
-          prepend-icon="mdi-share-variant-outline"
-          aria-label="Share conversation"
-          :disabled="sharing"
-          @click="openSharing(shareableMessages.at(-1).id)"
-          ><span>Share</span></v-btn
-        >
-        <v-btn
-          variant="outlined"
-          prepend-icon="mdi-plus"
-          aria-label="Start new conversation"
-          :disabled="initializing || !!availabilityError || changingConversation"
-          @click="handleNewChat"
-          ><span>New chat</span></v-btn
-        >
-        <v-menu v-if="conversationId && !sharedSnapshot" location="bottom end"
-          ><template #activator="{ props }"
-            ><v-btn
-              v-bind="props"
-              icon="mdi-dots-horizontal"
-              size="small"
-              variant="text"
-              aria-label="Conversation actions" /></template
-          ><v-list>
-            <v-list-item
-              title="Export conversation"
-              prepend-icon="mdi-download"
-              :disabled="!hasUserMessages || loading"
-              @click="exportChat"
-            />
-            <v-list-item
-              v-if="latestRun"
-              title="Reanalyze current data"
-              prepend-icon="mdi-refresh"
-              :disabled="!canChat || loading"
-              @click="controlRun('reanalyze')"
-            />
-            <v-list-item
-              title="Shared snapshots"
-              prepend-icon="mdi-share-variant-outline"
-              @click="sharingOpen = true"
-            />
-            <v-list-item
-              title="Delete conversation"
-              prepend-icon="mdi-delete-outline"
-              :disabled="changingConversation"
-              @click="handleDelete"
-            /> </v-list
-        ></v-menu>
-      </div>
-    </header>
+        <v-spacer />
+        <div class="strixy-header-actions">
+          <v-btn
+            variant="text"
+            prepend-icon="mdi-history"
+            aria-label="Conversations"
+            @click="openHistory"
+            ><span>Conversations</span></v-btn
+          >
+          <v-btn
+            v-if="!sharedSnapshot && shareableMessages.length"
+            variant="text"
+            prepend-icon="mdi-share-variant-outline"
+            aria-label="Share conversation"
+            :disabled="sharing"
+            @click="openSharing(shareableMessages.at(-1).id)"
+            ><span>Share</span></v-btn
+          >
+          <v-btn
+            variant="outlined"
+            prepend-icon="mdi-plus"
+            aria-label="Start new conversation"
+            :disabled="initializing || !!availabilityError || changingConversation"
+            @click="handleNewChat"
+            ><span>New chat</span></v-btn
+          >
+          <v-menu v-if="conversationId && !sharedSnapshot" location="bottom end"
+            ><template #activator="{ props }"
+              ><v-btn
+                v-bind="props"
+                icon="mdi-dots-horizontal"
+                size="small"
+                variant="text"
+                aria-label="Conversation actions" /></template
+            ><v-list>
+              <v-list-item
+                title="Export conversation"
+                prepend-icon="mdi-download"
+                :disabled="!hasUserMessages || loading"
+                @click="exportChat"
+              />
+              <v-list-item
+                v-if="latestRun"
+                title="Reanalyze current data"
+                prepend-icon="mdi-refresh"
+                :disabled="!canChat || loading"
+                @click="controlRun('reanalyze')"
+              />
+              <v-list-item
+                title="Shared snapshots"
+                prepend-icon="mdi-share-variant-outline"
+                @click="sharingOpen = true"
+              />
+              <v-list-item
+                title="Delete conversation"
+                prepend-icon="mdi-delete-outline"
+                :disabled="changingConversation"
+                @click="handleDelete"
+              /> </v-list
+          ></v-menu>
+        </div>
+      </header>
+    </template>
 
-    <section class="strixy-layout" :class="{ 'strixy-empty': !visibleMessages.length }">
+    <section class="strixy-layout">
       <div v-if="availabilityError || apiKeyError" class="strixy-notice" role="status">
         <v-icon icon="mdi-information-outline" size="20" />
         <div>
@@ -248,7 +252,7 @@
     <v-snackbar v-model="exportError" timeout="5000" location="top center"
       >Unable to export this conversation. Reopen it to check current access.</v-snackbar
     >
-  </v-main>
+  </BaseDashboard>
 </template>
 
 <script setup>
@@ -256,6 +260,7 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useActiveCaseStore } from '@/stores/activeCase'
 import { useStrixyChat } from '@/composables/useStrixyChat'
+import BaseDashboard from '@/components/BaseDashboard.vue'
 import ConfirmationDialog from '@/components/ConfirmationDialog.vue'
 import StrixyHistoryDialog from '@/components/strixy/StrixyHistoryDialog.vue'
 import StrixyMessage from '@/components/strixy/StrixyMessage.vue'
@@ -376,7 +381,8 @@ const canContinue = computed(
         latestRun.value.status !== 'failed')),
 )
 const failureReasons = {
-  invalid_citation: 'The model quoted text that isn’t in the case records, so the answer was withheld',
+  invalid_citation:
+    'The model quoted text that isn’t in the case records, so the answer was withheld',
   invalid_tool_request: 'The model asked to read the case in a way Strixy doesn’t support',
 }
 const recoveryNotice = computed(() => {
@@ -599,32 +605,8 @@ watch(
 }
 </style>
 <style scoped>
-.strixy-page {
-  display: flex;
-  flex-direction: column;
-  height: 100dvh;
-  overflow: hidden;
-  background: rgb(var(--v-theme-surface));
-}
-
 .strixy-page :where(h1, p) {
   margin: 0;
-}
-
-.strixy-header {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
-  min-height: 88px;
-  padding: 18px 30px;
-  border-bottom: 1px solid var(--strixy-line);
-}
-
-.strixy-brand :where(p) span {
-  padding: 0 5px;
 }
 
 .strixy-header-actions {
@@ -638,35 +620,16 @@ watch(
   border-radius: 8px;
 }
 
-.strixy-layout {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  max-width: 820px;
-  margin: 0 auto;
-  padding: 0 34px 16px;
-}
-
 .chat-messages {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 30px 3px 22px;
-  scrollbar-width: thin;
-  scroll-padding: 24px;
-}
-
-.strixy-empty .chat-messages {
-  display: flex;
-  align-items: center;
+  padding: 8px 0 22px;
 }
 
 .strixy-compose-area {
-  flex-shrink: 0;
-  padding-top: 12px;
-  background: rgb(var(--v-theme-surface));
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  padding: 12px 0 16px;
+  background: rgb(var(--v-theme-background));
 }
 
 .strixy-composer {
@@ -771,10 +734,6 @@ watch(
 }
 
 @media (width <= 750px) {
-  .strixy-header {
-    padding: 17px 18px;
-  }
-
   .strixy-header-actions {
     gap: 2px;
   }
@@ -790,12 +749,6 @@ watch(
 
   .strixy-header-actions :deep(.v-btn__content > span) {
     display: none;
-  }
-}
-
-@media (width <= 600px) {
-  .strixy-layout {
-    padding: 0 18px 16px;
   }
 }
 

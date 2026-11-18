@@ -64,6 +64,7 @@ const starterPrompts = [
 }
 
 .strixy-welcome-copy {
+  max-width: 80ch;
   font-size: 15px;
   line-height: 1.8;
   color: var(--strixy-muted);
