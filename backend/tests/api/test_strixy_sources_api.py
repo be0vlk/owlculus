@@ -310,6 +310,49 @@ def test_invented_citations_never_publish_answer(
 
 
 @pytest.mark.parametrize(
+    "excerpt,status", [("Victim", "completed"), ("Suspect", "failed")]
+)
+def test_entity_data_key_cited_as_field_is_checked_against_data(
+    client,
+    assigned,
+    configured,
+    analyst_token,
+    session,
+    test_analyst,
+    engine,
+    monkeypatch,
+    excerpt,
+    status,
+):
+    session.add(
+        Entity(
+            case_id=assigned,
+            entity_type="person",
+            data={"name": "Mina", "notes": "Victim"},
+            created_by_id=test_analyst.id,
+        )
+    )
+    session.commit()
+    detail, owner = new_conversation(client, assigned, analyst_token)
+
+    def reply(self, messages, config, timeout):
+        sources = json.loads(messages[0].content)["sources"]
+        source = next(s for s in sources if s["kind"] == "entity")
+        citation = {
+            "source_id": source["source_id"],
+            "field": "notes",
+            "excerpt": excerpt,
+        }
+        return ProviderReply("Mina is the victim.", citations=[citation])
+
+    monkeypatch.setattr(StrixyService, "generate", reply)
+    saved = turn(client, detail, owner, engine)
+    assert saved["runs"][-1]["status"] == status
+    if status == "completed":
+        assert saved["messages"][-1]["citations"][0]["field"] == "data"
+
+
+@pytest.mark.parametrize(
     "attack", ["execute_plugin", "shell", "case_override", "foreign_source"]
 )
 def test_tool_allowlist_and_case_binding_leave_investigation_unchanged(

@@ -50,6 +50,18 @@ def encoded(value) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
 
 
+def object_field_with_key(fields: dict[str, str], key: str) -> str:
+    """Models cite keys inside JSON-object fields (Entity data) as if they were fields."""
+    for name, text in fields.items():
+        try:
+            value = json.loads(text)
+        except ValueError:
+            continue
+        if isinstance(value, dict) and key in value:
+            return name
+    return key
+
+
 @dataclass
 class CaseSource:
     kind: str
@@ -644,12 +656,19 @@ class GroundedMaterial:
             if visual:
                 if excerpt != "":
                     raise ValueError("Visual references cannot verify transcriptions")
-            elif (
-                citation["field"] not in source["fields"]
-                or not excerpt
-                or excerpt not in source["fields"][citation["field"]]
-            ):
-                raise ValueError("Invalid citation")
+            else:
+                if citation["field"] not in source["fields"]:
+                    citation = citation | {
+                        "field": object_field_with_key(
+                            source["fields"], citation["field"]
+                        )
+                    }
+                if (
+                    citation["field"] not in source["fields"]
+                    or not excerpt
+                    or excerpt not in source["fields"][citation["field"]]
+                ):
+                    raise ValueError("Invalid citation")
             result.append(
                 citation
                 | {"version": source["version"], "inspected_at": self.inspected_at}
