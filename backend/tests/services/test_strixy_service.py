@@ -256,12 +256,12 @@ def test_compatible_adapter_sends_chat_completions_without_reasoning(limited):
     assert sent["parallel_tool_calls"] is False
     assert sent["stream"] is False
     assert not {"reasoning", "reasoning_effort", "store"} & sent.keys()
-    assert sent["messages"][0] == {"role": "system", "content": COMPAT.instructions}
-    assert sent["messages"][1] == {"role": "system", "content": "Earlier note"}
-    assert sent["messages"][2] == {"role": "user", "content": "Question"}
-    image_parts = sent["messages"][3]["content"]
-    assert '"source_id": "evidence:2"' in image_parts[0]["text"]
-    assert image_parts[1] == {
+    assert [m["role"] for m in sent["messages"]] == ["system", "user"]
+    assert sent["messages"][0]["content"] == COMPAT.instructions + "\n\nEarlier note"
+    user_parts = sent["messages"][1]["content"]
+    assert user_parts[0] == {"type": "text", "text": "Question"}
+    assert '"source_id": "evidence:2"' in user_parts[1]["text"]
+    assert user_parts[2] == {
         "type": "image_url",
         "image_url": {"url": "data:image/png;base64,cGl4"},
     }

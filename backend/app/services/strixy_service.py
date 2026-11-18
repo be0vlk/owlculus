@@ -103,36 +103,48 @@ def visual_label(image) -> str:
 def chat_messages(
     messages: list[ChatMessage], config: StrixyConfig
 ) -> list[ChatCompletionMessageParam]:
-    items: list[dict] = [{"role": "system", "content": config.instructions}]
-    for message in messages:
-        items.append({"role": message.role, "content": message.content})
-        if isinstance(message, ModelMessage):
-            for image in message.images:
-                items.append(
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": visual_label(image)},
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": "data:image/png;base64," + image.data
-                                },
-                            },
-                        ],
-                    }
-                )
-    return cast(list[ChatCompletionMessageParam], items)
+    system, turns = merged_turns(
+        messages,
+        config,
+        lambda data: {
+            "type": "image_url",
+            "image_url": {"url": "data:image/png;base64," + data},
+        },
+    )
+    for turn in turns:
+        # Many local servers accept only string content for text-only turns.
+        if all(part["type"] == "text" for part in turn["content"]):
+            turn["content"] = "\n\n".join(part["text"] for part in turn["content"])
+    return cast(
+        list[ChatCompletionMessageParam],
+        [{"role": "system", "content": system}] + turns,
+    )
 
 
 def anthropic_messages(
     messages: list[ChatMessage], config: StrixyConfig
 ) -> tuple[str, list[dict]]:
+    return merged_turns(
+        messages,
+        config,
+        lambda data: {
+            "type": "image",
+            "source": {"type": "base64", "media_type": "image/png", "data": data},
+        },
+    )
+
+
+def merged_turns(
+    messages: list[ChatMessage],
+    config: StrixyConfig,
+    image_part: Callable[[str], dict],
+) -> tuple[str, list[dict]]:
     system = [config.instructions]
     turns: list[dict] = []
 
     def add(role: str, blocks: list[dict]) -> None:
-        # Anthropic requires alternating roles; visual inputs are extra user turns.
+        # Anthropic and strict local chat templates require one system message and
+        # alternating roles; visual inputs are extra user turns.
         if turns and turns[-1]["role"] == role:
             turns[-1]["content"].extend(blocks)
         else:
@@ -150,14 +162,7 @@ def anthropic_messages(
                     "user",
                     [
                         {"type": "text", "text": visual_label(image)},
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": "image/png",
-                                "data": image.data,
-                            },
-                        },
+                        image_part(image.data),
                     ],
                 )
     return "\n\n".join(system), turns
