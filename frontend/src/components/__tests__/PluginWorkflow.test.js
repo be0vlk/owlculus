@@ -1,13 +1,24 @@
 import { expect, it, vi } from 'vitest'
 import { flushPromises, DOMWrapper } from '@vue/test-utils'
+import { createPinia, setActivePinia } from 'pinia'
 import { mountWithVuetify } from './helpers/vuetify'
+import { useActiveCaseStore } from '@/stores/activeCase'
 import { VForm } from 'vuetify/components'
 import CorrelationScanPluginResult from '../plugins/CorrelationScanPluginResult.vue'
 import GenericPluginParams from '../plugins/GenericPluginParams.vue'
 import PluginResultsModal from '../plugins/PluginResultsModal.vue'
 import { assembleCorrelationResults } from '@/utils/correlationResults'
 
-vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
+vi.mock('vue-router', () => ({
+  useRouter: () => ({
+    resolve: ({ params, query }) => ({ href: `/case/${params.id}?entity=${query.entity}` }),
+  }),
+}))
+
+const expandAll = async (root) => {
+  for (const toggle of root.findAll('.v-data-table__td--expanded-row button'))
+    await toggle.trigger('click')
+}
 
 it('validates generic required fields without rendering plugin metadata as inputs', async () => {
   const wrapper = mountWithVuetify(VForm, {
@@ -65,7 +76,7 @@ it('explains a completed correlation scan with no matches', () => {
   const wrapper = mountWithVuetify(CorrelationScanPluginResult, {
     props: { result: [{ type: 'complete', data: {} }] },
   })
-  expect(wrapper.get('[role="alert"]').text()).toBe(
+  expect(wrapper.get('[role="alert"]').text()).toContain(
     'Correlation scan complete. No correlations are available in accessible Cases.',
   )
 })
@@ -79,7 +90,7 @@ it('does not describe a failed correlation scan as a successful empty result', (
       ],
     },
   })
-  expect(wrapper.get('[role="alert"]').text()).toBe('Case not found')
+  expect(wrapper.get('[role="alert"]').text()).toContain('Case not found')
   expect(wrapper.text()).not.toContain('No correlations found')
   expect(wrapper.text()).not.toContain('Correlation scan complete')
 })
@@ -88,6 +99,7 @@ it('offers optional saving for correlation without source or destination selecto
   const { default: CorrelationScanPluginParams } = await import(
     '../plugins/CorrelationScanPluginParams.vue'
   )
+  setActivePinia(createPinia())
   const wrapper = mountWithVuetify(CorrelationScanPluginParams, {
     props: { parameters: {}, modelValue: { save_to_case: false, case_id: 999 } },
   })
@@ -99,6 +111,30 @@ it('offers optional saving for correlation without source or destination selecto
   expect(wrapper.emitted('update:modelValue').at(-1)[0]).toEqual({ save_to_case: true })
   expect(wrapper.text()).not.toContain('Case to Scan')
   expect(wrapper.text()).not.toContain('Case to Save')
+})
+
+it.each([
+  [[{ id: 1, case_number: 'A-1' }], 'nothing to compare against'],
+  [
+    [
+      { id: 1, case_number: 'A-1' },
+      { id: 2, case_number: 'B-2' },
+      { id: 3, case_number: 'C-3' },
+    ],
+    'Scans the entities in Case #A-1 against the 2 other cases you can access.',
+  ],
+])('states the scanned case and how many other cases it is compared with', async (cases, text) => {
+  const { default: CorrelationScanPluginParams } = await import(
+    '../plugins/CorrelationScanPluginParams.vue'
+  )
+  setActivePinia(createPinia())
+  const store = useActiveCaseStore()
+  store.accessibleCases = cases
+  store.resolve(1)
+  const wrapper = mountWithVuetify(CorrelationScanPluginParams, {
+    props: { parameters: {}, modelValue: {} },
+  })
+  expect(wrapper.text()).toContain(text)
 })
 
 it('renders retained typed events through the specialized correlation renderer', async () => {
@@ -130,7 +166,7 @@ it('labels retained partial output', async () => {
   expect(dialog.text()).toContain('example.org')
 })
 
-it('renders field explanations and tentative vehicle qualifications', () => {
+it('renders field explanations and tentative vehicle qualifications', async () => {
   const wrapper = mountWithVuetify(CorrelationScanPluginResult, {
     props: {
       result: [
@@ -163,11 +199,12 @@ it('renders field explanations and tentative vehicle qualifications', () => {
       ],
     },
   })
+  await expandAll(wrapper)
   for (const text of [
     'vehicle #10',
     'Blue van',
-    'license_plate: OWL-123',
-    'license_plate: owl 123',
+    'License Plate: OWL-123',
+    'License Plate: owl 123',
     'registration state unknown',
     'conflicting VINs',
   ]) {
@@ -200,9 +237,7 @@ it('qualifies completed scans containing skipped references without rendering a 
   expect(wrapper.text()).not.toContain('Found an entity')
 })
 
-it('keeps legacy related names and explanations readable with stable navigation', async () => {
-  const push = vi.fn()
-  vi.spyOn(await import('vue-router'), 'useRouter').mockReturnValue({ push })
+it('keeps legacy related names and explanations readable with new-tab navigation', async () => {
   const wrapper = mountWithVuetify(CorrelationScanPluginResult, {
     props: {
       result: [
@@ -231,10 +266,14 @@ it('keeps legacy related names and explanations readable with stable navigation'
       ],
     },
   })
-  expect(wrapper.text()).toContain('Charles (person)')
+  await expandAll(wrapper)
+  expect(wrapper.text()).toContain('Charles')
   expect(wrapper.text()).toContain('employer: Engines')
-  await wrapper.get('button').trigger('click')
-  expect(push).toHaveBeenCalledWith({ path: '/case/2', query: { entity: 20 } })
+  const open = wrapper.get('a[aria-label="Open Charles in Case #B"]')
+  expect(open.attributes('href')).toBe('/case/2?entity=20')
+  expect(open.attributes('target')).toBe('_blank')
+  const source = wrapper.get('a[aria-label="Open source Ada"]')
+  expect(source.attributes('href')).toBe('/case/1?entity=10')
 })
 
 it('assembles continued groups and ranks exact identifiers before provider overlap in cards and exports', async () => {
@@ -277,12 +316,19 @@ it('assembles continued groups and ranks exact identifiers before provider overl
     results: [low, email, phone, continuation, email, { type: 'complete', data: {} }],
   })
   const dialog = new DOMWrapper(document.querySelector('[role="dialog"]'))
-  const cards = dialog.findAll('h3').map((heading) => heading.element.parentElement.textContent)
-  expect(cards).toHaveLength(3)
-  expect(cards[0]).toContain('Email Match')
-  expect(cards[1]).toContain('Phone Match')
-  expect(cards[2]).toContain('Domain Match')
+  expect(dialog.findAll('h3').filter((heading) => heading.text() === 'Ada')).toHaveLength(1)
   expect(dialog.text()).toContain('1 source Entities · 4 matches · 1 related Cases')
+  const matchKinds = () =>
+    dialog
+      .findAll('tbody tr:not(.v-data-table-group-header-row)')
+      .map((row) => row.text().match(/(Email|Phone|Domain) Match/)?.[1])
+  expect(matchKinds()).toEqual(['Email', 'Email', 'Phone'])
+  await dialog
+    .findAll('.v-chip-group .v-chip')
+    .find((chip) => chip.text().startsWith('Weak'))
+    .trigger('click')
+  expect(matchKinds()).toEqual(['Email', 'Email', 'Phone', 'Domain'])
+  await expandAll(dialog)
   expect(dialog.text()).toContain('Low signal: common email provider')
   expect(dialog.text()).toContain('Original 24')
   const exported = assembleCorrelationResults(wrapper.props('results')).filter(
@@ -299,7 +345,8 @@ it('shows bounded progress while correlation output is still arriving', async ()
     data: { message: 'Indexed candidate Entities', count: 256, case_scope: [1, 2] },
   }
   const wrapper = mountWithVuetify(CorrelationScanPluginResult, { props: { result: [progress] } })
-  expect(wrapper.get('[role="status"]').text()).toContain('Indexed candidate Entities: 256')
+  expect(wrapper.get('[role="status"]').text()).toBe('Indexed candidate Entities')
+  expect(wrapper.find('[role="progressbar"]').exists()).toBe(true)
   expect(wrapper.text()).not.toContain('No correlations are available')
   await wrapper.setProps({ result: [progress, { type: 'complete', data: {} }] })
   expect(wrapper.find('[role="status"]').exists()).toBe(false)
@@ -361,6 +408,7 @@ it('presents and exports explicit IP connections with original fields alongside 
   await wrapper.setProps({ modelValue: true })
   await flushPromises()
   const dialog = new DOMWrapper(document.querySelector('[role="dialog"]'))
+  await expandAll(dialog)
   expect(dialog.text()).toContain('IP Address Match')
   expect(dialog.text()).toContain('Exact IP address match')
   expect(dialog.text()).toContain('2001:0DB8:0:0:0:0:0:1')
@@ -411,9 +459,10 @@ it('renders and exports recorded profile equality with every field and conservat
   await wrapper.setProps({ modelValue: true })
   await flushPromises()
   const dialog = new DOMWrapper(document.querySelector('[role="dialog"]'))
+  await expandAll(dialog)
   expect(dialog.text()).toContain('Exact Profile Reference')
   expect(dialog.text()).toContain('personal identity and account ownership are not established')
-  for (const field of ['social_media.linkedin', 'usernames[0]', 'social_media.other'])
+  for (const field of ['Social Media Linkedin', 'Usernames', 'Social Media Other'])
     expect(dialog.text()).toContain(field)
   expect(dialog.text()).toContain(raw.trim())
   expect(assembleCorrelationResults(results)).toEqual(results)
@@ -437,7 +486,7 @@ it('qualifies retained counts until retrieval finishes despite a completed event
   expect(wrapper.text()).toContain('cancelled')
 })
 
-it('collapses readable weak matches in mixed groups and preserves expansion through continuation', async () => {
+it('hides weak matches by default and keeps filter, expansion and open groups through continuation', async () => {
   const group = (matches) => ({
     type: 'data',
     data: {
@@ -463,17 +512,22 @@ it('collapses readable weak matches in mixed groups and preserves expansion thro
   const wrapper = mountWithVuetify(CorrelationScanPluginResult, {
     props: { result: [group([ordinary, weak(21), weak(22)])] },
   })
-  expect(wrapper.get('details').element.open).toBe(false)
-  expect(wrapper.get('summary').text()).toBe('Weak provider matches (2)')
-  expect(wrapper.get('details').text()).not.toContain('Explicit Domain')
-  wrapper.get('details').element.open = true
+  const weakChip = () =>
+    wrapper.findAll('.v-chip-group .v-chip').find((chip) => chip.text().startsWith('Weak'))
+  const rowTexts = () =>
+    wrapper.findAll('tbody tr:not(.v-data-table-group-header-row)').map((row) => row.text())
+  expect(weakChip().text()).toBe('Weak (2)')
+  expect(rowTexts().join()).toContain('Explicit Domain')
+  expect(rowTexts().join()).not.toContain('Mailbox')
+  await weakChip().trigger('click')
+  await wrapper.get('.v-data-table__td--expanded-row button').trigger('click')
   await wrapper.setProps({
     result: [group([ordinary, weak(21), weak(22)]), group([weak(22), weak(23)])],
   })
-  expect(wrapper.get('details').element.open).toBe(true)
-  expect(wrapper.get('summary').text()).toBe('Weak provider matches (3)')
-  expect(wrapper.findAll('h4')).toHaveLength(4)
-  expect(wrapper.text()).toContain('Source email: ada@gmail.com')
+  expect(weakChip().text()).toBe('Weak (3)')
+  expect(rowTexts().join()).toContain('Mailbox 23')
+  expect(wrapper.findAll('tbody tr:not(.v-data-table-group-header-row)')).toHaveLength(5)
+  expect(wrapper.text()).toContain('Source Email: ada@gmail.com')
 })
 
 it('shows the latest progress once without repeated status keys and hides it at durable termination', async () => {
@@ -483,15 +537,14 @@ it('shows the latest progress once without repeated status keys and hides it at 
     props: { result: [status(1), status(2), status(3)], executionStatus: 'running' },
   })
   expect(wrapper.findAll('[role="status"]')).toHaveLength(1)
-  expect(wrapper.text()).toContain('Indexed Entities: 3')
-  expect(wrapper.text()).not.toContain('Indexed Entities: 1')
+  expect(wrapper.get('[role="status"]').text()).toBe('Indexed Entities')
   await wrapper.setProps({ executionStatus: 'failed' })
   expect(wrapper.find('[role="status"]').exists()).toBe(false)
   expect(warn.mock.calls.flat().join(' ')).not.toContain('Duplicate keys')
   warn.mockRestore()
 })
 
-it('places legacy weak-only groups after useful associations', () => {
+it('places legacy weak-only groups after useful associations', async () => {
   const group = (id, kind, signal) => ({
     type: 'data',
     data: {
@@ -510,5 +563,10 @@ it('places legacy weak-only groups after useful associations', () => {
       ],
     },
   })
-  expect(wrapper.findAll('h3').map((h) => h.text())).toEqual(['Source 2', 'Source 1'])
+  await wrapper
+    .findAll('.v-chip-group .v-chip')
+    .find((chip) => chip.text().startsWith('Weak'))
+    .trigger('click')
+  const sources = wrapper.findAll('h3').map((h) => h.text())
+  expect(sources.slice(-2)).toEqual(['Source 2', 'Source 1'])
 })

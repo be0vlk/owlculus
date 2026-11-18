@@ -15,7 +15,11 @@ vi.mock('@/services/plugin', () => ({
   },
 }))
 vi.mock('@/utils/download', () => ({ downloadBlob: vi.fn() }))
-vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
+vi.mock('vue-router', () => ({
+  useRouter: () => ({
+    resolve: ({ params, query }) => ({ href: `/case/${params.id}?entity=${query.entity}` }),
+  }),
+}))
 
 const state = (id = 1, status = 'completed') => ({
   id,

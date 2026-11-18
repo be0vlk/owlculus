@@ -7,7 +7,10 @@ import HuntParameterForm from '../hunts/HuntParameterForm.vue'
 const testRouter = () =>
   createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/:pathMatch(.*)*', component: { template: '<div />' } }],
+    routes: [
+      { path: '/case/:id', name: 'CaseDetails', component: { template: '<div />' } },
+      { path: '/:pathMatch(.*)*', component: { template: '<div />' } },
+    ],
   })
 
 // Correlation results link to entities, so mounts get a router unless the test brings its own.
@@ -181,8 +184,6 @@ it('assembles Hunt correlation portions like standalone results and retains navi
   await flushPromises()
   expect(wrapper.text()).toContain('1 source Entities · 2 matches · 1 related Cases')
   expect(wrapper.text()).toContain('person #10')
-  expect(wrapper.text()).toContain('Source email: ada@gmail.com')
-  expect(wrapper.text()).toContain('Related domain: gmail.com')
   expect(wrapper.text()).toContain('Execution running')
   const standalone = mountHunt(CorrelationScanPluginResult, {
     props: {
@@ -193,8 +194,13 @@ it('assembles Hunt correlation portions like standalone results and retains navi
     global: { plugins: [router] },
   })
   expect(wrapper.getComponent(CorrelationScanPluginResult).text()).toBe(standalone.text())
-  expect(wrapper.get('details').element.open).toBe(false)
-  wrapper.get('details').element.open = true
+  await wrapper.get('.v-data-table__td--expanded-row button').trigger('click')
+  expect(wrapper.text()).toContain('Source Email: ada@gmail.com')
+  expect(wrapper.text()).toContain('Related Domain: gmail.com')
+  const weakChip = () =>
+    wrapper.findAll('.v-chip-group .v-chip').find((chip) => chip.text().startsWith('Weak'))
+  expect(weakChip().text()).toBe('Weak (1)')
+  await weakChip().trigger('click')
   await wrapper.setProps({
     step: {
       ...step,
@@ -202,14 +208,12 @@ it('assembles Hunt correlation portions like standalone results and retains navi
     },
   })
   await flushPromises()
-  expect(wrapper.get('details').element.open).toBe(true)
-  expect(wrapper.get('summary').text()).toBe('Weak provider matches (2)')
-  await wrapper
-    .findAll('button')
-    .find((button) => button.text().includes('View Entity'))
-    .trigger('click')
-  await flushPromises()
-  expect(router.currentRoute.value.query).toEqual({ entity: '20' })
+  expect(weakChip().text()).toBe('Weak (2)')
+  expect(wrapper.text()).toContain('Mailbox')
+  expect(wrapper.text()).toContain('Source Email: ada@gmail.com')
+  const open = wrapper.get('a[aria-label="Open Explicit Domain in Case #OTHER"]')
+  expect(open.attributes('href')).toBe('/case/2?entity=20')
+  expect(open.attributes('target')).toBe('_blank')
 })
 
 it.each(['pending', 'running', 'failed', 'cancelled', 'skipped', 'completed'])(
@@ -300,8 +304,9 @@ it.each(['ip_address', 'exact_profile', 'employer', 'name'])(
     })
     expect(wrapper.getComponent(CorrelationScanPluginResult).text()).toBe(standalone.text())
     expect(wrapper.text()).toContain('1 source Entities · 1 matches · 1 related Cases')
+    await wrapper.get('.v-data-table__td--expanded-row button').trigger('click')
     expect(wrapper.text()).toContain('Legacy field explanation')
-    expect(wrapper.text()).toContain('Reference coverage is incomplete')
+    expect(wrapper.text()).toContain('reference coverage is incomplete')
     expect(wrapper.text()).toContain(error.message)
     expect(wrapper.text()).not.toContain('Correlation scan complete')
   },

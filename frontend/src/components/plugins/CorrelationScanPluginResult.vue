@@ -1,143 +1,191 @@
 <template>
   <div class="d-flex flex-column ga-4">
-    <p v-if="latestProgress" role="status" class="text-body-medium">
-      {{ latestProgress.message }}: {{ latestProgress.count }} in this portion.
-    </p>
+    <div v-if="latestProgress">
+      <p role="status" class="text-body-medium mb-2">{{ latestProgress.message }}</p>
+      <v-progress-linear indeterminate rounded />
+    </div>
     <p v-if="!retrievalComplete" class="text-body-medium">
       Partial retained results — counts reflect loaded matches.
     </p>
     <p v-if="executionStatus === 'cancelled'" role="status">
       Execution cancelled. Retained output may be partial.
     </p>
-    <p v-if="hasCorrelations" class="text-body-medium">
-      {{ counts.entities }} source Entities · {{ counts.matches }} matches ·
-      {{ counts.cases }} related Cases
-    </p>
-    <template v-for="resultItem in cardResults" :key="resultKey(resultItem)">
-      <v-card v-if="isGroup(resultItem)" elevation="1" rounded="lg">
-        <v-card-text class="border-b">
-          <div class="d-flex align-center">
-            <v-icon icon="mdi-link" class="mr-2" color="grey-darken-1" />
-            <h3 class="text-title-large font-weight-medium">
-              {{ entityLabel(resultItem.data) }}
-            </h3>
-            <v-chip class="ml-2" color="primary" size="small" variant="tonal">
-              {{ resultItem.data.entity_type }}
-            </v-chip>
+
+    <PluginStatusAlert
+      v-for="error in errors"
+      :key="error.data.message"
+      type="error"
+      plugin-name="Correlation Scan"
+      :message="error.data.message"
+    />
+    <PluginStatusAlert
+      v-if="completionMessage"
+      type="complete"
+      plugin-name="Correlation Scan"
+      :message="completionMessage"
+    />
+
+    <v-alert v-if="notices.length" type="warning" variant="tonal">
+      {{ notices.length }} malformed
+      {{ notices.length === 1 ? 'reference was' : 'references were' }}
+      skipped; reference coverage is incomplete.
+      <details class="mt-2">
+        <summary>Skipped references</summary>
+        <ul class="pl-6">
+          <li v-for="notice in notices" :key="noticeKey(notice)">
+            <a
+              v-if="notice.case_id != null && notice.entity_id != null"
+              :href="entityHref(notice.case_id, notice.entity_id)"
+              target="_blank"
+              rel="noopener"
+              >Entity #{{ notice.entity_id }} in Case #{{ notice.case_id }}</a
+            >
+            <span v-if="notice.field"> · {{ fieldLabel(notice.field) }}</span>
+          </li>
+        </ul>
+      </details>
+    </v-alert>
+
+    <template v-if="rows.length">
+      <div class="d-flex flex-column ga-2">
+        <h3 class="text-title-large font-weight-medium">
+          {{ counts.entities }} source Entities · {{ counts.matches }} matches ·
+          {{ counts.cases }} related Cases
+        </h3>
+        <p class="text-body-medium text-medium-emphasis">
+          Connections are investigative leads; they do not establish identity.
+        </p>
+        <div class="d-flex flex-wrap align-center ga-2">
+          <v-chip-group v-model="selectedStrengths" filter multiple selected-class="text-primary">
             <v-chip
-              class="ml-2"
-              size="small"
-              :color="getMatchTypeColor(resultItem.data.match_type)"
-              variant="tonal"
+              v-for="option in STRENGTHS"
+              :key="option.value"
+              :value="option.value"
+              variant="outlined"
+              filter
             >
-              {{ getMatchTypeLabel(resultItem.data.match_type) }}
+              {{ option.title }} ({{ strengthCounts[option.value] }})
             </v-chip>
-          </div>
+          </v-chip-group>
+          <v-text-field
+            v-model="search"
+            prepend-inner-icon="mdi-magnify"
+            label="Search connections"
+            single-line
+            hide-details
+            clearable
+            density="compact"
+            class="flex-grow-1"
+            style="min-width: 12rem"
+          />
+        </div>
+      </div>
 
-          <div class="mt-2 text-body-medium text-medium-emphasis">
-            Shared {{ getMatchTypeLabel(resultItem.data.match_type).toLowerCase() }} value:
-            <span class="font-weight-medium">{{
-              resultItem.data.matched_value ||
-              resultItem.data.domain ||
-              resultItem.data.employer_name ||
-              entityLabel(resultItem.data)
-            }}</span
-            >. This connection is an investigative lead; it does not establish identity.
-            <p
-              v-for="field in resultItem.data.source_fields || []"
-              :key="field.field + field.value"
-            >
-              Source {{ field.field }}: {{ field.value }}
-            </p>
-          </div>
-        </v-card-text>
+      <v-data-table
+        v-model:expanded="expanded"
+        :headers="HEADERS"
+        :items="filteredRows"
+        :items-per-page="25"
+        :items-per-page-options="[10, 25, 50, 100]"
+        :group-by="[{ key: 'sourceEntityId' }]"
+        :sort-by="[{ key: 'strength', order: 'asc' }]"
+        no-data-text="No connections match the current filters."
+        item-value="key"
+        density="compact"
+        class="elevation-1"
+        rounded="lg"
+        show-expand
+        open-all
+      >
+        <template #group-header="{ item: group, columns, toggleGroup, isGroupOpen }">
+          <tr class="v-data-table-group-header-row">
+            <td :colspan="columns.length">
+              <div class="d-flex align-center ga-2">
+                <v-btn
+                  :icon="isGroupOpen(group) ? 'mdi-chevron-down' : 'mdi-chevron-right'"
+                  :aria-label="`${isGroupOpen(group) ? 'Collapse' : 'Expand'} ${groupSource(group).sourceLabel}`"
+                  :aria-expanded="isGroupOpen(group)"
+                  size="small"
+                  variant="text"
+                  @click="toggleGroup(group)"
+                />
+                <h3 class="text-title-medium font-weight-medium">
+                  {{ groupSource(group).sourceLabel }}
+                </h3>
+                <v-chip size="small" variant="tonal" color="primary">
+                  {{ groupSource(group).sourceType }}
+                </v-chip>
+                <span class="text-body-medium text-medium-emphasis">
+                  {{ group.items.length }} {{ group.items.length === 1 ? 'match' : 'matches' }}
+                </span>
+                <v-btn
+                  :href="
+                    entityHref(groupSource(group).sourceCaseId, groupSource(group).sourceEntityId)
+                  "
+                  :aria-label="`Open source ${groupSource(group).sourceLabel}`"
+                  target="_blank"
+                  rel="noopener"
+                  icon="mdi-open-in-new"
+                  size="small"
+                  variant="text"
+                />
+              </div>
+            </td>
+          </tr>
+        </template>
 
-        <v-card-text>
-          <component
-            v-for="section in matchSections(resultItem.data.matches)"
-            :key="section.weak ? 'weak' : 'ordinary'"
-            :is="section.weak ? 'details' : 'div'"
-            class="d-flex flex-column ga-3"
+        <template #[`item.matchType`]="{ item }">{{ getMatchTypeLabel(item.matchType) }}</template>
+
+        <template #[`item.relatedLabel`]="{ item }">
+          <div class="font-weight-medium">{{ item.relatedLabel }}</div>
+          <div class="text-body-small text-medium-emphasis">{{ item.relatedType }}</div>
+        </template>
+
+        <template #[`item.caseNumber`]="{ item }">
+          <div class="font-weight-medium">Case #{{ item.caseNumber ?? item.caseId }}</div>
+          <div class="text-body-small text-medium-emphasis">{{ item.caseTitle }}</div>
+        </template>
+
+        <template #[`item.strength`]="{ item }">
+          <v-chip
+            :color="STRENGTHS[item.strength].color"
+            :title="item.signal"
+            size="small"
+            variant="tonal"
           >
-            <summary v-if="section.weak" class="text-body-large">
-              Weak provider matches ({{ section.matches.length }})
-            </summary>
-            <v-card
-              v-for="match in section.matches"
-              :key="`${match.case_id}:${match.entity_id}`"
-              elevation="1"
-              rounded="lg"
-            >
-              <v-card-text>
-                <div class="d-flex justify-space-between align-start">
-                  <div class="d-flex flex-column ga-1">
-                    <h4 class="text-body-large font-weight-medium">
-                      Case #{{ match.case_number }}
-                    </h4>
-                    <p class="text-body-medium text-medium-emphasis">
-                      {{ match.case_title }}
-                    </p>
-                    <p class="text-body-medium text-secondary">
-                      {{ entityLabel(match) }} ({{
-                        match.entity_type || resultItem.data.entity_type
-                      }})
-                    </p>
-                    <p
-                      v-for="field in match.fields || []"
-                      :key="field.field + field.value"
-                      class="text-body-medium"
-                    >
-                      Related {{ field.field }}: {{ field.value }}
-                    </p>
-                    <p v-if="!match.fields?.length && match.found_in" class="text-body-medium">
-                      {{ match.found_in }}
-                    </p>
-                    <p v-if="match.signal" class="text-body-medium">{{ match.signal }}</p>
-                  </div>
-                  <v-btn
-                    color="primary"
-                    variant="text"
-                    size="small"
-                    append-icon="mdi-chevron-right"
-                    @click="viewEntity(match)"
-                  >
-                    View Entity
-                  </v-btn>
-                </div>
-              </v-card-text>
-            </v-card>
-          </component>
-        </v-card-text>
-      </v-card>
+            {{ STRENGTHS[item.strength].title }}
+          </v-chip>
+        </template>
 
-      <v-alert
-        v-else-if="resultItem.data?.notice_type === 'skipped_reference'"
-        type="warning"
-        variant="tonal"
-      >
-        {{ resultItem.data.message }} Case #{{ resultItem.data.case_id }}, Entity #{{
-          resultItem.data.entity_id
-        }}, {{ resultItem.data.field }}
-      </v-alert>
+        <template #[`item.actions`]="{ item }">
+          <v-btn
+            :href="entityHref(item.caseId, item.entityId)"
+            :aria-label="`Open ${item.relatedLabel} in Case #${item.caseNumber ?? item.caseId}`"
+            target="_blank"
+            rel="noopener"
+            icon="mdi-open-in-new"
+            size="small"
+            variant="text"
+          />
+        </template>
 
-      <v-alert v-else-if="resultItem.type === 'error'" border="start" elevation="1" type="error">
-        {{ resultItem.data.message }}
-      </v-alert>
-
-      <v-alert
-        v-else-if="resultItem.type === 'complete' && completedSuccessfully"
-        type="success"
-        density="comfortable"
-        variant="tonal"
-      >
-        {{
-          hasWarnings
-            ? 'Correlation scan completed with skipped references; reference coverage is incomplete.'
-            : hasCorrelations
-              ? 'Correlation scan complete'
-              : 'Correlation scan complete. No correlations are available in accessible Cases.'
-        }}
-      </v-alert>
+        <template #expanded-row="{ columns, item }">
+          <tr>
+            <td :colspan="columns.length" class="py-3">
+              <div class="d-flex flex-column ga-1 text-body-medium">
+                <p v-for="field in item.sourceFields" :key="field.field + field.value">
+                  Source {{ fieldLabel(field.field) }}: {{ field.value }}
+                </p>
+                <p v-for="field in item.fields" :key="field.field + field.value">
+                  Related {{ fieldLabel(field.field) }}: {{ field.value }}
+                </p>
+                <p v-if="!item.fields.length && item.foundIn">{{ item.foundIn }}</p>
+                <p v-if="item.signal">{{ item.signal }}</p>
+              </div>
+            </td>
+          </tr>
+        </template>
+      </v-data-table>
     </template>
 
     <v-card
@@ -156,13 +204,11 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
-import {
-  assembleCorrelationResults,
-  isWeakProviderMatch,
-  correlationGroupKey,
-} from '@/utils/correlationResults'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import PluginStatusAlert from './PluginStatusAlert.vue'
+import { assembleCorrelationResults, correlationRows } from '@/utils/correlationResults'
+import { formatParameterName } from '@/utils/huntDisplayUtils'
 
 const props = defineProps({
   executionStatus: { type: String, default: null },
@@ -175,28 +221,63 @@ const props = defineProps({
 })
 
 const router = useRouter()
-const matchSections = (matches) =>
-  [
-    { weak: false, matches: matches.filter((match) => !isWeakProviderMatch(match)) },
-    { weak: true, matches: matches.filter(isWeakProviderMatch) },
-  ].filter((section) => section.matches.length)
+
+const STRENGTHS = [
+  { value: 0, title: 'Exact identifier', color: 'primary' },
+  { value: 1, title: 'Association', color: 'info' },
+  { value: 2, title: 'Weak', color: 'grey' },
+]
+const HEADERS = [
+  { title: 'Match', key: 'matchType' },
+  { title: 'Shared value', key: 'sharedValue' },
+  { title: 'Related entity', key: 'relatedLabel' },
+  { title: 'Case', key: 'caseNumber' },
+  { title: 'Strength', key: 'strength' },
+  { title: 'Open', key: 'actions', sortable: false, align: 'end' },
+]
+
+const selectedStrengths = ref([0, 1])
+const search = ref('')
+const expanded = ref([])
 
 const normalizedResult = computed(() => assembleCorrelationResults(props.result))
+const rows = computed(() => correlationRows(normalizedResult.value))
 
-const cardResults = computed(() => [
-  ...new Map(
+const unique = (items, keyOf) => [...new Map(items.map((item) => [keyOf(item), item])).values()]
+const errors = computed(() =>
+  unique(
+    normalizedResult.value.filter((item) => item.type === 'error'),
+    (item) => item.data?.message,
+  ),
+)
+const noticeKey = (notice) =>
+  [notice.case_id, notice.entity_id, notice.field, notice.message].join(':')
+const notices = computed(() =>
+  unique(
     normalizedResult.value
-      .filter((item) => item.type !== 'status')
-      .map((item) => [resultKey(item), item]),
-  ).values(),
-])
+      .map((item) => item.data)
+      .filter((data) => data?.notice_type === 'skipped_reference'),
+    noticeKey,
+  ),
+)
+
+const hasCorrelations = computed(() => rows.value.length > 0)
 const completedSuccessfully = computed(
   () =>
     props.retrievalComplete &&
     !props.executionPartial &&
-    !hasErrors.value &&
+    !errors.value.length &&
     (!props.executionStatus || props.executionStatus === 'completed'),
 )
+const completionMessage = computed(() => {
+  if (!completedSuccessfully.value || !normalizedResult.value.some((i) => i.type === 'complete'))
+    return ''
+  if (notices.value.length)
+    return 'Correlation scan completed with skipped references; reference coverage is incomplete.'
+  return hasCorrelations.value
+    ? 'Correlation scan complete'
+    : 'Correlation scan complete. No correlations are available in accessible Cases.'
+})
 
 const latestProgress = computed(() => {
   if (['completed', 'failed', 'cancelled'].includes(props.executionStatus)) return null
@@ -204,31 +285,43 @@ const latestProgress = computed(() => {
   return normalizedResult.value.findLast((item) => item.type === 'status')?.data || null
 })
 
-const hasErrors = computed(() => normalizedResult.value.some((item) => item.type === 'error'))
-
-const isGroup = (item) => item.type === 'data' && Array.isArray(item.data?.matches)
-const hasCorrelations = computed(() => normalizedResult.value.some(isGroup))
-const hasWarnings = computed(() =>
-  normalizedResult.value.some((item) => item.data?.notice_type === 'skipped_reference'),
+const counts = computed(() => ({
+  entities: new Set(rows.value.map((row) => row.sourceEntityId)).size,
+  matches: rows.value.length,
+  cases: new Set(rows.value.map((row) => row.caseId)).size,
+}))
+const strengthCounts = computed(() =>
+  STRENGTHS.map((option) => rows.value.filter((row) => row.strength === option.value).length),
 )
-const entityLabel = (entity) =>
-  entity.entity_name?.trim() ||
-  entity.person_name?.trim() ||
-  `${entity.entity_type || 'Entity'} #${entity.entity_id}`
-const resultKey = (item) => {
-  const data = item.data || {}
-  return isGroup(item)
-    ? correlationGroupKey(data)
-    : `${item.type}:${data.notice_type || ''}:${data.case_id || ''}:${data.entity_id || ''}:${data.field || ''}:${data.message || ''}`
-}
-const counts = computed(() => {
-  const groups = normalizedResult.value.filter(isGroup).map((item) => item.data)
-  return {
-    entities: new Set(groups.map((group) => group.entity_id)).size,
-    matches: groups.reduce((total, group) => total + group.matches.length, 0),
-    cases: new Set(groups.flatMap((group) => group.matches.map((match) => match.case_id))).size,
-  }
+
+const searchText = (row) =>
+  [
+    getMatchTypeLabel(row.matchType),
+    row.sharedValue,
+    row.relatedLabel,
+    row.relatedType,
+    row.caseNumber,
+    row.caseTitle,
+    row.foundIn,
+    row.signal,
+    ...[...row.sourceFields, ...row.fields].map((field) => field.value),
+  ]
+    .join('\n')
+    .toLowerCase()
+const filteredRows = computed(() => {
+  const query = (search.value || '').trim().toLowerCase()
+  return rows.value.filter(
+    (row) =>
+      selectedStrengths.value.includes(row.strength) && (!query || searchText(row).includes(query)),
+  )
 })
+
+const groupSource = (group) => group.items[0].raw
+
+const entityHref = (caseId, entityId) =>
+  router.resolve({ name: 'CaseDetails', params: { id: caseId }, query: { entity: entityId } }).href
+
+const fieldLabel = (field) => formatParameterName(field.replace(/\[\d+\]/g, '').replace(/\./g, ' '))
 
 const getMatchTypeLabel = (matchType) => {
   const labels = {
@@ -243,27 +336,5 @@ const getMatchTypeLabel = (matchType) => {
     license_plate: 'License Plate Match',
   }
   return labels[matchType] || 'Match'
-}
-
-const getMatchTypeColor = (matchType) => {
-  const colors = {
-    name: 'success',
-    employer: 'secondary',
-    domain: 'info',
-    vin: 'warning',
-    email: 'success',
-    phone: 'success',
-    ip_address: 'success',
-    exact_profile: 'success',
-    license_plate: 'warning',
-  }
-  return colors[matchType] || 'grey'
-}
-
-const viewEntity = (match) => {
-  router.push({
-    path: `/case/${match.case_id}`,
-    query: { entity: match.entity_id },
-  })
 }
 </script>

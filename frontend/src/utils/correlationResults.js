@@ -69,3 +69,51 @@ export const correlationGroupKey = (group) =>
     group.match_type,
     group.normalized_value ?? group.matched_value ?? group.domain ?? group.employer_name ?? '',
   ])
+
+export const entityLabel = (entity) =>
+  entity.entity_name?.trim() ||
+  entity.person_name?.trim() ||
+  `${entity.entity_type || 'Entity'} #${entity.entity_id}`
+
+/** Flatten assembled groups into one table row per connection; strength is 0 exact, 1 association, 2 weak. */
+export function correlationRows(assembled) {
+  return assembled
+    .filter((item) => item.type === 'data' && Array.isArray(item.data?.matches))
+    .flatMap(({ data: group }) =>
+      group.matches.map((match) => ({
+        key: JSON.stringify([
+          group.entity_id,
+          group.match_type,
+          group.normalized_value ??
+            group.matched_value ??
+            group.domain ??
+            group.employer_name ??
+            '',
+          match.case_id,
+          match.entity_id,
+        ]),
+        sourceEntityId: group.entity_id,
+        sourceCaseId: group.case_id,
+        sourceLabel: entityLabel(group),
+        sourceType: group.entity_type,
+        matchType: group.match_type,
+        sharedValue:
+          group.matched_value ||
+          group.domain ||
+          group.employer_name ||
+          group.normalized_value ||
+          entityLabel(group),
+        sourceFields: group.source_fields || [],
+        entityId: match.entity_id,
+        caseId: match.case_id,
+        caseNumber: match.case_number,
+        caseTitle: match.case_title,
+        relatedLabel: entityLabel(match),
+        relatedType: match.entity_type || group.entity_type,
+        fields: match.fields || [],
+        foundIn: match.found_in,
+        signal: match.signal,
+        strength: rank(match, group),
+      })),
+    )
+}

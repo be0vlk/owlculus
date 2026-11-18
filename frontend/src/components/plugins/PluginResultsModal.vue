@@ -182,7 +182,7 @@ const getPluginIcon = (name) => {
   const iconMap = {
     holehe: 'mdi-account-search',
     dnslookup: 'mdi-dns',
-    correlation: 'mdi-chart-scatter-plot',
+    correlationscan: 'mdi-chart-scatter-plot',
     default: 'mdi-puzzle',
   }
 
