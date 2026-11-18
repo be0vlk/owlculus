@@ -404,7 +404,7 @@ class GroundedMaterial:
         self.config = config
         self.inspected_at = get_utc_now().isoformat()
         self.supplied: dict[str, dict] = {}
-        self.tool_result: dict | None = None
+        self.tool_results: list[dict] = []
         self.states = {key: "unexamined" for key in self.sources}
         self.previous = previous or MaterialCheckpoint()
         # Cumulative processing is independent of what fits this model input.
@@ -549,18 +549,22 @@ class GroundedMaterial:
 
     def lookup(self, source_id: str):
         self.read(source_id)
-        self.tool_result = {
-            "action": "read",
-            "source_ids": [source_id],
-            "state": self.states[source_id],
-        }
+        self.tool_results.append(
+            {
+                "action": "read",
+                "source_ids": [source_id],
+                "state": self.states[source_id],
+            }
+        )
 
     def list_sources(self):
-        self.tool_result = {
-            "action": "list",
-            "source_ids": list(self.sources),
-            "enumeration_complete": self.complete,
-        }
+        self.tool_results.append(
+            {
+                "action": "list",
+                "source_ids": list(self.sources),
+                "enumeration_complete": self.complete,
+            }
+        )
 
     def search(self, query: str):
         matches = []
@@ -570,17 +574,19 @@ class GroundedMaterial:
             if query.casefold() in encoded(source.fields).casefold():
                 self.read(source.source_id)
                 matches.append(source.source_id)
-        self.tool_result = {
-            "action": "search",
-            "query": query,
-            "source_ids": matches,
-            "enumeration_complete": self.complete,
-        }
+        self.tool_results.append(
+            {
+                "action": "search",
+                "query": query,
+                "source_ids": matches,
+                "enumeration_complete": self.complete,
+            }
+        )
 
     def context(self) -> dict:
         return {
             "reused_progress": self.reused_progress,
-            "tool_result": self.tool_result,
+            "tool_results": self.tool_results,
             "sources": list(self.supplied.values()),
             "coverage": self.coverage(),
             "catalog": [

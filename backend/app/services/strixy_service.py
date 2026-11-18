@@ -33,6 +33,9 @@ https://openrouter.ai/docs/features/provider-routing
   openrouter reuses Chat Completions at https://openrouter.ai/api/v1.
   provider.require_parameters=true routes only to endpoints that honor every
   request parameter (tools, response_format), instead of silently ignoring them.
+  parallel_tool_calls is never sent on Chat Completions: no OpenRouter endpoint
+  lists it (checked 2026-11-18), so require_parameters would exclude them all.
+  Replies may therefore carry several tool calls; analysis applies each one.
   No data_collection or zdr preference is sent: the account's own privacy
   settings decide.
 https://openrouter.ai/docs/use-cases/reasoning-tokens
@@ -318,7 +321,6 @@ class StrixyService:
                         },
                     }
                 ],
-                parallel_tool_calls=False,
                 response_format={
                     "type": "json_schema",
                     "json_schema": {

@@ -207,29 +207,28 @@ def analyze(
             )
         if attempt + 1 == config.max_model_calls:
             return ProviderReply("", input_tokens, output_tokens, "model_call_limit")
-        if len(reply.tool_requests) != 1:
-            raise GroundingError("invalid_tool_request")
-        request = reply.tool_requests[0]
-        try:
-            if (
-                set(request) != {"name", "arguments"}
-                or request["name"] != "read_case_sources"
-            ):
-                raise ValueError
-            query = SourceQuery.model_validate(request["arguments"])
-            # All tools operate only on this run's bounded authorized inventory.
-            if query.action == "read":
-                if query.source_id is None or query.query is not None:
+        material.tool_results = []
+        for request in reply.tool_requests:
+            try:
+                if (
+                    set(request) != {"name", "arguments"}
+                    or request["name"] != "read_case_sources"
+                ):
                     raise ValueError
-                material.lookup(query.source_id)
-            elif query.action == "search":
-                if not query.query or query.source_id is not None:
-                    raise ValueError
-                material.search(query.query)
-            else:
-                if query.query is not None or query.source_id is not None:
-                    raise ValueError
-                material.list_sources()
-        except (ValueError, KeyError, TypeError):
-            raise GroundingError("invalid_tool_request") from None
+                query = SourceQuery.model_validate(request["arguments"])
+                # All tools operate only on this run's bounded authorized inventory.
+                if query.action == "read":
+                    if query.source_id is None or query.query is not None:
+                        raise ValueError
+                    material.lookup(query.source_id)
+                elif query.action == "search":
+                    if not query.query or query.source_id is not None:
+                        raise ValueError
+                    material.search(query.query)
+                else:
+                    if query.query is not None or query.source_id is not None:
+                        raise ValueError
+                    material.list_sources()
+            except (ValueError, KeyError, TypeError):
+                raise GroundingError("invalid_tool_request") from None
     raise GroundingError("model_call_limit")

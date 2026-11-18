@@ -253,7 +253,7 @@ def test_compatible_adapter_sends_chat_completions_without_reasoning(limited):
     sent = client.chat.completions.create.call_args.kwargs
     assert sent["model"] == "llama3"
     assert sent["max_tokens"] == COMPAT.max_output_tokens
-    assert sent["parallel_tool_calls"] is False
+    assert "parallel_tool_calls" not in sent
     assert sent["stream"] is False
     assert not {"reasoning", "reasoning_effort", "store"} & sent.keys()
     assert [m["role"] for m in sent["messages"]] == ["system", "user"]
@@ -515,6 +515,8 @@ def test_openrouter_requires_parameters_and_sends_effort_without_echoing_it():
         "provider": {"require_parameters": True},
         "reasoning": {"effort": "medium", "exclude": True},
     }
+    # No OpenRouter endpoint lists it, so require_parameters would exclude them all.
+    assert "parallel_tool_calls" not in sent
     client.responses.create.assert_not_called()
 
 

@@ -770,6 +770,46 @@ def test_focus_outside_broad_inventory_still_reads_requested_record(
     assert not saved["messages"][-1]["coverage"]["complete"]
 
 
+def test_parallel_tool_requests_are_all_applied(
+    client, assigned, configured, analyst_token, engine, monkeypatch
+):
+    calls = []
+
+    def reply(self, messages, config, timeout):
+        context = json.loads(messages[0].content)
+        calls.append(context)
+        if len(calls) == 1:
+            return ProviderReply(
+                "",
+                tool_requests=[
+                    {
+                        "name": "read_case_sources",
+                        "arguments": {
+                            "action": "search",
+                            "source_id": None,
+                            "query": "nonexistent-identifier",
+                        },
+                    },
+                    {
+                        "name": "read_case_sources",
+                        "arguments": {
+                            "action": "read",
+                            "source_id": f"case:{assigned}",
+                            "query": None,
+                        },
+                    },
+                ],
+            )
+        assert [r["action"] for r in context["tool_results"]] == ["search", "read"]
+        return ProviderReply("Both lookups done")
+
+    monkeypatch.setattr(StrixyService, "generate", reply)
+    detail, owner = new_conversation(client, assigned, analyst_token)
+    saved = turn(client, detail, owner, engine)
+    assert saved["runs"][-1]["status"] == "completed"
+    assert len(calls) == 2
+
+
 @pytest.mark.parametrize("action", ["search", "read", "list"])
 def test_tools_supply_explicit_results_including_no_matches(
     client, assigned, configured, analyst_token, engine, monkeypatch, action
@@ -797,7 +837,7 @@ def test_tools_supply_explicit_results_including_no_matches(
                     }
                 ],
             )
-        result = context["tool_result"]
+        [result] = context["tool_results"]
         assert result["action"] == action
         assert result["source_ids"] == (
             [] if action == "search" else [f"case:{assigned}"]
