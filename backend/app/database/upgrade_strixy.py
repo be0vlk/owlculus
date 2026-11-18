@@ -1,5 +1,5 @@
-"""Repeatable provisioning of the permanent Strixy Analyst identity and the
-SystemConfiguration.strixy_settings column."""
+"""Repeatable provisioning of the permanent Strixy Analyst identity, the
+SystemConfiguration.strixy_settings column and StrixyRun.error_detail."""
 
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
@@ -27,6 +27,13 @@ def upgrade(database_engine: Engine) -> None:
         if "strixy_settings" not in config_columns:
             connection.execute(
                 text("ALTER TABLE systemconfiguration ADD COLUMN strixy_settings JSON")
+            )
+        run_columns = {
+            column["name"] for column in inspect(connection).get_columns("strixyrun")
+        }
+        if "error_detail" not in run_columns:
+            connection.execute(
+                text("ALTER TABLE strixyrun ADD COLUMN error_detail VARCHAR")
             )
         connection.execute(
             text(

@@ -109,15 +109,27 @@ def test_connection(config: StrixyConfig, api_key: str | None) -> dict:
     }
 
 
+def provider_message(exc: openai.APIError | anthropic.APIError) -> str:
+    """The provider's own message; the SDKs prefix theirs with the whole error body."""
+    body = exc.body
+    if isinstance(body, dict):
+        body = body.get("error", body)
+        if isinstance(body, dict) and isinstance(body.get("message"), str):
+            return body["message"]
+    return exc.message
+
+
 def provider_error(exc: Exception) -> str:
     if isinstance(exc, (openai.AuthenticationError, anthropic.AuthenticationError)):
         return "The provider rejected the API key"
     if isinstance(exc, (openai.NotFoundError, anthropic.NotFoundError)):
-        return f"Model or endpoint not found: {exc.message}"
+        return f"Model or endpoint not found: {provider_message(exc)}"
     if isinstance(exc, (openai.APIConnectionError, anthropic.APIConnectionError)):
         return f"Couldn't reach the provider: {exc.message}"
     if isinstance(exc, (openai.APIStatusError, anthropic.APIStatusError)):
-        return f"Provider returned {exc.status_code}: {exc.message}"
+        return f"Provider returned {exc.status_code}: {provider_message(exc)}"
+    if isinstance(exc, (openai.APIError, anthropic.APIError)):
+        return f"Provider error: {provider_message(exc)}"
     if isinstance(exc, ValidationError):
         return (
             "The model didn't return Strixy's JSON format; "
@@ -126,3 +138,10 @@ def provider_error(exc: Exception) -> str:
     if isinstance(exc, (ValidationException, RuntimeError)):
         return str(exc)
     return f"Unexpected error: {type(exc).__name__}"
+
+
+def provider_reason(exc: Exception) -> str | None:
+    """Chat users see only what the provider's API said, never internal error text."""
+    if isinstance(exc, (openai.APIError, anthropic.APIError)):
+        return provider_error(exc)[:500]
+    return None

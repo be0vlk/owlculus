@@ -23,6 +23,7 @@ from app.database.models import (
 from app.schemas.strixy_schema import ChatMessage
 from app.services.strixy_access import require_strixy_access
 from app.services.strixy_analysis import GroundingError, analyze
+from app.services.strixy_setup import provider_reason
 from app.services.strixy_sources import CaseSources
 
 
@@ -90,7 +91,7 @@ def execute(run_id: str, database_engine: Engine = engine):
         ]
         deadline = run.deadline
     reply = None
-    error = None
+    error = detail = None
     try:
         reply = analyze(run_id, database_engine, config, deadline)
     except GroundingError as failure:
@@ -99,10 +100,10 @@ def execute(run_id: str, database_engine: Engine = engine):
         error = "provider_not_configured"
     except DomainException:
         error = "access_revoked"
-    except (APIConnectionError, AnthropicConnectionError):
-        error = "completion_uncertain"
-    except Exception:  # noqa: BLE001 - sanitized external failures
-        error = "provider_failed"
+    except (APIConnectionError, AnthropicConnectionError) as failure:
+        error, detail = "completion_uncertain", provider_reason(failure)
+    except Exception as failure:  # noqa: BLE001 - sanitized external failures
+        error, detail = "provider_failed", provider_reason(failure)
     with Session(database_engine) as db, transaction(db):
         selected = lock_run(db, run_id)
         if selected is None or selected[1].status != "running":
@@ -120,12 +121,13 @@ def execute(run_id: str, database_engine: Engine = engine):
         if ledger and not CaseSources(
             db, human, conversation.case_id
         ).validate_provenance(ledger.provenance, current=True):
-            error = "sources_changed"
+            error, detail = "sources_changed", None
         if get_utc_now() >= deadline or error == "runtime_limit":
             run.limit_code = "runtime_limit"
             finish(run, "completed")
         elif error:
             finish(run, "failed", error)
+            run.error_detail = detail
         elif reply is not None:
             run.input_tokens, run.output_tokens = (
                 reply.input_tokens,

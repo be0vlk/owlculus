@@ -102,6 +102,22 @@ it('refreshes and searches named history before reopening its transcript', async
   expect(api.get).toHaveBeenCalledWith(`${base}/one`)
   expect(wrapper.find('.user-message').text()).toContain('Who is Ada?')
 })
+it.each([
+  ['provider_failed', 'Provider returned 429: Rate limited', 'Provider returned 429: Rate limited'],
+  ['invalid_citation', null, 'quoted text that isn’t in the case records'],
+  ['provider_failed', null, 'Strixy couldn’t finish this reply.'],
+])('explains a %s failure', async (error_code, error_detail, shown) => {
+  history = [{ id: 'one', title: 'Timeline', created_at: '2026-09-12T12:00:00Z' }]
+  transcript = {
+    messages: [{ id: 'q', role: 'user', content: 'Timeline', timestamp: '2026-09-12T12:00:00Z' }],
+    runs: [{ id: 'run', position: 1, status: 'failed', error_code, error_detail }],
+  }
+  await mountChat()
+  const notice = wrapper.get('.run-notice').text()
+  expect(notice).toContain('Strixy couldn’t finish this reply.')
+  expect(notice).toContain(shown)
+  expect(notice).toContain('Retry analysis')
+})
 it('keeps the conversation and raises no error when deletion is cancelled', async () => {
   const rejections = []
   const onRejection = (reason) => rejections.push(reason)

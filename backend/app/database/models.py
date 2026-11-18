@@ -435,6 +435,7 @@ class StrixyRun(SQLModel, table=True):
         default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
     )
     error_code: str | None = None
+    error_detail: str | None = None
     limit_code: str | None = None
     coverage: str = "conversation_only"
     configuration: dict = Field(default_factory=dict, sa_column=Column(JSON))

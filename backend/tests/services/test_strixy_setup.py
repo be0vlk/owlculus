@@ -186,6 +186,10 @@ def invalid_json() -> Exception:
             status_error(openai.BadRequestError, 400, "No endpoints found"),
             "Provider returned 400: No endpoints found",
         ),
+        (
+            openai.APIError("rate-limited upstream", request=REQUEST, body=None),
+            "Provider error: rate-limited upstream",
+        ),
         (invalid_json(), "structured outputs"),
         (ValidationException("API key not configured"), "API key not configured"),
         (RuntimeError("Provider did not complete the response"), "did not complete"),
@@ -197,3 +201,17 @@ def test_provider_errors_become_admin_readable_text(exc, expected):
 
 def test_unknown_errors_do_not_leak_details():
     assert "secret" not in strixy_setup.provider_error(KeyError("secret"))
+
+
+def test_chat_reason_uses_the_provider_message_and_hides_internal_errors():
+    body = {"error": {"type": "overloaded_error", "message": "Overloaded"}}
+    response = httpx.Response(529, request=REQUEST)
+    overloaded = anthropic.APIStatusError(
+        "Error code: 529 - {...}", response=response, body=body
+    )
+    assert (
+        strixy_setup.provider_reason(overloaded) == "Provider returned 529: Overloaded"
+    )
+    assert strixy_setup.provider_reason(RuntimeError("sensitive")) is None
+    long = openai.APIError("x" * 2000, request=REQUEST, body=None)
+    assert len(strixy_setup.provider_reason(long)) <= 500

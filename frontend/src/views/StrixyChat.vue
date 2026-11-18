@@ -375,14 +375,20 @@ const canContinue = computed(
       (hasIncompleteReview(latestRun.value.source_coverage) &&
         latestRun.value.status !== 'failed')),
 )
+const failureReasons = {
+  invalid_citation: 'The model quoted text that isn’t in the case records, so the answer was withheld',
+  invalid_tool_request: 'The model asked to read the case in a way Strixy doesn’t support',
+}
 const recoveryNotice = computed(() => {
   const run = latestRun.value
   if (!run || sharedSnapshot.value || loading.value) return ''
   if (run.error_code === 'sources_changed')
     return 'A source changed. Review the case again to use the current records.'
   if (run.status === 'cancelled') return 'Analysis cancelled. Saved partial findings are retained.'
-  if (run.status === 'failed')
-    return 'Strixy couldn’t finish this reply. Your question and any saved findings are still here.'
+  if (run.status === 'failed') {
+    const reason = (run.error_detail || failureReasons[run.error_code] || '').replace(/\.$/, '')
+    return `Strixy couldn’t finish this reply.${reason ? ` ${reason}.` : ''} Your question and any saved findings are still here.`
+  }
   if (canContinue.value)
     return 'The review is incomplete. Continue to examine more of the available material.'
   return ''
@@ -770,6 +776,7 @@ watch(
 
 .run-notice {
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .strixy-loading {

@@ -224,6 +224,7 @@ def test_late_worker_cannot_publish_after_deletion_or_revocation(
         assert response.status_code == 200
         assert [m["content"] for m in response.json()["messages"]] == ["Question"]
         assert response.json()["runs"][0]["error_code"] == "provider_failed"
+        assert response.json()["runs"][0]["error_detail"] is None
         assert "sensitive" not in response.text
         assert (
             client.post(
@@ -333,7 +334,40 @@ def test_transport_loss_reports_uncertain_completion(
     execute(accepted["id"], engine)
     result = client.get(detail, headers=owner).json()
     assert result["runs"][0]["error_code"] == "completion_uncertain"
+    assert result["runs"][0]["error_detail"].startswith("Couldn't reach the provider")
     assert len(result["messages"]) == 1
+
+
+def test_provider_rejection_reason_is_shown_on_the_failed_run(
+    client, assigned, configured, analyst_token, engine, monkeypatch
+):
+    import httpx
+    import openai
+
+    from app.executions.strixy_worker import execute
+    from app.services.strixy_service import StrixyService
+
+    def rejected(*args):
+        response = httpx.Response(
+            404, request=httpx.Request("POST", "https://openrouter.ai/api/v1")
+        )
+        raise openai.NotFoundError(
+            "Error code: 404 - {...}",
+            response=response,
+            body={"message": "No endpoints found", "metadata": {"routing": []}},
+        )
+
+    monkeypatch.setattr(StrixyService, "generate", rejected)
+    owner = auth(analyst_token)
+    url = f"/api/strixy/cases/{assigned}/conversations"
+    detail = f"{url}/{client.post(url, headers=owner).json()['id']}"
+    accepted = client.post(
+        f"{detail}/messages", headers=owner, json={"content": "Question"}
+    ).json()
+    execute(accepted["id"], engine)
+    run = client.get(detail, headers=owner).json()["runs"][0]
+    assert run["error_code"] == "provider_failed"
+    assert run["error_detail"] == "Model or endpoint not found: No endpoints found"
 
 
 def test_identifiers_cannot_move_conversations_between_cases(
