@@ -60,6 +60,6 @@ def install():
     StrixyService.generate = generate
     from app.core import strixy_config
 
-    strixy_config.get_strixy_config = lambda: StrixyConfig(
+    strixy_config.get_strixy_config = lambda _db: StrixyConfig(
         runtime_seconds=int(os.environ.get("STRIXY_TEST_RUNTIME_SECONDS", "3"))
     )

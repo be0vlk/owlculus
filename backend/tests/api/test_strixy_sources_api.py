@@ -439,7 +439,7 @@ def test_limits_and_focus_report_actual_partial_processing(
     session.refresh(entity)
     monkeypatch.setattr(
         "app.core.strixy_config.get_strixy_config",
-        lambda: StrixyConfig(max_source_field_bytes=100),
+        lambda _db: StrixyConfig(max_source_field_bytes=100),
     )
     monkeypatch.setattr(
         StrixyService, "generate", lambda *args: ProviderReply("Limited findings")
@@ -455,7 +455,8 @@ def test_limits_and_focus_report_actual_partial_processing(
         "unavailable": 0,
     }
     monkeypatch.setattr(
-        "app.core.strixy_config.get_strixy_config", lambda: StrixyConfig(max_sources=1)
+        "app.core.strixy_config.get_strixy_config",
+        lambda _db: StrixyConfig(max_sources=1),
     )
     saved = turn(client, detail, owner, engine)
     assert not saved["messages"][-1]["coverage"]["enumeration_complete"]
@@ -602,7 +603,7 @@ def test_read_tools_recheck_access_and_bound_model_calls(
 
     monkeypatch.setattr(
         "app.core.strixy_config.get_strixy_config",
-        lambda: StrixyConfig(max_model_calls=2),
+        lambda _db: StrixyConfig(max_model_calls=2),
     )
     saved = turn(client, detail, owner, engine)
     assert saved["runs"][-1]["limit_code"] == "model_call_limit"
@@ -708,7 +709,8 @@ def test_focus_outside_broad_inventory_still_reads_requested_record(
     session.commit()
     session.refresh(evidence)
     monkeypatch.setattr(
-        "app.core.strixy_config.get_strixy_config", lambda: StrixyConfig(max_sources=1)
+        "app.core.strixy_config.get_strixy_config",
+        lambda _db: StrixyConfig(max_sources=1),
     )
     supplied = []
 

@@ -174,7 +174,8 @@ def test_visual_processing_reports_actual_page_coverage(
         writer.write(output)
         data = output.getvalue()
     monkeypatch.setattr(
-        "app.core.strixy_config.get_strixy_config", lambda: StrixyConfig(**overrides)
+        "app.core.strixy_config.get_strixy_config",
+        lambda _db: StrixyConfig(**overrides),
     )
     upload(client, assigned, admin_token, "pages.pdf", data, "application/pdf")
     images = []
@@ -229,7 +230,7 @@ def test_visual_citations_require_a_supplied_page_and_never_verify_ocr(
 
     monkeypatch.setattr(
         "app.core.strixy_config.get_strixy_config",
-        lambda: StrixyConfig(visual_max_images=1),
+        lambda _db: StrixyConfig(visual_max_images=1),
     )
     evidence = upload(
         client, assigned, admin_token, "pages.pdf", document(), "application/pdf"
@@ -382,7 +383,7 @@ def test_visual_byte_limit_continuation_advances_without_repeating_first_page(
 
     monkeypatch.setattr(
         "app.core.strixy_config.get_strixy_config",
-        lambda: StrixyConfig(visual_max_input_bytes=40000),
+        lambda _db: StrixyConfig(visual_max_input_bytes=40000),
     )
     upload(client, assigned, admin_token, "mixed.pdf", document(), "application/pdf")
     seen = []
@@ -479,7 +480,7 @@ def test_multiple_images_share_run_budgets(
         if limit == "count"
         else StrixyConfig(max_total_input_tokens=8000)
     )
-    monkeypatch.setattr("app.core.strixy_config.get_strixy_config", lambda: config)
+    monkeypatch.setattr("app.core.strixy_config.get_strixy_config", lambda _db: config)
     for name in ("one.png", "two.png"):
         upload(client, assigned, admin_token, name, screenshot(), "image/png")
     seen = []
@@ -521,7 +522,7 @@ def test_unprocessable_page_does_not_hide_later_readable_pages(
     writer.write(output)
     monkeypatch.setattr(
         "app.core.strixy_config.get_strixy_config",
-        lambda: StrixyConfig(visual_max_pixels=100000),
+        lambda _db: StrixyConfig(visual_max_pixels=100000),
     )
     upload(
         client,

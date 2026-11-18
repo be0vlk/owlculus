@@ -149,3 +149,52 @@ def test_preview_and_evidence_templates_are_public_behaviour(client, test_admin)
     )
     assert update.status_code == 200
     assert update.json()["templates"] == templates
+
+
+def test_admin_can_read_and_update_strixy_settings(client, test_admin):
+    authenticate_as(test_admin)
+
+    response = client.get("/api/admin/configuration/strixy")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["provider"] == "openai"
+    assert body["reasoning_effort"] == "low"
+    assert body["supports_vision"] is True
+    assert body["providers"]["anthropic"] == {
+        "name": "Anthropic",
+        "default_model": "claude-sonnet-5-5",
+    }
+
+    saved = {
+        "provider": "openai_compatible",
+        "model": "llama3",
+        "base_url": "http://10.0.0.5:11434/v1",
+        "supports_vision": False,
+        "reasoning_effort": "high",
+    }
+    response = client.put("/api/admin/configuration/strixy", json=saved)
+    assert response.status_code == 200
+    assert response.json() == body | saved
+
+    response = client.get("/api/admin/configuration/strixy")
+    assert response.json() == body | saved
+
+
+def test_invalid_strixy_settings_are_rejected(client, test_admin):
+    authenticate_as(test_admin)
+
+    for invalid in (
+        {"provider": "openai_compatible"},
+        {"provider": "openai", "base_url": "ftp://host"},
+        {"provider": "bogus"},
+    ):
+        response = client.put("/api/admin/configuration/strixy", json=invalid)
+        assert response.status_code == 422
+
+
+def test_strixy_settings_routes_reject_non_admin(client, test_user):
+    authenticate_as(test_user)
+
+    assert client.get("/api/admin/configuration/strixy").status_code == 403
+    response = client.put("/api/admin/configuration/strixy", json={})
+    assert response.status_code == 403

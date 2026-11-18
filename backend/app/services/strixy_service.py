@@ -1,8 +1,8 @@
 """Small stateless provider adapters; application state stays in PostgreSQL.
 
 openai uses the Responses API, openai_compatible uses Chat Completions against
-STRIXY_BASE_URL, and anthropic uses the Messages API. Each adapter sends the
-messages, images, the read_case_sources tool and the answer JSON schema, and
+the configured base URL, and anthropic uses the Messages API. Each adapter sends
+the messages, images, the read_case_sources tool and the answer JSON schema, and
 returns a ProviderReply. No tool results are ever sent back to the model.
 
 Verified 2026-11-18 against official documentation:

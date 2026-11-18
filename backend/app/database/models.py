@@ -132,6 +132,7 @@ class SystemConfiguration(SQLModel, table=True):
     evidence_folder_templates: Optional[dict] = Field(
         default=None, sa_column=Column(JSON)
     )
+    strixy_settings: Optional[dict] = Field(default=None, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=get_utc_now)
     updated_at: datetime = Field(default_factory=get_utc_now)
 

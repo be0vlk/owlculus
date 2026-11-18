@@ -51,7 +51,7 @@ async def strixy_availability(
     case_id: Annotated[int, Query(gt=0)],
 ) -> dict[str, bool | str]:
     require_strixy_access(db, current_user, case_id)
-    config = get_strixy_config()
+    config = get_strixy_config(db)
     return {
         "is_configured": bool(strixy_key(db, config)),
         "provider": PROVIDER_NAMES[config.provider],
@@ -117,7 +117,7 @@ async def list_sources(conversations: Conversations):
 
     catalog = CaseSources(
         conversations.db, conversations.human, conversations.case_id
-    ).catalog(get_strixy_config())
+    ).catalog(get_strixy_config(conversations.db))
     return {
         "sources": [source.catalog_entry() for source in catalog.sources],
         "enumeration_complete": catalog.complete,
@@ -132,7 +132,7 @@ async def read_source(
 ):
     from app.core.strixy_config import get_strixy_config
 
-    config = get_strixy_config()
+    config = get_strixy_config(conversations.db)
     reader = CaseSources(conversations.db, conversations.human, conversations.case_id)
     material = GroundedMaterial(
         SourceCatalog([reader.read(source_id)], True),

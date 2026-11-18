@@ -19,6 +19,21 @@ def strixy(engine, session):
     return session.exec(select(User).where(User.system_identity == "strixy")).one()
 
 
+def test_upgrade_restores_a_missing_strixy_settings_column(engine):
+    from sqlalchemy import inspect, text
+
+    upgrade(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            text("ALTER TABLE systemconfiguration DROP COLUMN strixy_settings")
+        )
+
+    upgrade(engine)
+
+    columns = {c["name"] for c in inspect(engine).get_columns("systemconfiguration")}
+    assert "strixy_settings" in columns
+
+
 def headers(token):
     return {"Authorization": f"Bearer {token}"}
 
@@ -246,12 +261,13 @@ def test_availability_exposes_configuration_boolean_to_assigned_analyst(
 def test_availability_follows_the_configured_provider(
     client, strixy, analyst_token, test_case_with_users, session, monkeypatch
 ):
-    from app.database.models import CaseUserLink
+    from app.database.models import CaseUserLink, SystemConfiguration
 
     case_id = test_case_with_users.id
     session.add(CaseUserLink(case_id=case_id, user_id=strixy.id))
     session.commit()
-    monkeypatch.setattr("app.core.config.settings.STRIXY_PROVIDER", "anthropic")
+    session.add(SystemConfiguration(strixy_settings={"provider": "anthropic"}))
+    session.commit()
     monkeypatch.setenv("OPENAI_API_KEY", "openai-only")
 
     def availability():

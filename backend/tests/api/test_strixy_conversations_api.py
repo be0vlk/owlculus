@@ -250,9 +250,12 @@ def test_missing_configuration_preserves_conversation(client, assigned, analyst_
 
 
 def test_missing_configuration_names_the_configured_provider(
-    client, assigned, analyst_token, monkeypatch
+    client, assigned, analyst_token, session, monkeypatch
 ):
-    monkeypatch.setattr("app.core.config.settings.STRIXY_PROVIDER", "anthropic")
+    from app.database.models import SystemConfiguration
+
+    session.add(SystemConfiguration(strixy_settings={"provider": "anthropic"}))
+    session.commit()
     monkeypatch.setenv("OPENAI_API_KEY", "openai-only")
     owner = auth(analyst_token)
     url = f"/api/strixy/cases/{assigned}/conversations"
@@ -290,7 +293,8 @@ def test_run_limits_are_distinct_from_execution_failure(
     assert saved["runs"][0]["limit_code"] == "output_limit"
     assert saved["messages"][-1]["content"] == "Partial finding"
     monkeypatch.setattr(
-        "app.core.strixy_config.get_strixy_config", lambda: StrixyConfig(max_messages=1)
+        "app.core.strixy_config.get_strixy_config",
+        lambda _db: StrixyConfig(max_messages=1),
     )
     limited = client.post(
         f"{detail}/messages", headers=owner, json={"content": "More"}
@@ -460,7 +464,7 @@ def test_explicit_continuation_reuses_progress_and_reanalysis_reads_current_sour
 
     monkeypatch.setattr(
         "app.core.strixy_config.get_strixy_config",
-        lambda: StrixyConfig(max_model_calls=1),
+        lambda _db: StrixyConfig(max_model_calls=1),
     )
     contexts = []
 
@@ -540,7 +544,8 @@ def test_continuation_advances_beyond_bounded_catalog(
     session.add_all(entities)
     session.commit()
     monkeypatch.setattr(
-        "app.core.strixy_config.get_strixy_config", lambda: StrixyConfig(max_sources=1)
+        "app.core.strixy_config.get_strixy_config",
+        lambda _db: StrixyConfig(max_sources=1),
     )
     seen = []
 
@@ -582,7 +587,7 @@ def test_limits_across_steps_preserve_findings_and_usage(
 
     monkeypatch.setattr(
         "app.core.strixy_config.get_strixy_config",
-        lambda: StrixyConfig(max_output_tokens=16, max_total_input_tokens=5000),
+        lambda _db: StrixyConfig(max_output_tokens=16, max_total_input_tokens=5000),
     )
     calls = []
 
@@ -653,7 +658,7 @@ def test_continuation_invalidates_changed_preparation(
     if change == "configuration":
         monkeypatch.setattr(
             "app.core.strixy_config.get_strixy_config",
-            lambda: StrixyConfig(max_source_field_bytes=1000),
+            lambda _db: StrixyConfig(max_source_field_bytes=1000),
         )
     else:
         with Session(engine) as db:
@@ -698,7 +703,7 @@ def test_continuation_does_not_skip_material_rejected_before_model_admission(
     session.commit()
     monkeypatch.setattr(
         "app.core.strixy_config.get_strixy_config",
-        lambda: StrixyConfig(max_sources=1, max_total_input_tokens=100),
+        lambda _db: StrixyConfig(max_sources=1, max_total_input_tokens=100),
     )
 
     def unexpected(*args):
@@ -752,7 +757,7 @@ def test_continuation_reads_next_record_chunk_without_repeating_preparation(
     source_id = f"evidence:{evidence.id}"
     monkeypatch.setattr(
         "app.core.strixy_config.get_strixy_config",
-        lambda: StrixyConfig(max_source_field_bytes=100),
+        lambda _db: StrixyConfig(max_source_field_bytes=100),
     )
     chunks = []
 
@@ -809,7 +814,7 @@ def test_continuation_finishes_byte_limited_batches_before_later_records(
     session.commit()
     monkeypatch.setattr(
         "app.core.strixy_config.get_strixy_config",
-        lambda: StrixyConfig(max_sources=3, max_source_bytes=1200),
+        lambda _db: StrixyConfig(max_sources=3, max_source_bytes=1200),
     )
     chunks = {f"entity:{entity.id}": "" for entity in entities}
     empty_sources = []

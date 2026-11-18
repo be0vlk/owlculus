@@ -15,6 +15,7 @@ from ..core.evidence_templates import DEFAULT_TEMPLATES
 from ..core.exceptions import ValidationException
 from ..core.logging import audit_operation
 from ..core.security import encrypt_api_key
+from ..core.strixy_config import StrixySettings
 from ..core.utils import get_utc_now
 from ..database import models
 from ..database.db_utils import transaction
@@ -188,3 +189,18 @@ class SystemConfigService:
         config = await self.get_configuration()
         config.evidence_folder_templates = templates
         return self._persist_configuration(config)
+
+    async def get_strixy_settings(self, current_user: models.User) -> StrixySettings:
+        self.case_access.require_admin(current_user)
+        config = await self.get_configuration()
+        return StrixySettings.model_validate(config.strixy_settings or {})
+
+    @audit_operation("strixy_settings_update")
+    async def update_strixy_settings(
+        self, settings: StrixySettings, current_user: models.User
+    ) -> StrixySettings:
+        self.case_access.require_admin(current_user)
+        config = await self.get_configuration()
+        config.strixy_settings = settings.model_dump()
+        self._persist_configuration(config)
+        return settings

@@ -367,7 +367,7 @@ class StrixyConversations:
                 raise HTTPException(
                     409, "Wait for the current reply before sending another message"
                 )
-            config = get_strixy_config()
+            config = get_strixy_config(self.db)
             if not strixy_key(self.db, config):
                 raise HTTPException(
                     422,

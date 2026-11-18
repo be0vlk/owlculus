@@ -22,7 +22,11 @@ store=False avoids persisted response state, not independent provider retention.
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from sqlmodel import Session
+
+Provider = Literal["openai", "openai_compatible", "anthropic"]
+ReasoningEffort = Literal["low", "medium", "high", "xhigh", "max"]
 
 DEFAULT_MODELS = {
     "openai": "gpt-6-astra",
@@ -38,15 +42,40 @@ PROVIDER_NAMES = {
 }
 
 
+class StrixySettings(BaseModel):
+    """Admin-editable provider settings, stored on SystemConfiguration."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    provider: Provider = "openai"
+    model: str | None = None
+    base_url: str | None = None
+    supports_vision: bool = True
+    reasoning_effort: ReasoningEffort = "low"
+
+    @field_validator("model", "base_url", mode="before")
+    @classmethod
+    def blank_means_unset(cls, value: object) -> object:
+        return None if isinstance(value, str) and not value.strip() else value
+
+    @model_validator(mode="after")
+    def check_endpoint(self) -> "StrixySettings":
+        if self.provider == "openai_compatible" and not (self.model and self.base_url):
+            raise ValueError("openai_compatible requires a model and base URL")
+        if self.base_url and not self.base_url.startswith(("http://", "https://")):
+            raise ValueError("base URL must start with http:// or https://")
+        return self
+
+
 class StrixyConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     version: str = "strixy-6-v2"
     instruction_version: str = "grounded-visuals-v1"
-    provider: Literal["openai", "openai_compatible", "anthropic"] = "openai"
+    provider: Provider = "openai"
     base_url: str | None = None
     model: str = "gpt-6-astra"
-    reasoning_effort: Literal["low", "medium", "high", "xhigh", "max"] = "low"
+    reasoning_effort: ReasoningEffort = "low"
     supports_streaming: bool = True
     supports_vision: bool = True
     runtime_seconds: int = Field(default=300, ge=1, le=600)
@@ -94,13 +123,17 @@ class StrixyConfig(BaseModel):
     )
 
 
-def get_strixy_config() -> StrixyConfig:
-    from app.core.config import settings
+def get_strixy_config(db: Session) -> StrixyConfig:
+    from sqlmodel import select
 
-    provider = settings.STRIXY_PROVIDER
+    from app.database.models import SystemConfiguration
+
+    row = db.exec(select(SystemConfiguration)).first()
+    saved = StrixySettings.model_validate((row and row.strixy_settings) or {})
     return StrixyConfig(
-        provider=provider,
-        base_url=settings.STRIXY_BASE_URL,
-        model=settings.STRIXY_MODEL or DEFAULT_MODELS[provider],
-        supports_vision=settings.STRIXY_SUPPORTS_VISION,
+        provider=saved.provider,
+        base_url=saved.base_url,
+        model=saved.model or DEFAULT_MODELS[saved.provider],
+        supports_vision=saved.supports_vision,
+        reasoning_effort=saved.reasoning_effort,
     )

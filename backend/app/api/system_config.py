@@ -7,6 +7,7 @@ from app.core.database_boundary import DatabaseRoute
 
 from ..core.dependencies import get_current_user
 from ..core.exceptions import ValidationException
+from ..core.strixy_config import DEFAULT_MODELS, PROVIDER_NAMES, StrixySettings
 from ..database import models
 from ..database.connection import get_db
 from ..schemas import system_config_schema
@@ -153,4 +154,34 @@ async def update_evidence_folder_templates(
     updated_templates = await config_service.get_evidence_folder_templates()
     return system_config_schema.EvidenceFolderTemplatesResponse(
         templates=updated_templates
+    )
+
+
+def _strixy_response(settings: StrixySettings) -> dict:
+    return settings.model_dump() | {
+        "providers": {
+            key: {"name": name, "default_model": DEFAULT_MODELS[key]}
+            for key, name in PROVIDER_NAMES.items()
+        }
+    }
+
+
+@router.get("/configuration/strixy")
+async def get_strixy_settings(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return _strixy_response(
+        await SystemConfigService(db).get_strixy_settings(current_user)
+    )
+
+
+@router.put("/configuration/strixy")
+async def update_strixy_settings(
+    settings: StrixySettings,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return _strixy_response(
+        await SystemConfigService(db).update_strixy_settings(settings, current_user)
     )

@@ -37,7 +37,8 @@ def test_continuation_passes_exhausted_attachment_gaps_to_later_records(
     first = upload(client, assigned, admin_token, name, data, mime)
     later = upload(client, assigned, admin_token, "later.txt", b"Later witness found.")
     monkeypatch.setattr(
-        "app.core.strixy_config.get_strixy_config", lambda: StrixyConfig(max_sources=3)
+        "app.core.strixy_config.get_strixy_config",
+        lambda _db: StrixyConfig(max_sources=3),
     )
     seen = []
 
@@ -317,7 +318,7 @@ def test_preparation_failures_are_explicit_and_metadata_remains_available(
 
     monkeypatch.setattr(
         "app.core.strixy_config.get_strixy_config",
-        lambda: StrixyConfig(attachment_max_bytes=100, attachment_max_units=2),
+        lambda _db: StrixyConfig(attachment_max_bytes=100, attachment_max_units=2),
     )
     evidence = upload(client, assigned, admin_token, name, data)
     contexts = []
@@ -354,7 +355,7 @@ def test_attachment_unit_limit_continues_at_next_line(
 
     monkeypatch.setattr(
         "app.core.strixy_config.get_strixy_config",
-        lambda: StrixyConfig(attachment_max_units=2),
+        lambda _db: StrixyConfig(attachment_max_units=2),
     )
     evidence = upload(
         client, assigned, admin_token, "long.txt", b"first\nsecond\nthird\nfourth"
@@ -613,7 +614,7 @@ def test_office_processing_limits_and_untrusted_contents(
         mime, extension = "application/msword", "doc"
         monkeypatch.setattr(
             "app.core.strixy_config.get_strixy_config",
-            lambda: StrixyConfig(attachment_max_expanded_bytes=100),
+            lambda _db: StrixyConfig(attachment_max_expanded_bytes=100),
         )
     elif variant == "encrypted":
         import io
@@ -634,7 +635,7 @@ def test_office_processing_limits_and_untrusted_contents(
             extra["word/media/oversized.bin"] = b"A" * 5000
             monkeypatch.setattr(
                 "app.core.strixy_config.get_strixy_config",
-                lambda: StrixyConfig(attachment_max_expanded_bytes=4000),
+                lambda _db: StrixyConfig(attachment_max_expanded_bytes=4000),
             )
         elif variant == "entity":
             extra["word/document.xml"] = (
@@ -783,7 +784,7 @@ def test_preparation_timeout_is_bounded_and_cleans_parser_snapshots(
     monkeypatch.setattr("tempfile.tempdir", str(temporary))
     monkeypatch.setattr(
         "app.core.strixy_config.get_strixy_config",
-        lambda: StrixyConfig(
+        lambda _db: StrixyConfig(
             attachment_seconds=1, attachment_max_expanded_bytes=200_000_000
         ),
     )
