@@ -103,6 +103,8 @@ export function useStrixyChat() {
     } else if (status === 422 && error.response?.data?.detail?.includes('API key not configured')) {
       apiKeyError.value = true
       operationError.value = `Ask an administrator to configure the ${providerName.value} API key, then try again.`
+    } else if (status === 429 && error.response?.data?.detail) {
+      operationError.value = error.response.data.detail
     } else {
       operationError.value =
         status === 409
@@ -361,9 +363,12 @@ export function useStrixyChat() {
       )
       if (token !== generation) return
       sourcePreview.value = { ...source, citation }
-    } catch {
+    } catch (error) {
       if (token === generation)
-        sourceError.value = 'This source is unavailable or your access has changed.'
+        sourceError.value =
+          error.response?.status === 503
+            ? 'Too many previews are loading. Try again in a moment.'
+            : 'This source is unavailable or your access has changed.'
     }
   }
   const authorizedExport = async () => {

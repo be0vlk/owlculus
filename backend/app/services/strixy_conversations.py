@@ -4,7 +4,7 @@ import builtins
 import json
 
 from fastapi import HTTPException
-from sqlalchemy import delete
+from sqlalchemy import delete, func
 from sqlmodel import Session, col, select
 
 from app.core.strixy_config import PROVIDER_NAMES
@@ -380,6 +380,29 @@ class StrixyConversations:
                     409, "Wait for the current reply before sending another message"
                 )
             config = get_strixy_config(self.db)
+            # Serializes this user's submits across conversations so the cap cannot race.
+            self.db.exec(
+                select(User.id).where(User.id == self.human.id).with_for_update()
+            ).first()
+            in_flight = self.db.exec(
+                select(func.count())
+                .select_from(StrixyRun)
+                .join(
+                    StrixyConversation,
+                    col(StrixyConversation.id) == col(StrixyRun.conversation_id),
+                )
+                .where(
+                    StrixyConversation.owner_id == self.human.id,
+                    col(StrixyRun.status).in_(["pending", "running"]),
+                )
+            ).one()
+            if in_flight >= config.max_active_runs:
+                raise HTTPException(
+                    429,
+                    f"You already have {in_flight} Strixy replies in progress. "
+                    "Wait for one to finish, or cancel one, before sending another message.",
+                    headers={"Retry-After": "10"},
+                )
             if not strixy_key(self.db, config.provider):
                 raise HTTPException(
                     422,

@@ -1,5 +1,6 @@
 """Small synthetic OOXML containers containing known investigation facts."""
 
+import struct
 from io import BytesIO
 from zipfile import ZIP_DEFLATED, ZipFile
 
@@ -87,3 +88,37 @@ def document(kinds=("text", "scan")):
         else:
             pdf.image(io.BytesIO(screenshot()), x=20, y=30, w=150)
     return bytes(pdf.output())
+
+
+def password_protected_office():
+    """Minimal compound file holding only the EncryptedPackage entry Office writes."""
+    end, free = 0xFFFFFFFE, 0xFFFFFFFF
+    header = (
+        bytes.fromhex("D0CF11E0A1B11AE1")
+        + bytes(16)
+        + struct.pack("<HHHHH6x", 0x3E, 3, 0xFFFE, 9, 6)
+        + struct.pack("<IIIIIIIII", 0, 1, 0, 0, 4096, end, 0, end, 0)
+        + struct.pack("<I", 1)
+        + struct.pack("<I", free) * 108
+    )
+    fat = struct.pack("<II", end, 0xFFFFFFFD) + struct.pack("<I", free) * 126
+
+    def entry(name, kind, child):
+        raw = (name + "\0").encode("utf-16-le")
+        return (
+            raw.ljust(64, b"\0")
+            + struct.pack("<HBB", len(raw), kind, 1)
+            + struct.pack("<III", free, free, child)
+            + bytes(16 + 4 + 8 + 8)
+            + struct.pack("<II", end, 0)
+            + bytes(4)
+        )
+
+    # Upload sniffing wants the first sector to start with a Word marker; the
+    # root entry's name is free text, so it carries the marker bytes.
+    directory = (
+        entry("\ua5ec\u00c1oot Entry", 5, 1)
+        + entry("EncryptedPackage", 2, free)
+        + bytes(128) * 2
+    )
+    return header.ljust(512, b"\0") + directory + fat

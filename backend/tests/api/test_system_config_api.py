@@ -359,3 +359,140 @@ def test_strixy_setup_routes_reject_non_admin(client, test_user):
     for route, body in bodies.items():
         response = client.post(f"/api/admin/configuration/strixy/{route}", json=body)
         assert response.status_code == 403
+
+
+COMPATIBLE = {
+    "provider": "openai_compatible",
+    "model": "local-model",
+    "base_url": "https://llm.example.test/v1",
+    "reasoning_effort": None,
+}
+OTHER_HOST = "https://elsewhere.example.test/v1"
+
+
+def save_compatible(client, **extra):
+    return client.put("/api/admin/configuration/strixy", json=COMPATIBLE | extra)
+
+
+def test_stored_compatible_key_is_not_used_with_a_changed_base_url(
+    client, session, test_admin, monkeypatch
+):
+    monkeypatch.delenv("OPENAI_COMPATIBLE_API_KEY", raising=False)
+    authenticate_as(test_admin)
+    assert save_compatible(client, api_key="stored-secret").status_code == 200
+    moved = {"base_url": OTHER_HOST}
+
+    with (
+        patch("app.services.strixy_setup.list_models") as list_models,
+        patch("app.services.strixy_setup.test_connection") as test_connection,
+    ):
+        listed = client.post(
+            "/api/admin/configuration/strixy/models",
+            json={"provider": "openai_compatible"} | moved,
+        )
+        tested = client.post(
+            "/api/admin/configuration/strixy/test", json=COMPATIBLE | moved
+        )
+        saved = save_compatible(client, **moved)
+
+    for response in (listed, tested, saved):
+        assert response.status_code == 422
+        assert "Enter the API key again" in response.json()["detail"]
+    list_models.assert_not_called()
+    test_connection.assert_not_called()
+    stored = session.exec(select(SystemConfiguration)).one()
+    assert stored.strixy_settings["base_url"] == COMPATIBLE["base_url"]
+
+
+def test_switching_provider_does_not_free_the_stored_compatible_key(
+    client, test_admin, monkeypatch
+):
+    monkeypatch.delenv("OPENAI_COMPATIBLE_API_KEY", raising=False)
+    authenticate_as(test_admin)
+    save_compatible(client, api_key="stored-secret")
+    client.put(
+        "/api/admin/configuration/strixy",
+        json={"provider": "openrouter", "model": "vendor/model", "api_key": "or"},
+    )
+
+    with patch("app.services.strixy_setup.list_models") as list_models:
+        listed = client.post(
+            "/api/admin/configuration/strixy/models",
+            json={"provider": "openai_compatible", "base_url": OTHER_HOST},
+        )
+    saved = save_compatible(client, base_url=OTHER_HOST)
+
+    assert listed.status_code == saved.status_code == 422
+    list_models.assert_not_called()
+
+
+def test_stored_compatible_key_still_works_with_the_saved_base_url(
+    client, test_admin, monkeypatch
+):
+    monkeypatch.delenv("OPENAI_COMPATIBLE_API_KEY", raising=False)
+    authenticate_as(test_admin)
+    save_compatible(client, api_key="stored-secret")
+
+    with patch("app.services.strixy_setup.list_models", return_value=[]) as listed:
+        response = client.post(
+            "/api/admin/configuration/strixy/models",
+            json={
+                "provider": "openai_compatible",
+                "base_url": COMPATIBLE["base_url"] + "/",
+            },
+        )
+
+    assert response.status_code == 200
+    assert listed.call_args.args[2] == "stored-secret"
+    assert save_compatible(client).status_code == 200
+
+
+def test_a_typed_key_allows_a_changed_base_url(
+    client, session, test_admin, monkeypatch
+):
+    monkeypatch.delenv("OPENAI_COMPATIBLE_API_KEY", raising=False)
+    authenticate_as(test_admin)
+    save_compatible(client, api_key="stored-secret")
+
+    with patch("app.services.strixy_setup.list_models", return_value=[]) as listed:
+        response = client.post(
+            "/api/admin/configuration/strixy/models",
+            json={
+                "provider": "openai_compatible",
+                "base_url": OTHER_HOST,
+                "api_key": "new-secret",
+            },
+        )
+    assert response.status_code == 200
+    assert listed.call_args.args[2] == "new-secret"
+
+    assert (
+        save_compatible(client, base_url=OTHER_HOST, api_key="new-secret").status_code
+        == 200
+    )
+    assert (
+        ConfigurationApiKeyVault(session).get_key(Provider.OPENAI_COMPATIBLE)
+        == "new-secret"
+    )
+
+
+def test_first_time_and_keyless_compatible_setup_is_unchanged(
+    client, test_admin, monkeypatch
+):
+    monkeypatch.delenv("OPENAI_COMPATIBLE_API_KEY", raising=False)
+    authenticate_as(test_admin)
+
+    with patch("app.services.strixy_setup.list_models", return_value=[]) as listed:
+        first = client.post(
+            "/api/admin/configuration/strixy/models",
+            json={"provider": "openai_compatible", "base_url": OTHER_HOST},
+        )
+    assert first.status_code == 200
+    assert listed.call_args.args[2] == "not-needed"
+
+    assert save_compatible(client).status_code == 200
+    assert save_compatible(client, base_url=OTHER_HOST).status_code == 200
+    saved = save_compatible(
+        client, base_url=COMPATIBLE["base_url"], api_key="first-key"
+    )
+    assert saved.status_code == 200

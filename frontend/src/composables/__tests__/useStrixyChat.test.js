@@ -111,6 +111,15 @@ it('keeps failed submissions as drafts and requires an explicit retry', async ()
   expect(api.post).toHaveBeenCalledTimes(1)
 })
 
+it('shows the run limit message and keeps the draft', async () => {
+  const detail = 'You already have 3 Strixy replies in progress. Wait for one to finish.'
+  api.post.mockRejectedValueOnce({ response: { status: 429, data: { detail } } })
+  chat.currentMessage.value = 'My draft'
+  await chat.sendMessage()
+  expect(chat.operationError.value).toBe(detail)
+  expect(chat.currentMessage.value).toBe('My draft')
+})
+
 it('deletes the selected conversation and clears the transcript', async () => {
   api.delete.mockResolvedValue({})
   await chat.deleteConversation()

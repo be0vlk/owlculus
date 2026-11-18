@@ -118,6 +118,63 @@ def test_acceptance_owns_history_and_blocks_overlapping_turns(
     assert client.get(detail, headers=owner).json() == saved
 
 
+def test_user_cannot_have_more_than_the_run_cap_in_flight_across_conversations(
+    client, session, assigned, configured, analyst_token, admin_token
+):
+    from app.database.models import StrixyRun
+
+    owner = auth(analyst_token)
+    url = f"/api/strixy/cases/{assigned}/conversations"
+    details = [
+        f"{url}/{client.post(url, headers=owner).json()['id']}" for _ in range(4)
+    ]
+    runs = []
+    for detail in details[:3]:
+        accepted = client.post(
+            f"{detail}/messages", headers=owner, json={"content": "Q"}
+        )
+        assert accepted.status_code == 202
+        runs.append((detail, accepted.json()["id"]))
+    refused = client.post(
+        f"{details[3]}/messages", headers=owner, json={"content": "Q"}
+    )
+    assert refused.status_code == 429
+    assert "in progress" in refused.json()["detail"]
+    assert client.get(details[3], headers=owner).json()["messages"] == []
+
+    other = client.post(url, headers=auth(admin_token)).json()["id"]
+    assert (
+        client.post(
+            f"{url}/{other}/messages", headers=auth(admin_token), json={"content": "Q"}
+        ).status_code
+        == 202
+    )
+
+    detail, run_id = runs[0]
+    cancelled = client.post(f"{detail}/runs/{run_id}/cancel", headers=owner)
+    assert cancelled.status_code == 200
+    run = session.get(StrixyRun, run_id)
+    run.status = "failed"
+    session.add(run)
+    session.commit()
+    retried = client.post(f"{detail}/runs/{run_id}/retry", headers=owner)
+    assert retried.status_code == 202
+    blocked = client.post(
+        f"{details[3]}/messages", headers=owner, json={"content": "Q"}
+    )
+    assert blocked.status_code == 429
+    detail, run_id = runs[1]
+    client.post(f"{detail}/runs/{run_id}/cancel", headers=owner)
+    assert (
+        client.post(
+            f"{details[3]}/messages", headers=owner, json={"content": "Q"}
+        ).status_code
+        == 202
+    )
+    cancelled_again = client.post(f"{detail}/runs/{run_id}/continue", headers=owner)
+    assert cancelled_again.status_code == 429
+
+
 def test_worker_publishes_once_and_uses_saved_history(
     client, assigned, configured, analyst_token, engine, monkeypatch
 ):

@@ -244,7 +244,6 @@ def test_progress_schema_upgrade_preserves_existing_conversations(strixy_system)
 
 def test_mixed_attachments_cross_real_upload_broker_and_worker_boundary(strixy_system):
     import json
-    from pathlib import Path
 
     from tests.attachment_fixtures import document, office, screenshot
 
@@ -282,11 +281,6 @@ def test_mixed_attachments_cross_real_upload_broker_and_worker_boundary(strixy_s
         ("witness.txt", b"Ada works at Acme.", "text/plain"),
         ("witness.json", b'{"employer":"Acme"}', "application/json"),
         ("witness.csv", b"name,employer\nAda,Acme", "text/csv"),
-        (
-            "witness.doc",
-            (Path(__file__).parents[1] / "fixtures/strixy/witness.doc").read_bytes(),
-            "application/msword",
-        ),
     ]
     for extension in ("docx", "xlsx", "pptx"):
         data, mime = office(extension)

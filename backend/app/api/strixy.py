@@ -1,5 +1,9 @@
 """Strixy conversation, run, source and share routes."""
 
+from collections import Counter
+from collections.abc import Iterator
+from contextlib import contextmanager, nullcontext
+from threading import Lock
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -24,6 +28,29 @@ from app.services.strixy_shares import StrixyShares
 from app.services.strixy_sources import CaseSources, GroundedMaterial, SourceCatalog
 
 router = APIRouter(route_class=DatabaseRoute)
+
+# Per-process counts; use a shared store if the API ever runs several workers.
+_previews: Counter[int] = Counter()
+_previews_lock = Lock()
+
+
+@contextmanager
+def preview_slot(user_id: int, limit: int) -> Iterator[None]:
+    with _previews_lock:
+        if _previews[user_id] >= limit:
+            raise HTTPException(
+                503,
+                "Too many source previews are loading; retry shortly",
+                headers={"Retry-After": "2"},
+            )
+        _previews[user_id] += 1
+    try:
+        yield
+    finally:
+        with _previews_lock:
+            _previews[user_id] -= 1
+            if not _previews[user_id]:
+                del _previews[user_id]
 
 
 async def get_conversations(
@@ -134,15 +161,31 @@ async def read_source(
 
     config = get_strixy_config(conversations.db)
     reader = CaseSources(conversations.db, conversations.human, conversations.case_id)
-    material = GroundedMaterial(
-        SourceCatalog([reader.read(source_id)], True),
-        config.model_copy(update={"visual_max_images": 1}),
-        [],
-        attachment_start=(unit or 1) - 1,
+    source = reader.read(source_id)
+    config = config.model_copy(
+        update={
+            "visual_max_images": 1,
+            "attachment_seconds": min(
+                config.attachment_seconds, config.preview_attachment_seconds
+            ),
+        }
     )
+    assert conversations.human.id is not None
+    with (
+        preview_slot(conversations.human.id, config.max_active_previews)
+        if source.attachment
+        else nullcontext()
+    ):
+        material = GroundedMaterial(
+            SourceCatalog([source], True),
+            config,
+            [],
+            attachment_start=(unit or 1) - 1,
+        )
+        context = material.context()
     if not reader.validate_provenance(material.provenance(), current=True):
         raise ResourceNotFoundException("Source unavailable")
-    return material.context() | {"images": [v.model_dump() for v in material.images]}
+    return context | {"images": [v.model_dump() for v in material.images]}
 
 
 @router.post("/cases/{case_id}/conversations/{conversation_id}/runs/{run_id}/cancel")

@@ -7,11 +7,13 @@ import pytest
 from app.services.strixy_service import ProviderReply, StrixyService
 from tests.api import test_strixy_conversations_api as fixtures
 from tests.api.test_strixy_sources_api import new_conversation, turn
+from tests.attachment_fixtures import password_protected_office
 
 assigned = fixtures.assigned
 configured = fixtures.configured
 session = fixtures.session
 strixy = fixtures.strixy
+auth = fixtures.auth
 
 
 @pytest.mark.parametrize("first_format", ["unreadable", "office_warning"])
@@ -300,6 +302,7 @@ def test_office_bytes_preserve_document_sheet_and_slide_locators(
         ("big.txt", b"A" * 101, "attachment_size_limit"),
         ("partial.txt", b"first\nsecond\nthird", "attachment_unit_limit"),
         ("unsupported.html", b"<p>Unexamined</p>", "unsupported_format"),
+        ("legacy.doc", b"Ada works at Acme.", "unsupported_format"),
     ],
 )
 def test_preparation_failures_are_explicit_and_metadata_remains_available(
@@ -384,44 +387,6 @@ def test_attachment_unit_limit_continues_at_next_line(
     assert fields["attachment:line:3"] == "third"
     assert "attachment:line:1" not in fields
     assert saved["messages"][1]["content"] == first["messages"][1]["content"]
-
-
-def test_legacy_doc_text_is_read_with_extraction_locators(
-    client, assigned, configured, admin_token, analyst_token, engine, monkeypatch
-):
-    from pathlib import Path
-
-    data = (Path(__file__).parents[1] / "fixtures/strixy/witness.doc").read_bytes()
-    evidence = upload(
-        client, assigned, admin_token, "witness.doc", data, "application/msword"
-    )
-
-    def reply(self, messages, config, timeout):
-        source = next(
-            s
-            for s in json.loads(messages[0].content)["sources"]
-            if s["source_id"] == f"evidence:{evidence['id']}"
-        )
-        locator, _text = next(
-            (key, value)
-            for key, value in source["fields"].items()
-            if key.startswith("attachment:") and "Acme" in value
-        )
-        assert locator.startswith("attachment:extracted-line:")
-        return ProviderReply(
-            "Employer recorded",
-            citations=[
-                {"source_id": source["source_id"], "field": locator, "excerpt": "Acme"}
-            ],
-        )
-
-    monkeypatch.setattr(StrixyService, "generate", reply)
-    detail, owner = new_conversation(client, assigned, analyst_token)
-    saved = turn(client, detail, owner, engine)
-    assert saved["runs"][-1]["status"] == "completed", saved
-    assert saved["messages"][-1]["coverage"]["attachment_outcomes"][0]["warnings"] == [
-        "legacy_layout_and_visuals_unexamined"
-    ]
 
 
 @pytest.mark.parametrize(
@@ -592,7 +557,7 @@ def test_uncited_attachment_bytes_keep_protected_evidence_scope(
 
 @pytest.mark.parametrize(
     "variant",
-    ["expansion", "doc_expansion", "encrypted", "entity", "visual", "invalid_locator"],
+    ["expansion", "encrypted", "entity", "visual", "invalid_locator"],
 )
 def test_office_processing_limits_and_untrusted_contents(
     client,
@@ -604,31 +569,12 @@ def test_office_processing_limits_and_untrusted_contents(
     monkeypatch,
     variant,
 ):
-    from pathlib import Path
-
     from app.core.strixy_config import StrixyConfig
     from tests.attachment_fixtures import office
 
-    if variant == "doc_expansion":
-        data = (Path(__file__).parents[1] / "fixtures/strixy/witness.doc").read_bytes()
-        mime, extension = "application/msword", "doc"
-        monkeypatch.setattr(
-            "app.core.strixy_config.get_strixy_config",
-            lambda _db: StrixyConfig(attachment_max_expanded_bytes=100),
-        )
-    elif variant == "encrypted":
-        import io
-
-        import olefile
-
-        stream = io.BytesIO(
-            (Path(__file__).parents[1] / "fixtures/strixy/witness.doc").read_bytes()
-        )
-        with olefile.OleFileIO(stream, write_mode=True) as compound:
-            word = bytearray(compound.openstream("WordDocument").read())
-            word[11] |= 1
-            compound.write_stream("WordDocument", bytes(word))
-        data, mime, extension = stream.getvalue(), "application/msword", "doc"
+    if variant == "encrypted":
+        data, mime = password_protected_office(), "application/octet-stream"
+        extension = "docx"
     else:
         extra = {}
         if variant == "expansion":
@@ -805,3 +751,56 @@ def test_preparation_timeout_is_bounded_and_cleans_parser_snapshots(
     assert outcomes[0]["reason"] == "attachment_time_limit"
     assert outcomes[1]["reason"] == "attachment_time_limit"
     assert list(temporary.iterdir()) == []
+
+
+def preview_url(case_id, evidence):
+    return f"/api/strixy/cases/{case_id}/sources/evidence:{evidence['id']}"
+
+
+def test_source_preview_reports_legacy_doc_as_unsupported(
+    client, assigned, configured, admin_token, analyst_token
+):
+    evidence = upload(
+        client, assigned, admin_token, "legacy.doc", b"Ada works at Acme."
+    )
+    preview = client.get(preview_url(assigned, evidence), headers=auth(analyst_token))
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["sources"][0]["attachment"]["reason"] == "unsupported_format"
+
+
+def test_source_preview_uses_a_shorter_time_bound_than_runs(
+    client, assigned, configured, admin_token, analyst_token, monkeypatch
+):
+    from app.services import strixy_sources
+    from app.services.strixy_attachments import PreparedAttachment
+
+    evidence = upload(client, assigned, admin_token, "note.txt", b"Ada works at Acme.")
+    seen = []
+
+    def slow(attachment, config, *, start, timeout):
+        seen.append((config.attachment_seconds, timeout))
+        return PreparedAttachment(reason="attachment_time_limit")
+
+    monkeypatch.setattr(strixy_sources, "prepare", slow)
+    preview = client.get(preview_url(assigned, evidence), headers=auth(analyst_token))
+    assert preview.status_code == 200, preview.text
+    assert seen[0][0] == 10 and seen[0][1] <= 10
+    attachment = preview.json()["sources"][0]["attachment"]
+    assert attachment["reason"] == "attachment_time_limit"
+
+
+def test_a_user_can_prepare_only_two_source_previews_at_once(
+    client, assigned, configured, admin_token, analyst_token, test_analyst, monkeypatch
+):
+    from app.api import strixy as api
+
+    evidence = upload(client, assigned, admin_token, "note.txt", b"Ada works at Acme.")
+    url = preview_url(assigned, evidence)
+    monkeypatch.setitem(api._previews, test_analyst.id, 2)
+    refused = client.get(url, headers=auth(analyst_token))
+    assert refused.status_code == 503
+    assert refused.headers["retry-after"]
+    assert client.get(url, headers=auth(admin_token)).status_code == 200
+    monkeypatch.setitem(api._previews, test_analyst.id, 1)
+    assert client.get(url, headers=auth(analyst_token)).status_code == 200
+    assert api._previews[test_analyst.id] == 1

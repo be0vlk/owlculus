@@ -96,7 +96,6 @@ def prepare(
         ".txt",
         ".json",
         ".csv",
-        ".doc",
         ".docx",
         ".xlsx",
         ".pptx",

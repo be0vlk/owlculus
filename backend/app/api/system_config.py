@@ -194,6 +194,10 @@ async def update_strixy_settings(
     db: Session = Depends(get_db),
 ):
     service = SystemConfigService(db)
+    service.case_access.require_admin(current_user)
+    await service.require_key_for_changed_base_url(
+        setup.provider, setup.base_url, setup.api_key
+    )
     if setup.api_key:
         await service.set_api_key(
             provider=Provider(setup.provider),

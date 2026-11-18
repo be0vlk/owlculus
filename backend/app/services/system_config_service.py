@@ -212,14 +212,40 @@ class SystemConfigService:
         self._persist_configuration(config)
         return settings
 
-    def _strixy_setup_key(self, provider: str, typed: str | None) -> str | None:
+    async def require_key_for_changed_base_url(
+        self, provider: str, base_url: str | None, typed: str | None
+    ) -> None:
+        """A stored key may only go to the base URL it was saved with."""
+        if typed or provider != "openai_compatible":
+            return
+        config = await self.get_configuration()
+        key_data = (config.api_keys or {}).get(provider)
+        if not (
+            key_data and StoredApiKey.from_mapping(provider, key_data).encrypted_key
+        ):
+            return
+        # Switching provider clears the saved URL but keeps the key, so an empty
+        # saved URL still counts as a different host.
+        saved_url = ((config.strixy_settings or {}).get("base_url") or "").rstrip("/")
+        if saved_url != (base_url or "").rstrip("/"):
+            raise ValidationException(
+                "The base URL changed, so the stored API key can't be used with it. "
+                "Enter the API key again."
+            )
+
+    async def _strixy_setup_key(
+        self, provider: str, base_url: str | None, typed: str | None
+    ) -> str | None:
+        await self.require_key_for_changed_base_url(provider, base_url, typed)
         return typed or strixy_key(self.db, provider)
 
     async def list_strixy_models(
         self, query: StrixyModelQuery, current_user: models.User
     ) -> list[dict]:
         self.case_access.require_admin(current_user)
-        key = self._strixy_setup_key(query.provider, query.api_key)
+        key = await self._strixy_setup_key(
+            query.provider, query.base_url, query.api_key
+        )
         if not key:
             raise ValidationException(
                 f"{PROVIDER_NAMES[query.provider]} API key not configured"
@@ -236,5 +262,5 @@ class SystemConfigService:
         self.case_access.require_admin(current_user)
         return strixy_setup.test_connection(
             strixy_config_from(setup),
-            self._strixy_setup_key(setup.provider, setup.api_key),
+            await self._strixy_setup_key(setup.provider, setup.base_url, setup.api_key),
         )

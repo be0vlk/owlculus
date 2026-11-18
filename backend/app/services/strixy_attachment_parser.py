@@ -4,7 +4,6 @@ import csv
 import io
 import json
 import resource
-import subprocess
 import sys
 from pathlib import Path
 from zipfile import ZipFile
@@ -43,44 +42,10 @@ def invalid_constant(value):
 
 
 def units(path, extension, limits, warnings):
-    if extension in {".doc", ".docx", ".xlsx", ".pptx"} and olefile.isOleFile(path):
+    if extension in {".docx", ".xlsx", ".pptx"} and olefile.isOleFile(path):
         with olefile.OleFileIO(path) as compound:
             if compound.exists("EncryptedPackage") or compound.exists("EncryptionInfo"):
                 raise PreparationFailure("encrypted_file")
-            if extension == ".doc" and compound.exists("WordDocument"):
-                header = compound.openstream("WordDocument").read(32)
-                if len(header) < 12:
-                    raise PreparationFailure("unreadable_file")
-                if int.from_bytes(header[10:12], "little") & 0x8100:
-                    raise PreparationFailure("encrypted_file")
-    if extension == ".doc":
-        target = path.with_suffix(".txt")
-        try:
-            output_limit = resource.getrlimit(resource.RLIMIT_FSIZE)
-            try:
-                resource.setrlimit(
-                    resource.RLIMIT_FSIZE,
-                    (limits["attachment_max_expanded_bytes"], output_limit[1]),
-                )
-                with target.open("wb") as output:
-                    process = subprocess.run(
-                        ["antiword", "-m", "UTF-8.txt", "-w", "0", str(path)],
-                        stdout=output,
-                        stderr=subprocess.DEVNULL,
-                        check=False,
-                    )
-            finally:
-                resource.setrlimit(resource.RLIMIT_FSIZE, output_limit)
-            if process.returncode:
-                if target.stat().st_size >= limits["attachment_max_expanded_bytes"]:
-                    raise PreparationFailure("attachment_expansion_limit")
-                raise PreparationFailure("unreadable_file")
-            warnings.add("legacy_layout_and_visuals_unexamined")
-            for index, line in enumerate(target.read_text().splitlines(), 1):
-                yield f"extracted-line:{index}", line
-        except FileNotFoundError:
-            raise PreparationFailure("converter_unavailable") from None
-        return
     if extension in {".docx", ".xlsx", ".pptx"}:
         with ZipFile(path) as archive:
             document = OfficeDocument(archive, limits["attachment_max_expanded_bytes"])

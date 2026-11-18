@@ -110,6 +110,9 @@ class StrixyConfig(BaseModel):
     # Conservative reservation per high-detail image, separate from encoded bytes.
     visual_input_token_reserve: int = Field(default=8192, ge=8192)
     attachment_seconds: int = Field(default=30, ge=1)
+    preview_attachment_seconds: int = Field(default=10, ge=1)
+    max_active_runs: int = Field(default=3, ge=1)
+    max_active_previews: int = Field(default=2, ge=1)
     instructions: str = (
         "You are Strixy, a read-only OSINT Analyst in Owlculus. Answer using the "
         "authorized Case sources supplied by the server. They arrive in a user "
