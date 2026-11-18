@@ -5,12 +5,12 @@ from hashlib import sha256
 from secrets import token_hex
 from typing import Any, cast
 
-from fastapi import HTTPException
 from redis import Redis as SyncRedis
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
 from app.core.config import settings
+from app.core.exceptions import RateLimitException, ServiceUnavailableException
 from app.core.redis_health import bounded_redis, storage_ready
 
 _readiness_redis = bounded_redis(settings.AUTH_REDIS_URL, SyncRedis)
@@ -68,8 +68,8 @@ return 0
                 )
             )
         except (OSError, RedisError):
-            raise HTTPException(
-                503, self._UNAVAILABLE, headers={"Retry-After": "5"}
+            raise ServiceUnavailableException(
+                self._UNAVAILABLE, retry_after=5
             ) from None
 
 
@@ -109,10 +109,9 @@ class RedisLoginRateLimiter(SlidingWindowLimiter):
             },
         )
         if retry_after:
-            raise HTTPException(
-                429,
+            raise RateLimitException(
                 "Too many login attempts. Please retry later.",
-                headers={"Retry-After": str(retry_after)},
+                retry_after=retry_after,
             )
 
 

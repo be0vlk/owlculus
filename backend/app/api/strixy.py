@@ -1,17 +1,14 @@
 """Strixy conversation, run, source and share routes."""
 
-from collections import Counter
-from collections.abc import Iterator
-from contextlib import contextmanager, nullcontext
-from threading import Lock
+from contextlib import nullcontext
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, Query, Response
 from sqlmodel import Session
 
 from app.core.database_boundary import DatabaseRoute
 from app.core.dependencies import get_current_user
-from app.core.exceptions import ResourceNotFoundException
+from app.core.exceptions import GoneException, ResourceNotFoundException
 from app.core.strixy_config import PROVIDER_NAMES, get_strixy_config
 from app.database import models
 from app.database.connection import get_db
@@ -25,32 +22,14 @@ from app.services.api_key_vault import strixy_key
 from app.services.strixy_access import require_strixy_access
 from app.services.strixy_conversations import StrixyConversations
 from app.services.strixy_shares import StrixyShares
-from app.services.strixy_sources import CaseSources, GroundedMaterial, SourceCatalog
+from app.services.strixy_sources import (
+    CaseSources,
+    GroundedMaterial,
+    SourceCatalog,
+    preview_slot,
+)
 
 router = APIRouter(route_class=DatabaseRoute)
-
-# Per-process counts; use a shared store if the API ever runs several workers.
-_previews: Counter[int] = Counter()
-_previews_lock = Lock()
-
-
-@contextmanager
-def preview_slot(user_id: int, limit: int) -> Iterator[None]:
-    with _previews_lock:
-        if _previews[user_id] >= limit:
-            raise HTTPException(
-                503,
-                "Too many source previews are loading; retry shortly",
-                headers={"Retry-After": "2"},
-            )
-        _previews[user_id] += 1
-    try:
-        yield
-    finally:
-        with _previews_lock:
-            _previews[user_id] -= 1
-            if not _previews[user_id]:
-                del _previews[user_id]
 
 
 async def get_conversations(
@@ -92,7 +71,7 @@ async def chat_with_strixy(
     current_user: Annotated[models.User, Depends(get_current_user)],
 ) -> ChatResponse:
     require_strixy_access(db, current_user, request.case_id)
-    raise HTTPException(410, "Use private conversations to submit a new user message")
+    raise GoneException("Use private conversations to submit a new user message")
 
 
 @router.post("/cases/{case_id}/conversations", status_code=201)

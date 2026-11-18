@@ -4,10 +4,14 @@ import os
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from fastapi import HTTPException
 from sqlalchemy import func, text
 from sqlmodel import Session, col, select
 
+from app.core.exceptions import (
+    RateLimitException,
+    RelatedResourceException,
+    ValidationException,
+)
 from app.database.models import (
     TERMINAL,
     ExecutionControl,
@@ -46,10 +50,9 @@ def require_capacity(db: Session, case_id: int, user_id: int) -> None:
                 query = query.where(model.created_by_id == user_id)
             count += db.exec(query).one()
         if count >= limit:
-            raise HTTPException(
-                429,
+            raise RateLimitException(
                 f"Execution capacity is full for this {scope}. Wait for queued work to finish, then retry.",
-                headers={"Retry-After": "10"},
+                retry_after=10,
             )
 
 
@@ -65,7 +68,7 @@ class SubmissionRequest:
         if self.key is None:
             return None
         if not self.key.strip() or len(self.key) > 200:
-            raise HTTPException(422, "Idempotency-Key must contain 1–200 characters")
+            raise ValidationException("Idempotency-Key must contain 1–200 characters")
         submission = db.exec(
             select(ExecutionSubmission).where(
                 ExecutionSubmission.user_id == self.user_id,
@@ -80,14 +83,12 @@ class SubmissionRequest:
             normalized = normalize(
                 submission.parameter_definitions, self.payload["parameters"]
             )
-        except HTTPException:
-            raise HTTPException(
-                409,
+        except ValidationException:
+            raise RelatedResourceException(
                 "Idempotency-Key was already used with different input. Start a new run for changed input.",
             ) from None
         if submission.payload != {**self.payload, "parameters": normalized}:
-            raise HTTPException(
-                409,
+            raise RelatedResourceException(
                 "Idempotency-Key was already used with a different case or payload. Start a new run for changed input.",
             )
         control = db.get(ExecutionControl, submission.control_id)

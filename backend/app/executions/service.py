@@ -4,10 +4,16 @@ from copy import deepcopy
 from datetime import UTC
 from typing import Any, cast
 
-from fastapi import HTTPException
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session, col, select
 
+from app.core.exceptions import (
+    AuthorizationException,
+    RelatedResourceException,
+    ResourceNotFoundException,
+    ServiceUnavailableException,
+    ValidationException,
+)
 from app.core.utils import get_utc_now
 from app.database.db_utils import keyset_page, transaction
 from app.database.models import (
@@ -34,9 +40,9 @@ from app.services.case_access import CaseAccess
 def plugin_parameter_definitions(registry: PluginRegistry, name: str) -> dict:
     metadata = registry.metadata().get(name)
     if metadata is None:
-        raise HTTPException(404, "Plugin not found")
+        raise ResourceNotFoundException("Plugin not found")
     if not metadata["enabled"]:
-        raise HTTPException(409, "Plugin is disabled")
+        raise RelatedResourceException("Plugin is disabled")
     return {
         k: v
         for k, v in metadata["parameters"].items()
@@ -46,7 +52,7 @@ def plugin_parameter_definitions(registry: PluginRegistry, name: str) -> dict:
 
 def normalize_parameters(definitions: dict, params: dict) -> dict:
     if params.keys() - definitions.keys():
-        raise HTTPException(422, "Unknown plugin parameters")
+        raise ValidationException("Unknown plugin parameters")
     normalized = dict(params)
     types = {
         "string": (str,),
@@ -62,14 +68,14 @@ def normalize_parameters(definitions: dict, params: dict) -> dict:
             value = normalized[key] = definition["default"]
         if value is None or value == "":
             if definition.get("required"):
-                raise HTTPException(422, f"{key} is required")
+                raise ValidationException(f"{key} is required")
             normalized.pop(key, None)
             continue
         if type(value) not in types.get(definition["type"], ()):
-            raise HTTPException(422, f"Invalid type for {key}")
+            raise ValidationException(f"Invalid type for {key}")
         options = definition.get("options")
         if options and value not in options:
-            raise HTTPException(422, f"Invalid option for {key}")
+            raise ValidationException(f"Invalid option for {key}")
     return normalized
 
 
@@ -78,7 +84,7 @@ def authorize_execution(
 ) -> User:
     user = db.get(User, execution.created_by_id, populate_existing=True)
     if user is None or not user.is_active:
-        raise HTTPException(403, "Initiating user is inactive")
+        raise AuthorizationException("Initiating user is inactive")
     access = CaseAccess(db)
     access.require_non_analyst(user)
     if isinstance(execution, HuntExecution) or execution.save_to_case:
@@ -119,10 +125,10 @@ def accept(
     values = dict(params)
     case_id = values.pop("case_id", None)
     if type(case_id) is not int or case_id <= 0:
-        raise HTTPException(422, "A positive integer case_id is required")
+        raise ValidationException("A positive integer case_id is required")
     save = values.pop("save_to_case", False)
     if type(save) is not bool:
-        raise HTTPException(422, "save_to_case must be a boolean")
+        raise ValidationException("save_to_case must be a boolean")
     submission = admission.SubmissionRequest(
         cast(int, user.id),
         "plugin",
@@ -154,7 +160,7 @@ def accept(
             response = representation(execution, control, outbox)
         return response
     except SQLAlchemyError:
-        raise HTTPException(503, "Execution could not be accepted") from None
+        raise ServiceUnavailableException("Execution could not be accepted") from None
 
 
 def dispatch_observation(
@@ -234,7 +240,7 @@ def representation(
 def detail(db: Session, user: User, execution_id: int) -> dict:
     execution = db.get(PluginExecution, execution_id)
     if execution is None:
-        raise HTTPException(404, "Execution not found")
+        raise ResourceNotFoundException("Execution not found")
     CaseAccess(db).readable(user, execution.case_id)
     control = db.exec(
         select(ExecutionControl).where(
@@ -311,7 +317,7 @@ def retry_hunt(
             authorize_execution(db, prior)
         return prior
     except SQLAlchemyError:
-        raise HTTPException(503, "Execution could not be accepted") from None
+        raise ServiceUnavailableException("Execution could not be accepted") from None
 
 
 def accept_hunt(
@@ -350,7 +356,7 @@ def accept_hunt(
             db.expunge(execution)
         return execution
     except SQLAlchemyError:
-        raise HTTPException(503, "Execution could not be accepted") from None
+        raise ServiceUnavailableException("Execution could not be accepted") from None
 
 
 def hunt_observation(db: Session, execution: HuntExecution) -> dict:

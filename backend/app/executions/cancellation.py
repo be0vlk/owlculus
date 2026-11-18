@@ -2,11 +2,14 @@
 
 import logging
 
-from fastapi import HTTPException
 from redis import Redis
 from sqlmodel import Session, select
 
-from app.core.exceptions import ResourceNotFoundException
+from app.core.exceptions import (
+    AuthorizationException,
+    RelatedResourceException,
+    ResourceNotFoundException,
+)
 from app.core.utils import get_utc_now
 from app.database.db_utils import transaction
 from app.database.models import (
@@ -48,12 +51,12 @@ def request_cancel(db, user, execution_id, *, kind="plugin"):
         access.require_non_analyst(user)
         access.writable(user, execution.case_id)
         if not user.is_active:
-            raise HTTPException(403, "Inactive user")
+            raise AuthorizationException("Inactive user")
         if execution.status in TERMINAL:
             return execution
         if control is None:
-            raise HTTPException(
-                409, "Legacy execution requires the background execution upgrade"
+            raise RelatedResourceException(
+                "Legacy execution requires the background execution upgrade"
             )
         if control.cancellation_requested_at is None:
             control.cancellation_requested_at = get_utc_now()

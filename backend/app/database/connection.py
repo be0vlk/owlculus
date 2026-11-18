@@ -9,12 +9,12 @@ with PostgreSQL and includes connection pooling and health check configuration.
 import os
 from collections.abc import AsyncGenerator
 
-from fastapi import HTTPException
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError
 from sqlmodel import Session, create_engine
 
 from ..core.config import settings
+from ..core.exceptions import ServiceUnavailableException
 
 
 def create_execution_engine(
@@ -59,10 +59,9 @@ async def get_db() -> AsyncGenerator[Session, None]:
         yield db
     except OperationalError:
         # Authentication and validation can touch PostgreSQL before acceptance.
-        raise HTTPException(
-            503,
+        raise ServiceUnavailableException(
             "Database temporarily unavailable; retry when service recovers",
-            headers={"Retry-After": "10"},
+            retry_after=10,
         ) from None
     finally:
         db.close()

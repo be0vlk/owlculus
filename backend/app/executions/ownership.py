@@ -5,7 +5,6 @@ from datetime import UTC, datetime, timedelta
 from typing import cast
 from uuid import uuid4
 
-from fastapi import HTTPException
 from sqlmodel import Session, col, select
 
 from app.core.enums import ExecutionStatus
@@ -108,7 +107,7 @@ def claim(db: Session, execution_id: int, *, kind: str) -> Ownership | None:
             return None
         try:
             authorize_execution(db, execution)
-        except (HTTPException, AuthorizationException, ResourceNotFoundException):
+        except (AuthorizationException, ResourceNotFoundException):
             execution.status = ExecutionStatus.FAILED.value
             execution.error = {
                 "code": "access_revoked",

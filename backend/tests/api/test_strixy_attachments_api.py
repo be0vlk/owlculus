@@ -792,7 +792,7 @@ def test_source_preview_uses_a_shorter_time_bound_than_runs(
 def test_a_user_can_prepare_only_two_source_previews_at_once(
     client, assigned, configured, admin_token, analyst_token, test_analyst, monkeypatch
 ):
-    from app.api import strixy as api
+    from app.services import strixy_sources as api
 
     evidence = upload(client, assigned, admin_token, "note.txt", b"Ada works at Acme.")
     url = preview_url(assigned, evidence)

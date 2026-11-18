@@ -11,7 +11,7 @@ from typing import Any
 
 from sqlmodel import Session, col, select
 
-from app.core.exceptions import ResourceNotFoundException
+from app.core.exceptions import ResourceNotFoundException, ValidationException
 from app.database.models import Hunt, HuntExecution, HuntStep, User
 from app.services.case_access import CaseAccess
 
@@ -63,8 +63,6 @@ class HuntService:
         if not hunt or not hunt.is_active:
             raise ResourceNotFoundException("Hunt not found or inactive")
 
-        from fastapi import HTTPException
-
         from app.executions.service import accept_hunt, normalize_parameters
         from app.hunts.base_hunt import BaseHunt, HuntStepDefinition
         from app.hunts.hunt_definition_check import HuntDefinitionCheck
@@ -99,7 +97,7 @@ class HuntService:
                 definition.initial_parameters, initial_parameters
             )
         except (ValueError, KeyError, TypeError) as error:
-            raise HTTPException(422, str(error)) from None
+            raise ValidationException(str(error)) from None
         return accept_hunt(
             self.db,
             current_user,

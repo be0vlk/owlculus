@@ -5,12 +5,12 @@ Tests for HuntService
 from datetime import UTC, datetime
 
 import pytest
-from fastapi import HTTPException
 from sqlmodel import Session, select
 
 from app.core.exceptions import (
     AuthorizationException,
     ResourceNotFoundException,
+    ValidationException,
 )
 from app.database.models import Case, Client, Hunt, HuntExecution, HuntStep, User
 from app.services.hunt_service import HuntService
@@ -406,7 +406,7 @@ async def test_create_execution_rejects_missing_required_input(
     target: str | None,
 ):
     params = {} if target is None else {"target": target}
-    with pytest.raises(HTTPException, match="target is required"):
+    with pytest.raises(ValidationException, match="target is required"):
         await hunt_service.create_execution(
             hunt_id=defaulted_hunt.id,
             case_id=test_case.id,

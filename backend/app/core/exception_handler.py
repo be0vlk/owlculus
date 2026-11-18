@@ -24,4 +24,5 @@ async def handle_domain_exception(
         ).warning("Request authorization denied")
         if exception.code is not None:
             content["code"] = exception.code
-    return JSONResponse(status_code=response_status, content=content)
+    headers = exception.headers if isinstance(exception, DomainException) else None
+    return JSONResponse(status_code=response_status, content=content, headers=headers)

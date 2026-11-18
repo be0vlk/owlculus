@@ -3,10 +3,15 @@
 import builtins
 import json
 
-from fastapi import HTTPException
 from sqlalchemy import delete, func
 from sqlmodel import Session, col, select
 
+from app.core.exceptions import (
+    RateLimitException,
+    RelatedResourceException,
+    ResourceNotFoundException,
+    ValidationException,
+)
 from app.core.strixy_config import PROVIDER_NAMES
 from app.core.utils import get_utc_now
 from app.database.db_utils import transaction
@@ -52,14 +57,14 @@ class StrixyConversations:
             .execution_options(populate_existing=True)
         ).first()
         if conversation is None:
-            raise HTTPException(404, "Conversation not found")
+            raise ResourceNotFoundException("Conversation not found")
         return conversation
 
     def owned_run(self, conversation_id: str, run_id: str) -> StrixyRun:
         self.owned(conversation_id)
         run = self.db.get(StrixyRun, run_id)
         if run is None or run.conversation_id != conversation_id:
-            raise HTTPException(404, "Run not found")
+            raise ResourceNotFoundException("Run not found")
         return run
 
     def messages(self, conversation_id: str):
@@ -296,8 +301,8 @@ class StrixyConversations:
                 or latest.id != run_id
                 or prior.status in {"pending", "running"}
             ):
-                raise HTTPException(
-                    409, "Only the latest finished run can be continued or retried"
+                raise RelatedResourceException(
+                    "Only the latest finished run can be continued or retried"
                 )
             ledger = self.db.get(StrixyGrounding, run_id)
             if action == "continue" and not (
@@ -305,9 +310,9 @@ class StrixyConversations:
                 or prior.status == "cancelled"
                 or (ledger and ledger.coverage and not ledger.coverage.get("complete"))
             ):
-                raise HTTPException(409, "This run has no unfinished analysis")
+                raise RelatedResourceException("This run has no unfinished analysis")
             if action == "retry" and prior.status != "failed":
-                raise HTTPException(409, "Only failed runs can be retried")
+                raise RelatedResourceException("Only failed runs can be retried")
             question = self.db.exec(
                 select(StrixyMessage).where(
                     StrixyMessage.conversation_id == conversation_id,
@@ -376,8 +381,8 @@ class StrixyConversations:
                 )
             ).first()
             if active:
-                raise HTTPException(
-                    409, "Wait for the current reply before sending another message"
+                raise RelatedResourceException(
+                    "Wait for the current reply before sending another message"
                 )
             config = get_strixy_config(self.db)
             # Serializes this user's submits across conversations so the cap cannot race.
@@ -397,15 +402,13 @@ class StrixyConversations:
                 )
             ).one()
             if in_flight >= config.max_active_runs:
-                raise HTTPException(
-                    429,
+                raise RateLimitException(
                     f"You already have {in_flight} Strixy replies in progress. "
                     "Wait for one to finish, or cancel one, before sending another message.",
-                    headers={"Retry-After": "10"},
+                    retry_after=10,
                 )
             if not strixy_key(self.db, config.provider):
-                raise HTTPException(
-                    422,
+                raise ValidationException(
                     f"{PROVIDER_NAMES[config.provider]} API key not configured. "
                     "Ask an administrator to configure it.",
                 )

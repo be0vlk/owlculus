@@ -193,21 +193,8 @@ async def update_strixy_settings(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    service = SystemConfigService(db)
-    service.case_access.require_admin(current_user)
-    await service.require_key_for_changed_base_url(
-        setup.provider, setup.base_url, setup.api_key
-    )
-    if setup.api_key:
-        await service.set_api_key(
-            provider=Provider(setup.provider),
-            api_key=setup.api_key,
-            name=f"{PROVIDER_NAMES[setup.provider]} API",
-            current_user=current_user,
-        )
-    settings = StrixySettings.model_validate(setup.model_dump(exclude={"api_key"}))
     return _strixy_response(
-        await service.update_strixy_settings(settings, current_user), db
+        await SystemConfigService(db).save_strixy_setup(setup, current_user), db
     )
 
 

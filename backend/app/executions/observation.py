@@ -7,7 +7,7 @@ import logging
 import os
 import time
 
-from fastapi import HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import WebSocket, WebSocketDisconnect
 from fastapi.encoders import jsonable_encoder
 from sqlmodel import Session, select
 
@@ -28,7 +28,7 @@ AUTH_SECONDS = min(
 def readable_execution(db, user_id, kind, execution_id):
     user = db.get(User, user_id, populate_existing=True)
     if user is None or not user.is_active or user.system_identity is not None:
-        raise HTTPException(403, "Observation access is no longer available")
+        raise AuthorizationException("Observation access is no longer available")
     execution = db.get(execution_kind(kind)[0], execution_id, populate_existing=True)
     if execution is None:
         raise ResourceNotFoundException("Execution not found")
@@ -44,7 +44,7 @@ def snapshot(database_engine, user_id, kind, execution_id, identity, version):
             or user.auth_identity != identity
             or user.session_version != version
         ):
-            raise HTTPException(403, "Observation access is no longer available")
+            raise AuthorizationException("Observation access is no longer available")
         _, association = execution_kind(kind)
         # Writers lock the same row. All snapshot fields and its revision therefore
         # describe one commit; later commits have strictly newer replay cursors.
@@ -168,7 +168,6 @@ async def observe(websocket: WebSocket, database_engine, kind: str, execution_id
                                     last_cursor = event_cursor
                 except (
                     TimeoutError,
-                    HTTPException,
                     AuthorizationException,
                     ResourceNotFoundException,
                 ):
@@ -204,7 +203,7 @@ async def observe(websocket: WebSocket, database_engine, kind: str, execution_id
         for task in done:
             task.result()
         await websocket.close(code=1000)
-    except (HTTPException, AuthorizationException, ResourceNotFoundException):
+    except (AuthorizationException, ResourceNotFoundException):
         await websocket.close(code=1008, reason="Observation access revoked")
     except TimeoutError:
         await websocket.close(code=1013, reason=f"Reconnect from {last_cursor}")

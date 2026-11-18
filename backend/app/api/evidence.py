@@ -2,7 +2,7 @@
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlmodel import Session
 
@@ -13,6 +13,7 @@ from app.core.exceptions import (
     AuthenticationException,
     AuthorizationException,
     DuplicateResourceException,
+    PayloadTooLargeException,
     RelatedResourceException,
     ResourceNotFoundException,
     ValidationException,
@@ -46,9 +47,8 @@ async def create_evidence(
         raise ValidationException("At least one file must be provided")
 
     if len(files) > 10:
-        raise HTTPException(
-            status_code=413,
-            detail="Upload at most 10 files per request. No Evidence was saved.",
+        raise PayloadTooLargeException(
+            "Upload at most 10 files per request. No Evidence was saved."
         )
 
     evidence_service = EvidenceService(db)

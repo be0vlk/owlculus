@@ -13,10 +13,11 @@ from contextvars import ContextVar, copy_context
 from threading import BoundedSemaphore
 from typing import Any
 
-from fastapi import HTTPException, Request, Response
+from fastapi import Request, Response
 from fastapi.routing import APIRoute
 
 from app.core.config import settings
+from app.core.exceptions import ServiceUnavailableException
 
 _transport_loop: ContextVar[asyncio.AbstractEventLoop | None] = ContextVar(
     "database_transport_loop", default=None
@@ -65,10 +66,8 @@ class DatabaseRoute(APIRoute):
 
         async def handle(request: Request) -> Response:
             if not _request_slots.acquire(blocking=False):
-                raise HTTPException(
-                    503,
-                    "API database capacity is busy; retry shortly",
-                    headers={"Retry-After": "1"},
+                raise ServiceUnavailableException(
+                    "API database capacity is busy; retry shortly", retry_after=1
                 )
             loop = asyncio.get_running_loop()
 

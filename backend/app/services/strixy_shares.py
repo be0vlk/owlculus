@@ -3,10 +3,10 @@
 from copy import deepcopy
 from datetime import datetime
 
-from fastapi import HTTPException
 from fastapi.encoders import jsonable_encoder
 from sqlmodel import col, select
 
+from app.core.exceptions import ResourceNotFoundException
 from app.database.db_utils import transaction
 from app.database.models import (
     StrixyConversation,
@@ -48,12 +48,12 @@ class StrixyShares:
                 None,
             )
             if boundary is None:
-                raise HTTPException(404, "Message not found")
+                raise ResourceNotFoundException("Message not found")
             messages = messages[: boundary + 1]
             provenance: list[dict] = []
             for message in messages:
                 if message.get("withheld"):
-                    raise HTTPException(404, "Snapshot unavailable")
+                    raise ResourceNotFoundException("Snapshot unavailable")
                 original = self.db.get(StrixyMessage, message["id"])
                 grounding = (
                     self.conversations.grounding_for(original)
@@ -66,7 +66,7 @@ class StrixyShares:
             if not CaseSources(
                 self.db, self.conversations.human, self.conversations.case_id
             ).validate_provenance(provenance):
-                raise HTTPException(404, "Snapshot unavailable")
+                raise ResourceNotFoundException("Snapshot unavailable")
             # JSON storage preserves timestamps independently of the original rows.
             share = StrixyShare(
                 conversation_id=conversation_id,
@@ -107,7 +107,7 @@ class StrixyShares:
         if conversation is None or (
             owner and conversation.owner_id != self.conversations.human.id
         ):
-            raise HTTPException(404, "Snapshot unavailable")
+            raise ResourceNotFoundException("Snapshot unavailable")
         share = self.db.exec(
             select(StrixyShare)
             .where(StrixyShare.id == share_id)
@@ -115,7 +115,7 @@ class StrixyShares:
             .execution_options(populate_existing=True)
         ).first()
         if share is None:
-            raise HTTPException(404, "Snapshot unavailable")
+            raise ResourceNotFoundException("Snapshot unavailable")
         return share
 
     def authorized(self, share_id: str):
@@ -123,7 +123,7 @@ class StrixyShares:
         if not CaseSources(
             self.db, self.conversations.human, self.conversations.case_id
         ).validate_provenance(share.provenance):
-            raise HTTPException(404, "Snapshot unavailable")
+            raise ResourceNotFoundException("Snapshot unavailable")
         return share
 
     def read(self, share_id: str):
@@ -138,7 +138,7 @@ class StrixyShares:
             for message in share.messages
         ]
         if any(message.get("withheld") for message in messages):
-            raise HTTPException(404, "Snapshot unavailable")
+            raise ResourceNotFoundException("Snapshot unavailable")
         return self.metadata(share) | {"messages": messages}
 
     def revoke(self, share_id: str):

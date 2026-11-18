@@ -3,15 +3,22 @@
 import hashlib
 import json
 import re
-from collections.abc import Callable
+from collections import Counter
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
+from threading import Lock
 from time import monotonic
 from typing import Literal, cast
 
 from pydantic import BaseModel, Field
 from sqlmodel import Session, col, select
 
-from app.core.exceptions import AuthorizationException, ResourceNotFoundException
+from app.core.exceptions import (
+    AuthorizationException,
+    ResourceNotFoundException,
+    ServiceUnavailableException,
+)
 from app.core.strixy_config import StrixyConfig
 from app.core.utils import get_utc_now
 from app.database import models as m
@@ -27,6 +34,28 @@ from app.services.case_access import CaseAccess
 from app.services.evidence_service import EvidenceService
 from app.services.strixy_access import require_strixy_access
 from app.services.strixy_attachments import Attachment, prepare
+
+# Per-process counts; use a shared store if the API ever runs several workers.
+_previews: Counter[int] = Counter()
+_previews_lock = Lock()
+
+
+@contextmanager
+def preview_slot(user_id: int, limit: int) -> Iterator[None]:
+    with _previews_lock:
+        if _previews[user_id] >= limit:
+            raise ServiceUnavailableException(
+                "Too many source previews are loading; retry shortly", retry_after=2
+            )
+        _previews[user_id] += 1
+    try:
+        yield
+    finally:
+        with _previews_lock:
+            _previews[user_id] -= 1
+            if not _previews[user_id]:
+                del _previews[user_id]
+
 
 SourceRow = (
     m.Case

@@ -212,6 +212,23 @@ class SystemConfigService:
         self._persist_configuration(config)
         return settings
 
+    async def save_strixy_setup(
+        self, setup: StrixySetup, current_user: models.User
+    ) -> StrixySettings:
+        self.case_access.require_admin(current_user)
+        await self.require_key_for_changed_base_url(
+            setup.provider, setup.base_url, setup.api_key
+        )
+        if setup.api_key:
+            await self.set_api_key(
+                provider=Provider(setup.provider),
+                api_key=setup.api_key,
+                name=f"{PROVIDER_NAMES[setup.provider]} API",
+                current_user=current_user,
+            )
+        settings = StrixySettings.model_validate(setup.model_dump(exclude={"api_key"}))
+        return await self.update_strixy_settings(settings, current_user)
+
     async def require_key_for_changed_base_url(
         self, provider: str, base_url: str | None, typed: str | None
     ) -> None:
