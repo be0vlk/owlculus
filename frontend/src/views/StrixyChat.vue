@@ -620,6 +620,11 @@ watch(
   border-radius: 8px;
 }
 
+.strixy-layout {
+  max-width: 780px;
+  margin: 0 auto;
+}
+
 .chat-messages {
   padding: 8px 0 22px;
 }

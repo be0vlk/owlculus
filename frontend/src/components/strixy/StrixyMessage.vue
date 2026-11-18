@@ -91,7 +91,7 @@ const time = computed(() =>
 }
 
 .user-message {
-  max-width: min(90%, 80ch);
+  max-width: 90%;
   width: fit-content;
   margin-left: auto;
   padding: 12px 18px;
@@ -126,7 +126,6 @@ const time = computed(() =>
 }
 
 .message-content {
-  max-width: 80ch;
   font-size: 14px;
   line-height: 1.85;
 }
