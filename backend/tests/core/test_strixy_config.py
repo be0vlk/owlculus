@@ -20,6 +20,12 @@ def save(session, settings: dict) -> None:
     session.commit()
 
 
+def test_run_configuration_saved_with_the_retired_model_call_cap_still_loads() -> None:
+    saved = StrixyConfig().model_dump() | {"max_model_calls": 8}
+
+    assert StrixyConfig.model_validate(saved) == StrixyConfig()
+
+
 def test_unsaved_settings_give_the_built_in_defaults(session) -> None:
     assert get_strixy_config(session) == StrixyConfig()
 

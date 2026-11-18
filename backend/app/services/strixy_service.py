@@ -2,40 +2,35 @@
 
 openai uses the Responses API, openai_compatible uses Chat Completions against
 the configured base URL, and anthropic uses the Messages API. Each adapter sends
-the messages, images, the read_case_sources tool and the answer JSON schema, and
-returns a ProviderReply. No tool results are ever sent back to the model.
+the messages, images and the answer JSON schema, and returns a ProviderReply.
 
 Verified 2026-11-18 against official documentation:
 https://platform.claude.com/docs/en/build-with-claude/structured-outputs
   Anthropic JSON outputs are GA: output_config={"format": {"type": "json_schema",
-  "schema": {...}}}. Strict tools set "strict": true beside "input_schema".
-  Neither accepts numeric or string constraints such as maxLength, so schemas
-  pass through anthropic.transform_schema, which moves them into descriptions.
+  "schema": {...}}}. It does not accept numeric or string constraints such as
+  maxLength, so the schema passes through anthropic.transform_schema, which
+  moves them into descriptions.
 https://platform.claude.com/docs/en/build-with-claude/effort
   GA: output_config={"effort": "low"|"medium"|"high"|"xhigh"|"max"}. Sonnet 5.5
   supports all five, so STRIXY reasoning_effort is passed through unchanged;
   models outside that list (for example Haiku 4.5) reject the parameter.
 https://platform.claude.com/docs/en/build-with-claude/streaming
   Text arrives as content_block_delta events with delta.type "text_delta";
-  tool input arrives as "input_json_delta" and thinking as "thinking_delta".
+  thinking arrives as "thinking_delta".
   stop_reason "max_tokens" means the output limit was hit.
-  The pinned SDK (anthropic 2.10.0) takes output_config and strict on its
-  stable messages.create/messages.stream, so no beta namespace is needed.
+  The pinned SDK (anthropic 2.10.0) takes output_config on its stable
+  messages.create/messages.stream, so no beta namespace is needed.
 https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create
   Chat Completions: response_format={"type": "json_schema", "json_schema":
-  {"name", "schema", "strict"}}, tools=[{"type": "function", "function":
-  {"name", "description", "parameters", "strict"}}], finish_reason "length"
-  at the token cap, stream_options={"include_usage": true} adds a final chunk
-  with empty choices and usage. max_tokens is deprecated by OpenAI in favor of
+  {"name", "schema", "strict"}}, finish_reason "length" at the token cap,
+  stream_options={"include_usage": true} adds a final chunk with empty choices
+  and usage. max_tokens is deprecated by OpenAI in favor of
   max_completion_tokens, but OpenAI-compatible servers honor max_tokens
   universally; no reasoning parameters are sent because many reject them.
 https://openrouter.ai/docs/features/provider-routing
   openrouter reuses Chat Completions at https://openrouter.ai/api/v1.
   provider.require_parameters=true routes only to endpoints that honor every
-  request parameter (tools, response_format), instead of silently ignoring them.
-  parallel_tool_calls is never sent on Chat Completions: no OpenRouter endpoint
-  lists it (checked 2026-11-18), so require_parameters would exclude them all.
-  Replies may therefore carry several tool calls; analysis applies each one.
+  request parameter (response_format), instead of silently ignoring them.
   No data_collection or zdr preference is sent: the account's own privacy
   settings decide.
 https://openrouter.ai/docs/use-cases/reasoning-tokens
@@ -67,7 +62,6 @@ from app.schemas.strixy_schema import (
     GroundedAnswer,
     ModelMessage,
     SourceCitation,
-    SourceQuery,
 )
 
 
@@ -100,10 +94,6 @@ def response_input(messages: list[ChatMessage]) -> ResponseInputParam:
                     }
                 )
     return cast(ResponseInputParam, items)
-
-
-TOOL_NAME = "read_case_sources"
-TOOL_DESCRIPTION = "List, search or read the bounded authorized Case sources. No Case or identity overrides."
 
 
 def visual_label(image) -> str:
@@ -191,7 +181,6 @@ class ProviderReply:
     output_tokens: int = 0
     limit_code: str | None = None
     citations: list[dict] = field(default_factory=list)
-    tool_requests: list[dict] = field(default_factory=list)
 
 
 class StrixyService:
@@ -236,16 +225,6 @@ class StrixyService:
                 max_output_tokens=config.max_output_tokens,
                 store=False,
                 stream=streaming,
-                tools=[
-                    {
-                        "type": "function",
-                        "name": TOOL_NAME,
-                        "description": TOOL_DESCRIPTION,
-                        "parameters": SourceQuery.model_json_schema(),
-                        "strict": True,
-                    }
-                ],
-                parallel_tool_calls=False,
                 text={
                     "format": {
                         "type": "json_schema",
@@ -270,14 +249,8 @@ class StrixyService:
             limit = "output_limit"
         elif response.status != "completed":
             raise RuntimeError("Provider did not complete the response")
-        requests = [
-            {"name": item.name, "arguments": json.loads(item.arguments)}
-            for item in response.output
-            if item.type == "function_call"
-        ]
         return build_reply(
             response.output_text,
-            requests,
             limit,
             partial,
             response.usage.input_tokens if response.usage else 0,
@@ -310,17 +283,6 @@ class StrixyService:
                 messages=chat_messages(messages, config),
                 max_tokens=config.max_output_tokens,
                 stream=streaming,
-                tools=[
-                    {
-                        "type": "function",
-                        "function": {
-                            "name": TOOL_NAME,
-                            "description": TOOL_DESCRIPTION,
-                            "parameters": SourceQuery.model_json_schema(),
-                            "strict": True,
-                        },
-                    }
-                ],
                 response_format={
                     "type": "json_schema",
                     "json_schema": {
@@ -333,35 +295,20 @@ class StrixyService:
             )
             partial = ProviderReply("")
             if streaming:
-                text, calls, finish, usage, partial = self.consume_chat_stream(
-                    result, config
-                )
+                text, finish, usage, partial = self.consume_chat_stream(result, config)
             else:
                 completion = cast(ChatCompletion, result)
                 choice = completion.choices[0]
                 text = choice.message.content or ""
-                calls = {
-                    i: {
-                        "name": call.function.name,
-                        "arguments": call.function.arguments,
-                    }
-                    for i, call in enumerate(choice.message.tool_calls or [])
-                    if call.type == "function"
-                }
                 finish, usage = choice.finish_reason, completion.usage
         if finish == "length":
-            calls, limit = {}, "output_limit"
+            limit = "output_limit"
         elif finish in {"content_filter", "error"}:
             raise RuntimeError("Provider did not complete the response")
         else:
             limit = None
-        requests = [
-            {"name": call["name"], "arguments": json.loads(call["arguments"])}
-            for _, call in sorted(calls.items())
-        ]
         return build_reply(
-            "" if requests else text,
-            requests,
+            text,
             limit,
             partial,
             usage.prompt_tokens if usage else 0,
@@ -370,7 +317,6 @@ class StrixyService:
 
     def consume_chat_stream(self, stream, config: StrixyConfig):
         text, finish, usage = "", None, None
-        calls: dict[int, dict] = {}
         partial, last_update = ProviderReply(""), 0.0
         with stream:
             for event in stream:
@@ -380,10 +326,6 @@ class StrixyService:
                     continue
                 choice = event.choices[0]
                 finish = choice.finish_reason or finish
-                for delta in choice.delta.tool_calls or []:
-                    call = calls.setdefault(delta.index, {"name": "", "arguments": ""})
-                    call["name"] += delta.function.name or ""
-                    call["arguments"] += delta.function.arguments or ""
                 if choice.delta.content:
                     text += choice.delta.content
                     partial, last_update = self.report_progress(
@@ -391,7 +333,7 @@ class StrixyService:
                     )
         if finish is None:
             raise RuntimeError("Provider stream ended without completion")
-        return text, calls, finish, usage, partial
+        return text, finish, usage, partial
 
     def report_progress(
         self,
@@ -419,15 +361,6 @@ class StrixyService:
             "max_tokens": config.max_output_tokens,
             "system": system,
             "messages": turns,
-            "tools": [
-                {
-                    "name": TOOL_NAME,
-                    "description": TOOL_DESCRIPTION,
-                    "input_schema": transform_schema(SourceQuery.model_json_schema()),
-                    "strict": True,
-                }
-            ],
-            "tool_choice": {"type": "auto", "disable_parallel_tool_use": True},
             "output_config": {
                 **(
                     {"effort": config.reasoning_effort}
@@ -459,23 +392,13 @@ class StrixyService:
                 response = client.messages.create(**request)
         if response.stop_reason == "max_tokens":
             limit = "output_limit"
-        elif response.stop_reason in {"end_turn", "tool_use", "stop_sequence"}:
+        elif response.stop_reason in {"end_turn", "stop_sequence"}:
             limit = None
         else:
             raise RuntimeError("Provider did not complete the response")
-        requests = (
-            []
-            if limit
-            else [
-                {"name": block.name, "arguments": block.input}
-                for block in response.content
-                if block.type == "tool_use"
-            ]
-        )
         answer_text = "".join(b.text for b in response.content if b.type == "text")
         return build_reply(
-            "" if requests else answer_text,
-            requests,
+            answer_text,
             limit,
             partial,
             response.usage.input_tokens,
@@ -485,7 +408,7 @@ class StrixyService:
     def consume_stream(
         self, stream: Stream[ResponseStreamEvent], config: StrixyConfig
     ) -> tuple[Response, ProviderReply]:
-        """Only the structured answer's content is visible, never reasoning/tool deltas.
+        """Only the structured answer's content is visible, never reasoning deltas.
 
         Verified against https://developers.openai.com/api/docs/guides/streaming-responses
         (2026-09-12). Checkpoints are cumulative snapshots, so reconnect needs no replay.
@@ -519,13 +442,12 @@ class StrixyService:
 
 def build_reply(
     text: str,
-    requests: list[dict],
     limit: str | None,
     partial: ProviderReply,
     input_tokens: int,
     output_tokens: int,
 ) -> ProviderReply:
-    if not text and not limit and not requests:
+    if not text and not limit:
         raise RuntimeError("Provider returned no answer")
     # Complete answers require the full schema; limited streams retain decoded visible fields.
     answer = GroundedAnswer.model_validate_json(text) if text and not limit else None
@@ -534,7 +456,6 @@ def build_reply(
         citations=(
             [c.model_dump() for c in answer.citations] if answer else partial.citations
         ),
-        tool_requests=requests,
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         limit_code=limit,

@@ -55,7 +55,7 @@ def test_compatible_models_use_the_given_base_url_and_ids_only():
     ]
 
 
-def test_openrouter_keeps_tool_and_structured_output_models_with_capabilities():
+def test_openrouter_keeps_structured_output_models_with_capabilities():
     client = context_client()
     client.models.list.return_value = [
         openai_model(
@@ -70,7 +70,13 @@ def test_openrouter_keeps_tool_and_structured_output_models_with_capabilities():
             supported_parameters=["tools", "structured_outputs"],
             architecture={"input_modalities": ["text"]},
         ),
-        openai_model("vendor/no-tools", supported_parameters=["structured_outputs"]),
+        openai_model(
+            "vendor/no-tools",
+            name="No tools",
+            supported_parameters=["structured_outputs"],
+            architecture={"input_modalities": ["text"]},
+        ),
+        openai_model("vendor/tools-only", supported_parameters=["tools"]),
         openai_model("vendor/bare"),
     ]
     with patch("app.services.strixy_setup.OpenAI", return_value=client) as factory:
@@ -79,6 +85,7 @@ def test_openrouter_keeps_tool_and_structured_output_models_with_capabilities():
     assert models == [
         {"id": "vendor/full", "name": "Full", "vision": True, "efforts": None},
         {"id": "vendor/plain", "name": "Plain", "vision": False, "efforts": []},
+        {"id": "vendor/no-tools", "name": "No tools", "vision": False, "efforts": []},
     ]
 
 
@@ -131,13 +138,6 @@ def test_connection_succeeds_when_the_model_answers():
     assert result["ok"] is True and result["model"] == "m"
     assert isinstance(result["seconds"], float)
     assert service.return_value.generate.call_args.kwargs["timeout"] == 60
-
-
-def test_connection_succeeds_on_a_tool_request():
-    reply = ProviderReply("", tool_requests=[{"name": "read_case_sources"}])
-    with patch("app.services.strixy_setup.StrixyService") as service:
-        service.return_value.generate.return_value = reply
-        assert strixy_setup.test_connection(StrixyConfig(), "k")["ok"] is True
 
 
 def test_connection_failure_is_reported_not_raised():

@@ -50,7 +50,7 @@ def list_models(provider: str, base_url: str | None, api_key: str) -> list[dict]
 def openrouter_entry(model) -> dict | None:
     extra = model.model_extra or {}
     supported = extra.get("supported_parameters") or []
-    if not {"tools", "structured_outputs"} <= set(supported):
+    if "structured_outputs" not in supported:
         return None
     modalities = (extra.get("architecture") or {}).get("input_modalities") or []
     return {

@@ -40,13 +40,6 @@ class SubmitMessage(BaseModel):
     focus: list[str] = Field(default_factory=list, max_length=20)
 
 
-class SourceQuery(BaseModel):
-    model_config = {"extra": "forbid"}
-    action: Literal["list", "search", "read"]
-    source_id: str | None
-    query: str | None = Field(max_length=200)
-
-
 class SourceCitation(BaseModel):
     model_config = {"extra": "forbid"}
     source_id: str

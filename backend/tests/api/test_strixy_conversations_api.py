@@ -93,7 +93,7 @@ def test_acceptance_owns_history_and_blocks_overlapping_turns(
     assert run["coverage"] == "conversation_only"
     assert run["model"] == "gpt-6-astra"
     assert run["instruction_version"]
-    assert run["configuration_version"] == "strixy-6-v2"
+    assert run["configuration_version"] == "strixy-6-v3"
     from app.database.models import StrixyRun
 
     persisted_run = session.get(StrixyRun, run["id"])
@@ -491,28 +491,16 @@ def test_explicit_continuation_reuses_progress_and_reanalysis_reads_current_sour
 ):
     import json
 
-    from app.core.strixy_config import StrixyConfig
     from app.database.models import Case
     from app.executions.strixy_worker import execute
     from app.services.strixy_service import ProviderReply, StrixyService
 
-    monkeypatch.setattr(
-        "app.core.strixy_config.get_strixy_config",
-        lambda _db: StrixyConfig(max_model_calls=1),
-    )
     contexts = []
 
     def reply(self, messages, config, timeout):
         contexts.append(json.loads(messages[0].content))
-        return ProviderReply(
-            "Partial supported observation",
-            tool_requests=[
-                {
-                    "name": "read_case_sources",
-                    "arguments": {"action": "list", "source_id": None, "query": None},
-                }
-            ],
-        )
+        self.on_progress(ProviderReply("Partial supported observation"))
+        return ProviderReply("", limit_code="output_limit")
 
     monkeypatch.setattr(StrixyService, "generate", reply)
     owner = auth(analyst_token)
@@ -523,7 +511,7 @@ def test_explicit_continuation_reuses_progress_and_reanalysis_reads_current_sour
     ).json()
     execute(first["id"], engine)
     saved = client.get(detail, headers=owner).json()
-    assert saved["runs"][0]["limit_code"] == "model_call_limit"
+    assert saved["runs"][0]["limit_code"] == "output_limit"
     assert saved["runs"][0]["partial"]["content"] == "Partial supported observation"
     continued = client.post(f"{detail}/runs/{first['id']}/continue", headers=owner)
     assert continued.status_code == 202
@@ -606,23 +594,16 @@ def test_continuation_advances_beyond_bounded_catalog(
     assert seen == [f"case:{assigned}", *[f"entity:{item.id}" for item in entities]]
 
 
-@pytest.mark.parametrize(
-    "limit", ["runtime_limit", "output_limit", "model_input_limit"]
-)
-def test_limits_across_steps_preserve_findings_and_usage(
+@pytest.mark.parametrize("limit", ["runtime_limit", "output_limit"])
+def test_limits_preserve_findings_and_usage(
     client, assigned, configured, analyst_token, engine, monkeypatch, limit
 ):
     from datetime import timedelta
 
-    from app.core.strixy_config import StrixyConfig
     from app.core.utils import get_utc_now
     from app.executions.strixy_worker import execute
     from app.services.strixy_service import ProviderReply, StrixyService
 
-    monkeypatch.setattr(
-        "app.core.strixy_config.get_strixy_config",
-        lambda _db: StrixyConfig(max_output_tokens=16, max_total_input_tokens=5000),
-    )
     calls = []
 
     def reply(self, messages, config, timeout):
@@ -635,14 +616,9 @@ def test_limits_across_steps_preserve_findings_and_usage(
             )
         return ProviderReply(
             "",
-            input_tokens=5000 if limit == "model_input_limit" else 10,
+            input_tokens=10,
             output_tokens=16 if limit == "output_limit" else 1,
-            tool_requests=[
-                {
-                    "name": "read_case_sources",
-                    "arguments": {"action": "list", "source_id": None, "query": None},
-                }
-            ],
+            limit_code="output_limit" if limit == "output_limit" else None,
         )
 
     monkeypatch.setattr(StrixyService, "generate", reply)

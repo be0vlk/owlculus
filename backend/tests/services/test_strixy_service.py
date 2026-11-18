@@ -59,8 +59,7 @@ def test_responses_adapter_bounds_usage_and_withholds_incomplete_json(limited):
     }
     assert sent["store"] is False
     assert sent["max_output_tokens"] == config.max_output_tokens
-    assert [tool["name"] for tool in sent["tools"]] == ["read_case_sources"]
-    assert sent["tools"][0]["strict"] is True
+    assert not {"tools", "parallel_tool_calls"} & sent.keys()
     assert sent["text"]["format"]["strict"] is True
     assert "previous_response_id" not in sent
 
@@ -71,31 +70,6 @@ def test_missing_vault_key_never_calls_provider():
         with pytest.raises(ValidationException):
             service.generate([], StrixyConfig(), 12)
         factory.assert_not_called()
-
-
-def test_responses_adapter_translates_function_request_without_executing_it():
-    client = MagicMock()
-    client.__enter__.return_value = client
-    request = Mock(
-        type="function_call",
-        arguments='{"action":"search","source_id":null,"query":"Ada"}',
-    )
-    request.name = "read_case_sources"
-    client.responses.create.return_value = Mock(
-        status="completed", output_text="", output=[request], usage=None
-    )
-    service = StrixyService("fake")
-    with patch("app.services.strixy_service.OpenAI", return_value=client):
-        reply = service.generate(
-            [ChatMessage(role="user", content="Find Ada")], StrixyConfig(), 12
-        )
-    assert reply.tool_requests == [
-        {
-            "name": "read_case_sources",
-            "arguments": {"action": "search", "source_id": None, "query": "Ada"},
-        }
-    ]
-    assert reply.content == "" and reply.citations == []
 
 
 def test_streams_only_visible_answer_content_and_retains_incomplete_output():
@@ -194,34 +168,18 @@ def context_client() -> MagicMock:
     return client
 
 
-def completion(content="", tool_calls=None, finish="stop", usage=(10, 20)):
+def completion(content="", finish="stop", usage=(10, 20)):
     return Mock(
-        choices=[
-            Mock(
-                finish_reason=finish,
-                message=Mock(content=content, tool_calls=tool_calls),
-            )
-        ],
+        choices=[Mock(finish_reason=finish, message=Mock(content=content))],
         usage=Mock(prompt_tokens=usage[0], completion_tokens=usage[1]),
     )
 
 
-def chunk(content=None, tool_calls=None, finish=None):
+def chunk(content=None, finish=None):
     return Mock(
-        choices=[
-            Mock(
-                finish_reason=finish,
-                delta=Mock(content=content, tool_calls=tool_calls),
-            )
-        ],
+        choices=[Mock(finish_reason=finish, delta=Mock(content=content))],
         usage=None,
     )
-
-
-def tool_delta(index, name=None, arguments=None):
-    function = Mock(arguments=arguments)
-    function.name = name
-    return Mock(index=index, function=function)
 
 
 @pytest.mark.parametrize("limited", [False, True])
@@ -253,7 +211,7 @@ def test_compatible_adapter_sends_chat_completions_without_reasoning(limited):
     sent = client.chat.completions.create.call_args.kwargs
     assert sent["model"] == "llama3"
     assert sent["max_tokens"] == COMPAT.max_output_tokens
-    assert "parallel_tool_calls" not in sent
+    assert not {"tools", "parallel_tool_calls"} & sent.keys()
     assert sent["stream"] is False
     assert not {"reasoning", "reasoning_effort", "store"} & sent.keys()
     assert [m["role"] for m in sent["messages"]] == ["system", "user"]
@@ -265,38 +223,12 @@ def test_compatible_adapter_sends_chat_completions_without_reasoning(limited):
         "type": "image_url",
         "image_url": {"url": "data:image/png;base64,cGl4"},
     }
-    assert sent["tools"][0]["type"] == "function"
-    assert sent["tools"][0]["function"]["name"] == "read_case_sources"
-    assert sent["tools"][0]["function"]["strict"] is True
     assert sent["response_format"]["type"] == "json_schema"
     assert sent["response_format"]["json_schema"]["strict"] is True
     assert sent["response_format"]["json_schema"]["name"] == "grounded_answer"
 
 
-def test_compatible_adapter_translates_tool_calls_without_executing_them():
-    client = context_client()
-    call = Mock(
-        type="function",
-        function=Mock(arguments='{"action":"search","source_id":null,"query":"Ada"}'),
-    )
-    call.function.name = "read_case_sources"
-    client.chat.completions.create.return_value = completion(
-        "", tool_calls=[call], finish="tool_calls"
-    )
-    with patch("app.services.strixy_service.OpenAI", return_value=client):
-        reply = StrixyService("k").generate(
-            [ChatMessage(role="user", content="Find Ada")], COMPAT, 12
-        )
-    assert reply.tool_requests == [
-        {
-            "name": "read_case_sources",
-            "arguments": {"action": "search", "source_id": None, "query": "Ada"},
-        }
-    ]
-    assert reply.content == "" and reply.citations == []
-
-
-def test_compatible_adapter_streams_visible_content_and_assembles_tool_calls():
+def test_compatible_adapter_streams_visible_content():
     client = context_client()
     stream = MagicMock()
     stream.__enter__.return_value = stream
@@ -304,12 +236,7 @@ def test_compatible_adapter_streams_visible_content_and_assembles_tool_calls():
     stream.__iter__.return_value = iter(
         [
             chunk(content='{"content":"A useful'),
-            chunk(content=" partial finding"),
-            chunk(tool_calls=[tool_delta(0, "read_case_sources", '{"action":"li')]),
-            chunk(tool_calls=[tool_delta(0, None, 'st","source_id":null,')]),
-            chunk(
-                tool_calls=[tool_delta(0, None, '"query":null}')], finish="tool_calls"
-            ),
+            chunk(content=' finding","citations":[]}', finish="stop"),
             usage_chunk,
         ]
     )
@@ -323,12 +250,7 @@ def test_compatible_adapter_streams_visible_content_and_assembles_tool_calls():
     assert sent["stream"] is True
     assert sent["stream_options"] == {"include_usage": True}
     assert updates[0].content == "A useful"
-    assert reply.tool_requests == [
-        {
-            "name": "read_case_sources",
-            "arguments": {"action": "list", "source_id": None, "query": None},
-        }
-    ]
+    assert reply.content == "A useful finding"
     assert (reply.input_tokens, reply.output_tokens) == (7, 9)
 
 
@@ -363,7 +285,7 @@ def text_block(text):
 
 
 @pytest.mark.parametrize("limited", [False, True])
-def test_anthropic_adapter_sends_structured_output_strict_tool_and_effort(limited):
+def test_anthropic_adapter_sends_structured_output_and_effort(limited):
     client = context_client()
     client.messages.create.return_value = message(
         "max_tokens" if limited else "end_turn",
@@ -400,38 +322,14 @@ def test_anthropic_adapter_sends_structured_output_strict_tool_and_effort(limite
         "type": "image",
         "source": {"type": "base64", "media_type": "image/png", "data": "cGl4"},
     }
-    tool = sent["tools"][0]
-    assert tool["name"] == "read_case_sources"
-    assert tool["strict"] is True
-    assert "'maxLength'" not in str(tool["input_schema"])
     assert sent["output_config"]["effort"] == "low"
     assert sent["output_config"]["format"]["type"] == "json_schema"
     assert sent["output_config"]["format"]["schema"]["required"] == [
         "content",
         "citations",
     ]
-    assert sent["tool_choice"] == {"type": "auto", "disable_parallel_tool_use": True}
+    assert not {"tools", "tool_choice"} & sent.keys()
     assert "stream" not in sent
-
-
-def test_anthropic_adapter_translates_tool_use_without_executing_it():
-    client = context_client()
-    use = Mock(
-        type="tool_use", input={"action": "search", "source_id": None, "query": "Ada"}
-    )
-    use.name = "read_case_sources"
-    client.messages.create.return_value = message("tool_use", [use])
-    with patch("app.services.strixy_service.Anthropic", return_value=client):
-        reply = StrixyService("k").generate(
-            [ChatMessage(role="user", content="Find Ada")], ANTHROPIC, 12
-        )
-    assert reply.tool_requests == [
-        {
-            "name": "read_case_sources",
-            "arguments": {"action": "search", "source_id": None, "query": "Ada"},
-        }
-    ]
-    assert reply.content == "" and reply.citations == []
 
 
 def test_anthropic_adapter_streams_only_answer_text_deltas():
@@ -447,7 +345,6 @@ def test_anthropic_adapter_streams_only_answer_text_deltas():
             delta("thinking_delta", thinking="private reasoning"),
             delta("text_delta", text='{"content":"A useful'),
             delta("text_delta", text=' partial finding"'),
-            delta("input_json_delta", partial_json='{"action":'),
         ]
     )
     stream.get_final_message.return_value = message(
@@ -466,27 +363,6 @@ def test_anthropic_adapter_streams_only_answer_text_deltas():
     assert reply.limit_code == "output_limit"
     assert (reply.input_tokens, reply.output_tokens) == (5, 6)
     assert client.messages.stream.call_args.kwargs["output_config"]["effort"] == "low"
-
-
-def test_anthropic_streaming_turn_that_calls_the_tool_returns_the_request():
-    client = context_client()
-    stream = MagicMock()
-    stream.__enter__.return_value = stream
-    stream.__iter__.return_value = iter([])
-    use = Mock(
-        type="tool_use", input={"action": "list", "source_id": None, "query": None}
-    )
-    use.name = "read_case_sources"
-    stream.get_final_message.return_value = message(
-        "tool_use", [text_block("Let me look."), use]
-    )
-    client.messages.stream.return_value = stream
-    with patch("app.services.strixy_service.Anthropic", return_value=client):
-        reply = StrixyService("k", on_progress=lambda _: None).generate(
-            [ChatMessage(role="user", content="Question")], ANTHROPIC, 12
-        )
-    assert [r["name"] for r in reply.tool_requests] == ["read_case_sources"]
-    assert reply.content == ""
 
 
 def test_missing_key_message_names_the_configured_provider():
@@ -515,8 +391,8 @@ def test_openrouter_requires_parameters_and_sends_effort_without_echoing_it():
         "provider": {"require_parameters": True},
         "reasoning": {"effort": "medium", "exclude": True},
     }
-    # No OpenRouter endpoint lists it, so require_parameters would exclude them all.
-    assert "parallel_tool_calls" not in sent
+    # Any parameter an endpoint doesn't list makes require_parameters exclude it.
+    assert not {"tools", "parallel_tool_calls"} & sent.keys()
     client.responses.create.assert_not_called()
 
 

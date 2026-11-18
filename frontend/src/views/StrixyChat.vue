@@ -383,7 +383,6 @@ const canContinue = computed(
 const failureReasons = {
   invalid_citation:
     'The model quoted text that isn’t in the case records, so the answer was withheld',
-  invalid_tool_request: 'The model asked to read the case in a way Strixy doesn’t support',
 }
 const recoveryNotice = computed(() => {
   const run = latestRun.value

@@ -8,14 +8,13 @@ https://developers.openai.com/api/reference/typescript/resources/beta/subresourc
 GPT-6 Astra supports Responses, function calling, streaming and image input.
 Use the current flagship alias with explicit low reasoning by default.
 File inputs support PDFs with text and page images for vision-capable models.
-Grounding uses only our read_case_sources function and strict JSON answers.
-https://developers.openai.com/api/docs/guides/function-calling
+Grounding uses strict JSON answers over server-supplied source material.
 https://developers.openai.com/api/docs/guides/structured-outputs
-No hosted tools, uploads or provider conversation storage are enabled.
+No tools, uploads or provider conversation storage are enabled.
 Visible answer content streams into authorized server-owned checkpoints.
 https://developers.openai.com/api/docs/guides/streaming-responses
-Each bounded model call receives fresh authorized source material; no provider
-response IDs or remote tool state are retained.
+The model call receives fresh authorized source material; no provider response
+IDs are retained.
 Responses max_output_tokens bounds visible output plus reasoning tokens;
 store=False avoids persisted response state, not independent provider retention.
 """
@@ -75,8 +74,16 @@ class StrixySettings(BaseModel):
 class StrixyConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    version: str = "strixy-6-v2"
-    instruction_version: str = "grounded-visuals-v1"
+    @model_validator(mode="before")
+    @classmethod
+    def drop_retired_fields(cls, data: object) -> object:
+        # Run configurations saved before the tool loop was removed still carry this key.
+        if isinstance(data, dict):
+            return {k: v for k, v in data.items() if k != "max_model_calls"}
+        return data
+
+    version: str = "strixy-6-v3"
+    instruction_version: str = "grounded-visuals-v2"
     provider: Provider = "openai"
     base_url: str | None = None
     model: str = "gpt-6-astra"
@@ -93,7 +100,6 @@ class StrixyConfig(BaseModel):
     max_source_bytes: int = Field(default=96000, ge=256, le=100000)
     max_source_field_bytes: int = Field(default=6000, ge=100, le=20000)
     max_total_input_tokens: int = Field(default=1000000, ge=100, le=1000000)
-    max_model_calls: int = Field(default=8, ge=1, le=8)
     attachment_max_bytes: int = Field(default=10_000_000, ge=1)
     attachment_max_expanded_bytes: int = Field(default=30_000_000, ge=1)
     attachment_max_units: int = Field(default=100, ge=1)
@@ -121,8 +127,6 @@ class StrixyConfig(BaseModel):
         "use an exact supplied image field and an empty excerpt; these identify supplied "
         "images, not verified transcriptions. Never invent a verbatim excerpt from pixels. "
         "Use server coverage, never claim complete coverage when limited. "
-        "read_case_sources can list, search or read the bounded permitted set; "
-        "each call receives the refreshed material as a new stateless request. "
         "Earlier assistant answers are historical interpretations, not current "
         "sources. Provide concise findings without private reasoning."
     )
