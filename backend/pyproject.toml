@@ -10,7 +10,7 @@ dependencies = [
     "chardet==7.6.0",
     "cryptography==50.0.1",
     "defusedxml==0.7.1",
-    "dnspython==2.9.0",
+    "dnspython==2.9.2",
     "fastapi[standard]==0.162.5",
     "filetype==1.2.0",
     "fpdf2==2.8.8",
