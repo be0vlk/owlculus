@@ -76,6 +76,24 @@
             style="min-width: 12rem"
           />
         </div>
+        <v-chip-group
+          v-if="matchTypes.length > 1"
+          v-model="selectedMatchTypes"
+          filter
+          multiple
+          selected-class="text-primary"
+        >
+          <v-chip
+            v-for="type in matchTypes"
+            :key="type.value"
+            :value="type.value"
+            variant="outlined"
+            size="small"
+            filter
+          >
+            {{ getMatchTypeLabel(type.value) }} ({{ type.count }})
+          </v-chip>
+        </v-chip-group>
       </div>
 
       <v-data-table
@@ -235,7 +253,22 @@ const HEADERS = [
   { title: 'Open', key: 'actions', sortable: false, align: 'end' },
 ]
 
+const MATCH_TYPE_LABELS = {
+  name: 'Name Match',
+  employer: 'Employer Match',
+  domain: 'Domain Match',
+  vin: 'VIN Match',
+  email: 'Email Match',
+  phone: 'Phone Match',
+  ip_address: 'IP Address Match',
+  exact_profile: 'Exact Profile Reference',
+  license_plate: 'License Plate Match',
+}
+const getMatchTypeLabel = (matchType) => MATCH_TYPE_LABELS[matchType] || 'Match'
+
 const selectedStrengths = ref([0, 1])
+// Stores what the user hid, so match types that arrive later in the stream start shown.
+const hiddenMatchTypes = ref([])
 const search = ref('')
 const expanded = ref([])
 
@@ -293,6 +326,25 @@ const strengthCounts = computed(() =>
   STRENGTHS.map((option) => rows.value.filter((row) => row.strength === option.value).length),
 )
 
+const matchTypes = computed(() => {
+  const counts = new Map()
+  for (const row of rows.value) counts.set(row.matchType, (counts.get(row.matchType) || 0) + 1)
+  return [...new Set([...Object.keys(MATCH_TYPE_LABELS), ...counts.keys()])]
+    .filter((value) => counts.has(value))
+    .map((value) => ({ value, count: counts.get(value) }))
+})
+const selectedMatchTypes = computed({
+  get: () =>
+    matchTypes.value
+      .map((type) => type.value)
+      .filter((value) => !hiddenMatchTypes.value.includes(value)),
+  set: (selected) => {
+    hiddenMatchTypes.value = matchTypes.value
+      .map((type) => type.value)
+      .filter((value) => !selected.includes(value))
+  },
+})
+
 const searchText = (row) =>
   [
     getMatchTypeLabel(row.matchType),
@@ -313,7 +365,9 @@ const filteredRows = computed(() => {
   const query = (search.value || '').trim().toLowerCase()
   return rows.value.filter(
     (row) =>
-      selectedStrengths.value.includes(row.strength) && (!query || searchText(row).includes(query)),
+      selectedStrengths.value.includes(row.strength) &&
+      !hiddenMatchTypes.value.includes(row.matchType) &&
+      (!query || searchText(row).includes(query)),
   )
 })
 
@@ -323,19 +377,4 @@ const entityHref = (caseId, entityId) =>
   router.resolve({ name: 'CaseDetails', params: { id: caseId }, query: { entity: entityId } }).href
 
 const fieldLabel = (field) => formatParameterName(field.replace(/\[\d+\]/g, '').replace(/\./g, ' '))
-
-const getMatchTypeLabel = (matchType) => {
-  const labels = {
-    name: 'Name Match',
-    employer: 'Employer Match',
-    domain: 'Domain Match',
-    vin: 'VIN Match',
-    email: 'Email Match',
-    phone: 'Phone Match',
-    ip_address: 'IP Address Match',
-    exact_profile: 'Exact Profile Reference',
-    license_plate: 'License Plate Match',
-  }
-  return labels[matchType] || 'Match'
-}
 </script>

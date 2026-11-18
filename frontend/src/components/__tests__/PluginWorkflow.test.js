@@ -552,6 +552,40 @@ it('finds a source entity by the name shown in its group header and renders no e
   expect(wrapper.findAll('h3').map((h) => h.text())).not.toContain('Grace Hopper')
 })
 
+it('hides a deselected match type and keeps it hidden while showing types that arrive later', async () => {
+  const group = (type, value, name) => ({
+    type: 'data',
+    data: {
+      case_id: 1,
+      entity_id: 10,
+      entity_name: 'Ada',
+      entity_type: 'person',
+      match_type: type,
+      normalized_value: value,
+      matches: [{ case_id: 2, entity_id: value.length, entity_name: name, signal_rank: 1 }],
+    },
+  })
+  const email = group('email', 'ada@example.org', 'Same mailbox')
+  const domain = group('domain', 'example.org', 'Same domain')
+  const wrapper = mountWithVuetify(CorrelationScanPluginResult, { props: { result: [email] } })
+  const typeChips = () =>
+    wrapper.findAll('.v-chip-group .v-chip').filter((chip) => chip.text().includes('Match ('))
+  const rowText = () =>
+    wrapper
+      .findAll('tbody tr:not(.v-data-table-group-header-row)')
+      .map((row) => row.text())
+      .join()
+  expect(typeChips()).toHaveLength(0)
+  await wrapper.setProps({ result: [email, domain] })
+  expect(typeChips().map((chip) => chip.text())).toEqual(['Domain Match (1)', 'Email Match (1)'])
+  await typeChips()[0].trigger('click')
+  expect(rowText()).toContain('Same mailbox')
+  expect(rowText()).not.toContain('Same domain')
+  await wrapper.setProps({ result: [email, domain, group('phone', '+15005550100', 'Same phone')] })
+  expect(rowText()).toContain('Same phone')
+  expect(rowText()).not.toContain('Same domain')
+})
+
 it('shows the latest progress once without repeated status keys and hides it at durable termination', async () => {
   const warn = vi.spyOn(console, 'warn')
   const status = (count) => ({ type: 'status', data: { message: 'Indexed Entities', count } })
