@@ -93,6 +93,14 @@ class TestClientService:
             await client_service.create_client(client_create, current_user=test_admin)
         assert "Email already registered" in str(excinfo.value)
 
+    async def test_create_second_client_without_email(self, session, test_admin):
+        await create_client_helper(session, {"name": "Personal"})
+        client_service = ClientService(session)
+        created = await client_service.create_client(
+            schemas.ClientCreate(name="Walk-in"), current_user=test_admin
+        )
+        assert created.email is None
+
     async def test_get_client_success(self, session, test_user):
         created_client = await create_client_helper(
             session, {"name": "Client 1", "email": "client1@test.com"}

@@ -41,10 +41,12 @@ class ClientService:
         self, client: schemas.ClientCreate, *, current_user: models.User
     ) -> models.Client:
         self.case_access.require_admin(current_user)
-        existing = self.db.exec(
-            select(models.Client).where(models.Client.email == client.email)
-        ).first()
-        if existing:
+        if (
+            client.email
+            and self.db.exec(
+                select(models.Client).where(models.Client.email == client.email)
+            ).first()
+        ):
             raise DuplicateResourceException("Email already registered")
 
         new_client = models.Client(**client.model_dump())
