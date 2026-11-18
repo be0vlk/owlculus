@@ -150,6 +150,51 @@ describe('StrixySettingsCard', () => {
       ])
     })
 
+    it('drops the old provider model on a provider change and restores it when switching back', async () => {
+      api.post.mockResolvedValue({ data: { models } })
+      const wrapper = await mountCard({ ...keyed, provider: 'openai', model: 'gpt-6-astra' })
+
+      await select(wrapper, 'Provider').vm.$emit('update:modelValue', 'anthropic')
+      await flushPromises()
+      expect(combo(wrapper).props('modelValue')).toBe('')
+
+      await select(wrapper, 'Provider').vm.$emit('update:modelValue', 'openai')
+      await flushPromises()
+      expect(combo(wrapper).props('modelValue')).toBe('gpt-6-astra')
+    })
+
+    it('reloads the model list when Reset changes the provider back', async () => {
+      const anthropicModels = [{ id: 'claude-x', name: 'Claude X', vision: true, efforts: null }]
+      const configured = {
+        ...providers,
+        openai: { ...providers.openai, key_configured: true },
+        anthropic: { ...providers.anthropic, key_configured: true },
+      }
+      api.post.mockResolvedValueOnce({ data: { models } })
+      const wrapper = await mountCard({ ...settings, providers: configured })
+
+      api.post.mockResolvedValueOnce({ data: { models: anthropicModels } })
+      await select(wrapper, 'Provider').vm.$emit('update:modelValue', 'anthropic')
+      await flushPromises()
+      expect(combo(wrapper).props('items')).toEqual([{ title: 'Claude X', value: 'claude-x' }])
+
+      api.post.mockResolvedValueOnce({ data: { models } })
+      await button(wrapper, 'Reset').trigger('click')
+      await flushPromises()
+      expect(select(wrapper, 'Provider').props('modelValue')).toBe('openai')
+      expect(api.post).toHaveBeenLastCalledWith(modelsUrl, { provider: 'openai' })
+      expect(combo(wrapper).props('items')).toHaveLength(3)
+    })
+
+    it('does not reload models when the key field blurs with nothing typed', async () => {
+      api.post.mockResolvedValue({ data: { models } })
+      const wrapper = await mountCard(keyed)
+      api.post.mockClear()
+      await field(wrapper, 'API key').find('input').trigger('blur')
+      await flushPromises()
+      expect(api.post).not.toHaveBeenCalled()
+    })
+
     it('does not list models without a key, then lists after a typed key', async () => {
       api.post.mockResolvedValue({ data: { models } })
       const wrapper = await mountCard({ ...settings, provider: 'openrouter' })

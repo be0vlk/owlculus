@@ -40,7 +40,7 @@
               label="API key"
               prepend-inner-icon="mdi-key-outline"
               type="password"
-              @blur="loadModels"
+              @blur="typedKey() && loadModels()"
             />
           </v-col>
           <v-col v-if="isCompatible" cols="12">
@@ -223,9 +223,17 @@ const apply = (data) => {
   saved.value = payload()
 }
 
+const resetModels = () => {
+  models.value = []
+  modelsError.value = ''
+  loadModels()
+}
+
 const reset = () => {
+  const providerChanged = form.provider !== saved.value.provider
   apply({ ...saved.value, providers: providers.value })
   apiKey.value = ''
+  if (providerChanged) resetModels()
 }
 
 const errorText = (error, fallback) => {
@@ -259,10 +267,9 @@ const loadModels = async () => {
 
 const changeProvider = (provider) => {
   form.provider = provider
+  form.model = provider === saved.value?.provider ? (saved.value.model ?? '') : ''
   apiKey.value = ''
-  models.value = []
-  modelsError.value = ''
-  loadModels()
+  resetModels()
 }
 
 const setModel = (value) => {
