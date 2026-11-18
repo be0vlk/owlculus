@@ -109,7 +109,7 @@ const time = computed(() =>
   gap: 10px;
   color: var(--strixy-muted);
   margin-bottom: 12px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .message-heading > span {
@@ -218,7 +218,7 @@ const time = computed(() =>
   border-radius: 7px;
   background: none;
   color: var(--strixy-accent);
-  font-size: 11px;
+  font-size: 12px;
   text-align: left;
 }
 
@@ -235,7 +235,7 @@ const time = computed(() =>
   height: 24px;
   background: var(--strixy-soft);
   border-radius: 5px;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .review-button {
@@ -248,7 +248,7 @@ const time = computed(() =>
   border: 0;
   background: none;
   color: var(--strixy-muted);
-  font-size: 11px;
+  font-size: 12px;
   text-align: left;
 }
 </style>

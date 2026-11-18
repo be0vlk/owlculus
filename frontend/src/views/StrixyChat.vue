@@ -3,8 +3,8 @@
     <header class="strixy-header">
       <div class="strixy-brand">
         <div>
-          <h1>Strixy</h1>
-          <p>
+          <h1 class="text-headline-small font-weight-bold">Strixy</h1>
+          <p class="text-body-medium text-medium-emphasis">
             {{ activeCase.activeCase?.case_number }}
             <span class="strixy-brand-role">· Case assistant</span>
           </p>
@@ -541,23 +541,20 @@ watch(
 <style>
 .strixy-page,
 .strixy-dialog {
-  --strixy-accent: #00585f;
-  --strixy-text: #233b3e;
-  --strixy-muted: #627578;
-  --strixy-line: #dde5e4;
-  --strixy-soft: #edf5f3;
+  --strixy-accent: rgb(var(--v-theme-primary));
+  --strixy-text: rgb(var(--v-theme-on-surface));
+  --strixy-muted: rgb(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  --strixy-line: rgb(var(--v-border-color), var(--v-border-opacity));
+  --strixy-soft: rgb(var(--v-theme-primary), 0.08);
 
   color: var(--strixy-text);
 }
 
+/* theme primary (#00585f) is unreadable on the dark surface */
 .v-theme--owlculusDark .strixy-page,
 .v-theme--owlculusDark .strixy-dialog,
 .strixy-dialog.v-theme--owlculusDark {
   --strixy-accent: #8ed6ce;
-  --strixy-text: #e0eae8;
-  --strixy-muted: #a6b7b3;
-  --strixy-line: #384744;
-  --strixy-soft: #233a36;
 }
 
 .strixy-dialog :where(h3, p) {
@@ -626,19 +623,6 @@ watch(
   border-bottom: 1px solid var(--strixy-line);
 }
 
-.strixy-brand h1 {
-  font-size: 19px;
-  line-height: 1.4;
-  font-weight: 600;
-  letter-spacing: -0.5px;
-}
-
-.strixy-brand p {
-  color: var(--strixy-muted);
-  font-size: 10px;
-  margin-top: 1px;
-}
-
 .strixy-brand :where(p) span {
   padding: 0 5px;
 }
@@ -651,8 +635,6 @@ watch(
 }
 
 .strixy-header-actions .v-btn {
-  font-size: 12px;
-  letter-spacing: 0;
   border-radius: 8px;
 }
 
@@ -689,7 +671,7 @@ watch(
 
 .strixy-composer {
   padding: 15px 16px 11px;
-  border: 1px solid #9fb9b6;
+  border: 1px solid var(--strixy-line);
   border-radius: 15px;
   background: rgb(var(--v-theme-surface));
   box-shadow: 0 3px 12px #173b3b06;
@@ -729,7 +711,7 @@ watch(
 .strixy-compose-hint {
   flex: 1;
   text-align: right;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--strixy-muted);
 }
 
@@ -740,7 +722,7 @@ watch(
   flex-wrap: wrap;
   gap: 5px;
   padding-top: 12px;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--strixy-muted);
 }
 
@@ -767,7 +749,7 @@ watch(
 
 .strixy-notice > .v-btn {
   margin-left: auto;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .strixy-notice p {
@@ -820,10 +802,6 @@ watch(
 @media (width <= 450px) {
   .strixy-brand-role {
     display: none;
-  }
-
-  .strixy-brand p {
-    font-size: 9px;
   }
 
   .strixy-compose-hint {

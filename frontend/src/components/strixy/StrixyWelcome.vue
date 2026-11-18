@@ -1,6 +1,5 @@
 <template>
   <div class="strixy-welcome">
-    <p class="strixy-eyebrow">A little clarity for your case</p>
     <h2>Where should we start?</h2>
     <p class="strixy-welcome-copy">
       Ask a question. I’ll use your case records<br class="desktop-break" />
@@ -57,20 +56,11 @@ const starterPrompts = [
   margin: 0;
 }
 
-.strixy-eyebrow {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 1.3px;
-  text-transform: uppercase;
-  color: var(--strixy-muted);
-}
-
 .strixy-welcome h2 {
   font-size: clamp(25px, 3vw, 37px);
-  letter-spacing: -1.2px;
   font-weight: 600;
   line-height: 1.2;
-  margin: 12px 0 16px;
+  margin: 0 0 16px;
 }
 
 .strixy-welcome-copy {
@@ -123,7 +113,7 @@ const starterPrompts = [
 
 .strixy-starters span {
   color: var(--strixy-muted);
-  font-size: 11px;
+  font-size: 12px;
   margin-top: 5px;
 }
 
@@ -137,10 +127,6 @@ const starterPrompts = [
 @media (width <= 600px) {
   .strixy-welcome {
     padding: 20px 0 16px;
-  }
-
-  .strixy-welcome > .strixy-eyebrow {
-    display: none;
   }
 
   .strixy-welcome h2 {
