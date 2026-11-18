@@ -229,6 +229,7 @@ const PROVIDERS = [
   { text: 'OpenAI', value: 'openai', icon: 'mdi-robot' },
   { text: 'Anthropic', value: 'anthropic', icon: 'mdi-robot' },
   { text: 'OpenAI-compatible', value: 'openai_compatible', icon: 'mdi-robot' },
+  { text: 'OpenRouter', value: 'openrouter', icon: 'mdi-robot' },
   { text: 'Security Trails', value: 'securitytrails', icon: 'mdi-magnify-scan' },
   { text: 'People Data Labs', value: 'people_data_labs', icon: 'mdi-account-group' },
   { text: 'Shodan', value: 'shodan', icon: 'mdi-radar' },
