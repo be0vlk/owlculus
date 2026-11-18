@@ -4,6 +4,7 @@ from sqlalchemy import event
 from sqlalchemy.engine import Engine
 from sqlmodel import Session
 
+from app.database.db_utils import transaction
 from app.database.models import HuntExecution, HuntStep
 from app.executions.events import record_event
 from app.executions.ownership import OwnershipLost, fail_execution
@@ -60,7 +61,8 @@ async def execute(engine: Engine, registry: PluginRegistry, ownership) -> None:
             assert definition is not None
             db.expunge(user)
             # End the initial read transaction without expiring the run data.
-            db.commit()
+            with transaction(db):
+                pass
             executor = HuntExecutor(
                 db,
                 plugin_runner=WorkerPluginRunner(registry, vault),

@@ -34,10 +34,12 @@ def test_backend_does_not_import_shared_crud_module() -> None:
 def test_transaction_helper_is_the_only_application_commit_point() -> None:
     app_root = Path(__file__).parents[1] / "app"
     transaction_module = app_root / "database" / "db_utils.py"
+    # Role provisioning runs DDL on a raw DBAPI connection, not a service Session.
+    raw_connection_modules = {app_root / "database" / "runtime_role.py"}
     offenders: list[str] = []
 
     for path in app_root.rglob("*.py"):
-        if path == transaction_module:
+        if path in {transaction_module, *raw_connection_modules}:
             continue
         tree = ast.parse(path.read_text(), filename=str(path))
         if any(
