@@ -2,55 +2,96 @@
 
 Thank you for your interest in contributing to this project! Please follow these guidelines to help us maintain a not-terrible-quality codebase.
 
-## Pull Request Process
+## Security First
 
-- **Description**: PRs must include clear and descriptive explanations of the changes you've made. Highlight the problem solved or the feature added, and reference related issues if applicable.
+- TAKE SECURITY SERIOUSLY! Owlculus stores sensitive investigation data. Double and triple check your work and consider security at every stage.
+- **Never report a vulnerability in a public issue or PR.** Follow [SECURITY.md](SECURITY.md) instead.
 
-## Code Style
+## Prerequisites
 
-### Backend
+- Docker with Docker Compose
+- [uv](https://docs.astral.sh/uv/) (backend, Python 3.12)
+- Node.js 24 (frontend)
 
-- Use [Ruff](https://docs.astral.sh/ruff/) to ensure linting and code quality.
-- Make sure your code passes all style checks before submitting your PR.
+## Development Setup
 
-### Frontend
-
-- Use [ESLint](https://eslint.org/) to enforce code quality and style.
-- Use [Prettier](https://prettier.io/) for consistent code formatting.
-
-### Tests
-
-- Make sure to update existing tests in `/backend/tests` or create new tests as needed for any changes to backend functionality.
-- Exact testing strategy is up to you, just get as much coverage as you can.
-
-The backend uses its uv lockfile for a reproducible local test environment:
+Start the development stack from the repository root:
 
 ```bash
-cd backend
-uv sync --locked
-uv run --locked pytest
+make setup-dev
 ```
 
-Run the backend and frontend checks from the repository root:
+Install the local toolchains for tests and linting:
 
 ```bash
-make typecheck
-make lint
+cd backend && uv sync --locked
+cd frontend && npm ci
 ```
 
-Enable the pre-commit hook, which runs `make lint` and the frontend unit tests your change affects, once per clone:
+Enable the pre-commit hook once per clone. It runs `make lint` and the frontend unit tests your change affects:
 
 ```bash
 git config core.hooksPath .githooks
 ```
 
+Run `make help` to see the other commands.
+
+## Checks
+
+CI runs these on every PR, and a PR can't merge until they pass. Run them locally first, from the repository root:
+
+```bash
+make lint        # Ruff, ESLint, Stylelint
+make typecheck   # mypy
+make test        # backend tests and frontend unit tests
+```
+
+To fix formatting, run `uv run --locked ruff format app tests ../scripts` from `backend/` and `npm run format` from `frontend/`.
+
+## Tests
+
+Add or update tests for every behavior change. Exact testing strategy is up to you, just get as much coverage as you can.
+
+- **Backend**: pytest, under `backend/tests/`.
+- **Frontend**: Vitest, in `__tests__/` folders next to the code they cover.
+- **Browser**: Playwright journeys, under `frontend/e2e/`.
+
+CI doesn't run the browser journeys. Run them yourself when you change a user-facing workflow:
+
+```bash
+make test-browser
+```
+
+To run one backend file: `cd backend && uv run --locked pytest tests/path/to/test_file.py`.
+
+The durable execution tests in `backend/tests/executions/` skip by default. They start disposable PostgreSQL and Redis containers and take about 10 minutes. Run them when you change plugin or hunt execution:
+
+```bash
+cd backend && RUN_EXECUTION_ACCEPTANCE=1 uv run --locked pytest tests/executions
+```
+
+## Plugins and Hunts
+
+Generate the boilerplate for a new plugin or hunt instead of writing it by hand:
+
+```bash
+python scripts/create_plugin.py <plugin_name>
+python scripts/create_hunt.py <hunt_name>
+```
+
+Run either script with `--help` for its options.
+
+## Pull Request Process
+
+- Open PRs against `main`.
+- Fill in the PR template: a summary of the change, evidence that it works, and how risky it is to merge.
+- If your change affects what users see or do (setup, configuration, features), say so in the PR so the [wiki](https://github.com/be0vlk/owlculus/wiki) can be updated.
+
 ## Naming & Documentation
 
 - Prefer clear and descriptive method and class names over excessive code comments. Well-named methods and classes often make code self-explanatory.
-- Use module-level docstrings for Python.
+- Use module-level docstrings in Python.
 
-## Other Guidelines
+## Conduct
 
-- TAKE SECURITY SERIOUSLY! Double and triple check your work and make sure you are considering security at every stage.
-- Test your code thoroughly and ensure no regressions.
 - Be respectful and constructive in code reviews and interactions.
