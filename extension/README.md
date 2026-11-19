@@ -1,16 +1,14 @@
 # Owlculus Evidence Collector Browser Extension
 
-A browser extension that allows you to capture web pages and send them as evidence to your Owlculus case management system.
+A browser extension that captures web pages as HTML or screenshots and saves them as Evidence in an Owlculus Case.
 
 ## Features
 
-- Capture full HTML content of web pages
-- Automatic removal of scripts and sensitive data
-- Direct upload to Owlculus evidence storage
-- Case selection from available cases
-- Configurable API endpoint
-- JWT-based authentication
-- Support for evidence categories
+- Save the full HTML of a page, with scripts and sensitive form data removed
+- Take a screenshot of the visible part of the tab (not the full scrollable page)
+- Upload directly to a chosen Case and Evidence folder
+- Configurable Owlculus site URL, with sessions bound to that instance
+- Token-based authentication against the Owlculus API
 
 ## Installation
 
@@ -21,25 +19,26 @@ A browser extension that allows you to capture web pages and send them as eviden
 
 ## Configuration
 
-1. Click the extension icon and then "Open Settings"
-2. Configure your Owlculus site endpoint (e.g., `http://localhost`)
-3. Login with your Owlculus credentials
-4. The extension will remember your authentication
+1. Click the extension icon and then **Open Settings**
+2. Enter the **Owlculus Site URL** (e.g., `http://localhost`, `http://localhost:5173` for development, or `https://owlculus.example.com`)
+3. Move focus out of the URL field and grant the requested site permission
+4. Enter your **Username** and **Password** and click **Login**
+5. The extension remembers your session for that site
 
 ## Usage
 
 1. Navigate to any web page you want to capture
 2. Click the Owlculus extension icon
-3. Select a case from the dropdown
-4. Optionally modify the title and category
-5. Click "Capture Page"
-6. The page HTML will be uploaded as evidence to the selected case
+3. Choose a Case in **Select Case** and a folder in **Save to Folder**
+4. Optionally edit the **Evidence Title**
+5. Click **Save Page** to upload the page HTML, or **Screenshot** to upload an image of the visible tab
+6. The capture is saved as Evidence in the selected Case and folder
 
 ## Security Features
 
 - Removes all JavaScript from captured pages
 - Clears sensitive form data and tokens
-- Uses secure Chrome storage for credentials
+- Stores credentials encrypted in extension storage
 - JWT tokens expire according to server configuration
 
 ## Development
@@ -48,7 +47,7 @@ The extension uses Chrome Extension Manifest V3 and consists of:
 
 - **Popup**: Main user interface for capture functionality
 - **Options**: Settings page for API configuration and authentication
-- **Content Script**: Captures page HTML and removes sensitive data
+- **Content Script**: Captures page HTML and removes scripts and sensitive data
 - **Service Worker**: Handles background operations
 - **Utils**: API client and storage utilities
 
@@ -59,7 +58,8 @@ The extension integrates with Owlculus API endpoints:
 - `POST /api/auth/login` - Authentication
 - `GET /api/users/me` - Get current user
 - `GET /api/cases/` - List available cases
-- `POST /api/evidence/` - Upload evidence
+- `GET /api/evidence/case/{case_id}/folder-tree` - List a Case's folders
+- `POST /api/evidence/` - Upload evidence (HTML or screenshot)
 
 ## Requirements
 
