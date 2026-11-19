@@ -9,7 +9,7 @@ from sqlmodel import Session
 
 from app.core.dependencies import get_current_user
 from app.database.connection import get_db
-from app.database.models import Client, User
+from app.database.models import Case, CaseUserLink, Client, User
 from app.main import app
 
 
@@ -163,6 +163,72 @@ class TestClientsAPI:
             }
         finally:
             app.dependency_overrides.clear()
+
+    def test_client_cases_limited_to_readable_cases(
+        self,
+        session: Session,
+        test_admin: User,
+        test_user: User,
+        test_client_data: Client,
+        client: TestClient,
+    ):
+        """Client responses only nest Cases the caller may read."""
+        member_case = Case(
+            case_number="CASE-A", title="Member Case", client_id=test_client_data.id
+        )
+        foreign_case = Case(
+            case_number="CASE-B",
+            title="Foreign Case",
+            notes="foreign notes",
+            client_id=test_client_data.id,
+        )
+        outsider = User(
+            username="outsider",
+            email="outsider@example.com",
+            password_hash="dummy_hash",
+            is_active=True,
+            role="Investigator",
+        )
+        session.add_all([member_case, foreign_case, outsider])
+        session.commit()
+        session.add_all(
+            [
+                CaseUserLink(case_id=member_case.id, user_id=test_user.id),
+                CaseUserLink(
+                    case_id=foreign_case.id, user_id=test_admin.id, is_lead=True
+                ),
+            ]
+        )
+        session.commit()
+
+        def nested_cases(user: User, path: str) -> dict:
+            app.dependency_overrides[get_current_user] = (
+                override_get_current_user_factory(user)
+            )
+            app.dependency_overrides[get_db] = override_get_db_factory(session)
+            try:
+                response = client.get(path)
+            finally:
+                app.dependency_overrides.clear()
+            assert response.status_code == status.HTTP_200_OK
+            body = response.json()
+            if isinstance(body, list):
+                body = next(item for item in body if item["id"] == test_client_data.id)
+            return {case["case_number"]: case for case in body["cases"]}
+
+        for path in ("/api/clients/", f"/api/clients/{test_client_data.id}"):
+            member_view = nested_cases(test_user, path)
+            assert set(member_view) == {"CASE-A"}
+            assert [user["username"] for user in member_view["CASE-A"]["users"]] == [
+                "testuser"
+            ]
+            assert nested_cases(outsider, path) == {}
+            admin_view = nested_cases(test_admin, path)
+            assert set(admin_view) == {"CASE-A", "CASE-B"}
+            assert admin_view["CASE-B"]["notes"] == "foreign notes"
+            assert [user["username"] for user in admin_view["CASE-B"]["users"]] == [
+                "admin"
+            ]
 
     def test_get_clients_forbidden_analyst(
         self, session: Session, test_analyst: User, client: TestClient
