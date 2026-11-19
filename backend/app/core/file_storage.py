@@ -22,7 +22,7 @@ EXECUTION_ARTIFACT_DIR = ".execution-artifacts"
 def _case_dir(case_id: int) -> Path:
     if not isinstance(case_id, int) or case_id <= 0:
         raise ValidationException(f"Invalid case ID: {case_id}")
-    return UPLOAD_DIR / str(case_id)
+    return Path(os.path.realpath(UPLOAD_DIR / str(case_id)))
 
 
 def _remove_empty_parents(path: Path, stop: Path) -> None:
@@ -67,12 +67,12 @@ def _user_folder_path(folder_path: str | None) -> str:
 
 
 def _contained(root: Path, relative: str) -> Path:
-    path = root / relative
-    real_root = os.path.realpath(root)
-    real_path = os.path.realpath(path)
-    if real_path != real_root and not real_path.startswith(real_root + os.sep):
+    if not relative:
+        return root
+    real_path = os.path.realpath(os.path.join(root, relative))
+    if not real_path.startswith(os.path.realpath(root) + os.sep):
         raise ValidationException("Invalid folder path")
-    return path
+    return Path(real_path)
 
 
 def create_folder(case_id: int, folder_path: str) -> Path:
@@ -182,7 +182,7 @@ async def save_upload_file(
                         upload_file.filename, case_dir
                     )
 
-        relative_path = str(file_path.relative_to(UPLOAD_DIR))
+        relative_path = str(file_path.relative_to(os.path.realpath(UPLOAD_DIR)))
 
         security_logger = get_security_logger(
             event="file_upload_complete",
