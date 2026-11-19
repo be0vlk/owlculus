@@ -35,7 +35,10 @@ CHECK_PROMPT = "Connection check: answer OK with no citations."
 def list_models(provider: str, base_url: str | None, api_key: str) -> list[dict]:
     if provider == "anthropic":
         return anthropic_models(api_key)
-    url = OPENROUTER_BASE_URL if provider == "openrouter" else base_url
+    # Only openai_compatible may name a host; other keys stay on their provider.
+    url = {"openai_compatible": base_url, "openrouter": OPENROUTER_BASE_URL}.get(
+        provider
+    )
     with OpenAI(
         base_url=url, api_key=api_key, max_retries=0, timeout=LIST_TIMEOUT_SECONDS
     ) as client:

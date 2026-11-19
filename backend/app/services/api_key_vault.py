@@ -76,6 +76,11 @@ class ConfigurationApiKeyVault:
         self._log = log or get_security_logger(component="api_key_vault")
 
     def get_key(self, provider: Provider) -> str | None:
+        return self._stored_key(provider) or self._environment_key(
+            provider, log_absent=True
+        )
+
+    def _stored_key(self, provider: Provider) -> str | None:
         try:
             config = self._db.exec(select(SystemConfiguration)).first()
         except SQLAlchemyError as error:
@@ -83,7 +88,7 @@ class ConfigurationApiKeyVault:
                 provider=provider.value,
                 event_type="api_key_database_unavailable",
             ).warning(f"API key database lookup failed: {error}")
-            return self._environment_key(provider, log_absent=True)
+            return None
 
         key_data: dict | None = (
             (config.api_keys or {}).get(provider.value) if config else None
@@ -101,8 +106,7 @@ class ConfigurationApiKeyVault:
                     provider=provider.value,
                     event_type="api_key_decrypt_failed",
                 ).warning(f"Stored API key could not be decrypted: {error}")
-
-        return self._environment_key(provider, log_absent=True)
+        return None
 
     def is_configured(self, provider: Provider) -> bool:
         return self.get_key(provider) is not None
@@ -132,9 +136,16 @@ class StaticApiKeyVault:
         return self.get_key(provider) is not None
 
 
-def strixy_key(db: Session, provider: str) -> str | None:
-    key = ConfigurationApiKeyVault(db).get_key(Provider(provider))
+def strixy_key(db: Session, provider: str, base_url: str | None) -> str | None:
+    """The key for a Strixy request to base_url, the endpoint it will be sent to."""
+    vault = ConfigurationApiKeyVault(db)
+    if provider != Provider.OPENAI_COMPATIBLE:
+        return vault.get_key(Provider(provider))
+    key = vault._stored_key(Provider.OPENAI_COMPATIBLE)
+    # Admins can set the base URL, so the environment key is bound to the
+    # operator's own URL instead; otherwise an admin could send it anywhere.
+    env_url = os.environ.get("OPENAI_COMPATIBLE_BASE_URL", "").rstrip("/")
+    if key is None and env_url and env_url == (base_url or "").rstrip("/"):
+        key = vault._environment_key(Provider.OPENAI_COMPATIBLE, log_absent=True)
     # Local OpenAI-compatible servers often need no key, but the SDK requires one.
-    if key is None and provider == "openai_compatible":
-        return "not-needed"
-    return key
+    return key or "not-needed"

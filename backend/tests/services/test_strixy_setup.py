@@ -44,6 +44,14 @@ def test_openai_models_are_newest_first_with_unknown_capabilities():
     assert factory.call_args.kwargs["max_retries"] == 0
 
 
+def test_openai_models_ignore_a_caller_base_url():
+    client = context_client()
+    client.models.list.return_value = []
+    with patch("app.services.strixy_setup.OpenAI", return_value=client) as factory:
+        strixy_setup.list_models("openai", "https://attacker.example/v1", "sk")
+    assert factory.call_args.kwargs["base_url"] is None
+
+
 def test_compatible_models_use_the_given_base_url_and_ids_only():
     client = context_client()
     client.models.list.return_value = [openai_model("llama3")]

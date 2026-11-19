@@ -141,18 +141,45 @@ def test_strixy_key_reads_the_configured_providers_key(session, monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "openai-key")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "anthropic-key")
 
-    assert strixy_key(session, "openai") == "openai-key"
-    assert strixy_key(session, "anthropic") == "anthropic-key"
+    assert strixy_key(session, "openai", None) == "openai-key"
+    assert strixy_key(session, "anthropic", None) == "anthropic-key"
 
 
 def test_openai_compatible_without_a_key_gets_a_placeholder(session, monkeypatch):
     monkeypatch.delenv("OPENAI_COMPATIBLE_API_KEY", raising=False)
-    assert strixy_key(session, "openai_compatible") == "not-needed"
+    monkeypatch.delenv("OPENAI_COMPATIBLE_BASE_URL", raising=False)
+    assert strixy_key(session, "openai_compatible", "http://llm/v1") == "not-needed"
+
+
+def test_environment_compatible_key_only_goes_to_the_environment_base_url(
+    session, monkeypatch
+):
     monkeypatch.setenv("OPENAI_COMPATIBLE_API_KEY", "router-key")
-    assert strixy_key(session, "openai_compatible") == "router-key"
+    monkeypatch.delenv("OPENAI_COMPATIBLE_BASE_URL", raising=False)
+    assert strixy_key(session, "openai_compatible", "http://llm/v1") == "not-needed"
+
+    monkeypatch.setenv("OPENAI_COMPATIBLE_BASE_URL", "http://llm/v1/")
+    assert strixy_key(session, "openai_compatible", "http://llm/v1") == "router-key"
+    assert strixy_key(session, "openai_compatible", "http://evil/v1") == "not-needed"
+    assert strixy_key(session, "openai_compatible", None) == "not-needed"
+
+
+def test_stored_compatible_key_is_used_without_an_environment_base_url(
+    session, monkeypatch
+):
+    monkeypatch.setenv("OPENAI_COMPATIBLE_API_KEY", "router-key")
+    monkeypatch.delenv("OPENAI_COMPATIBLE_BASE_URL", raising=False)
+    session.add(
+        SystemConfiguration(
+            api_keys={"openai_compatible": {"api_key": encrypt_api_key("stored")}}
+        )
+    )
+    session.commit()
+
+    assert strixy_key(session, "openai_compatible", "http://llm/v1") == "stored"
 
 
 def test_strixy_key_is_absent_for_unconfigured_hosted_providers(session, monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
-    assert strixy_key(session, "anthropic") is None
+    assert strixy_key(session, "anthropic", None) is None

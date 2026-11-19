@@ -407,7 +407,7 @@ class StrixyConversations:
                     "Wait for one to finish, or cancel one, before sending another message.",
                     retry_after=10,
                 )
-            if not strixy_key(self.db, config.provider):
+            if not strixy_key(self.db, config.provider, config.base_url):
                 raise ValidationException(
                     f"{PROVIDER_NAMES[config.provider]} API key not configured. "
                     "Ask an administrator to configure it.",

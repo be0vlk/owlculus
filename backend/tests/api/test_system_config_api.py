@@ -492,6 +492,32 @@ def test_first_time_and_keyless_compatible_setup_is_unchanged(
 
     assert save_compatible(client).status_code == 200
     assert save_compatible(client, base_url=OTHER_HOST).status_code == 200
+
+
+def test_environment_compatible_key_only_goes_to_the_environment_base_url(
+    client, test_admin, monkeypatch
+):
+    monkeypatch.setenv("OPENAI_COMPATIBLE_API_KEY", "env-secret")
+    monkeypatch.setenv("OPENAI_COMPATIBLE_BASE_URL", COMPATIBLE["base_url"])
+    authenticate_as(test_admin)
+    client.put(
+        "/api/admin/configuration/strixy",
+        json={"provider": "openai", "base_url": OTHER_HOST},
+    )
+
+    with patch("app.services.strixy_setup.list_models", return_value=[]) as listed:
+        for base_url in (COMPATIBLE["base_url"], OTHER_HOST):
+            response = client.post(
+                "/api/admin/configuration/strixy/models",
+                json={"provider": "openai_compatible", "base_url": base_url},
+            )
+            assert response.status_code == 200
+
+    assert [call.args[2] for call in listed.call_args_list] == [
+        "env-secret",
+        "not-needed",
+    ]
+    assert save_compatible(client).status_code == 200
     saved = save_compatible(
         client, base_url=COMPATIBLE["base_url"], api_key="first-key"
     )
