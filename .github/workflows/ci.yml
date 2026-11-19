@@ -35,6 +35,9 @@ jobs:
       - run: npm ci
         working-directory: frontend
 
+      # Tests start this image with --pull=never.
+      - run: docker pull postgres:15-alpine
+
       - run: make lint
       - run: make typecheck
       - run: make test
