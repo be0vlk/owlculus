@@ -50,13 +50,9 @@ def normalize_folder_path(folder_path: str) -> str:
 
     parts = []
     for part in path.split("/"):
-        part = part.strip()
-        if not part or part in (".", "..", "..."):
-            continue
-
-        sanitized = "".join(c for c in part if c.isalnum() or c in "._- ")
-
-        if sanitized and len(sanitized) <= 100:
+        # Check dots after sanitizing: "..!" must not become "..".
+        sanitized = "".join(c for c in part if c.isalnum() or c in "._- ").strip()
+        if sanitized.strip(".") and len(sanitized) <= 100:
             parts.append(sanitized)
 
     return "/".join(parts) if parts else ""
@@ -68,6 +64,15 @@ def _user_folder_path(folder_path: str | None) -> str:
     if normalized.partition("/")[0] == EXECUTION_ARTIFACT_DIR:
         raise ValidationException("Invalid folder path")
     return normalized
+
+
+def _contained(root: Path, relative: str) -> Path:
+    path = root / relative
+    real_root = os.path.realpath(root)
+    real_path = os.path.realpath(path)
+    if real_path != real_root and not real_path.startswith(real_root + os.sep):
+        raise ValidationException("Invalid folder path")
+    return path
 
 
 def create_folder(case_id: int, folder_path: str) -> Path:
@@ -83,7 +88,7 @@ def create_folder(case_id: int, folder_path: str) -> Path:
     if not normalized_path:
         raise ValidationException("Invalid folder path")
 
-    folder_dir = case_dir / normalized_path
+    folder_dir = _contained(case_dir, normalized_path)
     folder_dir.mkdir(parents=True, exist_ok=True)
     return folder_dir
 
@@ -97,7 +102,7 @@ def delete_folder(case_id: int, folder_path: str) -> None:
     if not normalized_path:
         raise ValidationException("Invalid folder path")
 
-    folder_dir = case_dir / normalized_path
+    folder_dir = _contained(case_dir, normalized_path)
     if folder_dir.is_dir():
         shutil.rmtree(folder_dir)
     _remove_empty_parents(folder_dir, case_dir)
@@ -129,7 +134,7 @@ async def save_upload_file(
     security_logger.info(f"File upload validated: {upload_file.filename}")
 
     try:
-        case_dir = case_root / _user_folder_path(folder_path)
+        case_dir = _contained(case_root, _user_folder_path(folder_path))
         case_dir.mkdir(parents=True, exist_ok=True)
 
         if artifact_id is not None:

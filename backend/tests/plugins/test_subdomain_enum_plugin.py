@@ -65,8 +65,7 @@ def test_evidence_formatter_receives_payloads_and_includes_findings(ip):
         {"domain": "example.com"},
     )
 
-    assert "api.example.com" in content
-    assert f"→ {ip or 'N/A':<15} (Source: crt.sh)" in content
+    assert f"{'api.example.com':<50} → {ip or 'N/A':<15} (Source: crt.sh)" in content
     assert "Total Unique Subdomains Found: 1" in content
     assert f"Successfully Resolved: {int(ip is not None)}" in content
 

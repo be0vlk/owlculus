@@ -92,6 +92,13 @@ class TestNormalizeFolderPath:
         result = file_storage.normalize_folder_path("../../../")
         assert result == ""
 
+    @pytest.mark.parametrize(
+        "raw", ["..!/..!/etc", "..\\/..\\/x", "a/..$/b", ".. /x", "..?", "..?/..?/..?"]
+    )
+    def test_normalize_path_drops_parts_that_sanitize_to_dots(self, raw):
+        parts = file_storage.normalize_folder_path(raw).split("/")
+        assert ".." not in parts and "." not in parts
+
 
 class TestCreateFolder:
     """Test the create_folder function."""
@@ -235,6 +242,15 @@ class TestDeleteFolder:
     def test_delete_folder_nonexistent_folder(self, temp_upload_dir, case_id):
         """Test deleting non-existent folder doesn't raise error."""
         file_storage.delete_folder(case_id, "nonexistent_folder")
+
+    def test_delete_folder_stays_inside_case(self, temp_upload_dir, case_id):
+        (temp_upload_dir / str(case_id)).mkdir()
+        outside = temp_upload_dir / "outside"
+        outside.mkdir()
+
+        file_storage.delete_folder(case_id, "..!/outside")
+
+        assert outside.is_dir()
 
 
 class TestSaveUploadFile:
