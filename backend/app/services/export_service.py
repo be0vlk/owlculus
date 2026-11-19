@@ -269,14 +269,20 @@ class ExportService:
         )
         writer.writeheader()
         for record in self._task_records(tasks):
+            row = {
+                column: (
+                    json.dumps(record[column], ensure_ascii=False)
+                    if column == "custom_fields" and record[column] is not None
+                    else record[column]
+                )
+                for column in TASK_CSV_COLUMNS
+            }
             writer.writerow(
                 {
                     column: (
-                        json.dumps(record[column], ensure_ascii=False)
-                        if column == "custom_fields" and record[column] is not None
-                        else record[column]
+                        _neutralize_formula(value) if isinstance(value, str) else value
                     )
-                    for column in TASK_CSV_COLUMNS
+                    for column, value in row.items()
                 }
             )
         return output.getvalue().encode("utf-8")
@@ -615,7 +621,9 @@ class ExportService:
                 if column == "notes" and isinstance(value, str):
                     value = html_to_plain_text(value)
                 row[column] = _csv_value(value)
-            writer.writerow(row)
+            writer.writerow(
+                {column: _neutralize_formula(cell) for column, cell in row.items()}
+            )
 
         return b"\xef\xbb\xbf" + output.getvalue().encode("utf-8")
 
@@ -803,6 +811,12 @@ def _csv_value(value: Any) -> str:
     if isinstance(value, bool):
         return "true" if value else "false"
     return str(value)
+
+
+def _neutralize_formula(cell: str) -> str:
+    if cell.startswith(("=", "+", "-", "@", "\t", "\r")):
+        return f"'{cell}"
+    return cell
 
 
 TASK_CSV_COLUMNS = [

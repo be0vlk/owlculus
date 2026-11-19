@@ -27,7 +27,7 @@ from app.core.file_storage import (
     normalize_folder_path,
     save_upload_file,
 )
-from app.core.logging import get_security_logger
+from app.core.logging import get_security_logger, log_safe
 from app.core.utils import get_utc_now
 from app.database import models
 from app.database.db_utils import transaction
@@ -72,7 +72,7 @@ class EvidenceService:
     @staticmethod
     def _fail(log: Any, reason: str, error: DomainException, **fields: Any):
         """Log a rejected operation on its ``*_failed`` logger and return the error."""
-        log.bind(failure_reason=reason, **fields).warning(str(error))
+        log.bind(failure_reason=reason, **fields).warning(log_safe(error))
         return error
 
     def _stored_file(self, evidence: models.Evidence, failed: Any) -> Path:

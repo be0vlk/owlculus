@@ -78,6 +78,14 @@ def setup_logging():
     logger.debug(f"Log file: {logging_settings.LOG_FILE}")
 
 
+def log_safe(value: object) -> str:
+    """Escape non-printable characters so client text cannot forge log lines."""
+    return "".join(
+        c if c.isprintable() else c.encode("unicode_escape").decode()
+        for c in str(value)
+    )
+
+
 def get_security_logger(**context):
     client_ip = client_ip_context.get()
     if client_ip:

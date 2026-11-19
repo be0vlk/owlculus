@@ -11,7 +11,7 @@ from typing import Any, Optional, Tuple
 from uuid import UUID
 
 from .exceptions import DomainException, ValidationException
-from .logging import get_security_logger
+from .logging import get_security_logger, log_safe
 from .security import secure_filename_with_path, validate_file_security
 
 UPLOAD_DIR = Path("uploads")
@@ -131,7 +131,7 @@ async def save_upload_file(
         case_id=case_id,
         file_size=upload_file.size if hasattr(upload_file, "size") else None,
     )
-    security_logger.info(f"File upload validated: {upload_file.filename}")
+    security_logger.info(f"File upload validated: {log_safe(upload_file.filename)}")
 
     try:
         case_dir = _contained(case_root, _user_folder_path(folder_path))
@@ -192,7 +192,7 @@ async def save_upload_file(
             file_hash=file_hash,
         )
         security_logger.info(
-            f"File uploaded successfully: {upload_file.filename} to {relative_path}"
+            f"File uploaded successfully: {log_safe(upload_file.filename)} to {relative_path}"
         )
 
         return relative_path, file_hash
@@ -218,7 +218,9 @@ async def save_upload_file(
         security_logger = get_security_logger(
             event="file_upload_error", filename=upload_file.filename, case_id=case_id
         )
-        security_logger.error(f"Failed to save file {upload_file.filename}: {str(e)}")
+        security_logger.error(
+            f"Failed to save file {log_safe(upload_file.filename)}: {str(e)}"
+        )
 
         raise DomainException(
             "Could not save file. Please try again or contact support."

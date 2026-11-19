@@ -924,3 +924,33 @@ async def test_folder_template_uses_normalized_paths_for_storage_and_filesystem(
         "Root",
         "Root/Child",
     ]
+
+
+@pytest.mark.asyncio
+async def test_unknown_folder_template_name_cannot_forge_log_lines(
+    evidence_service_instance: evidence_service.EvidenceService,
+    sample_case: models.Case,
+    test_admin: models.User,
+):
+    name = "x\n2026-01-01 00:00:00.000 | INFO | forged\r\x1b[2J "
+    messages: list[str] = []
+    sink = logger.add(lambda message: messages.append(message.record["message"]))
+    try:
+        with (
+            patch(
+                "app.services.system_config_service.SystemConfigService.get_evidence_folder_templates",
+                new=AsyncMock(return_value={}),
+            ),
+            pytest.raises(ResourceNotFoundException) as exc_info,
+        ):
+            await evidence_service_instance.create_folders_from_template(
+                sample_case.id, name, test_admin
+            )
+    finally:
+        logger.remove(sink)
+
+    assert str(exc_info.value) == f"Template '{name}' not found"
+    assert messages[-1] == (
+        "Template 'x\\n2026-01-01 00:00:00.000 | INFO | forged\\r\\x1b[2J\\u2028'"
+        " not found"
+    )

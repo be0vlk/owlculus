@@ -56,9 +56,24 @@ class CaseService:
         if not cases:
             return f"{base_format}-01"
 
-        highest = max(int(case.case_number.split("-")[-1]) for case in cases)
-        next_number = str(highest + 1).zfill(2)
-        return f"{base_format}-{next_number}"
+        numbers = []
+        for case in cases:
+            try:
+                numbers.append(int(case.case_number.split("-")[-1]))
+            except ValueError:
+                continue
+
+        # Only a top suffix at Python's int/str digit limit falls through: its
+        # successor cannot be formatted, and the next one down may be stored.
+        taken = {case.case_number for case in cases}
+        for highest in sorted(numbers, reverse=True):
+            try:
+                candidate = f"{base_format}-{str(highest + 1).zfill(2)}"
+            except ValueError:
+                continue
+            if candidate not in taken:
+                return candidate
+        return f"{base_format}-01"
 
     @audit_operation("case_creation")
     async def create_case(

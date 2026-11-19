@@ -297,6 +297,50 @@ def test_case_bundle_composes_notes_entities_tasks_and_hunts(
         assert "PeopleSearch" in pdf_text
 
 
+def test_case_bundle_task_csv_neutralizes_formula_cells(
+    client: TestClient,
+    session: Session,
+    case_export_user: User,
+    case_export_case: Case,
+):
+    task = Task(
+        case_id=case_export_case.id,
+        title="=cmd|' /C calc'!A0",
+        description="+SUM(1,1)",
+        priority="-1",
+        status="@HYPERLINK()",
+        assigned_by_id=case_export_user.id,
+        custom_fields={"=key": "=value"},
+    )
+    session.add(task)
+    session.commit()
+    session.refresh(task)
+    app.dependency_overrides[get_current_user] = lambda: case_export_user
+
+    response = client.get(f"{settings.API_V1_STR}/cases/{case_export_case.id}/export")
+
+    assert response.status_code == 200
+    with ZipFile(BytesIO(response.content)) as archive:
+        root = "CASE-003"
+        task_records = json.loads(archive.read(f"{root}/tasks/tasks.json"))
+        assert task_records[0]["title"] == "=cmd|' /C calc'!A0"
+        [row] = list(
+            csv.DictReader(
+                io.StringIO(archive.read(f"{root}/tasks/tasks.csv").decode())
+            )
+        )
+
+    assert row["id"] == str(task.id)
+    assert row["title"] == "'=cmd|' /C calc'!A0"
+    assert row["description"] == "'+SUM(1,1)"
+    assert row["priority"] == "'-1"
+    assert row["status"] == "'@HYPERLINK()"
+    assert row["assigned_by"] == "case-exporter"
+    assert row["assigned_to"] == ""
+    assert row["template"] == ""
+    assert json.loads(row["custom_fields"]) == {"=key": "=value"}
+
+
 def test_case_bundle_preserves_the_evidence_tree_and_records_missing_files(
     client: TestClient,
     session: Session,
