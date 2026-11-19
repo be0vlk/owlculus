@@ -159,7 +159,9 @@ def analyze(
         db.add(ledger)
         progress.model_calls += 1
         db.add(progress)
-        service = StrixyService(strixy_key(db, config.provider), on_progress=checkpoint)
+        service = StrixyService(
+            strixy_key(db, config.provider, config.base_url), on_progress=checkpoint
+        )
     reply = service.generate(messages, config, remaining)
     with Session(database_engine) as db, transaction(db):
         selected = lock_run(db, run_id)

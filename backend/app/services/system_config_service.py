@@ -254,7 +254,7 @@ class SystemConfigService:
         self, provider: str, base_url: str | None, typed: str | None
     ) -> str | None:
         await self.require_key_for_changed_base_url(provider, base_url, typed)
-        return typed or strixy_key(self.db, provider)
+        return typed or strixy_key(self.db, provider, base_url)
 
     async def list_strixy_models(
         self, query: StrixyModelQuery, current_user: models.User
