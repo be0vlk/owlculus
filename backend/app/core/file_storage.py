@@ -22,7 +22,7 @@ EXECUTION_ARTIFACT_DIR = ".execution-artifacts"
 def _case_dir(case_id: int) -> Path:
     if not isinstance(case_id, int) or case_id <= 0:
         raise ValidationException(f"Invalid case ID: {case_id}")
-    return Path(os.path.realpath(UPLOAD_DIR / str(case_id)))
+    return _contained(UPLOAD_DIR, str(case_id))
 
 
 def _remove_empty_parents(path: Path, stop: Path) -> None:
