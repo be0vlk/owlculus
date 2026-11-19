@@ -1,13 +1,9 @@
-"""
-Evidence schemas for the application.
-"""
+"""Evidence schemas."""
 
 from datetime import datetime
 from typing import ClassVar, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-
-from ..core.utils import get_utc_now
 
 
 class EvidenceBase(BaseModel):
@@ -29,10 +25,7 @@ class EvidenceBase(BaseModel):
 class EvidenceCreate(EvidenceBase):
     """Schema for creating evidence."""
 
-    case_id: int = Field(..., gt=0)  # Ensure case_id is provided and positive
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-    created_by_id: Optional[int] = None
+    case_id: int = Field(..., gt=0)
 
     VALID_CATEGORIES: ClassVar[List[str]] = [
         "Social Media",
@@ -48,13 +41,11 @@ class EvidenceCreate(EvidenceBase):
         if self.evidence_type not in ["file", "text"]:
             raise ValueError("evidence_type must be either 'file' or 'text'")
 
-        # Make category validation case-insensitive
         if self.category.lower() not in [cat.lower() for cat in self.VALID_CATEGORIES]:
             raise ValueError(
                 f"category must be one of: {', '.join(self.VALID_CATEGORIES)}"
             )
 
-        # Ensure consistent casing with VALID_CATEGORIES
         self.category = next(
             cat for cat in self.VALID_CATEGORIES if cat.lower() == self.category.lower()
         )
@@ -69,7 +60,6 @@ class FolderCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
     parent_folder_id: Optional[int] = None
-    folder_path: Optional[str] = Field(default=None, max_length=500)
 
 
 class FolderUpdate(BaseModel):
@@ -78,7 +68,6 @@ class FolderUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     parent_folder_id: Optional[int] = None
-    updated_at: datetime = Field(default_factory=get_utc_now)
 
 
 class EvidenceUpdate(BaseModel):
@@ -86,30 +75,8 @@ class EvidenceUpdate(BaseModel):
 
     title: Optional[str] = None
     description: Optional[str] = None
-    category: Optional[str] = None
-    content: Optional[str] = None  # File path
-    file_hash: Optional[str] = None  # SHA-256 hash of file content
-    folder_path: Optional[str] = None
+    content: Optional[str] = None
     parent_folder_id: Optional[int] = None
-    updated_at: datetime = Field(default_factory=get_utc_now)
-
-    VALID_CATEGORIES: ClassVar[List[str]] = EvidenceCreate.VALID_CATEGORIES
-
-    @model_validator(mode="after")
-    def validate_category(self) -> "EvidenceUpdate":
-        if self.category is not None and self.category.lower() not in [
-            cat.lower() for cat in self.VALID_CATEGORIES
-        ]:
-            raise ValueError(
-                f"category must be one of: {', '.join(self.VALID_CATEGORIES)}"
-            )
-        if self.category is not None:
-            self.category = next(
-                cat
-                for cat in self.VALID_CATEGORIES
-                if cat.lower() == self.category.lower()
-            )
-        return self
 
 
 class Evidence(EvidenceBase):

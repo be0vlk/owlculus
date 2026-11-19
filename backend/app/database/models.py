@@ -7,11 +7,11 @@ system configuration. All models include proper relationships and constraints.
 """
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 from uuid import uuid4
 
 from pydantic import EmailStr
-from sqlalchemy import JSON, CheckConstraint, Column, UniqueConstraint
+from sqlalchemy import JSON, CheckConstraint, Column, DateTime, UniqueConstraint
 from sqlmodel import Field, Relationship, SQLModel
 
 from ..core.enums import ExecutionStatus, TaskPriority, TaskStatus
@@ -31,10 +31,17 @@ class CaseUserLink(SQLModel, table=True):
 class User(SQLModel, table=True):
     __table_args__ = (
         CheckConstraint(
+            "system_identity IS NULL OR "
+            "(system_identity = 'strixy' AND role = 'Analyst' "
+            "AND is_superadmin = false AND password_hash = '!')",
+            name="user_system_identity_policy",
+        ),
+        CheckConstraint(
             "session_version >= 0", name="user_session_version_nonnegative"
         ),
     )
 
+    system_identity: str | None = Field(default=None, unique=True)
     auth_identity: str = Field(
         default_factory=lambda: str(uuid4()), unique=True, nullable=False
     )
@@ -89,8 +96,6 @@ class Evidence(SQLModel, table=True):
     created_at: datetime = Field(default_factory=get_utc_now)
     updated_at: datetime = Field(default_factory=get_utc_now)
     created_by_id: int = Field(foreign_key="user.id")
-    case: "Case" = Relationship(back_populates="evidence")
-    creator: "User" = Relationship()
     parent_folder: Optional["Evidence"] = Relationship(
         back_populates="subfolders",
         sa_relationship_kwargs={"remote_side": "Evidence.id"},
@@ -118,9 +123,6 @@ class Entity(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=get_utc_now)
     created_by_id: int = Field(foreign_key="user.id")
 
-    case: "Case" = Relationship(back_populates="entities")
-    creator: "User" = Relationship()
-
 
 class SystemConfiguration(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -130,6 +132,7 @@ class SystemConfiguration(SQLModel, table=True):
     evidence_folder_templates: Optional[dict] = Field(
         default=None, sa_column=Column(JSON)
     )
+    strixy_settings: Optional[dict] = Field(default=None, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=get_utc_now)
     updated_at: datetime = Field(default_factory=get_utc_now)
 
@@ -145,10 +148,6 @@ class Case(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=get_utc_now)
     client: Optional[Client] = Relationship(back_populates="cases")
     users: List["User"] = Relationship(back_populates="cases", link_model=CaseUserLink)
-    evidence: List["Evidence"] = Relationship(back_populates="case")
-    entities: List["Entity"] = Relationship(back_populates="case")
-    hunt_executions: List["HuntExecution"] = Relationship(back_populates="case")
-    tasks: List["Task"] = Relationship(back_populates="case")
 
 
 class Hunt(SQLModel, table=True):
@@ -162,8 +161,6 @@ class Hunt(SQLModel, table=True):
     is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=get_utc_now)
     updated_at: datetime = Field(default_factory=get_utc_now)
-
-    executions: List["HuntExecution"] = Relationship(back_populates="hunt")
 
 
 class HuntExecution(SQLModel, table=True):
@@ -182,8 +179,8 @@ class HuntExecution(SQLModel, table=True):
     created_at: datetime = Field(default_factory=get_utc_now)
     created_by_id: int = Field(foreign_key="user.id")
 
-    hunt: Hunt = Relationship(back_populates="executions")
-    case: Case = Relationship(back_populates="hunt_executions")
+    hunt: Hunt = Relationship()
+    case: Case = Relationship()
     creator: User = Relationship()
     steps: List["HuntStep"] = Relationship(back_populates="execution")
 
@@ -217,7 +214,6 @@ class TaskTemplate(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=get_utc_now)
 
     creator: Optional[User] = Relationship()
-    tasks: List["Task"] = Relationship(back_populates="template")
 
 
 class Task(SQLModel, table=True):
@@ -237,8 +233,7 @@ class Task(SQLModel, table=True):
     created_at: datetime = Field(default_factory=get_utc_now)
     updated_at: datetime = Field(default_factory=get_utc_now)
 
-    case: Case = Relationship(back_populates="tasks")
-    template: Optional[TaskTemplate] = Relationship(back_populates="tasks")
+    template: Optional[TaskTemplate] = Relationship()
     assigned_to: Optional[User] = Relationship(
         sa_relationship_kwargs={"foreign_keys": "[Task.assigned_to_id]"}
     )
@@ -297,6 +292,23 @@ class ExecutionControl(SQLModel, table=True):
             return "hunt", self.hunt_execution_id
         assert self.plugin_execution_id is not None
         return "plugin", self.plugin_execution_id
+
+
+TERMINAL = {"completed", "partial", "failed", "cancelled"}
+
+
+def execution_kind(
+    kind: str,
+) -> tuple[type[HuntExecution] | type[PluginExecution], Any]:
+    """The execution model and its control foreign key for an execution kind."""
+    if kind == "hunt":
+        return HuntExecution, ExecutionControl.hunt_execution_id
+    return PluginExecution, ExecutionControl.plugin_execution_id
+
+
+def associated_execution(db, control: ExecutionControl):
+    kind, execution_id = control.execution_reference()
+    return db.get(execution_kind(kind)[0], execution_id)
 
 
 class ExecutionOutbox(SQLModel, table=True):
@@ -360,3 +372,129 @@ class ExecutionEvent(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     control_id: int = Field(foreign_key="executioncontrol.id", index=True)
     revision: int
+
+
+class StrixyConversation(SQLModel, table=True):
+    """Private transcript; deletion retains only an append-blocking tombstone."""
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    case_id: int = Field(foreign_key="case.id", ondelete="CASCADE", index=True)
+    owner_id: int = Field(foreign_key="user.id", ondelete="CASCADE", index=True)
+    created_at: datetime = Field(
+        default_factory=get_utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    deleted_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+
+
+class StrixyMessage(SQLModel, table=True):
+    """Server-ordered, immutable user or assistant message."""
+
+    __table_args__ = (UniqueConstraint("conversation_id", "position"),)
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    conversation_id: str = Field(
+        foreign_key="strixyconversation.id", ondelete="CASCADE", index=True
+    )
+    position: int
+    role: str
+    content: str
+    timestamp: datetime = Field(
+        default_factory=get_utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+
+
+class StrixyRun(SQLModel, table=True):
+    """Durable acceptance and dispatch intent, with a single non-replayable claim."""
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    conversation_id: str = Field(
+        foreign_key="strixyconversation.id", ondelete="CASCADE", index=True
+    )
+    strixy_id: int = Field(foreign_key="user.id")
+    position: int
+    status: str = Field(default="pending", index=True)
+    created_at: datetime = Field(
+        default_factory=get_utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    started_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    finished_at: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    dispatch_at: datetime = Field(
+        default_factory=get_utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False, index=True),
+    )
+    dispatch_attempts: int = 0
+    deadline: datetime | None = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    error_code: str | None = None
+    error_detail: str | None = None
+    limit_code: str | None = None
+    coverage: str = "conversation_only"
+    configuration: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+
+class StrixyGrounding(SQLModel, table=True):
+    """Assistant-owned source ledger; no investigative record is modified."""
+
+    run_id: str = Field(
+        foreign_key="strixyrun.id", ondelete="CASCADE", primary_key=True
+    )
+    focus: list[str] = Field(default_factory=list, sa_column=Column(JSON))
+    provenance: list[dict] = Field(default_factory=list, sa_column=Column(JSON))
+    citations: list[dict] = Field(default_factory=list, sa_column=Column(JSON))
+    coverage: dict = Field(default_factory=dict, sa_column=Column(JSON))
+
+
+class StrixyProgress(SQLModel, table=True):
+    """Replaceable run checkpoint; never a second transcript or provider session."""
+
+    run_id: str = Field(
+        foreign_key="strixyrun.id", ondelete="CASCADE", primary_key=True
+    )
+    phase: str = "locating_records"
+    content: str = ""
+    updated_at: datetime = Field(
+        default_factory=get_utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    material: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    resume_from: str | None = None
+    model_calls: int = 0
+
+
+class StrixyShare(SQLModel, table=True):
+    """Immutable snapshot; access is serialized with source conversation deletion."""
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True)
+    conversation_id: str = Field(
+        foreign_key="strixyconversation.id", ondelete="CASCADE", index=True
+    )
+    through_message_id: str
+    created_at: datetime = Field(
+        default_factory=get_utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    messages: list[dict] = Field(default_factory=list, sa_column=Column(JSON))
+    provenance: list[dict] = Field(default_factory=list, sa_column=Column(JSON))
+
+
+class StrixyCopiedGrounding(SQLModel, table=True):
+    """Independent provenance for copied messages, without fabricated worker runs."""
+
+    message_id: str = Field(
+        foreign_key="strixymessage.id", ondelete="CASCADE", primary_key=True
+    )
+    partial: bool = False
+    provenance: list[dict] = Field(default_factory=list, sa_column=Column(JSON))
+    citations: list[dict] = Field(default_factory=list, sa_column=Column(JSON))
+    coverage: dict = Field(default_factory=dict, sa_column=Column(JSON))

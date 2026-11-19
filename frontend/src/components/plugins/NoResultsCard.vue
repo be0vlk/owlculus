@@ -6,5 +6,3 @@
     </v-card-text>
   </v-card>
 </template>
-
-<script setup></script>

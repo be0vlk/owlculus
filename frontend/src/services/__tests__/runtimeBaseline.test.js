@@ -35,7 +35,7 @@ describe('frontend runtime baseline', () => {
     const packageJson = JSON.parse(packageJsonText)
 
     expect(packageJson.engines).toEqual({ node: '>=24 <25', npm: '>=11 <12' })
-    expect(npmConfig).toMatch(/^engine-strict=true\s*$/)
+    expect(npmConfig).toMatch(/^engine-strict=true\s*$/m)
     expect(nodeVersion.trim()).toBe('24')
     expect(productionDockerfile).toContain('FROM node:24-alpine AS frontend-builder')
     expect(developmentDockerfile).toContain('FROM node:24-alpine')
@@ -63,14 +63,12 @@ describe('frontend runtime baseline', () => {
     ).toEqual(vuePackages.map(() => '3.5.42'))
   })
 
-  it('locks the stable Vuetify 4 runtime and its migration tooling', async () => {
+  it('locks the stable Vuetify 4 runtime and its lint tooling', async () => {
     const { packageJson, packageLock } = await readPackageMetadata()
 
     expect(packageJson.dependencies.vuetify).toBe('4.2.0')
-    expect(packageJson.devDependencies['vite-plugin-vuetify']).toBe('2.1.3')
     expect(packageJson.devDependencies['eslint-plugin-vuetify']).toBe('2.7.2')
     expect(packageLock.packages['node_modules/vuetify'].version).toBe('4.2.0')
-    expect(packageLock.packages['node_modules/vite-plugin-vuetify'].version).toBe('2.1.3')
     expect(packageLock.packages['node_modules/eslint-plugin-vuetify'].version).toBe('2.7.2')
   })
 })

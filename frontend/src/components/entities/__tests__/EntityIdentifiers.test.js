@@ -42,7 +42,7 @@ afterEach(() => {
 
 async function openEntity(entity) {
   wrapper = mount(EntityDetailsModal, {
-    props: { show: true, entity, caseId: 7, existingEntities: [] },
+    props: { show: true, entity, caseId: 7 },
     attachTo: document.body,
     global: {
       plugins: [createVuetify({ components, directives, theme: false })],

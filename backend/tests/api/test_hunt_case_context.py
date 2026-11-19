@@ -108,3 +108,65 @@ def test_hunt_rejects_invalid_initial_parameters_before_acceptance(
     )
     assert response.status_code == 422
     assert client.get(f"/api/hunts/cases/{case.id}/executions").json() == []
+
+
+def test_hunt_responses_share_one_hunt_shape(client, session):
+    user = User(
+        username="shape", email="shape@example.com", password_hash="x", role="Admin"
+    )
+    case = Case(case_number="SHAPE-1", title="Shape")
+    hunt = Hunt(
+        name="shape",
+        display_name="Shape",
+        description="Shape hunt",
+        category="general",
+        definition_json={
+            "steps": [
+                {
+                    "step_id": step,
+                    "plugin_name": "DnsLookup",
+                    "display_name": step,
+                    "description": step,
+                }
+                for step in ("a", "b")
+            ],
+            "initial_parameters": {"subject": {"type": "string"}},
+        },
+    )
+    session.add_all([user, case, hunt])
+    session.commit()
+    app.dependency_overrides[get_current_user] = lambda: user
+
+    listed = [h for h in client.get("/api/hunts/").json() if h["id"] == hunt.id]
+    assert listed == [
+        {
+            "id": hunt.id,
+            "name": "shape",
+            "display_name": "Shape",
+            "description": "Shape hunt",
+            "category": "general",
+            "version": "1.0.0",
+            "is_active": True,
+            "initial_parameters": {"subject": {"type": "string"}},
+            "step_count": 2,
+            "created_at": listed[0]["created_at"],
+            "updated_at": listed[0]["updated_at"],
+        }
+    ]
+    accepted = client.post(
+        f"/api/hunts/{hunt.id}/execute",
+        json={"case_id": case.id, "parameters": {"subject": "owl"}},
+    ).json()
+    assert accepted["hunt"] == listed[0]
+    detail = client.get(f"/api/hunts/executions/{accepted['id']}").json()
+    assert detail["hunt"] == listed[0]
+    assert detail["case"] == {"id": case.id, "title": "Shape", "case_number": "SHAPE-1"}
+    assert detail["created_by"] == {
+        "id": user.id,
+        "email": "shape@example.com",
+        "username": "shape",
+    }
+    history = client.get(f"/api/hunts/cases/{case.id}/executions").json()
+    assert [(h["id"], h["hunt_display_name"], h["hunt_category"]) for h in history] == [
+        (accepted["id"], "Shape", "general")
+    ]

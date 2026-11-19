@@ -3,11 +3,16 @@
 from datetime import UTC, datetime
 
 import pytest
+from pydantic import ValidationError as PydanticValidationError
 from sqlmodel import select
 
 from app.core.exceptions import AuthorizationException, ValidationException
 from app.core.security import decrypt_api_key
 from app.database.models import SystemConfiguration
+from app.schemas.system_config_schema import (
+    EvidenceFolderTemplatesUpdate,
+    SystemConfigurationUpdate,
+)
 from app.services.api_key_vault import Provider
 from app.services.system_config_service import SystemConfigService
 
@@ -45,8 +50,24 @@ async def test_update_configuration_validates_and_persists(service, test_admin):
     assert updated.case_number_prefix == "OWL"
     assert updated.updated_at == FIXED_TIME.replace(tzinfo=None)
 
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"case_number_template": "invalid"},
+        {"case_number_template": "PREFIX-YYMM-NN"},
+        {"case_number_template": "PREFIX-YYMM-NN", "case_number_prefix": "O-L"},
+        {"case_number_template": "PREFIX-YYMM-NN", "case_number_prefix": "O"},
+    ],
+)
+def test_configuration_schema_rejects_invalid_templates(payload):
+    with pytest.raises(PydanticValidationError):
+        SystemConfigurationUpdate.model_validate(payload)
+
+
+def test_preview_rejects_unknown_template(service, test_admin):
     with pytest.raises(ValidationException):
-        await service.update_configuration("invalid", current_user=test_admin)
+        service.preview_case_number_template("invalid", None, test_admin)
 
 
 async def test_monthly_template_clears_an_existing_prefix(service, test_admin):
@@ -109,7 +130,7 @@ async def test_list_and_remove_keys(service, test_admin):
     assert removed.api_keys == {}
 
 
-async def test_evidence_template_update_is_validated(service, test_admin):
+async def test_evidence_template_update_persists(service, test_admin):
     templates = {
         "compact": {
             "name": "Compact",
@@ -121,7 +142,9 @@ async def test_evidence_template_update_is_validated(service, test_admin):
     await service.update_evidence_folder_templates(templates, current_user=test_admin)
     assert await service.get_evidence_folder_templates() == templates
 
-    with pytest.raises(ValidationException):
-        await service.update_evidence_folder_templates(
-            {"broken": {"name": "Broken"}}, current_user=test_admin
+
+def test_evidence_template_schema_requires_template_fields():
+    with pytest.raises(PydanticValidationError):
+        EvidenceFolderTemplatesUpdate.model_validate(
+            {"templates": {"broken": {"name": "Broken"}}}
         )

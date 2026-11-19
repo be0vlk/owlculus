@@ -1,5 +1,5 @@
 # Owlculus Docker Management
-.PHONY: help setup setup-dev start start-dev stop restart logs clean build rebuild test test-browser typecheck
+.PHONY: help setup setup-dev start start-dev stop restart logs clean build rebuild test test-browser typecheck lint
 
 COMPOSE = ./scripts/compose.sh direct
 DEV_COMPOSE = ./scripts/compose.sh development
@@ -19,8 +19,9 @@ help:
 	@echo "  build       - Build Docker images"
 	@echo "  rebuild     - Rebuild Docker images (no cache)"
 	@echo "  clean       - Stop and remove all containers, networks, and volumes"
-	@echo "  test        - Run backend tests"
+	@echo "  test        - Run backend tests and frontend unit tests"
 	@echo "  typecheck   - Typecheck the backend in the locked uv environment"
+	@echo "  lint        - Check backend formatting and lint (ruff) and frontend lint (eslint, stylelint)"
 	@echo "  test-browser - Run the first-install browser journey against ephemeral stacks"
 	@echo ""
 
@@ -80,10 +81,16 @@ clean:
 test:
 	@echo "🧪 Running backend tests..."
 	cd backend && uv run --locked pytest tests/ -v
+	@echo "🧪 Running frontend unit tests..."
+	cd frontend && npx vitest run
 
 typecheck:
 	@echo "Checking backend types..."
 	cd backend && uv run --locked mypy app
+
+lint:
+	cd backend && uv run --locked ruff format --check -q app tests ../scripts && uv run --locked ruff check -q app tests ../scripts
+	cd frontend && npx eslint --quiet . && npx stylelint 'src/**/*.{css,scss,vue}'
 
 test-browser:
 	@echo "🧪 Running first-install browser journey..."

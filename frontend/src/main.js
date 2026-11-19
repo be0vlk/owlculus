@@ -1,7 +1,6 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 
-// Vuetify imports
 import vuetify from './plugins/vuetify'
 
 import App from './App.vue'

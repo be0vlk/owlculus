@@ -1,10 +1,5 @@
 # ruff: noqa: B008
-"""
-Plugin Management and Execution API for Owlculus OSINT Platform.
-
-This module provides the core plugin system interface for executing OSINT tools and services,
-enabling extensible investigation capabilities through a standardized plugin architecture.
-"""
+"""Plugin catalogue and plugin execution routes."""
 
 from typing import Any
 

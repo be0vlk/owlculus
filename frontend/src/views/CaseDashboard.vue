@@ -1,14 +1,5 @@
 <template>
-  <CaseWorkspacePrototype
-    v-if="prototypeVariant && caseData"
-    :case-data="caseData"
-    :client="client"
-    :evidence="evidence"
-    :hunt-executions="caseHuntExecutions"
-    @state="prototypeState = $event"
-  />
   <BaseDashboard
-    v-else
     :title="caseData ? `Case: ${caseData.case_number}` : 'Case Details'"
     :loading="loading"
     :error="error"
@@ -65,12 +56,14 @@
       </v-card>
     </template>
 
-    <!-- Case Content -->
     <div v-if="caseData">
-      <CaseTabs v-model="activeCaseTab" :tabs="availableTabs">
-        <template #default="{ activeTab }">
-          <!-- Entities Tab -->
-          <div v-if="activeTab === 'entities'" class="py-4">
+      <v-tabs v-model="activeCaseTab" color="on-surface" show-arrows aria-label="Case workspaces">
+        <v-tab v-for="tab in availableTabs" :key="tab.name" :text="tab.label" :value="tab.name" />
+      </v-tabs>
+
+      <v-window v-model="activeCaseTab" class="case-tab-window" :touch="false" :transition="false">
+        <v-window-item value="entities" eager :transition="false">
+          <div class="py-4">
             <v-row class="mb-4" no-gutters>
               <v-col cols="auto">
                 <v-btn color="primary" prepend-icon="mdi-plus" @click="openNewEntityModal">
@@ -79,20 +72,17 @@
               </v-col>
             </v-row>
 
-            <!-- Entity Data Table -->
             <EntityDataTable
               ref="entityTableRef"
               :case-id="caseId"
-              :entity-service="entityServiceRef"
               @create="openNewEntityModal"
-              @deleted="handleEntityDeleted"
-              @edit="showEntityDetails"
               @view="showEntityDetails"
             />
           </div>
+        </v-window-item>
 
-          <!-- Evidence Tab -->
-          <div v-else-if="activeTab === 'evidence'" class="py-4">
+        <v-window-item value="evidence" eager :transition="false">
+          <div class="py-4">
             <v-row class="mb-4" no-gutters>
               <v-col cols="auto">
                 <v-btn
@@ -109,35 +99,33 @@
               </v-col>
             </v-row>
             <EvidenceList
-              ref="evidenceListRef"
               :case-id="caseId"
               :error="evidenceError"
               :evidence-list="evidence"
               :loading="loadingEvidence"
               :user-role="userRole"
-              @delete="handleDeleteEvidence"
               @download="handleDownloadEvidence"
               @refresh="loadEvidence"
               @upload-to-folder="handleUploadToFolder"
               @extract-metadata="handleExtractMetadata"
               @view-content="handleViewFileContent"
-              @evidence-moved="handleEvidenceMoved"
+              @evidence-moved="evidence = $event"
             />
           </div>
+        </v-window-item>
 
-          <CaseExecutionHistory
-            v-else-if="activeTab === 'runs'"
-            :case-id="caseId"
-            :allow-hunts="userRole !== 'Analyst'"
-          />
+        <v-window-item value="runs" eager :transition="false">
+          <CaseExecutionHistory :case-id="caseId" :allow-hunts="userRole !== 'Analyst'" />
+        </v-window-item>
 
-          <!-- Tasks Tab -->
-          <div v-else-if="activeTab === 'tasks'" class="py-4">
+        <v-window-item value="tasks" eager :transition="false">
+          <div class="py-4">
             <CaseTasks :case-id="caseId" />
           </div>
+        </v-window-item>
 
-          <!-- Notes Tab -->
-          <div v-else-if="activeTab === 'notes'" class="case-notes py-4">
+        <v-window-item value="notes" eager :transition="false">
+          <div class="case-notes py-4">
             <v-card variant="outlined">
               <v-card-title class="d-flex flex-wrap ga-2 align-center text-wrap">
                 <span><v-icon start>mdi-note-text</v-icon>Case Notes</span>
@@ -157,25 +145,13 @@
                   notesSaveError
                 }}</v-alert>
                 <p v-if="notesSaveStatus" role="status">{{ notesSaveStatus }}</p>
-                <NoteEditor
-                  v-model="caseData.notes"
-                  :case-id="caseId"
-                  :is-editing="isEditingNotes"
-                  :save-mode="'manual'"
-                  :variant="'plain'"
-                  @update:modelValue="handleNotesUpdate"
-                />
+                <NoteEditor v-model="caseData.notes" :is-editing="isEditingNotes" />
               </v-card-text>
               <v-divider />
               <v-card-actions class="pa-4">
                 <v-spacer />
                 <div v-if="!isEditingNotes">
-                  <v-btn
-                    color="primary"
-                    prepend-icon="mdi-pencil"
-                    variant="flat"
-                    @click="startEditingNotes"
-                  >
+                  <v-btn color="primary" prepend-icon="mdi-pencil" @click="startEditingNotes">
                     Edit Notes
                   </v-btn>
                 </div>
@@ -185,7 +161,6 @@
                     :loading="savingNotes"
                     color="primary"
                     prepend-icon="mdi-content-save"
-                    variant="flat"
                     @click="saveNotes"
                   >
                     Save
@@ -194,12 +169,10 @@
               </v-card-actions>
             </v-card>
           </div>
-        </template>
-      </CaseTabs>
+        </v-window-item>
+      </v-window>
     </div>
   </BaseDashboard>
-
-  <PrototypeSwitcher v-if="prototypeEnabled" :state="prototypeState" />
 
   <v-snackbar
     v-model="snackbar.show"
@@ -228,7 +201,6 @@
     @manage-users="showManageUsersModal = true"
   />
 
-  <!-- Modals -->
   <EditCaseModal
     v-if="caseData"
     :case-data="caseData"
@@ -258,12 +230,10 @@
     :key="`${caseId}:${selectedEntity.id}`"
     :case-id="caseId"
     :entity="selectedEntity"
-    :existing-entities="entities"
     :restore-focus-to="resolveEntityDetailsActivator"
     :show="showEntityDetailsModal"
     @close="handleCloseEntityDetails"
     @edit="handleEditEntity"
-    @viewEntity="showEntityDetails"
   />
 
   <UploadEvidenceModal
@@ -271,6 +241,7 @@
     :case-id="caseId"
     :show="showUploadEvidenceModal"
     :target-folder="uploadTargetFolder"
+    :folders="evidence"
     @close="handleCloseUploadModal"
     @uploaded="handleEvidenceUpload"
   />
@@ -278,22 +249,12 @@
   <MetadataModal
     v-model="showMetadataModal"
     :error="metadataError"
-    :evidence-item="selectedEvidenceForMetadata"
     :loading="loadingMetadata"
     :metadata="extractedMetadata"
   />
 
-  <FileContentModal
-    v-model="showFileContentModal"
-    :evidence-item="selectedEvidenceForContent"
-    :content="fileContent"
-    :file-info="fileContentInfo"
-    :loading="loadingFileContent"
-    :error="fileContentError"
-    @download="handleDownloadEvidence"
-  />
+  <FileContentModal v-model="showFileContentModal" :evidence-item="selectedEvidenceForContent" />
 
-  <!-- Entity Creation Success Dialog -->
   <v-dialog
     v-model="showEntityCreationSuccess"
     aria-label="Entity Created Successfully"
@@ -321,18 +282,16 @@
       <v-card-actions>
         <v-spacer />
         <v-btn variant="text" @click="handleSkipEditEntity"> No, thanks </v-btn>
-        <v-btn color="primary" variant="flat" @click="handleEditNewEntity">
-          Yes, edit entity
-        </v-btn>
+        <v-btn color="primary" @click="handleEditNewEntity"> Yes, edit entity </v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
 </template>
 
 <script setup>
-import { getEntityDisplayName } from '@/composables/useEntityDisplay'
+import { getEntityDisplayName } from '@/composables/entityDisplay'
 import CaseExecutionHistory from '@/components/plugins/CaseExecutionHistory.vue'
-import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useActiveCaseStore } from '../stores/activeCase'
@@ -341,7 +300,6 @@ import { useDialogFocusRestore } from '../composables/useDialogFocusRestore'
 import BaseDashboard from '../components/BaseDashboard.vue'
 import CaseDetailsPanel from '../components/CaseDetailsPanel.vue'
 import EntityDataTable from '../components/entities/EntityDataTable.vue'
-import CaseTabs from '../components/CaseTabs.vue'
 import EditCaseModal from '../components/EditCaseModal.vue'
 import ManageUsersModal from '../components/ManageUsersModal.vue'
 import NewEntityModal from '../components/NewEntityModal.vue'
@@ -356,35 +314,20 @@ import { caseService } from '../services/case'
 import { clientService } from '../services/client'
 import { entityService } from '../services/entity'
 import { evidenceService } from '../services/evidence'
-import { useHuntStore } from '../stores/huntStore.js'
 import { downloadBlob } from '../utils/download'
 import { getErrorMessage } from '../utils/errorMessage'
 
 const route = useRoute()
-// THROWAWAY: enabled only by the isolated prototype task runner; absent from production.
-const prototypeEnabled =
-  import.meta.env.DEV && import.meta.env.VITE_CASE_WORKSPACE_PROTOTYPE === true
-const CaseWorkspacePrototype = prototypeEnabled
-  ? defineAsyncComponent(() => import('./cases/CaseWorkspacePrototype.vue'))
-  : null
-const PrototypeSwitcher = prototypeEnabled
-  ? defineAsyncComponent(() => import('@/components/PrototypeSwitcher.vue'))
-  : null
-const prototypeVariant = computed(() => prototypeEnabled && route.query.variant !== 'original')
-const prototypeState = ref({})
 const router = useRouter()
 const authStore = useAuthStore()
 const activeCase = useActiveCaseStore()
 const caseId = computed(() => activeCase.activeCaseId)
-const huntStore = useHuntStore()
 const { snackbar, showNotification, closeNotification } = useNotifications()
 const loading = ref(false)
 const error = ref(null)
 const caseData = ref(null)
 const client = ref(null)
-const entities = ref([])
 const entityTableRef = ref(null)
-const evidenceListRef = ref(null)
 const showCaseDetails = ref(false)
 const detailsRefreshError = ref('')
 const showEditModal = ref(false)
@@ -404,28 +347,19 @@ let entityDetailsActivator = null
 
 useDialogFocusRestore(showEntityCreationSuccess)
 const showMetadataModal = ref(false)
-const selectedEvidenceForMetadata = ref(null)
 const extractedMetadata = ref(null)
 const loadingMetadata = ref(false)
 const metadataError = ref('')
 
 const showFileContentModal = ref(false)
 const selectedEvidenceForContent = ref(null)
-const fileContent = ref(null)
-const fileContentInfo = ref(null)
-const loadingFileContent = ref(false)
-const fileContentError = ref('')
 
 const isEditingNotes = ref(false)
 const savingNotes = ref(false)
 const notesSaveError = ref('')
 const notesSaveStatus = ref('')
 const originalNotes = ref('')
-const entityServiceRef = entityService
 const exportingCase = ref(false)
-
-// History supplied only to the isolated design prototype.
-const caseHuntExecutions = ref([])
 
 const userRole = computed(() => authStore.user?.role || 'Analyst')
 
@@ -497,12 +431,10 @@ function openNewEntityModal(event) {
 }
 
 async function handleEditEntity(updatedEntity) {
-  // Update selectedEntity if it's the one being edited
   if (selectedEntity.value?.id === updatedEntity.id) {
     selectedEntity.value = { ...updatedEntity }
   }
 
-  // Always refresh the EntityDataTable to show updated data
   if (entityTableRef.value) {
     entityTableRef.value.refresh()
   }
@@ -524,12 +456,6 @@ function applyCaseMetadata(data) {
   // Logistics updates must not replace a draft or remount the retained editor.
   const notes = isEditingNotes.value ? caseData.value.notes : data.notes
   caseData.value = { ...caseData.value, ...data, notes }
-}
-
-const handleNotesUpdate = (notes) => {
-  if (caseData.value) {
-    caseData.value.notes = notes
-  }
 }
 
 const startEditingNotes = () => {
@@ -566,7 +492,6 @@ const saveNotes = async () => {
 }
 
 const handleNewEntity = (newEntity) => {
-  entities.value = [...entities.value, newEntity]
   createdEntity.value = newEntity
   newEntityModalActivator?.focus()
   showEntityCreationSuccess.value = true
@@ -589,8 +514,6 @@ const handleSkipEditEntity = () => {
   showEntityCreationSuccess.value = false
   createdEntity.value = null
 }
-
-const handleEntityDeleted = () => {}
 
 const loadClientData = async (clientId) => {
   const owner = caseId.value
@@ -634,8 +557,6 @@ const loadCaseData = async ({ refresh = false } = {}) => {
   }
 }
 
-// Entities are now handled by EntityDataTable component
-
 const loadEvidence = async () => {
   if (!caseId.value) return
 
@@ -677,29 +598,8 @@ const handleExportCase = async () => {
   }
 }
 
-const handleDeleteEvidence = async (evidenceItem) => {
-  if (!confirm('Are you sure you want to delete this evidence?')) return
-
-  try {
-    await evidenceService.deleteEvidence(evidenceItem.id)
-    evidence.value = evidence.value.filter((e) => e.id !== evidenceItem.id)
-  } catch (error) {
-    console.error('Failed to delete evidence:', error)
-  }
-}
-
 const handleEvidenceUpload = async (newEvidenceList) => {
   evidence.value = [...evidence.value, ...newEvidenceList]
-}
-
-const handleEvidenceMoved = (updatedEvidenceList, openState) => {
-  // Update the evidence list with optimistic changes
-  evidence.value = updatedEvidenceList
-
-  // Restore the folder open state if provided
-  if (openState && evidenceListRef.value) {
-    evidenceListRef.value.restoreOpenState(openState)
-  }
 }
 
 const handleUploadToFolder = (folder) => {
@@ -713,7 +613,6 @@ const handleCloseUploadModal = () => {
 }
 
 const handleExtractMetadata = async (evidenceItem) => {
-  selectedEvidenceForMetadata.value = evidenceItem
   extractedMetadata.value = null
   metadataError.value = ''
   loadingMetadata.value = true
@@ -729,67 +628,48 @@ const handleExtractMetadata = async (evidenceItem) => {
   }
 }
 
-const handleViewFileContent = async (evidenceItem) => {
+const handleViewFileContent = (evidenceItem) => {
   selectedEvidenceForContent.value = evidenceItem
-
-  fileContent.value = null
-  fileContentInfo.value = null
-  fileContentError.value = ''
-  loadingFileContent.value = false
-
   showFileContentModal.value = true
 }
-
-// Preserve the isolated prototype fixture preview.
-const loadCaseHuntExecutions = async () => {
-  if (!caseId.value) return
-
-  try {
-    const executions = await huntStore.getCaseExecutions(caseId.value)
-    caseHuntExecutions.value = executions
-  } catch (error) {
-    console.error('Failed to load hunt executions:', error)
-    caseHuntExecutions.value = []
-  }
-}
-
-// Watch for entity query parameter changes
-watch(
-  () => route.query.entity,
-  async (newEntityId) => {
-    if (newEntityId && caseData.value) {
-      try {
-        const entityId = Number(newEntityId)
-        const entity = await entityService.getEntity(caseId.value, entityId)
-        showEntityDetails(entity)
-      } catch (error) {
-        console.error('Failed to load entity:', error)
-      }
-    }
-  },
-)
 
 let disposed = false
 onUnmounted(() => {
   disposed = true
 })
 
-onMounted(async () => {
-  await loadCaseData()
-  if (disposed || !caseId.value) return
-  loadEvidence()
-  if (prototypeEnabled) loadCaseHuntExecutions()
-
-  // Check if entity ID is provided in query params
-  if (route.query.entity) {
+// Open the entity named in the query string once the case has loaded.
+watch(
+  () => caseData.value && route.query.entity,
+  async (entityId) => {
+    if (!entityId) return
     try {
-      const entityId = Number(route.query.entity)
-      const entity = await entityService.getEntity(caseId.value, entityId)
+      const entity = await entityService.getEntity(caseId.value, Number(entityId))
       if (!disposed) showEntityDetails(entity)
     } catch (error) {
       console.error('Failed to load entity:', error)
     }
-  }
+  },
+  { immediate: true },
+)
+
+let openedEvidenceId = null
+watch(
+  [() => route.query.evidence, evidence],
+  ([evidenceId, items]) => {
+    if (!evidenceId || evidenceId === openedEvidenceId) return
+    const item = items.find((candidate) => candidate.id === Number(evidenceId))
+    if (!item) return
+    openedEvidenceId = evidenceId
+    if (!item.is_folder) handleViewFileContent(item)
+  },
+  { immediate: true },
+)
+
+onMounted(async () => {
+  await loadCaseData()
+  if (disposed || !caseId.value) return
+  loadEvidence()
 })
 </script>
 
@@ -826,6 +706,15 @@ onMounted(async () => {
     font-size: 20px;
     line-height: 1.4;
   }
+}
+
+:deep(.v-tab:focus-visible) {
+  outline: 2px solid currentcolor;
+  outline-offset: -3px;
+}
+
+.case-tab-window {
+  min-height: 200px;
 }
 
 .case-notes {

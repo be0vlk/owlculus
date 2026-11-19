@@ -10,6 +10,8 @@ vi.mock('@/services/plugin', () => ({
     getHistory: vi.fn(),
     executePlugin: vi.fn(),
     getExecution: vi.fn(),
+    createExecutionStream: vi.fn(),
+    closeExecutionStream: vi.fn(),
     getResults: vi.fn(),
     cancelExecution: vi.fn(),
   },
@@ -136,7 +138,11 @@ it('reopens recovery waiting and then an uncertain failure without resubmitting'
   wrapper.unmount()
 })
 
-vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
+vi.mock('vue-router', () => ({
+  useRouter: () => ({
+    resolve: ({ params, query }) => ({ href: `/case/${params.id}?entity=${query.entity}` }),
+  }),
+}))
 
 vi.mock('@/utils/download', () => ({ downloadBlob: vi.fn() }))
 

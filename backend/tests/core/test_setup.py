@@ -6,19 +6,19 @@ import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from threading import Barrier, Event
+from threading import Barrier
+
+import pytest
+from fastapi.testclient import TestClient
 
 import app.main as main_module
-import pytest
 from app.core.setup import (
     check_and_generate_setup_token,
     clear_setup_token,
     create_setup_token_once,
-    generate_setup_token,
     get_setup_token,
     validate_setup_token,
 )
-from fastapi.testclient import TestClient
 
 
 def test_generated_setup_token_is_persisted(tmp_path, monkeypatch):
@@ -26,7 +26,7 @@ def test_generated_setup_token_is_persisted(tmp_path, monkeypatch):
     token_file = tmp_path / "setup" / ".setup_token"
     monkeypatch.setattr("app.core.setup.SETUP_TOKEN_FILE", token_file)
 
-    token = generate_setup_token()
+    token = create_setup_token_once()[0]
 
     assert token
     assert get_setup_token() == token
@@ -46,7 +46,7 @@ def test_failed_setup_token_publication_leaves_no_secret_fragment(
     monkeypatch.setattr("app.core.setup.os.fsync", fail_to_sync)
 
     with pytest.raises(OSError, match="simulated storage failure"):
-        generate_setup_token()
+        create_setup_token_once()[0]
 
     assert list(token_file.parent.iterdir()) == []
 
@@ -56,7 +56,7 @@ def test_setup_token_validation_accepts_only_the_persisted_token(tmp_path, monke
     monkeypatch.setattr(
         "app.core.setup.SETUP_TOKEN_FILE", tmp_path / "setup" / ".setup_token"
     )
-    token = generate_setup_token()
+    token = create_setup_token_once()[0]
 
     assert validate_setup_token(token) is True
     assert validate_setup_token("wrong-token") is False
@@ -67,7 +67,7 @@ def test_clearing_setup_token_invalidates_and_removes_it(tmp_path, monkeypatch):
     """Clearing a token makes it unavailable and is safe to repeat."""
     token_file = tmp_path / "setup" / ".setup_token"
     monkeypatch.setattr("app.core.setup.SETUP_TOKEN_FILE", token_file)
-    token = generate_setup_token()
+    token = create_setup_token_once()[0]
 
     clear_setup_token()
     clear_setup_token()
@@ -125,24 +125,6 @@ def test_new_process_reuses_token_from_configured_setup_directory(
     assert restarted_token == first_token
 
 
-def test_explicit_regeneration_replaces_token_with_a_strong_private_value(
-    tmp_path, monkeypatch
-):
-    """Explicit regeneration replaces, rather than reuses, the pending token."""
-    token_file = tmp_path / "setup" / ".setup_token"
-    monkeypatch.setattr("app.core.setup.SETUP_TOKEN_FILE", token_file)
-
-    first_token = generate_setup_token()
-    second_token = generate_setup_token()
-
-    assert second_token != first_token
-    assert len(first_token) >= 43
-    assert len(second_token) >= 43
-    assert token_file.read_text() == second_token
-    assert token_file.stat().st_mode & 0o777 == 0o600
-    assert list(token_file.parent.glob("*.tmp")) == []
-
-
 def test_concurrent_initializers_publish_only_one_setup_token(tmp_path, monkeypatch):
     """Concurrent process-equivalent initializers converge on one persisted value."""
     token_file = tmp_path / "setup" / ".setup_token"
@@ -158,38 +140,6 @@ def test_concurrent_initializers_publish_only_one_setup_token(tmp_path, monkeypa
 
     assert {token for token, _ in results} == {token_file.read_text()}
     assert sum(created for _, created in results) == 1
-
-
-def test_readers_never_observe_partially_published_tokens(tmp_path, monkeypatch):
-    """Readers see complete tokens while another process-equivalent replaces them."""
-    token_file = tmp_path / "setup" / ".setup_token"
-    monkeypatch.setattr("app.core.setup.SETUP_TOKEN_FILE", token_file)
-    generate_setup_token()
-    start = Barrier(2)
-    finished = Event()
-
-    def observe_tokens():
-        observed = []
-        start.wait()
-        while not finished.is_set():
-            observed.append(get_setup_token())
-        observed.append(get_setup_token())
-        return observed
-
-    def replace_tokens():
-        start.wait()
-        for _ in range(50):
-            generate_setup_token()
-
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        reader = executor.submit(observe_tokens)
-        writer = executor.submit(replace_tokens)
-        writer.result()
-        finished.set()
-        observed_tokens = reader.result()
-
-    assert observed_tokens
-    assert all(token is not None and len(token) >= 43 for token in observed_tokens)
 
 
 def test_empty_installation_prints_new_token_once(

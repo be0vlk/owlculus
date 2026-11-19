@@ -3,7 +3,6 @@
     <v-main>
       <v-container fluid :class="compact ? 'pa-4 pa-md-6' : 'pa-6'">
         <slot name="header">
-          <!-- Page Header Card -->
           <v-card class="mb-6 header-gradient">
             <v-card-title class="d-flex flex-wrap ga-3 align-center pa-6 text-white">
               <h1 class="text-headline-large font-weight-bold text-wrap">{{ title }}</h1>
@@ -13,7 +12,6 @@
           </v-card>
         </slot>
 
-        <!-- Loading State -->
         <slot name="loading" v-if="loading">
           <v-card variant="outlined">
             <v-card-title class="d-flex align-center pa-4 header-gradient text-white">
@@ -27,7 +25,6 @@
           </v-card>
         </slot>
 
-        <!-- Error State -->
         <slot name="error" v-else-if="error">
           <v-alert
             type="error"
@@ -42,7 +39,6 @@
           </v-alert>
         </slot>
 
-        <!-- Main Content -->
         <slot v-else />
       </v-container>
     </v-main>
@@ -66,7 +62,3 @@ defineProps({
   },
 })
 </script>
-
-<style scoped>
-/* Styles are now in main.css for shared usage */
-</style>

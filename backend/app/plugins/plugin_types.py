@@ -83,9 +83,7 @@ def unique_ip_writes(
     """Validate and deduplicate provider-specific IP discoveries."""
     writes: dict[str, IpAddressWrite] = {}
     for address, description, sources in candidates:
-        if address is None:
-            continue
-        if not is_ip_address(address):
+        if address is None or not is_ip_address(address):
             continue
         writes.setdefault(address, IpAddressWrite(address, description, sources))
     return list(writes.values())

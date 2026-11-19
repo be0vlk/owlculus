@@ -1,6 +1,5 @@
 <template>
   <div class="d-flex flex-column ga-4">
-    <!-- Status Messages -->
     <PluginStatusAlert
       v-for="(item, index) in statusMessages"
       :key="`status-${index}`"
@@ -8,12 +7,10 @@
       :message="item.data.message"
     />
 
-    <!-- VirusTotal Results -->
     <div v-if="virusTotalResults.length" class="vt-results-grid">
       <v-row>
         <v-col v-for="(result, index) in virusTotalResults" :key="`vt-${index}`" cols="12">
           <v-card elevation="1" rounded="lg" class="result-card">
-            <!-- Result Header -->
             <v-card-title class="d-flex align-center result-heading pa-4">
               <v-icon :icon="getTargetIcon(result.target_type)" size="large" class="mr-3" />
               <div class="flex-grow-1">
@@ -33,7 +30,6 @@
                 </div>
               </div>
 
-              <!-- Verdict Chip -->
               <v-chip
                 :color="getVerdictColor(result.verdict)"
                 variant="elevated"
@@ -47,7 +43,6 @@
 
             <v-card-text class="pa-0">
               <div class="pa-4">
-                <!-- Detection Summary -->
                 <div class="mb-4">
                   <div class="d-flex align-center justify-space-between mb-2">
                     <span class="text-subtitle1 font-weight-medium">Detection Ratio</span>
@@ -71,7 +66,6 @@
                   </div>
                 </div>
 
-                <!-- Target-specific Information -->
                 <div v-if="result.file_info" class="mb-4">
                   <div class="text-subtitle2 font-weight-medium mb-2">File Information</div>
                   <v-list density="compact" class="pa-0">
@@ -111,7 +105,6 @@
                     </v-list-item>
                   </v-list>
 
-                  <!-- File Names -->
                   <div v-if="result.file_info.names && result.file_info.names.length" class="mt-3">
                     <div class="text-body-medium font-weight-medium mb-1">Known Filenames:</div>
                     <div class="d-flex flex-wrap ga-1">
@@ -136,7 +129,6 @@
                   </div>
                 </div>
 
-                <!-- URL Information -->
                 <div v-if="result.url_info" class="mb-4">
                   <div class="text-subtitle2 font-weight-medium mb-2">URL Information</div>
                   <v-list density="compact" class="pa-0">
@@ -159,7 +151,6 @@
                   </v-list>
                 </div>
 
-                <!-- Domain Information -->
                 <div v-if="result.domain_info" class="mb-4">
                   <div class="text-subtitle2 font-weight-medium mb-2">Domain Information</div>
                   <v-list density="compact" class="pa-0">
@@ -190,7 +181,6 @@
                   </v-list>
                 </div>
 
-                <!-- IP Information -->
                 <div v-if="result.ip_info" class="mb-4">
                   <div class="text-subtitle2 font-weight-medium mb-2">IP Information</div>
                   <v-list density="compact" class="pa-0">
@@ -221,7 +211,6 @@
                   </v-list>
                 </div>
 
-                <!-- Categories -->
                 <div v-if="result.categories && Object.keys(result.categories).length" class="mb-4">
                   <div class="text-subtitle2 font-weight-medium mb-2">Categories</div>
                   <div class="d-flex flex-wrap ga-1">
@@ -238,7 +227,6 @@
                   </div>
                 </div>
 
-                <!-- Tags -->
                 <div v-if="result.tags && result.tags.length" class="mb-4">
                   <div class="text-subtitle2 font-weight-medium mb-2">Tags</div>
                   <div class="d-flex flex-wrap ga-1">
@@ -254,7 +242,6 @@
                   </div>
                 </div>
 
-                <!-- Vendor Detections -->
                 <div v-if="result.detections && result.detections.length">
                   <v-divider class="mb-3" />
                   <v-expansion-panels variant="accordion">
@@ -299,7 +286,6 @@
       </v-row>
     </div>
 
-    <!-- Error Messages -->
     <PluginStatusAlert
       v-for="(item, index) in errorMessages"
       :key="`error-${index}`"
@@ -308,12 +294,13 @@
       plugin-name="VirusTotal"
     />
 
-    <!-- No Results -->
-    <NoResultsCard v-if="!parsedResults.length" />
+    <NoResultsCard v-if="!result.length" />
   </div>
 </template>
 
 <script setup>
+import { copyToClipboard } from '@/utils/clipboard'
+import { formatFileSize } from '@/utils/huntDisplayUtils'
 import { computed, toRef } from 'vue'
 import { usePluginResults } from '@/composables/usePluginResults'
 import PluginStatusAlert from './PluginStatusAlert.vue'
@@ -321,82 +308,40 @@ import NoResultsCard from './NoResultsCard.vue'
 
 const props = defineProps({
   result: {
-    type: [Object, Array],
+    type: Array,
     required: true,
   },
 })
 
-const { parsedResults, statusMessages, errorMessages } = usePluginResults(toRef(props, 'result'))
+const { statusMessages, errorMessages, dataResults } = usePluginResults(toRef(props, 'result'))
 
-// Extract VirusTotal data results
-const virusTotalResults = computed(() => {
-  return parsedResults.value.filter((item) => item.type === 'data').map((item) => item.data)
-})
+const virusTotalResults = computed(() => dataResults.value.map((item) => item.data))
 
-// Helper functions
-const getTargetIcon = (targetType) => {
-  switch (targetType) {
-    case 'file':
-      return 'mdi-file-document-outline'
-    case 'url':
-      return 'mdi-link'
-    case 'domain':
-      return 'mdi-web'
-    case 'ip_address':
-      return 'mdi-ip-network'
-    default:
-      return 'mdi-magnify'
-  }
+const targetIcons = {
+  file: 'mdi-file-document-outline',
+  url: 'mdi-link',
+  domain: 'mdi-web',
+  ip_address: 'mdi-ip-network',
 }
+const getTargetIcon = (targetType) => targetIcons[targetType] ?? 'mdi-magnify'
 
-const formatTargetType = (targetType) => {
-  switch (targetType) {
-    case 'file':
-      return 'File Hash'
-    case 'url':
-      return 'URL'
-    case 'domain':
-      return 'Domain'
-    case 'ip_address':
-      return 'IP Address'
-    default:
-      return targetType
-  }
+const targetTypeLabels = {
+  file: 'File Hash',
+  url: 'URL',
+  domain: 'Domain',
+  ip_address: 'IP Address',
 }
+const formatTargetType = (targetType) => targetTypeLabels[targetType] ?? targetType
 
-const getVerdictColor = (verdict) => {
-  switch (verdict) {
-    case 'Clean':
-      return 'success'
-    case 'Likely Safe':
-      return 'success'
-    case 'Suspicious':
-      return 'warning'
-    case 'Likely Malicious':
-      return 'error'
-    case 'Malicious':
-      return 'error'
-    default:
-      return 'grey'
-  }
+const verdicts = {
+  Clean: { color: 'success', icon: 'mdi-shield-check' },
+  'Likely Safe': { color: 'success', icon: 'mdi-shield-check' },
+  Suspicious: { color: 'warning', icon: 'mdi-shield-alert' },
+  'Likely Malicious': { color: 'error', icon: 'mdi-shield-remove' },
+  Malicious: { color: 'error', icon: 'mdi-shield-off' },
 }
-
-const getVerdictIcon = (verdict) => {
-  switch (verdict) {
-    case 'Clean':
-      return 'mdi-shield-check'
-    case 'Likely Safe':
-      return 'mdi-shield-check'
-    case 'Suspicious':
-      return 'mdi-shield-alert'
-    case 'Likely Malicious':
-      return 'mdi-shield-remove'
-    case 'Malicious':
-      return 'mdi-shield-off'
-    default:
-      return 'mdi-shield-outline'
-  }
-}
+const getVerdictColor = (verdict) => verdicts[verdict]?.color ?? 'grey'
+const getVerdictIcon = (verdict) => verdicts[verdict]?.icon ?? 'mdi-shield-outline'
 
 const getDetectionPercentage = (ratio) => {
   if (!ratio) return 0
@@ -433,22 +378,6 @@ const getDetectionCategoryColor = (category) => {
   }
   return categoryColors[category?.toLowerCase()] || 'info'
 }
-
-const formatFileSize = (bytes) => {
-  if (!bytes) return 'Unknown'
-  const sizes = ['Bytes', 'KB', 'MB', 'GB']
-  if (bytes === 0) return '0 Bytes'
-  const i = Math.floor(Math.log(bytes) / Math.log(1024))
-  return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + ' ' + sizes[i]
-}
-
-const copyToClipboard = async (text) => {
-  try {
-    await navigator.clipboard.writeText(text)
-  } catch (err) {
-    console.error('Failed to copy text:', err)
-  }
-}
 </script>
 
 <style scoped>
@@ -478,12 +407,6 @@ const copyToClipboard = async (text) => {
 .font-mono {
   font-family: 'Courier New', Courier, monospace;
   font-size: 0.85em;
-}
-
-.text-truncate {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .detection-progress {

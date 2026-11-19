@@ -1,23 +1,15 @@
-"""
-Pydantic schemas for system configuration data validation.
-
-This module defines request and response models for system settings,
-configuration updates, API key management, case number templates,
-and evidence folder template management.
-"""
+"""System configuration schemas."""
 
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-class SystemConfigurationBase(BaseModel):
+class SystemConfigurationUpdate(BaseModel):
     case_number_template: str
-    case_number_prefix: Optional[str] = None
+    case_number_prefix: Optional[str] = Field(default=None, validate_default=True)
 
-
-class SystemConfigurationCreate(SystemConfigurationBase):
     @field_validator("case_number_template")
     @classmethod
     def validate_template(cls, v):
@@ -38,20 +30,9 @@ class SystemConfigurationCreate(SystemConfigurationBase):
         return v
 
 
-class SystemConfigurationUpdate(SystemConfigurationCreate):
-    pass
-
-
 class APIKeyUpdate(BaseModel):
     api_key: Optional[str] = None
     name: Optional[str] = None
-
-
-class APIKeyResponse(BaseModel):
-    provider: str
-    name: str
-    is_configured: bool
-    created_at: Optional[str] = None
 
 
 class APIKeyStatusResponse(BaseModel):

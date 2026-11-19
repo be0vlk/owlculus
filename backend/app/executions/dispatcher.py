@@ -19,6 +19,7 @@ from app.database.models import (
     ExecutionOutbox,
     HuntExecution,
     PluginExecution,
+    associated_execution,
 )
 from app.executions.celery_app import HUNT_QUEUE, QUEUE, app
 from app.executions.events import record_event
@@ -66,10 +67,7 @@ def dispatch_once(database_engine=engine) -> bool:
         if selected is None:
             return False
         row, control = selected
-        kind = "hunt" if control.hunt_execution_id is not None else "plugin"
-        execution_id = (
-            control.hunt_execution_id if kind == "hunt" else control.plugin_execution_id
-        )
+        kind, execution_id = control.execution_reference()
         attempt = row.attempts + 1
         dispatch_status = "published"
         row.last_attempt_at = now
@@ -90,9 +88,7 @@ def dispatch_once(database_engine=engine) -> bool:
             )
             if row.attempts >= 5:
                 dispatch_status = "failed"
-                execution = db.get(
-                    HuntExecution if kind == "hunt" else PluginExecution, execution_id
-                )
+                execution = associated_execution(db, control)
                 assert execution is not None
                 execution.status = "failed"
                 execution.completed_at = get_utc_now()
@@ -124,6 +120,7 @@ def dispatch_once(database_engine=engine) -> bool:
 def main():
     from app.executions.events import publish_once, redis_client, refresh_active_streams
     from app.executions.recovery import reconcile
+    from app.executions.strixy_dispatcher import dispatch_once as dispatch_strixy
 
     poll_seconds = max(
         0.05, float(os.environ.get("EXECUTION_DISPATCH_POLL_SECONDS", "0.2"))
@@ -135,6 +132,7 @@ def main():
                 reconcile()
                 next_reconcile = time.monotonic() + 10
             busy = dispatch_once()
+            busy = dispatch_strixy() or busy
             # Event publication has its own failure boundary: completed work stays
             # completed, and dispatch/recovery proceed during event outages.
             try:

@@ -24,12 +24,7 @@
     </v-snackbar>
 
     <!-- Global session expiration notification -->
-    <v-snackbar
-      v-model="sessionSnackbar.show"
-      :color="sessionSnackbar.color"
-      :timeout="sessionSnackbar.timeout"
-      location="top center"
-    >
+    <v-snackbar v-model="sessionSnackbar.show" color="error" :timeout="6000" location="top center">
       {{ sessionSnackbar.text }}
       <template #actions>
         <v-btn variant="text" @click="sessionSnackbar.show = false"> Close </v-btn>
@@ -49,7 +44,6 @@ import { useDarkMode } from '@/composables/useDarkMode'
 import FullPageLoading from '@/components/FullPageLoading.vue'
 import { useAuthStore } from '@/stores/auth'
 
-// Initialize dark mode
 useDarkMode()
 const authStore = useAuthStore()
 const activeCase = useActiveCaseStore()
@@ -71,14 +65,8 @@ const caseContextBlocked = computed(
 authStore.init()
 
 // Global session expiration notification
-const sessionSnackbar = ref({
-  show: false,
-  text: '',
-  color: 'error',
-  timeout: 6000,
-})
+const sessionSnackbar = ref({ show: false, text: '' })
 
-// Handle session expiration notification
 const handleSessionExpired = (event) => {
   sessionSnackbar.value.text = event.detail.message
   sessionSnackbar.value.show = true
@@ -106,6 +94,8 @@ body {
     'Open Sans',
     'Helvetica Neue',
     sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

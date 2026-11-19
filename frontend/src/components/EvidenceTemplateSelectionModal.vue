@@ -35,9 +35,7 @@
             <v-alert-title>Error Loading Templates</v-alert-title>
             {{ error }}
           </v-alert>
-          <v-btn color="primary" prepend-icon="mdi-refresh" variant="flat" @click="loadTemplates">
-            Retry
-          </v-btn>
+          <v-btn color="primary" prepend-icon="mdi-refresh" @click="loadTemplates"> Retry </v-btn>
         </div>
 
         <div v-else>
@@ -47,8 +45,6 @@
             item-title="name"
             item-value="value"
             label="Select Template"
-            variant="outlined"
-            density="comfortable"
             prepend-inner-icon="mdi-folder-template"
             class="mb-4"
             placeholder="Choose a folder template..."
@@ -56,7 +52,7 @@
             <template v-slot:item="{ props: itemProps, item }">
               <v-list-item v-bind="itemProps" :subtitle="item.description">
                 <template v-slot:prepend>
-                  <v-icon icon="mdi-folder-multiple" :color="getFolderColor()" class="me-3" />
+                  <v-icon icon="mdi-folder-multiple" color="purple-darken-1" class="me-3" />
                 </template>
               </v-list-item>
             </template>
@@ -116,23 +112,16 @@ import { ref, computed, watch } from 'vue'
 import { systemService } from '@/services/system'
 import { evidenceService } from '@/services/evidence'
 import TemplateFolderTree from './TemplateFolderTree.vue'
-import { useFolderIcons } from '../composables/useFolderIcons'
 import ModalActions from './ModalActions.vue'
 
-const { getFolderColor } = useFolderIcons()
-
 const props = defineProps({
-  modelValue: {
-    type: Boolean,
-    default: false,
-  },
   caseId: {
     type: Number,
     required: true,
   },
 })
 
-const emit = defineEmits(['update:modelValue', 'template-applied'])
+const emit = defineEmits(['template-applied'])
 
 const loading = ref(false)
 const error = ref('')
@@ -140,10 +129,7 @@ const applying = ref(false)
 const templates = ref({})
 const selectedTemplate = ref('')
 
-const dialogOpen = computed({
-  get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value),
-})
+const dialogOpen = defineModel({ type: Boolean, default: false })
 
 const templateOptions = computed(() => {
   return Object.keys(templates.value).map((key) => ({

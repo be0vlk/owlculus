@@ -7,7 +7,7 @@ import UploadEvidenceModal from '../UploadEvidenceModal.vue'
 import { evidenceService } from '@/services/evidence'
 
 vi.mock('@/services/evidence', () => ({
-  evidenceService: { createEvidence: vi.fn(), getFolderTree: vi.fn().mockResolvedValue([]) },
+  evidenceService: { createEvidence: vi.fn() },
 }))
 let wrapper
 

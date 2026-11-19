@@ -1,0 +1,3 @@
+#!/bin/sh
+# Enable once per clone: git config core.hooksPath .githooks
+make -s lint && cd frontend && exec npx vitest run --changed

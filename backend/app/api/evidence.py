@@ -1,22 +1,19 @@
-"""
-Evidence Management API for Owlculus OSINT Platform.
-
-This module provides comprehensive digital evidence management capabilities for OSINT investigations,
-ensuring proper chain of custody and forensic integrity of collected data.
-"""
+"""Evidence and evidence folder routes."""
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlmodel import Session
 
+from app.core import file_storage
 from app.core.database_boundary import DatabaseRoute
 from app.core.dependencies import get_current_user
 from app.core.exceptions import (
     AuthenticationException,
     AuthorizationException,
     DuplicateResourceException,
+    PayloadTooLargeException,
     RelatedResourceException,
     ResourceNotFoundException,
     ValidationException,
@@ -24,8 +21,8 @@ from app.core.exceptions import (
 from app.database import models
 from app.database.connection import get_db
 from app.schemas import evidence_schema as schemas
+from app.services.evidence_metadata import extract_metadata
 from app.services.evidence_service import EvidenceService
-from app.services.exiftool_service import ExifToolService
 
 router = APIRouter(route_class=DatabaseRoute)
 
@@ -50,9 +47,8 @@ async def create_evidence(
         raise ValidationException("At least one file must be provided")
 
     if len(files) > 10:
-        raise HTTPException(
-            status_code=413,
-            detail="Upload at most 10 files per request. No Evidence was saved.",
+        raise PayloadTooLargeException(
+            "Upload at most 10 files per request. No Evidence was saved."
         )
 
     evidence_service = EvidenceService(db)
@@ -114,8 +110,7 @@ async def read_case_evidence(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    evidence_service = EvidenceService(db)
-    return await evidence_service.get_case_evidence(
+    return await EvidenceService(db).get_case_evidence(
         case_id=case_id, current_user=current_user, skip=skip, limit=limit
     )
 
@@ -126,8 +121,7 @@ async def read_evidence(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    evidence_service = EvidenceService(db)
-    return await evidence_service.get_evidence(
+    return await EvidenceService(db).get_evidence(
         evidence_id=evidence_id, current_user=current_user
     )
 
@@ -138,8 +132,7 @@ async def download_evidence(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    evidence_service = EvidenceService(db)
-    file_path = await evidence_service.download_evidence(
+    file_path = await EvidenceService(db).download_evidence(
         evidence_id=evidence_id,
         current_user=current_user,
     )
@@ -156,30 +149,9 @@ async def get_evidence_content(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    evidence_service = EvidenceService(db)
-    return await evidence_service.get_evidence_content(
+    return await EvidenceService(db).get_evidence_content(
         evidence_id=evidence_id,
         current_user=current_user,
-    )
-
-
-@router.get("/{evidence_id}/image")
-async def get_evidence_image(
-    evidence_id: int,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(get_current_user),
-):
-    evidence_service = EvidenceService(db)
-    file_path = await evidence_service.get_evidence_image(
-        evidence_id=evidence_id,
-        current_user=current_user,
-    )
-    return FileResponse(
-        path=str(file_path),
-        headers={
-            "Cache-Control": "max-age=3600",
-            "X-Content-Type-Options": "nosniff",
-        },
     )
 
 
@@ -190,8 +162,7 @@ async def update_evidence(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    evidence_service = EvidenceService(db)
-    return evidence_service.update_evidence(
+    return EvidenceService(db).update_evidence(
         evidence_id=evidence_id,
         evidence_update=evidence,
         current_user=current_user,
@@ -204,8 +175,7 @@ async def delete_evidence(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    evidence_service = EvidenceService(db)
-    await evidence_service.delete_evidence(
+    await EvidenceService(db).delete_evidence(
         evidence_id=evidence_id, current_user=current_user
     )
 
@@ -218,8 +188,7 @@ async def create_folder(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    evidence_service = EvidenceService(db)
-    return await evidence_service.create_folder(
+    return await EvidenceService(db).create_folder(
         folder_data=folder_data, current_user=current_user
     )
 
@@ -230,9 +199,8 @@ async def get_folder_tree(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    evidence_service = EvidenceService(db)
-    return await evidence_service.get_folder_tree(
-        case_id=case_id, current_user=current_user
+    return await EvidenceService(db).get_case_evidence(
+        case_id=case_id, current_user=current_user, limit=None
     )
 
 
@@ -243,8 +211,7 @@ async def update_folder(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    evidence_service = EvidenceService(db)
-    return await evidence_service.update_folder(
+    return await EvidenceService(db).update_folder(
         folder_id=folder_id,
         folder_update=folder_update,
         current_user=current_user,
@@ -257,8 +224,9 @@ async def delete_folder(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    evidence_service = EvidenceService(db)
-    await evidence_service.delete_folder(folder_id=folder_id, current_user=current_user)
+    await EvidenceService(db).delete_folder(
+        folder_id=folder_id, current_user=current_user
+    )
 
 
 @router.get("/{evidence_id}/metadata")
@@ -267,47 +235,18 @@ async def extract_evidence_metadata(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    evidence_service = EvidenceService(db)
-    exiftool_service = ExifToolService()
-
-    evidence = await evidence_service.get_evidence(
+    evidence = await EvidenceService(db).get_evidence(
         evidence_id=evidence_id, current_user=current_user
     )
-
-    if not evidence:
-        raise ResourceNotFoundException("Evidence not found")
-
     if not evidence.content or evidence.is_folder:
         raise ValidationException(
             "Cannot extract metadata from folders or evidence without files"
         )
-
-    from app.core.file_storage import UPLOAD_DIR
-
-    full_file_path = UPLOAD_DIR / evidence.content
-
-    if not exiftool_service.is_supported_file(str(full_file_path)):
-        return {
-            "success": False,
-            "error": "Unsupported file type for metadata extraction",
-            "supported_file": False,
-            "file_extension": (
-                evidence.content.split(".")[-1]
-                if "." in evidence.content
-                else "unknown"
-            ),
-        }
-
-    metadata_result = await exiftool_service.extract_metadata(str(full_file_path))
-
-    if "error" in metadata_result:
-        return {
-            "success": False,
-            "error": metadata_result["error"],
-            "supported_file": True,
-        }
-
-    return metadata_result
+    try:
+        path = file_storage.evidence_file_path(evidence.case_id, evidence.content)
+    except ValueError as error:
+        raise ValidationException(str(error)) from error
+    return extract_metadata(path)
 
 
 @router.post(
@@ -321,8 +260,7 @@ async def apply_folder_template(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    evidence_service = EvidenceService(db)
-    return await evidence_service.create_folders_from_template(
+    return await EvidenceService(db).create_folders_from_template(
         case_id=case_id,
         template_name=template_name,
         current_user=current_user,

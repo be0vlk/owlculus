@@ -1,17 +1,18 @@
 """Authorized snapshot/replay observation with no worker-to-socket coupling."""
 
 import asyncio
+import functools
 import json
 import logging
 import os
 import time
 
-from fastapi import HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import WebSocket, WebSocketDisconnect
 from fastapi.encoders import jsonable_encoder
 from sqlmodel import Session, select
 
 from app.core.exceptions import AuthorizationException, ResourceNotFoundException
-from app.database.models import ExecutionControl, HuntExecution, PluginExecution, User
+from app.database.models import TERMINAL, ExecutionControl, User, execution_kind
 from app.executions.events import redis_client, stream_key
 from app.services.case_access import CaseAccess
 
@@ -26,10 +27,9 @@ AUTH_SECONDS = min(
 
 def readable_execution(db, user_id, kind, execution_id):
     user = db.get(User, user_id, populate_existing=True)
-    if user is None or not user.is_active:
-        raise HTTPException(403, "Observation access is no longer available")
-    model = HuntExecution if kind == "hunt" else PluginExecution
-    execution = db.get(model, execution_id, populate_existing=True)
+    if user is None or not user.is_active or user.system_identity is not None:
+        raise AuthorizationException("Observation access is no longer available")
+    execution = db.get(execution_kind(kind)[0], execution_id, populate_existing=True)
     if execution is None:
         raise ResourceNotFoundException("Execution not found")
     CaseAccess(db).readable(user, execution.case_id)
@@ -44,12 +44,8 @@ def snapshot(database_engine, user_id, kind, execution_id, identity, version):
             or user.auth_identity != identity
             or user.session_version != version
         ):
-            raise HTTPException(403, "Observation access is no longer available")
-        association = (
-            ExecutionControl.hunt_execution_id
-            if kind == "hunt"
-            else ExecutionControl.plugin_execution_id
-        )
+            raise AuthorizationException("Observation access is no longer available")
+        _, association = execution_kind(kind)
         # Writers lock the same row. All snapshot fields and its revision therefore
         # describe one commit; later commits have strictly newer replay cursors.
         control = db.exec(
@@ -92,7 +88,7 @@ def retained(client, key, cursor):
 
 
 async def observe(websocket: WebSocket, database_engine, kind: str, execution_id: int):
-    from app.core.security import ephemeral_token_manager
+    from app.core.security import validate_ephemeral_token
 
     token = websocket.query_params.get("token")
     cursor = websocket.query_params.get("cursor")
@@ -102,14 +98,15 @@ async def observe(websocket: WebSocket, database_engine, kind: str, execution_id
         ):
             raise ValueError("Invalid cursor")
         capability = await asyncio.to_thread(
-            ephemeral_token_manager.validate_token, token or "", execution_id, kind
+            validate_ephemeral_token, token or "", execution_id, kind
         )
         if capability is None:
             raise ValueError("Invalid token")
         user_id, identity, version = capability
-        initial = await asyncio.to_thread(
+        current_snapshot = functools.partial(
             snapshot, database_engine, user_id, kind, execution_id, identity, version
         )
+        initial = await asyncio.to_thread(current_snapshot)
     except Exception:  # noqa: BLE001 - deny without token or transport details
         await websocket.close(code=1008, reason="Observation access unavailable")
         return
@@ -121,15 +118,7 @@ async def observe(websocket: WebSocket, database_engine, kind: str, execution_id
     async def send(message):
         nonlocal authorized_at
         if time.monotonic() - authorized_at >= AUTH_SECONDS:
-            await asyncio.to_thread(
-                snapshot,
-                database_engine,
-                user_id,
-                kind,
-                execution_id,
-                identity,
-                version,
-            )
+            await asyncio.to_thread(current_snapshot)
             authorized_at = time.monotonic()
         await asyncio.wait_for(
             websocket.send_json(jsonable_encoder(message)), SEND_TIMEOUT
@@ -150,15 +139,7 @@ async def observe(websocket: WebSocket, database_engine, kind: str, execution_id
             # between submission and subscription. Updates after it use XREAD,
             # never consumer groups, so every API observer sees the same revisions.
             while True:
-                current = await asyncio.to_thread(
-                    snapshot,
-                    database_engine,
-                    user_id,
-                    kind,
-                    execution_id,
-                    identity,
-                    version,
-                )
+                current = await asyncio.to_thread(current_snapshot)
                 try:
                     valid = await asyncio.to_thread(retained, client, key, last_cursor)
                     updates = await asyncio.to_thread(
@@ -187,7 +168,6 @@ async def observe(websocket: WebSocket, database_engine, kind: str, execution_id
                                     last_cursor = event_cursor
                 except (
                     TimeoutError,
-                    HTTPException,
                     AuthorizationException,
                     ResourceNotFoundException,
                 ):
@@ -205,12 +185,7 @@ async def observe(websocket: WebSocket, database_engine, kind: str, execution_id
                     )
                     await send({"event_type": "resync", **current})
                     last_cursor = current["cursor"]
-                if current["state"]["status"] in {
-                    "completed",
-                    "partial",
-                    "failed",
-                    "cancelled",
-                }:
+                if current["state"]["status"] in TERMINAL:
                     if current["cursor"] != last_cursor:
                         await send({"event_type": "snapshot", **current})
                         last_cursor = current["cursor"]
@@ -228,7 +203,7 @@ async def observe(websocket: WebSocket, database_engine, kind: str, execution_id
         for task in done:
             task.result()
         await websocket.close(code=1000)
-    except (HTTPException, AuthorizationException, ResourceNotFoundException):
+    except (AuthorizationException, ResourceNotFoundException):
         await websocket.close(code=1008, reason="Observation access revoked")
     except TimeoutError:
         await websocket.close(code=1013, reason=f"Reconnect from {last_cursor}")

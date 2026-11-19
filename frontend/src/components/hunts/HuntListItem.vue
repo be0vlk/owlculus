@@ -1,17 +1,16 @@
 <template>
   <v-card
     class="hunt-list-item"
-    :class="`category-${hunt.category}`"
+    :style="{ borderLeftColor: `rgb(var(--v-theme-${categoryColor}))` }"
     variant="outlined"
     hover
     @click="$emit('view-details', hunt)"
   >
     <v-card-text class="pa-3">
       <v-row class="align-center">
-        <!-- Hunt Icon and Basic Info -->
         <v-col cols="12" md="5" class="d-flex align-center">
           <v-avatar :color="categoryColor" size="40" class="me-3">
-            <v-icon :icon="categoryIcon" size="small" color="white" />
+            <v-icon :icon="getCategoryIcon(hunt.category)" size="small" color="white" />
           </v-avatar>
           <div>
             <div class="d-flex align-center">
@@ -29,20 +28,17 @@
           </div>
         </v-col>
 
-        <!-- Description -->
         <v-col cols="12" md="3">
           <div class="text-body-medium text-medium-emphasis hunt-description">
             {{ hunt.description }}
           </div>
         </v-col>
 
-        <!-- Stats and Actions -->
         <v-col cols="12" md="4" class="d-flex align-center justify-md-end justify-start">
           <div class="text-body-small text-medium-emphasis me-3">
             {{ hunt.step_count || 0 }} steps
           </div>
 
-          <!-- Execute Button -->
           <v-btn
             color="primary"
             variant="tonal"
@@ -61,7 +57,7 @@
 
 <script setup>
 import { computed } from 'vue'
-import { getCategoryColor, getDisplayCategory } from '@/utils/huntDisplayUtils'
+import { getCategoryColor, getCategoryIcon, getDisplayCategory } from '@/utils/huntDisplayUtils'
 
 const props = defineProps({
   hunt: {
@@ -71,20 +67,6 @@ const props = defineProps({
 })
 
 defineEmits(['execute', 'view-details'])
-
-// Computed properties
-const categoryIcon = computed(() => {
-  const iconMap = {
-    person: 'mdi-account',
-    domain: 'mdi-web',
-    company: 'mdi-office-building',
-    ip: 'mdi-ip-network',
-    phone: 'mdi-phone',
-    email: 'mdi-email',
-    general: 'mdi-magnify',
-  }
-  return iconMap[props.hunt.category] || iconMap.general
-})
 
 const categoryColor = computed(() => {
   return getCategoryColor(props.hunt.category)
@@ -109,37 +91,6 @@ const displayCategory = computed(() => {
   box-shadow: 0 2px 8px rgb(0 0 0 / 10%);
 }
 
-/* Category-specific left border colors */
-.hunt-list-item.category-person {
-  border-left-color: rgb(var(--v-theme-primary));
-}
-
-.hunt-list-item.category-domain,
-.hunt-list-item.category-network {
-  border-left-color: rgb(var(--v-theme-info));
-}
-
-.hunt-list-item.category-company {
-  border-left-color: rgb(var(--v-theme-warning));
-}
-
-.hunt-list-item.category-ip {
-  border-left-color: rgb(var(--v-theme-secondary));
-}
-
-.hunt-list-item.category-phone {
-  border-left-color: rgb(var(--v-theme-primary-darken-1));
-}
-
-.hunt-list-item.category-email {
-  border-left-color: rgb(var(--v-theme-error));
-}
-
-.hunt-list-item.category-general,
-.hunt-list-item.category-other {
-  border-left-color: rgb(var(--v-theme-secondary));
-}
-
 .hunt-description {
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -148,7 +99,6 @@ const displayCategory = computed(() => {
   line-height: 1.5;
 }
 
-/* Add subtle background on hover */
 .hunt-list-item:hover::before {
   content: '';
   position: absolute;

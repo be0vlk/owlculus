@@ -1,26 +1,18 @@
 <template>
-  <v-card :elevation="embedded ? 0 : undefined" :variant="embedded ? 'flat' : 'outlined'">
-    <!-- Header -->
+  <v-card :elevation="0" variant="flat">
     <v-card-title class="operations-heading d-flex flex-wrap ga-3 align-center pa-4 bg-surface">
-      <v-icon v-if="!embedded" icon="mdi-email" color="primary" size="large" class="me-3" />
       <div class="flex-grow-1">
-        <h2 class="text-title-large font-weight-bold">
-          {{ embedded ? 'Invites' : 'Invite Management' }}
-        </h2>
-        <div v-if="!embedded" class="text-body-medium text-medium-emphasis">
-          Manage user invitation links
-        </div>
+        <h2 class="text-title-large font-weight-bold">Invites</h2>
       </div>
       <div class="d-flex align-center ga-2">
         <v-btn
           size="small"
           ref="inviteAction"
           color="primary"
-          variant="flat"
           prepend-icon="mdi-email-plus"
           @click="openCreateDialog"
         >
-          {{ embedded ? 'Invite user' : 'Generate Invite' }}
+          Invite user
         </v-btn>
         <v-tooltip text="Refresh invite list" location="bottom">
           <template #activator="{ props }">
@@ -40,7 +32,6 @@
 
     <v-divider />
 
-    <!-- Search Toolbar -->
     <v-card-text class="pa-4">
       <v-row class="mb-0 align-center">
         <v-col cols="12" md="4">
@@ -63,22 +54,16 @@
             v-model="statusFilter"
             :items="statusOptions"
             label="Invitation status"
-            variant="outlined"
-            density="comfortable"
             hide-details
           />
         </v-col>
 
-        <!-- Search Controls -->
         <v-col cols="12" md="4">
           <div class="d-flex align-center ga-4 justify-end">
-            <!-- Search Field -->
             <v-text-field
-              v-model="inviteSearchQuery"
+              v-model="searchQuery"
               prepend-inner-icon="mdi-magnify"
               label="Search invites..."
-              variant="outlined"
-              density="comfortable"
               hide-details
               class="operations-search"
               clearable
@@ -99,42 +84,39 @@
       v-else
       :cell-props="{ class: 'operations-cell' }"
       :header-props="{ class: 'operations-column' }"
-      :headers="inviteHeaders"
+      :headers="headers"
       :items="filteredInvites"
+      :search="searchQuery"
+      :sort-by="[{ key: 'created_at', order: 'desc' }]"
       :loading="loading"
       item-value="id"
       class="elevation-0 admin-dashboard-table"
       hover
     >
-      <!-- Role column -->
       <template #[`item.role`]="{ item }">
-        <v-chip :color="getRoleColor(item.role)" size="small" variant="tonal">
+        <v-chip color="grey-darken-1" size="small" variant="tonal">
           {{ item.role }}
         </v-chip>
       </template>
 
-      <!-- Status column -->
       <template #[`item.status`]="{ item }">
-        <v-chip :color="getInviteStatusColor(item)" size="small" variant="tonal">
-          {{ getInviteStatus(item) === 'Active' ? 'Pending' : getInviteStatus(item) }}
+        <v-chip :color="inviteStatus(item).color" size="small" variant="tonal">
+          {{ inviteStatus(item).label }}
         </v-chip>
       </template>
 
-      <!-- Created date -->
       <template #[`item.created_at`]="{ item }">
         <span class="text-body-medium">
           {{ formatDate(item.created_at) }}
         </span>
       </template>
 
-      <!-- Expires date -->
       <template #[`item.expires_at`]="{ item }">
         <span class="text-body-medium">
           {{ formatDate(item.expires_at) }}
         </span>
       </template>
 
-      <!-- Actions column -->
       <template #[`item.actions`]="{ item }">
         <div class="d-flex ga-2">
           <v-btn
@@ -164,85 +146,75 @@
         </div>
       </template>
 
-      <!-- Empty state -->
       <template #no-data>
         <div class="text-center pa-12">
           <v-icon class="mb-4" color="grey-lighten-1" icon="mdi-email-outline" size="64" />
           <h3 class="text-title-large font-weight-medium mb-2">
-            {{ statusFilter === 'all' ? getInviteEmptyStateTitle() : `No ${statusFilter} invites` }}
+            {{
+              statusFilter !== 'all'
+                ? `No ${statusFilter} invites`
+                : searchQuery
+                  ? 'No invites found'
+                  : 'No invites yet'
+            }}
           </h3>
           <p class="text-body-medium text-medium-emphasis mb-4">
             {{
-              statusFilter === 'all'
-                ? getInviteEmptyStateMessage()
-                : 'Try another status or search term, or invite someone new.'
+              statusFilter !== 'all'
+                ? 'Try another status or search term, or invite someone new.'
+                : searchQuery
+                  ? "Try adjusting your search terms to find the invite you're looking for."
+                  : 'Generate your first invite to allow new users to register.'
             }}
           </p>
           <v-btn
-            v-if="shouldShowCreateInviteButton()"
+            v-if="!invites.length && !searchQuery"
             color="primary"
             prepend-icon="mdi-email-plus"
             @click="openCreateDialog"
           >
-            {{ embedded ? 'Invite user' : 'Generate Invite' }}
+            Invite user
           </v-btn>
         </div>
       </template>
     </v-data-table>
 
-    <!-- Invite Modal -->
     <NewInviteModal
       :show="showNewInviteModal"
-      @close="closeInviteModal"
-      @created="handleInviteCreatedWithNotification"
+      @close="showNewInviteModal = false"
+      @created="handleInviteCreated"
     />
   </v-card>
 </template>
 
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { useInvites } from '@/composables/useInvites'
+import { formatDate } from '@/composables/dateUtils'
+import { inviteService } from '@/services/invite'
 import NewInviteModal from './NewInviteModal.vue'
 
-defineProps({ embedded: Boolean })
 const emit = defineEmits(['notification', 'confirmDelete', 'count'])
 
-const {
-  // State
-  invites,
-  loading,
-  error,
-  inviteSearchQuery,
-  cleanupLoading,
+const invites = ref([])
+const loading = ref(true)
+const error = ref(null)
+const searchQuery = ref('')
+const cleanupLoading = ref(false)
+const showNewInviteModal = ref(false)
 
-  // Modal state
-  showNewInviteModal,
+const headers = [
+  { title: 'Role', key: 'role' },
+  { title: 'Status', key: 'status' },
+  { title: 'Created', key: 'created_at' },
+  { title: 'Expires', key: 'expires_at' },
+  { title: 'Actions', key: 'actions', sortable: false },
+]
 
-  // Constants
-  inviteHeaders,
-
-  // Computed
-  sortedAndFilteredInvites,
-
-  // Helper functions
-  getRoleColor,
-  getInviteStatus,
-  getInviteStatusColor,
-  getInviteEmptyStateTitle,
-  getInviteEmptyStateMessage,
-  shouldShowCreateInviteButton,
-  formatDate,
-
-  // CRUD operations
-  loadInvites,
-  deleteInvite,
-  cleanupExpiredInvites,
-  copyInviteLink,
-
-  // Modal management
-  closeInviteModal,
-  handleInviteCreated,
-} = useInvites()
+const inviteStatus = (invite) => {
+  if (invite.is_used) return { label: 'Used', color: 'success' }
+  if (invite.is_expired) return { label: 'Expired', color: 'error' }
+  return { label: 'Pending', color: 'primary' }
+}
 
 const statusFilter = ref('pending')
 const statusOptions = [
@@ -254,7 +226,7 @@ const pendingCount = computed(
   () => invites.value.filter((invite) => !invite.is_used && !invite.is_expired).length,
 )
 const filteredInvites = computed(() =>
-  sortedAndFilteredInvites.value.filter((invite) => {
+  invites.value.filter((invite) => {
     if (statusFilter.value === 'pending') return !invite.is_used && !invite.is_expired
     if (statusFilter.value === 'expired') return !invite.is_used && invite.is_expired
     return true
@@ -278,9 +250,22 @@ watch(showNewInviteModal, async (show, wasOpen) => {
 })
 defineExpose({ openCreateDialog })
 
+const loadInvites = async () => {
+  try {
+    loading.value = true
+    error.value = null
+    invites.value = await inviteService.getInvites()
+  } catch (err) {
+    error.value = 'Failed to load invites. Please try again later.'
+    console.error('Error loading invites:', err)
+  } finally {
+    loading.value = false
+  }
+}
+
 const handleCopyInviteLink = async (invite) => {
   try {
-    await copyInviteLink(invite)
+    await navigator.clipboard.writeText(`${window.location.origin}/register?token=${invite.token}`)
     emit('notification', { text: 'Invite link copied to clipboard!', color: 'success' })
   } catch {
     emit('notification', { text: 'Failed to copy invite link', color: 'error' })
@@ -293,7 +278,8 @@ const handleDeleteInvite = (invite) => {
     message: `Are you sure you want to delete this ${invite.role} invite?`,
     onConfirm: async () => {
       try {
-        await deleteInvite(invite)
+        await inviteService.deleteInvite(invite.id)
+        invites.value = invites.value.filter((i) => i.id !== invite.id)
         emit('notification', { text: 'Invite deleted successfully', color: 'success' })
       } catch (err) {
         emit('notification', { text: 'Failed to delete invite. Please try again.', color: 'error' })
@@ -304,8 +290,10 @@ const handleDeleteInvite = (invite) => {
 }
 
 const handleCleanupExpiredInvites = async () => {
+  cleanupLoading.value = true
   try {
-    const result = await cleanupExpiredInvites()
+    const result = await inviteService.cleanupExpiredInvites()
+    await loadInvites()
     emit('notification', {
       text: `Cleaned up ${result.deleted_count || 0} expired invites`,
       color: 'success',
@@ -313,15 +301,16 @@ const handleCleanupExpiredInvites = async () => {
   } catch (err) {
     emit('notification', { text: 'Failed to cleanup expired invites', color: 'error' })
     console.error('Error cleaning up expired invites:', err)
+  } finally {
+    cleanupLoading.value = false
   }
 }
 
-const handleInviteCreatedWithNotification = (invite) => {
-  handleInviteCreated(invite)
+const handleInviteCreated = (invite) => {
+  invites.value.unshift(invite)
+  showNewInviteModal.value = false
   emit('notification', { text: 'Invite generated successfully!', color: 'success' })
 }
 
-onMounted(async () => {
-  await loadInvites()
-})
+onMounted(loadInvites)
 </script>

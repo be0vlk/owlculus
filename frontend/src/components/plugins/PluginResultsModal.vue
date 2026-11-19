@@ -9,7 +9,6 @@
     scrollable
   >
     <v-card :height="mdAndDown ? '100dvh' : '90vh'" class="d-flex flex-column">
-      <!-- Header -->
       <v-card-title class="d-flex flex-wrap align-center ga-3 px-6 py-4">
         <v-icon :icon="getPluginIcon(pluginName)" size="24" />
         <div class="flex-grow-1 text-wrap">
@@ -21,7 +20,6 @@
           </div>
         </div>
 
-        <!-- Action buttons -->
         <div class="d-flex ga-2">
           <v-btn
             v-if="hasResults"
@@ -43,10 +41,8 @@
 
       <v-divider />
 
-      <!-- Content -->
       <v-card-text class="flex-grow-1 pa-0">
         <v-container class="py-6 px-6" style="max-width: none">
-          <!-- Plugin Parameters Display -->
           <v-card
             v-if="parameters && Object.keys(parameters).length"
             variant="outlined"
@@ -82,7 +78,6 @@
             <strong>Partial retained results</strong>
             <div>{{ error }}</div>
           </v-alert>
-          <!-- Results Display -->
           <div
             v-if="
               hasResults || executionStatus || retrievalError || retrievalLoading || exportError
@@ -91,7 +86,7 @@
           >
             <PluginResult
               :plugin-name="pluginName"
-              :result="results || []"
+              :result="results ?? []"
               class="modal-plugin-result"
               :execution-status="executionStatus"
               :execution-error="error"
@@ -103,7 +98,6 @@
             />
           </div>
 
-          <!-- Error Display -->
           <v-alert v-else-if="error" class="ma-0" prominent type="error" variant="tonal">
             <template #title>
               <div class="d-flex align-center">
@@ -114,7 +108,6 @@
             <div class="text-body-large">{{ error }}</div>
           </v-alert>
 
-          <!-- No Results State -->
           <v-card v-else variant="outlined" class="text-center pa-8">
             <v-icon class="mb-4" color="grey-darken-1" icon="mdi-file-search-outline" size="64" />
             <h3 class="text-title-large mb-2">No Results Available</h3>
@@ -130,10 +123,10 @@
 
 <script setup>
 import { computed } from 'vue'
-import { assembleCorrelationResults } from '@/utils/correlationResults'
 import { useDisplay } from 'vuetify'
 import PluginResult from '@/components/plugins/PluginResult.vue'
 import { formatDate } from '@/composables/dateUtils.js'
+import { formatParameterName } from '@/utils/huntDisplayUtils'
 
 const props = defineProps({
   executionStatus: { type: String, default: null },
@@ -141,17 +134,13 @@ const props = defineProps({
   retrievalComplete: { type: Boolean, default: true },
   retrievalError: { type: String, default: null },
   exportError: { type: String, default: null },
-  modelValue: {
-    type: Boolean,
-    default: false,
-  },
   pluginName: {
     type: String,
     required: true,
   },
   results: {
-    type: [Object, Array, String, Number, Boolean],
-    default: null,
+    type: Array,
+    default: () => [],
   },
   error: {
     type: String,
@@ -167,21 +156,13 @@ const props = defineProps({
   },
 })
 
-const hasResults = computed(() => {
-  if (props.results === null || props.results === undefined || props.results === '') return false
-  if (Array.isArray(props.results)) return props.results.length > 0
-  if (typeof props.results === 'object') return Object.keys(props.results).length > 0
-  return true
-})
+const hasResults = computed(() => props.results?.length > 0)
 
-const emit = defineEmits(['update:modelValue', 'export', 'retry'])
+const emit = defineEmits(['export', 'retry'])
 
 const { mdAndDown } = useDisplay()
 
-const isOpen = computed({
-  get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value),
-})
+const isOpen = defineModel({ type: Boolean, default: false })
 
 const closeModal = () => {
   isOpen.value = false
@@ -190,7 +171,6 @@ const closeModal = () => {
 const getPluginDisplayName = (name) => {
   if (!name) return 'Unknown Plugin'
 
-  // Remove 'Plugin' suffix and capitalize
   return name
     .replace(/Plugin$/, '')
     .replace(/([A-Z])/g, ' $1')
@@ -202,7 +182,7 @@ const getPluginIcon = (name) => {
   const iconMap = {
     holehe: 'mdi-account-search',
     dnslookup: 'mdi-dns',
-    correlation: 'mdi-chart-scatter-plot',
+    correlationscan: 'mdi-chart-scatter-plot',
     default: 'mdi-puzzle',
   }
 
@@ -215,13 +195,6 @@ const formatExecutionTime = (time) => {
   return formatDate(time.toISOString())
 }
 
-const formatParameterName = (key) => {
-  return key
-    .split('_')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ')
-}
-
 const formatParameterValue = (value) => {
   if (value === null || value === undefined) return 'Not set'
   if (typeof value === 'boolean') return value ? 'Yes' : 'No'
@@ -231,20 +204,8 @@ const formatParameterValue = (value) => {
 }
 
 const exportResults = () => {
-  emit('export', {
-    pluginName: props.pluginName,
-    results:
-      props.pluginName === 'CorrelationScan'
-        ? assembleCorrelationResults(props.results)
-        : props.results,
-    parameters: props.parameters,
-    executionTime: props.executionTime,
-    partial:
-      Boolean(props.error) ||
-      !props.retrievalComplete ||
-      Boolean(props.executionStatus && props.executionStatus !== 'completed'),
-    error: props.error || null,
-  })
+  // The listener fetches and fills in the current results, parameters and status.
+  emit('export', { pluginName: props.pluginName, executionTime: props.executionTime })
 }
 </script>
 
@@ -253,7 +214,6 @@ const exportResults = () => {
   width: 100%;
 }
 
-/* Enhanced styles for modal plugin results */
 :deep(.modal-plugin-result) {
   /* Remove any width restrictions from the modal context */
   width: 100%;

@@ -284,7 +284,7 @@ class TestClientsAPI:
 
         client_data = {
             "name": "Another Client",
-            "email": test_client_data.email,  # Use existing email
+            "email": test_client_data.email,
         }
 
         try:
@@ -461,7 +461,6 @@ class TestClientsAPI:
         self, session: Session, test_admin: User, client: TestClient
     ):
         """Test successful client deletion"""
-        # Create a client to delete
         new_client = Client(name="To Delete", email="delete@example.com")
         session.add(new_client)
         session.commit()
@@ -526,16 +525,14 @@ class TestClientsAPI:
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
         try:
-            # Test with very long name
             long_name = "A" * 1000
             client_data = {"name": long_name}
             response = client.post("/api/clients/", json=client_data)
             assert response.status_code == status.HTTP_201_CREATED
 
-            # Test with Unicode characters - this might fail due to email validation
+            # Unicode name may fail email validation, so 400 is accepted too.
             unicode_data = {"name": "测试客户"}
             response = client.post("/api/clients/", json=unicode_data)
-            # Accept either success or validation error
             assert response.status_code in [
                 status.HTTP_201_CREATED,
                 status.HTTP_400_BAD_REQUEST,
@@ -554,11 +551,9 @@ class TestClientsAPI:
         app.dependency_overrides[get_db] = override_get_db_factory(session)
 
         try:
-            # Test with pagination parameters
             response = client.get("/api/clients/?skip=0&limit=10")
             assert response.status_code == status.HTTP_200_OK
 
-            # Test with zero limit
             response = client.get("/api/clients/?skip=0&limit=0")
             assert response.status_code == status.HTTP_200_OK
 

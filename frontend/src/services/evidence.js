@@ -1,12 +1,6 @@
 import api from './api'
-import { createDownloadArtifact } from '@/utils/download'
 
 export const evidenceService = {
-  async getEvidenceForCase(caseId) {
-    const response = await api.get(`/api/evidence/case/${caseId}`)
-    return response.data
-  },
-
   async createEvidence({ description, category, caseId, files, folderPath, parentFolderId }) {
     const formData = new FormData()
     files.forEach((file) => {
@@ -28,19 +22,18 @@ export const evidenceService = {
       formData.append('parent_folder_id', parentFolderId)
     }
 
-    const response = await api.post(`/api/evidence/?${queryParams}`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    })
-    return response.data
+    return (
+      await api.post(`/api/evidence/?${queryParams}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+    ).data
   },
 
   async downloadEvidence(evidenceId) {
     const response = await api.get(`/api/evidence/${evidenceId}/download`, {
       responseType: 'blob',
     })
-    return createDownloadArtifact(response.data, response.headers)
+    return { blob: response.data, headers: response.headers }
   },
 
   async deleteEvidence(evidenceId) {
@@ -48,65 +41,50 @@ export const evidenceService = {
   },
 
   async getFolderTree(caseId) {
-    const response = await api.get(`/api/evidence/case/${caseId}/folder-tree`)
-    return response.data
+    return (await api.get(`/api/evidence/case/${caseId}/folder-tree`)).data
   },
 
   async createFolder({ caseId, title, description, parentFolderId }) {
-    const response = await api.post('/api/evidence/folders', {
-      case_id: caseId,
-      title,
-      description,
-      parent_folder_id: parentFolderId,
-    })
-    return response.data
+    return (
+      await api.post('/api/evidence/folders', {
+        case_id: caseId,
+        title,
+        description,
+        parent_folder_id: parentFolderId,
+      })
+    ).data
   },
 
-  async updateFolder(folderId, { title, description, parentFolderId }) {
-    const response = await api.put(`/api/evidence/folders/${folderId}`, {
-      title,
-      description,
-      parent_folder_id: parentFolderId,
-    })
-    return response.data
+  async updateFolder(folderId, { title }) {
+    return (await api.put(`/api/evidence/folders/${folderId}`, { title })).data
   },
 
   async deleteFolder(folderId) {
     await api.delete(`/api/evidence/folders/${folderId}`)
   },
 
-  async updateEvidence(evidenceId, { title, description, category, folderPath, parentFolderId }) {
-    const response = await api.put(`/api/evidence/${evidenceId}`, {
-      title,
-      description,
-      category,
-      folder_path: folderPath,
-      parent_folder_id: parentFolderId,
-    })
-    return response.data
+  async updateEvidence(evidenceId, { title, parentFolderId }) {
+    return (
+      await api.put(`/api/evidence/${evidenceId}`, {
+        title,
+        parent_folder_id: parentFolderId,
+      })
+    ).data
   },
 
   async extractMetadata(evidenceId) {
-    const response = await api.get(`/api/evidence/${evidenceId}/metadata`)
-    return response.data
+    return (await api.get(`/api/evidence/${evidenceId}/metadata`)).data
   },
 
   async getEvidenceContent(evidenceId) {
-    const response = await api.get(`/api/evidence/${evidenceId}/content`)
-    return response.data
+    return (await api.get(`/api/evidence/${evidenceId}/content`)).data
   },
 
   async applyFolderTemplate(caseId, templateName) {
-    const response = await api.post(`/api/evidence/case/${caseId}/apply-template`, null, {
-      params: { template_name: templateName },
-    })
-    return response.data
-  },
-
-  async moveEvidence(evidenceId, targetFolderId) {
-    const response = await api.put(`/api/evidence/${evidenceId}`, {
-      parent_folder_id: targetFolderId,
-    })
-    return response.data
+    return (
+      await api.post(`/api/evidence/case/${caseId}/apply-template`, null, {
+        params: { template_name: templateName },
+      })
+    ).data
   },
 }

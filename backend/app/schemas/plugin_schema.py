@@ -1,6 +1,4 @@
-"""
-Plugin schemas for request/response validation
-"""
+"""Plugin schemas."""
 
 from typing import Any, Dict, List
 
@@ -11,10 +9,10 @@ class PluginMetadata(BaseModel):
     """Schema for plugin metadata"""
 
     name: str  # Internal name (class name)
-    display_name: str  # User-friendly name
+    display_name: str
     description: str
-    enabled: bool = True  # Whether the plugin is enabled
-    category: str = "Other"  # Plugin category
-    parameters: Dict[str, Dict[str, Any]] = {}  # Plugin parameters
-    api_key_requirements: List[str] = []  # List of required API key providers
-    api_key_status: Dict[str, bool] = {}  # Status of required API keys
+    enabled: bool = True
+    category: str = "Other"
+    parameters: Dict[str, Dict[str, Any]] = {}
+    api_key_requirements: List[str] = []
+    api_key_status: Dict[str, bool] = {}

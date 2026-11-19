@@ -29,7 +29,7 @@ from app import main as main_module
 from app.core import file_storage
 from app.core.config import settings
 from app.core.dependencies import get_current_user
-from app.core.login_rate_limiting import get_login_rate_limiter
+from app.core.rate_limiting import get_login_rate_limiter
 from app.core.security import (
     create_access_token,
     get_password_hash,
@@ -72,15 +72,10 @@ def engine_fixture(tmp_path):
 
 @pytest.fixture(name="session")
 def session_fixture(engine):
-    connection = engine.connect()
-    transaction = connection.begin()
-    session = Session(bind=connection)
-
-    yield session
-
-    session.close()
-    transaction.rollback()
-    connection.close()
+    # Each test owns a fresh database file, so commits are real; an outer
+    # rollback-only transaction would let any request rollback erase fixtures.
+    with Session(engine) as session:
+        yield session
 
 
 @pytest.fixture(name="client")
@@ -257,9 +252,6 @@ def override_auth_fixture(session):
     app.dependency_overrides.clear()
 
 
-# Additional fixtures for comprehensive testing
-
-
 @pytest.fixture(name="test_inactive_user")
 def test_inactive_user_fixture(session):
     """Create an inactive user for testing authentication edge cases"""
@@ -311,7 +303,6 @@ def test_case_with_users_fixture(
     session, test_case, test_admin, test_user, test_analyst
 ):
     """Create a test case with multiple users assigned"""
-    # Add users to case
     case_user_admin = models.CaseUserLink(case_id=test_case.id, user_id=test_admin.id)
     case_user_investigator = models.CaseUserLink(
         case_id=test_case.id, user_id=test_user.id
@@ -349,7 +340,6 @@ def test_entities_fixture(session, test_case, test_admin):
     """Create various test entities of different types"""
     entities = []
 
-    # Person entity
     person_entity = models.Entity(
         case_id=test_case.id,
         entity_type="person",
@@ -370,7 +360,6 @@ def test_entities_fixture(session, test_case, test_admin):
     )
     entities.append(person_entity)
 
-    # Company entity
     company_entity = models.Entity(
         case_id=test_case.id,
         entity_type="company",
@@ -391,7 +380,6 @@ def test_entities_fixture(session, test_case, test_admin):
     )
     entities.append(company_entity)
 
-    # Domain entity
     domain_entity = models.Entity(
         case_id=test_case.id,
         entity_type="domain",
@@ -403,7 +391,6 @@ def test_entities_fixture(session, test_case, test_admin):
     )
     entities.append(domain_entity)
 
-    # IP Address entity
     ip_entity = models.Entity(
         case_id=test_case.id,
         entity_type="ip_address",
@@ -428,7 +415,6 @@ def test_evidence_fixture(session, test_case, test_admin):
     import os
     import tempfile
 
-    # Create temporary file for testing
     with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as tmp_file:
         tmp_file.write(b"Test evidence content")
         tmp_file_path = tmp_file.name
@@ -447,19 +433,16 @@ def test_evidence_fixture(session, test_case, test_admin):
     session.commit()
     session.refresh(evidence)
 
-    # Clean up function
     def cleanup():
         if os.path.exists(tmp_file_path):
             os.remove(tmp_file_path)
 
-    # Return evidence and cleanup function
     return evidence, cleanup
 
 
 @pytest.fixture(name="expired_token")
 def expired_token_fixture():
     """Create an expired token for testing"""
-    # Create token that expired 1 hour ago
     access_token = create_access_token(
         data={"sub": "expireduser"},
         expires_delta=timedelta(hours=-1),
@@ -494,7 +477,7 @@ def test_complete_scenario_fixture(
             "analyst": test_analyst,
         },
         "entities": test_entities,
-        "evidence": test_evidence[0],  # Just the evidence object, not cleanup function
+        "evidence": test_evidence[0],
     }
 
 

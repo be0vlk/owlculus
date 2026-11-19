@@ -44,12 +44,10 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
 import CaseDetail from './CaseDetail.vue'
 import { useDialogFocusRestore } from '../composables/useDialogFocusRestore'
 
-const props = defineProps({
-  modelValue: Boolean,
+defineProps({
   caseData: { type: Object, required: true },
   client: { type: Object, default: null },
   refreshError: { type: String, default: '' },
@@ -57,11 +55,8 @@ const props = defineProps({
   canManageUsers: Boolean,
   nestedDialogOpen: Boolean,
 })
-const emit = defineEmits(['update:modelValue', 'edit', 'manage-users', 'retry'])
-const open = computed({
-  get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value),
-})
+defineEmits(['edit', 'manage-users', 'retry'])
+const open = defineModel({ type: Boolean })
 useDialogFocusRestore(open)
 </script>
 

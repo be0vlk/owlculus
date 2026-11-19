@@ -11,8 +11,6 @@
           v-model="formData.title"
           :rules="[(v) => !!v || 'Title is required']"
           label="Title"
-          variant="outlined"
-          density="comfortable"
           class="mb-4"
         />
 
@@ -21,8 +19,6 @@
           :rules="[(v) => !!v || 'Description is required']"
           label="Description"
           rows="3"
-          variant="outlined"
-          density="comfortable"
           class="mb-4"
         />
 
@@ -34,17 +30,13 @@
           item-title="display_name"
           item-value="id"
           label="Template (Optional)"
-          variant="outlined"
-          density="comfortable"
           class="mb-4"
         />
 
         <v-select
           v-model="formData.priority"
-          :items="priorityOptions"
+          :items="TASK_PRIORITY_OPTIONS"
           label="Priority"
-          variant="outlined"
-          density="comfortable"
           class="mb-4"
         />
 
@@ -55,8 +47,6 @@
           item-title="username"
           item-value="id"
           label="Assign To"
-          variant="outlined"
-          density="comfortable"
           class="mb-4"
         />
 
@@ -65,12 +55,9 @@
           clearable
           label="Due Date"
           type="date"
-          variant="outlined"
-          density="comfortable"
           class="mb-4"
         />
 
-        <!-- Custom Fields -->
         <div v-if="customFields.length > 0" class="mt-4">
           <v-divider class="mb-4" />
           <div class="text-title-small text-medium-emphasis mb-3">Additional Fields</div>
@@ -88,14 +75,7 @@
     <v-card-actions class="pa-4">
       <v-spacer />
       <v-btn :disabled="loading" variant="text" @click="$emit('cancel')">Cancel</v-btn>
-      <v-btn
-        :disabled="!valid"
-        :loading="loading"
-        color="primary"
-        variant="flat"
-        type="submit"
-        :form="formId"
-      >
+      <v-btn :disabled="!valid" :loading="loading" color="primary" type="submit" :form="formId">
         {{ isEdit ? 'Update' : 'Create' }}
       </v-btn>
     </v-card-actions>
@@ -106,7 +86,7 @@
 import { useId, computed, onMounted, ref, watch } from 'vue'
 import { useTaskStore } from '@/stores/taskStore'
 import { useActiveCaseStore } from '@/stores/activeCase'
-import { TASK_PRIORITY, TASK_PRIORITY_LABELS } from '@/constants/tasks'
+import { TASK_PRIORITY, TASK_PRIORITY_OPTIONS } from '@/constants/tasks'
 import CustomFieldInput from './CustomFieldInput.vue'
 
 const props = defineProps({
@@ -150,10 +130,6 @@ const formData = ref({
 const templates = computed(() => taskStore.templates)
 const customFields = ref([])
 
-const priorityOptions = computed(() =>
-  Object.entries(TASK_PRIORITY_LABELS).map(([value, title]) => ({ title, value })),
-)
-
 const filteredUsers = computed(() => {
   if (!formData.value.case_id) return []
 
@@ -161,22 +137,17 @@ const filteredUsers = computed(() => {
   return selectedCase?.users || []
 })
 
-// Watch for template selection changes
 watch(
   () => formData.value.template_id,
   (newTemplateId) => {
     if (newTemplateId && !isEdit.value) {
-      // Find the selected template
       const selectedTemplate = templates.value.find((t) => t.id === newTemplateId)
       if (selectedTemplate) {
-        // Auto-fill title and description from template
         formData.value.title = selectedTemplate.display_name
         formData.value.description = selectedTemplate.description
 
-        // Set custom fields from template
         if (selectedTemplate.definition_json?.fields) {
           customFields.value = selectedTemplate.definition_json.fields
-          // Initialize custom field values
           const customFieldValues = {}
           selectedTemplate.definition_json.fields.forEach((field) => {
             customFieldValues[field.name] =
@@ -188,7 +159,6 @@ watch(
         }
       }
     } else if (!newTemplateId) {
-      // Clear custom fields when no template is selected
       customFields.value = []
       formData.value.custom_fields = {}
     }
@@ -201,7 +171,6 @@ async function save() {
   try {
     const result = await form.value.validate()
     if (!result.valid || props.saving || activeCase.activeCaseId !== formData.value.case_id) return
-    // Format date if present
     const data = { ...formData.value }
     if (data.due_date) {
       data.due_date = new Date(data.due_date).toISOString()
@@ -214,12 +183,10 @@ async function save() {
 }
 
 onMounted(async () => {
-  // Load required data
   try {
     await taskStore.loadTemplates()
     // Templates are already stored in the taskStore
 
-    // If editing a task with a template, load custom fields
     if (isEdit.value && props.task?.template_id) {
       const template = templates.value.find((t) => t.id === props.task.template_id)
       if (template?.definition_json?.fields) {

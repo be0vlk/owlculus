@@ -1,51 +1,43 @@
 import api from './api'
-import { createDownloadArtifact } from '@/utils/download'
+import { isStrixy } from '../utils/userDisplay'
 
 export const caseService = {
   async getCases(params = {}) {
-    const response = await api.get('/api/cases/', { params })
-    return response.data
+    return (await api.get('/api/cases/', { params })).data
   },
 
   async getCase(id) {
-    const response = await api.get(`/api/cases/${id}`)
-    return response.data
+    return (await api.get(`/api/cases/${id}`)).data
   },
 
   async exportCase(id) {
     const response = await api.get(`/api/cases/${id}/export`, {
       responseType: 'blob',
     })
-    return createDownloadArtifact(response.data, response.headers)
+    return { blob: response.data, headers: response.headers }
   },
 
   async createCase(caseData) {
-    const response = await api.post('/api/cases/', caseData)
-    return response.data
+    return (await api.post('/api/cases/', caseData)).data
   },
 
   async updateCase(id, caseData) {
-    const response = await api.put(`/api/cases/${id}`, caseData)
-    return response.data
+    return (await api.put(`/api/cases/${id}`, caseData)).data
   },
 
   async addUserToCase(caseId, userId, isLead = false) {
-    const response = await api.post(`/api/cases/${caseId}/users/${userId}`, { is_lead: isLead })
-    return response.data
+    return (await api.post(`/api/cases/${caseId}/users/${userId}`, { is_lead: isLead })).data
   },
 
   async removeUserFromCase(caseId, userId) {
-    const response = await api.delete(`/api/cases/${caseId}/users/${userId}`)
-    return response.data
+    return (await api.delete(`/api/cases/${caseId}/users/${userId}`)).data
   },
 
   async updateCaseUserLeadStatus(caseId, userId, isLead) {
-    const response = await api.patch(`/api/cases/${caseId}/users/${userId}`, { is_lead: isLead })
-    return response.data
+    return (await api.patch(`/api/cases/${caseId}/users/${userId}`, { is_lead: isLead })).data
   },
 
   async getCaseUsers(caseId) {
-    const response = await api.get(`/api/cases/${caseId}/users`)
-    return response.data
+    return (await api.get(`/api/cases/${caseId}/users`)).data.filter((user) => !isStrixy(user))
   },
 }

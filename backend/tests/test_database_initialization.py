@@ -1,14 +1,15 @@
 """Behavioral tests for deployment database initialization."""
 
 import pytest
-from sqlmodel import Session, create_engine, select
+from sqlmodel import Session, SQLModel, create_engine, select
 
+from app.core.setup import is_setup_required
 from app.database.init_db import initialize_database
-from app.database.models import Client, User
+from app.database.models import CaseUserLink, Client, User
 from tests.deployment import SUPPORTED_TOPOLOGIES, load_compose_configuration
 
 
-def test_fresh_initialization_creates_personal_client_without_a_user(tmp_path):
+def test_fresh_initialization_provisions_strixy_without_human_credentials(tmp_path):
     """A fresh deployment has its schema and case default, but no credentials."""
     database_path = tmp_path / "owlculus.db"
     database_engine = create_engine(f"sqlite:///{database_path}")
@@ -20,7 +21,14 @@ def test_fresh_initialization_creates_personal_client_without_a_user(tmp_path):
         users = list(session.exec(select(User)))
 
     assert [(client.name, client.email) for client in clients] == [("Personal", None)]
-    assert users == []
+    assert len(users) == 1
+    assert users[0].system_identity == "strixy"
+    assert users[0].role == "Analyst"
+    assert users[0].password_hash == "!"
+    assert users[0].is_superadmin is False
+    with Session(database_engine) as session:
+        assert is_setup_required(session)
+        assert list(session.exec(select(CaseUserLink))) == []
 
 
 def test_repeated_initialization_does_not_duplicate_seed_data(tmp_path):
@@ -35,7 +43,14 @@ def test_repeated_initialization_does_not_duplicate_seed_data(tmp_path):
         users = list(session.exec(select(User)))
 
     assert [(client.name, client.email) for client in clients] == [("Personal", None)]
-    assert users == []
+    assert len(users) == 1
+    assert users[0].system_identity == "strixy"
+    assert users[0].role == "Analyst"
+    assert users[0].password_hash == "!"
+    assert users[0].is_superadmin is False
+    with Session(database_engine) as session:
+        assert is_setup_required(session)
+        assert list(session.exec(select(CaseUserLink))) == []
 
 
 @pytest.mark.parametrize(
@@ -153,3 +168,34 @@ def test_admin_bootstrap_variables_are_absent_from_every_compose_file(topology):
     }
 
     assert not {"ADMIN_USERNAME", "ADMIN_PASSWORD", "ADMIN_EMAIL"} & environment_names
+
+
+def test_initialization_preserves_colliding_human_and_stable_system_identity(tmp_path):
+    database_engine = create_engine(f"sqlite:///{tmp_path / 'existing.db'}")
+    SQLModel.metadata.create_all(database_engine)
+    with Session(database_engine) as session:
+        human = User(
+            username="strixy",
+            email="strixy@system.invalid",
+            password_hash="existing-hash",
+            role="Admin",
+            session_version=7,
+        )
+        session.add(human)
+        session.commit()
+        session.refresh(human)
+        original = human.model_dump()
+    initialize_database(database_engine)
+    with Session(database_engine) as session:
+        users = list(session.exec(select(User)))
+        system = next(user for user in users if user.system_identity == "strixy")
+        system_id = system.id
+        assert session.get(User, original["id"]).model_dump() == original
+        assert system.username != "strixy"
+        assert system.email != "strixy@system.invalid"
+        assert not is_setup_required(session)
+    initialize_database(database_engine)
+    with Session(database_engine) as session:
+        assert session.get(User, system_id).system_identity == "strixy"
+        assert len(list(session.exec(select(User)))) == 2
+        assert session.get(User, original["id"]).model_dump() == original

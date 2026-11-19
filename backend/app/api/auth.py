@@ -1,9 +1,4 @@
-"""
-Authentication API for Owlculus OSINT Platform.
-
-This module provides JWT-based authentication endpoints for the Owlculus platform,
-enabling secure access to digital investigation tools and case management features.
-"""
+"""Login, setup status and WebSocket token routes."""
 
 from typing import Annotated, Literal
 
@@ -14,7 +9,7 @@ from sqlmodel import Session
 
 from app.core.database_boundary import DatabaseRoute
 from app.core.dependencies import get_client_ip, get_current_user
-from app.core.login_rate_limiting import RedisLoginRateLimiter, get_login_rate_limiter
+from app.core.rate_limiting import RedisLoginRateLimiter, get_login_rate_limiter
 from app.core.setup import is_setup_required
 from app.database import models
 from app.database.connection import get_db
@@ -38,8 +33,7 @@ async def login_for_access_token(
     limiter: Annotated[RedisLoginRateLimiter, Depends(get_login_rate_limiter)],
 ):
     await limiter.check(get_client_ip(request), form_data.username)
-    auth_service = AuthService(db)
-    return await auth_service.authenticate_user(
+    return await AuthService(db).authenticate_user(
         username=form_data.username, password=form_data.password
     )
 
@@ -61,7 +55,6 @@ async def create_websocket_token(
     This token is valid for 30 seconds and can only be used once
     to establish a WebSocket connection for the specified execution.
     """
-    auth_service = AuthService(db)
-    return await auth_service.create_websocket_token(
+    return await AuthService(db).create_websocket_token(
         request.execution_id, current_user, request.kind
     )

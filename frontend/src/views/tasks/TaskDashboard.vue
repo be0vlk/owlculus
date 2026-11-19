@@ -33,47 +33,20 @@
       </div>
     </template>
 
-    <!-- Stats Cards -->
     <v-row class="mb-4">
-      <v-col cols="12" md="3" sm="6">
+      <v-col v-for="card in statCards" :key="card.label" cols="12" md="3" sm="6">
         <v-card variant="outlined">
           <v-card-text class="text-center pa-4">
-            <div class="text-headline-large font-weight-bold">{{ stats.total }}</div>
-            <div class="text-body-medium text-medium-emphasis">Total Tasks</div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-      <v-col cols="12" md="3" sm="6">
-        <v-card variant="outlined">
-          <v-card-text class="text-center pa-4">
-            <div class="text-headline-large font-weight-bold text-primary">{{ stats.myTasks }}</div>
-            <div class="text-body-medium text-medium-emphasis">My Tasks</div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-      <v-col cols="12" md="3" sm="6">
-        <v-card variant="outlined">
-          <v-card-text class="text-center pa-4">
-            <div class="text-headline-large font-weight-bold text-warning">{{ stats.overdue }}</div>
-            <div class="text-body-medium text-medium-emphasis">Overdue</div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-      <v-col cols="12" md="3" sm="6">
-        <v-card variant="outlined">
-          <v-card-text class="text-center pa-4">
-            <div class="text-headline-large font-weight-bold text-success">
-              {{ stats.completed }}
+            <div class="text-headline-large font-weight-bold" :class="card.color">
+              {{ card.value }}
             </div>
-            <div class="text-body-medium text-medium-emphasis">Completed</div>
+            <div class="text-body-medium text-medium-emphasis">{{ card.label }}</div>
           </v-card-text>
         </v-card>
       </v-col>
     </v-row>
 
-    <!-- Tasks Table Card -->
     <v-card variant="outlined">
-      <!-- Header -->
       <v-card-title class="operations-heading d-flex flex-wrap ga-3 align-center pa-4 bg-surface">
         <v-icon class="me-3" color="primary" icon="mdi-format-list-checks" size="large" />
         <div class="flex-grow-1">
@@ -86,10 +59,8 @@
 
       <v-divider />
 
-      <!-- Filters and Search Toolbar -->
       <v-card-text class="pa-4">
         <v-row class="mb-0 align-center">
-          <!-- Quick Filter Chips -->
           <v-col cols="12" md="8">
             <div class="d-flex align-center ga-2 flex-wrap">
               <span class="text-body-medium font-weight-medium me-2">Filter:</span>
@@ -105,18 +76,15 @@
             </div>
           </v-col>
 
-          <!-- Search Field -->
           <v-col cols="12" md="4">
             <div class="d-flex align-center ga-2 justify-end">
               <v-text-field
                 v-model="searchQuery"
                 clearable
-                density="comfortable"
                 hide-details
                 label="Search tasks..."
                 prepend-inner-icon="mdi-magnify"
                 class="operations-search"
-                variant="outlined"
               />
             </div>
           </v-col>
@@ -126,7 +94,6 @@
       <v-divider />
       <TaskTable
         v-model="selected"
-        :show-case="false"
         :loading="loading"
         :show-select="true"
         :tasks="filteredAndSearchedTasks"
@@ -147,7 +114,6 @@
       </TaskTable>
     </v-card>
 
-    <!-- Bulk Actions -->
     <v-row v-if="selected.length > 0" class="mt-4">
       <v-col>
         <span class="mr-3" role="status">{{ selected.length }} Tasks selected</span>
@@ -188,7 +154,7 @@
             </v-alert>
             <v-select
               v-model="value"
-              :items="kind === 'assign' ? assigneeOptions : statusOptions"
+              :items="kind === 'assign' ? assigneeOptions : TASK_STATUS_OPTIONS"
               :label="kind === 'assign' ? 'Assign To' : 'New Status'"
               :disabled="pending || (kind === 'assign' && (usersLoading || !!usersError))"
               :loading="kind === 'assign' && usersLoading"
@@ -211,7 +177,6 @@
       <template #actions><v-btn @click="snackbar.show = false">Close</v-btn></template>
     </v-snackbar>
 
-    <!-- Create Task Dialog -->
     <v-dialog aria-label="Create Task" v-model="showCreateDialog" max-width="600">
       <TaskForm :saving="loading" @cancel="showCreateDialog = false" @save="handleCreateTask" />
     </v-dialog>
@@ -225,6 +190,7 @@ import { useActiveCaseStore } from '@/stores/activeCase'
 import { useTaskStore } from '@/stores/taskStore'
 import { useAuthStore } from '@/stores/auth'
 import { useTaskTable } from '@/composables/useTaskTable'
+import { TASK_STATUS_OPTIONS } from '@/constants/tasks'
 import TaskForm from '@/components/tasks/TaskForm.vue'
 import TaskTable from '@/components/tasks/TaskTable.vue'
 import BaseDashboard from '@/components/BaseDashboard.vue'
@@ -233,7 +199,6 @@ const taskStore = useTaskStore()
 const authStore = useAuthStore()
 const { canCreateTasks } = useTaskTable()
 
-// Data
 const showCreateDialog = ref(false)
 const context = useActiveCaseStore()
 const refreshButton = ref(null)
@@ -242,20 +207,22 @@ let bulkCaseId
 const searchQuery = ref('')
 const activeQuickFilter = ref('me')
 
-// Computed
 const loading = computed(() => taskStore.loading)
 const error = computed(() => taskStore.error)
-const stats = computed(() => taskStore.stats)
+const statCards = computed(() => [
+  { label: 'Total Tasks', value: taskStore.stats.total },
+  { label: 'My Tasks', value: taskStore.stats.myTasks, color: 'text-primary' },
+  { label: 'Overdue', value: taskStore.stats.overdue, color: 'text-warning' },
+  { label: 'Completed', value: taskStore.stats.completed, color: 'text-success' },
+])
 
 const filteredAndSearchedTasks = computed(() => {
-  let result = taskStore.filteredTasks.filter((task) => task.case_id === context.activeCaseId)
+  let result = taskStore.tasks.filter((task) => task.case_id === context.activeCaseId)
 
-  // Apply quick filter
   if (activeQuickFilter.value === 'me' && authStore.user) {
     result = result.filter((task) => task.assigned_to?.id === authStore.user.id)
   }
 
-  // Apply search
   if (searchQuery.value) {
     const query = searchQuery.value.toLowerCase()
     result = result.filter(
@@ -282,7 +249,6 @@ const {
   canUpdate,
   canSubmit,
   assigneeOptions,
-  statusOptions,
   snackbar,
   open,
   close,
@@ -304,7 +270,6 @@ function restoreBulkFocus() {
   target?.focus()
 }
 
-// Methods
 async function loadTasks() {
   await taskStore.loadTasks()
 }
@@ -321,7 +286,6 @@ async function handleCreateTask(taskData) {
   }
 }
 
-// Empty state helper functions
 const getEmptyStateTitle = () => {
   if (searchQuery.value) {
     return 'No tasks found'
@@ -346,7 +310,6 @@ const shouldShowCreateButton = () => {
   return !searchQuery.value && activeQuickFilter.value === 'all' && canCreateTasks.value
 }
 
-// Lifecycle
 onMounted(async () => {
   try {
     await loadTasks()

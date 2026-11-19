@@ -66,7 +66,6 @@ class DomainHunt(BaseHunt):
                 parameter_mapping=subdomain_param_mapping,
                 optional=True,
             ),
-            # Investigate the main domain's IP address
             HuntStepDefinition(
                 step_id="ip_investigation_from_dns",
                 plugin_name="ShodanPlugin",

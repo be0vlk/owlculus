@@ -1,6 +1,5 @@
 <template>
   <v-card class="hunt-progress-card" elevation="1" rounded="lg">
-    <!-- Header -->
     <v-card-title class="d-flex align-center pa-3 pa-sm-4 text-no-wrap">
       <v-avatar :color="statusColor" size="40" class="me-3">
         <v-icon :icon="statusIcon" color="white" />
@@ -19,10 +18,8 @@
 
     <v-divider />
 
-    <!-- Progress Section -->
     <v-card-text class="pa-3 pa-sm-4">
       <ExecutionWaiting :execution="execution" />
-      <!-- Timing Information -->
       <div class="timing-info mb-4">
         <div class="d-flex align-center flex-wrap">
           <div class="d-flex align-center me-4 mb-1">
@@ -33,14 +30,16 @@
             <v-icon icon="mdi-clock-end" size="small" class="me-1" />
             <span class="text-body-small">Completed: {{ formatDate(execution.completed_at) }}</span>
           </div>
-          <div v-else-if="execution.status === 'running'" class="d-flex align-center mb-1">
+          <div
+            v-else-if="execution.status === 'running' && execution.started_at"
+            class="d-flex align-center mb-1"
+          >
             <v-icon icon="mdi-clock" size="small" class="me-1" />
-            <span class="text-body-small">{{ elapsedTime }}</span>
+            <span class="text-body-small">{{ calculateDuration(execution.started_at, now) }}</span>
           </div>
         </div>
       </div>
 
-      <!-- Step Progress -->
       <div v-if="execution.steps && execution.steps.length > 0" class="mb-4">
         <div class="text-body-medium font-weight-medium mb-3">Hunt Steps</div>
         <div class="step-list">
@@ -49,12 +48,10 @@
             :key="step.id"
             class="step-item d-flex align-center mb-2"
           >
-            <!-- Step Status Icon -->
-            <v-avatar :color="getStepStatusColor(step.status)" size="24" class="me-3">
-              <v-icon :icon="getStepStatusIcon(step.status)" color="white" size="small" />
+            <v-avatar :color="getStatusColor(step.status)" size="24" class="me-3">
+              <v-icon :icon="getStatusIcon(step.status)" color="white" size="small" />
             </v-avatar>
 
-            <!-- Step Info -->
             <div class="flex-grow-1 text-truncate">
               <div class="text-body-medium text-truncate">
                 {{ step.step_id || `Step ${index + 1}` }}
@@ -64,15 +61,13 @@
               </div>
             </div>
 
-            <!-- Step Status -->
-            <v-chip :color="getStepStatusColor(step.status)" variant="flat" size="x-small">
+            <v-chip :color="getStatusColor(step.status)" variant="flat" size="x-small">
               {{ step.status }}
             </v-chip>
           </div>
         </div>
       </div>
 
-      <!-- Error Display -->
       <v-alert
         v-if="execution.status === 'failed' || hasFailedSteps"
         type="error"
@@ -87,7 +82,6 @@
         </div>
       </v-alert>
 
-      <!-- Results Summary -->
       <div v-if="execution.status === 'completed' || execution.status === 'partial'" class="mb-4">
         <div class="text-body-medium font-weight-medium mb-2">Results Summary</div>
         <div class="d-flex align-center flex-wrap">
@@ -103,7 +97,6 @@
       </div>
     </v-card-text>
 
-    <!-- Actions -->
     <v-card-actions class="pa-3 pa-sm-4 pt-0 flex-wrap">
       <v-btn
         v-if="['pending', 'running'].includes(execution.status)"
@@ -153,8 +146,10 @@
 
 <script setup>
 import ExecutionWaiting from '@/components/ExecutionWaiting.vue'
-import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { computed } from 'vue'
+import { useNow } from '@/composables/useNow'
 import {
+  calculateDuration,
   formatHuntExecutionTitle,
   getStatusText,
   getStatusColor,
@@ -175,11 +170,8 @@ const props = defineProps({
 
 defineEmits(['cancel', 'view-details'])
 
-// Local state
-const elapsedTime = ref('')
-let elapsedInterval = null
+const now = useNow(() => props.execution.status === 'running')
 
-// Computed properties
 const statusColor = computed(() => getStatusColor(props.execution.status))
 const statusIcon = computed(() => getStatusIcon(props.execution.status))
 
@@ -206,115 +198,6 @@ const huntDisplayTitle = computed(() => {
 
   return formatHuntExecutionTitle(baseName, initialParams, huntCategory)
 })
-
-// Methods
-const getStepStatusColor = (status) => {
-  switch (status) {
-    case 'pending':
-      return 'grey'
-    case 'running':
-      return 'primary'
-    case 'completed':
-      return 'success'
-    case 'failed':
-      return 'error'
-    case 'skipped':
-      return 'warning'
-    case 'cancelled':
-      return 'grey'
-    default:
-      return 'grey'
-  }
-}
-
-const getStepStatusIcon = (status) => {
-  switch (status) {
-    case 'pending':
-      return 'mdi-clock-outline'
-    case 'running':
-      return 'mdi-play'
-    case 'completed':
-      return 'mdi-check'
-    case 'failed':
-      return 'mdi-close'
-    case 'skipped':
-      return 'mdi-skip-next'
-    case 'cancelling':
-      return 'mdi-timer-sand'
-    case 'cancelled':
-      return 'mdi-stop'
-    default:
-      return 'mdi-help'
-  }
-}
-
-// formatDate is now imported from dateUtils
-
-const updateElapsedTime = () => {
-  if (props.execution.status !== 'running' || !props.execution.started_at) {
-    elapsedTime.value = ''
-    return
-  }
-
-  // Ensure the timestamp is parsed as UTC by appending 'Z' if it doesn't have timezone info
-  let startTimeStr = props.execution.started_at
-  if (
-    !startTimeStr.includes('Z') &&
-    !startTimeStr.includes('+') &&
-    !startTimeStr.includes('-', 10)
-  ) {
-    startTimeStr += 'Z'
-  }
-
-  const startTime = new Date(startTimeStr)
-  const now = new Date()
-  const diff = now - startTime
-
-  // Ensure we don't show negative times
-  if (diff < 0) {
-    elapsedTime.value = '0s'
-    return
-  }
-
-  const minutes = Math.floor(diff / 60000)
-  const seconds = Math.floor((diff % 60000) / 1000)
-
-  if (minutes > 0) {
-    elapsedTime.value = `${minutes}m ${seconds}s`
-  } else {
-    elapsedTime.value = `${seconds}s`
-  }
-}
-
-// Lifecycle
-onMounted(() => {
-  updateElapsedTime()
-  if (props.execution.status === 'running') {
-    elapsedInterval = setInterval(updateElapsedTime, 1000)
-  }
-})
-
-onUnmounted(() => {
-  if (elapsedInterval) {
-    clearInterval(elapsedInterval)
-  }
-})
-
-// Watch for status changes
-import { watch } from 'vue'
-watch(
-  () => props.execution.status,
-  (newStatus) => {
-    if (newStatus === 'running' && !elapsedInterval) {
-      updateElapsedTime()
-      elapsedInterval = setInterval(updateElapsedTime, 1000)
-    } else if (newStatus !== 'running' && elapsedInterval) {
-      clearInterval(elapsedInterval)
-      elapsedInterval = null
-      elapsedTime.value = ''
-    }
-  },
-)
 </script>
 
 <style scoped>
@@ -340,14 +223,6 @@ watch(
   background-color: rgb(var(--v-theme-surface-variant), 0.1);
 }
 
-/* Ensure proper text truncation */
-.text-truncate {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Responsive adjustments */
 @media (width <= 600px) {
   .hunt-progress-card {
     min-height: 280px;

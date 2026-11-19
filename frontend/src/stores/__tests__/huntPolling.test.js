@@ -9,6 +9,7 @@ vi.mock('@/services/hunt', () => ({
     getExecution: vi.fn(),
     executeHunt: vi.fn(),
     createExecutionStream: vi.fn(),
+    closeExecutionStream: vi.fn(),
     cancelExecution: vi.fn(),
   },
 }))
@@ -18,7 +19,7 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 afterEach(() => {
-  useHuntStore().resetCaseExecutions()
+  useHuntStore().invalidateWorkflow(true)
   vi.useRealTimers()
 })
 it('observes queued, running and partial results without resubmitting and stops at terminal state', async () => {
@@ -27,12 +28,10 @@ it('observes queued, running and partial results without resubmitting and stops 
     .mockResolvedValueOnce({ id: 1, status: 'running' })
     .mockResolvedValueOnce({ id: 1, status: 'partial', steps: [{ output: { result_count: 1 } }] })
   const store = useHuntStore()
-  store.subscribeToExecution(1)
+  expect((await store.openWorkflow({ caseId: 1, executionId: 1 }).refresh()).status).toBe('pending')
   await flushPromises()
-  expect(store.activeExecutions[1].status).toBe('pending')
-  await vi.advanceTimersByTimeAsync(1000)
   expect(store.activeExecutions[1].status).toBe('running')
-  await vi.advanceTimersByTimeAsync(1500)
+  await vi.advanceTimersByTimeAsync(1000)
   expect(store.activeExecutions[1].steps[0].output.result_count).toBe(1)
   await vi.advanceTimersByTimeAsync(30000)
   expect(huntService.getExecution).toHaveBeenCalledTimes(3)
@@ -40,23 +39,25 @@ it('observes queued, running and partial results without resubmitting and stops 
 })
 it('discards an in-flight observation after navigation', async () => {
   let finish
-  huntService.getExecution.mockReturnValue(
+  huntService.getExecution.mockResolvedValueOnce({ id: 1, status: 'running' }).mockReturnValue(
     new Promise((resolve) => {
       finish = resolve
     }),
   )
   const store = useHuntStore()
-  store.subscribeToExecution(1)
-  store.unsubscribeFromExecution(1)
+  const flow = store.openWorkflow({ caseId: 1, executionId: 1 })
+  await flow.refresh()
+  flow.release()
   finish({ id: 1, status: 'running' })
   await flushPromises()
   await vi.advanceTimersByTimeAsync(30000)
   expect(store.activeExecutions).toEqual({})
-  expect(huntService.getExecution).toHaveBeenCalledTimes(1)
+  expect(huntService.getExecution).toHaveBeenCalledTimes(2)
 })
 
 it('retains terminal state when an older cancellation response arrives late', async () => {
   huntService.getExecution
+    .mockResolvedValueOnce({ id: 1, status: 'running', revision: 2 })
     .mockResolvedValueOnce({ id: 1, status: 'running', revision: 2 })
     .mockResolvedValue({ id: 1, status: 'cancelled', revision: 4, steps: [] })
   let resolveCancel
@@ -66,7 +67,7 @@ it('retains terminal state when an older cancellation response arrives late', as
     }),
   )
   const store = useHuntStore()
-  store.subscribeToExecution(1)
+  await store.openWorkflow({ caseId: 1, executionId: 1 }).refresh()
   await flushPromises()
   const pending = store.cancelExecution(1)
   await vi.advanceTimersByTimeAsync(1000)
@@ -74,7 +75,7 @@ it('retains terminal state when an older cancellation response arrives late', as
   await pending
   expect(store.activeExecutions[1].status).toBe('cancelled')
   await vi.advanceTimersByTimeAsync(30000)
-  expect(huntService.getExecution).toHaveBeenCalledTimes(2)
+  expect(huntService.getExecution).toHaveBeenCalledTimes(3)
 })
 
 it('refreshes hunt step output on a live hint and releases the subscription on navigation', async () => {
@@ -87,7 +88,8 @@ it('refreshes hunt step output on a live hint and releases the subscription on n
   huntService.closeExecutionStream = vi.fn()
   huntService.getExecution.mockResolvedValue({ id: 1, status: 'running', revision: 2, steps: [] })
   const store = useHuntStore()
-  store.subscribeToExecution(1)
+  const flow = store.openWorkflow({ caseId: 1, executionId: 1 })
+  await flow.refresh()
   await flushPromises()
   huntService.getExecution.mockResolvedValue({
     id: 1,
@@ -98,7 +100,7 @@ it('refreshes hunt step output on a live hint and releases the subscription on n
   notify({ event_type: 'update', revision: 3, cursor: '3-0' })
   await flushPromises()
   expect(store.activeExecutions[1].steps[0].output.results).toEqual(['found'])
-  store.unsubscribeFromExecution(1)
+  flow.release()
   expect(huntService.closeExecutionStream).toHaveBeenCalledWith(socket)
   const reads = huntService.getExecution.mock.calls.length
   notify({ event_type: 'update', revision: 4, cursor: '4-0' })

@@ -9,7 +9,6 @@ const api = axios.create({
   },
 })
 
-// Add a request interceptor to include the token in requests
 api.interceptors.request.use(
   (config) => {
     const token = authService.getCurrentToken()
@@ -24,15 +23,12 @@ api.interceptors.request.use(
   },
 )
 
-// Add a response interceptor to handle authentication errors
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Token is invalid or expired
       authService.logout()
 
-      // Show user notification about session expiration
       window.dispatchEvent(
         new CustomEvent('api:sessionExpired', {
           detail: { message: 'Your session has expired. Please log in again.' },

@@ -4,7 +4,33 @@ import Highlight from '@tiptap/extension-highlight'
 import { TaskList, TaskItem } from '@tiptap/extension-list'
 import { Placeholder } from '@tiptap/extensions'
 import { ref, computed, onBeforeUnmount, onMounted } from 'vue'
-import { formatDistanceToNow } from 'date-fns'
+
+const relativeTime = new Intl.RelativeTimeFormat('en', { numeric: 'always' })
+const RELATIVE_UNITS = [
+  ['day', 86400],
+  ['hour', 3600],
+  ['minute', 60],
+]
+
+const formatTimeAgo = (date) => {
+  const seconds = Math.max(0, Math.round((Date.now() - date) / 1000))
+  const [unit, size] = RELATIVE_UNITS.find(([, size]) => seconds >= size) ?? ['second', 1]
+  // Negative zero keeps "0 seconds ago" instead of "in 0 seconds".
+  return relativeTime.format(-Math.floor(seconds / size), unit)
+}
+
+// [icon, title, chain command, active mark]
+const TOOLBAR_ACTIONS = [
+  ['mdi-format-bold', 'Bold (Ctrl+B)', 'toggleBold', 'bold'],
+  ['mdi-format-italic', 'Italic (Ctrl+I)', 'toggleItalic', 'italic'],
+  ['mdi-format-underline', 'Underline (Ctrl+U)', 'toggleUnderline', 'underline'],
+  ['mdi-format-strikethrough', 'Strikethrough', 'toggleStrike', 'strike'],
+  ['mdi-marker', 'Highlight', 'toggleHighlight', 'highlight'],
+  ['mdi-format-list-bulleted', 'Bullet List', 'toggleBulletList', 'bulletList'],
+  ['mdi-format-list-numbered', 'Ordered List', 'toggleOrderedList', 'orderedList'],
+  ['mdi-format-list-checks', 'Task List', 'toggleTaskList', 'taskList'],
+  ['mdi-format-quote-close', 'Blockquote', 'toggleBlockquote', 'blockquote'],
+]
 
 export function useBaseNoteEditor({
   initialContent = '',
@@ -21,7 +47,7 @@ export function useBaseNoteEditor({
 
   const formatLastSaved = computed(() => {
     if (!lastSavedTime.value) return ''
-    return formatDistanceToNow(lastSavedTime.value, { addSuffix: true })
+    return formatTimeAgo(lastSavedTime.value)
   })
 
   let saveTimeout
@@ -85,62 +111,12 @@ export function useBaseNoteEditor({
     },
   })
 
-  const editorActions = computed(() => [
-    {
-      icon: 'mdi-format-bold',
-      title: 'Bold (Ctrl+B)',
-      action: () => editor.value?.chain().focus().toggleBold().run(),
-      isActive: () => editor.value?.isActive('bold'),
-    },
-    {
-      icon: 'mdi-format-italic',
-      title: 'Italic (Ctrl+I)',
-      action: () => editor.value?.chain().focus().toggleItalic().run(),
-      isActive: () => editor.value?.isActive('italic'),
-    },
-    {
-      icon: 'mdi-format-underline',
-      title: 'Underline (Ctrl+U)',
-      action: () => editor.value?.chain().focus().toggleUnderline().run(),
-      isActive: () => editor.value?.isActive('underline'),
-    },
-    {
-      icon: 'mdi-format-strikethrough',
-      title: 'Strikethrough',
-      action: () => editor.value?.chain().focus().toggleStrike().run(),
-      isActive: () => editor.value?.isActive('strike'),
-    },
-    {
-      icon: 'mdi-marker',
-      title: 'Highlight',
-      action: () => editor.value?.chain().focus().toggleHighlight().run(),
-      isActive: () => editor.value?.isActive('highlight'),
-    },
-    {
-      icon: 'mdi-format-list-bulleted',
-      title: 'Bullet List',
-      action: () => editor.value?.chain().focus().toggleBulletList().run(),
-      isActive: () => editor.value?.isActive('bulletList'),
-    },
-    {
-      icon: 'mdi-format-list-numbered',
-      title: 'Ordered List',
-      action: () => editor.value?.chain().focus().toggleOrderedList().run(),
-      isActive: () => editor.value?.isActive('orderedList'),
-    },
-    {
-      icon: 'mdi-format-list-checks',
-      title: 'Task List',
-      action: () => editor.value?.chain().focus().toggleTaskList().run(),
-      isActive: () => editor.value?.isActive('taskList'),
-    },
-    {
-      icon: 'mdi-format-quote-close',
-      title: 'Blockquote',
-      action: () => editor.value?.chain().focus().toggleBlockquote().run(),
-      isActive: () => editor.value?.isActive('blockquote'),
-    },
-  ])
+  const editorActions = TOOLBAR_ACTIONS.map(([icon, title, command, mark]) => ({
+    icon,
+    title,
+    action: () => editor.value?.chain().focus()[command]().run(),
+    isActive: () => editor.value?.isActive(mark),
+  }))
 
   onMounted(() => {
     lastSaved.value = editor.value.getHTML()

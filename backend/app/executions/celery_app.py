@@ -21,8 +21,6 @@ app.conf.update(
     task_ignore_result=True,
     task_acks_late=True,
     task_reject_on_worker_lost=True,
-    visibility_timeout=VISIBILITY_SECONDS,
-    result_backend_transport_options={"visibility_timeout": VISIBILITY_SECONDS},
     task_serializer="json",
     accept_content=["json"],
     broker_connection_retry_on_startup=True,
@@ -49,3 +47,15 @@ def execute_hunt(execution_id: int):
     from app.executions.supervisor import run
 
     run(execution_id, "hunt")
+
+
+@app.task(name="owlculus.execute_strixy", time_limit=660)
+def execute_strixy(run_id: str):
+    from app.database.connection import create_execution_engine
+    from app.executions.strixy_worker import execute
+
+    database_engine = create_execution_engine()
+    try:
+        execute(run_id, database_engine)
+    finally:
+        database_engine.dispose()

@@ -10,6 +10,7 @@ from app.services.api_key_vault import (
     ConfigurationApiKeyVault,
     Provider,
     StaticApiKeyVault,
+    strixy_key,
 )
 
 
@@ -124,10 +125,34 @@ def test_static_vault_implements_lookup_and_configured_contract():
 
 def test_provider_enum_covers_every_current_consumer():
     assert {provider.value for provider in Provider} == {
+        "anthropic",
         "custom",
         "openai",
+        "openai_compatible",
+        "openrouter",
         "people_data_labs",
         "securitytrails",
         "shodan",
         "virustotal",
     }
+
+
+def test_strixy_key_reads_the_configured_providers_key(session, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "openai-key")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "anthropic-key")
+
+    assert strixy_key(session, "openai") == "openai-key"
+    assert strixy_key(session, "anthropic") == "anthropic-key"
+
+
+def test_openai_compatible_without_a_key_gets_a_placeholder(session, monkeypatch):
+    monkeypatch.delenv("OPENAI_COMPATIBLE_API_KEY", raising=False)
+    assert strixy_key(session, "openai_compatible") == "not-needed"
+    monkeypatch.setenv("OPENAI_COMPATIBLE_API_KEY", "router-key")
+    assert strixy_key(session, "openai_compatible") == "router-key"
+
+
+def test_strixy_key_is_absent_for_unconfigured_hosted_providers(session, monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    assert strixy_key(session, "anthropic") is None

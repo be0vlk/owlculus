@@ -1,28 +1,21 @@
-"""
-Task-related Pydantic schemas for request/response validation
-"""
+"""Task and task template schemas."""
 
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict
 
-from .user_schema import User
 from ..core.enums import TaskPriority, TaskStatus
+from .user_schema import User
 
 
-# TaskTemplate Schemas
-class TaskTemplateBase(BaseModel):
+class TaskTemplateCreate(BaseModel):
     name: str
     display_name: str
     description: str
     category: str
     is_active: bool = True
     definition_json: Dict[str, Any]
-
-
-class TaskTemplateCreate(TaskTemplateBase):
-    pass
 
 
 class TaskTemplateUpdate(BaseModel):
@@ -34,7 +27,7 @@ class TaskTemplateUpdate(BaseModel):
     definition_json: Optional[Dict[str, Any]] = None
 
 
-class TaskTemplateResponse(TaskTemplateBase):
+class TaskTemplateResponse(TaskTemplateCreate):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -44,7 +37,6 @@ class TaskTemplateResponse(TaskTemplateBase):
     creator: Optional[User] = None
 
 
-# Task Schemas
 class TaskBase(BaseModel):
     title: str
     description: str
@@ -81,14 +73,12 @@ class TaskResponse(TaskBase):
     created_at: datetime
     updated_at: datetime
 
-    # Relationships
     template: Optional[TaskTemplateResponse] = None
     assigned_to: Optional[User] = None
     assigned_by: User
     completed_by: Optional[User] = None
 
 
-# Bulk operation schemas
 class BulkTaskAssign(BaseModel):
     task_ids: List[int]
     user_id: Optional[int] = None  # None to unassign
@@ -99,7 +89,6 @@ class BulkTaskStatusUpdate(BaseModel):
     status: str
 
 
-# Filter schemas
 class TaskFilter(BaseModel):
     case_id: Optional[int] = None
     assigned_to_id: Optional[int] = None

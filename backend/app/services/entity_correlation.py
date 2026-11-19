@@ -91,14 +91,6 @@ class EntityCorrelation:
         self.case_access = CaseAccess(db)
         self.skipped_references: list[SkippedReference] = []
 
-    def correlate(self, case: Case, user: User) -> list[CorrelationMatch]:
-        """Compatibility query for callers that need a materialized result."""
-        return [
-            item
-            for item in self.iter_correlations(case, user)
-            if isinstance(item, CorrelationMatch)
-        ]
-
     def iter_correlations(
         self, case: Case, user: User
     ) -> Iterator[CorrelationMatch | ScanProgress]:
@@ -329,7 +321,7 @@ def _profile(value: str) -> str | None:
     # beyond the shared scheme/hostname representation are implied here.
     authority_and_suffix = text.split("://", 1)[1]
     authority = re.split(r"[/\?#]", authority_and_suffix, maxsplit=1)[0]
-    return f"{parsed.scheme}://{parsed.netloc}{authority_and_suffix[len(authority):]}"
+    return f"{parsed.scheme}://{parsed.netloc}{authority_and_suffix[len(authority) :]}"
 
 
 def _email(value: str) -> str:

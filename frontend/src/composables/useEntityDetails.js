@@ -6,8 +6,7 @@ import { cleanFormData } from '../utils/cleanFormData'
 import { getErrorMessage } from '../utils/errorMessage'
 import { useBaseNoteEditor } from './useBaseNoteEditor'
 import { useNoteSaveQueue } from './useNoteSaveQueue'
-import { useEntityValidation, entityIdentityGuidance } from './useEntityValidation'
-import { useEntitySources } from './useEntitySources'
+import { domainRule, ipRule, isFormValid, entityIdentityGuidance } from './entityValidation'
 
 // Entity transport data is JSON. Copy recursively, including arrays, to isolate Vue proxies too.
 const clone = (value) => JSON.parse(JSON.stringify(value))
@@ -73,25 +72,29 @@ export function useEntityDetails(entity, caseId, emit) {
     }
   }
 
-  const { getSourceValue, updateSourceValue } = useEntitySources(
-    acknowledgedEntity,
-    formData,
-    isEditing,
-  )
+  const sourceKey = (parentField, fieldId) => (parentField ? `${parentField}.${fieldId}` : fieldId)
+  const getSourceValue = (parentField, fieldId) =>
+    (isEditing.value ? formData.value : acknowledgedEntity.value).data.sources?.[
+      sourceKey(parentField, fieldId)
+    ] || ''
+  const updateSourceValue = (parentField, fieldId, value) => {
+    const sources = (formData.value.data.sources ||= {})
+    if (value) sources[sourceKey(parentField, fieldId)] = value
+    else delete sources[sourceKey(parentField, fieldId)]
+  }
 
   const updateEntity = async (confirmed = false) => {
     try {
       updating.value = true
       error.value = ''
       if (['domain', 'ip_address'].includes(targetType)) {
-        const { domainRule, ipRule } = useEntityValidation()
         const rule = targetType === 'domain' ? domainRule : ipRule
         const result = rule(formData.value.data[targetType])
         if (result !== true) throw new Error(result)
       }
       if (
         ['person', 'vehicle'].includes(targetType) &&
-        !useEntityValidation().isFormValid(targetType, formData.value.data)
+        !isFormValid(targetType, formData.value.data)
       )
         throw new Error(entityIdentityGuidance[targetType])
       const payload = { entity_type: targetType, data: cleanFormData(clone(formData.value.data)) }
@@ -211,7 +214,6 @@ export function useEntityDetails(entity, caseId, emit) {
     )
   }
 
-  // Watch for entity changes and update editor content
   watch(
     () => acknowledgedEntity.value?.data?.notes,
     (newNotes) => {
@@ -224,12 +226,10 @@ export function useEntityDetails(entity, caseId, emit) {
     { immediate: true },
   )
 
-  // Watch for editing state changes and update editor editability
   watch(
     () => isEditing.value,
     (newEditingState, oldEditingState) => {
       if (editor.value) {
-        // If exiting edit mode, save any pending changes first
         if (oldEditingState && !newEditingState) {
           saveNotes()
         }

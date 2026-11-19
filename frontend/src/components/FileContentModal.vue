@@ -4,9 +4,8 @@
     :aria-label="`${titleText}: ${evidenceItem?.title || 'Evidence'}`"
     max-width="1200px"
     scrollable
-    @update:model-value="handleModelValueUpdate"
   >
-    <v-card class="d-flex flex-column h-100-dialog">
+    <v-card class="d-flex flex-column">
       <v-card-title class="d-flex align-center justify-space-between flex-shrink-0">
         <div class="preview-title d-flex align-center flex-wrap ga-2">
           <v-icon :icon="titleIcon" />
@@ -71,6 +70,7 @@
 import { useDialogFocusRestore } from '@/composables/useDialogFocusRestore'
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { evidenceService } from '@/services/evidence'
+import { getErrorMessage } from '@/utils/errorMessage'
 import {
   FileTypeIcons,
   getFileTypeByExtension,
@@ -81,22 +81,13 @@ import TextContentPreview from './file-previews/TextContentPreview.vue'
 import ImageContentPreview from './file-previews/ImageContentPreview.vue'
 
 const props = defineProps({
-  modelValue: {
-    type: Boolean,
-    default: false,
-  },
   evidenceItem: {
     type: Object,
     default: null,
   },
 })
 
-const emit = defineEmits(['update:modelValue'])
-
-const show = computed({
-  get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value),
-})
+const show = defineModel({ type: Boolean, default: false })
 
 const loading = ref(false)
 const error = ref('')
@@ -104,14 +95,14 @@ const fileContent = ref(null)
 const fileInfo = ref(null)
 const contentPreviewRef = ref(null)
 
-// This computed property determines the *initial* request strategy (extension-based)
+// Initial request strategy, inferred from the file extension
 const requestContentType = computed(() => {
   if (!props.evidenceItem) return null
   const fileExtension = props.evidenceItem.title.split('.').pop()
   return getFileTypeByExtension(fileExtension)
 })
 
-// This computed property determines the *actual display type* (MIME-type preferred)
+// Actual display type, preferring the MIME type
 const displayContentType = computed(() => {
   if (fileInfo.value && fileInfo.value.mime_type) {
     const mimeTypeGroup = getFileTypeByMime(fileInfo.value.mime_type)
@@ -129,19 +120,8 @@ const titleIcon = computed(() => {
   return FileTypeIcons[displayContentType.value] || FileTypeIcons.DEFAULT
 })
 
-const titleText = computed(() => {
-  switch (displayContentType.value) {
-    case 'TEXT':
-      return 'Text File Content'
-    case 'IMAGE':
-      return 'Image Preview'
-    case 'PDF':
-      return 'PDF Document Preview'
-    // Add more cases for other types
-    default:
-      return 'File Content'
-  }
-})
+const TITLES = { TEXT: 'Text File Content', IMAGE: 'Image Preview' }
+const titleText = computed(() => TITLES[displayContentType.value] || 'File Content')
 
 const cleanupBlobUrl = () => {
   if (
@@ -155,15 +135,6 @@ const cleanupBlobUrl = () => {
 }
 
 const fetchFileContent = async (item) => {
-  if (!item || !item.id) {
-    cleanupBlobUrl()
-    fileContent.value = null
-    fileInfo.value = null
-    error.value = ''
-    return
-  }
-
-  // Determine the content type *for the request*
   const currentRequestType = requestContentType.value
 
   loading.value = true
@@ -193,11 +164,7 @@ const fetchFileContent = async (item) => {
     }
   } catch (err) {
     console.error('Error fetching file content:', err)
-    if (err.response && err.response.data && err.response.data.detail) {
-      error.value = err.response.data.detail
-    } else {
-      error.value = 'Failed to load file content.'
-    }
+    error.value = getErrorMessage(err, 'Failed to load file content.')
     cleanupBlobUrl()
   } finally {
     loading.value = false
@@ -216,7 +183,7 @@ const resetModalState = () => {
 }
 
 watch(
-  () => props.modelValue,
+  show,
   (newValue) => {
     if (newValue && props.evidenceItem) {
       fetchFileContent(props.evidenceItem)
@@ -236,26 +203,13 @@ watch(
   },
 )
 
-const handleModelValueUpdate = (value) => {
-  emit('update:modelValue', value)
-  if (!value) {
-    resetModalState()
-  }
-}
-
 onUnmounted(() => {
   cleanupBlobUrl()
 })
-useDialogFocusRestore(() => props.modelValue)
+useDialogFocusRestore(show)
 </script>
 
 <style scoped>
-.h-100-dialog {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
 .preview-title {
   min-width: 0;
   white-space: normal;

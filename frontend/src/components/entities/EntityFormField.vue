@@ -6,8 +6,6 @@
         :model-value="fieldValue"
         @update:model-value="$emit('update:field', $event)"
         :label="field.label"
-        variant="outlined"
-        density="comfortable"
         rows="3"
         auto-grow
         clearable
@@ -23,18 +21,14 @@
             ? [identifierRules[field.id]]
             : []
         "
-        variant="outlined"
-        density="comfortable"
         clearable
-        :prepend-inner-icon="getFieldIcon(field.type)"
+        :prepend-inner-icon="fieldIcon(field.type)"
       />
       <v-text-field
         v-if="field.hasSource"
         :model-value="sourceValue"
         @update:model-value="$emit('update:source', $event)"
         :label="`Source for ${field.label}`"
-        variant="outlined"
-        density="comfortable"
         clearable
         prepend-inner-icon="mdi-source-branch"
         bg-color="surface-variant"
@@ -46,10 +40,10 @@
 </template>
 
 <script setup>
-import { useEntityValidation } from '../../composables/useEntityValidation.js'
-import { useEntityIcons } from '../../composables/useEntityIcons.js'
+import { domainRule, ipRule } from '../../composables/entityValidation.js'
+import { fieldIcon } from '../../composables/entityTypes.js'
 
-const props = defineProps({
+defineProps({
   field: { type: Object, required: true },
   fieldValue: { type: [String, Number], default: '' },
   sourceValue: { type: String, default: '' },
@@ -58,7 +52,5 @@ const props = defineProps({
 
 defineEmits(['update:field', 'update:source'])
 
-const { domainRule, ipRule } = useEntityValidation()
 const identifierRules = { domain: domainRule, ip_address: ipRule }
-const { getFieldIcon } = useEntityIcons(props.entity)
 </script>

@@ -6,7 +6,6 @@
       v-model="localParams.domain"
       label="Domain Name"
       placeholder="example.com"
-      variant="outlined"
       density="compact"
       :rules="[domainRule]"
       @update:model-value="updateParams"
@@ -16,13 +15,11 @@
       v-model.number="localParams.timeout"
       label="Timeout (seconds)"
       placeholder="30"
-      variant="outlined"
       density="compact"
       type="number"
       @update:model-value="updateParams"
     />
 
-    <!-- Save to Case Option -->
     <CaseEvidenceToggle
       :model-value="props.modelValue"
       @update:model-value="emit('update:modelValue', $event)"
@@ -31,11 +28,8 @@
 </template>
 
 <script setup>
-import {
-  usePluginValidation,
-  usePluginParamsAdvanced,
-  pluginParamConfigs,
-} from '@/composables/usePluginParams'
+import { usePluginParamsAdvanced } from '@/composables/usePluginParams'
+import { domainRule } from '@/composables/entityValidation'
 import PluginDescriptionCard from './PluginDescriptionCard.vue'
 import CaseEvidenceToggle from './CaseEvidenceToggle.vue'
 
@@ -52,13 +46,10 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 
-// Use advanced plugin params composable with domain configuration
 const { pluginDescription, localParams, updateParams } = usePluginParamsAdvanced(props, emit, {
   parameterDefaults: {
-    ...pluginParamConfigs.domain(),
+    domain: '',
     timeout: 30,
   },
 })
-
-const { domainRule } = usePluginValidation()
 </script>

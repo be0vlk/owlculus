@@ -9,13 +9,11 @@
     <v-card prepend-icon="mdi-briefcase-edit">
       <v-card-title id="edit-case-dialog-title">Edit Case</v-card-title>
       <v-card-text>
-        <!-- Error Alert -->
         <v-alert v-if="error" type="error" variant="tonal" class="mb-4">
           {{ error }}
         </v-alert>
 
         <v-form ref="formRef" v-model="isFormValid" @submit.prevent="handleSubmit">
-          <!-- Case Details Section -->
           <v-card variant="outlined" class="mb-6">
             <v-card-title class="text-body-large pb-2">
               <v-icon start>mdi-information</v-icon>
@@ -27,8 +25,6 @@
                 v-model="formData.title"
                 autofocus
                 label="Case Title"
-                variant="outlined"
-                density="comfortable"
                 prepend-inner-icon="mdi-briefcase"
                 :rules="[rules.required, rules.titleLength]"
                 counter="100"
@@ -41,8 +37,6 @@
                 v-model="formData.status"
                 :items="statusOptions"
                 label="Case Status"
-                variant="outlined"
-                density="comfortable"
                 prepend-inner-icon="mdi-flag"
                 :rules="[rules.required]"
                 :readonly="updating"
@@ -50,7 +44,6 @@
             </v-card-text>
           </v-card>
 
-          <!-- Case Metadata (Read-only info) -->
           <v-card variant="outlined" v-if="caseData.created_at">
             <v-card-title class="text-body-large pb-2">
               <v-icon start>mdi-clock</v-icon>
@@ -104,7 +97,7 @@
 
 <script setup>
 import { ref, watch, computed } from 'vue'
-import api from '../services/api'
+import { caseService } from '../services/case'
 import { formatDate } from '../composables/dateUtils'
 import { useDialogFocusRestore } from '../composables/useDialogFocusRestore'
 import { getErrorMessage } from '../utils/errorMessage'
@@ -118,12 +111,6 @@ const props = defineProps({
   caseData: {
     type: Object,
     required: true,
-    default: () => ({
-      title: '',
-      status: '',
-      created_at: null,
-      updated_at: null,
-    }),
   },
 })
 
@@ -131,13 +118,11 @@ useDialogFocusRestore(() => props.show)
 
 const emit = defineEmits(['close', 'update'])
 
-// Reactive variables
 const formRef = ref(null)
 const isFormValid = ref(false)
 const updating = ref(false)
 const error = ref(null)
 
-// Status options with icons and colors
 const statusOptions = [
   {
     value: 'Open',
@@ -157,7 +142,6 @@ const statusOptions = [
   },
 ]
 
-// Validation rules
 const rules = {
   required: (value) => !!value || 'This field is required',
   titleLength: (value) => {
@@ -180,7 +164,6 @@ const formData = ref({
   status: '',
 })
 
-// Watch for caseData changes and update form
 watch(
   () => props.caseData,
   (newValue) => {
@@ -194,7 +177,6 @@ watch(
   { immediate: true },
 )
 
-// Reset form validation when dialog opens
 watch(
   () => props.show,
   (show) => {
@@ -207,7 +189,6 @@ watch(
 )
 
 const handleSubmit = async () => {
-  // Validate form before submission
   if (!formRef.value) return
 
   const { valid } = await formRef.value.validate()
@@ -217,11 +198,11 @@ const handleSubmit = async () => {
   error.value = null
 
   try {
-    const response = await api.put(`/api/cases/${props.caseData.id}`, {
+    const updatedCase = await caseService.updateCase(props.caseData.id, {
       title: formData.value.title.trim(),
       status: formData.value.status,
     })
-    emit('update', response.data)
+    emit('update', updatedCase)
     emit('close')
   } catch (err) {
     error.value = getErrorMessage(err, 'Failed to update case')

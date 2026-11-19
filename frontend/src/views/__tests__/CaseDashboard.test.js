@@ -6,6 +6,7 @@ import * as components from 'vuetify/components'
 import * as directives from 'vuetify/directives'
 
 import CaseDashboard from '../CaseDashboard.vue'
+import { createTestVuetify } from '@/components/__tests__/helpers/vuetify'
 
 enableAutoUnmount(afterEach)
 
@@ -90,7 +91,6 @@ const SnackbarStub = defineComponent({
     '<div v-if="modelValue" data-testid="case-export-notification" :data-color="color"><slot /></div>',
 })
 const CaseTabsStub = defineComponent({
-  name: 'CaseTabsStub',
   props: { modelValue: String },
   emits: ['update:modelValue'],
   template:
@@ -116,6 +116,7 @@ const mountDashboard = async (global = {}, keyedWorkspace = false) => {
     : CaseDashboard
   const wrapper = shallowMount(root, {
     global: {
+      plugins: [createTestVuetify()],
       ...global,
       stubs: {
         CaseDashboard: false,
@@ -128,7 +129,7 @@ const mountDashboard = async (global = {}, keyedWorkspace = false) => {
         VRow: PassthroughStub,
         VCol: PassthroughStub,
         VSnackbar: SnackbarStub,
-        CaseTabs: CaseTabsStub,
+        VTabs: CaseTabsStub,
         CaseDetail: CaseDetailStub,
         EditCaseModal: EditCaseModalStub,
         ...global.stubs,
@@ -163,13 +164,10 @@ async function mountEditingDashboard() {
       stubs: {
         ...Object.fromEntries(Object.keys(components).map((name) => [name, false])),
         EntityDataTable: EntityTableStub,
-        CaseTabs: defineComponent({ template: '<div><slot active-tab="entities" /></div>' }),
         EntityDetailsModal: false,
-        EntityTabContent: false,
         EntityFormField: false,
         EntityViewField: false,
         EntityNotesFullscreen: false,
-        EntityModalActions: false,
         EditorToolbar: false,
         EditorContent: false,
         MaybeTransition: false,
@@ -187,9 +185,10 @@ async function mountEditingDashboard() {
 function editingControls(wrapper) {
   const button = (text) => wrapper.findAll('button').find((item) => item.text() === text)
   const tab = async (title) => {
+    // The entity dialog renders after the case workspace tabs.
     await wrapper
       .findAll('[role="tab"]')
-      .find((item) => item.text() === title)
+      .findLast((item) => item.text() === title)
       .trigger('click')
     await flushPromises()
   }
@@ -284,6 +283,39 @@ describe('CaseDashboard', () => {
     const wrapper = await mountDashboard()
 
     expect(wrapper.get('[data-testid="case-tabs"]').attributes('data-model-value')).toBe('entities')
+  })
+
+  it('opens the evidence file named in the URL once evidence has loaded', async () => {
+    const file = { id: 9, title: 'Witness note', is_folder: false }
+    mocks.getFolderTree.mockResolvedValue([{ id: 3, title: 'Folder', is_folder: true }, file])
+    mocks.route.query = { tab: 'evidence', evidence: '9' }
+
+    const wrapper = await mountDashboard()
+
+    const modal = wrapper.findComponent({ name: 'FileContentModal' })
+    expect(modal.props()).toMatchObject({ evidenceItem: file, modelValue: true })
+  })
+
+  it('only shows the Evidence tab when the URL names a folder', async () => {
+    mocks.getFolderTree.mockResolvedValue([{ id: 3, title: 'Folder', is_folder: true }])
+    mocks.route.query = { tab: 'evidence', evidence: '3' }
+
+    const wrapper = await mountDashboard()
+
+    expect(wrapper.findComponent({ name: 'FileContentModal' }).props('modelValue')).toBe(false)
+  })
+
+  it('opens the entity named in the URL once the case has loaded', async () => {
+    const { entityService } = await import('@/services/entity')
+    const entity = { id: 5, entity_type: 'person', data: { first_name: 'Ada' } }
+    entityService.getEntity.mockResolvedValue(entity)
+    mocks.route.query = { entity: '5' }
+
+    const wrapper = await mountDashboard()
+
+    expect(entityService.getEntity).toHaveBeenCalledExactlyOnceWith(42, 5)
+    const modal = wrapper.findComponent({ name: 'EntityDetailsModal' })
+    expect(modal.props()).toMatchObject({ entity, show: true })
   })
 
   it('applies successful edits emitted by the edit-case dialog', async () => {
@@ -490,7 +522,7 @@ describe('CaseDashboard', () => {
 
   it('keeps pending notes with their entity when selection changes during a save', async () => {
     const wrapper = await mountEditingDashboard()
-    const notesTab = () => wrapper.findAll('[role="tab"]').find((tab) => tab.text() === 'Notes')
+    const notesTab = () => wrapper.findAll('[role="tab"]').findLast((tab) => tab.text() === 'Notes')
     const button = (text) => wrapper.findAll('button').find((button) => button.text() === text)
     try {
       await wrapper.get('[data-testid="view-a"]').trigger('click')

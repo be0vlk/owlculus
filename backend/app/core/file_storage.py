@@ -4,29 +4,32 @@ File storage utilities for handling evidence uploads
 
 import hashlib
 import os
+import shutil
 import urllib.parse
 from pathlib import Path
 from typing import Any, Optional, Tuple
 from uuid import UUID
 
-from .exceptions import BaseException as DomainException
-from .exceptions import ValidationException
+from .exceptions import DomainException, ValidationException
 from .logging import get_security_logger
 from .security import secure_filename_with_path, validate_file_security
 
 UPLOAD_DIR = Path("uploads")
-if not UPLOAD_DIR.exists():
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+EXECUTION_ARTIFACT_DIR = ".execution-artifacts"
 
 
-def calculate_file_hash(content: bytes) -> str:
-    """
-    Calculate SHA-256 hash of file content.
-    Returns the hash as a hexadecimal string.
-    """
-    hasher = hashlib.sha256()
-    hasher.update(content)
-    return hasher.hexdigest()
+def _case_dir(case_id: int) -> Path:
+    if not isinstance(case_id, int) or case_id <= 0:
+        raise ValidationException(f"Invalid case ID: {case_id}")
+    return _contained(UPLOAD_DIR, str(case_id))
+
+
+def _remove_empty_parents(path: Path, stop: Path) -> None:
+    parent = path.parent
+    while parent != stop and parent.exists() and not any(parent.iterdir()):
+        parent.rmdir()
+        parent = parent.parent
 
 
 def normalize_folder_path(folder_path: str) -> str:
@@ -47,16 +50,29 @@ def normalize_folder_path(folder_path: str) -> str:
 
     parts = []
     for part in path.split("/"):
-        part = part.strip()
-        if not part or part in (".", "..", "..."):
-            continue
-
-        sanitized = "".join(c for c in part if c.isalnum() or c in "._- ")
-
-        if sanitized and len(sanitized) <= 100:
+        # Check dots after sanitizing: "..!" must not become "..".
+        sanitized = "".join(c for c in part if c.isalnum() or c in "._- ").strip()
+        if sanitized.strip(".") and len(sanitized) <= 100:
             parts.append(sanitized)
 
     return "/".join(parts) if parts else ""
+
+
+def _user_folder_path(folder_path: str | None) -> str:
+    """Normalize a user folder path; the Case's execution artifact directory is reserved."""
+    normalized = normalize_folder_path(folder_path or "")
+    if normalized.partition("/")[0] == EXECUTION_ARTIFACT_DIR:
+        raise ValidationException("Invalid folder path")
+    return normalized
+
+
+def _contained(root: Path, relative: str) -> Path:
+    if not relative:
+        return root
+    real_path = os.path.realpath(os.path.join(root, relative))
+    if not real_path.startswith(os.path.realpath(root) + os.sep):
+        raise ValidationException("Invalid folder path")
+    return Path(real_path)
 
 
 def create_folder(case_id: int, folder_path: str) -> Path:
@@ -64,18 +80,15 @@ def create_folder(case_id: int, folder_path: str) -> Path:
     Create a folder structure within a case directory.
     Returns the path to the created folder.
     """
-    if not isinstance(case_id, int) or case_id <= 0:
-        raise ValidationException(f"Invalid case ID: {case_id}")
-
+    case_dir = _case_dir(case_id)
     if not folder_path:
         raise ValidationException("Folder path is required")
 
-    normalized_path = normalize_folder_path(folder_path)
+    normalized_path = _user_folder_path(folder_path)
     if not normalized_path:
         raise ValidationException("Invalid folder path")
 
-    case_dir = UPLOAD_DIR / str(case_id)
-    folder_dir = case_dir / normalized_path
+    folder_dir = _contained(case_dir, normalized_path)
     folder_dir.mkdir(parents=True, exist_ok=True)
     return folder_dir
 
@@ -84,25 +97,15 @@ def delete_folder(case_id: int, folder_path: str) -> None:
     """
     Delete a folder and all its contents from a case directory.
     """
-    if not isinstance(case_id, int) or case_id <= 0:
-        raise ValidationException(f"Invalid case ID: {case_id}")
-
-    normalized_path = normalize_folder_path(folder_path)
+    case_dir = _case_dir(case_id)
+    normalized_path = _user_folder_path(folder_path)
     if not normalized_path:
         raise ValidationException("Invalid folder path")
 
-    case_dir = UPLOAD_DIR / str(case_id)
-    folder_dir = case_dir / normalized_path
-
-    if folder_dir.exists() and folder_dir.is_dir():
-        import shutil
-
+    folder_dir = _contained(case_dir, normalized_path)
+    if folder_dir.is_dir():
         shutil.rmtree(folder_dir)
-
-    parent = folder_dir.parent
-    while parent != case_dir and parent.exists() and not any(parent.iterdir()):
-        parent.rmdir()
-        parent = parent.parent
+    _remove_empty_parents(folder_dir, case_dir)
 
 
 async def save_upload_file(
@@ -116,14 +119,7 @@ async def save_upload_file(
     Save an uploaded file to the uploads directory.
     Returns a tuple of (relative_path, file_hash).
     """
-    if case_id is None:
-        raise ValidationException("Case ID is required but was not provided")
-
-    if not isinstance(case_id, int) or case_id <= 0:
-        raise ValidationException(
-            f"Invalid case ID: {case_id}. Please ensure you're uploading to a valid case."
-        )
-
+    case_root = _case_dir(case_id)
     if upload_file is None:
         raise ValidationException("No file was provided for upload")
 
@@ -138,10 +134,7 @@ async def save_upload_file(
     security_logger.info(f"File upload validated: {upload_file.filename}")
 
     try:
-        case_dir = UPLOAD_DIR / str(case_id)
-        if folder_path:
-            normalized_path = normalize_folder_path(folder_path)
-            case_dir = case_dir / normalized_path
+        case_dir = _contained(case_root, _user_folder_path(folder_path))
         case_dir.mkdir(parents=True, exist_ok=True)
 
         if artifact_id is not None:
@@ -151,7 +144,7 @@ async def save_upload_file(
             if not control_id.isdigit() or int(control_id) <= 0:
                 raise ValidationException("Invalid execution artifact identity")
             artifact_id = f"{int(control_id)}-{UUID(identity)}"
-            case_dir = UPLOAD_DIR / str(case_id) / ".execution-artifacts"
+            case_dir = case_root / EXECUTION_ARTIFACT_DIR
             case_dir.mkdir(parents=True, exist_ok=True)
             safe_filename = f"{artifact_id}.txt"
         else:
@@ -163,23 +156,33 @@ async def save_upload_file(
         if len(content) > 15 * 1024 * 1024:  # 15 MiB limit
             raise ValidationException("File too large. Maximum size is 15 MiB")
 
-        file_hash = calculate_file_hash(content)
+        file_hash = hashlib.sha256(content).hexdigest()
 
-        staging_path = file_path.with_suffix(".staging") if artifact_id else file_path
-        with open(staging_path, "wb") as buffer:
-            buffer.write(content)
-            if artifact_id:
+        if artifact_id:
+            staging_path = file_path.with_suffix(".staging")
+            with open(staging_path, "wb") as buffer:
+                buffer.write(content)
                 buffer.flush()
                 os.fsync(buffer.fileno())
-        if artifact_id:
             os.replace(staging_path, file_path)
             directory_fd = os.open(case_dir, os.O_RDONLY)
             try:
                 os.fsync(directory_fd)
             finally:
                 os.close(directory_fd)
+        else:
+            # Exclusive create: a concurrent upload that took this name gets the next one.
+            while True:
+                try:
+                    with open(file_path, "xb") as buffer:
+                        buffer.write(content)
+                    break
+                except FileExistsError:
+                    file_path = case_dir / secure_filename_with_path(
+                        upload_file.filename, case_dir
+                    )
 
-        relative_path = str(file_path.relative_to(UPLOAD_DIR))
+        relative_path = str(file_path.relative_to(os.path.realpath(UPLOAD_DIR)))
 
         security_logger = get_security_logger(
             event="file_upload_complete",
@@ -222,19 +225,6 @@ async def save_upload_file(
         ) from e
 
 
-def create_case_directory(case_id: int) -> Path:
-    """
-    Create the directory structure for a new case.
-    Returns the path to the created case directory.
-    """
-    if not isinstance(case_id, int) or case_id <= 0:
-        raise ValidationException(f"Invalid case ID: {case_id}")
-
-    case_dir = UPLOAD_DIR / str(case_id)
-    case_dir.mkdir(parents=True, exist_ok=True)
-    return case_dir
-
-
 async def delete_file(relative_path: str) -> None:
     """Delete a file from the uploads directory."""
     try:
@@ -272,14 +262,7 @@ async def delete_file(relative_path: str) -> None:
                 event="file_delete_complete", file_path=relative_path
             )
             security_logger.info(f"File deleted successfully: {relative_path}")
-        parent_dir = file_path.parent
-        while (
-            parent_dir != base_dir
-            and parent_dir.exists()
-            and not any(parent_dir.iterdir())
-        ):
-            parent_dir.rmdir()
-            parent_dir = parent_dir.parent
+        _remove_empty_parents(file_path, base_dir)
 
     except DomainException:
         raise
@@ -290,3 +273,15 @@ async def delete_file(relative_path: str) -> None:
         security_logger.error(f"Failed to delete file {relative_path}: {str(e)}")
 
         raise DomainException("Could not delete file") from e
+
+
+def evidence_file_path(case_id: int, relative_path: str) -> Path:
+    """Resolve stored Evidence inside its own Case; callers authorize the record first."""
+    root = UPLOAD_DIR.resolve()
+    case_root = root / str(case_id)
+    path = (root / relative_path).resolve()
+    if not case_root.is_relative_to(root) or case_root.resolve() != case_root:
+        raise ValueError("Invalid Case storage")
+    if not path.is_relative_to(case_root) or not path.is_file():
+        raise ValueError("Evidence file unavailable")
+    return path

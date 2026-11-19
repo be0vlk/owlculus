@@ -10,10 +10,16 @@ vi.mock('@/services/plugin', () => ({
     getExecution: vi.fn(),
     getResults: vi.fn(),
     cancelExecution: vi.fn(),
+    createExecutionStream: vi.fn(),
+    closeExecutionStream: vi.fn(),
   },
 }))
 vi.mock('@/utils/download', () => ({ downloadBlob: vi.fn() }))
-vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
+vi.mock('vue-router', () => ({
+  useRouter: () => ({
+    resolve: ({ params, query }) => ({ href: `/case/${params.id}?entity=${query.entity}` }),
+  }),
+}))
 
 const state = (id = 1, status = 'completed') => ({
   id,

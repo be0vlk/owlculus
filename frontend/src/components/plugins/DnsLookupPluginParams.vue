@@ -2,8 +2,7 @@
   <div class="d-flex flex-column ga-3">
     <PluginDescriptionCard :description="pluginDescription" />
 
-    <!-- Lookup Mode -->
-    <v-radio-group v-model="lookupMode" density="compact" inline @update:model-value="updateMode">
+    <v-radio-group v-model="lookupMode" density="compact" inline>
       <template #label>
         <span class="text-subtitle2">Lookup Type</span>
       </template>
@@ -11,17 +10,14 @@
       <v-radio label="Reverse DNS (IP → Domain)" value="reverse" />
     </v-radio-group>
 
-    <!-- Input Field -->
     <v-text-field
       v-model="localParams.domain"
       :label="inputLabel"
       :placeholder="inputPlaceholder"
-      variant="outlined"
       density="compact"
       @update:model-value="updateParams"
     />
 
-    <!-- Record Types (only for forward DNS) -->
     <v-select
       v-if="lookupMode === 'forward'"
       v-model="selectedRecordTypes"
@@ -31,33 +27,27 @@
       multiple
       chips
       persistent-hint
-      variant="outlined"
       density="compact"
-      @update:model-value="updateRecordTypes"
+      @update:model-value="updateParams"
     />
 
-    <!-- Timeout -->
     <v-text-field
       v-model.number="localParams.timeout"
       label="Timeout"
       placeholder="Query timeout in seconds"
       type="number"
-      variant="outlined"
       density="compact"
       @update:model-value="updateParams"
     />
 
-    <!-- Custom Nameservers -->
     <v-text-field
       v-model="localParams.nameservers"
       label="Custom Nameservers (Optional)"
       placeholder="Comma-separated custom DNS servers (e.g., 8.8.8.8,1.1.1.1)"
-      variant="outlined"
       density="compact"
       @update:model-value="updateParams"
     />
 
-    <!-- Case Evidence Toggle -->
     <CaseEvidenceToggle
       :model-value="props.modelValue"
       @update:model-value="emit('update:modelValue', $event)"
@@ -84,7 +74,6 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 
-// Use advanced plugin params composable
 const { pluginDescription, localParams, updateParams } = usePluginParamsAdvanced(props, emit, {
   parameterDefaults: {
     domain: '',
@@ -93,7 +82,6 @@ const { pluginDescription, localParams, updateParams } = usePluginParamsAdvanced
     lookup_mode: 'forward',
   },
   customUpdateLogic: (updatedValue, params) => {
-    // Handle record_types based on lookup mode
     if (params.lookup_mode === 'reverse') {
       delete updatedValue.record_types
     } else if (selectedRecordTypes.value && params.lookup_mode === 'forward') {
@@ -102,7 +90,6 @@ const { pluginDescription, localParams, updateParams } = usePluginParamsAdvanced
   },
 })
 
-// DNS record types
 const dnsRecordTypes = [
   { title: 'A Records (IPv4)', value: 'A' },
   { title: 'AAAA Records (IPv6)', value: 'AAAA' },
@@ -112,16 +99,14 @@ const dnsRecordTypes = [
   { title: 'CNAME Records (Canonical Name)', value: 'CNAME' },
 ]
 
-// Lookup mode state (computed from localParams)
 const lookupMode = computed({
   get: () => localParams.lookup_mode,
   set: (value) => {
     localParams.lookup_mode = value
-    updateMode()
+    updateParams()
   },
 })
 
-// Dynamic input labels based on mode
 const inputLabel = computed(() => {
   return lookupMode.value === 'forward' ? 'Domain Names' : 'IP Addresses'
 })
@@ -132,24 +117,12 @@ const inputPlaceholder = computed(() => {
     : 'Enter IP addresses (e.g., 8.8.8.8, 1.1.1.1)'
 })
 
-// Selected record types as array
 const selectedRecordTypes = ref(
   props.modelValue.record_types
     ? props.modelValue.record_types.split(',').map((t) => t.trim())
     : ['A'],
 )
 
-// Update mode and clear inappropriate parameters
-const updateMode = () => {
-  updateParams()
-}
-
-// Update record types parameter when selection changes
-const updateRecordTypes = () => {
-  updateParams()
-}
-
-// Watch for external changes to record_types
 watch(
   () => props.modelValue.record_types,
   (newValue) => {
@@ -159,8 +132,7 @@ watch(
   },
 )
 
-// Initialize record_types on mount for forward mode
 if (lookupMode.value === 'forward' && !props.modelValue.record_types) {
-  updateRecordTypes()
+  updateParams()
 }
 </script>

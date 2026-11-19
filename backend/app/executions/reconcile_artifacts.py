@@ -1,7 +1,6 @@
 """Reconcile interrupted execution-owned evidence files without touching uploads."""
 
 from datetime import UTC
-from typing import cast
 from uuid import UUID
 
 from sqlmodel import Session, select
@@ -9,12 +8,7 @@ from sqlmodel import Session, select
 from app.core.file_storage import UPLOAD_DIR
 from app.core.utils import get_utc_now
 from app.database.connection import engine
-from app.database.models import (
-    Evidence,
-    ExecutionControl,
-    HuntExecution,
-    PluginExecution,
-)
+from app.database.models import Evidence, ExecutionControl, associated_execution
 
 
 def reconcile(database_engine=engine, upload_dir=UPLOAD_DIR) -> int:
@@ -40,11 +34,7 @@ def reconcile(database_engine=engine, upload_dir=UPLOAD_DIR) -> int:
             ).first()
             if control is None:
                 continue
-            model = HuntExecution if control.hunt_execution_id else PluginExecution
-            execution = cast(
-                HuntExecution | PluginExecution | None,
-                db.get(model, control.hunt_execution_id or control.plugin_execution_id),
-            )
+            execution = associated_execution(db, control)
             if execution is None or execution.case_id != case_id:
                 continue
             if (

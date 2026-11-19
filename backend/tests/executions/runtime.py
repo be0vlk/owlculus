@@ -79,7 +79,6 @@ class AcceptancePlugin(BasePlugin):
                 raise RuntimeError("Test barrier timed out")
         if params.get("mode", "success") == "error":
             yield self.error("Deterministic failure")
-            yield self.complete()
 
     def entity_writes(self, payloads, params):
         if params.get("mode") == "sized":
@@ -151,20 +150,22 @@ def install():
                 wait_at_boundary()
             return result
 
-        from app.executions.hunt_worker import DurableHuntNotifier
-        from app.executions.worker import WorkerEvidenceSink
+        from app.executions.effects import CaseEffects
+        from app.hunts.hunt_executor import HuntExecutor
 
-        async def checkpoint(self, event):
-            if boundary == "hunt-boundary" and event.event_type in {
-                "step_complete",
-                "step_failed",
-            }:
+        original_step = HuntExecutor._execute_step
+
+        async def step_boundary(self, *args, **kwargs):
+            # A step's terminal record is committed once it returns; plugin
+            # exceptions already arrive as error results, not raises.
+            await original_step(self, *args, **kwargs)
+            if boundary == "hunt-boundary":
                 root = Path(os.environ["EXECUTION_TEST_DIR"])
                 (root / "boundary-reached").write_text(str(os.getpid()))
                 while not (root / "release-boundary").exists():
                     await asyncio.sleep(0.05)
 
-        original_evidence = WorkerEvidenceSink.write
+        original_evidence = CaseEffects.evidence
 
         async def evidence_boundary(self, *args, **kwargs):
             await original_evidence(self, *args, **kwargs)
@@ -174,8 +175,8 @@ def install():
                 while not (root / "release-boundary").exists():
                     await asyncio.sleep(0.05)
 
-        DurableHuntNotifier.broadcast = checkpoint
-        WorkerEvidenceSink.write = evidence_boundary
+        HuntExecutor._execute_step = step_boundary
+        CaseEffects.evidence = evidence_boundary
 
         def stop_at_boundary(process):
             if boundary == "before-cleanup" and process.stdin is not None:
@@ -198,8 +199,8 @@ def install():
     original = plugin_registry.get_shipped_plugin_registry
     registry = original()
     # Keep shipped definitions for startup hunt validation.
-    plugin_registry.get_shipped_plugin_registry = (
-        lambda: plugin_registry.PluginRegistry.from_classes(
+    plugin_registry.get_shipped_plugin_registry = lambda: (
+        plugin_registry.PluginRegistry.from_classes(
             [type(registry.create(name)) for name in registry.metadata()]
             + [AcceptancePlugin]
         )
@@ -216,12 +217,20 @@ if __name__ == "__main__":
         sys.argv.pop(1)
         main()
     elif sys.argv[1] == "api":
+        if os.environ.get("STRIXY_ACCEPTANCE") == "1":
+            from tests.executions.strixy_provider import install
+
+            install()
         import uvicorn
 
         uvicorn.run(
             "app.main:app", host="127.0.0.1", port=int(sys.argv[2]), log_level="warning"
         )
     elif sys.argv[1] in {"worker", "hunt-worker"}:
+        if os.environ.get("STRIXY_ACCEPTANCE") == "1":
+            from tests.executions.strixy_provider import install
+
+            install()
         from app.executions.celery_app import HUNT_QUEUE, QUEUE, app
 
         queue = HUNT_QUEUE if sys.argv[1] == "hunt-worker" else QUEUE

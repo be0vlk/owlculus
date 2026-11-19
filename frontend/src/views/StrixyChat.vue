@@ -1,400 +1,766 @@
 <template>
-  <div>
-    <v-main>
-      <v-container fluid class="pa-6">
-        <v-alert v-if="apiKeyError" class="mb-6" prominent type="warning" variant="tonal">
-          <v-alert-title>OpenAI API Key Required</v-alert-title>
+  <BaseDashboard compact title="Strixy" class="strixy-page">
+    <template #header>
+      <header class="d-flex flex-wrap align-center ga-4 mb-6">
+        <div class="d-flex align-center ga-3">
           <div>
-            Strixy requires an OpenAI API key to function. Please contact your administrator to
-            configure the OpenAI API key in the system settings.
+            <h1 class="text-headline-small font-weight-bold">Strixy</h1>
+            <p class="text-body-medium text-medium-emphasis mb-0">
+              {{ activeCase.activeCase?.case_number }}
+              <span class="strixy-brand-role">· Case assistant</span>
+            </p>
           </div>
-          <template #append>
-            <v-icon size="large">mdi-key-alert</v-icon>
-          </template>
-        </v-alert>
+        </div>
+        <v-spacer />
+        <div class="strixy-header-actions">
+          <v-btn
+            variant="text"
+            prepend-icon="mdi-history"
+            aria-label="Conversations"
+            @click="openHistory"
+            ><span>Conversations</span></v-btn
+          >
+          <v-btn
+            v-if="!sharedSnapshot && shareableMessages.length"
+            variant="text"
+            prepend-icon="mdi-share-variant-outline"
+            aria-label="Share conversation"
+            :disabled="sharing"
+            @click="openSharing(shareableMessages.at(-1).id)"
+            ><span>Share</span></v-btn
+          >
+          <v-btn
+            variant="outlined"
+            prepend-icon="mdi-plus"
+            aria-label="Start new conversation"
+            :disabled="initializing || !!availabilityError || changingConversation"
+            @click="handleNewChat"
+            ><span>New chat</span></v-btn
+          >
+          <v-menu v-if="conversationId && !sharedSnapshot" location="bottom end"
+            ><template #activator="{ props }"
+              ><v-btn
+                v-bind="props"
+                icon="mdi-dots-horizontal"
+                size="small"
+                variant="text"
+                aria-label="Conversation actions" /></template
+            ><v-list>
+              <v-list-item
+                title="Export conversation"
+                prepend-icon="mdi-download"
+                :disabled="!hasUserMessages || loading"
+                @click="exportChat"
+              />
+              <v-list-item
+                v-if="latestRun"
+                title="Reanalyze current data"
+                prepend-icon="mdi-refresh"
+                :disabled="!canChat || loading"
+                @click="controlRun('reanalyze')"
+              />
+              <v-list-item
+                title="Shared snapshots"
+                prepend-icon="mdi-share-variant-outline"
+                @click="sharingOpen = true"
+              />
+              <v-list-item
+                title="Delete conversation"
+                prepend-icon="mdi-delete-outline"
+                :disabled="changingConversation"
+                @click="handleDelete"
+              /> </v-list
+          ></v-menu>
+        </div>
+      </header>
+    </template>
 
-        <v-card variant="outlined" class="chat-container" :class="{ 'chat-disabled': apiKeyError }">
-          <v-card-title class="d-flex align-center pa-4 bg-surface">
-            <v-icon
-              :color="apiKeyError ? 'grey' : 'primary'"
-              class="me-3"
-              icon="mdi-robot"
-              size="large"
+    <section class="strixy-layout">
+      <div v-if="availabilityError || apiKeyError" class="strixy-notice" role="status">
+        <v-icon icon="mdi-information-outline" size="20" />
+        <div>
+          <strong>{{ apiKeyError ? 'Strixy needs a connection' : 'Strixy unavailable' }}</strong>
+          <p>
+            {{
+              apiKeyError
+                ? `Ask an administrator to configure the ${providerName} API key in system settings.`
+                : availabilityError
+            }}
+          </p>
+        </div>
+        <v-btn variant="text" :loading="checkingAvailability" @click="initializeChat"
+          >Check again</v-btn
+        >
+      </div>
+      <div v-if="shareError && !sharingOpen" class="strixy-notice" role="status">
+        {{ shareError }}
+      </div>
+      <div v-if="operationError" class="strixy-notice" role="status">
+        <span>{{ operationError }}</span
+        ><v-btn variant="text" @click="selectConversation(conversationId)"
+          >Reopen conversation</v-btn
+        >
+      </div>
+      <div v-if="sharedSnapshot" class="strixy-notice shared-notice">
+        <v-icon icon="mdi-lock-outline" size="18" />
+        <div>
+          <strong>Read-only snapshot</strong>
+          <p>
+            {{ sharedSnapshot.message_count }} messages · Shared
+            {{ formatDate(sharedSnapshot.created_at) }}. Later private replies are excluded.
+          </p>
+        </div>
+        <v-btn variant="text" :loading="sharing" @click="copyShare">Start private follow-up</v-btn>
+      </div>
+
+      <div
+        class="chat-messages"
+        role="log"
+        aria-label="Conversation"
+        aria-live="polite"
+        :aria-busy="loading || initializing || changingConversation"
+      >
+        <div v-if="initializing || changingConversation" class="strixy-loading" role="status">
+          <v-progress-circular indeterminate size="24" width="2" /> Opening conversation…
+        </div>
+        <StrixyWelcome
+          v-else-if="!visibleMessages.length && !sharedSnapshot"
+          :disabled="!canChat"
+          @start="startPrompt"
+        />
+        <template v-else>
+          <StrixyMessage
+            v-for="(message, index) in displayMessages"
+            :key="message.id || index"
+            :message="message"
+            :shared="!!sharedSnapshot"
+            :sharing="sharing"
+            @review="reviewIndex = index"
+            @share="openSharing"
+          />
+          <div v-if="loading" class="strixy-loading" role="status">
+            <v-progress-circular indeterminate size="18" width="2" />{{ progressLabel }}
+          </div>
+        </template>
+      </div>
+
+      <div v-if="recoveryNotice" class="strixy-notice run-notice" role="status">
+        <span>{{ recoveryNotice }}</span
+        ><v-btn
+          v-if="canContinue"
+          variant="text"
+          :disabled="!canChat || loading"
+          @click="controlRun('continue')"
+          >Continue analysis</v-btn
+        ><v-btn
+          v-else-if="latestRun?.error_code === 'sources_changed'"
+          variant="text"
+          :disabled="!canChat || loading"
+          @click="controlRun('reanalyze')"
+          >Reanalyze current data</v-btn
+        ><v-btn
+          v-else-if="latestRun?.status === 'failed'"
+          variant="text"
+          :disabled="!canChat || loading"
+          @click="controlRun('retry')"
+          >Retry analysis</v-btn
+        >
+      </div>
+      <div v-if="!sharedSnapshot" class="strixy-compose-area">
+        <form class="strixy-composer" @submit.prevent="sendMessage">
+          <textarea
+            ref="messageInput"
+            v-model="currentMessage"
+            aria-label="Message input"
+            rows="2"
+            placeholder="Ask anything about this case…"
+            :disabled="!canChat || initializing || changingConversation"
+            @keydown="composerKeydown"
+          />
+          <div class="strixy-composer-tools">
+            <span class="strixy-compose-hint">{{
+              loading ? 'Reviewing your sources…' : 'Enter to send'
+            }}</span
+            ><v-btn
+              v-if="loading"
+              icon="mdi-stop"
+              size="small"
+              color="primary"
+              aria-label="Cancel analysis"
+              :disabled="!canChat || !['pending', 'running'].includes(latestRun?.status)"
+              @click="controlRun('cancel')"
+            /><v-btn
+              v-else
+              type="submit"
+              icon="mdi-arrow-up"
+              size="small"
+              color="primary"
+              aria-label="Send message"
+              :disabled="!canChat || !currentMessage.trim() || initializing || changingConversation"
             />
-            <div class="flex-grow-1">
-              <div
-                :class="{ 'text-disabled': apiKeyError }"
-                class="text-title-large font-weight-bold"
-              >
-                Strixy · {{ activeCase.activeCase?.case_number }}
-              </div>
-            </div>
+          </div>
+        </form>
+        <p class="strixy-composer-note">
+          <v-icon icon="mdi-lock-outline" size="12" />Private to you <span>·</span> Check sources
+          before using a finding.
+        </p>
+      </div>
+    </section>
 
-            <v-tooltip text="Export chat" location="bottom">
-              <template #activator="{ props }">
-                <v-btn
-                  v-bind="props"
-                  icon="mdi-download"
-                  variant="tonal"
-                  color="primary"
-                  :disabled="!hasUserMessages || loading"
-                  @click="exportChat"
-                  class="mr-2"
-                />
-              </template>
-            </v-tooltip>
+    <StrixyHistoryDialog
+      v-model="historyOpen"
+      :conversations="conversations"
+      :messages="messages"
+      :conversation-id="conversationId"
+      :loading="historyLoading"
+      :disabled="!!availabilityError || changingConversation"
+      @select="selectConversation"
+      @new="handleNewChat"
+    />
 
-            <v-tooltip text="Start new chat" location="bottom">
-              <template #activator="{ props }">
-                <v-btn
-                  v-bind="props"
-                  icon="mdi-plus"
-                  variant="outlined"
-                  :disabled="loading"
-                  @click="handleNewChat"
-                />
-              </template>
-            </v-tooltip>
-          </v-card-title>
+    <StrixyReviewDialog
+      :message="reviewedMessage"
+      :source-labels="sourceLabels"
+      :coverage-limits="coverageLimits"
+      @close="reviewIndex = null"
+      @inspect="inspectReviewedSource"
+    />
 
-          <v-divider />
+    <StrixySourceDialog
+      :preview="sourcePreview"
+      :error="sourceError"
+      :source-labels="sourceLabels"
+      :can-ask="canChat && !loading"
+      :readonly="!!sharedSnapshot"
+      @close="closeSource"
+      @ask="askAboutSource"
+    />
 
-          <v-card-text class="pa-0">
-            <div
-              class="chat-messages pa-4"
-              style="height: 500px; overflow-y: auto"
-              ref="chatContainer"
-            >
-              <v-list class="pa-0">
-                <v-list-item v-for="(message, index) in messages" :key="index" class="px-0 mb-3">
-                  <div
-                    class="message-bubble"
-                    :class="{
-                      'user-message': message.role === 'user',
-                      'assistant-message': message.role === 'assistant',
-                    }"
-                  >
-                    <div class="message-header d-flex align-center mb-1">
-                      <v-icon
-                        :icon="message.role === 'user' ? 'mdi-account' : 'mdi-robot'"
-                        :color="message.role === 'user' ? 'primary' : 'secondary'"
-                        size="small"
-                        class="me-2"
-                      />
-                      <span class="text-body-small font-weight-medium">
-                        {{ message.role === 'user' ? 'You' : 'Strixy' }}
-                      </span>
-                      <v-spacer />
-                      <span class="text-body-small text-medium-emphasis">
-                        {{ formatTime(message.timestamp) }}
-                      </span>
-                    </div>
-                    <div class="message-content" v-html="renderMarkdown(message.content)"></div>
-                  </div>
-                </v-list-item>
-              </v-list>
-
-              <div v-if="loading" class="d-flex justify-center my-4">
-                <v-progress-circular class="me-2" color="primary" indeterminate size="24" />
-                <span class="text-body-small">Strixy is thinking...</span>
-              </div>
-            </div>
-
-            <v-divider />
-
-            <div class="pa-4">
-              <v-row class="align-center" no-gutters>
-                <v-col>
-                  <v-text-field
-                    v-model="currentMessage"
-                    placeholder="Ask Strixy for help on your case"
-                    variant="outlined"
-                    density="comfortable"
-                    hide-details
-                    :disabled="!contextReady || loading || apiKeyError"
-                    @keydown.enter="sendMessage"
-                    aria-label="Message input"
-                  />
-                </v-col>
-                <v-col cols="auto" class="ml-3">
-                  <v-btn
-                    color="primary"
-                    icon="mdi-send"
-                    :loading="loading"
-                    :disabled="!contextReady || !currentMessage.trim() || loading || apiKeyError"
-                    @click="sendMessage"
-                    aria-label="Send message"
-                  />
-                </v-col>
-              </v-row>
-            </div>
-          </v-card-text>
-        </v-card>
-      </v-container>
-    </v-main>
-
-    <!-- Confirmation Dialog -->
+    <StrixySharingDialog
+      v-model="sharingOpen"
+      :through-message="shareThroughMessage"
+      :shares="shares"
+      :sharing="sharing"
+      :error="shareError"
+      :case-id="activeCase.activeCaseId"
+      @create="createShare"
+      @revoke="revokeShare"
+    />
     <ConfirmationDialog ref="confirmDialog" />
-  </div>
+    <v-snackbar v-model="exportError" timeout="5000" location="top center"
+      >Unable to export this conversation. Reopen it to check current access.</v-snackbar
+    >
+  </BaseDashboard>
 </template>
 
 <script setup>
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useActiveCaseStore } from '@/stores/activeCase'
-import { onMounted, computed, ref } from 'vue'
-import ConfirmationDialog from '@/components/ConfirmationDialog.vue'
 import { useStrixyChat } from '@/composables/useStrixyChat'
-import MarkdownIt from 'markdown-it'
-
-const md = new MarkdownIt({
-  html: false,
-  linkify: true,
-  typographer: true,
-  breaks: true,
-})
+import BaseDashboard from '@/components/BaseDashboard.vue'
+import ConfirmationDialog from '@/components/ConfirmationDialog.vue'
+import StrixyHistoryDialog from '@/components/strixy/StrixyHistoryDialog.vue'
+import StrixyMessage from '@/components/strixy/StrixyMessage.vue'
+import StrixyReviewDialog from '@/components/strixy/StrixyReviewDialog.vue'
+import StrixySharingDialog from '@/components/strixy/StrixySharingDialog.vue'
+import StrixySourceDialog from '@/components/strixy/StrixySourceDialog.vue'
+import StrixyWelcome from '@/components/strixy/StrixyWelcome.vue'
+import { hasIncompleteReview, sourceLabel } from '@/utils/strixyDisplay'
+import { formatDate } from '@/composables/dateUtils'
+import { downloadBlob } from '@/utils/download'
 
 const activeCase = useActiveCaseStore()
+const route = useRoute()
+const router = useRouter()
 const {
-  contextReady,
+  shares,
+  sharedSnapshot,
+  shareError,
+  sharing,
+  createShare,
+  revokeShare,
+  openShare,
+  copyShare: copySharedConversation,
+  latestRun,
+  coverageLimits,
+  visibleMessages,
+  controlRun,
+  sourcePreview,
+  sourceError,
+  openSource,
+  authorizedExport,
+  canChat,
+  availabilityError,
+  checkingAvailability,
   messages,
   loading,
   currentMessage,
   apiKeyError,
+  providerName,
   sendMessage,
   initializeChat,
-  clearChat,
+  createConversation,
+  conversations,
+  conversationId,
+  selectConversation: selectPrivateConversation,
+  deleteConversation,
+  operationError,
+  refreshConversations,
 } = useStrixyChat()
-
+const initializing = ref(true)
+const changingConversation = ref(false)
+const historyOpen = ref(false)
+const historyLoading = ref(false)
+const sharingOpen = ref(false)
+const shareThroughId = ref(null)
+const reviewIndex = ref(null)
+const exportError = ref(false)
 const confirmDialog = ref(null)
-
-const hasUserMessages = computed(() => {
-  return messages.value.some((message) => message.role === 'user')
+const messageInput = ref(null)
+const sourceLabels = computed(() =>
+  Object.fromEntries(
+    visibleMessages.value.flatMap((message) =>
+      message.withheld
+        ? []
+        : [
+            ...(message.citations || [])
+              .filter((citation) => citation.title)
+              .map((citation) => [citation.source_id, sourceLabel(citation)]),
+            ...Object.entries(message.source_labels || {}).map(([id, label]) => [
+              id,
+              sourceLabel({ ...label, source_id: id }),
+            ]),
+          ],
+    ),
+  ),
+)
+const displayMessages = computed(() =>
+  visibleMessages.value.map((message) => ({
+    ...message,
+    citations: (message.citations || []).map((citation) => ({
+      ...citation,
+      title:
+        message.source_labels?.[citation.source_id]?.title ||
+        citation.title ||
+        sourceLabels.value[citation.source_id],
+    })),
+  })),
+)
+const reviewedMessage = computed(() =>
+  reviewIndex.value === null
+    ? null
+    : displayMessages.value[reviewIndex.value]?.withheld
+      ? null
+      : displayMessages.value[reviewIndex.value],
+)
+const shareableMessages = computed(() =>
+  displayMessages.value.filter((message) => !message.withheld && message.id),
+)
+const shareThroughMessage = computed(() =>
+  shareableMessages.value.find((message) => message.id === shareThroughId.value),
+)
+const hasUserMessages = computed(() => messages.value.some((message) => message.role === 'user'))
+const progressLabel = computed(
+  () =>
+    ({
+      locating_records: 'Locating records',
+      examining_inputs: 'Reviewing case records',
+      preparing_findings: 'Preparing findings',
+    })[latestRun.value?.progress] || 'Strixy is thinking…',
+)
+const canContinue = computed(
+  () =>
+    !loading.value &&
+    latestRun.value &&
+    (latestRun.value.limit_code ||
+      latestRun.value.status === 'cancelled' ||
+      (hasIncompleteReview(latestRun.value.source_coverage) &&
+        latestRun.value.status !== 'failed')),
+)
+const failureReasons = {
+  invalid_citation:
+    'The model quoted text that isn’t in the case records, so the answer was withheld',
+}
+const recoveryNotice = computed(() => {
+  const run = latestRun.value
+  if (!run || sharedSnapshot.value || loading.value) return ''
+  if (run.error_code === 'sources_changed')
+    return 'A source changed. Review the case again to use the current records.'
+  if (run.status === 'cancelled') return 'Analysis cancelled. Saved partial findings are retained.'
+  if (run.status === 'failed') {
+    const reason = (run.error_detail || failureReasons[run.error_code] || '').replace(/\.$/, '')
+    return `Strixy couldn’t finish this reply.${reason ? ` ${reason}.` : ''} Your question and any saved findings are still here.`
+  }
+  if (canContinue.value)
+    return 'The review is incomplete. Continue to examine more of the available material.'
+  return ''
 })
-
-const handleNewChat = async () => {
-  if (hasUserMessages.value) {
-    const confirmed = await confirmDialog.value.confirm({
-      title: 'Start New Chat',
-      message:
-        'Are you sure you want to start a new chat? This will clear your current conversation.',
-      icon: 'mdi-chat-plus',
-      iconColor: 'primary',
-      confirmText: 'Start New Chat',
-      confirmColor: 'primary',
-    })
-    if (confirmed) {
-      await clearChat()
-    }
-  } else {
-    await clearChat()
+function composerKeydown(event) {
+  if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+    event.preventDefault()
+    if (!initializing.value && !changingConversation.value) sendMessage()
   }
 }
-
-const formatTime = (timestamp) => {
-  return new Date(timestamp).toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+async function startPrompt(text) {
+  if (!canChat.value || loading.value || initializing.value || changingConversation.value) return
+  currentMessage.value = text
+  await sendMessage()
 }
-
-const exportChat = () => {
+function closeDialogs() {
+  historyOpen.value = false
+  sharingOpen.value = false
+  reviewIndex.value = null
+  shareThroughId.value = null
+}
+async function clearShareQuery() {
+  if (route?.query.share) {
+    const query = { ...route.query }
+    delete query.share
+    await router.replace({ query })
+  }
+}
+async function selectConversation(id) {
+  if (changingConversation.value) return
+  changingConversation.value = true
+  closeDialogs()
+  try {
+    await selectPrivateConversation(id)
+    await clearShareQuery()
+  } finally {
+    changingConversation.value = false
+  }
+}
+async function handleNewChat() {
+  if (changingConversation.value) return
+  changingConversation.value = true
+  closeDialogs()
+  try {
+    await createConversation()
+    if (conversationId.value) await clearShareQuery()
+    await nextTick()
+    messageInput.value?.focus()
+  } finally {
+    changingConversation.value = false
+  }
+}
+async function copyShare() {
+  await copySharedConversation()
+  if (conversationId.value) await clearShareQuery()
+}
+async function openHistory() {
+  historyLoading.value = true
+  historyOpen.value = true
+  await refreshConversations()
+  historyLoading.value = false
+}
+function openSharing(id) {
+  shareThroughId.value = id
+  sharingOpen.value = true
+}
+function inspectReviewedSource(citation) {
+  reviewIndex.value = null
+  openSource(citation)
+}
+function closeSource() {
+  sourcePreview.value = null
+  sourceError.value = ''
+}
+function askAboutSource() {
+  const source = sourcePreview.value?.citation
+  if (!source) return
+  currentMessage.value = `What does ${sourceLabel(source)} tell us?`
+  closeSource()
+  nextTick(() => messageInput.value?.focus())
+}
+async function handleDelete() {
+  try {
+    await confirmDialog.value.confirm({
+      title: 'Delete conversation',
+      message:
+        'Remove this conversation, its replies, and all its shared snapshots from Owlculus? Independent follow-ups remain. This does not change the provider’s retention policies.',
+      icon: 'mdi-delete',
+      confirmText: 'Delete',
+      confirmColor: 'error',
+    })
+  } catch {
+    return
+  }
+  closeDialogs()
+  await deleteConversation()
+}
+async function exportChat() {
   if (!hasUserMessages.value) return
-
-  const exportData = {
+  const saved = await authorizedExport()
+  if (!saved) {
+    exportError.value = true
+    return
+  }
+  const payload = {
     title: 'Strixy Chat Export',
-    case_id: activeCase.activeCaseId,
+    case_id: saved.case_id,
     exportTime: new Date().toISOString(),
-    messages: messages.value.map((msg) => ({
-      role: msg.role,
-      content: msg.content,
-      timestamp: msg.timestamp,
+    messages: saved.messages.map((message) => ({
+      role: message.role,
+      content: message.content,
+      timestamp: message.timestamp,
+      citations: message.citations,
+      coverage: message.coverage,
+      withheld: message.withheld,
     })),
   }
-
-  const dataStr = JSON.stringify(exportData, null, 2)
-  const dataBlob = new Blob([dataStr], { type: 'application/json' })
-  const url = URL.createObjectURL(dataBlob)
-
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `strixy_chat_${Date.now()}.json`
-  link.click()
-
-  URL.revokeObjectURL(url)
+  downloadBlob(
+    { blob: new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }) },
+    `strixy_chat_${Date.now()}.json`,
+  )
 }
-
-const renderMarkdown = (content) => {
-  if (!content) return ''
-  return md.render(content)
+async function openLinkedShare() {
+  if (
+    typeof route?.query.share === 'string' &&
+    String(route.params.caseId) === String(activeCase.activeCaseId)
+  ) {
+    closeDialogs()
+    await openShare(route.query.share)
+  }
 }
-
 onMounted(async () => {
-  await initializeChat()
+  try {
+    await initializeChat()
+    await openLinkedShare()
+  } finally {
+    initializing.value = false
+  }
 })
+watch(() => route?.query.share, openLinkedShare)
+watch(
+  () => conversationId.value,
+  () => {
+    reviewIndex.value = null
+    shareThroughId.value = null
+  },
+)
 </script>
 
+<style>
+.strixy-page,
+.strixy-dialog {
+  --strixy-accent: rgb(var(--v-theme-primary));
+  --strixy-text: rgb(var(--v-theme-on-surface));
+  --strixy-muted: rgb(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  --strixy-line: rgb(var(--v-border-color), var(--v-border-opacity));
+  --strixy-soft: rgb(var(--v-theme-primary), 0.08);
+
+  color: var(--strixy-text);
+}
+
+/* theme primary (#00585f) is unreadable on the dark surface */
+.v-theme--owlculusDark .strixy-page,
+.v-theme--owlculusDark .strixy-dialog,
+.strixy-dialog.v-theme--owlculusDark {
+  --strixy-accent: #8ed6ce;
+}
+
+.strixy-dialog :where(h3, p) {
+  margin: 0;
+}
+
+.strixy-dialog .v-card-subtitle {
+  color: var(--strixy-muted);
+}
+
+.strixy-dialog :is(.v-card-title, .v-list-item-title) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.strixy-dialog-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 18px 24px;
+  border-top: 1px solid var(--strixy-line);
+}
+
+.strixy-dialog .dialog-note {
+  color: var(--strixy-muted);
+  font-size: 13px;
+  line-height: 1.8;
+  margin: 12px 0;
+}
+
+.strixy-dialog summary {
+  cursor: pointer;
+  padding: 10px 0;
+}
+
+.strixy-page button:focus-visible,
+.strixy-dialog button:focus-visible {
+  outline: 2px solid var(--strixy-accent);
+  outline-offset: 3px;
+}
+</style>
 <style scoped>
-.chat-container {
-  max-width: 100%;
+.strixy-page :where(h1, p) {
+  margin: 0;
 }
 
-.chat-disabled {
-  opacity: 0.6;
-  pointer-events: none;
-  position: relative;
+.strixy-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--strixy-muted);
 }
 
-.chat-disabled::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-color: rgb(var(--v-theme-surface), 0.3);
-  z-index: 1;
-  pointer-events: none;
+.strixy-header-actions .v-btn {
+  border-radius: 8px;
 }
 
-.text-disabled {
-  color: rgb(var(--v-theme-on-surface-variant));
-  opacity: 0.6;
+.strixy-layout {
+  max-width: 780px;
+  margin: 0 auto;
 }
 
 .chat-messages {
-  scroll-behavior: smooth;
+  padding: 8px 0 22px;
 }
 
-.message-bubble {
-  max-width: 80%;
-  padding: 12px 16px;
-  border-radius: 12px;
-  background-color: rgb(var(--v-theme-surface-variant));
-  margin-bottom: 8px;
+.strixy-compose-area {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  padding: 12px 0 16px;
+  background: rgb(var(--v-theme-background));
 }
 
-.user-message {
-  margin-left: auto;
-  background-color: rgb(var(--v-theme-primary));
-  color: rgb(var(--v-theme-on-primary));
+.strixy-composer {
+  padding: 15px 16px 11px;
+  border: 1px solid var(--strixy-line);
+  border-radius: 15px;
+  background: rgb(var(--v-theme-surface));
+  box-shadow: 0 3px 12px #173b3b06;
 }
 
-.user-message .message-header {
-  color: rgb(var(--v-theme-on-primary));
-  opacity: 0.9;
+.strixy-composer:focus-within {
+  outline: 2px solid var(--strixy-accent);
+  outline-offset: 2px;
 }
 
-.assistant-message {
-  margin-right: auto;
-  background-color: rgb(var(--v-theme-surface-variant));
-  color: rgb(var(--v-theme-on-surface-variant));
-}
-
-.message-content {
-  line-height: 1.5;
-  word-wrap: break-word;
-}
-
-/* Markdown styling */
-.message-content :deep(h1),
-.message-content :deep(h2),
-.message-content :deep(h3),
-.message-content :deep(h4),
-.message-content :deep(h5),
-.message-content :deep(h6) {
-  margin: 0.5em 0 0.3em;
-  font-weight: 600;
-}
-
-.message-content :deep(h1) {
-  font-size: 1.5em;
-}
-
-.message-content :deep(h2) {
-  font-size: 1.3em;
-}
-
-.message-content :deep(h3) {
-  font-size: 1.1em;
-}
-
-.message-content :deep(p) {
-  margin: 0.5em 0;
-}
-
-.message-content :deep(ul),
-.message-content :deep(ol) {
-  margin: 0.5em 0;
-  padding-left: 1.5em;
-}
-
-.message-content :deep(li) {
-  margin: 0.2em 0;
-}
-
-.message-content :deep(blockquote) {
-  border-left: 4px solid rgb(var(--v-theme-primary));
-  margin: 0.5em 0;
-  padding: 0.5em 0 0.5em 1em;
-  background-color: rgb(var(--v-theme-surface-variant), 0.3);
-  border-radius: 4px;
-}
-
-.message-content :deep(code) {
-  background-color: rgb(var(--v-theme-surface-variant), 0.8);
-  padding: 0.1em 0.3em;
-  border-radius: 3px;
-  font-family: 'Courier New', Courier, monospace;
-  font-size: 0.9em;
-}
-
-.message-content :deep(pre) {
-  background-color: rgb(var(--v-theme-surface-variant), 0.8);
-  border-radius: 6px;
-  padding: 1em;
-  overflow-x: auto;
-  margin: 0.5em 0;
-}
-
-.message-content :deep(pre code) {
-  background: none;
-  padding: 0;
-}
-
-.message-content :deep(a) {
-  color: rgb(var(--v-theme-primary));
-  text-decoration: underline;
-}
-
-.message-content :deep(strong) {
-  font-weight: 600;
-}
-
-.message-content :deep(em) {
-  font-style: italic;
-}
-
-.message-content :deep(table) {
-  border-collapse: collapse;
-  margin: 0.5em 0;
+.strixy-composer textarea {
+  display: block;
   width: 100%;
+  min-height: 54px;
+  max-height: 180px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.7;
+  resize: vertical;
+  color: var(--strixy-text);
 }
 
-.message-content :deep(th),
-.message-content :deep(td) {
-  border: 1px solid rgb(var(--v-theme-outline), 0.3);
-  padding: 0.5em;
-  text-align: left;
+.strixy-composer textarea::placeholder {
+  color: var(--strixy-muted);
+  opacity: 1;
 }
 
-.message-content :deep(th) {
-  background-color: rgb(var(--v-theme-surface-variant), 0.5);
-  font-weight: 600;
+.strixy-composer-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-@media (width <= 600px) {
-  .message-bubble {
-    max-width: 95%;
+.strixy-compose-hint {
+  flex: 1;
+  text-align: right;
+  font-size: 12px;
+  color: var(--strixy-muted);
+}
+
+.strixy-composer-note {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding-top: 12px;
+  font-size: 12px;
+  color: var(--strixy-muted);
+}
+
+.strixy-composer-note span {
+  padding: 0 4px;
+}
+
+.strixy-notice {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  background: var(--strixy-soft);
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.strixy-notice > div {
+  flex: 1;
+}
+
+.strixy-notice > .v-btn {
+  margin-left: auto;
+  font-size: 12px;
+}
+
+.strixy-notice p {
+  margin-top: 4px;
+}
+
+.run-notice {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.strixy-loading {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  color: var(--strixy-muted);
+  font-size: 13px;
+  padding: 20px 0;
+}
+
+@media (width <= 750px) {
+  .strixy-header-actions {
+    gap: 2px;
   }
 
-  .chat-messages {
-    height: 400px;
+  .strixy-header-actions .v-btn {
+    min-width: 36px;
+    padding: 0 9px;
+  }
+
+  .strixy-header-actions :deep(.v-btn__prepend) {
+    margin: 0;
+  }
+
+  .strixy-header-actions :deep(.v-btn__content > span) {
+    display: none;
+  }
+}
+
+@media (width <= 450px) {
+  .strixy-brand-role {
+    display: none;
+  }
+
+  .strixy-compose-hint {
+    visibility: hidden;
   }
 }
 </style>

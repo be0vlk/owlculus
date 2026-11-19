@@ -4,7 +4,7 @@
     <div>
       {{ computedMessage }}
     </div>
-    <template v-if="showAdminLink && isAdmin" #append>
+    <template v-if="isAdmin" #append>
       <v-btn
         variant="text"
         size="small"
@@ -29,10 +29,6 @@ const props = defineProps({
   missingProviders: {
     type: Array,
     default: () => [],
-  },
-  showAdminLink: {
-    type: Boolean,
-    default: true,
   },
 })
 

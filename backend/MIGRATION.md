@@ -1,8 +1,9 @@
-# Upgrade to 2.0.3
+# Upgrade to 2.1.0
 
-If you're running a version earlier than 2.0.3 with Docker Compose, follow these
-steps once 2.0.3 is released. Schedule downtime and run the commands from your
-existing installation directory.
+If you're running an earlier version with Docker Compose, follow these steps.
+Upgrading from 2.0.3 needs no manual migration: `db-init` adds the new tables and
+columns. Steps marked *before 2.0.3* apply only to older installations. Schedule
+downtime and run the commands from your existing installation directory.
 
 Keep your Compose project name, `.env`, `POSTGRES_*` values, and `SECRET_KEY`.
 Changing the project name selects different volumes; changing `SECRET_KEY` makes
@@ -51,8 +52,8 @@ Compose files with every command below.
    Never use `docker compose down -v`, `make clean`, or `setup.sh --clean` during
    this upgrade: they delete persistent data.
 
-   Edit your existing `.env`; do not replace it with `.env.example`. If you do not
-   already have a runtime database login, run `openssl rand -hex 32` and add:
+   *Before 2.0.3:* edit your existing `.env`; do not replace it with
+   `.env.example`. If you do not already have a runtime database login, run `openssl rand -hex 32` and add:
 
    ```dotenv
    RUNTIME_POSTGRES_USER=owlculus_runtime
@@ -63,7 +64,7 @@ Compose files with every command below.
    already exists, keep its existing username and password. Initialization creates
    the new login automatically.
 
-   Browser API and WebSocket traffic now goes through the frontend gateway;
+   *Before 2.0.3:* browser API and WebSocket traffic now goes through the frontend gateway;
    backend port 8000 is no longer published. Point any external proxy at the
    frontend. For Caddy-managed HTTPS, set `DOMAIN` to your public hostname and
    make ports 80 and 443 reachable; use `DOMAIN=:80` for HTTP.
@@ -93,7 +94,17 @@ Compose files with every command below.
    Sign in with an existing account, open a Case, download old Evidence, and run
    a Plugin and Hunt that save results. Check that stored provider keys still work.
 
-**Expected changes:** Existing accounts and investigation data are retained, but
+**Expected changes in 2.1.0:**
+
+- A `strixy` system user appears in the user list, named `strixy_ai_N` if
+  `strixy` was taken. It is Strixy's identity; do not remove it.
+- Strixy's default OpenAI model is now `gpt-6-astra`. Make sure your key can use
+  it, or choose a provider and model under Admin > Strixy.
+- Strixy runs in `plugin-worker` and shares `PLUGIN_CONCURRENCY` and
+  `PLUGIN_WORKER_MEMORY` with Plugins; raise them for heavy use.
+- Strixy can't read legacy `.doc` attachments.
+
+**Expected changes from before 2.0.3:** Existing accounts and investigation data are retained, but
 users with legacy sessions must sign in again. Invalid Evidence folder links and
 Task assignments are cleared, as are historical Analyst lead flags. Unfinished
 legacy Hunts are marked failed and must be resubmitted. Legacy Hunt outputs and

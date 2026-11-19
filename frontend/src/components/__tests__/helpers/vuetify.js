@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils'
 import { createVuetify } from 'vuetify'
 import * as components from 'vuetify/components'
 import * as directives from 'vuetify/directives'
+import { defaults } from '@/plugins/vuetify'
 
 const wrappers = []
 
@@ -25,15 +26,15 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+export const createTestVuetify = () =>
+  createVuetify({ components, directives, defaults, theme: false })
+
 export function mountWithVuetify(component, options = {}) {
   const wrapper = mount(component, {
     ...options,
     global: {
       ...options.global,
-      plugins: [
-        ...(options.global?.plugins || []),
-        createVuetify({ components, directives, theme: false }),
-      ],
+      plugins: [...(options.global?.plugins || []), createTestVuetify()],
     },
   })
   wrappers.push(wrapper)

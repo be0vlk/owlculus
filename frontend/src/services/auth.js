@@ -3,22 +3,15 @@ import { apiBaseURL } from './config'
 
 // Create a separate axios instance for auth that doesn't have interceptors
 // to avoid circular dependencies with the main api instance
-const authApi = axios.create({
-  baseURL: apiBaseURL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-})
+const authApi = axios.create({ baseURL: apiBaseURL })
 
 export const authService = {
   async getSetupStatus() {
-    const response = await authApi.get('/api/auth/setup-status')
-    return response.data
+    return (await authApi.get('/api/auth/setup-status')).data
   },
 
   async createAdministrator(userData) {
-    const response = await authApi.post('/api/users/', userData)
-    return response.data
+    return (await authApi.post('/api/users/', userData)).data
   },
 
   async login(username, password) {
@@ -26,17 +19,12 @@ export const authService = {
     formData.append('username', username)
     formData.append('password', password)
 
-    const response = await authApi.post('/api/auth/login', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    })
+    const response = await authApi.post('/api/auth/login', formData)
 
     if (response.data.access_token) {
       localStorage.setItem('access_token', response.data.access_token)
       localStorage.setItem('token_type', response.data.token_type || 'bearer')
 
-      // Fetch and return user data along with the token
       const userData = await this.getCurrentUser()
       return { ...response.data, user: userData }
     }
@@ -61,7 +49,6 @@ export const authService = {
       return response.data
     } catch (error) {
       console.error('Failed to fetch user data:', error)
-      // Throw the error instead of silently returning null
       // This allows calling code to handle auth failures properly
       throw error
     }
@@ -95,11 +82,6 @@ export const authService = {
   },
 
   isAuthenticated() {
-    try {
-      return !!localStorage.getItem('access_token')
-    } catch (error) {
-      console.error('Failed to check authentication status:', error)
-      return false
-    }
+    return !!this.getCurrentToken()
   },
 }

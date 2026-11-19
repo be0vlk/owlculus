@@ -12,18 +12,14 @@
             autofocus
             v-model="folderName"
             label="Folder Name"
-            :rules="folderNameRules"
+            :rules="nameRules"
             required
-            variant="outlined"
-            density="comfortable"
             prepend-inner-icon="mdi-folder"
           ></v-text-field>
 
           <v-textarea
             v-model="description"
             label="Description (Optional)"
-            variant="outlined"
-            density="comfortable"
             rows="2"
             prepend-inner-icon="mdi-text"
           ></v-textarea>
@@ -39,7 +35,7 @@
         submit-icon="mdi-folder-plus"
         :submit-disabled="!valid || !folderName.trim()"
         :loading="loading"
-        @cancel="cancel"
+        @cancel="dialog = false"
         @submit="createFolder"
       />
     </v-card>
@@ -48,15 +44,13 @@
 
 <script setup>
 import { useDialogFocusRestore } from '@/composables/useDialogFocusRestore'
-import { ref, computed, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { evidenceService } from '../services/evidence'
 import ModalActions from './ModalActions.vue'
+import { nameRules } from './RenameDialog.vue'
+import { getErrorMessage } from '@/utils/errorMessage'
 
 const props = defineProps({
-  modelValue: {
-    type: Boolean,
-    default: false,
-  },
   caseId: {
     type: Number,
     required: true,
@@ -67,9 +61,8 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['update:modelValue', 'folderCreated'])
+const emit = defineEmits(['folderCreated'])
 
-// Reactive data
 const form = ref()
 const valid = ref(false)
 const loading = ref(false)
@@ -77,35 +70,12 @@ const error = ref('')
 const folderName = ref('')
 const description = ref('')
 
-// Computed
-const dialog = computed({
-  get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value),
-})
+const dialog = defineModel({ type: Boolean, default: false })
 
-// Validation rules
-const folderNameRules = [
-  (v) => !!v || 'Folder name is required',
-  (v) => (v && v.length >= 1) || 'Folder name must be at least 1 character',
-  (v) => (v && v.length <= 255) || 'Folder name must be less than 255 characters',
-  (v) =>
-    /^[a-zA-Z0-9._\s-]+$/.test(v) ||
-    'Folder name can only contain letters, numbers, spaces, dots, underscores, and hyphens',
-]
-
-// Methods
 const createFolder = async () => {
   if (loading.value) return
-  // Trigger validation and wait for it to complete
-  const isValid = await form.value.validate()
-  if (!isValid.valid) {
-    return
-  }
-
-  // Double check the folder name is not empty
-  if (!folderName.value.trim()) {
-    return
-  }
+  const { valid: isValid } = await form.value.validate()
+  if (!isValid) return
 
   loading.value = true
   error.value = ''
@@ -119,34 +89,20 @@ const createFolder = async () => {
     })
 
     emit('folderCreated', newFolder)
-    resetForm()
     dialog.value = false
   } catch (err) {
-    error.value = err.response?.data?.detail || err.message || 'Failed to create folder'
+    error.value = getErrorMessage(err, 'Failed to create folder')
   } finally {
     loading.value = false
   }
 }
 
-const cancel = () => {
-  resetForm()
-  dialog.value = false
-}
-
-const resetForm = () => {
+watch(dialog, (open) => {
+  if (open) return
   folderName.value = ''
   description.value = ''
   error.value = ''
-  if (form.value) {
-    form.value.resetValidation()
-  }
-}
-
-// Watch for dialog close to reset form
-watch(dialog, (newVal) => {
-  if (!newVal) {
-    resetForm()
-  }
+  form.value?.resetValidation()
 })
 useDialogFocusRestore(() => dialog.value)
 </script>

@@ -20,7 +20,7 @@
               color="error"
               size="small"
               variant="outlined"
-              @click="showMassDeleteConfirm = true"
+              @click="deleteSelected"
               prepend-icon="mdi-delete"
             >
               Delete Selected
@@ -31,7 +31,7 @@
             color="on-surface"
             size="small"
             variant="outlined"
-            @click="showCreateFolder = true"
+            @click="openCreateFolder(null)"
             prepend-icon="mdi-folder-plus"
           >
             Create Folder
@@ -49,7 +49,7 @@
             </p>
             <div v-if="userRole !== 'Analyst'" class="d-flex flex-column align-center ga-3">
               <div class="d-flex flex-wrap justify-center ga-2">
-                <v-btn :disabled="!caseId" color="primary" @click="showCreateFolder = true">
+                <v-btn :disabled="!caseId" color="primary" @click="openCreateFolder(null)">
                   <v-icon start>mdi-folder-plus</v-icon>
                   Create Folder
                 </v-btn>
@@ -88,14 +88,20 @@
               <div class="evidence-row-content">
                 <div
                   class="tree-item-title-wrapper"
-                  :class="getDragClasses(item)"
+                  :class="{
+                    'evidence-dragging': draggedId === item.id,
+                    'evidence-drag-over': dropTargetId === item.id,
+                  }"
                   :draggable="!item.is_folder && userRole !== 'Analyst'"
-                  @dragstart="onDragStart($event, item)"
-                  @dragend="onDragEnd"
-                  @dragenter="onDragEnter($event, item)"
-                  @dragover="onDragOver($event, item)"
-                  @dragleave="onDragLeave($event, item)"
-                  @drop="onDrop($event, item)"
+                  @dragstart="
+                    ((draggedId = item.id), $event.dataTransfer.setData('text/plain', item.title))
+                  "
+                  @dragend="draggedId = dropTargetId = null"
+                  @dragover="canDrop(item) && ($event.preventDefault(), (dropTargetId = item.id))"
+                  @dragleave="
+                    !$event.currentTarget.contains($event.relatedTarget) && (dropTargetId = null)
+                  "
+                  @drop.prevent="moveTo(item)"
                 >
                   <div class="d-flex align-center flex-wrap ga-2">
                     <v-checkbox-btn
@@ -108,8 +114,8 @@
                     />
                     <v-icon
                       v-if="item.is_folder"
-                      :icon="getFolderIcon(isOpen)"
-                      :color="getFolderColor()"
+                      :icon="isOpen ? 'mdi-folder-open' : 'mdi-folder'"
+                      color="purple-darken-1"
                       @contextmenu.prevent="showContextMenu($event, item)"
                     />
                     <v-icon
@@ -118,14 +124,14 @@
                       color="grey-darken-1"
                       class="cursor-pointer"
                       @contextmenu.prevent="showContextMenu($event, item)"
-                      @dblclick="handleFileDoubleClick(item)"
+                      @dblclick="viewContent(item)"
                     />
                   </div>
                   <span
                     class="tree-item-title"
                     :class="{ 'title-supported-file': hasFileAction(item) }"
                     @contextmenu.prevent="showContextMenu($event, item)"
-                    @dblclick="handleFileDoubleClick(item)"
+                    @dblclick="viewContent(item)"
                   >
                     {{ item.title }}
                   </span>
@@ -137,7 +143,7 @@
                     variant="text"
                     icon="mdi-eye"
                     :aria-label="`Preview ${item.title}`"
-                    @click.stop="handleFileDoubleClick(item)"
+                    @click.stop="viewContent(item)"
                   />
                   <v-btn
                     size="x-small"
@@ -146,13 +152,8 @@
                     :aria-label="`Actions for ${item.title}`"
                     @click.stop="showContextMenu($event, item)"
                   />
-                  <v-chip
-                    v-if="item.is_folder && item.childCount > 0"
-                    size="x-small"
-                    variant="tonal"
-                    color="grey"
-                  >
-                    {{ item.childCount }}
+                  <v-chip v-if="item.children?.length" size="x-small" variant="tonal" color="grey">
+                    {{ item.children.length }}
                   </v-chip>
 
                   <v-btn
@@ -181,102 +182,32 @@
       </v-card-text>
     </v-card>
 
-    <v-alert v-if="actionError && !showDeleteConfirm && !showMassDeleteConfirm" type="error">{{
-      actionError
-    }}</v-alert>
+    <v-alert v-if="actionError" type="error">{{ actionError }}</v-alert>
     <p v-if="moveStatus" role="status" class="text-body-medium">{{ moveStatus }}</p>
 
-    <!-- Context Menu -->
     <FolderContextMenu
       v-model="contextMenu.show"
       :activator="contextMenu.activator"
       :item="contextMenu.item"
       :user-role="userRole"
-      @create-subfolder="createSubfolder"
-      @upload-files="uploadToFolder"
-      @rename="renameItem"
+      @create-subfolder="openCreateFolder($event.id)"
+      @upload-files="$emit('upload-to-folder', $event)"
+      @rename="openRename"
       @delete="deleteItem"
-      @extract-metadata="extractMetadata"
+      @extract-metadata="$emit('extract-metadata', $event)"
     />
 
-    <!-- Create Folder Dialog -->
     <CreateFolderDialog
       v-model="showCreateFolder"
       :case-id="caseId"
       :parent-folder-id="newFolderParent"
-      @folder-created="handleFolderCreated"
+      @folder-created="$emit('refresh')"
     />
 
-    <!-- Rename Dialog -->
-    <RenameDialog v-model="showRename" :item="renameTargetItem" @renamed="handleItemRenamed" />
+    <RenameDialog v-model="showRename" :item="renameTargetItem" @renamed="$emit('refresh')" />
 
-    <!-- Delete Confirmation -->
-    <v-dialog v-model="showDeleteConfirm" aria-label="Confirm Delete" max-width="500px">
-      <v-card>
-        <v-card-title class="d-flex align-center">
-          <v-icon icon="mdi-delete" color="error" class="mr-2"></v-icon>
-          Confirm Delete
-        </v-card-title>
+    <ConfirmationDialog ref="confirmDialog" />
 
-        <v-card-text>
-          <v-alert v-if="actionError" type="error" class="mb-3">{{ actionError }}</v-alert>
-          <p>
-            Are you sure you want to delete
-            <strong>{{ deleteTargetItem?.title }}</strong
-            >?
-          </p>
-          <p v-if="deleteTargetItem?.is_folder" class="text-warning mt-2">
-            <v-icon icon="mdi-alert" class="mr-1"></v-icon>
-            This will also delete all contents within this folder.
-          </p>
-        </v-card-text>
-
-        <v-card-actions>
-          <v-spacer></v-spacer>
-          <v-btn color="grey" variant="text" @click="showDeleteConfirm = false"> Cancel </v-btn>
-          <v-btn :loading="deleteLoading" color="error" variant="flat" @click="confirmDelete">
-            Delete
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
-
-    <!-- Mass Delete Confirmation -->
-    <v-dialog v-model="showMassDeleteConfirm" aria-label="Confirm Mass Delete" max-width="500px">
-      <v-card>
-        <v-card-title class="d-flex align-center">
-          <v-icon icon="mdi-delete-multiple" color="error" class="mr-2"></v-icon>
-          Confirm Mass Delete
-        </v-card-title>
-
-        <v-card-text>
-          <v-alert v-if="actionError" type="error" class="mb-3">{{ actionError }}</v-alert>
-          <p>
-            Are you sure you want to delete <strong>{{ selectedItems.length }}</strong> selected
-            items?
-          </p>
-          <p class="text-warning mt-2">
-            <v-icon icon="mdi-alert" class="mr-1"></v-icon>
-            This action cannot be undone. Folders will be deleted along with all their contents.
-          </p>
-        </v-card-text>
-
-        <v-card-actions>
-          <v-spacer></v-spacer>
-          <v-btn color="grey" variant="text" @click="showMassDeleteConfirm = false"> Cancel </v-btn>
-          <v-btn
-            color="error"
-            variant="flat"
-            @click="confirmMassDelete"
-            :loading="massDeleteLoading"
-          >
-            Delete All
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
-
-    <!-- Template Selection Modal -->
     <evidence-template-selection-modal
       v-model="showTemplateSelection"
       :case-id="caseId"
@@ -288,13 +219,12 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { evidenceService } from '../services/evidence'
-import { useDialogFocusRestore } from '@/composables/useDialogFocusRestore'
+import { getErrorMessage } from '@/utils/errorMessage'
+import ConfirmationDialog from './ConfirmationDialog.vue'
 import CreateFolderDialog from './CreateFolderDialog.vue'
 import FolderContextMenu from './FolderContextMenu.vue'
 import EvidenceTemplateSelectionModal from './EvidenceTemplateSelectionModal.vue'
 import RenameDialog from './RenameDialog.vue'
-import { useFolderIcons } from '../composables/useFolderIcons'
-import { useDragAndDrop } from '../composables/useDragAndDrop'
 import {
   getFileTypeByExtension,
   getIconByExtension,
@@ -326,7 +256,6 @@ const props = defineProps({
 
 const emit = defineEmits([
   'download',
-  'delete',
   'refresh',
   'upload-to-folder',
   'extract-metadata',
@@ -334,129 +263,52 @@ const emit = defineEmits([
   'evidence-moved',
 ])
 
-// Composables
-const { getFolderColor, getFolderIcon } = useFolderIcons()
-const {
-  handleDragStart,
-  handleDragEnter,
-  handleDragOver,
-  handleDragLeave,
-  handleDrop,
-  handleDragEnd,
-  getDragClasses,
-} = useDragAndDrop()
-
-// Reactive data
 const actionError = ref('')
 const moveStatus = ref('')
 const showCreateFolder = ref(false)
 const showRename = ref(false)
-const showDeleteConfirm = ref(false)
-const showMassDeleteConfirm = ref(false)
 const showTemplateSelection = ref(false)
-useDialogFocusRestore(() => showDeleteConfirm.value)
-useDialogFocusRestore(() => showMassDeleteConfirm.value)
-const deleteLoading = ref(false)
-const massDeleteLoading = ref(false)
+const confirmDialog = ref(null)
 const newFolderParent = ref(null)
 const renameTargetItem = ref(null)
-const deleteTargetItem = ref(null)
 const openItems = ref([])
-
-// Function to preserve open state during evidence updates
-const preserveOpenState = () => {
-  // Get currently open items from the treeview
-  return [...openItems.value]
-}
-
-// Function to restore open state after evidence updates
-const restoreOpenState = (savedOpenItems) => {
-  openItems.value = savedOpenItems
-}
 const selectedItems = ref([])
+// Only files are draggable, so a drag can never move a folder into its own subtree.
+const draggedId = ref(null)
+const dropTargetId = ref(null)
 
-// Context menu
 const contextMenu = ref({
   show: false,
   activator: null,
   item: null,
 })
 
-// Computed
-
 const treeItems = computed(() => {
-  const items = []
-  const itemMap = new Map()
-
-  // First pass: create all items
-  props.evidenceList.forEach((evidence) => {
-    const item = {
-      id: evidence.id,
-      title: evidence.title,
-      is_folder: evidence.is_folder,
-      evidence_type: evidence.evidence_type,
-      category: evidence.category,
-      file_hash: evidence.file_hash,
-      parent_folder_id: evidence.parent_folder_id,
-      folder_path: evidence.folder_path,
-      children: evidence.is_folder ? [] : undefined, // Only folders have children
-      childCount: 0,
-    }
-    itemMap.set(evidence.id, item)
-  })
-
-  // Second pass: build hierarchy
-  itemMap.forEach((item) => {
-    if (item.parent_folder_id && itemMap.has(item.parent_folder_id)) {
-      const parent = itemMap.get(item.parent_folder_id)
-      parent.children.push(item)
-      parent.childCount++
-    } else {
-      items.push(item)
-    }
-  })
-
-  // Sort items: folders first, then by title
-  const sortItems = (items) => {
-    return items
-      .sort((a, b) => {
-        if (a.is_folder && !b.is_folder) return -1
-        if (!a.is_folder && b.is_folder) return 1
-        return a.title.localeCompare(b.title)
-      })
-      .map((item) => ({
-        ...item,
-        children: item.children ? sortItems(item.children) : item.children,
-      }))
+  const itemMap = new Map(
+    props.evidenceList.map((evidence) => [
+      evidence.id,
+      { ...evidence, children: evidence.is_folder ? [] : undefined },
+    ]),
+  )
+  const roots = []
+  for (const item of itemMap.values()) {
+    ;(itemMap.get(item.parent_folder_id)?.children ?? roots).push(item)
   }
-
-  return sortItems(items)
+  // Folders first, then by title.
+  const order = (a, b) => !!b.is_folder - !!a.is_folder || a.title.localeCompare(b.title)
+  for (const item of itemMap.values()) item.children?.sort(order)
+  return roots.sort(order)
 })
 
-// Methods
-const getFileIcon = (item) => {
-  if (item.is_folder) return 'mdi-folder'
-
-  const fileExtension = item.title.split('.').pop()
-
-  return getIconByExtension(fileExtension)
-}
+const getFileIcon = (item) => getIconByExtension(item.title.split('.').pop())
 
 function hasFileAction(item) {
-  if (!item || !item.title) {
-    return false
-  }
-
-  const fileExtension = item.title.split('.').pop()
-  const type = getFileTypeByExtension(fileExtension)
-
+  const type = getFileTypeByExtension(item?.title?.split('.').pop())
   return SUPPORTED_PREVIEW_TYPES.includes(type)
 }
 
-const handleFileDoubleClick = (item) => {
-  if (hasFileAction(item)) {
-    emit('view-content', item)
-  }
+const viewContent = (item) => {
+  if (hasFileAction(item)) emit('view-content', item)
 }
 
 const showContextMenu = (event, item) => {
@@ -468,99 +320,56 @@ const showContextMenu = (event, item) => {
   }
 }
 
-const createSubfolder = (parentItem) => {
-  newFolderParent.value = parentItem?.id || null
+const openCreateFolder = (parentId) => {
+  newFolderParent.value = parentId
   showCreateFolder.value = true
 }
 
-const uploadToFolder = (folderItem) => {
-  emit('upload-to-folder', folderItem)
-}
-
-const renameItem = (item) => {
+const openRename = (item) => {
   renameTargetItem.value = item
   showRename.value = true
-}
-
-const deleteItem = (item) => {
-  actionError.value = ''
-  deleteTargetItem.value = item
-  showDeleteConfirm.value = true
-}
-
-const extractMetadata = (item) => {
-  emit('extract-metadata', item)
 }
 
 const toggleSelection = (itemId) => {
   const index = selectedItems.value.indexOf(itemId)
   if (index > -1) {
-    // Remove from selection
     selectedItems.value.splice(index, 1)
   } else {
-    // Add to selection
     selectedItems.value.push(itemId)
   }
 }
 
-const handleFolderCreated = () => {
-  emit('refresh')
-}
-
-const handleItemRenamed = () => {
-  emit('refresh')
-}
-
-const confirmDelete = async () => {
-  if (!deleteTargetItem.value) return
-
-  actionError.value = ''
-  deleteLoading.value = true
-
+const deleteItems = async (items, label) => {
   try {
-    if (deleteTargetItem.value.is_folder) {
-      await evidenceService.deleteFolder(deleteTargetItem.value.id)
-    } else {
-      await evidenceService.deleteEvidence(deleteTargetItem.value.id)
-    }
-
-    emit('refresh')
-    showDeleteConfirm.value = false
-  } catch (error) {
-    actionError.value = error.response?.data?.detail || 'Failed to delete evidence'
-  } finally {
-    deleteLoading.value = false
+    await confirmDialog.value.confirmDelete(label)
+  } catch {
+    return
   }
+  actionError.value = ''
+  let deleted = 0
+  try {
+    for (const item of items) {
+      await (item.is_folder
+        ? evidenceService.deleteFolder(item.id)
+        : evidenceService.deleteEvidence(item.id))
+      deleted++
+    }
+  } catch (error) {
+    actionError.value = getErrorMessage(error, 'Failed to delete evidence')
+  }
+  // Refreshing drops deleted ids from the selection; failed ones stay selected for a retry.
+  if (deleted) emit('refresh')
 }
 
-const confirmMassDelete = async () => {
-  if (selectedItems.value.length === 0) return
+const deleteItem = (item) => {
+  const title = `"${item.title}"`
+  deleteItems([item], item.is_folder ? `${title} and all its contents` : title)
+}
 
-  actionError.value = ''
-  massDeleteLoading.value = true
-
-  try {
-    // Get the items to delete from the evidence list
-    const itemsToDelete = props.evidenceList.filter((item) => selectedItems.value.includes(item.id))
-
-    // Delete each item
-    for (const item of itemsToDelete) {
-      if (item.is_folder) {
-        await evidenceService.deleteFolder(item.id)
-      } else {
-        await evidenceService.deleteEvidence(item.id)
-      }
-    }
-
-    // Clear selection and refresh
-    selectedItems.value = []
-    emit('refresh')
-    showMassDeleteConfirm.value = false
-  } catch (error) {
-    actionError.value = error.response?.data?.detail || 'Failed to delete selected evidence'
-  } finally {
-    massDeleteLoading.value = false
-  }
+const deleteSelected = () => {
+  const items = props.evidenceList.filter((item) => selectedItems.value.includes(item.id))
+  const label = `${items.length} selected items (folders with all their contents)`
+  deleteItems(items, label)
 }
 
 const handleTemplateApplied = () => {
@@ -568,88 +377,33 @@ const handleTemplateApplied = () => {
   emit('refresh')
 }
 
-// Drag and drop functionality
-const handleMoveEvidence = async (draggedItem, targetFolder) => {
-  // Store original evidence list and open state for potential rollback
-  const originalEvidenceList = [...props.evidenceList]
-  const savedOpenState = preserveOpenState()
+const canDrop = (folder) => {
+  const dragged = props.evidenceList.find((item) => item.id === draggedId.value)
+  return folder.is_folder && !!dragged && dragged.parent_folder_id !== folder.id
+}
 
+const moveTo = async (folder) => {
+  const id = draggedId.value
+  draggedId.value = dropTargetId.value = null
+  if (!id) return
+
+  actionError.value = ''
+  moveStatus.value = 'Moving evidence…'
+  const original = props.evidenceList
+  emit(
+    'evidence-moved',
+    original.map((item) => (item.id === id ? { ...item, parent_folder_id: folder.id } : item)),
+  )
   try {
-    // Optimistically update the evidence list
-    const updatedEvidenceList = moveItemOptimistically(
-      draggedItem,
-      targetFolder,
-      props.evidenceList,
-    )
-
-    emit('evidence-moved', updatedEvidenceList, savedOpenState)
-    await evidenceService.moveEvidence(draggedItem.id, targetFolder.id)
-
-    return { success: true }
+    await evidenceService.updateEvidence(id, { parentFolderId: folder.id })
+    moveStatus.value = `Evidence moved to ${folder.title}`
   } catch (error) {
-    // Revert the optimistic update on failure
-    emit('evidence-moved', originalEvidenceList, savedOpenState)
-
-    return {
-      success: false,
-      error: error.response?.data?.detail || error.message || 'Failed to move file',
-    }
+    emit('evidence-moved', original)
+    moveStatus.value = ''
+    actionError.value = getErrorMessage(error, 'Failed to move evidence')
   }
 }
 
-// Helper function to optimistically move an item in the evidence list
-const moveItemOptimistically = (draggedItem, targetFolder, evidenceList) => {
-  const updatedList = evidenceList.map((item) => {
-    if (item.id === draggedItem.id) {
-      return {
-        ...item,
-        parent_folder_id: targetFolder.id,
-      }
-    }
-    return item
-  })
-
-  return updatedList
-}
-
-const onDragStart = (event, item) => {
-  return handleDragStart(event, item, props.userRole)
-}
-
-const onDragEnter = (event, item) => {
-  if (item.is_folder) {
-    handleDragEnter(event, item, props.userRole)
-  }
-}
-
-const onDragOver = (event, item) => {
-  if (item.is_folder) {
-    handleDragOver(event, item, props.userRole)
-  }
-}
-
-const onDragLeave = (event, item) => {
-  if (item.is_folder) {
-    handleDragLeave(event, item)
-  }
-}
-
-const onDrop = async (event, item) => {
-  if (item.is_folder) {
-    actionError.value = ''
-    moveStatus.value = 'Moving evidence…'
-    const result = await handleDrop(event, item, props.userRole, handleMoveEvidence)
-
-    moveStatus.value = result.success ? `Evidence moved to ${item.title}` : ''
-    if (!result.success) actionError.value = result.error || 'Failed to move evidence'
-  }
-}
-
-const onDragEnd = () => {
-  handleDragEnd()
-}
-
-// Watch for evidence list changes to maintain open state
 watch(
   () => props.evidenceList,
   () => {
@@ -657,14 +411,7 @@ watch(
     openItems.value = openItems.value.filter((id) => ids.has(id))
     selectedItems.value = selectedItems.value.filter((id) => ids.has(id))
   },
-  { deep: true },
 )
-
-// Expose methods to parent component
-defineExpose({
-  restoreOpenState,
-  preserveOpenState,
-})
 </script>
 
 <style scoped>
@@ -700,16 +447,11 @@ defineExpose({
   text-decoration: underline;
 }
 
-.cursor-pointer {
-  cursor: pointer;
-}
-
 .evidence-container {
   max-height: 60vh;
   min-height: 200px;
 }
 
-/* Responsive adjustments */
 @media (width <= 599px) {
   .evidence-container {
     max-height: 50vh;
@@ -722,7 +464,6 @@ defineExpose({
   }
 }
 
-/* Drag and Drop Styles */
 .evidence-dragging {
   opacity: 0.5;
   background-color: rgb(var(--v-theme-primary), 0.1);
@@ -737,21 +478,6 @@ defineExpose({
   box-shadow: 0 2px 8px rgb(var(--v-theme-success), 0.3);
 }
 
-.evidence-invalid-drop {
-  background-color: rgb(var(--v-theme-error), 0.1);
-  border: 2px dashed rgb(var(--v-theme-error));
-  border-radius: 4px;
-}
-
-.draggable-item {
-  cursor: grab;
-}
-
-.draggable-item:active {
-  cursor: grabbing;
-}
-
-/* Tree item title wrapper */
 .tree-item-title-wrapper {
   width: 100%;
   min-width: 0;

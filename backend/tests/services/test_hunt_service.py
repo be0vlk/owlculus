@@ -3,7 +3,6 @@ Tests for HuntService
 """
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock
 
 import pytest
 from sqlmodel import Session, select
@@ -98,7 +97,6 @@ def test_case_fixture(session: Session, test_client: Client, test_user: User):
     session.commit()
     session.refresh(case)
 
-    # Add the test user to the case
     from app.database.models import CaseUserLink
 
     case_user_link = CaseUserLink(case_id=case.id, user_id=test_user.id)
@@ -163,7 +161,6 @@ class TestHuntService:
         """Test listing available hunts."""
         hunts = await hunt_service.list_hunts(current_user=test_user)
         assert len(hunts) >= 1
-        # Check that our test hunt is in the list
         hunt_names = [hunt.name for hunt in hunts]
         assert test_hunt.name in hunt_names
 
@@ -246,7 +243,6 @@ class TestHuntService:
         test_user: User,
     ):
         """Test canceling a running execution."""
-        # Setup test execution in running state
         test_hunt_execution.status = "running"
         hunt_service.db.add(test_hunt_execution)
         hunt_service.db.commit()
@@ -272,7 +268,6 @@ class TestHuntService:
         session: Session,
     ):
         """Test getting steps for an execution."""
-        # Add test steps
         step1 = HuntStep(
             execution_id=test_hunt_execution.id,
             step_id="step1",
@@ -286,12 +281,10 @@ class TestHuntService:
         session.add(step1)
         session.commit()
 
-        # Get steps
         steps = await hunt_service.get_execution_steps(
             test_hunt_execution.id, current_user=test_user
         )
 
-        # Verify steps
         assert len(steps) == 1
         assert steps[0].step_id == "step1"
         assert steps[0].status == "completed"
@@ -360,3 +353,63 @@ class TestHuntService:
                 initial_parameters={},
                 current_user=test_analyst,
             )
+
+
+@pytest.fixture(name="defaulted_hunt")
+def defaulted_hunt_fixture(session: Session):
+    hunt = Hunt(
+        name="defaulted_hunt",
+        display_name="Defaulted Hunt",
+        description="Hunt with required and defaulted inputs",
+        category="test",
+        definition_json={
+            "steps": [],
+            "initial_parameters": {
+                "target": {"type": "string", "required": True},
+                "mode": {"type": "string", "default": "fast"},
+            },
+        },
+        is_active=True,
+    )
+    session.add(hunt)
+    session.commit()
+    session.refresh(hunt)
+    return hunt
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("sent", [{}, {"mode": ""}, {"mode": None}])
+async def test_create_execution_applies_defaults_for_absent_or_empty_inputs(
+    hunt_service: HuntService,
+    defaulted_hunt: Hunt,
+    test_case: Case,
+    test_user: User,
+    sent: dict,
+):
+    execution = await hunt_service.create_execution(
+        hunt_id=defaulted_hunt.id,
+        case_id=test_case.id,
+        initial_parameters={"target": "example.com", **sent},
+        current_user=test_user,
+    )
+
+    assert execution.initial_parameters == {"target": "example.com", "mode": "fast"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("target", [None, ""])
+async def test_create_execution_rejects_missing_required_input(
+    hunt_service: HuntService,
+    defaulted_hunt: Hunt,
+    test_case: Case,
+    test_user: User,
+    target: str | None,
+):
+    params = {} if target is None else {"target": target}
+    with pytest.raises(ValidationException, match="target is required"):
+        await hunt_service.create_execution(
+            hunt_id=defaulted_hunt.id,
+            case_id=test_case.id,
+            initial_parameters=params,
+            current_user=test_user,
+        )

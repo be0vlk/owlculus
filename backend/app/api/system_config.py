@@ -1,10 +1,4 @@
-"""
-API endpoints for system configuration management.
-
-This module manages application settings, configuration updates, system parameters,
-API key management, case number templates, and evidence folder templates.
-Provides administrative endpoints for system configuration.
-"""
+"""Admin system configuration routes."""
 
 from fastapi import APIRouter, Depends
 from sqlmodel import Session
@@ -13,6 +7,13 @@ from app.core.database_boundary import DatabaseRoute
 
 from ..core.dependencies import get_current_user
 from ..core.exceptions import ValidationException
+from ..core.strixy_config import (
+    DEFAULT_MODELS,
+    PROVIDER_NAMES,
+    StrixyModelQuery,
+    StrixySettings,
+    StrixySetup,
+)
 from ..database import models
 from ..database.connection import get_db
 from ..schemas import system_config_schema
@@ -29,8 +30,9 @@ async def get_configuration(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    config_service = SystemConfigService(db)
-    config = await config_service.get_configuration_admin(current_user=current_user)
+    config = await SystemConfigService(db).get_configuration_admin(
+        current_user=current_user
+    )
     return system_config_schema.SystemConfigurationResponse.from_model(config)
 
 
@@ -42,8 +44,7 @@ async def update_configuration(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    config_service = SystemConfigService(db)
-    config = await config_service.update_configuration(
+    config = await SystemConfigService(db).update_configuration(
         case_number_template=config_data.case_number_template,
         case_number_prefix=config_data.case_number_prefix,
         current_user=current_user,
@@ -61,11 +62,10 @@ async def set_api_key(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    config_service = SystemConfigService(db)
     if not api_key_data.api_key and not api_key_data.name:
         raise ValidationException("Either api_key or name must be provided")
 
-    config = await config_service.set_api_key(
+    config = await SystemConfigService(db).set_api_key(
         provider=provider,
         api_key=api_key_data.api_key,
         name=api_key_data.name or f"{provider.value.title()} API",
@@ -83,8 +83,7 @@ async def remove_api_key(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    config_service = SystemConfigService(db)
-    config = await config_service.remove_api_key(
+    config = await SystemConfigService(db).remove_api_key(
         provider=provider,
         current_user=current_user,
     )
@@ -96,8 +95,7 @@ async def list_api_keys(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    config_service = SystemConfigService(db)
-    return await config_service.list_api_keys(current_user=current_user)
+    return await SystemConfigService(db).list_api_keys(current_user=current_user)
 
 
 @router.get(
@@ -109,8 +107,7 @@ async def get_api_key_status(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    config_service = SystemConfigService(db)
-    await config_service.get_configuration_admin(current_user=current_user)
+    await SystemConfigService(db).get_configuration_admin(current_user=current_user)
     vault = ConfigurationApiKeyVault(db)
     is_configured = vault.is_configured(provider)
     return system_config_schema.APIKeyStatusResponse(
@@ -125,8 +122,7 @@ async def preview_case_number_template(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    config_service = SystemConfigService(db)
-    example, display_name = config_service.preview_case_number_template(
+    example, display_name = SystemConfigService(db).preview_case_number_template(
         template, prefix, current_user
     )
     return system_config_schema.SystemConfigurationPreview(
@@ -142,8 +138,7 @@ async def get_evidence_folder_templates(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    config_service = SystemConfigService(db)
-    templates = await config_service.get_evidence_folder_templates()
+    templates = await SystemConfigService(db).get_evidence_folder_templates()
     return system_config_schema.EvidenceFolderTemplatesResponse(templates=templates)
 
 
@@ -166,3 +161,58 @@ async def update_evidence_folder_templates(
     return system_config_schema.EvidenceFolderTemplatesResponse(
         templates=updated_templates
     )
+
+
+def _strixy_response(settings: StrixySettings, db: Session) -> dict:
+    vault = ConfigurationApiKeyVault(db)
+    return settings.model_dump() | {
+        "providers": {
+            key: {
+                "name": name,
+                "default_model": DEFAULT_MODELS[key],
+                "key_configured": vault.is_configured(Provider(key)),
+            }
+            for key, name in PROVIDER_NAMES.items()
+        }
+    }
+
+
+@router.get("/configuration/strixy")
+async def get_strixy_settings(
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return _strixy_response(
+        await SystemConfigService(db).get_strixy_settings(current_user), db
+    )
+
+
+@router.put("/configuration/strixy")
+async def update_strixy_settings(
+    setup: StrixySetup,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return _strixy_response(
+        await SystemConfigService(db).save_strixy_setup(setup, current_user), db
+    )
+
+
+@router.post("/configuration/strixy/models")
+async def list_strixy_models(
+    query: StrixyModelQuery,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return {
+        "models": await SystemConfigService(db).list_strixy_models(query, current_user)
+    }
+
+
+@router.post("/configuration/strixy/test")
+async def test_strixy_connection(
+    setup: StrixySetup,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return await SystemConfigService(db).test_strixy_connection(setup, current_user)

@@ -161,15 +161,15 @@ async def test_insert_failure_rolls_back_claim(
     token, existing_username = invitation
     with Session(postgres_engine) as db:
         service = InviteService(db)
-        original = service._registration_conflict
+        original = invite_service.duplicate_user_error
         calls = 0
 
-        def concurrent_identity(data):
+        def concurrent_identity(*args, **kwargs):
             nonlocal calls
             calls += 1
-            return None if calls == 1 else original(data)
+            return None if calls == 1 else original(*args, **kwargs)
 
-        monkeypatch.setattr(service, "_registration_conflict", concurrent_identity)
+        monkeypatch.setattr(invite_service, "duplicate_user_error", concurrent_identity)
         with pytest.raises(DuplicateResourceException, match="Username already taken"):
             await service.register_user_with_invite(
                 registration(token, existing_username)

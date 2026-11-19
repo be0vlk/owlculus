@@ -2,31 +2,26 @@
   <div class="d-flex flex-column ga-3">
     <PluginDescriptionCard :description="pluginDescription" />
 
-    <!-- Domain -->
     <v-text-field
       v-model="localParams.domain"
       label="Domain"
       placeholder="Enter target domain (e.g., example.com)"
-      variant="outlined"
       density="compact"
       :rules="[domainRule]"
       @update:model-value="updateParams"
     />
 
-    <!-- Concurrency -->
     <v-text-field
       v-model.number="localParams.concurrency"
       label="Concurrency"
       placeholder="Maximum concurrent DNS queries"
       type="number"
-      variant="outlined"
       density="compact"
       min="1"
       max="200"
       @update:model-value="updateParams"
     />
 
-    <!-- SecurityTrails Option -->
     <v-switch
       v-model="localParams.use_securitytrails"
       label="Enable SecurityTrails API"
@@ -37,7 +32,6 @@
       @update:model-value="updateParams"
     />
 
-    <!-- Case Evidence Toggle -->
     <CaseEvidenceToggle
       :model-value="props.modelValue"
       @update:model-value="emit('update:modelValue', $event)"
@@ -46,11 +40,8 @@
 </template>
 
 <script setup>
-import {
-  usePluginValidation,
-  usePluginParamsAdvanced,
-  pluginParamConfigs,
-} from '@/composables/usePluginParams'
+import { usePluginParamsAdvanced } from '@/composables/usePluginParams'
+import { domainRule } from '@/composables/entityValidation'
 import PluginDescriptionCard from './PluginDescriptionCard.vue'
 import CaseEvidenceToggle from './CaseEvidenceToggle.vue'
 
@@ -67,10 +58,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 
-// Use advanced plugin params composable with domain/concurrency/securitytrails configuration
 const { pluginDescription, localParams, updateParams } = usePluginParamsAdvanced(props, emit, {
-  parameterDefaults: pluginParamConfigs.domainWithSecurityTrails(),
+  parameterDefaults: { domain: '', concurrency: 5, use_securitytrails: false },
 })
-
-const { domainRule } = usePluginValidation()
 </script>

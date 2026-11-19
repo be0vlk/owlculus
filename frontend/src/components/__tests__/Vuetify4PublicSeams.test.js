@@ -1,15 +1,12 @@
-import { computed, ref } from 'vue'
 import { flushPromises, shallowMount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import ApiKeyManagementCard from '../ApiKeyManagementCard.vue'
 import NewInviteModal from '../NewInviteModal.vue'
 import SystemConfigurationCard from '../SystemConfigurationCard.vue'
-import { useApiKeys } from '@/composables/useApiKeys'
-import { useSystemConfiguration } from '@/composables/useSystemConfiguration'
+import api from '@/services/api'
 
-vi.mock('@/composables/useApiKeys', () => ({ useApiKeys: vi.fn() }))
-vi.mock('@/composables/useSystemConfiguration', () => ({ useSystemConfiguration: vi.fn() }))
+vi.mock('@/services/api', () => ({ default: { get: vi.fn() } }))
 
 const PassthroughStub = { template: '<div><slot /></div>' }
 const SelectStub = {
@@ -49,11 +46,14 @@ const vuetifyStubs = {
   VListItem: ListItemStub,
   VListItemSubtitle: PassthroughStub,
   VListItemTitle: PassthroughStub,
+  VProgressLinear: PassthroughStub,
   VRow: PassthroughStub,
   VSelect: SelectStub,
+  VSkeletonLoader: PassthroughStub,
   VSpacer: PassthroughStub,
   VTable: PassthroughStub,
   VTextField: TextFieldStub,
+  VTooltip: PassthroughStub,
 }
 
 describe('Vuetify 4 public component seams', () => {
@@ -75,66 +75,31 @@ describe('Vuetify 4 public component seams', () => {
   })
 
   it('renders provider icons from the Vuetify 4 select item payload', async () => {
-    useApiKeys.mockReturnValue({
-      loading: ref(false),
-      saving: ref(false),
-      deleting: ref(false),
-      error: ref(null),
-      showAddDialog: ref(true),
-      showEditDialog: ref(false),
-      editingProvider: ref(null),
-      newKeyForm: ref({ provider: '', name: '', api_key: '' }),
-      editKeyForm: ref({ name: '', api_key: '' }),
-      commonProviders: [{ text: 'Shodan', value: 'shodan', icon: 'mdi-radar' }],
-      sortedApiKeys: computed(() => []),
-      isFormValid: computed(() => false),
-      validateProvider: vi.fn(),
-      validateApiKey: vi.fn(),
-      validateName: vi.fn(),
-      loadApiKeys: vi.fn().mockResolvedValue(undefined),
-      addApiKey: vi.fn(),
-      updateApiKey: vi.fn(),
-      deleteApiKey: vi.fn(),
-      openAddDialog: vi.fn(),
-      openEditDialog: vi.fn(),
-      closeAddDialog: vi.fn(),
-      closeEditDialog: vi.fn(),
-      handleProviderChange: vi.fn(),
-      getProviderIcon: vi.fn(),
-      getProviderDisplayName: vi.fn(),
-    })
-
+    api.get.mockResolvedValue({ data: {} })
     const wrapper = shallowMount(ApiKeyManagementCard, {
       global: { stubs: vuetifyStubs },
     })
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="select-item"]').text()).toContain('mdi-radar')
+    expect(wrapper.get('[data-testid="select-item"]').text()).toContain('mdi-robot')
   })
 
   it('handles the Vuetify 4 model update event for the case-number prefix', async () => {
-    const onPrefixChange = vi.fn()
-    useSystemConfiguration.mockReturnValue({
-      selectedTemplate: ref('PREFIX-YYMM-NN'),
-      caseNumberPrefix: ref('CASE'),
-      configLoading: ref(false),
-      exampleCaseNumber: ref('CASE-2609-01'),
-      templateOptions: [],
-      isConfigChanged: computed(() => true),
-      isConfigValid: computed(() => true),
-      validatePrefix: vi.fn(() => true),
-      onTemplateChange: vi.fn(),
-      onPrefixChange,
-      loadConfiguration: vi.fn().mockResolvedValue(undefined),
-      saveConfiguration: vi.fn(),
-      resetConfiguration: vi.fn(),
-    })
+    api.get.mockImplementation(async (url) => ({
+      data:
+        url === '/api/admin/configuration'
+          ? { case_number_template: 'PREFIX-YYMM-NN', case_number_prefix: 'CASE' }
+          : { example_case_number: 'CASE-2609-01' },
+    }))
 
     const wrapper = shallowMount(SystemConfigurationCard, {
       global: { stubs: vuetifyStubs },
     })
+    await flushPromises()
     await wrapper.get('input[aria-label="Prefix (2-8 letters/numbers)"]').setValue('INV')
 
-    expect(onPrefixChange).toHaveBeenCalledWith('INV')
+    expect(api.get).toHaveBeenLastCalledWith(
+      '/api/admin/configuration/preview?template=PREFIX-YYMM-NN&prefix=INV',
+    )
   })
 })

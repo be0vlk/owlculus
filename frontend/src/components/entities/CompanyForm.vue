@@ -11,8 +11,6 @@
         autofocus
         @update:model-value="updateField('name', $event)"
         label="Company Name"
-        variant="outlined"
-        density="comfortable"
         prepend-inner-icon="mdi-domain"
         required
         placeholder="Enter company name"

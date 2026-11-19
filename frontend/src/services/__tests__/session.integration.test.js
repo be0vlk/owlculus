@@ -6,7 +6,9 @@ vi.mock('vue-router', async (importOriginal) => {
   const actual = await importOriginal()
   return { ...actual, createWebHistory: actual.createMemoryHistory }
 })
-vi.mock('../../composables/useDarkMode', () => ({ useDarkMode: vi.fn() }))
+vi.mock('../../composables/useDarkMode', () => ({
+  useDarkMode: () => ({ isDark: false, toggleDark: vi.fn() }),
+}))
 
 let api
 let axios

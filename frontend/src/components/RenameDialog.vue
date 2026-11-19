@@ -14,8 +14,6 @@
             label="Name"
             :rules="nameRules"
             required
-            variant="outlined"
-            density="comfortable"
             :prepend-inner-icon="item?.is_folder ? 'mdi-folder' : 'mdi-file'"
           ></v-text-field>
 
@@ -30,107 +28,68 @@
         submit-icon="mdi-rename-box"
         :submit-disabled="!valid || !newName.trim() || newName === item?.title"
         :loading="loading"
-        @cancel="cancel"
+        @cancel="dialog = false"
         @submit="rename"
       />
     </v-card>
   </v-dialog>
 </template>
 
+<script>
+export const nameRules = [
+  (v) => !!v?.trim() || 'Name is required',
+  (v) => v.length <= 255 || 'Name must be less than 255 characters',
+  (v) =>
+    /^[a-zA-Z0-9._\s-]+$/.test(v) ||
+    'Name can only contain letters, numbers, spaces, dots, underscores, and hyphens',
+]
+</script>
+
 <script setup>
+import { getErrorMessage } from '@/utils/errorMessage'
 import { useDialogFocusRestore } from '@/composables/useDialogFocusRestore'
-import { ref, computed, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { evidenceService } from '../services/evidence'
 import ModalActions from './ModalActions.vue'
 
 const props = defineProps({
-  modelValue: {
-    type: Boolean,
-    default: false,
-  },
   item: {
     type: Object,
     default: null,
   },
 })
 
-const emit = defineEmits(['update:modelValue', 'renamed'])
+const emit = defineEmits(['renamed'])
 
-// Reactive data
 const form = ref()
 const valid = ref(false)
 const loading = ref(false)
 const error = ref('')
 const newName = ref('')
 
-// Computed
-const dialog = computed({
-  get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value),
-})
+const dialog = defineModel({ type: Boolean, default: false })
 
-// Validation rules
-const nameRules = [
-  (v) => !!v || 'Name is required',
-  (v) => (v && v.length >= 1) || 'Name must be at least 1 character',
-  (v) => (v && v.length <= 255) || 'Name must be less than 255 characters',
-  (v) =>
-    /^[a-zA-Z0-9._\s-]+$/.test(v) ||
-    'Name can only contain letters, numbers, spaces, dots, underscores, and hyphens',
-]
-
-// Methods
 const rename = async () => {
   if (loading.value) return
   const { valid: isValid } = await form.value.validate()
-  if (!isValid || !newName.value.trim()) {
-    return
-  }
+  if (!isValid) return
 
   loading.value = true
   error.value = ''
 
   try {
-    let updatedItem
-
-    if (props.item.is_folder) {
-      updatedItem = await evidenceService.updateFolder(props.item.id, {
-        title: newName.value.trim(),
-      })
-    } else {
-      updatedItem = await evidenceService.updateEvidence(props.item.id, {
-        title: newName.value.trim(),
-      })
-    }
-
-    emit('renamed', updatedItem)
+    const update = props.item.is_folder ? 'updateFolder' : 'updateEvidence'
+    emit('renamed', await evidenceService[update](props.item.id, { title: newName.value.trim() }))
     dialog.value = false
   } catch (err) {
-    error.value = err.response?.data?.detail || err.message || 'Failed to rename item'
+    error.value = getErrorMessage(err, 'Failed to rename item')
   } finally {
     loading.value = false
   }
 }
 
-const cancel = () => {
-  dialog.value = false
-}
-
-// Watch for dialog open to set initial name
-watch(dialog, (newVal) => {
-  if (newVal && props.item) {
-    newName.value = props.item.title
-  }
+watch([dialog, () => props.item], () => {
+  if (dialog.value && props.item) newName.value = props.item.title
 })
-
-// Watch for item changes
-watch(
-  () => props.item,
-  (newItem) => {
-    if (newItem) {
-      newName.value = newItem.title
-    }
-  },
-)
 useDialogFocusRestore(() => dialog.value)
 </script>

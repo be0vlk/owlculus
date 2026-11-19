@@ -75,7 +75,6 @@ class ServiceEvidenceSink:
                     case_id=request.case_id,
                     title="Plugin Results",
                     description="Auto-created folder for all plugin and hunt results",
-                    folder_path=None,
                     parent_folder_id=None,
                 ),
                 current_user=user,
@@ -123,8 +122,8 @@ class ServiceEntitySink:
     async def _write_ip(
         self, request: IpAddressWrite, case_id: int, user: models.User
     ) -> None:
-        existing = await self._service.find_entity_by_ip_address(
-            case_id, request.address, current_user=user
+        existing = await self._service.find_canonical_entity(
+            case_id, "ip_address", request.address, current_user=user
         )
         if existing:
             await self._service.enrich_entity_description(
@@ -151,8 +150,8 @@ class ServiceEntitySink:
     async def _write_domain(
         self, request: DomainSubdomainsWrite, case_id: int, user: models.User
     ) -> None:
-        existing = await self._service.find_entity_by_domain(
-            case_id, request.domain, current_user=user
+        existing = await self._service.find_canonical_entity(
+            case_id, "domain", request.domain, current_user=user
         )
         if existing:
             current_data = existing.data.copy()
@@ -202,8 +201,6 @@ class PluginRun:
     api_keys: ApiKeyVault
     evidence: EvidenceSink
     entities: EntitySink
-    execution_control_id: int | None = None
-    operation_id: str = "plugin"
 
     @classmethod
     def for_test(
@@ -266,5 +263,4 @@ class ProductionPluginRunAdapter:
                 self._api_key_vault_factory(session),
                 ServiceEvidenceSink(session),
                 ServiceEntitySink(session),
-                operation_id=operation_id,
             )

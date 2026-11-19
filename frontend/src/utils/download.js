@@ -5,14 +5,8 @@ const contentDispositionHeader = (headers) => {
 }
 
 const safeDownloadName = (filename, fallbackFilename) => {
-  const leafName = (filename.split(/[\\/]/).pop() || '')
-    .split('')
-    .filter((character) => {
-      const characterCode = character.charCodeAt(0)
-      return characterCode >= 32 && characterCode !== 127
-    })
-    .join('')
-  return leafName || fallbackFilename
+  // Strip any directory part and control characters.
+  return filename.replace(/^.*[\\/]|\p{Cc}/gsu, '') || fallbackFilename
 }
 
 export const getDownloadFilename = (headers, fallbackFilename) => {
@@ -34,18 +28,9 @@ export const getDownloadFilename = (headers, fallbackFilename) => {
   return filename ? safeDownloadName(filename, fallbackFilename) : fallbackFilename
 }
 
-export const createDownloadArtifact = (blob, headers) => ({ blob, headers })
-
 export const downloadBlob = (artifact, fallbackFilename) => {
-  const filename = getDownloadFilename(artifact.headers, fallbackFilename)
-  const blob = artifact.blob
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = filename
-  anchor.style.display = 'none'
-  document.body.appendChild(anchor)
-  anchor.click()
-  document.body.removeChild(anchor)
+  const url = URL.createObjectURL(artifact.blob)
+  const download = getDownloadFilename(artifact.headers, fallbackFilename)
+  Object.assign(document.createElement('a'), { href: url, download }).click()
   URL.revokeObjectURL(url)
 }

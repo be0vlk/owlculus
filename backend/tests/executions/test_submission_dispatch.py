@@ -61,8 +61,10 @@ def test_published_unstarted_work_recovers_after_redis_loss(execution_system):
     ).json()
     dispatcher = system.start("-m", "app.executions.dispatcher")
     eventually(
-        lambda: client.get(accepted["links"]["detail"]).json()["dispatch_state"]
-        == "published"
+        lambda: (
+            client.get(accepted["links"]["detail"]).json()["dispatch_state"]
+            == "published"
+        )
     )
     system.stop(dispatcher)
     broker = Redis.from_url(system.env["REDIS_URL"])
@@ -131,10 +133,10 @@ def test_admission_is_atomic_across_kinds_and_api_instances(execution_system, li
     for response in responses:
         if response.status_code == 202:
             eventually(
-                lambda response=response: first.get(
-                    response.json()["links"]["detail"]
-                ).json()["status"]
-                == "completed"
+                lambda response=response: (
+                    first.get(response.json()["links"]["detail"]).json()["status"]
+                    == "completed"
+                )
             )
     assert submit(9).status_code == 202
 

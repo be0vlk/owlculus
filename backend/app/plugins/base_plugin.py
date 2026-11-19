@@ -7,7 +7,7 @@ from typing import Any
 
 from app.core.utils import get_utc_now
 from app.schemas.evidence_schema import EvidenceCreate
-from app.services.api_key_vault import ApiKeyVault, Provider
+from app.services.api_key_vault import Provider
 
 from .output_limits import OutputBudget
 from .plugin_context import PluginRun
@@ -56,10 +56,6 @@ class BasePlugin(ABC):
     @staticmethod
     def status(message: str) -> ResultEvent:
         return ResultEvent.status(message)
-
-    @staticmethod
-    def complete() -> ResultEvent:
-        return ResultEvent.complete()
 
     @abstractmethod
     def run(
@@ -141,11 +137,13 @@ class BasePlugin(ABC):
     ) -> Sequence[EntityWrite]:
         return []
 
-    def _generate_ip_description(self, ip_address: str, context: str = "") -> str:
+    def _generate_ip_description(self, context: str = "") -> str:
         context_part = f" for '{context}'" if context else ""
         return f"Discovered via {self.display_name} lookup{context_part}"
 
-    def _get_enhanced_parameters(self) -> dict[str, dict[str, Any]]:
+    def get_metadata(self) -> dict[str, Any]:
+        if self.evidence_category not in EvidenceCreate.VALID_CATEGORIES:
+            raise ValueError(f"Invalid evidence category: {self.evidence_category}")
         parameters = self.parameters.copy()
         parameters.setdefault(
             "save_to_case",
@@ -156,23 +154,12 @@ class BasePlugin(ABC):
                 "required": False,
             },
         )
-        return parameters
-
-    def get_metadata(self, api_keys: ApiKeyVault | None = None) -> dict[str, Any]:
-        if self.evidence_category not in EvidenceCreate.VALID_CATEGORIES:
-            raise ValueError(f"Invalid evidence category: {self.evidence_category}")
-        metadata: dict[str, Any] = {
+        return {
             "name": self.name,
             "display_name": self.display_name,
             "description": self.description,
             "enabled": self.enabled,
             "category": self.category,
-            "parameters": self._get_enhanced_parameters(),
+            "parameters": parameters,
             "api_key_requirements": self.api_key_requirements,
         }
-        if api_keys is not None:
-            metadata["api_key_status"] = {
-                provider.value: api_keys.is_configured(provider)
-                for provider in self.api_key_requirements
-            }
-        return metadata

@@ -1,10 +1,4 @@
-"""
-Main API router configuration that aggregates all API endpoints.
-
-This module sets up the primary API router by including all sub-routers for different
-functional areas including authentication, users, cases, clients, plugins, evidence,
-system configuration, invites, external services, hunts, and tasks.
-"""
+"""Aggregates every API router under its prefix."""
 
 from fastapi import APIRouter
 

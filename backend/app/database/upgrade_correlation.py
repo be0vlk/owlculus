@@ -4,12 +4,11 @@ from sqlalchemy import text
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, select
 
-from app.database.connection import engine
 from app.database.correlation_provenance import report_provenance
 from app.database.models import Evidence
 
 
-def upgrade(database_engine: Engine = engine) -> None:
+def upgrade(database_engine: Engine) -> None:
     with database_engine.begin() as connection:
         if database_engine.dialect.name == "postgresql":
             connection.execute(text("SELECT pg_advisory_xact_lock(827104001)"))
@@ -22,7 +21,3 @@ def upgrade(database_engine: Engine = engine) -> None:
                 if provenance is not None:
                     db.merge(provenance)
             db.flush()
-
-
-if __name__ == "__main__":
-    upgrade()

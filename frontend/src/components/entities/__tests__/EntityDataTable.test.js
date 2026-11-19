@@ -1,11 +1,18 @@
 import { defineComponent } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createVuetify } from 'vuetify'
+import * as components from 'vuetify/components'
+import * as directives from 'vuetify/directives'
 
 import EntityDataTable from '../EntityDataTable.vue'
 import { downloadBlob } from '@/utils/download'
+import { entityService } from '@/services/entity'
 
 vi.mock('@/utils/download', () => ({ downloadBlob: vi.fn() }))
+vi.mock('@/services/entity', () => ({
+  entityService: { getCaseEntities: vi.fn(), exportEntities: vi.fn(), deleteEntity: vi.fn() },
+}))
 
 const DataTableStub = defineComponent({
   props: {
@@ -13,9 +20,8 @@ const DataTableStub = defineComponent({
     items: { type: Array, default: () => [] },
     itemsLength: { type: Number, default: 0 },
     loading: Boolean,
-    sortBy: { type: Array, default: () => [] },
   },
-  emits: ['update:modelValue', 'update:options', 'update:sortBy', 'click:row'],
+  emits: ['update:modelValue', 'click:row'],
   template: `<section aria-label="Entities">
     <slot name="top" />
     <div v-if="loading" role="status">Loading entities</div>
@@ -65,7 +71,7 @@ const AlertStub = defineComponent({ template: '<div role="alert"><slot /></div>'
 
 const global = {
   stubs: {
-    VDataTableServer: DataTableStub,
+    VDataTable: DataTableStub,
     VMenu: MenuStub,
     VBtn: ButtonStub,
     VList: PassthroughStub,
@@ -84,6 +90,7 @@ const global = {
     VCardTitle: PassthroughStub,
     VCardText: PassthroughStub,
     VCardActions: PassthroughStub,
+    VDivider: PassthroughStub,
     VAlert: AlertStub,
     VSnackbar: SnackbarStub,
     VSkeletonLoader: PassthroughStub,
@@ -102,19 +109,21 @@ const mountTable = async (entities = [matchingEntity], exportError = null) => {
     blob: new Blob(['export']),
     headers: { 'content-disposition': 'attachment; filename="export.csv"' },
   }
-  const entityService = {
-    getCaseEntities: vi.fn().mockResolvedValue(entities),
-    exportEntities: exportError
-      ? vi.fn().mockRejectedValue(exportError)
-      : vi.fn().mockResolvedValue(download),
-    deleteEntity: vi.fn(),
-  }
-  const wrapper = mount(EntityDataTable, {
-    props: { caseId: 42, entityService },
-    global,
-  })
+  entityService.getCaseEntities.mockResolvedValue(entities)
+  if (exportError) entityService.exportEntities.mockRejectedValue(exportError)
+  else entityService.exportEntities.mockResolvedValue(download)
+  const wrapper = mount(EntityDataTable, { props: { caseId: 42 }, global })
   await flushPromises()
-  return { wrapper, entityService, download }
+  return { wrapper, download }
+}
+
+const button = (wrapper, text) =>
+  wrapper.findAll('button').find((item) => item.text().trim() === text)
+
+const confirmDeletion = async (wrapper) => {
+  const dialog = wrapper.get('[role="dialog"][aria-label="Confirm Deletion"]')
+  await button(dialog, 'Delete').trigger('click')
+  await flushPromises()
 }
 
 describe('EntityDataTable exports', () => {
@@ -130,7 +139,7 @@ describe('EntityDataTable exports', () => {
   it.each(['csv', 'json'])(
     'exports current filters as %s through the download helper',
     async (format) => {
-      const { wrapper, entityService, download } = await mountTable()
+      const { wrapper, download } = await mountTable()
       await wrapper.get('[data-testid="select-person"]').trigger('click')
       await wrapper.get('[data-testid="entity-search"]').setValue('needle')
       await flushPromises()
@@ -165,7 +174,7 @@ describe('EntityDataTable exports', () => {
     await wrapper.get('[data-testid="export-csv"]').trigger('click')
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="entity-export-error"]').text()).toContain(
+    expect(wrapper.get('[data-testid="entity-action-error"]').text()).toContain(
       'The export service is unavailable',
     )
   })
@@ -195,108 +204,76 @@ describe('EntityDataTable workflow', () => {
     expect(wrapper.emitted('view')).toHaveLength(2)
 
     const dialog = wrapper.get('[role="dialog"]')
-    expect(dialog.attributes('aria-label')).toBe('Confirm Delete')
+    expect(dialog.attributes('aria-label')).toBe('Confirm Deletion')
     expect(dialog.text()).toContain('Are you sure you want to delete this entity?')
     expect(dialog.text()).toContain('This action cannot be undone.')
 
-    await dialog.get('button').trigger('click')
+    await button(dialog, 'Cancel').trigger('click')
+    await flushPromises()
 
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+    expect(entityService.deleteEntity).not.toHaveBeenCalled()
   })
 
-  it('keeps the confirmation open and reports a delete failure', async () => {
-    const { wrapper, entityService } = await mountTable()
+  it('reports a delete failure', async () => {
+    const { wrapper } = await mountTable()
     entityService.deleteEntity.mockRejectedValue({
       response: { data: { detail: 'The entity is still referenced by evidence' } },
     })
 
     await wrapper.get('[aria-label="Delete Needle Person"]').trigger('click')
-    const dialog = wrapper.get('[role="dialog"]')
-    const deleteButton = dialog
-      .findAll('button')
-      .find((button) => button.text().trim() === 'Delete')
-    await deleteButton.trigger('click')
-    await flushPromises()
+    await confirmDeletion(wrapper)
 
-    expect(wrapper.get('[data-testid="entity-delete-error"]').text()).toContain(
+    expect(wrapper.get('[data-testid="entity-action-error"]').text()).toContain(
       'The entity is still referenced by evidence',
     )
-    expect(wrapper.find('[role="dialog"]').exists()).toBe(true)
     expect(wrapper.emitted('deleted')).toBeUndefined()
   })
 
-  it('removes successful items from a partial bulk deletion before retrying failures', async () => {
+  it('keeps failed items selected after a partial bulk deletion so they can be retried', async () => {
     const remainingEntity = {
       id: 2,
       entity_type: 'person',
       data: { first_name: 'Retry', last_name: 'Person' },
       created_at: '2026-09-02T00:00:00Z',
     }
-    const entityService = {
-      getCaseEntities: vi
-        .fn()
-        .mockResolvedValueOnce([matchingEntity, remainingEntity])
-        .mockResolvedValue([remainingEntity]),
-      exportEntities: vi.fn(),
-      deleteEntity: vi
-        .fn()
-        .mockResolvedValueOnce()
-        .mockRejectedValueOnce(new Error('Deletion service unavailable'))
-        .mockResolvedValueOnce(),
-    }
-    const wrapper = mount(EntityDataTable, {
-      props: { caseId: 42, entityService },
-      global,
-    })
+    entityService.getCaseEntities
+      .mockResolvedValueOnce([matchingEntity, remainingEntity])
+      .mockResolvedValue([remainingEntity])
+    entityService.deleteEntity
+      .mockResolvedValueOnce()
+      .mockRejectedValueOnce(new Error('Deletion service unavailable'))
+      .mockResolvedValueOnce()
+    const wrapper = mount(EntityDataTable, { props: { caseId: 42 }, global })
     await flushPromises()
 
     wrapper
       .findComponent(DataTableStub)
       .vm.$emit('update:modelValue', [matchingEntity, remainingEntity])
     await flushPromises()
-    await wrapper
-      .findAll('button')
-      .find((button) => button.text().includes('Delete (2)'))
-      .trigger('click')
-    let dialog = wrapper.get('[role="dialog"]')
-    await dialog
-      .findAll('button')
-      .find((button) => button.text().trim() === 'Delete')
-      .trigger('click')
-    await flushPromises()
+    await button(wrapper, 'Delete (2)').trigger('click')
+    await confirmDeletion(wrapper)
 
     expect(entityService.deleteEntity.mock.calls).toEqual([
       [42, matchingEntity.id],
       [42, remainingEntity.id],
     ])
     expect(wrapper.emitted('deleted')).toEqual([[[matchingEntity]]])
-    expect(wrapper.get('[data-testid="entity-delete-error"]').text()).toContain(
+    expect(wrapper.get('[data-testid="entity-action-error"]').text()).toContain(
       '1 entity could not be deleted: Deletion service unavailable',
     )
-    dialog = wrapper.get('[role="dialog"]')
-    expect(dialog.text()).toContain('delete this entity')
     expect(wrapper.findComponent(DataTableStub).props('items')).toEqual([remainingEntity])
 
-    await dialog
-      .findAll('button')
-      .find((button) => button.text().trim() === 'Delete')
-      .trigger('click')
-    await flushPromises()
+    await button(wrapper, 'Delete (1)').trigger('click')
+    await confirmDeletion(wrapper)
 
     expect(entityService.deleteEntity).toHaveBeenLastCalledWith(42, remainingEntity.id)
-    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+    expect(button(wrapper, 'Delete (1)')).toBeUndefined()
   })
 
   it('reports a loading failure and lets the user retry', async () => {
-    const entityService = {
-      getCaseEntities: vi.fn().mockRejectedValueOnce(new Error('Entity service unavailable')),
-      exportEntities: vi.fn(),
-      deleteEntity: vi.fn(),
-    }
-    const wrapper = mount(EntityDataTable, {
-      props: { caseId: 42, entityService },
-      global,
-    })
+    entityService.getCaseEntities.mockRejectedValueOnce(new Error('Entity service unavailable'))
+    const wrapper = mount(EntityDataTable, { props: { caseId: 42 }, global })
     await flushPromises()
 
     expect(wrapper.get('[data-testid="entity-load-error"]').text()).toContain(
@@ -311,25 +288,70 @@ describe('EntityDataTable workflow', () => {
     expect(wrapper.findComponent(DataTableStub).props('items')).toEqual([matchingEntity])
     expect(wrapper.find('[data-testid="entity-load-error"]').exists()).toBe(false)
   })
+})
 
-  it('applies table sorting to the visible entities', async () => {
-    const alphaEntity = {
-      id: 2,
-      entity_type: 'person',
-      data: { first_name: 'Alpha', last_name: 'Person' },
-      created_at: '2026-08-01T00:00:00Z',
-    }
-    const { wrapper } = await mountTable([matchingEntity, alphaEntity])
-    const table = wrapper.findComponent(DataTableStub)
+describe('EntityDataTable with Vuetify', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    )
+  })
 
-    table.vm.$emit('update:sortBy', [{ key: 'name', order: 'asc' }])
-    await flushPromises()
-    table.vm.$emit('update:options')
-    await flushPromises()
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
 
-    expect(table.props('items').map((entity) => entity.data.first_name)).toEqual([
-      'Alpha',
-      'Needle',
+  it('filters by type and search, and sorts IPv4 names numerically', async () => {
+    const ip = (id, address) => ({
+      id,
+      entity_type: 'ip_address',
+      data: { ip_address: address },
+      created_at: `2026-09-0${id}T00:00:00Z`,
+    })
+    entityService.getCaseEntities.mockResolvedValue([
+      ip(1, '10.0.0.2'),
+      ip(2, '9.0.0.1'),
+      {
+        ...matchingEntity,
+        id: 3,
+        data: { ...matchingEntity.data, description: 'witness' },
+        created_at: '2026-09-03T00:00:00Z',
+      },
     ])
+    const wrapper = mount(EntityDataTable, {
+      props: { caseId: 42 },
+      global: { plugins: [createVuetify({ components, directives, theme: false })] },
+    })
+    await flushPromises()
+    const names = () =>
+      wrapper.findAll('tbody tr').map((row) => row.findAll('td')[2]?.text().split('\n')[0])
+
+    // Newest first until the user sorts.
+    expect(names()).toEqual(['Needle Person', '9.0.0.1', '10.0.0.2'])
+
+    await wrapper
+      .findAll('th')
+      .find((th) => th.text().includes('Name'))
+      .trigger('click')
+    expect(names()).toEqual(['9.0.0.1', '10.0.0.2', 'Needle Person'])
+
+    await wrapper
+      .findAll('.v-chip')
+      .find((chip) => chip.text().includes('IP Address'))
+      .trigger('click')
+    expect(names()).toEqual(['9.0.0.1', '10.0.0.2'])
+
+    await wrapper
+      .findAll('.v-chip')
+      .find((chip) => chip.text().includes('IP Address'))
+      .trigger('click')
+    await wrapper.get('[data-testid="entity-search"] input').setValue('WITNESS')
+    expect(names()).toEqual(['Needle Person'])
   })
 })

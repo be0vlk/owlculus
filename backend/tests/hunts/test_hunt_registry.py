@@ -6,22 +6,27 @@ from sqlmodel import select
 
 from app.database.models import Hunt
 from app.hunts.base_hunt import BaseHunt
-from app.hunts.definitions import DomainHunt, PersonHunt
+from app.hunts.definitions.domain_hunt import DomainHunt
+from app.hunts.definitions.person_hunt import PersonHunt
 from app.hunts.hunt_registry import HuntRegistry
 
 
-def test_class_list_adapter_builds_a_registry():
-    registry = HuntRegistry.from_classes([DomainHunt, PersonHunt])
-
-    assert set(registry.names()) == {"DomainHunt", "PersonHunt"}
+def stored_names(session) -> set[str]:
+    return set(session.exec(select(Hunt.name)).all())
 
 
-def test_directory_scan_adapter_discovers_shipped_hunts():
+def test_class_list_adapter_builds_a_registry(session):
+    HuntRegistry.from_classes([DomainHunt, PersonHunt]).sync(session)
+
+    assert stored_names(session) == {"DomainHunt", "PersonHunt"}
+
+
+def test_directory_scan_adapter_discovers_shipped_hunts(session):
     definitions = Path(__file__).parents[2] / "app/hunts/definitions"
 
-    registry = HuntRegistry.from_directory(definitions, "app.hunts.definitions")
+    HuntRegistry.from_directory(definitions, "app.hunts.definitions").sync(session)
 
-    assert set(registry.names()) == {"DomainHunt", "PersonHunt"}
+    assert stored_names(session) == {"DomainHunt", "PersonHunt"}
 
 
 def test_registry_syncs_each_definition_to_the_database_once(session):

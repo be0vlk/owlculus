@@ -1,126 +1,70 @@
 <template>
   <v-form ref="form" @submit.prevent="emit('submit')">
     <div v-for="(paramDef, paramName) in parameters" :key="paramName" class="mb-4">
-      <!-- String/Text Parameters -->
       <v-text-field
         v-if="paramDef.type === 'string' && !paramDef.multiline"
         v-model="localValues[paramName]"
-        :label="getParameterLabel(paramName, paramDef)"
-        :placeholder="paramDef.description"
-        :rules="getValidationRules(paramName, paramDef)"
-        :required="paramDef.required"
-        :error-messages="errors[paramName]"
-        :aria-invalid="!!(errors[paramName] || validationErrors[paramName])"
-        variant="outlined"
-        density="comfortable"
-        @update:model-value="handleValueChange(paramName, $event)"
-        @blur="validateField(paramName)"
+        v-bind="inputAttrs(paramName, paramDef)"
       >
         <template #prepend>
           <v-icon :icon="getParameterIcon(paramName, paramDef)" size="small" />
         </template>
       </v-text-field>
 
-      <!-- Number Parameters -->
       <v-text-field
         v-else-if="paramDef.type === 'number' || paramDef.type === 'float'"
         v-model.number="localValues[paramName]"
-        :label="getParameterLabel(paramName, paramDef)"
-        :placeholder="paramDef.description"
-        :rules="getValidationRules(paramName, paramDef)"
-        :required="paramDef.required"
-        :error-messages="errors[paramName]"
-        :aria-invalid="!!(errors[paramName] || validationErrors[paramName])"
+        v-bind="inputAttrs(paramName, paramDef)"
         type="number"
-        variant="outlined"
-        density="comfortable"
-        @update:model-value="handleValueChange(paramName, $event)"
-        @blur="validateField(paramName)"
       >
         <template #prepend>
           <v-icon :icon="getParameterIcon(paramName, paramDef)" size="small" />
         </template>
       </v-text-field>
 
-      <!-- Boolean Parameters -->
       <v-switch
         v-else-if="paramDef.type === 'boolean'"
         v-model="localValues[paramName]"
-        :label="getParameterLabel(paramName, paramDef)"
-        :required="paramDef.required"
-        :error-messages="errors[paramName]"
-        :aria-invalid="!!(errors[paramName] || validationErrors[paramName])"
+        v-bind="fieldAttrs(paramName, paramDef)"
         color="primary"
-        density="comfortable"
-        @update:model-value="handleValueChange(paramName, $event)"
       >
         <template #prepend>
           <v-icon :icon="getParameterIcon(paramName, paramDef)" size="small" class="me-2" />
         </template>
       </v-switch>
 
-      <!-- Select/Choice Parameters -->
       <v-select
         v-else-if="paramDef.type === 'select' && paramDef.options"
         v-model="localValues[paramName]"
+        v-bind="inputAttrs(paramName, paramDef)"
         :items="paramDef.options"
-        :label="getParameterLabel(paramName, paramDef)"
-        :placeholder="paramDef.description"
-        :rules="getValidationRules(paramName, paramDef)"
-        :required="paramDef.required"
-        :error-messages="errors[paramName]"
-        :aria-invalid="!!(errors[paramName] || validationErrors[paramName])"
-        variant="outlined"
-        density="comfortable"
-        @update:model-value="handleValueChange(paramName, $event)"
       >
         <template #prepend>
           <v-icon :icon="getParameterIcon(paramName, paramDef)" size="small" />
         </template>
       </v-select>
 
-      <!-- Textarea for long text -->
       <v-textarea
         v-else-if="paramDef.type === 'text' || paramDef.multiline"
         v-model="localValues[paramName]"
-        :label="getParameterLabel(paramName, paramDef)"
-        :placeholder="paramDef.description"
-        :rules="getValidationRules(paramName, paramDef)"
-        :required="paramDef.required"
-        :error-messages="errors[paramName]"
-        :aria-invalid="!!(errors[paramName] || validationErrors[paramName])"
+        v-bind="inputAttrs(paramName, paramDef)"
         :rows="3"
-        variant="outlined"
-        density="comfortable"
-        @update:model-value="handleValueChange(paramName, $event)"
-        @blur="validateField(paramName)"
       >
         <template #prepend>
           <v-icon :icon="getParameterIcon(paramName, paramDef)" size="small" />
         </template>
       </v-textarea>
 
-      <!-- Fallback to text field -->
       <v-text-field
         v-else
         v-model="localValues[paramName]"
-        :label="getParameterLabel(paramName, paramDef)"
-        :placeholder="paramDef.description"
-        :rules="getValidationRules(paramName, paramDef)"
-        :required="paramDef.required"
-        :error-messages="errors[paramName]"
-        :aria-invalid="!!(errors[paramName] || validationErrors[paramName])"
-        variant="outlined"
-        density="comfortable"
-        @update:model-value="handleValueChange(paramName, $event)"
-        @blur="validateField(paramName)"
+        v-bind="inputAttrs(paramName, paramDef)"
       >
         <template #prepend>
           <v-icon :icon="getParameterIcon(paramName, paramDef)" size="small" />
         </template>
       </v-text-field>
 
-      <!-- Parameter Description -->
       <div v-if="paramDef.description" class="text-body-small text-medium-emphasis ml-4 mt-1">
         {{ paramDef.description }}
       </div>
@@ -129,7 +73,8 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, watch } from 'vue'
+import { formatParameterName } from '@/utils/huntDisplayUtils'
 
 const props = defineProps({
   parameters: {
@@ -140,20 +85,14 @@ const props = defineProps({
     type: Object,
     default: () => ({}),
   },
-  errors: {
-    type: Object,
-    default: () => ({}),
-  },
 })
 
-const emit = defineEmits(['update:modelValue', 'validate', 'submit'])
+const emit = defineEmits(['update:modelValue', 'submit'])
 
-// Local state
 const form = ref()
 const localValues = ref({})
 const validationErrors = ref({})
 
-// Initialize local values
 const initializeValues = () => {
   const values = {}
   Object.keys(props.parameters).forEach((paramName) => {
@@ -163,7 +102,6 @@ const initializeValues = () => {
     } else if (paramDef.default !== undefined) {
       values[paramName] = paramDef.default
     } else {
-      // Set appropriate default based on type
       switch (paramDef.type) {
         case 'boolean':
           values[paramName] = false
@@ -180,23 +118,30 @@ const initializeValues = () => {
   localValues.value = values
 }
 
-// Computed properties
-const isFormValid = computed(() => {
-  return Object.keys(validationErrors.value).length === 0
-})
-
-// Methods
 const getParameterLabel = (paramName, paramDef) => {
-  const label =
-    paramDef.label || paramName.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
+  const label = paramDef.label || formatParameterName(paramName)
   return paramDef.required ? `${label} *` : label
 }
 
+const fieldAttrs = (paramName, paramDef) => ({
+  label: getParameterLabel(paramName, paramDef),
+  required: paramDef.required,
+  'aria-invalid': !!validationErrors.value[paramName],
+  density: 'comfortable',
+  'onUpdate:modelValue': (value) => handleValueChange(paramName, value),
+})
+
+const inputAttrs = (paramName, paramDef) => ({
+  ...fieldAttrs(paramName, paramDef),
+  placeholder: paramDef.description,
+  rules: getValidationRules(paramName, paramDef),
+  variant: 'outlined',
+  onBlur: () => validateField(paramName),
+})
+
 const getParameterIcon = (paramName, paramDef) => {
-  // Check for custom icon
   if (paramDef.icon) return paramDef.icon
 
-  // Infer icon from parameter name or type
   const name = paramName.toLowerCase()
   if (name.includes('email')) return 'mdi-email'
   if (name.includes('domain') || name.includes('url')) return 'mdi-web'
@@ -217,7 +162,6 @@ const isEmptyValue = (value) => value === null || value === undefined || value =
 const getValidationRules = (paramName, paramDef) => {
   const rules = []
 
-  // Required validation
   if (paramDef.required) {
     rules.push((value) => {
       if (paramDef.type === 'boolean') return true
@@ -228,7 +172,6 @@ const getValidationRules = (paramName, paramDef) => {
     })
   }
 
-  // Type-specific validation
   if (paramDef.type === 'email' || paramName.toLowerCase().includes('email')) {
     rules.push((value) => {
       if (isEmptyValue(value) && !paramDef.required) return true
@@ -264,7 +207,6 @@ const getValidationRules = (paramName, paramDef) => {
     })
   }
 
-  // Length validation
   if (paramDef.minLength) {
     rules.push((value) => {
       if (isEmptyValue(value) && !paramDef.required) return true
@@ -283,7 +225,6 @@ const getValidationRules = (paramName, paramDef) => {
     })
   }
 
-  // Pattern validation
   if (paramDef.pattern) {
     rules.push((value) => {
       if (isEmptyValue(value) && !paramDef.required) return true
@@ -299,11 +240,7 @@ const handleValueChange = (paramName, value) => {
   localValues.value[paramName] = value
   emit('update:modelValue', { ...localValues.value })
 
-  // Clear previous validation error for this field
-  if (validationErrors.value[paramName]) {
-    delete validationErrors.value[paramName]
-    emitValidationState()
-  }
+  delete validationErrors.value[paramName]
 }
 
 const getValidationError = (name) => {
@@ -318,7 +255,6 @@ const validateField = (name) => {
   const error = getValidationError(name)
   if (error) validationErrors.value[name] = error
   else delete validationErrors.value[name]
-  emitValidationState()
 }
 
 const collectValidationErrors = () => {
@@ -328,7 +264,6 @@ const collectValidationErrors = () => {
     if (error) errors[name] = error
   }
   validationErrors.value = errors
-  emitValidationState()
 }
 
 const validateAll = async () => {
@@ -339,39 +274,9 @@ const validateAll = async () => {
   return valid
 }
 
-const emitValidationState = () => {
-  emit('validate', isFormValid.value, validationErrors.value)
-}
+watch(() => [props.parameters, props.modelValue], initializeValues, { immediate: true })
 
-// Watchers
-watch(
-  () => props.parameters,
-  () => {
-    initializeValues()
-  },
-  { immediate: true },
-)
-
-watch(
-  () => props.modelValue,
-  () => {
-    initializeValues()
-  },
-  { immediate: true },
-)
-
-// Initialize
-initializeValues()
-nextTick(() => {
-  emitValidationState()
-})
-
-// Expose validation method
 defineExpose({
   validate: validateAll,
 })
 </script>
-
-<style scoped>
-/* Any custom styles if needed */
-</style>

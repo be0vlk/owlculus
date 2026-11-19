@@ -42,3 +42,7 @@ export const TASK_PRIORITY_ICONS = {
   [TASK_PRIORITY.MEDIUM]: 'mdi-minus',
   [TASK_PRIORITY.HIGH]: 'mdi-chevron-up',
 }
+
+const toOptions = (labels) => Object.entries(labels).map(([value, title]) => ({ title, value }))
+export const TASK_STATUS_OPTIONS = toOptions(TASK_STATUS_LABELS)
+export const TASK_PRIORITY_OPTIONS = toOptions(TASK_PRIORITY_LABELS)

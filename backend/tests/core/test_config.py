@@ -49,36 +49,11 @@ def test_login_limits_require_finite_positive_configuration(monkeypatch, name, v
         Settings(_env_file=None)
 
 
-@pytest.mark.parametrize("name", ["API_WORKERS", "API_DATABASE_CONCURRENCY"])
 @pytest.mark.parametrize("value", ["0", "-1", "invalid", "1.5", "100"])
-def test_api_concurrency_configuration_rejects_invalid_values(monkeypatch, name, value):
-    monkeypatch.setenv(name, value)
-    with pytest.raises(ValidationError, match=name):
+def test_api_concurrency_configuration_rejects_invalid_values(monkeypatch, value):
+    monkeypatch.setenv("API_DATABASE_CONCURRENCY", value)
+    with pytest.raises(ValidationError, match="API_DATABASE_CONCURRENCY"):
         Settings(_env_file=None)
-
-
-def test_production_launcher_preserves_worker_and_proxy_configuration(monkeypatch):
-    from app import serve
-
-    calls = []
-    monkeypatch.setattr(serve.settings, "API_WORKERS", 2)
-    monkeypatch.setattr(serve.settings, "FORWARDED_ALLOW_IPS", "172.29.0.254")
-    monkeypatch.setattr(
-        serve.uvicorn, "run", lambda *args, **kwargs: calls.append((args, kwargs))
-    )
-    serve.main()
-    assert calls == [
-        (
-            ("app.main:app",),
-            {
-                "host": "0.0.0.0",
-                "port": 8000,
-                "workers": 2,
-                "proxy_headers": True,
-                "forwarded_allow_ips": "172.29.0.254",
-            },
-        )
-    ]
 
 
 def test_authentication_endpoint_is_independent_of_legacy_execution_url(monkeypatch):
@@ -86,4 +61,3 @@ def test_authentication_endpoint_is_independent_of_legacy_execution_url(monkeypa
     monkeypatch.setenv("AUTH_REDIS_URL", "redis://authentication.example:6379/0")
     configured = Settings(_env_file=None)
     assert configured.AUTH_REDIS_URL == "redis://authentication.example:6379/0"
-    assert configured.REDIS_URL == "redis://execution.example:6379/0"

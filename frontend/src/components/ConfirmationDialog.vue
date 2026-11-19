@@ -1,24 +1,24 @@
 <template>
   <v-dialog
     v-model="showDialog"
-    :aria-label="dialogTitle"
+    :aria-label="opts.title"
     max-width="500"
     persistent
-    @keydown.esc="!loading && handleCancel()"
+    @keydown.esc="handleCancel"
   >
     <v-card>
       <v-card-title class="d-flex align-center pa-6">
-        <v-icon :color="dialogIconColor" :icon="dialogIcon" class="me-3" size="large" />
-        <span class="text-headline-small font-weight-medium">{{ dialogTitle }}</span>
+        <v-icon :color="opts.iconColor" :icon="opts.icon" class="me-3" size="large" />
+        <span class="text-headline-small font-weight-medium">{{ opts.title }}</span>
       </v-card-title>
 
       <v-divider />
 
       <v-card-text class="pa-6">
-        <div class="text-body-large mb-4" v-html="dialogMessage" />
-        <v-alert v-if="warningText" class="mb-0" type="warning" variant="tonal">
+        <p class="text-body-large mb-4">{{ opts.message }}</p>
+        <v-alert v-if="opts.warning" class="mb-0" type="warning" variant="tonal">
           <div class="text-body-medium">
-            <strong>{{ warningText }}</strong>
+            <strong>{{ opts.warning }}</strong>
           </div>
         </v-alert>
       </v-card-text>
@@ -27,17 +27,11 @@
 
       <v-card-actions class="pa-6">
         <v-spacer />
-        <v-btn :disabled="loading" color="primary" variant="text" @click="handleCancel">
-          {{ cancelButtonText }}
+        <v-btn color="primary" variant="text" @click="handleCancel">
+          {{ opts.cancelText }}
         </v-btn>
-        <v-btn
-          variant="flat"
-          :color="confirmButtonColor"
-          @click="handleConfirm"
-          :loading="loading"
-          prepend-icon="mdi-check"
-        >
-          {{ confirmButtonText }}
+        <v-btn :color="opts.confirmColor" @click="handleConfirm" prepend-icon="mdi-check">
+          {{ opts.confirmText }}
         </v-btn>
       </v-card-actions>
     </v-card>
@@ -47,31 +41,8 @@
 <script setup>
 import { useConfirmationDialog } from '@/composables/useConfirmationDialog'
 
-const {
-  // State
-  showDialog,
-  dialogTitle,
-  dialogMessage,
-  dialogIcon,
-  dialogIconColor,
-  confirmButtonText,
-  confirmButtonColor,
-  cancelButtonText,
-  loading,
-  warningText,
+const { showDialog, opts, confirm, confirmDelete, handleConfirm, handleCancel } =
+  useConfirmationDialog()
 
-  // Methods
-  confirm,
-  confirmDelete,
-  confirmAction,
-  handleConfirm,
-  handleCancel,
-} = useConfirmationDialog()
-
-// Expose the confirm method for parent components
-defineExpose({
-  confirm,
-  confirmDelete,
-  confirmAction,
-})
+defineExpose({ confirm, confirmDelete })
 </script>

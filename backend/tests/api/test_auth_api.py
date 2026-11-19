@@ -73,7 +73,7 @@ def test_login_uses_persisted_password_hash(
 
 @pytest.mark.parametrize(
     ("username", "password"),
-    [("nonexistent", "password123"), ("testuser", "wrongpassword"), ("", "")],
+    [("nonexistent", "password123"), ("testuser", "wrongpassword")],
 )
 def test_login_rejects_invalid_credentials(
     session: Session,
@@ -88,6 +88,12 @@ def test_login_rejects_invalid_credentials(
     )
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert response.json() == {"detail": "Incorrect username or password"}
+
+
+def test_login_rejects_blank_credentials_as_missing_fields(client: TestClient):
+    """Starlette treats blank form fields as missing, so the form fails validation."""
+    response = client.post("/api/auth/login", data={"username": "", "password": ""})
+    assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
 @pytest.mark.parametrize(

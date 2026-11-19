@@ -39,7 +39,6 @@ export const auditedSources = [
   'src/components/TemplateFolderTree.vue',
   'src/components/EvidenceList.vue',
   'src/views/CaseDashboard.vue',
-  'src/composables/useEvidenceTemplates.js',
   'src/services/system.js',
   'src/services/evidence.js',
   'src/services/case.js',

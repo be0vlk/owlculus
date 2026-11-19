@@ -4,7 +4,6 @@ import { createVuetify } from 'vuetify'
 import * as components from 'vuetify/components'
 import * as directives from 'vuetify/directives'
 
-// Custom theme to match current Owlculus color scheme
 const owlculusTheme = {
   dark: false,
   colors: {
@@ -22,7 +21,6 @@ const owlculusTheme = {
     info: '#00838F',
     success: '#26A69A',
     warning: '#FB8C00',
-    // OSINT-specific colors
     'case-status': '#26A69A',
     evidence: '#FF9800',
     entity: '#9C27B0',
@@ -52,6 +50,28 @@ const owlculusDarkTheme = {
   },
 }
 
+export const defaults = {
+  VBtn: {
+    variant: 'flat',
+    style: 'text-transform: none;',
+  },
+  VCard: {
+    elevation: 2,
+  },
+  VTextField: {
+    variant: 'outlined',
+    density: 'comfortable',
+  },
+  VSelect: {
+    variant: 'outlined',
+    density: 'comfortable',
+  },
+  VTextarea: {
+    variant: 'outlined',
+    density: 'comfortable',
+  },
+}
+
 export default createVuetify({
   components,
   directives,
@@ -62,25 +82,5 @@ export default createVuetify({
       owlculusDark: owlculusDarkTheme,
     },
   },
-  defaults: {
-    VBtn: {
-      variant: 'flat',
-      style: 'text-transform: none;',
-    },
-    VCard: {
-      elevation: 2,
-    },
-    VTextField: {
-      variant: 'outlined',
-      density: 'comfortable',
-    },
-    VSelect: {
-      variant: 'outlined',
-      density: 'comfortable',
-    },
-    VTextarea: {
-      variant: 'outlined',
-      density: 'comfortable',
-    },
-  },
+  defaults,
 })

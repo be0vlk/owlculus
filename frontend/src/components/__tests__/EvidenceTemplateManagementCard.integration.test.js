@@ -57,13 +57,12 @@ const button = (wrapper, name) =>
   wrapper.findAll('button').find((item) => item.text().trim() === name)
 async function mountEditor() {
   const wrapper = mountWithVuetify(EvidenceTemplateManagementCard, { attachTo: document.body })
-  await wrapper.get('.v-expansion-panel-title').trigger('click')
   await flushPromises()
   return wrapper
 }
 function row(wrapper, name) {
   return wrapper
-    .findAll('.folder-row')
+    .findAll('.folder-content')
     .find((item) => item.get('input[placeholder="Folder name"]').element.value === name)
 }
 async function edit(wrapper, name, value, description = false) {

@@ -1,9 +1,4 @@
-"""
-Task Management API for Owlculus OSINT Platform.
-
-This module provides comprehensive task management capabilities for OSINT investigations,
-enabling structured workflow coordination and team collaboration within cases.
-"""
+"""Task and task template routes."""
 
 from typing import List
 
@@ -26,8 +21,9 @@ async def list_templates(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    service = TaskService(db)
-    return await service.get_templates(include_inactive, current_user=current_user)
+    return await TaskService(db).get_templates(
+        include_inactive, current_user=current_user
+    )
 
 
 @router.post("/templates", response_model=schemas.TaskTemplateResponse)
@@ -36,8 +32,7 @@ async def create_template(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    service = TaskService(db)
-    return await service.create_custom_template(
+    return await TaskService(db).create_custom_template(
         template.model_dump(), current_user=current_user
     )
 
@@ -49,9 +44,8 @@ async def update_template(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    service = TaskService(db)
     update_data = {k: v for k, v in updates.model_dump().items() if v is not None}
-    return await service.update_template(
+    return await TaskService(db).update_template(
         template_id, update_data, current_user=current_user
     )
 
@@ -62,8 +56,9 @@ async def delete_template(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    service = TaskService(db)
-    success = await service.delete_template(template_id, current_user=current_user)
+    success = await TaskService(db).delete_template(
+        template_id, current_user=current_user
+    )
     if success:
         return {"message": "Template deleted successfully"}
 
@@ -74,8 +69,7 @@ async def list_tasks(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    service = TaskService(db)
-    return await service.get_tasks(
+    return await TaskService(db).get_tasks(
         current_user=current_user,
         case_id=filters.case_id,
         assigned_to_id=filters.assigned_to_id,
@@ -92,8 +86,7 @@ async def create_task(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    service = TaskService(db)
-    return await service.create_task(
+    return await TaskService(db).create_task(
         case_id=task.case_id,
         task_data=task.model_dump(exclude={"case_id"}),
         current_user=current_user,
@@ -106,8 +99,7 @@ async def bulk_assign_tasks(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    service = TaskService(db)
-    return await service.bulk_assign(
+    return await TaskService(db).bulk_assign(
         data.task_ids, data.user_id, current_user=current_user
     )
 
@@ -118,8 +110,7 @@ async def bulk_update_status(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    service = TaskService(db)
-    return await service.bulk_update_status(
+    return await TaskService(db).bulk_update_status(
         data.task_ids, data.status, current_user=current_user
     )
 
@@ -130,8 +121,7 @@ async def get_task(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    service = TaskService(db)
-    return await service.get_task(task_id, current_user=current_user)
+    return await TaskService(db).get_task(task_id, current_user=current_user)
 
 
 @router.put("/{task_id}", response_model=schemas.TaskResponse)
@@ -141,9 +131,10 @@ async def update_task(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    service = TaskService(db)
     update_data = {k: v for k, v in updates.model_dump().items() if v is not None}
-    return await service.update_task(task_id, update_data, current_user=current_user)
+    return await TaskService(db).update_task(
+        task_id, update_data, current_user=current_user
+    )
 
 
 @router.delete("/{task_id}")
@@ -152,8 +143,7 @@ async def delete_task(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    service = TaskService(db)
-    success = await service.delete_task(task_id, current_user=current_user)
+    success = await TaskService(db).delete_task(task_id, current_user=current_user)
     if success:
         return {"message": "Task deleted successfully"}
 
@@ -165,8 +155,9 @@ async def assign_task(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    service = TaskService(db)
-    return await service.assign_task(task_id, user_id, current_user=current_user)
+    return await TaskService(db).assign_task(
+        task_id, user_id, current_user=current_user
+    )
 
 
 @router.put("/{task_id}/status", response_model=schemas.TaskResponse)
@@ -176,5 +167,6 @@ async def update_task_status(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    service = TaskService(db)
-    return await service.update_status(task_id, status, current_user=current_user)
+    return await TaskService(db).update_status(
+        task_id, status, current_user=current_user
+    )

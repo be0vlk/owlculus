@@ -8,13 +8,10 @@
     <v-divider />
     <v-card-text class="pa-4">
       <v-form ref="form" :id="formId" v-model="valid" :disabled="loading" @submit.prevent="save">
-        <!-- Status Update -->
         <v-select
           v-model="formData.status"
-          :items="statusOptions"
+          :items="TASK_STATUS_OPTIONS"
           label="Status"
-          variant="outlined"
-          density="comfortable"
           class="mb-4"
         />
 
@@ -24,13 +21,10 @@
           v-model="formData.due_date"
           label="Due Date"
           type="date"
-          variant="outlined"
-          density="comfortable"
           clearable
           class="mb-4"
         />
 
-        <!-- Custom Fields -->
         <div v-if="customFields.length > 0">
           <v-divider class="mb-4" />
           <div class="text-title-small text-medium-emphasis mb-3">Additional Fields</div>
@@ -52,7 +46,6 @@
         :disabled="!valid || !hasChanges"
         :loading="loading"
         color="primary"
-        variant="flat"
         type="submit"
         :form="formId"
       >
@@ -64,7 +57,7 @@
 
 <script setup>
 import { useId, ref, computed, watch } from 'vue'
-import { TASK_STATUS_LABELS } from '@/constants/tasks'
+import { TASK_STATUS_OPTIONS } from '@/constants/tasks'
 import CustomFieldInput from './CustomFieldInput.vue'
 import { useAuthStore } from '@/stores/auth'
 
@@ -93,54 +86,45 @@ const valid = ref(false)
 const validating = ref(false)
 const loading = computed(() => validating.value || props.saving)
 
-// Check if user can edit due date (admin or lead)
 const canEditDueDate = computed(() => {
   return authStore.user?.role === 'Admin' || props.isUserCaseLead
 })
 
-// Initialize form data with current task values
 const formData = ref({
   status: props.task.status,
   due_date: props.task.due_date ? props.task.due_date.split('T')[0] : null,
   custom_fields: { ...props.task.custom_fields },
 })
 
-// Track original values to detect changes
 const originalData = {
   status: props.task.status,
   due_date: props.task.due_date ? props.task.due_date.split('T')[0] : null,
   custom_fields: { ...props.task.custom_fields },
 }
 
-const statusOptions = computed(() =>
-  Object.entries(TASK_STATUS_LABELS).map(([value, title]) => ({ title, value })),
-)
-
-// Check if any changes have been made
-const hasChanges = computed(() => {
-  // Check status change
-  if (formData.value.status !== originalData.status) return true
-
-  // Check due date change (only if user can edit it)
-  if (canEditDueDate.value && formData.value.due_date !== originalData.due_date) return true
-
-  // Check custom fields changes
-  if (props.customFields.length > 0) {
-    for (const field of props.customFields) {
-      const currentValue = formData.value.custom_fields[field.name]
-      const originalValue = originalData.custom_fields[field.name]
-
-      // Handle different types of comparisons
-      if (field.type === 'boolean') {
-        if (!!currentValue !== !!originalValue) return true
-      } else if (currentValue !== originalValue) {
-        return true
-      }
-    }
+// Only changed fields are sent.
+const updates = computed(() => {
+  const result = {}
+  if (formData.value.status !== originalData.status) result.status = formData.value.status
+  if (canEditDueDate.value && formData.value.due_date !== originalData.due_date) {
+    result.due_date = formData.value.due_date
+      ? new Date(formData.value.due_date).toISOString()
+      : null
   }
-
-  return false
+  const changedFields = props.customFields.filter((field) => {
+    const current = formData.value.custom_fields[field.name]
+    const original = originalData.custom_fields[field.name]
+    return field.type === 'boolean' ? !!current !== !!original : current !== original
+  })
+  if (changedFields.length) {
+    result.custom_fields = { ...props.task.custom_fields }
+    changedFields.forEach((field) => {
+      result.custom_fields[field.name] = formData.value.custom_fields[field.name]
+    })
+  }
+  return result
 })
+const hasChanges = computed(() => Object.keys(updates.value).length > 0)
 
 async function save() {
   if (loading.value) return
@@ -148,56 +132,12 @@ async function save() {
   try {
     const result = await form.value.validate()
     if (!result.valid || !hasChanges.value || props.saving) return
-    // Only send changed fields
-    const updates = {}
-
-    if (formData.value.status !== originalData.status) {
-      updates.status = formData.value.status
-    }
-
-    // Check for due date changes (only if user can edit it)
-    if (canEditDueDate.value && formData.value.due_date !== originalData.due_date) {
-      // Convert to ISO format if date is provided, otherwise set to null
-      updates.due_date = formData.value.due_date
-        ? new Date(formData.value.due_date).toISOString()
-        : null
-    }
-
-    // Check for custom field changes
-    const customFieldChanges = {}
-    let hasCustomFieldChanges = false
-
-    if (props.customFields.length > 0) {
-      for (const field of props.customFields) {
-        const currentValue = formData.value.custom_fields[field.name]
-        const originalValue = originalData.custom_fields[field.name]
-
-        if (
-          field.type === 'boolean'
-            ? !!currentValue !== !!originalValue
-            : currentValue !== originalValue
-        ) {
-          customFieldChanges[field.name] = currentValue
-          hasCustomFieldChanges = true
-        }
-      }
-    }
-
-    if (hasCustomFieldChanges) {
-      // Merge changed custom fields with existing ones
-      updates.custom_fields = {
-        ...props.task.custom_fields,
-        ...customFieldChanges,
-      }
-    }
-
-    emit('save', updates)
+    emit('save', updates.value)
   } finally {
     validating.value = false
   }
 }
 
-// Reset form data when task prop changes
 watch(
   () => props.task,
   (newTask) => {

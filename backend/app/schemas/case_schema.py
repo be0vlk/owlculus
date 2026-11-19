@@ -1,17 +1,11 @@
-"""
-Pydantic schemas for case management data validation.
-
-This module defines request and response models for case creation, updates,
-retrieval, and user assignment functionality including case lead management.
-"""
+"""Case schemas."""
 
 from datetime import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from .user_schema import User
-from ..core.utils import get_utc_now
 
 
 class CaseUser(User):
@@ -20,7 +14,7 @@ class CaseUser(User):
     is_lead: bool = False
 
 
-class CaseBase(BaseModel):
+class CaseCreate(BaseModel):
     client_id: int
     title: str
     status: Literal["Open", "Closed"] = "Open"
@@ -28,7 +22,7 @@ class CaseBase(BaseModel):
     notes: Optional[str] = None
 
 
-class CaseOptional(BaseModel):
+class CaseUpdate(BaseModel):
     client_id: Optional[int] = None
     title: Optional[str] = None
     status: Literal["Open", "Closed"] = "Open"
@@ -36,28 +30,13 @@ class CaseOptional(BaseModel):
     notes: Optional[str] = None
 
 
-class CaseCreate(CaseBase):
-    pass
-
-
-class CaseUpdate(CaseOptional):
-    updated_at: datetime = Field(default_factory=get_utc_now)
-
-
-class Case(CaseBase):
+class Case(CaseCreate):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    created_at: datetime = Field(default_factory=get_utc_now)
-    updated_at: datetime = Field(default_factory=get_utc_now)
+    created_at: datetime
+    updated_at: datetime
     users: list[CaseUser] = []
-
-
-class CaseUserAdd(BaseModel):
-    """Schema for adding a user to a case"""
-
-    user_id: int
-    is_lead: bool = False
 
 
 class CaseUserUpdate(BaseModel):

@@ -1,19 +1,16 @@
 <template>
-  <v-form :disabled="disabled" ref="form" @submit.prevent="handleSubmit">
+  <v-form :disabled="disabled" ref="formRef" @submit.prevent="emit('submit')">
     <v-row>
-      <!-- Basic Information -->
       <v-col cols="12">
         <div class="text-title-large mb-4">Basic Information</div>
       </v-col>
 
       <v-col cols="12" md="6">
         <v-text-field
-          v-model="localForm.name"
+          v-model="form.name"
           label="Template Name"
-          variant="outlined"
-          density="comfortable"
           prepend-inner-icon="mdi-identifier"
-          :rules="[validateTemplateName]"
+          :rules="nameRules"
           :disabled="isEdit"
           hint="Unique identifier (lowercase, no spaces)"
           persistent-hint
@@ -23,12 +20,10 @@
 
       <v-col cols="12" md="6">
         <v-text-field
-          v-model="localForm.display_name"
+          v-model="form.display_name"
           label="Display Name"
-          variant="outlined"
-          density="comfortable"
           prepend-inner-icon="mdi-tag"
-          :rules="[validateDisplayName]"
+          :rules="displayNameRules"
           hint="User-friendly name"
           persistent-hint
           required
@@ -37,12 +32,10 @@
 
       <v-col cols="12">
         <v-textarea
-          v-model="localForm.description"
+          v-model="form.description"
           label="Description"
-          variant="outlined"
-          density="comfortable"
           prepend-inner-icon="mdi-text"
-          :rules="[validateDescription]"
+          :rules="[required('Description')]"
           rows="2"
           hint="Describe when and how to use this template"
           persistent-hint
@@ -52,13 +45,13 @@
 
       <v-col cols="12" md="6">
         <v-combobox
-          v-model="localForm.category"
+          v-model="form.category"
           :items="commonCategories"
           label="Category"
           variant="outlined"
           density="comfortable"
           prepend-inner-icon="mdi-folder"
-          :rules="[validateCategory]"
+          :rules="[required('Category')]"
           hint="Type to create a new category"
           persistent-hint
           required
@@ -66,16 +59,15 @@
       </v-col>
 
       <v-col cols="12" md="6">
-        <v-switch v-model="localForm.is_active" label="Active" color="primary" hide-details>
+        <v-switch v-model="form.is_active" label="Active" color="primary" hide-details>
           <template #label>
-            <span :class="localForm.is_active ? '' : 'text-medium-emphasis'">
-              {{ localForm.is_active ? 'Active' : 'Inactive' }}
+            <span :class="form.is_active ? '' : 'text-medium-emphasis'">
+              {{ form.is_active ? 'Active' : 'Inactive' }}
             </span>
           </template>
         </v-switch>
       </v-col>
 
-      <!-- Custom Fields -->
       <v-col cols="12">
         <v-divider class="my-4" />
         <div class="d-flex flex-wrap ga-3 align-center justify-space-between mb-4">
@@ -98,12 +90,8 @@
         </div>
       </v-col>
 
-      <!-- Field List -->
       <v-col cols="12">
-        <div
-          v-if="localForm.definition_json.fields.length === 0"
-          class="empty-fields text-center py-8"
-        >
+        <div v-if="form.definition_json.fields.length === 0" class="empty-fields text-center py-8">
           <v-icon icon="mdi-form-textbox" size="48" color="grey-lighten-1" class="mb-2" />
           <div class="text-title-large font-weight-medium mb-2">No Custom Fields</div>
           <p class="text-body-medium text-medium-emphasis">
@@ -112,13 +100,10 @@
         </div>
 
         <v-expansion-panels v-else variant="accordion" class="mb-4">
-          <v-expansion-panel
-            v-for="(field, index) in localForm.definition_json.fields"
-            :key="index"
-          >
+          <v-expansion-panel v-for="(field, index) in form.definition_json.fields" :key="index">
             <v-expansion-panel-title>
               <div class="d-flex align-center flex-grow-1">
-                <v-icon :icon="getFieldIcon(field.type)" class="me-3" />
+                <v-icon :icon="fieldType(field.type)?.icon || 'mdi-help-circle'" class="me-3" />
                 <span v-if="field.label" class="font-weight-medium">
                   {{ field.label }}
                   <span v-if="field.name" class="text-body-small text-medium-emphasis ms-2">
@@ -137,7 +122,7 @@
                   Required
                 </v-chip>
                 <v-chip size="small" variant="tonal">
-                  {{ getFieldTypeLabel(field.type) }}
+                  {{ fieldType(field.type)?.title || field.type }}
                 </v-chip>
               </div>
             </v-expansion-panel-title>
@@ -148,11 +133,10 @@
                   <v-text-field
                     v-model="field.name"
                     label="Field Name"
-                    variant="outlined"
                     density="compact"
                     :rules="[
-                      (v) => !!v || 'Field name is required',
-                      (v) => /^[a-zA-Z0-9_]+$/.test(v) || 'Must be alphanumeric with underscores',
+                      required('Field name'),
+                      (v) => FIELD_NAME.test(v) || 'Must be alphanumeric with underscores',
                     ]"
                     hint="Internal field identifier"
                     persistent-hint
@@ -164,9 +148,8 @@
                   <v-text-field
                     v-model="field.label"
                     label="Display Label"
-                    variant="outlined"
                     density="compact"
-                    :rules="[(v) => !!v || 'Label is required']"
+                    :rules="[required('Label')]"
                     hint="User-friendly field name"
                     persistent-hint
                     required
@@ -178,7 +161,6 @@
                     v-model="field.type"
                     :items="fieldTypes"
                     label="Field Type"
-                    variant="outlined"
                     density="compact"
                   />
                 </v-col>
@@ -197,7 +179,6 @@
                   <v-textarea
                     v-model="field.description"
                     label="Field Description (Optional)"
-                    variant="outlined"
                     density="compact"
                     rows="2"
                     hint="Help text for users"
@@ -212,7 +193,7 @@
                     size="small"
                     prepend-icon="mdi-delete"
                     :disabled="disabled"
-                    @click="removeField(index)"
+                    @click="form.definition_json.fields.splice(index, 1)"
                   >
                     Remove Field
                   </v-btn>
@@ -227,42 +208,31 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref } from 'vue'
 
 const props = defineProps({
   disabled: { type: Boolean, default: false },
-  modelValue: {
-    type: Object,
-    required: true,
-  },
-  isEdit: {
-    type: Boolean,
-    default: false,
-  },
-  validateTemplateName: {
-    type: Function,
-    required: true,
-  },
-  validateDisplayName: {
-    type: Function,
-    required: true,
-  },
-  validateDescription: {
-    type: Function,
-    required: true,
-  },
-  validateCategory: {
-    type: Function,
-    required: true,
-  },
+  isEdit: { type: Boolean, default: false },
+  existingNames: { type: Array, default: () => [] },
 })
+const form = defineModel({ type: Object, required: true })
+const emit = defineEmits(['submit'])
+const formRef = ref(null)
 
-const emit = defineEmits(['update:modelValue', 'submit'])
+const FIELD_NAME = /^[a-zA-Z0-9_]+$/
+const required = (label) => (v) => !!v || `${label} is required`
+const nameRules = [
+  required('Template name'),
+  (v) =>
+    /^[a-z0-9_-]+$/.test(v) ||
+    'Template name must contain only lowercase letters, numbers, underscores, and hyphens',
+  (v) => !props.existingNames.includes(v) || 'Template name already exists',
+]
+const displayNameRules = [
+  required('Display name'),
+  (v) => v.length >= 3 || 'Display name must be at least 3 characters',
+]
 
-// Local copy of form data
-const localForm = ref(JSON.parse(JSON.stringify(props.modelValue)))
-
-// Common categories
 const commonCategories = [
   'Investigation',
   'Analysis',
@@ -273,50 +243,18 @@ const commonCategories = [
   'Administrative',
 ]
 
-// Field types
 const fieldTypes = [
-  { title: 'Text', value: 'string' },
-  { title: 'Number', value: 'number' },
-  { title: 'Date', value: 'date' },
-  { title: 'Boolean', value: 'boolean' },
-  { title: 'Text Area', value: 'text' },
-  { title: 'Select', value: 'select' },
+  { value: 'string', title: 'Text', icon: 'mdi-format-text' },
+  { value: 'number', title: 'Number', icon: 'mdi-numeric' },
+  { value: 'date', title: 'Date', icon: 'mdi-calendar' },
+  { value: 'boolean', title: 'Yes/No', icon: 'mdi-toggle-switch' },
+  { value: 'text', title: 'Text Area', icon: 'mdi-text-box' },
+  { value: 'select', title: 'Select', icon: 'mdi-form-select' },
 ]
+const fieldType = (value) => fieldTypes.find((type) => type.value === value)
 
-// Field type icons
-const fieldTypeIcons = {
-  string: 'mdi-format-text',
-  number: 'mdi-numeric',
-  date: 'mdi-calendar',
-  boolean: 'mdi-toggle-switch',
-  text: 'mdi-text-box',
-  select: 'mdi-form-select',
-}
-
-// Field type labels
-const fieldTypeLabels = {
-  string: 'Text',
-  number: 'Number',
-  date: 'Date',
-  boolean: 'Yes/No',
-  text: 'Text Area',
-  select: 'Select',
-}
-
-// Methods
-const getFieldIcon = (type) => {
-  return fieldTypeIcons[type] || 'mdi-help-circle'
-}
-
-const getFieldTypeLabel = (type) => {
-  return fieldTypeLabels[type] || type
-}
-
-const addField = () => {
-  if (!localForm.value.definition_json.fields) {
-    localForm.value.definition_json.fields = []
-  }
-  localForm.value.definition_json.fields.push({
+function addField() {
+  form.value.definition_json.fields.push({
     name: '',
     label: '',
     type: 'string',
@@ -325,57 +263,13 @@ const addField = () => {
   })
 }
 
-const removeField = (index) => {
-  localForm.value.definition_json.fields.splice(index, 1)
+// Collapsed panels do not render their inputs, so check custom fields directly.
+async function validate() {
+  const { valid } = await formRef.value.validate()
+  return valid && form.value.definition_json.fields.every((f) => FIELD_NAME.test(f.name) && f.label)
 }
 
-const handleSubmit = () => {
-  emit('submit')
-}
-
-// Form ref
-const form = ref(null)
-
-// Expose validate method
-const validate = async () => {
-  const { valid } = await form.value.validate()
-
-  // Also validate fields
-  if (valid && localForm.value.definition_json.fields.length > 0) {
-    const fieldsValid = localForm.value.definition_json.fields.every((field) => {
-      return field.name && /^[a-zA-Z0-9_]+$/.test(field.name) && field.label
-    })
-    return fieldsValid
-  }
-
-  return valid
-}
-
-// Watch for prop changes
-watch(
-  () => props.modelValue,
-  (newValue) => {
-    // Only update if the values are actually different to prevent loops
-    if (JSON.stringify(newValue) !== JSON.stringify(localForm.value)) {
-      localForm.value = JSON.parse(JSON.stringify(newValue))
-    }
-  },
-  { deep: true },
-)
-
-// Keep the parent payload current when Enter or the save button submits immediately.
-watch(
-  localForm,
-  (newValue) => {
-    emit('update:modelValue', JSON.parse(JSON.stringify(newValue)))
-  },
-  { deep: true },
-)
-
-// Expose methods to parent
-defineExpose({
-  validate,
-})
+defineExpose({ validate })
 </script>
 
 <style scoped>

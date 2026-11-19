@@ -177,11 +177,16 @@ def test_database_lock_preserves_liveness_readiness_and_observation(execution_sy
 
                 def waiting_on_lock():
                     with system.engine.connect() as observer:
-                        return observer.execute(text("""
+                        return (
+                            observer.execute(
+                                text("""
                             SELECT count(*) FROM pg_stat_activity
                             WHERE datname = current_database() AND wait_event_type = 'Lock'
                               AND query LIKE 'SELECT client.%'
-                        """)).scalar() == 1
+                        """)
+                            ).scalar()
+                            == 1
+                        )
 
                 eventually(waiting_on_lock, timeout=3)
                 with httpx.Client(

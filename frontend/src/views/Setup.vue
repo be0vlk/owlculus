@@ -33,7 +33,6 @@
                   placeholder="Find this in the server console output."
                   prepend-inner-icon="mdi-key-variant"
                   required
-                  variant="outlined"
                 />
 
                 <v-text-field
@@ -45,7 +44,6 @@
                   maxlength="50"
                   prepend-inner-icon="mdi-account"
                   required
-                  variant="outlined"
                 />
 
                 <v-text-field
@@ -57,7 +55,6 @@
                   prepend-inner-icon="mdi-email"
                   required
                   type="email"
-                  variant="outlined"
                 />
 
                 <v-text-field
@@ -69,7 +66,6 @@
                   prepend-inner-icon="mdi-lock"
                   required
                   type="password"
-                  variant="outlined"
                 />
 
                 <v-text-field
@@ -81,7 +77,6 @@
                   prepend-inner-icon="mdi-lock-check"
                   required
                   type="password"
-                  variant="outlined"
                 />
 
                 <v-btn

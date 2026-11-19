@@ -38,7 +38,7 @@ afterEach(() => {
 
 async function openNotes(entity) {
   wrapper = mount(EntityDetailsModal, {
-    props: { show: true, entity, caseId: 7, existingEntities: [] },
+    props: { show: true, entity, caseId: 7 },
     attachTo: document.body,
     global: {
       plugins: [createVuetify({ components, directives, theme: false })],
@@ -363,7 +363,6 @@ describe('Entity notes with the real editor', () => {
   it.each([
     ['domain', 'Domain Information', 'Domain Name', 'domain', 'old.example', 'new.example'],
     ['ip_address', 'IP Address Information', 'IP Address', 'ip_address', '192.0.2.1', '192.0.2.2'],
-    ['network_assets', 'Network Assets', 'Subdomains', 'subdomains', 'old.example', 'new.example'],
     ['vehicle', 'Vehicle Information', 'Make', 'make', 'Old make', 'New make'],
   ])(
     'saves %s through the shared draft workflow',

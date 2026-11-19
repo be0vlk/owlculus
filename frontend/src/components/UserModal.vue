@@ -1,10 +1,11 @@
 <template>
   <v-dialog
     :aria-label="user ? 'Edit User' : 'Add New User'"
-    v-model="dialogVisible"
+    :model-value="show"
     max-width="600px"
     persistent
     scrollable
+    @update:model-value="!$event && $emit('close')"
   >
     <v-card>
       <v-card-title class="d-flex align-center pa-4 bg-primary">
@@ -28,17 +29,20 @@
           {{ error }}
         </v-alert>
 
-        <v-form :id="formId" :disabled="loading" ref="formRef" @submit.prevent="handleSubmit">
+        <v-form
+          :id="formId"
+          v-model="valid"
+          :disabled="loading"
+          ref="formRef"
+          @submit.prevent="handleSubmit"
+        >
           <v-container fluid class="pa-0">
             <v-row>
-              <!-- Username -->
               <v-col cols="12">
                 <v-text-field
                   v-model="formData.username"
                   label="Username"
                   :disabled="!!user"
-                  variant="outlined"
-                  density="comfortable"
                   prepend-inner-icon="mdi-account"
                   :rules="usernameRules"
                   required
@@ -49,14 +53,11 @@
                 />
               </v-col>
 
-              <!-- Email -->
               <v-col cols="12">
                 <v-text-field
                   v-model="formData.email"
                   label="Email Address"
                   type="email"
-                  variant="outlined"
-                  density="comfortable"
                   prepend-inner-icon="mdi-email"
                   :rules="emailRules"
                   required
@@ -65,14 +66,11 @@
                 />
               </v-col>
 
-              <!-- Password (only for new users) -->
               <v-col cols="12" v-if="!user">
                 <v-text-field
                   v-model="formData.password"
                   label="Password"
                   :type="showPassword ? 'text' : 'password'"
-                  variant="outlined"
-                  density="comfortable"
                   prepend-inner-icon="mdi-lock"
                   :append-inner-icon="showPassword ? 'mdi-eye' : 'mdi-eye-off'"
                   @click:append-inner="showPassword = !showPassword"
@@ -83,16 +81,13 @@
                 />
               </v-col>
 
-              <!-- Role -->
               <v-col cols="12">
                 <v-select
                   v-model="formData.role"
-                  :items="roleOptions"
+                  :items="ROLE_OPTIONS"
                   item-title="title"
                   item-value="value"
                   label="User Role"
-                  variant="outlined"
-                  density="comfortable"
                   prepend-inner-icon="mdi-shield-account"
                   required
                   hint="Determines user permissions and access level"
@@ -120,7 +115,7 @@
         :submit-form="formId"
         :submit-text="user ? 'Save Changes' : 'Create User'"
         :submit-icon="user ? 'mdi-content-save' : 'mdi-account-plus'"
-        :submit-disabled="!isFormValid"
+        :submit-disabled="!valid"
         :loading="loading"
         @cancel="$emit('close')"
         @submit="handleSubmit"
@@ -130,9 +125,9 @@
 </template>
 
 <script setup>
-import { useId, ref, onMounted, computed, watch } from 'vue'
+import { useId, ref, watch } from 'vue'
 import { userService } from '../services/user'
-// Vuetify components are auto-imported
+import { ROLE_OPTIONS } from '@/constants/roles'
 import ModalActions from './ModalActions.vue'
 
 const props = defineProps({
@@ -148,18 +143,10 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'saved'])
 
-const dialogVisible = computed({
-  get: () => props.show,
-  set: (value) => {
-    if (!value) {
-      emit('close')
-    }
-  },
-})
-
 const loading = ref(false)
 const error = ref(null)
 const showPassword = ref(false)
+const valid = ref(false)
 const formId = useId()
 const formRef = ref(null)
 
@@ -171,32 +158,6 @@ const formData = ref({
   is_active: true,
 })
 
-// Role options with descriptions and icons
-const roleOptions = [
-  {
-    value: 'Analyst',
-    title: 'Analyst',
-    description: 'Read-only access to assigned cases',
-    icon: 'mdi-chart-line',
-    color: 'warning',
-  },
-  {
-    value: 'Investigator',
-    title: 'Investigator',
-    description: 'Read/write access, can run plugins',
-    icon: 'mdi-account-search',
-    color: 'info',
-  },
-  {
-    value: 'Admin',
-    title: 'Administrator',
-    description: 'Full system access and user management',
-    icon: 'mdi-shield-check',
-    color: 'success',
-  },
-]
-
-// Validation rules
 const usernameRules = [
   (v) => !!v || 'Username is required',
   (v) => v.length >= 3 || 'Username must be at least 3 characters',
@@ -217,40 +178,6 @@ const passwordRules = [
   (v) => /\d/.test(v) || 'Password must contain at least one number',
 ]
 
-// Form validation
-const isFormValid = computed(() => {
-  if (!formData.value.username || !formData.value.email || !formData.value.role) {
-    return false
-  }
-
-  if (!props.user && !formData.value.password) {
-    return false
-  }
-
-  // Check email format
-  if (!/.+@.+\..+/.test(formData.value.email)) {
-    return false
-  }
-
-  // Check username format
-  if (formData.value.username.length < 3 || !/^[a-zA-Z0-9_-]+$/.test(formData.value.username)) {
-    return false
-  }
-
-  // Check password for new users
-  if (!props.user) {
-    if (
-      formData.value.password.length < 8 ||
-      !/[A-Za-z]/.test(formData.value.password) ||
-      !/\d/.test(formData.value.password)
-    ) {
-      return false
-    }
-  }
-
-  return true
-})
-
 const resetForm = () => {
   formData.value = {
     username: '',
@@ -261,27 +188,14 @@ const resetForm = () => {
   }
 }
 
-const updateFormData = () => {
-  if (props.user) {
-    formData.value = {
-      ...formData.value,
-      ...props.user,
-      password: '', // Don't include password when editing
-    }
-  } else {
-    resetForm()
-  }
-}
-
-onMounted(() => {
-  updateFormData()
-})
-
-// Watch for changes to the user prop to update form data
 watch(
   () => props.user,
-  () => {
-    updateFormData()
+  (user) => {
+    if (user) {
+      formData.value = { ...formData.value, ...user, password: '' }
+    } else {
+      resetForm()
+    }
   },
   { immediate: true },
 )
@@ -289,21 +203,19 @@ watch(
 const handleSubmit = async () => {
   if (loading.value) return
   const { valid } = await formRef.value.validate()
-  if (!valid || !isFormValid.value || loading.value) return
+  if (!valid || loading.value) return
   try {
     loading.value = true
     error.value = null
 
     let result
     if (props.user) {
-      // Update existing user
       result = await userService.updateUser(props.user.id, {
         email: formData.value.email,
         role: formData.value.role,
         is_active: formData.value.is_active,
       })
     } else {
-      // Create new user
       result = await userService.createUser({
         username: formData.value.username,
         email: formData.value.email,
@@ -314,7 +226,7 @@ const handleSubmit = async () => {
     }
 
     emit('saved', result)
-    resetForm() // Reset form before closing
+    resetForm()
     emit('close')
   } catch (err) {
     error.value = err.response?.data?.detail || 'Failed to save user. Please try again.'

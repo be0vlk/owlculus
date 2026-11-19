@@ -16,8 +16,10 @@ def test_backend_image_enables_proxy_headers_explicitly():
 
     development, production = contents.split("FROM runtime-base AS production")
     assert '"--proxy-headers"' in development
-    assert 'CMD ["python", "-m", "app.serve"]' in production
-    # Production's actual proxy/worker arguments are exercised in test_config.
+    assert (
+        'CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]'
+        in production
+    )
 
 
 def test_direct_backend_defaults_to_loopback_proxy_trust_only():
@@ -50,9 +52,9 @@ def test_caddy_topology_trusts_only_the_gateway_container():
     SUPPORTED_TOPOLOGIES,
 )
 def test_compose_backends_share_persistent_rate_limit_storage(topology):
-    """Every backend topology persists counters in its shared Redis service."""
+    """Every backend topology persists counters in its authentication Redis."""
     configuration = load_compose_configuration(topology)
-    redis_service = configuration["services"]["redis"]
+    redis_service = configuration["services"]["auth-redis"]
     backend = configuration["services"]["backend"]
 
     command = redis_service["command"]
@@ -61,10 +63,14 @@ def test_compose_backends_share_persistent_rate_limit_storage(topology):
     assert redis_service["volumes"] == [
         {
             "type": "volume",
-            "source": ("redis_dev_data" if topology == "development" else "redis_data"),
+            "source": (
+                "auth_redis_dev_data"
+                if topology == "development"
+                else "auth_redis_data"
+            ),
             "target": "/data",
             "volume": {},
         }
     ]
-    assert backend["environment"]["REDIS_URL"] == "redis://redis:6379/0"
-    assert backend["depends_on"]["redis"]["condition"] == "service_healthy"
+    assert backend["environment"]["AUTH_REDIS_URL"] == "redis://auth-redis:6379/0"
+    assert "auth-redis" in backend["depends_on"]

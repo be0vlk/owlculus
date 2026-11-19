@@ -8,7 +8,6 @@
     class="owlculus-sidebar border-e"
     permanent
   >
-    <!-- Logo Section -->
     <v-container :class="smAndDown ? 'pa-1' : 'pa-4'">
       <div
         class="d-flex justify-center align-center"
@@ -52,7 +51,6 @@
       </section>
     </nav>
 
-    <!-- Actions Section -->
     <template #append>
       <v-divider />
       <v-list v-if="settingsItem" nav density="compact" aria-label="Settings navigation">
@@ -142,7 +140,6 @@ const navigationSections = computed(() => {
     },
   ]
 
-  // Add management pages for admin users
   if (authStore.requiresAdmin()) {
     managementItems.push(
       { name: 'Admin', href: '/admin', icon: 'mdi-shield-account-outline' },
@@ -163,7 +160,6 @@ const navigationSections = computed(() => {
     },
   )
 
-  // Add Hunts for non-analyst users
   if (authStore.user?.role !== 'Analyst') {
     items.push({
       name: 'Hunts',
@@ -213,7 +209,7 @@ const handleLogout = () => {
   opacity: 0.65;
 }
 
-/* Fix text clipping in navigation items and increase font size */
+/* Avoids clipped nav text, increases font size */
 .sidebar-item-title {
   display: block;
   line-height: 1.2;

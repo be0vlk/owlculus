@@ -4,39 +4,22 @@ Hunt management and execution service for Owlculus OSINT automated workflows.
 This module handles all hunt-related operations including hunt definition loading,
 execution management, and asynchronous workflow orchestration. Provides automated
 OSINT investigation workflows that chain multiple plugins together with parameter
-validation, progress tracking, and real-time status updates.
+validation and progress tracking.
 """
 
-from collections.abc import Callable
 from typing import Any
 
 from sqlmodel import Session, col, select
 
-from app.core.exceptions import ResourceNotFoundException
-from app.core.logging import get_security_logger
-from app.core.websocket_manager import websocket_manager
+from app.core.exceptions import ResourceNotFoundException, ValidationException
 from app.database.models import Hunt, HuntExecution, HuntStep, User
-from app.hunts.hunt_executor import HuntExecutor
-from app.hunts.hunt_registry import HuntRegistry, shipped_hunt_registry
 from app.services.case_access import CaseAccess
-
-security_logger = get_security_logger
 
 
 class HuntService:
-    def __init__(
-        self,
-        db: Session,
-        *,
-        registry: HuntRegistry = shipped_hunt_registry,
-        executor_factory: Callable[[Session], HuntExecutor] | None = None,
-    ):
+    def __init__(self, db: Session):
         self.db = db
         self.case_access = CaseAccess(db)
-        self.registry = registry
-        self._executor_factory = executor_factory or (
-            lambda session: HuntExecutor(session, websocket_manager)
-        )
 
     async def list_hunts(self, *, current_user: User) -> list[Hunt]:
         hunts = self.db.exec(
@@ -80,8 +63,6 @@ class HuntService:
         if not hunt or not hunt.is_active:
             raise ResourceNotFoundException("Hunt not found or inactive")
 
-        from fastapi import HTTPException
-
         from app.executions.service import accept_hunt, normalize_parameters
         from app.hunts.base_hunt import BaseHunt, HuntStepDefinition
         from app.hunts.hunt_definition_check import HuntDefinitionCheck
@@ -115,11 +96,8 @@ class HuntService:
             validated = normalize_parameters(
                 definition.initial_parameters, initial_parameters
             )
-            hunt_instance = self.registry.create(hunt.name)
-            if hunt_instance is not None:
-                validated = hunt_instance.validate_parameters(validated)
         except (ValueError, KeyError, TypeError) as error:
-            raise HTTPException(422, str(error)) from None
+            raise ValidationException(str(error)) from None
         return accept_hunt(
             self.db,
             current_user,

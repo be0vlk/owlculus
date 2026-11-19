@@ -1,6 +1,5 @@
 <template>
   <div class="d-flex flex-column ga-4">
-    <!-- Status Messages -->
     <PluginStatusAlert
       v-for="(item, index) in statusMessages"
       :key="`status-${index}`"
@@ -8,7 +7,6 @@
       :message="item.data.message"
     />
 
-    <!-- DNS Results Grid -->
     <div v-if="dnsResults.length" class="dns-results-grid">
       <v-row>
         <v-col v-for="(dnsData, index) in dnsResults" :key="`dns-${index}`" cols="12" lg="6">
@@ -27,7 +25,6 @@
             </v-card-title>
 
             <v-card-text class="pa-0">
-              <!-- Record Results Grid -->
               <div class="pa-4">
                 <div class="d-flex flex-column ga-3">
                   <div
@@ -35,7 +32,6 @@
                     :key="rIndex"
                     class="record-result"
                   >
-                    <!-- Success Result -->
                     <div v-if="recordResult.records" class="mb-3">
                       <div class="d-flex align-center mb-2">
                         <v-chip class="mr-2" color="success" size="small" variant="tonal">
@@ -67,7 +63,6 @@
                       </v-card>
                     </div>
 
-                    <!-- Error Result -->
                     <v-alert
                       v-else-if="recordResult.error"
                       type="error"
@@ -94,7 +89,6 @@
       </v-row>
     </div>
 
-    <!-- Completion and Error Messages -->
     <PluginStatusAlert
       v-for="(item, index) in completionMessages"
       :key="`complete-${index}`"
@@ -111,51 +105,12 @@
       plugin-name="DNS Lookup"
     />
 
-    <!-- Legacy Format Support (for old responses) -->
-    <template v-if="legacyFormat">
-      <v-card elevation="1" rounded="lg">
-        <v-card-text>
-          <div class="d-flex align-center">
-            <v-icon icon="mdi-web" class="mr-2" color="grey-darken-1" />
-            <h3 class="text-title-large font-weight-medium">
-              {{ legacyResult.domain }}
-            </h3>
-          </div>
-        </v-card-text>
-      </v-card>
-
-      <div v-if="hasIpAddresses(legacyResult)">
-        <h4 class="text-body-large font-weight-medium d-flex align-center mb-2">
-          <v-icon icon="mdi-map-marker-outline" class="mr-1" size="16" />
-          IP Addresses
-        </h4>
-        <v-card elevation="1" rounded="lg">
-          <v-card-text>
-            <div class="d-flex justify-space-between align-start">
-              <code class="text-body-medium font-mono flex-grow-1">{{
-                legacyResult.ips.join('\n')
-              }}</code>
-              <v-btn
-                icon="mdi-content-copy"
-                size="small"
-                variant="text"
-                @click="copyToClipboard(legacyResult.ips.join('\n'))"
-                class="ml-3 flex-shrink-0"
-              >
-                <v-tooltip activator="parent" location="top">Copy all IP addresses</v-tooltip>
-              </v-btn>
-            </div>
-          </v-card-text>
-        </v-card>
-      </div>
-    </template>
-
-    <!-- No Results -->
-    <NoResultsCard v-if="!parsedResults.length && !legacyFormat" />
+    <NoResultsCard v-if="!result.length" />
   </div>
 </template>
 
 <script setup>
+import { copyToClipboard } from '@/utils/clipboard'
 import { computed, toRef } from 'vue'
 import { usePluginResults } from '@/composables/usePluginResults'
 import PluginStatusAlert from './PluginStatusAlert.vue'
@@ -163,39 +118,16 @@ import NoResultsCard from './NoResultsCard.vue'
 
 const props = defineProps({
   result: {
-    type: [Object, Array],
+    type: Array,
     required: true,
   },
 })
 
-const { parsedResults, statusMessages, completionMessages, errorMessages } = usePluginResults(
+const { statusMessages, completionMessages, errorMessages, dataResults } = usePluginResults(
   toRef(props, 'result'),
 )
 
-const legacyFormat = computed(() => {
-  return props.result && !props.result.type && (props.result.domain || props.result.ips)
-})
-
-const legacyResult = computed(() => {
-  return legacyFormat.value ? props.result : null
-})
-
-// Extract DNS data results
-const dnsResults = computed(() => {
-  return parsedResults.value.filter((item) => item.type === 'data').map((item) => item.data)
-})
-
-const hasIpAddresses = (result) => {
-  return result && !result.error && Array.isArray(result.ips) && result.ips.length > 0
-}
-
-const copyToClipboard = async (text) => {
-  try {
-    await navigator.clipboard.writeText(text)
-  } catch (err) {
-    console.error('Failed to copy text:', err)
-  }
-}
+const dnsResults = computed(() => dataResults.value.map((item) => item.data))
 </script>
 
 <style scoped>

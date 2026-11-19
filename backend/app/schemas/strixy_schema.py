@@ -1,9 +1,4 @@
-"""
-Pydantic schemas for Strixy service data validation.
-
-This module defines request and response models for Strixy OSINT service
-integration, including chat message structures and conversation handling.
-"""
+"""Strixy schemas."""
 
 from datetime import datetime
 from typing import Literal
@@ -16,6 +11,18 @@ class ChatMessage(BaseModel):
     content: str
 
 
+class VisualInput(BaseModel):
+    source_id: str
+    field: str
+    data: str
+
+
+class ModelMessage(ChatMessage):
+    """Internal provider input; never accepted as a client chat submission."""
+
+    images: list[VisualInput]
+
+
 class ChatRequest(BaseModel):
     case_id: int = Field(gt=0)
     messages: list[ChatMessage]
@@ -25,3 +32,27 @@ class ChatResponse(BaseModel):
     message: str
     role: Literal["assistant"]
     timestamp: datetime
+
+
+class SubmitMessage(BaseModel):
+    model_config = {"extra": "forbid", "str_strip_whitespace": True}
+    content: str = Field(min_length=1, max_length=16000)
+    focus: list[str] = Field(default_factory=list, max_length=20)
+
+
+class SourceCitation(BaseModel):
+    model_config = {"extra": "forbid"}
+    source_id: str
+    field: str
+    excerpt: str
+
+
+class GroundedAnswer(BaseModel):
+    model_config = {"extra": "forbid"}
+    content: str
+    citations: list[SourceCitation]
+
+
+class CreateShare(BaseModel):
+    model_config = {"extra": "forbid"}
+    through_message_id: str = Field(min_length=1, max_length=36)

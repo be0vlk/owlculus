@@ -2,29 +2,26 @@
 
 import logging
 
-from fastapi import HTTPException
 from redis import Redis
 from sqlmodel import Session, select
 
-from app.core.exceptions import ResourceNotFoundException
+from app.core.exceptions import (
+    AuthorizationException,
+    RelatedResourceException,
+    ResourceNotFoundException,
+)
 from app.core.utils import get_utc_now
 from app.database.db_utils import transaction
 from app.database.models import (
+    TERMINAL,
     ExecutionControl,
     HuntExecution,
     HuntStep,
-    PluginExecution,
+    associated_execution,
+    execution_kind,
 )
 from app.executions.events import event_redis_url, record_event
 from app.services.case_access import CaseAccess
-
-TERMINAL = {"completed", "partial", "failed", "cancelled"}
-
-
-def associated_execution(db, control):
-    if control.hunt_execution_id is not None:
-        return db.get(HuntExecution, control.hunt_execution_id)
-    return db.get(PluginExecution, control.plugin_execution_id)
 
 
 def cancel_steps(db, execution):
@@ -38,12 +35,7 @@ def cancel_steps(db, execution):
 
 
 def request_cancel(db, user, execution_id, *, kind="plugin"):
-    model = HuntExecution if kind == "hunt" else PluginExecution
-    association = (
-        ExecutionControl.hunt_execution_id
-        if kind == "hunt"
-        else ExecutionControl.plugin_execution_id
-    )
+    model, association = execution_kind(kind)
     with transaction(db):
         control = db.exec(
             select(ExecutionControl)
@@ -59,12 +51,12 @@ def request_cancel(db, user, execution_id, *, kind="plugin"):
         access.require_non_analyst(user)
         access.writable(user, execution.case_id)
         if not user.is_active:
-            raise HTTPException(403, "Inactive user")
+            raise AuthorizationException("Inactive user")
         if execution.status in TERMINAL:
             return execution
         if control is None:
-            raise HTTPException(
-                409, "Legacy execution requires the background execution upgrade"
+            raise RelatedResourceException(
+                "Legacy execution requires the background execution upgrade"
             )
         if control.cancellation_requested_at is None:
             control.cancellation_requested_at = get_utc_now()

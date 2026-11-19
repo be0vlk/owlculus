@@ -4,35 +4,17 @@ from sqlalchemy import event
 from sqlalchemy.engine import Engine
 from sqlmodel import Session
 
+from app.database.db_utils import transaction
 from app.database.models import HuntExecution, HuntStep
 from app.executions.events import record_event
-from app.executions.ownership import OwnershipLost, claim, fail_execution
+from app.executions.ownership import OwnershipLost, fail_execution
 from app.executions.service import authorize_execution
 from app.executions.worker import WorkerPluginRunner, worker_adapter, worker_resources
 from app.hunts.hunt_executor import HuntExecutor
 from app.plugins.plugin_registry import PluginRegistry
 
 
-class DurableHuntNotifier:
-    """Fenced commits journal revisions for the supervised Redis publisher.
-
-    HuntEvent is a presentation hint; publishing it directly would expose
-    provisional completion before worker cleanup has committed terminal state.
-    """
-
-    async def broadcast(self, event):
-        # Publication intent is already durable in the fenced commit below.
-        return None
-
-
-async def execute(
-    engine: Engine, registry: PluginRegistry, execution_id: int, *, ownership=None
-) -> None:
-    if ownership is None:
-        with Session(engine) as db:
-            ownership = claim(db, execution_id, kind="hunt")
-    if ownership is None:
-        return
+async def execute(engine: Engine, registry: PluginRegistry, ownership) -> None:
     with (
         worker_resources(engine, ownership) as (vault, session_factory),
         Session(engine, expire_on_commit=False) as db,
@@ -79,10 +61,10 @@ async def execute(
             assert definition is not None
             db.expunge(user)
             # End the initial read transaction without expiring the run data.
-            db.commit()
+            with transaction(db):
+                pass
             executor = HuntExecutor(
                 db,
-                DurableHuntNotifier(),
                 plugin_runner=WorkerPluginRunner(registry, vault),
                 run_adapter=worker_adapter(session_factory, vault, ownership),
                 before_step=before_step,

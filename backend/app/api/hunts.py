@@ -1,9 +1,4 @@
-"""
-Hunt Operations API for Owlculus OSINT Platform.
-
-This module provides automated OSINT workflow execution capabilities through the hunt system,
-enabling complex multi-step investigations with real-time monitoring and results tracking.
-"""
+"""Hunt catalogue, execution and result routes."""
 
 from fastapi import (
     APIRouter,
@@ -30,26 +25,23 @@ from app.services.hunt_service import HuntService
 router = APIRouter(route_class=DatabaseRoute)
 
 
+def _hunt_response(hunt: models.Hunt) -> schemas.HuntResponse:
+    definition = hunt.definition_json
+    return schemas.HuntResponse(
+        **hunt.model_dump(),
+        initial_parameters=definition.get("initial_parameters", {}),
+        step_count=len(definition["steps"]) if "steps" in definition else None,
+    )
+
+
 @router.get("/", response_model=list[schemas.HuntResponse])
 async def list_hunts(
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """List all available hunts"""
-    service = HuntService(db)
-    hunts = await service.list_hunts(current_user=current_user)
-
-    response = []
-    for hunt in hunts:
-        hunt_dict = hunt.__dict__.copy()
-        if "definition_json" in hunt_dict and "steps" in hunt_dict["definition_json"]:
-            hunt_dict["step_count"] = len(hunt_dict["definition_json"]["steps"])
-        hunt_dict["initial_parameters"] = hunt_dict["definition_json"].get(
-            "initial_parameters", {}
-        )
-        response.append(schemas.HuntResponse(**hunt_dict))
-
-    return response
+    hunts = await HuntService(db).list_hunts(current_user=current_user)
+    return [_hunt_response(hunt) for hunt in hunts]
 
 
 @router.get("/executions/{execution_id}/export")
@@ -60,8 +52,7 @@ async def export_execution(
     db: Session = Depends(get_db),
 ):
     """Download a backend-generated hunt execution export."""
-    service = ExportService(db)
-    artifact = service.export_hunt_execution(
+    artifact = ExportService(db).export_hunt_execution(
         execution_id=execution_id,
         current_user=current_user,
         export_format=format,
@@ -81,17 +72,9 @@ async def get_hunt(
     db: Session = Depends(get_db),
 ):
     """Get details of a specific hunt"""
-    service = HuntService(db)
-    hunt = await service.get_hunt(hunt_id, current_user=current_user)
-
-    hunt_dict = hunt.__dict__.copy()
-    if "definition_json" in hunt_dict and "steps" in hunt_dict["definition_json"]:
-        hunt_dict["step_count"] = len(hunt_dict["definition_json"]["steps"])
-    hunt_dict["initial_parameters"] = hunt_dict["definition_json"].get(
-        "initial_parameters", {}
+    return _hunt_response(
+        await HuntService(db).get_hunt(hunt_id, current_user=current_user)
     )
-
-    return schemas.HuntResponse(**hunt_dict)
 
 
 @router.post(
@@ -112,9 +95,7 @@ async def execute_hunt(
     The hunt will run in the background and progress can be monitored
     via the execution status endpoint or WebSocket.
     """
-    service = HuntService(db)
-
-    execution = await service.create_execution(
+    execution = await HuntService(db).create_execution(
         hunt_id=hunt_id,
         case_id=request.case_id,
         initial_parameters=request.parameters,
@@ -122,20 +103,12 @@ async def execute_hunt(
         idempotency_key=idempotency_key,
     )
 
-    hunt = db.get(models.Hunt, execution.hunt_id)
-
     response.headers["Location"] = f"/api/hunts/executions/{execution.id}"
     return schemas.HuntExecutionResponse(
         **hunt_observation(db, execution),
         **HuntResultReader(db, execution, current_user).hunt_view(),
-        hunt=(
-            schemas.HuntResponse(
-                **hunt.__dict__,
-                initial_parameters=hunt.definition_json.get("initial_parameters", {}),
-            )
-            if hunt
-            else None
-        ),
+        # Acceptance hands back a detached execution, so load the hunt explicitly.
+        hunt=_hunt_response(db.get_one(models.Hunt, execution.hunt_id)),
     )
 
 
@@ -154,51 +127,30 @@ async def get_execution_status(
     """
     service = HuntService(db)
     execution = await service.get_execution(execution_id, current_user=current_user)
-
-    hunt = db.get(models.Hunt, execution.hunt_id)
-    case = execution.case
-    created_by = db.get(models.User, execution.created_by_id)
-    steps = None
-
-    if include_steps:
-        steps = await service.get_execution_steps(
-            execution_id, current_user=current_user
-        )
-
+    steps = (
+        await service.get_execution_steps(execution_id, current_user=current_user)
+        if include_steps
+        else None
+    )
     reader = HuntResultReader(db, execution, current_user, steps)
-    response = schemas.HuntExecutionResponse(
+    case = execution.case
+    creator = execution.creator
+    return schemas.HuntExecutionResponse(
         **hunt_observation(db, execution),
         **reader.hunt_view(),
-        hunt=(
-            schemas.HuntResponse(
-                **hunt.__dict__,
-                initial_parameters=hunt.definition_json.get("initial_parameters", {}),
-            )
-            if hunt
-            else None
-        ),
+        hunt=_hunt_response(execution.hunt),
         steps=(
             [schemas.HuntStepResponse(**reader.step_view(step)) for step in steps]
             if steps
             else None
         ),
-        case=(
-            {"id": case.id, "title": case.title, "case_number": case.case_number}
-            if case
-            else None
-        ),
-        created_by=(
-            {
-                "id": created_by.id,
-                "email": created_by.email,
-                "username": created_by.username,
-            }
-            if created_by
-            else None
-        ),
+        case={"id": case.id, "title": case.title, "case_number": case.case_number},
+        created_by={
+            "id": creator.id,
+            "email": creator.email,
+            "username": creator.username,
+        },
     )
-
-    return response
 
 
 @router.get(
@@ -211,19 +163,17 @@ async def list_case_executions(
     db: Session = Depends(get_db),
 ):
     """List all hunt executions for a specific case"""
-    service = HuntService(db)
-    executions = await service.list_case_executions(case_id, current_user=current_user)
-
-    response = []
-    for execution in executions:
-        hunt = db.get(models.Hunt, execution.hunt_id)
-        exec_dict = execution.__dict__.copy()
-        if hunt:
-            exec_dict["hunt_display_name"] = hunt.display_name
-            exec_dict["hunt_category"] = hunt.category
-        response.append(schemas.HuntExecutionListResponse(**exec_dict))
-
-    return response
+    executions = await HuntService(db).list_case_executions(
+        case_id, current_user=current_user
+    )
+    return [
+        schemas.HuntExecutionListResponse(
+            **execution.model_dump(),
+            hunt_display_name=execution.hunt.display_name,
+            hunt_category=execution.hunt.category,
+        )
+        for execution in executions
+    ]
 
 
 @router.delete("/executions/{execution_id}")
@@ -233,9 +183,9 @@ async def cancel_execution(
     db: Session = Depends(get_db),
 ):
     """Cancel a running hunt execution"""
-    service = HuntService(db)
-
-    execution = await service.cancel_execution(execution_id, current_user=current_user)
+    execution = await HuntService(db).cancel_execution(
+        execution_id, current_user=current_user
+    )
     return {
         "message": (
             "Cancellation requested"

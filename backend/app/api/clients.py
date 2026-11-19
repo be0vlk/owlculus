@@ -1,9 +1,4 @@
-"""
-Client Management API for Owlculus OSINT Platform.
-
-This module provides client organization management for the Owlculus platform,
-enabling structured relationship management for OSINT service delivery.
-"""
+"""Client routes."""
 
 from fastapi import APIRouter, Depends, status
 from sqlmodel import Session
@@ -25,8 +20,7 @@ async def read_clients(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    client_service = ClientService(db)
-    return await client_service.get_clients(
+    return await ClientService(db).get_clients(
         current_user=current_user, skip=skip, limit=limit
     )
 
@@ -37,8 +31,9 @@ async def create_client(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    client_service = ClientService(db)
-    return await client_service.create_client(client=client, current_user=current_user)
+    return await ClientService(db).create_client(
+        client=client, current_user=current_user
+    )
 
 
 @router.get("/{client_id}", response_model=schemas.Client)
@@ -47,8 +42,7 @@ async def read_client(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    client_service = ClientService(db)
-    return await client_service.get_client(
+    return await ClientService(db).get_client(
         client_id=client_id, current_user=current_user
     )
 
@@ -60,8 +54,7 @@ async def update_client(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    client_service = ClientService(db)
-    return await client_service.update_client(
+    return await ClientService(db).update_client(
         client_id=client_id, client_update=client, current_user=current_user
     )
 
@@ -72,6 +65,7 @@ async def delete_client(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    client_service = ClientService(db)
-    await client_service.delete_client(client_id=client_id, current_user=current_user)
+    await ClientService(db).delete_client(
+        client_id=client_id, current_user=current_user
+    )
     return {"message": "Client deleted successfully"}

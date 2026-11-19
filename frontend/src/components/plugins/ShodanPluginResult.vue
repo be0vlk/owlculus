@@ -1,6 +1,5 @@
 <template>
   <div class="d-flex flex-column ga-4">
-    <!-- Status Messages -->
     <PluginStatusAlert
       v-for="(item, index) in statusMessages"
       :key="`status-${index}`"
@@ -8,7 +7,6 @@
       :message="item.data.message"
     />
 
-    <!-- Shodan Results Grid -->
     <div v-if="shodanResults.length" class="shodan-results-grid">
       <v-row>
         <v-col
@@ -19,7 +17,6 @@
           xl="4"
         >
           <v-card elevation="1" rounded="lg" class="h-100 host-card">
-            <!-- Host Header -->
             <v-card-title class="d-flex align-center result-heading">
               <v-icon icon="mdi-server-network" class="mr-3" />
               <div class="flex-grow-1">
@@ -42,9 +39,7 @@
             </v-card-title>
 
             <v-card-text class="pa-0">
-              <!-- Host Information -->
               <div class="pa-4">
-                <!-- Location -->
                 <div v-if="result.country || result.city" class="mb-3">
                   <div class="d-flex align-center mb-1">
                     <v-icon icon="mdi-map-marker" size="small" class="mr-2" />
@@ -55,7 +50,6 @@
                   </div>
                 </div>
 
-                <!-- Hostnames -->
                 <div v-if="result.hostnames && result.hostnames.length" class="mb-3">
                   <div class="d-flex align-center mb-1">
                     <v-icon icon="mdi-web" size="small" class="mr-2" />
@@ -85,7 +79,6 @@
                   </div>
                 </div>
 
-                <!-- Ports (for host lookup results) -->
                 <div v-if="result.ports && result.ports.length" class="mb-3">
                   <div class="d-flex align-center mb-1">
                     <v-icon icon="mdi-ethernet" size="small" class="mr-2" />
@@ -112,7 +105,6 @@
                   </div>
                 </div>
 
-                <!-- Single Service (for search results) -->
                 <div v-if="result.port && result.search_type !== 'host_lookup'" class="mb-3">
                   <div class="d-flex align-center mb-1">
                     <v-icon icon="mdi-ethernet" size="small" class="mr-2" />
@@ -127,7 +119,6 @@
                   </span>
                 </div>
 
-                <!-- Vulnerabilities -->
                 <div v-if="result.vulns && result.vulns.length" class="mb-3">
                   <div class="d-flex align-center mb-1">
                     <v-icon icon="mdi-shield-alert" size="small" class="mr-2" color="error" />
@@ -149,7 +140,6 @@
                   </div>
                 </div>
 
-                <!-- Services (for host lookup results) -->
                 <div v-if="result.services && result.services.length" class="mb-3">
                   <div class="d-flex align-center mb-2">
                     <v-icon icon="mdi-application-cog" size="small" class="mr-2" />
@@ -195,7 +185,6 @@
                   </div>
                 </div>
 
-                <!-- Service Banner (for individual search results) -->
                 <div v-if="result.banner && result.search_type !== 'host_lookup'" class="mb-3">
                   <div class="d-flex align-center mb-1">
                     <v-icon icon="mdi-code-braces" size="small" class="mr-2" />
@@ -221,10 +210,9 @@
                   </v-card>
                 </div>
 
-                <!-- Last Update -->
                 <div v-if="result.last_update" class="text-body-small text-medium-emphasis">
                   <v-icon icon="mdi-clock-outline" size="x-small" class="mr-1" />
-                  Last updated: {{ formatDate(result.last_update) }}
+                  Last updated: {{ formatResultDate(result.last_update) }}
                 </div>
               </div>
             </v-card-text>
@@ -233,7 +221,6 @@
       </v-row>
     </div>
 
-    <!-- Error Messages -->
     <PluginStatusAlert
       v-for="(item, index) in errorMessages"
       :key="`error-${index}`"
@@ -242,54 +229,27 @@
       plugin-name="Shodan Search"
     />
 
-    <!-- No Results -->
-    <NoResultsCard v-if="!parsedResults.length" />
+    <NoResultsCard v-if="!result.length" />
   </div>
 </template>
 
 <script setup>
+import { copyToClipboard } from '@/utils/clipboard'
 import { computed, toRef } from 'vue'
-import { usePluginResults } from '@/composables/usePluginResults'
+import { usePluginResults, formatResultDate } from '@/composables/usePluginResults'
 import PluginStatusAlert from './PluginStatusAlert.vue'
 import NoResultsCard from './NoResultsCard.vue'
 
 const props = defineProps({
   result: {
-    type: [Object, Array],
+    type: Array,
     required: true,
   },
 })
 
-const { parsedResults, statusMessages, errorMessages } = usePluginResults(toRef(props, 'result'))
+const { statusMessages, errorMessages, dataResults } = usePluginResults(toRef(props, 'result'))
 
-// Extract Shodan data results
-const shodanResults = computed(() => {
-  return parsedResults.value.filter((item) => item.type === 'data').map((item) => item.data)
-})
-
-const formatDate = (dateString) => {
-  if (!dateString || dateString === 'Unknown') return 'Unknown'
-
-  try {
-    // Handle timestamp format
-    if (typeof dateString === 'string' && dateString.includes('T')) {
-      return new Date(dateString).toLocaleDateString()
-    }
-
-    // Handle other formats
-    return new Date(dateString).toLocaleDateString()
-  } catch {
-    return dateString
-  }
-}
-
-const copyToClipboard = async (text) => {
-  try {
-    await navigator.clipboard.writeText(text)
-  } catch (err) {
-    console.error('Failed to copy text:', err)
-  }
-}
+const shodanResults = computed(() => dataResults.value.map((item) => item.data))
 </script>
 
 <style scoped>
@@ -325,9 +285,5 @@ const copyToClipboard = async (text) => {
     rgb(var(--v-theme-primary), 0.08),
     rgb(var(--v-theme-primary), 0.03)
   );
-}
-
-.cursor-pointer {
-  cursor: pointer;
 }
 </style>

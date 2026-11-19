@@ -5,7 +5,13 @@ import { pluginService } from '@/services/plugin'
 import { usePluginExecution } from '../usePluginExecution'
 
 vi.mock('@/services/plugin', () => ({
-  pluginService: { getExecution: vi.fn(), getResults: vi.fn(), cancelExecution: vi.fn() },
+  pluginService: {
+    getExecution: vi.fn(),
+    getResults: vi.fn(),
+    cancelExecution: vi.fn(),
+    createExecutionStream: vi.fn(),
+    closeExecutionStream: vi.fn(),
+  },
 }))
 afterEach(() => {
   vi.useRealTimers()

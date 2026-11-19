@@ -1,6 +1,5 @@
 <template>
   <div class="hunt-execution-history">
-    <!-- Search and Filter Bar -->
     <v-card variant="outlined" class="mb-4">
       <v-card-text>
         <v-row class="align-center">
@@ -9,8 +8,6 @@
               v-model="searchQuery"
               prepend-inner-icon="mdi-magnify"
               label="Search executions..."
-              variant="outlined"
-              density="comfortable"
               clearable
               hide-details
             />
@@ -20,8 +17,6 @@
               v-model="statusFilter"
               :items="statusOptions"
               label="Status"
-              variant="outlined"
-              density="comfortable"
               clearable
               hide-details
             />
@@ -31,8 +26,6 @@
               v-model="categoryFilter"
               :items="categoryOptions"
               label="Category"
-              variant="outlined"
-              density="comfortable"
               clearable
               hide-details
             />
@@ -46,13 +39,11 @@
       </v-card-text>
     </v-card>
 
-    <!-- Loading State -->
     <div v-if="loading" class="text-center pa-8">
       <v-progress-circular indeterminate size="64" />
       <div class="text-title-large mt-4">Loading execution history...</div>
     </div>
 
-    <!-- Empty State -->
     <v-card v-else-if="filteredExecutions.length === 0" variant="outlined" class="text-center pa-8">
       <v-icon icon="mdi-history" size="64" color="grey" class="mb-4" />
       <div class="text-title-large mb-2">No executions found</div>
@@ -65,7 +56,6 @@
       </div>
     </v-card>
 
-    <!-- Execution History Table -->
     <v-card v-else variant="outlined">
       <v-data-table
         :headers="headers"
@@ -76,7 +66,6 @@
         density="comfortable"
         item-value="id"
       >
-        <!-- Hunt Name Column -->
         <template #[`item.hunt_display_name`]="{ item }">
           <div class="d-flex align-center">
             <v-avatar
@@ -91,14 +80,12 @@
           </div>
         </template>
 
-        <!-- Target Column -->
         <template #[`item.target`]="{ item }">
           <div class="text-body-medium">
             {{ getTargetDisplay(item) }}
           </div>
         </template>
 
-        <!-- Status Column -->
         <template #[`item.status`]="{ item }">
           <v-chip
             :color="getStatusColor(item.status)"
@@ -110,7 +97,6 @@
           </v-chip>
         </template>
 
-        <!-- Progress Column -->
         <template #[`item.progress`]="{ item }">
           <div class="d-flex align-center">
             <v-progress-linear
@@ -125,17 +111,16 @@
           </div>
         </template>
 
-        <!-- Created At Column -->
         <template #[`item.created_at`]="{ item }">
           <div class="text-body-medium">{{ formatDate(item.created_at) }}</div>
         </template>
 
-        <!-- Duration Column -->
         <template #[`item.duration`]="{ item }">
-          <span class="text-body-medium">{{ calculateDuration(item) }}</span>
+          <span class="text-body-medium">{{
+            calculateDuration(item.started_at, item.completed_at)
+          }}</span>
         </template>
 
-        <!-- Actions Column -->
         <template #[`item.actions`]="{ item }">
           <v-btn
             icon="mdi-eye"
@@ -153,9 +138,12 @@
 <script setup>
 import { ref, computed } from 'vue'
 import {
+  calculateDuration,
   getHuntTargetSummary,
   getCategoryColor,
   getCategoryIcon,
+  getStatusColor,
+  getStatusIcon,
   getStatusText as formatStatusText,
 } from '@/utils/huntDisplayUtils'
 import { formatDate } from '@/composables/dateUtils'
@@ -173,13 +161,11 @@ const props = defineProps({
 
 defineEmits(['view-details'])
 
-// Local state
 const searchQuery = ref('')
 const statusFilter = ref(null)
 const categoryFilter = ref(null)
 const itemsPerPage = ref(25)
 
-// Table headers
 const headers = [
   { title: 'Hunt', key: 'hunt_display_name', sortable: true },
   { title: 'Target', key: 'target', sortable: true, width: 200 },
@@ -190,7 +176,6 @@ const headers = [
   { title: 'Actions', key: 'actions', sortable: false, width: 80 },
 ]
 
-// Filter options
 const statusOptions = ['completed', 'failed', 'partial', 'cancelled', 'running', 'pending'].map(
   (value) => ({ title: formatStatusText(value, true), value }),
 )
@@ -205,7 +190,6 @@ const categoryOptions = computed(() => {
   }))
 })
 
-// Computed properties
 const hasActiveFilters = computed(() => {
   return !!(searchQuery.value || statusFilter.value || categoryFilter.value)
 })
@@ -213,7 +197,6 @@ const hasActiveFilters = computed(() => {
 const filteredExecutions = computed(() => {
   let filtered = props.executions
 
-  // Filter by search query
   if (searchQuery.value) {
     const query = searchQuery.value.toLowerCase()
     filtered = filtered.filter((exec) => {
@@ -230,88 +213,21 @@ const filteredExecutions = computed(() => {
     })
   }
 
-  // Filter by status
   if (statusFilter.value) {
     filtered = filtered.filter((exec) => exec.status === statusFilter.value)
   }
 
-  // Filter by category
   if (categoryFilter.value) {
     filtered = filtered.filter((exec) => exec.hunt_category === categoryFilter.value)
   }
 
-  // Add computed properties for sorting
   return filtered.map((exec) => ({
     ...exec,
-    target: getTargetDisplay(exec), // Add target as a sortable property
+    target: getTargetDisplay(exec),
   }))
 })
 
-// Methods
-
-const getStatusColor = (status) => {
-  switch (status) {
-    case 'pending':
-      return 'grey'
-    case 'running':
-      return 'primary'
-    case 'completed':
-      return 'success'
-    case 'partial':
-      return 'warning'
-    case 'failed':
-      return 'error'
-    case 'cancelled':
-      return 'grey'
-    default:
-      return 'grey'
-  }
-}
-
-const getStatusIcon = (status) => {
-  switch (status) {
-    case 'pending':
-      return 'mdi-clock-outline'
-    case 'running':
-      return 'mdi-play'
-    case 'completed':
-      return 'mdi-check'
-    case 'partial':
-      return 'mdi-alert'
-    case 'failed':
-      return 'mdi-close'
-    case 'cancelled':
-      return 'mdi-stop'
-    default:
-      return 'mdi-help'
-  }
-}
-
 const getStatusText = (status) => formatStatusText(status, true)
-
-// formatDate and formatTimeOnly are now imported from dateUtils
-
-const calculateDuration = (execution) => {
-  if (!execution.started_at) return 'N/A'
-
-  const startTime = new Date(execution.started_at)
-  const endTime = execution.completed_at ? new Date(execution.completed_at) : new Date()
-  const diffMs = endTime - startTime
-
-  if (diffMs < 1000) return '< 1s'
-
-  const diffSeconds = Math.floor(diffMs / 1000)
-  const diffMinutes = Math.floor(diffSeconds / 60)
-  const diffHours = Math.floor(diffMinutes / 60)
-
-  if (diffHours > 0) {
-    return `${diffHours}h ${diffMinutes % 60}m`
-  } else if (diffMinutes > 0) {
-    return `${diffMinutes}m ${diffSeconds % 60}s`
-  } else {
-    return `${diffSeconds}s`
-  }
-}
 
 const clearFilters = () => {
   searchQuery.value = ''
@@ -319,31 +235,6 @@ const clearFilters = () => {
   categoryFilter.value = null
 }
 
-const getTargetDisplay = (execution) => {
-  const initialParams = execution.initial_parameters || {}
-  const huntCategory = execution.hunt_category || 'general'
-
-  // First try to get the target from the helper function
-  const target = getHuntTargetSummary(initialParams, huntCategory)
-
-  // If we got a meaningful result, return it
-  if (target && target !== 'N/A') {
-    return target
-  }
-
-  // Otherwise, try to extract any parameter value as fallback
-  const paramKeys = Object.keys(initialParams)
-  if (paramKeys.length > 0) {
-    // Get the first non-empty parameter value
-    for (const key of paramKeys) {
-      const value = initialParams[key]
-      if (value && typeof value === 'string' && value.trim()) {
-        // Truncate if too long
-        return value.length > 30 ? value.substring(0, 27) + '...' : value
-      }
-    }
-  }
-
-  return 'N/A'
-}
+const getTargetDisplay = (execution) =>
+  getHuntTargetSummary(execution.initial_parameters || {}, execution.hunt_category || 'general')
 </script>

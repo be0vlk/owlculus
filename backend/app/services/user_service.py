@@ -1,11 +1,6 @@
 """Session-backed user lifecycle and privilege policy."""
 
 import re
-from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
-from enum import StrEnum
-from functools import wraps
-from typing import Any, TypeVar
 
 from pydantic import BaseModel
 from pydantic import ValidationError as PydanticValidationError
@@ -15,25 +10,22 @@ from sqlmodel import Session, col, select
 
 from app import schemas
 from app.core import security, setup
+from app.core.enums import UserRole
 from app.core.exceptions import (
     AuthenticationException,
     AuthorizationException,
+    DomainException,
     DuplicateResourceException,
     ResourceNotFoundException,
     ValidationException,
 )
-from app.core.exceptions import (
-    BaseException as DomainException,
-)
-from app.core.logging import get_security_logger
-from app.core.roles import UserRole
+from app.core.logging import audit_operation, get_security_logger
 from app.core.utils import get_utc_now
 from app.database.db_utils import transaction
 from app.database.models import CaseUserLink, User
 from app.services.case_access import CaseAccess
 
 _BOOTSTRAP_USERNAME_PATTERN = re.compile(r"[A-Za-z0-9_]{3,50}\Z")
-_Result = TypeVar("_Result")
 
 
 def _validate_user_payload[T: BaseModel](schema: type[T], user_data: object) -> T:
@@ -44,71 +36,22 @@ def _validate_user_payload[T: BaseModel](schema: type[T], user_data: object) -> 
         raise ValidationException("Invalid user data") from error
 
 
-class DuplicateUserField(StrEnum):
-    """User identity fields backed by unique database constraints."""
-
-    USERNAME = "username"
-    EMAIL = "email"
-
-
-class UserWriteOperation(StrEnum):
-    """User writes whose duplicate messages differ by operation."""
-
-    CREATE = "create"
-    UPDATE = "update"
-
-
-@dataclass(frozen=True)
-class UserIdentity:
-    username: str
-    email: str
-    excluded_user_id: int | None = None
-
-
-def _audit_user_operation(
-    action: str,
-) -> Callable[[Callable[..., Awaitable[_Result]]], Callable[..., Awaitable[_Result]]]:
-    """Record one structured outcome for every sensitive user operation."""
-
-    def decorate(
-        operation: Callable[..., Awaitable[_Result]],
-    ) -> Callable[..., Awaitable[_Result]]:
-        @wraps(operation)
-        async def audited(*args: Any, **kwargs: Any) -> _Result:
-            current_user = kwargs.get("current_user") or args[-1]
-            target = kwargs.get("user") or kwargs.get("user_id")
-            if target is None and len(args) > 1:
-                target = args[1]
-            context = {
-                "action": action,
-                "actor_user_id": getattr(current_user, "id", None),
-                "event_type": f"{action}_attempt",
-            }
-            if isinstance(target, int):
-                context["target_user_id"] = target
-            elif target is not None:
-                context["target_username"] = getattr(target, "username", None)
-            logger = get_security_logger(**context)
-            try:
-                result = await operation(*args, **kwargs)
-            except DomainException as error:
-                logger.bind(
-                    event_type=f"{action}_failed",
-                    failure_reason=type(error).__name__,
-                ).warning(f"{action} failed")
-                raise
-            except Exception as error:
-                logger.bind(
-                    event_type=f"{action}_error",
-                    error_type=type(error).__name__,
-                ).error(f"{action} failed unexpectedly")
-                raise
-            logger.bind(event_type=f"{action}_success").info(f"{action} succeeded")
-            return result
-
-        return audited
-
-    return decorate
+def duplicate_user_error(
+    db: Session,
+    username: str,
+    email: str,
+    exclude_id: int | None = None,
+    username_message: str = "Username already taken",
+) -> DuplicateResourceException | None:
+    """Name the first identity field another user already owns."""
+    for field, value, message in (
+        ("username", username, username_message),
+        ("email", email, "Email already registered"),
+    ):
+        owner = db.exec(select(User).where(getattr(User, field) == value)).first()
+        if owner is not None and owner.id != exclude_id:
+            return DuplicateResourceException(message, field=field)
+    return None
 
 
 class UserService:
@@ -118,47 +61,24 @@ class UserService:
         self.db = db
         self.case_access = CaseAccess(db)
 
-    def _find_by_username(self, username: str) -> User | None:
-        return self.db.exec(select(User).where(User.username == username)).first()
-
-    def _find_by_email(self, email: str) -> User | None:
-        return self.db.exec(select(User).where(User.email == email)).first()
-
-    def _duplicate_field(self, identity: UserIdentity) -> DuplicateUserField | None:
-        username_owner = self._find_by_username(identity.username)
-        if (
-            username_owner is not None
-            and username_owner.id != identity.excluded_user_id
-        ):
-            return DuplicateUserField.USERNAME
-        email_owner = self._find_by_email(identity.email)
-        if email_owner is not None and email_owner.id != identity.excluded_user_id:
-            return DuplicateUserField.EMAIL
-        return None
-
     @staticmethod
-    def _duplicate_exception(
-        field: DuplicateUserField, operation: UserWriteOperation
-    ) -> DuplicateResourceException:
-        messages = {
-            DuplicateUserField.USERNAME: (
-                "Username already taken"
-                if operation is UserWriteOperation.UPDATE
-                else "Username already registered"
-            ),
-            DuplicateUserField.EMAIL: "Email already registered",
-        }
-        return DuplicateResourceException(messages[field], field=field.value)
+    def _require_human_account(user: User) -> None:
+        if user.system_identity is not None:
+            raise AuthorizationException(
+                "Permanent AI system accounts cannot be modified"
+            )
 
     def _persist_user(
         self,
         user: User,
-        identity: UserIdentity,
         *,
-        operation: UserWriteOperation,
-        invalid_message: str,
+        username_message: str,
+        exclude_id: int | None = None,
+        invalid_message: str = "Invalid user data",
     ) -> None:
         """Persist a user and translate a raced unique constraint at its source."""
+        # Read before the write: a rollback expires the in-memory update.
+        username, email = user.username, user.email
         try:
             with transaction(self.db):
                 self.db.add(user)
@@ -170,9 +90,11 @@ class UserService:
                         .values(is_lead=False)
                     )
         except IntegrityError as error:
-            duplicate_field = self._duplicate_field(identity)
-            if duplicate_field:
-                raise self._duplicate_exception(duplicate_field, operation) from error
+            duplicate = duplicate_user_error(
+                self.db, username, email, exclude_id, username_message
+            )
+            if duplicate:
+                raise duplicate from error
             raise ValidationException(invalid_message) from error
 
     @staticmethod
@@ -230,10 +152,7 @@ class UserService:
                 )
                 new_user = self._new_user(forced_user)
                 self._persist_user(
-                    new_user,
-                    UserIdentity(username=user.username, email=str(user.email)),
-                    operation=UserWriteOperation.CREATE,
-                    invalid_message="Invalid user data",
+                    new_user, username_message="Username already registered"
                 )
             setup.clear_setup_token()
             logger.bind(
@@ -242,17 +161,13 @@ class UserService:
                 event_type="user_creation_success",
             ).info("Bootstrap administrator created successfully")
             return schemas.User.model_validate(new_user)
-        except (
-            AuthorizationException,
-            DuplicateResourceException,
-            ValidationException,
-        ):
+        except DomainException:
             raise
         except Exception as error:
             logger.bind(
-                event_type="user_creation_error", error_type="system_error"
-            ).error(f"Bootstrap user creation error: {error}")
-            raise DomainException("Internal server error") from error
+                event_type="user_creation_error", error_type=type(error).__name__
+            ).error("Bootstrap user creation failed unexpectedly")
+            raise
 
     async def create_user_from_payload(
         self, user_data: object, current_user: User
@@ -261,35 +176,36 @@ class UserService:
         user = _validate_user_payload(schemas.UserCreate, user_data)
         return await self.create_user(user, current_user)
 
-    @_audit_user_operation("user_creation")
+    @audit_operation("user_creation")
     async def create_user(
         self, user: schemas.UserCreate, current_user: User
     ) -> schemas.User:
         self.case_access.require_admin(current_user)
         if user.is_superadmin and not current_user.is_superadmin:
             raise AuthorizationException("Only superadmin can create superadmin users")
-        identity = UserIdentity(username=user.username, email=str(user.email))
-        duplicate_field = self._duplicate_field(identity)
-        if duplicate_field:
-            raise self._duplicate_exception(duplicate_field, UserWriteOperation.CREATE)
+        duplicate = duplicate_user_error(
+            self.db,
+            user.username,
+            str(user.email),
+            username_message="Username already registered",
+        )
+        if duplicate:
+            raise duplicate
 
         new_user = self._new_user(user)
-        self._persist_user(
-            new_user,
-            identity,
-            operation=UserWriteOperation.CREATE,
-            invalid_message="Invalid user data",
-        )
+        self._persist_user(new_user, username_message="Username already registered")
         return schemas.User.model_validate(new_user)
 
     async def get_users(
         self, current_user: User, skip: int = 0, limit: int = 100
     ) -> list[schemas.User]:
         self.case_access.require_admin(current_user)
-        users = self.db.exec(select(User).offset(skip).limit(min(limit, 200))).all()
+        users = self.db.exec(
+            select(User).order_by(col(User.id)).offset(skip).limit(min(limit, 200))
+        ).all()
         return [schemas.User.model_validate(user) for user in users]
 
-    @_audit_user_operation("user_update")
+    @audit_operation("user_update")
     async def update_user(
         self, user_id: int, user_update: schemas.UserUpdate, current_user: User
     ) -> schemas.User:
@@ -299,6 +215,7 @@ class UserService:
         user = self.db.get(User, user_id)
         if user is None:
             raise ResourceNotFoundException("User not found")
+        self._require_human_account(user)
         if user.is_superadmin and not current_user.is_superadmin:
             raise AuthorizationException("Only superadmin can edit superadmin users")
         updates = user_update.model_dump(exclude_unset=True)
@@ -322,32 +239,33 @@ class UserService:
         final_superadmin = updates.get("is_superadmin", user.is_superadmin)
         if final_superadmin and final_role != UserRole.ADMIN.value:
             raise ValidationException("Only users with Admin role can be superadmin")
-        username = updates.get("username", user.username)
-        email = str(updates.get("email", user.email))
-        identity = UserIdentity(
-            username=username, email=email, excluded_user_id=user_id
+        duplicate = duplicate_user_error(
+            self.db,
+            updates.get("username", user.username),
+            str(updates.get("email", user.email)),
+            exclude_id=user_id,
         )
-        duplicate_field = self._duplicate_field(identity)
-        if duplicate_field:
-            raise self._duplicate_exception(duplicate_field, UserWriteOperation.UPDATE)
+        if duplicate:
+            raise duplicate
         updates["updated_at"] = get_utc_now()
         for field, value in updates.items():
             setattr(user, field, value)
         self._persist_user(
             user,
-            identity,
-            operation=UserWriteOperation.UPDATE,
+            exclude_id=user_id,
+            username_message="Username already taken",
             invalid_message="Invalid update data",
         )
         return schemas.User.model_validate(user)
 
-    @_audit_user_operation("password_change")
+    @audit_operation("password_change")
     async def change_password(
         self, user_id: int, current_password: str, new_password: str, current_user: User
     ) -> schemas.User:
         user = self.db.get(User, user_id)
         if user is None:
             raise ResourceNotFoundException("User not found")
+        self._require_human_account(user)
         if current_user.id != user_id:
             raise AuthorizationException("Not authorized")
         if not security.verify_password(current_password, user.password_hash):
@@ -355,7 +273,7 @@ class UserService:
         self._replace_password(user, new_password, expected_hash=user.password_hash)
         return schemas.User.model_validate(user)
 
-    @_audit_user_operation("admin_password_reset")
+    @audit_operation("admin_password_reset")
     async def admin_reset_password(
         self, user_id: int, new_password: str, current_user: User
     ) -> schemas.User:
@@ -363,6 +281,7 @@ class UserService:
         user = self.db.get(User, user_id)
         if user is None:
             raise ResourceNotFoundException("User not found")
+        self._require_human_account(user)
         if user.is_superadmin and not current_user.is_superadmin:
             raise AuthorizationException(
                 "Only superadmin can reset superadmin passwords"
@@ -392,12 +311,13 @@ class UserService:
                 raise ValidationException("Password changed concurrently; try again")
             self.db.refresh(user)
 
-    @_audit_user_operation("user_deletion")
+    @audit_operation("user_deletion")
     async def delete_user(self, user_id: int, current_user: User) -> dict:
         self.case_access.require_admin(current_user)
         user = self.db.get(User, user_id)
         if user is None:
             raise ResourceNotFoundException("User not found")
+        self._require_human_account(user)
         if user.is_superadmin:
             raise AuthorizationException("Cannot delete superadmin user")
         if current_user.id == user_id:

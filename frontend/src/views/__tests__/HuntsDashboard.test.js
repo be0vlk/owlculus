@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { flushPromises, shallowMount } from '@vue/test-utils'
+import { createTestVuetify } from '@/components/__tests__/helpers/vuetify'
 import { useHuntStore } from '@/stores/huntStore'
 import { useActiveCaseStore } from '@/stores/activeCase'
 import { huntService } from '@/services/hunt'
@@ -30,6 +31,7 @@ const execution = (id, case_id) => ({ id, case_id, status: 'completed', created_
 const mountDashboard = (stubs = {}) =>
   shallowMount(HuntsDashboard, {
     global: {
+      plugins: [createTestVuetify()],
       renderStubDefaultSlot: true,
       stubs: {
         BaseDashboard: { template: '<div><slot /></div>' },
@@ -116,7 +118,7 @@ it('discards a polling response after switching cases', async () => {
 })
 
 afterEach(() => {
-  useHuntStore().resetCaseExecutions()
+  useHuntStore().invalidateWorkflow(true)
   vi.useRealTimers()
 })
 
@@ -411,7 +413,7 @@ it('stops an existing observer as soon as a history refresh recovers complete te
   const terminal = { ...running, status: 'completed', revision: 3, steps: [] }
   huntService.getCaseExecutions.mockResolvedValue([terminal])
   huntService.getExecution.mockResolvedValue(terminal)
-  await wrapper.vm.refreshData()
+  await wrapper.vm.loadData()
   await flushPromises()
   const reads = huntService.getExecution.mock.calls.length
   await vi.advanceTimersByTimeAsync(60000)
@@ -442,7 +444,7 @@ it('keeps denial feedback and hidden output through late history details and ano
       finish = resolve
     }),
   )
-  const refresh = wrapper.vm.refreshData()
+  const refresh = wrapper.vm.loadData()
   await flushPromises()
   huntService.getExecution.mockRejectedValueOnce({
     response: { status: 403, data: { detail: 'Access revoked' } },

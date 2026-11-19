@@ -11,7 +11,7 @@ from typing import Iterator
 
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from app.database.models import User
 
@@ -40,22 +40,6 @@ def _write_private_temp_file(token: str, destination: Path) -> Path:
     except Exception:
         temporary.unlink(missing_ok=True)
         raise
-
-
-def _write_setup_token(token: str, destination: Path) -> None:
-    """Atomically publish a token with owner-only permissions."""
-    temporary = _write_private_temp_file(token, destination)
-    try:
-        os.replace(temporary, destination)
-    finally:
-        temporary.unlink(missing_ok=True)
-
-
-def generate_setup_token() -> str:
-    """Generate and persist a new setup token with 32 bytes of entropy."""
-    token = secrets.token_urlsafe(32)
-    _write_setup_token(token, SETUP_TOKEN_FILE)
-    return token
 
 
 def create_setup_token_once() -> tuple[str, bool]:
@@ -125,8 +109,13 @@ def serialize_first_user_creation(session: Session) -> Iterator[None]:
 
 
 def is_setup_required(session: Session) -> bool:
-    """Return whether the installation has no users yet."""
-    return session.exec(select(User.id).limit(1)).first() is None
+    """Return whether the installation has no human accounts yet."""
+    return (
+        session.exec(
+            select(User.id).where(col(User.system_identity).is_(None)).limit(1)
+        ).first()
+        is None
+    )
 
 
 def check_and_generate_setup_token(session: Session) -> None:

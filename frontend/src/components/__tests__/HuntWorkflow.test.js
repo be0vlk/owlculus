@@ -1,10 +1,24 @@
 import { expect, it } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
+import { createMemoryHistory, createRouter } from 'vue-router'
 import { mountWithVuetify } from './helpers/vuetify'
 import HuntParameterForm from '../hunts/HuntParameterForm.vue'
 
-it('accepts zero, preserves defaults, and renders multiline and server errors accessibly', async () => {
-  const wrapper = mountWithVuetify(HuntParameterForm, {
+const testRouter = () =>
+  createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: '/case/:id', name: 'CaseDetails', component: { template: '<div />' } },
+      { path: '/:pathMatch(.*)*', component: { template: '<div />' } },
+    ],
+  })
+
+// Correlation results link to entities, so mounts get a router unless the test brings its own.
+const mountHunt = (component, options = {}) =>
+  mountWithVuetify(component, { global: { plugins: [testRouter()] }, ...options })
+
+it('accepts zero, preserves defaults, and renders multiline and validation errors accessibly', async () => {
+  const wrapper = mountHunt(HuntParameterForm, {
     props: {
       parameters: {
         limit: { type: 'number', required: true, min: 0, default: 0 },
@@ -16,16 +30,18 @@ it('accepts zero, preserves defaults, and renders multiline and server errors ac
   await flushPromises()
   expect(await wrapper.vm.validate()).toBe(true)
   expect(wrapper.get('textarea').element.value).toBe('Investigation notes')
-  await wrapper.setProps({ errors: { limit: 'Limit unavailable' } })
+  const limit = wrapper.get('input[type="number"]')
+  await limit.setValue('')
+  await limit.trigger('blur')
   await flushPromises()
-  expect(wrapper.text()).toContain('Limit unavailable')
-  expect(wrapper.get('input[type="number"]').attributes('aria-invalid')).toBe('true')
+  expect(wrapper.text()).toContain('Limit is required')
+  expect(limit.attributes('aria-invalid')).toBe('true')
 })
 
 it('validates before execution, submits defaults, and retains failure feedback while open', async () => {
   const { default: HuntExecutionModal } = await import('../hunts/HuntExecutionModal.vue')
   const { DOMWrapper } = await import('@vue/test-utils')
-  const wrapper = mountWithVuetify(HuntExecutionModal, {
+  const wrapper = mountHunt(HuntExecutionModal, {
     props: {
       modelValue: false,
       caseId: 4,
@@ -68,7 +84,7 @@ it('validates before execution, submits defaults, and retains failure feedback w
 it('has no case selector and blocks execution without resolved context', async () => {
   const { default: HuntExecutionModal } = await import('../hunts/HuntExecutionModal.vue')
   const { DOMWrapper } = await import('@vue/test-utils')
-  const wrapper = mountWithVuetify(HuntExecutionModal, {
+  const wrapper = mountHunt(HuntExecutionModal, {
     props: { modelValue: false, hunt: { id: 7 } },
     attachTo: document.body,
   })
@@ -85,7 +101,7 @@ it.each(['failed', 'running', 'cancelled'])(
   'shows useful partial results from a %s hunt step',
   async (status) => {
     const { default: HuntStepResults } = await import('../hunts/HuntStepResults.vue')
-    const wrapper = mountWithVuetify(HuntStepResults, {
+    const wrapper = mountHunt(HuntStepResults, {
       props: {
         stepNumber: 1,
         step: {
@@ -103,7 +119,7 @@ it.each(['failed', 'running', 'cancelled'])(
 
 it('shows a skipped Entity save explanation in a completed Hunt step', async () => {
   const { default: HuntStepResults } = await import('../hunts/HuntStepResults.vue')
-  const wrapper = mountWithVuetify(HuntStepResults, {
+  const wrapper = mountHunt(HuntStepResults, {
     props: {
       stepNumber: 2,
       step: {
@@ -135,11 +151,7 @@ it('assembles Hunt correlation portions like standalone results and retains navi
   const { default: CorrelationScanPluginResult } = await import(
     '../plugins/CorrelationScanPluginResult.vue'
   )
-  const { createRouter, createMemoryHistory } = await import('vue-router')
-  const router = createRouter({
-    history: createMemoryHistory(),
-    routes: [{ path: '/:pathMatch(.*)*', component: { template: '<div />' } }],
-  })
+  const router = testRouter()
   const part = (matches) => ({
     case_id: 1,
     entity_id: 10,
@@ -165,17 +177,15 @@ it('assembles Hunt correlation portions like standalone results and retains navi
     status: 'running',
     output: { results, errors: [], partial: true },
   }
-  const wrapper = mountWithVuetify(HuntStepResults, {
+  const wrapper = mountHunt(HuntStepResults, {
     props: { step, stepNumber: 1 },
     global: { plugins: [router] },
   })
   await flushPromises()
   expect(wrapper.text()).toContain('1 source Entities · 2 matches · 1 related Cases')
   expect(wrapper.text()).toContain('person #10')
-  expect(wrapper.text()).toContain('Source email: ada@gmail.com')
-  expect(wrapper.text()).toContain('Related domain: gmail.com')
   expect(wrapper.text()).toContain('Execution running')
-  const standalone = mountWithVuetify(CorrelationScanPluginResult, {
+  const standalone = mountHunt(CorrelationScanPluginResult, {
     props: {
       result: results.map((data) => ({ type: 'data', data })),
       executionStatus: 'running',
@@ -184,8 +194,13 @@ it('assembles Hunt correlation portions like standalone results and retains navi
     global: { plugins: [router] },
   })
   expect(wrapper.getComponent(CorrelationScanPluginResult).text()).toBe(standalone.text())
-  expect(wrapper.get('details').element.open).toBe(false)
-  wrapper.get('details').element.open = true
+  await wrapper.get('.v-data-table__td--expanded-row button').trigger('click')
+  expect(wrapper.text()).toContain('Source Email: ada@gmail.com')
+  expect(wrapper.text()).toContain('Related Domain: gmail.com')
+  const weakChip = () =>
+    wrapper.findAll('.v-chip-group .v-chip').find((chip) => chip.text().startsWith('Weak'))
+  expect(weakChip().text()).toBe('Weak (1)')
+  await weakChip().trigger('click')
   await wrapper.setProps({
     step: {
       ...step,
@@ -193,21 +208,19 @@ it('assembles Hunt correlation portions like standalone results and retains navi
     },
   })
   await flushPromises()
-  expect(wrapper.get('details').element.open).toBe(true)
-  expect(wrapper.get('summary').text()).toBe('Weak provider matches (2)')
-  await wrapper
-    .findAll('button')
-    .find((button) => button.text().includes('View Entity'))
-    .trigger('click')
-  await flushPromises()
-  expect(router.currentRoute.value.query).toEqual({ entity: '20' })
+  expect(weakChip().text()).toBe('Weak (2)')
+  expect(wrapper.text()).toContain('Mailbox')
+  expect(wrapper.text()).toContain('Source Email: ada@gmail.com')
+  const open = wrapper.get('a[aria-label="Open Explicit Domain in Case #OTHER"]')
+  expect(open.attributes('href')).toBe('/case/2?entity=20')
+  expect(open.attributes('target')).toBe('_blank')
 })
 
 it.each(['pending', 'running', 'failed', 'cancelled', 'skipped', 'completed'])(
   'keeps %s correlation state separate from retrieval and partial output',
   async (status) => {
     const { default: HuntStepResults } = await import('../hunts/HuntStepResults.vue')
-    const wrapper = mountWithVuetify(HuntStepResults, {
+    const wrapper = mountHunt(HuntStepResults, {
       props: {
         stepNumber: 1,
         step: {
@@ -277,9 +290,9 @@ it.each(['ip_address', 'exact_profile', 'employer', 'name'])(
       status: 'failed',
       output: { results, errors: [error], partial: true },
     }
-    const wrapper = mountWithVuetify(HuntStepResults, { props: { step, stepNumber: 1 } })
+    const wrapper = mountHunt(HuntStepResults, { props: { step, stepNumber: 1 } })
     await flushPromises()
-    const standalone = mountWithVuetify(CorrelationScanPluginResult, {
+    const standalone = mountHunt(CorrelationScanPluginResult, {
       props: {
         result: [
           ...results.map((data) => ({ type: 'data', data })),
@@ -291,16 +304,16 @@ it.each(['ip_address', 'exact_profile', 'employer', 'name'])(
     })
     expect(wrapper.getComponent(CorrelationScanPluginResult).text()).toBe(standalone.text())
     expect(wrapper.text()).toContain('1 source Entities · 1 matches · 1 related Cases')
+    await wrapper.get('.v-data-table__td--expanded-row button').trigger('click')
     expect(wrapper.text()).toContain('Legacy field explanation')
-    expect(wrapper.text()).toContain('Reference coverage is incomplete')
+    expect(wrapper.text()).toContain('reference coverage is incomplete')
     expect(wrapper.text()).toContain(error.message)
     expect(wrapper.text()).not.toContain('Correlation scan complete')
   },
 )
 
-it('counts assembled correlation groups in Hunt summaries and progress', async () => {
+it('counts assembled correlation groups in Hunt summaries', async () => {
   const { default: HuntResultsSummary } = await import('../hunts/HuntResultsSummary.vue')
-  const { default: HuntStepProgress } = await import('../hunts/HuntStepProgress.vue')
   const group = {
     case_id: 1,
     entity_id: 10,
@@ -316,10 +329,8 @@ it('counts assembled correlation groups in Hunt summaries and progress', async (
       result_count: 3,
     },
   }
-  const summary = mountWithVuetify(HuntResultsSummary, { props: { execution: { steps: [step] } } })
+  const summary = mountHunt(HuntResultsSummary, { props: { execution: { steps: [step] } } })
   expect(summary.text()).toContain('1Total Results')
-  const progress = mountWithVuetify(HuntStepProgress, { props: { step, stepNumber: 1 } })
-  expect(progress.text()).toContain('1 correlation group(s)')
 })
 
 it('announces a correlation failure once when step and retained errors agree', async () => {
@@ -332,7 +343,7 @@ it('announces a correlation failure once when step and retained errors agree', a
     error_details: message,
     output: { results: [], errors: [] },
   }
-  const wrapper = mountWithVuetify(HuntStepResults, { props: { step, stepNumber: 1 } })
+  const wrapper = mountHunt(HuntStepResults, { props: { step, stepNumber: 1 } })
   await flushPromises()
   expect(wrapper.text().split(message)).toHaveLength(2)
   await wrapper.setProps({ step: { ...step, output: { results: [], errors: [{ message }] } } })

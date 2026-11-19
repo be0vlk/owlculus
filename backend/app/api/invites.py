@@ -1,10 +1,4 @@
-"""
-API endpoints for managing user invitations and account creation requests.
-
-This module handles invite creation, retrieval, validation, acceptance, and deletion.
-Provides endpoints for user registration through invitation tokens and administrative
-invite management functionality.
-"""
+"""Invite and invite registration routes."""
 
 from fastapi import APIRouter, Depends, status
 from sqlmodel import Session
@@ -27,8 +21,9 @@ async def create_invite(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    invite_service = InviteService(db)
-    return await invite_service.create_invite(invite=invite, current_user=current_user)
+    return await InviteService(db).create_invite(
+        invite=invite, current_user=current_user
+    )
 
 
 @router.get("/", response_model=list[schemas.InviteListResponse])
@@ -38,8 +33,7 @@ async def get_invites(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    invite_service = InviteService(db)
-    return await invite_service.get_invites(
+    return await InviteService(db).get_invites(
         skip=skip, limit=limit, current_user=current_user
     )
 
@@ -49,8 +43,7 @@ async def validate_invite(
     token_data: schemas.InviteTokenValidation,
     db: Session = Depends(get_db),
 ):
-    invite_service = InviteService(db)
-    return await invite_service.validate_invite(token=token_data.token)
+    return await InviteService(db).validate_invite(token=token_data.token)
 
 
 @router.post(
@@ -62,8 +55,7 @@ async def register_user(
     registration_data: schemas.UserRegistration,
     db: Session = Depends(get_db),
 ):
-    invite_service = InviteService(db)
-    return await invite_service.register_user_with_invite(
+    return await InviteService(db).register_user_with_invite(
         registration=registration_data
     )
 
@@ -74,8 +66,9 @@ async def delete_invite(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    invite_service = InviteService(db)
-    await invite_service.delete_invite(invite_id=invite_id, current_user=current_user)
+    await InviteService(db).delete_invite(
+        invite_id=invite_id, current_user=current_user
+    )
     return {"message": "Invite deleted successfully"}
 
 
@@ -84,6 +77,5 @@ async def cleanup_expired_invites(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user),
 ):
-    invite_service = InviteService(db)
-    count = await invite_service.cleanup_expired_invites(current_user=current_user)
+    count = await InviteService(db).cleanup_expired_invites(current_user=current_user)
     return {"message": f"Cleaned up {count} expired invites"}

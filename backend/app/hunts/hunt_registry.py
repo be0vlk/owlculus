@@ -41,13 +41,6 @@ class HuntRegistry:
             )
         return cls.from_classes(hunt_classes)
 
-    def names(self) -> tuple[str, ...]:
-        return tuple(self._hunt_classes)
-
-    def create(self, name: str) -> BaseHunt | None:
-        hunt_class = self._hunt_classes.get(name)
-        return hunt_class() if hunt_class is not None else None
-
     def _definitions(self) -> Iterator[tuple[str, BaseHunt]]:
         for name, hunt_class in self._hunt_classes.items():
             try:

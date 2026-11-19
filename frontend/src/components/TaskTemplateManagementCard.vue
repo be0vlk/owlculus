@@ -1,21 +1,8 @@
 <template>
-  <v-card
-    :elevation="embedded ? 0 : undefined"
-    :class="embedded ? 'admin-embedded' : 'mb-6'"
-    :variant="embedded ? 'flat' : 'outlined'"
-  >
+  <v-card :elevation="0" variant="flat">
     <v-card-title class="operations-heading d-flex flex-wrap ga-3 align-center pa-4 bg-surface">
-      <v-icon
-        v-if="!embedded"
-        icon="mdi-clipboard-text"
-        color="primary"
-        size="large"
-        class="me-3"
-      />
       <div class="flex-grow-1">
-        <h2 class="text-title-large font-weight-bold">
-          {{ embedded ? 'Task templates' : 'Task Templates' }}
-        </h2>
+        <h2 class="text-title-large font-weight-bold">Task templates</h2>
         <div class="text-body-medium text-medium-emphasis">
           Manage reusable task templates for standardized workflows
         </div>
@@ -23,9 +10,8 @@
       <v-btn
         size="small"
         color="primary"
-        variant="flat"
         prepend-icon="mdi-plus"
-        @click="openAddDialog"
+        @click="openDialog()"
         :disabled="loading"
       >
         Add Template
@@ -35,27 +21,23 @@
     <v-divider />
 
     <v-card-text class="pa-0">
-      <!-- Loading state -->
       <div v-if="loading" class="pa-6">
         <v-skeleton-loader type="table-row@5" />
       </div>
 
-      <!-- Error state -->
       <v-alert v-else-if="error" :text="error" class="ma-4" type="error" variant="tonal" />
 
-      <!-- Empty state -->
       <div v-else-if="!sortedTemplates.length" class="pa-8 text-center">
         <v-icon icon="mdi-clipboard-off" size="64" color="grey-darken-1" class="mb-4" />
         <div class="text-title-large text-medium-emphasis mb-2">No Task Templates</div>
         <div class="text-body-medium text-medium-emphasis mb-4">
           Create task templates to standardize your investigation workflows
         </div>
-        <v-btn color="primary" prepend-icon="mdi-plus" variant="flat" @click="openAddDialog">
+        <v-btn color="primary" prepend-icon="mdi-plus" @click="openDialog()">
           Create Your First Template
         </v-btn>
       </div>
 
-      <!-- Templates Table -->
       <v-table v-else class="admin-dashboard-table">
         <thead>
           <tr>
@@ -99,11 +81,10 @@
             <td class="operations-cell">
               <div class="d-flex align-center" style="gap: 8px">
                 <v-btn
-                  :color="embedded ? undefined : 'primary'"
                   size="small"
                   variant="outlined"
                   icon
-                  @click="openEditDialog(template)"
+                  @click="openDialog(template)"
                   :disabled="saving || deleting"
                   :aria-label="`Edit ${template.display_name}`"
                 >
@@ -133,27 +114,29 @@
       </v-table>
     </v-card-text>
 
-    <!-- Add Template Dialog -->
-    <v-dialog aria-label="Add Task Template" v-model="showAddDialog" max-width="800" persistent>
+    <v-dialog
+      :aria-label="editing ? 'Edit Task Template' : 'Add Task Template'"
+      v-model="showDialog"
+      max-width="800"
+      persistent
+    >
       <v-card>
         <v-card-title class="d-flex align-center pa-4">
-          <v-icon icon="mdi-plus" class="me-3" />
-          Add Task Template
+          <v-icon :icon="editing ? 'mdi-pencil' : 'mdi-plus'" class="me-3" />
+          {{ editing ? `Edit Task Template - ${editing.display_name}` : 'Add Task Template' }}
         </v-card-title>
 
         <v-divider />
 
         <v-card-text class="pa-4">
           <TaskTemplateForm
-            :id="addFormId"
-            ref="addFormRef"
+            :id="formId"
+            ref="formRef"
+            v-model="draft"
             :disabled="saving"
-            @submit="handleCreateTemplate"
-            v-model="newTemplateForm"
-            :validate-template-name="validateTemplateName"
-            :validate-display-name="validateDisplayName"
-            :validate-description="validateDescription"
-            :validate-category="validateCategory"
+            :is-edit="!!editing"
+            :existing-names="editing ? [] : templates.map((t) => t.name)"
+            @submit="saveTemplate"
           />
         </v-card-text>
 
@@ -161,46 +144,9 @@
 
         <v-card-actions class="pa-4 flex-wrap">
           <v-spacer />
-          <v-btn :disabled="saving" variant="text" @click="closeAddDialog">Cancel</v-btn>
-          <v-btn color="primary" variant="flat" :loading="saving" type="submit" :form="addFormId">
-            Create Template
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
-
-    <!-- Edit Template Dialog -->
-    <v-dialog aria-label="Edit Task Template" v-model="showEditDialog" max-width="800" persistent>
-      <v-card>
-        <v-card-title class="d-flex align-center pa-4">
-          <v-icon icon="mdi-pencil" class="me-3" />
-          Edit Task Template - {{ editingTemplate?.display_name }}
-        </v-card-title>
-
-        <v-divider />
-
-        <v-card-text class="pa-4">
-          <TaskTemplateForm
-            :id="editFormId"
-            ref="editFormRef"
-            :disabled="saving"
-            @submit="handleUpdateTemplate"
-            v-model="editTemplateForm"
-            :is-edit="true"
-            :validate-template-name="validateTemplateName"
-            :validate-display-name="validateDisplayName"
-            :validate-description="validateDescription"
-            :validate-category="validateCategory"
-          />
-        </v-card-text>
-
-        <v-divider />
-
-        <v-card-actions class="pa-4 flex-wrap">
-          <v-spacer />
-          <v-btn :disabled="saving" variant="text" @click="closeEditDialog">Cancel</v-btn>
-          <v-btn color="primary" variant="flat" :loading="saving" type="submit" :form="editFormId">
-            Update Template
+          <v-btn :disabled="saving" variant="text" @click="showDialog = false">Cancel</v-btn>
+          <v-btn color="primary" :loading="saving" type="submit" :form="formId">
+            {{ editing ? 'Update Template' : 'Create Template' }}
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -209,121 +155,112 @@
 </template>
 
 <script setup>
-defineProps({ embedded: Boolean })
-import { onMounted, ref, useId } from 'vue'
-import { useTaskTemplates } from '@/composables/useTaskTemplates'
+import { computed, onMounted, ref, useId } from 'vue'
+import { taskService } from '@/services/task'
+import { getErrorMessage } from '@/utils/errorMessage'
 import TaskTemplateForm from './TaskTemplateForm.vue'
 
 const emit = defineEmits(['notification', 'confirmDelete'])
 
-// Form refs
-const addFormId = useId()
-const editFormId = useId()
-const addFormRef = ref(null)
-const editFormRef = ref(null)
+const formId = useId()
+const formRef = ref(null)
+const loading = ref(true)
+const saving = ref(false)
+const deleting = ref(false)
+const error = ref('')
+const templates = ref([])
+const showDialog = ref(false)
+const editing = ref(null)
 
-// Use the task templates composable
-const {
-  // State
-  loading,
-  saving,
-  deleting,
-  error,
-  showAddDialog,
-  showEditDialog,
-  editingTemplate,
-  newTemplateForm,
-  editTemplateForm,
+const blankTemplate = () => ({
+  name: '',
+  display_name: '',
+  description: '',
+  category: '',
+  is_active: true,
+  definition_json: { fields: [] },
+})
+const draft = ref(blankTemplate())
 
-  // Computed
-  sortedTemplates,
+const sortedTemplates = computed(() =>
+  [...templates.value].sort(
+    (a, b) => a.category.localeCompare(b.category) || a.display_name.localeCompare(b.display_name),
+  ),
+)
 
-  // Validation
-  validateTemplateName,
-  validateDisplayName,
-  validateDescription,
-  validateCategory,
+const getFieldCount = (template) => template.definition_json?.fields?.length || 0
 
-  // Methods
-  loadTemplates,
-  createTemplate,
-  updateTemplate,
-  deleteTemplate,
-  openAddDialog,
-  openEditDialog,
-  closeAddDialog,
-  closeEditDialog,
-} = useTaskTemplates()
+const notify = (text, color) => emit('notification', { text, color })
 
-// Helper methods
-const getFieldCount = (template) => {
-  return template.definition_json?.fields?.length || 0
-}
-
-// Event handlers
-const handleCreateTemplate = async () => {
-  if (saving.value) return
-  try {
-    // Validate form
-    const isValid = await addFormRef.value?.validate()
-    if (!isValid) return
-
-    await createTemplate()
-    emit('notification', { text: 'Task template created successfully!', color: 'success' })
-  } catch (error) {
-    console.error('Error creating template:', error)
-    emit('notification', { text: error.message || 'Failed to create template', color: 'error' })
-  }
-}
-
-const handleUpdateTemplate = async () => {
-  if (saving.value) return
-  try {
-    // Validate form
-    const isValid = await editFormRef.value?.validate()
-    if (!isValid) return
-
-    await updateTemplate()
-    emit('notification', { text: 'Task template updated successfully!', color: 'success' })
-  } catch (error) {
-    console.error('Error updating template:', error)
-    emit('notification', { text: error.message || 'Failed to update template', color: 'error' })
-  }
-}
-
-const handleDeleteTemplate = async (template) => {
-  try {
-    await emit('confirmDelete', {
-      title: 'Delete Task Template',
-      message: `Are you sure you want to delete the template "${template.display_name}"?`,
-      warning:
-        'This action cannot be undone. Existing tasks using this template will not be affected.',
-      onConfirm: async () => {
-        try {
-          await deleteTemplate(template.id)
-          emit('notification', { text: 'Task template deleted successfully!', color: 'success' })
-        } catch (error) {
-          emit('notification', {
-            text: error.message || 'Failed to delete task template',
-            color: 'error',
-          })
-        }
-      },
-    })
-  } catch (error) {
-    if (error.message && !error.message.includes('cancelled')) {
-      console.error('Error deleting template:', error)
-      emit('notification', { text: error.message || 'Failed to delete template', color: 'error' })
+function openDialog(template = null) {
+  editing.value = template
+  if (template) {
+    const { name, display_name, description, category, is_active, definition_json } = template
+    draft.value = {
+      name,
+      display_name,
+      description,
+      category,
+      is_active,
+      // Rows are reactive proxies, which structuredClone rejects.
+      definition_json: JSON.parse(JSON.stringify(definition_json || { fields: [] })),
     }
+  } else {
+    draft.value = blankTemplate()
+  }
+  showDialog.value = true
+}
+
+async function saveTemplate() {
+  if (saving.value || !(await formRef.value?.validate())) return
+  const id = editing.value?.id
+  saving.value = true
+  try {
+    if (id) {
+      const updated = await taskService.updateTemplate(id, draft.value)
+      templates.value = templates.value.map((t) => (t.id === id ? updated : t))
+    } else {
+      templates.value.push(await taskService.createCustomTemplate(draft.value))
+    }
+    showDialog.value = false
+    notify(`Task template ${id ? 'updated' : 'created'} successfully!`, 'success')
+  } catch (err) {
+    console.error('Error saving template:', err)
+    notify(getErrorMessage(err, `Failed to ${id ? 'update' : 'create'} template`), 'error')
+  } finally {
+    saving.value = false
   }
 }
 
-// Load templates on mount
+function handleDeleteTemplate(template) {
+  emit('confirmDelete', {
+    title: 'Delete Task Template',
+    message: `Are you sure you want to delete the template "${template.display_name}"?`,
+    warning:
+      'This action cannot be undone. Existing tasks using this template will not be affected.',
+    onConfirm: async () => {
+      deleting.value = true
+      try {
+        await taskService.deleteTemplate(template.id)
+        templates.value = templates.value.filter((t) => t.id !== template.id)
+        notify('Task template deleted successfully!', 'success')
+      } catch (err) {
+        notify(getErrorMessage(err, 'Failed to delete task template'), 'error')
+      } finally {
+        deleting.value = false
+      }
+    },
+  })
+}
+
 onMounted(async () => {
   try {
-    await loadTemplates()
-  } catch (error) {
-    console.error('Error loading templates:', error)
+    templates.value = await taskService.getTemplates(true)
+  } catch (err) {
+    console.error('Error loading templates:', err)
+    error.value = getErrorMessage(err, 'Failed to load templates')
+  } finally {
+    loading.value = false
   }
 })
 </script>

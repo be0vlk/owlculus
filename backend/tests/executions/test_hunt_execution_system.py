@@ -120,8 +120,10 @@ def test_hunt_capacity_is_separate_and_failures_retain_outputs(execution_system)
         system.worker()
         system.start("-m", "app.executions.dispatcher")
         eventually(
-            lambda: (system.root / "provider-starts").exists()
-            and len((system.root / "provider-starts").read_text().splitlines()) == 2
+            lambda: (
+                (system.root / "provider-starts").exists()
+                and len((system.root / "provider-starts").read_text().splitlines()) == 2
+            )
         )
         states = [detail(client, item)["status"] for item in accepted]
         assert states.count("running") == 2
@@ -420,8 +422,11 @@ def test_stale_hunt_owner_cannot_write_output_or_effects(execution_system):
             ],
         )
         eventually(
-            lambda: (system.root / "provider-starts").exists()
-            and "stale" in (system.root / "provider-starts").read_text().splitlines()
+            lambda: (
+                (system.root / "provider-starts").exists()
+                and "stale"
+                in (system.root / "provider-starts").read_text().splitlines()
+            )
         )
         state = detail(client, accepted)
         assert state["steps"][0]["output"]["result_count"] == 1

@@ -1,6 +1,4 @@
-"""
-Pydantic models for entities.
-"""
+"""Entity schemas."""
 
 import re
 from collections.abc import Callable
@@ -18,7 +16,6 @@ from pydantic import (
 
 from ..core.hostname import canonical_hostname, normalize_website
 from ..core.ip_address import canonical_ip_address
-from ..core.utils import get_utc_now
 
 
 class EntityData(BaseModel):
@@ -207,7 +204,6 @@ class VehicleData(EntityData):
     sources: Optional[Dict[str, str]] = None
 
 
-# Map entity types to their respective data schemas
 ENTITY_TYPE_SCHEMAS = {
     "person": PersonData,
     "company": CompanyData,
@@ -273,8 +269,8 @@ class Entity(BaseModel):
     entity_type: str
     data: Dict[str, Any]
     id: Optional[int] = None
-    created_at: Optional[datetime] = Field(default_factory=get_utc_now)
-    updated_at: Optional[datetime] = Field(default_factory=get_utc_now)
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     created_by_id: Optional[int] = None
 
 
@@ -291,9 +287,6 @@ class DuplicateAdvisory(BaseModel):
 class EntityCreate(BaseModel):
     entity_type: str
     data: Dict[str, Any]
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-    created_by_id: Optional[int] = None
 
     @model_validator(mode="after")
     def validate_data(self) -> "EntityCreate":
@@ -311,7 +304,6 @@ class EntityCreate(BaseModel):
 
 class EntityUpdate(BaseModel):
     data: Dict[str, Any]
-    updated_at: datetime = Field(default_factory=get_utc_now)
     entity_type_hint: Optional[str] = Field(None, alias="__entity_type")
 
     @model_validator(mode="before")

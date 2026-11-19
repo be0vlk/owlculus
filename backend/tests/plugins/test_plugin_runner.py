@@ -1,5 +1,6 @@
 """Contract tests for the startup plugin catalogue and invocation path."""
 
+import hashlib
 from collections.abc import AsyncGenerator
 from typing import Any
 from unittest.mock import AsyncMock, Mock
@@ -132,7 +133,7 @@ async def test_dns_lookup_saves_results_and_discovered_ips_to_case(
     assert "DNS Lookup Results" in content.decode("utf-8")
     assert "example.com" in content.decode("utf-8")
     assert all(address in content.decode("utf-8") for address in addresses)
-    assert saved.file_hash == file_storage.calculate_file_hash(content)
+    assert saved.file_hash == hashlib.sha256(content).hexdigest()
     entities = session.exec(
         select(models.Entity).where(models.Entity.case_id == case.id)
     ).all()

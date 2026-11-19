@@ -1,5 +1,11 @@
 <template>
-  <v-dialog aria-label="Reset Password" v-model="dialogVisible" max-width="500px" persistent>
+  <v-dialog
+    aria-label="Reset Password"
+    :model-value="show"
+    max-width="500px"
+    persistent
+    @update:model-value="!$event && $emit('close')"
+  >
     <v-card>
       <v-card-title class="d-flex align-center pa-4 bg-warning">
         <v-icon start color="white" size="large">mdi-key-variant</v-icon>
@@ -20,6 +26,7 @@
 
         <v-form
           :id="formId"
+          v-model="valid"
           :disabled="loading"
           ref="formRef"
           @submit.prevent="handlePasswordReset"
@@ -31,8 +38,6 @@
                   v-model="newPassword"
                   label="New Password"
                   :type="showNewPassword ? 'text' : 'password'"
-                  variant="outlined"
-                  density="comfortable"
                   prepend-inner-icon="mdi-lock"
                   :append-inner-icon="showNewPassword ? 'mdi-eye' : 'mdi-eye-off'"
                   @click:append-inner="showNewPassword = !showNewPassword"
@@ -48,8 +53,6 @@
                   v-model="confirmPassword"
                   label="Confirm Password"
                   :type="showConfirmPassword ? 'text' : 'password'"
-                  variant="outlined"
-                  density="comfortable"
                   prepend-inner-icon="mdi-lock-check"
                   :append-inner-icon="showConfirmPassword ? 'mdi-eye' : 'mdi-eye-off'"
                   @click:append-inner="showConfirmPassword = !showConfirmPassword"
@@ -60,7 +63,6 @@
                 />
               </v-col>
 
-              <!-- Password strength indicator -->
               <v-col cols="12" v-if="newPassword">
                 <v-card variant="outlined" class="pa-3">
                   <v-card-subtitle class="pa-0 pb-2">
@@ -104,7 +106,7 @@
         submit-text="Reset Password"
         submit-icon="mdi-key-variant"
         submit-color="warning"
-        :submit-disabled="!isPasswordValid"
+        :submit-disabled="!valid"
         :loading="loading"
         @cancel="$emit('close')"
         @submit="handlePasswordReset"
@@ -115,7 +117,6 @@
 
 <script setup>
 import { useId, ref, computed } from 'vue'
-// Vuetify components are auto-imported
 import { userService } from '@/services/user'
 import ModalActions from './ModalActions.vue'
 
@@ -133,30 +134,41 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'saved'])
 
-const dialogVisible = computed({
-  get: () => props.show,
-  set: (value) => {
-    if (!value) {
-      emit('close')
-    }
-  },
-})
-
 const newPassword = ref('')
 const confirmPassword = ref('')
 const showNewPassword = ref(false)
 const showConfirmPassword = ref(false)
 const loading = ref(false)
 const error = ref('')
+const valid = ref(false)
 const formId = useId()
 const formRef = ref(null)
 
-// Validation rules
+const REQUIREMENTS = [
+  {
+    text: '8+ characters',
+    message: 'Password must be at least 8 characters',
+    test: (v) => v.length >= 8,
+  },
+  {
+    text: 'Contains letter',
+    message: 'Password must contain at least one letter',
+    test: (v) => /[A-Za-z]/.test(v),
+  },
+  {
+    text: 'Contains number',
+    message: 'Password must contain at least one number',
+    test: (v) => /\d/.test(v),
+  },
+]
+
 const passwordRules = [
   (v) => !!v || 'Password is required',
-  (v) => v.length >= 8 || 'Password must be at least 8 characters',
-  (v) => /[A-Za-z]/.test(v) || 'Password must contain at least one letter',
-  (v) => /\d/.test(v) || 'Password must contain at least one number',
+  ...REQUIREMENTS.map(
+    ({ message, test }) =>
+      (v) =>
+        test(v) || message,
+  ),
 ]
 
 const confirmPasswordRules = [
@@ -164,64 +176,29 @@ const confirmPasswordRules = [
   (v) => v === newPassword.value || 'Passwords do not match',
 ]
 
-// Password requirements tracking
 const passwordRequirements = computed(() => [
-  {
-    text: '8+ characters',
-    met: newPassword.value.length >= 8,
-  },
-  {
-    text: 'Contains letter',
-    met: /[A-Za-z]/.test(newPassword.value),
-  },
-  {
-    text: 'Contains number',
-    met: /\d/.test(newPassword.value),
-  },
-  {
-    text: 'Passwords match',
-    met: newPassword.value && confirmPassword.value && newPassword.value === confirmPassword.value,
-  },
+  ...REQUIREMENTS.map(({ text, test }) => ({ text, met: test(newPassword.value) })),
+  { text: 'Passwords match', met: newPassword.value === confirmPassword.value },
 ])
 
-// Password strength calculation
+const STRENGTH = [
+  { label: 'Very Weak', color: 'error' },
+  { label: 'Weak', color: 'error' },
+  { label: 'Fair', color: 'warning' },
+  { label: 'Good', color: 'success' },
+  { label: 'Strong', color: 'success' },
+]
 const passwordStrength = computed(() => {
   const password = newPassword.value
-  if (!password) return { score: 0, label: 'Enter a password', color: 'grey' }
-
-  const checks = [
-    password.length >= 8,
-    /[A-Za-z]/.test(password),
-    /\d/.test(password),
-    /[!@#$%^&*(),.?":{}|<>]/.test(password),
-  ]
-
-  const score = checks.filter(Boolean).length
-
-  const strengthMap = {
-    0: { label: 'Very Weak', color: 'error' },
-    1: { label: 'Weak', color: 'error' },
-    2: { label: 'Fair', color: 'warning' },
-    3: { label: 'Good', color: 'success' },
-    4: { label: 'Strong', color: 'success' },
-  }
-
-  return { score, ...strengthMap[score] }
-})
-
-const isPasswordValid = computed(() => {
-  return (
-    newPassword.value &&
-    confirmPassword.value &&
-    newPassword.value === confirmPassword.value &&
-    newPassword.value.length >= 8 &&
-    /[A-Za-z]/.test(newPassword.value) &&
-    /\d/.test(newPassword.value)
-  )
+  const special = /[!@#$%^&*(),.?":{}|<>]/.test(password) ? 1 : 0
+  const score = REQUIREMENTS.filter(({ test }) => test(password)).length + special
+  return { score, ...STRENGTH[score] }
 })
 
 const handlePasswordReset = async () => {
-  if (loading.value || !isPasswordValid.value || !props.userId) return
+  if (loading.value || !props.userId) return
+  const { valid } = await formRef.value.validate()
+  if (!valid || loading.value) return
 
   loading.value = true
   error.value = ''

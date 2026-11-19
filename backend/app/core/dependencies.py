@@ -34,7 +34,11 @@ async def _resolve_current_user(db: Session, token: str) -> User:
         .where(User.auth_identity == identity)
         .execution_options(populate_existing=True)
     ).first()
-    if user is None or user.session_version != version:
+    if (
+        user is None
+        or user.system_identity is not None
+        or user.session_version != version
+    ):
         raise credentials_exception
 
     if not user.is_active:

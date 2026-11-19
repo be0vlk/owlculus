@@ -3,6 +3,7 @@
 import pytest
 from sqlmodel import Session
 
+from app.core import file_storage
 from app.core.exceptions import AuthorizationException
 from app.database.models import Case, CaseUserLink, Evidence, User
 from app.database.upgrade_correlation import upgrade
@@ -12,10 +13,9 @@ from app.services.evidence_service import EvidenceService
 
 @pytest.mark.asyncio
 async def test_upgrade_keeps_unverified_reports_protected_after_renaming(
-    engine, tmp_path
+    engine, tmp_path, monkeypatch
 ):
-    file = tmp_path / "report.txt"
-    file.write_bytes(b"Historical immutable report")
+    monkeypatch.setattr(file_storage, "UPLOAD_DIR", tmp_path)
     with Session(engine) as db:
         admin = User(
             username="admin",
@@ -33,12 +33,15 @@ async def test_upgrade_keeps_unverified_reports_protected_after_renaming(
         db.add_all([admin, reader, case])
         db.flush()
         db.add(CaseUserLink(case_id=case.id, user_id=reader.id))
+        file = tmp_path / str(case.id) / "report.txt"
+        file.parent.mkdir()
+        file.write_bytes(b"Historical immutable report")
         report = Evidence(
             case_id=case.id,
             created_by_id=admin.id,
             title="Correlation Scan results",
             evidence_type="file",
-            content=str(file),
+            content=f"{case.id}/report.txt",
         )
         db.add(report)
         db.commit()
@@ -61,6 +64,7 @@ async def test_upgrade_keeps_unverified_reports_protected_after_renaming(
         with pytest.raises(AuthorizationException):
             await service.get_evidence(report_id, db.get(User, reader_id))
         assert (
-            await service.download_evidence(report_id, db.get(User, admin_id)) == file
+            await service.download_evidence(report_id, db.get(User, admin_id))
+            == file.resolve()
         )
     assert file.read_bytes() == b"Historical immutable report"

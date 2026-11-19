@@ -55,11 +55,7 @@ describe('browser HTTP clients', () => {
     const apiClient = axiosMock.instances.find(({ get }) => get.mock.calls.length > 0)
     const authClient = axiosMock.instances.find(({ post }) => post.mock.calls.length > 0)
     expect(apiClient.get).toHaveBeenCalledWith('/api/cases/')
-    expect(authClient.post).toHaveBeenCalledWith(
-      '/api/auth/login',
-      expect.any(FormData),
-      expect.any(Object),
-    )
+    expect(authClient.post).toHaveBeenCalledWith('/api/auth/login', expect.any(FormData))
   })
 
   it('honors an explicit API-base override for development and tests', async () => {
@@ -112,6 +108,7 @@ describe('browser HTTP clients', () => {
         import('../case'),
       ])
 
+    axiosMock.instances.forEach(({ get }) => get.mockResolvedValueOnce({ data: [] }))
     await userService.getUsers()
     await userService.createUser({ username: 'analyst' })
     await inviteService.getInvites()
@@ -121,7 +118,7 @@ describe('browser HTTP clients', () => {
 
     const getCalls = axiosMock.instances.flatMap(({ get }) => get.mock.calls)
     const postCalls = axiosMock.instances.flatMap(({ post }) => post.mock.calls)
-    expect(getCalls).toContainEqual(['/api/users/'])
+    expect(getCalls).toContainEqual(['/api/users/', { params: { skip: 0, limit: 100 } }])
     expect(postCalls).toContainEqual(['/api/users/', { username: 'analyst' }])
     expect(getCalls).toContainEqual(['/api/invites/'])
     expect(postCalls).toContainEqual(['/api/invites/', { email: 'analyst@example.com' }])

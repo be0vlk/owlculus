@@ -1,10 +1,11 @@
 <template>
   <v-dialog
     aria-label="Generate Invite"
-    v-model="dialogVisible"
+    :model-value="show"
     max-width="500px"
     persistent
     scrollable
+    @update:model-value="!$event && handleClose()"
   >
     <v-card>
       <v-card-title class="d-flex align-center pa-4 bg-primary">
@@ -29,16 +30,13 @@
         <v-form :id="formId" :disabled="loading" ref="formRef" @submit.prevent="handleSubmit">
           <v-container fluid class="pa-0">
             <v-row>
-              <!-- Role Selection -->
               <v-col cols="12">
                 <v-select
                   v-model="formData.role"
-                  :items="roleOptions"
+                  :items="ROLE_OPTIONS"
                   item-title="title"
                   item-value="value"
                   label="User Role"
-                  variant="outlined"
-                  density="comfortable"
                   prepend-inner-icon="mdi-shield-account"
                   required
                   hint="Select the role for the new user account"
@@ -56,13 +54,10 @@
                 </v-select>
               </v-col>
 
-              <!-- Invite Link Display (when created) -->
               <v-col cols="12" v-if="inviteLink">
                 <v-text-field
                   :model-value="inviteLink"
                   label="Invite Link"
-                  variant="outlined"
-                  density="comfortable"
                   prepend-inner-icon="mdi-link"
                   readonly
                   append-inner-icon="mdi-content-copy"
@@ -85,7 +80,6 @@
         loading-text="Generating..."
         submit-icon="mdi-email-plus"
         :show-submit="!inviteLink"
-        :submit-disabled="!isFormValid"
         :loading="loading"
         @cancel="handleClose"
         @submit="handleSubmit"
@@ -95,8 +89,9 @@
 </template>
 
 <script setup>
-import { useId, ref, computed, watch } from 'vue'
+import { useId, ref, watch } from 'vue'
 import { inviteService } from '../services/invite'
+import { ROLE_OPTIONS } from '@/constants/roles'
 import ModalActions from './ModalActions.vue'
 
 const props = defineProps({
@@ -108,15 +103,6 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'created'])
 
-const dialogVisible = computed({
-  get: () => props.show,
-  set: (value) => {
-    if (!value) {
-      handleClose()
-    }
-  },
-})
-
 const loading = ref(false)
 const error = ref(null)
 const successMessage = ref(null)
@@ -126,34 +112,6 @@ const formRef = ref(null)
 
 const formData = ref({
   role: 'Analyst',
-})
-
-const roleOptions = [
-  {
-    value: 'Analyst',
-    title: 'Analyst',
-    description: 'Read-only access to assigned cases',
-    icon: 'mdi-chart-line',
-    color: 'info',
-  },
-  {
-    value: 'Investigator',
-    title: 'Investigator',
-    description: 'Read/write access, can run plugins',
-    icon: 'mdi-account-search',
-    color: 'primary',
-  },
-  {
-    value: 'Admin',
-    title: 'Administrator',
-    description: 'Full system access and user management',
-    icon: 'mdi-shield-check',
-    color: 'error',
-  },
-]
-
-const isFormValid = computed(() => {
-  return !!formData.value.role
 })
 
 const resetForm = () => {
@@ -181,7 +139,7 @@ const copyToClipboard = async () => {
 }
 
 const handleSubmit = async () => {
-  if (loading.value || inviteLink.value || !isFormValid.value) return
+  if (loading.value || inviteLink.value) return
   try {
     loading.value = true
     error.value = null

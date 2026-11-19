@@ -1,9 +1,13 @@
 <template>
   <v-dialog v-model="dialog" max-width="800px" @keydown.esc="handleClose">
     <v-card>
-      <!-- Header -->
       <v-card-title class="d-flex align-center pa-4 header-gradient text-white">
-        <v-icon :icon="categoryIcon" :color="categoryColor" size="large" class="me-3" />
+        <v-icon
+          :icon="getCategoryIcon(hunt?.category)"
+          :color="categoryColor"
+          size="large"
+          class="me-3"
+        />
         <div class="flex-grow-1">
           <div class="text-headline-small font-weight-bold">{{ hunt?.display_name }}</div>
         </div>
@@ -18,11 +22,9 @@
       <v-divider />
 
       <v-card-text class="pa-4">
-        <!-- Hunt Metadata -->
         <div class="mb-4">
           <div class="text-title-large mb-3">Hunt Information</div>
 
-          <!-- Hunt Description -->
           <div v-if="hunt?.description" class="mb-4">
             <div class="text-body-large text-medium-emphasis">{{ hunt.description }}</div>
           </div>
@@ -58,7 +60,6 @@
           </v-row>
         </div>
 
-        <!-- Parameters -->
         <div
           v-if="hunt?.initial_parameters && Object.keys(hunt.initial_parameters).length > 0"
           class="mb-4"
@@ -96,7 +97,6 @@
           </v-table>
         </div>
 
-        <!-- Hunt Steps (if available) -->
         <div v-if="huntSteps && huntSteps.length > 0" class="mb-4">
           <div class="text-title-large mb-3">Hunt Workflow</div>
           <v-timeline density="compact" side="end">
@@ -123,13 +123,11 @@
           </v-timeline>
         </div>
 
-        <!-- Warning for inactive hunts -->
         <v-alert v-if="!hunt?.is_active" type="warning" variant="tonal">
           This hunt is currently inactive and cannot be executed.
         </v-alert>
       </v-card-text>
 
-      <!-- Actions -->
       <v-card-actions class="pa-4 pt-0">
         <v-spacer />
         <v-btn variant="text" @click="handleClose"> Close </v-btn>
@@ -148,39 +146,19 @@
 </template>
 
 <script setup>
+import { formatParameterName, getCategoryIcon } from '@/utils/huntDisplayUtils'
 import { computed } from 'vue'
 
 const props = defineProps({
-  modelValue: {
-    type: Boolean,
-    default: false,
-  },
   hunt: {
     type: Object,
     default: null,
   },
 })
 
-const emit = defineEmits(['update:modelValue', 'execute', 'close'])
+const emit = defineEmits(['execute', 'close'])
 
-// Computed properties
-const dialog = computed({
-  get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value),
-})
-
-const categoryIcon = computed(() => {
-  const iconMap = {
-    person: 'mdi-account',
-    domain: 'mdi-web',
-    company: 'mdi-office-building',
-    ip: 'mdi-ip-network',
-    phone: 'mdi-phone',
-    email: 'mdi-email',
-    general: 'mdi-magnify',
-  }
-  return iconMap[props.hunt?.category] || iconMap.general
-})
+const dialog = defineModel({ type: Boolean, default: false })
 
 const categoryColor = computed(() => {
   const colorMap = {
@@ -199,11 +177,6 @@ const huntSteps = computed(() => {
   if (!props.hunt?.definition_json?.steps) return []
   return props.hunt.definition_json.steps
 })
-
-// Methods
-const formatParameterName = (paramName) => {
-  return paramName.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
-}
 
 const getStepColor = (index) => {
   const colors = ['primary', 'secondary', 'success', 'info', 'warning', 'error']

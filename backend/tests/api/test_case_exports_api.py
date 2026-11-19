@@ -190,6 +190,15 @@ def test_case_bundle_composes_notes_entities_tasks_and_hunts(
         case_id=case_export_case.id,
         status="completed",
         progress=1,
+        definition_snapshot={
+            "steps": [
+                {
+                    "step_id": "search-person",
+                    "plugin_name": "PeopleSearch",
+                    "parameter_mapping": {"country": "initial.country"},
+                }
+            ]
+        },
         initial_parameters={"name": "Zoë"},
         created_by_id=case_export_user.id,
     )

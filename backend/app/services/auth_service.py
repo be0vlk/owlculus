@@ -8,9 +8,7 @@ from sqlmodel import Session, select
 from app.core import security
 from app.core.config import settings
 from app.core.database_boundary import on_transport_loop
-from app.core.exceptions import (
-    AuthenticationException,
-)
+from app.core.exceptions import AuthenticationException, ServiceUnavailableException
 from app.core.logging import get_security_logger
 from app.database.models import User
 from app.schemas.auth_schema import Token, WebSocketToken
@@ -59,6 +57,7 @@ class AuthService:
         if (
             user is None
             or not user.is_active
+            or user.system_identity is not None
             or not await self._verify_password(password, user.password_hash)
         ):
             logger.bind(event_type="login_failed").warning("Authentication failed")
@@ -96,8 +95,6 @@ class AuthService:
         )
         import asyncio
 
-        from fastapi import HTTPException
-
         from app.executions.observation import readable_execution
 
         identity, version = current_user.auth_identity, current_user.session_version
@@ -106,7 +103,7 @@ class AuthService:
             raise AuthenticationException("Could not validate credentials")
         try:
             token = await asyncio.to_thread(
-                security.ephemeral_token_manager.create_token,
+                security.create_ephemeral_token,
                 current_user.id,
                 execution_id,
                 kind,
@@ -114,8 +111,7 @@ class AuthService:
                 version,
             )
         except Exception:  # noqa: BLE001 - never expose Redis credentials
-            raise HTTPException(
-                503,
+            raise ServiceUnavailableException(
                 "Live updates are unavailable; retained investigation results remain available",
             ) from None
         logger.bind(

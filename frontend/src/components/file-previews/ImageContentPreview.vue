@@ -78,15 +78,13 @@
     </div>
 
     <div ref="imageContainer" class="image-container flex-grow-1" @wheel.prevent="handleWheel">
-      <div :style="imageWrapperStyle" class="image-wrapper">
+      <div class="image-wrapper" :class="fitMode === 'contain' ? 'fit-contain' : 'overflow-auto'">
         <img
-          ref="imageElement"
-          :src="imageUrl"
+          :src="imageDataUrl"
           :alt="evidenceItem?.title || 'Evidence image'"
           class="evidence-image"
-          :style="imageStyle"
+          :style="{ transform: `scale(${zoomLevel})` }"
           @load="handleImageLoad"
-          @error="handleImageError"
         />
       </div>
     </div>
@@ -94,9 +92,10 @@
 </template>
 
 <script setup>
-import { computed, ref, watch, onUnmounted } from 'vue'
+import { computed, ref } from 'vue'
 import { evidenceService } from '@/services/evidence.js'
 import { downloadBlob } from '@/utils/download'
+import { formatFileSize } from '@/utils/huntDisplayUtils'
 
 const props = defineProps({
   evidenceItem: {
@@ -107,96 +106,24 @@ const props = defineProps({
     type: Object,
     default: null,
   },
-  loading: {
-    type: Boolean,
-    default: false,
-  },
-  error: {
-    type: String,
-    default: '',
-  },
-  // New prop for image data (could be a base64 string or blob URL passed directly)
+  // Blob URL owned (and revoked) by FileContentModal.
   imageDataUrl: {
     type: String,
     default: '',
   },
 })
 
-const imageUrl = ref('')
 const zoomLevel = ref(1)
 const fitMode = ref('contain')
 const imageDimensions = ref('')
-const imageFormat = ref('')
-const imageElement = ref(null)
 const imageContainer = ref(null)
-const naturalWidth = ref(0)
-const naturalHeight = ref(0)
 
-const imageWrapperStyle = computed(() => {
-  if (fitMode.value === 'contain') {
-    return {
-      width: '100%',
-      height: '100%',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-    }
-  }
-  return {
-    width: '100%',
-    height: '100%',
-    overflow: 'auto',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  }
-})
-
-const imageStyle = computed(() => {
-  if (fitMode.value === 'contain') {
-    return {
-      maxWidth: '100%',
-      maxHeight: '100%',
-      width: 'auto',
-      height: 'auto',
-      transform: `scale(${zoomLevel.value})`,
-      transition: 'transform 0.2s ease',
-    }
-  }
-  return {
-    transform: `scale(${zoomLevel.value})`,
-    transition: 'transform 0.2s ease',
-    transformOrigin: 'center',
-  }
-})
-
-const formatFileSize = (bytes) => {
-  if (!bytes) return 'Unknown'
-  const units = ['B', 'KB', 'MB', 'GB']
-  let size = bytes
-  let unitIndex = 0
-
-  while (size >= 1024 && unitIndex < units.length - 1) {
-    size /= 1024
-    unitIndex++
-  }
-
-  return `${size.toFixed(unitIndex > 0 ? 1 : 0)} ${units[unitIndex]}`
-}
+const imageFormat = computed(
+  () => props.evidenceItem?.title?.split('.').pop()?.toUpperCase() || 'Unknown',
+)
 
 const handleImageLoad = (event) => {
-  const img = event.target
-  naturalWidth.value = img.naturalWidth
-  naturalHeight.value = img.naturalHeight
-  imageDimensions.value = `${img.naturalWidth} × ${img.naturalHeight}`
-
-  const filename = props.evidenceItem?.title || ''
-  const extension = filename.split('.').pop()?.toUpperCase() || 'Unknown'
-  imageFormat.value = extension
-}
-
-const handleImageError = () => {
-  imageUrl.value = ''
+  imageDimensions.value = `${event.target.naturalWidth} × ${event.target.naturalHeight}`
 }
 
 const zoomIn = () => {
@@ -246,42 +173,16 @@ const toggleFullscreen = () => {
   }
 }
 
-watch(
-  () => props.imageDataUrl,
-  (newUrl) => {
-    if (imageUrl.value && imageUrl.value.startsWith('blob:') && imageUrl.value !== newUrl) {
-      URL.revokeObjectURL(imageUrl.value)
-    }
-    imageUrl.value = newUrl
-  },
-  { immediate: true },
-)
-
 const reset = () => {
-  if (imageUrl.value && imageUrl.value.startsWith('blob:')) {
-    URL.revokeObjectURL(imageUrl.value)
-  }
-  imageUrl.value = ''
   zoomLevel.value = 1
   fitMode.value = 'contain'
   imageDimensions.value = ''
-  imageFormat.value = ''
 }
 
 defineExpose({ reset })
-
-onUnmounted(() => {
-  if (imageUrl.value && imageUrl.value.startsWith('blob:')) {
-    URL.revokeObjectURL(imageUrl.value)
-  }
-})
 </script>
 
 <style scoped>
-.h-100 {
-  height: 100%;
-}
-
 .image-container {
   max-height: 70vh;
   min-height: 400px;
@@ -297,6 +198,10 @@ onUnmounted(() => {
   position: relative;
   width: 100%;
   height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  scrollbar-width: thin;
 }
 
 .evidence-image {
@@ -304,6 +209,12 @@ onUnmounted(() => {
   user-select: none;
   -webkit-user-drag: none;
   object-fit: contain;
+  transition: transform 0.2s ease;
+}
+
+.fit-contain .evidence-image {
+  max-width: 100%;
+  max-height: 100%;
 }
 
 .image-container:fullscreen {
@@ -330,24 +241,5 @@ onUnmounted(() => {
   .image-container {
     max-height: 80vh;
   }
-}
-
-.image-wrapper::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-.image-wrapper::-webkit-scrollbar-track {
-  background: rgb(var(--v-theme-surface-variant), 0.1);
-  border-radius: 4px;
-}
-
-.image-wrapper::-webkit-scrollbar-thumb {
-  background: rgb(var(--v-theme-outline), 0.3);
-  border-radius: 4px;
-}
-
-.image-wrapper::-webkit-scrollbar-thumb:hover {
-  background: rgb(var(--v-theme-outline), 0.5);
 }
 </style>

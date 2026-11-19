@@ -12,6 +12,7 @@ describe('useBaseNoteEditor', () => {
   let updateCallback
 
   beforeEach(() => {
+    vi.clearAllMocks()
     vi.useFakeTimers()
 
     mockEditor = {
@@ -81,7 +82,6 @@ describe('useBaseNoteEditor', () => {
 
     useBaseNoteEditor({ onUpdate })
 
-    // Simulate editor update
     updateCallback({ editor: mockEditor })
 
     expect(onUpdate).toHaveBeenCalledWith(mockEditor)
@@ -118,9 +118,9 @@ describe('useBaseNoteEditor', () => {
   it('should provide editor actions', () => {
     const result = useBaseNoteEditor({})
 
-    expect(result.editorActions.value).toHaveLength(9)
+    expect(result.editorActions).toHaveLength(9)
 
-    const boldAction = result.editorActions.value.find((a) => a.icon === 'mdi-format-bold')
+    const boldAction = result.editorActions.find((a) => a.icon === 'mdi-format-bold')
     expect(boldAction).toBeDefined()
     expect(boldAction.title).toBe('Bold (Ctrl+B)')
 
@@ -213,7 +213,15 @@ describe('useBaseNoteEditor', () => {
     expect(result.formatLastSaved.value).toBe('')
 
     result.lastSavedTime.value = new Date()
+    expect(result.formatLastSaved.value).toBe('0 seconds ago')
 
-    expect(result.formatLastSaved.value).toMatch(/ago$/)
+    result.lastSavedTime.value = new Date(Date.now() - 5000)
+    expect(result.formatLastSaved.value).toBe('5 seconds ago')
+
+    result.lastSavedTime.value = new Date(Date.now() - 3 * 60 * 60 * 1000)
+    expect(result.formatLastSaved.value).toBe('3 hours ago')
+
+    result.lastSavedTime.value = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)
+    expect(result.formatLastSaved.value).toBe('2 days ago')
   })
 })

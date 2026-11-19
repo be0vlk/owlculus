@@ -1,5 +1,5 @@
 <template>
-  <BaseDashboard compact :loading="loading" title="Admin">
+  <BaseDashboard compact title="Admin">
     <template #header>
       <header class="d-flex flex-wrap align-center ga-4 mb-6">
         <div class="d-flex align-center ga-3">
@@ -47,7 +47,6 @@
         <template v-if="visited.has(tab.value)">
           <UserManagementCard
             v-if="tab.value === 'users'"
-            embedded
             @count="userCount = $event"
             @invite="inviteUser"
             @confirmDelete="handleConfirmDelete"
@@ -56,14 +55,12 @@
           <InviteManagementCard
             v-else-if="tab.value === 'invites'"
             ref="inviteCard"
-            embedded
             @count="inviteCount = $event"
             @confirmDelete="handleConfirmDelete"
             @notification="handleNotification"
           />
           <ApiKeyManagementCard
             v-else-if="tab.value === 'keys'"
-            embedded
             @confirmDelete="handleConfirmDelete"
             @notification="handleNotification"
           />
@@ -85,7 +82,7 @@
               role="tabpanel"
               aria-labelledby="template-tab-evidence"
             >
-              <EvidenceTemplateManagementCard embedded @notification="handleNotification" />
+              <EvidenceTemplateManagementCard />
             </section>
             <section
               id="template-panel-tasks"
@@ -94,15 +91,17 @@
               aria-labelledby="template-tab-tasks"
             >
               <TaskTemplateManagementCard
-                embedded
                 @notification="handleNotification"
                 @confirmDelete="handleConfirmDelete"
               />
             </section>
           </template>
+          <StrixySettingsCard
+            v-else-if="tab.value === 'strixy'"
+            @notification="handleNotification"
+          />
           <SystemConfigurationCard
             v-else-if="tab.value === 'configuration'"
-            embedded
             @notification="handleNotification"
           />
         </template>
@@ -110,10 +109,8 @@
     </div>
   </BaseDashboard>
 
-  <!-- Confirmation Dialog -->
   <ConfirmationDialog ref="confirmDialog" />
 
-  <!-- Snackbar for notifications -->
   <v-snackbar
     v-model="snackbar.show"
     :color="snackbar.color"
@@ -128,12 +125,12 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onMounted } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
 import { useNotifications } from '@/composables/useNotifications'
 import BaseDashboard from '@/components/BaseDashboard.vue'
 import SystemConfigurationCard from '@/components/SystemConfigurationCard.vue'
+import StrixySettingsCard from '@/components/StrixySettingsCard.vue'
 import ApiKeyManagementCard from '@/components/ApiKeyManagementCard.vue'
 import EvidenceTemplateManagementCard from '@/components/EvidenceTemplateManagementCard.vue'
 import TaskTemplateManagementCard from '@/components/TaskTemplateManagementCard.vue'
@@ -142,16 +139,13 @@ import InviteManagementCard from '@/components/InviteManagementCard.vue'
 import ConfirmationDialog from '@/components/ConfirmationDialog.vue'
 
 const router = useRouter()
-const authStore = useAuthStore()
-
-// State
-const loading = ref(true)
 const route = useRoute()
 const tabs = [
   { value: 'users', label: 'Users' },
   { value: 'invites', label: 'Invites' },
   { value: 'keys', label: 'API keys' },
   { value: 'templates', label: 'Templates' },
+  { value: 'strixy', label: 'Strixy' },
   { value: 'configuration', label: 'Case numbering' },
 ]
 const activeTab = computed({
@@ -171,13 +165,10 @@ const inviteUser = async () => {
   inviteCard.value[0]?.openCreateDialog()
 }
 
-// Notifications
 const { snackbar, showNotification, closeNotification } = useNotifications()
 
-// Confirmation dialog reference
 const confirmDialog = ref(null)
 
-// Event handlers
 const handleNotification = ({ text, color }) => {
   showNotification(text, color)
 }
@@ -194,22 +185,11 @@ const handleConfirmDelete = async ({ title, message, warning, onConfirm }) => {
       iconColor: 'error',
     })
 
-    // Execute the confirmation action
     await onConfirm()
   } catch {
     // User cancelled or action failed
   }
 }
-
-onMounted(async () => {
-  if (!authStore.isAuthenticated || authStore.user?.role !== 'Admin') {
-    router.push('/')
-    return
-  }
-
-  // Let child components handle their own loading
-  loading.value = false
-})
 </script>
 
 <style scoped>

@@ -1,63 +1,63 @@
 <template>
   <div class="folder-editor">
-    <div class="folder-row">
-      <div class="folder-content">
-        <div class="folder-icon">
-          <v-icon :color="getFolderColor(level)" :icon="getFolderIcon(expanded)" size="small" />
-        </div>
+    <div class="folder-content">
+      <div class="folder-icon">
+        <v-icon
+          :color="level === 0 ? 'purple-darken-1' : 'purple-lighten-1'"
+          :icon="expanded ? 'mdi-folder-open' : 'mdi-folder'"
+          size="small"
+        />
+      </div>
 
-        <div class="folder-fields flex-grow-1">
-          <v-text-field
-            v-model="localFolder.name"
-            placeholder="Folder name"
-            variant="outlined"
-            density="compact"
-            hide-details
-            class="folder-name-field"
-            @blur="updateFolder"
-          />
+      <div class="folder-fields flex-grow-1">
+        <v-text-field
+          v-model="localFolder.name"
+          placeholder="Folder name"
+          density="compact"
+          hide-details
+          class="folder-name-field"
+          @blur="updateFolder"
+        />
 
-          <v-text-field
-            v-model="localFolder.description"
-            placeholder="Description (optional)"
-            variant="outlined"
-            density="compact"
-            hide-details
-            class="folder-desc-field"
-            @blur="updateFolder"
-          />
-        </div>
+        <v-text-field
+          v-model="localFolder.description"
+          placeholder="Description (optional)"
+          density="compact"
+          hide-details
+          class="folder-desc-field"
+          @blur="updateFolder"
+        />
+      </div>
 
-        <div class="folder-actions">
-          <v-btn
-            @click="toggleExpanded"
-            v-if="hasSubfolders"
-            icon
-            size="x-small"
-            variant="text"
-            :color="expanded ? 'primary' : 'default'"
-          >
-            <v-icon :icon="expanded ? 'mdi-chevron-down' : 'mdi-chevron-right'" />
-          </v-btn>
+      <div class="folder-actions">
+        <v-btn
+          @click="expanded = !expanded"
+          v-if="hasSubfolders"
+          icon
+          size="x-small"
+          variant="text"
+          :color="expanded ? 'primary' : 'default'"
+        >
+          <v-icon :icon="expanded ? 'mdi-chevron-down' : 'mdi-chevron-right'" />
+        </v-btn>
 
-          <v-btn
-            @click="addSubfolder"
-            icon="mdi-folder-plus"
-            size="x-small"
-            variant="text"
-            color="primary"
-            class="ml-1"
-          />
+        <v-btn
+          @click="addSubfolder"
+          icon="mdi-folder-plus"
+          size="x-small"
+          variant="text"
+          color="primary"
+          class="ml-1"
+        />
 
-          <v-btn
-            @click="deleteFolder"
-            icon="mdi-delete"
-            size="x-small"
-            variant="text"
-            color="error"
-            class="ml-1"
-          />
-        </div>
+        <v-btn
+          @click="$emit('delete')"
+          icon="mdi-delete"
+          size="x-small"
+          variant="text"
+          color="error"
+          class="ml-1"
+        />
       </div>
     </div>
 
@@ -67,10 +67,8 @@
         :key="`subfolder-${level}-${index}`"
         :folder="subfolder"
         :level="level + 1"
-        :path="[...path, index]"
         @update="updateSubfolder(index, $event)"
         @delete="deleteSubfolder(index)"
-        @add-subfolder="addSubfolderToChild(index, $event)"
       />
     </div>
   </div>
@@ -78,9 +76,6 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { useFolderIcons } from '../composables/useFolderIcons'
-
-const { getFolderColor, getFolderIcon } = useFolderIcons()
 
 const props = defineProps({
   folder: {
@@ -91,33 +86,21 @@ const props = defineProps({
     type: Number,
     default: 0,
   },
-  path: {
-    type: Array,
-    default: () => [],
-  },
 })
 
-const emit = defineEmits(['update', 'delete', 'add-subfolder'])
+const emit = defineEmits(['update', 'delete'])
 
 const localFolder = ref({ ...props.folder })
 const expanded = ref(true)
 
-const hasSubfolders = computed(() => {
-  return localFolder.value.subfolders && localFolder.value.subfolders.length > 0
-})
+const hasSubfolders = computed(() => localFolder.value.subfolders?.length > 0)
 
 const updateFolder = () => {
   emit('update', { ...localFolder.value })
 }
 
-const deleteFolder = () => {
-  emit('delete')
-}
-
 const addSubfolder = () => {
-  if (!localFolder.value.subfolders) {
-    localFolder.value.subfolders = []
-  }
+  localFolder.value.subfolders ??= []
   localFolder.value.subfolders.push({
     name: 'New Subfolder',
     description: '',
@@ -137,14 +120,6 @@ const deleteSubfolder = (index) => {
   updateFolder()
 }
 
-const addSubfolderToChild = (childIndex, path) => {
-  emit('add-subfolder', [childIndex, ...path])
-}
-
-const toggleExpanded = () => {
-  expanded.value = !expanded.value
-}
-
 watch(
   () => props.folder,
   (newFolder) => {
@@ -157,12 +132,6 @@ watch(
 <style scoped>
 .folder-editor {
   margin-bottom: 8px;
-}
-
-.folder-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
 }
 
 .folder-content {

@@ -39,17 +39,21 @@ def test_relationship_upgrade_preserves_legacy_schema_and_valid_references(
             )
         )
         connection.execute(text("INSERT INTO caseuserlink VALUES (1, 2), (1, 3)"))
-        connection.execute(text("""INSERT INTO evidence VALUES
+        connection.execute(
+            text("""INSERT INTO evidence VALUES
             (1, 1, TRUE, NULL, '', 'local'),
             (2, 2, TRUE, NULL, '', 'foreign'),
             (3, 1, FALSE, 2, '1/preserved.txt', 'original'),
             (4, 1, TRUE, 3, '', 'nonfolder-parent'),
             (5, 1, FALSE, 1, '1/valid.txt', 'local'),
-            (6, 1, FALSE, 999, '1/missing.txt', 'original')"""))
-        connection.execute(text("""INSERT INTO task VALUES
+            (6, 1, FALSE, 999, '1/missing.txt', 'original')""")
+        )
+        connection.execute(
+            text("""INSERT INTO task VALUES
             (1, 1, 1, 'admin'), (2, 1, 2, 'analyst'),
             (3, 1, 3, 'inactive reader'), (4, 1, 4, 'outsider history'),
-            (5, 1, 999, 'missing history')"""))
+            (5, 1, 999, 'missing history')""")
+        )
         connection.commit()
         scoped_engine = create_engine(
             engine.url,

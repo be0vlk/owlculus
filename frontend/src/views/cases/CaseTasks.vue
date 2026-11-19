@@ -1,6 +1,5 @@
 <template>
   <div>
-    <!-- Header -->
     <div class="d-flex align-center justify-space-between mb-4">
       <div>
         <div class="text-title-large">Tasks</div>
@@ -12,22 +11,16 @@
       </v-btn>
     </div>
 
-    <!-- Tasks Table -->
     <TaskTable :loading="loading" :tasks="tasks" />
 
-    <!-- Create Task Dialog -->
     <v-dialog aria-label="Create Task" v-model="showCreateDialog" max-width="600">
-      <TaskForm
-        :saving="loading"
-        @cancel="showCreateDialog = false"
-        @save="handleCreateTask"
-      />
+      <TaskForm :saving="loading" @cancel="showCreateDialog = false" @save="handleCreateTask" />
     </v-dialog>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useTaskStore } from '@/stores/taskStore'
 import { useTaskTable } from '@/composables/useTaskTable'
 import TaskForm from '@/components/tasks/TaskForm.vue'
@@ -43,16 +36,13 @@ const props = defineProps({
 const taskStore = useTaskStore()
 const { canCreateTasks } = useTaskTable()
 
-// Data
 const showCreateDialog = ref(false)
 
-// Computed
 const loading = computed(() => taskStore.loading)
 const tasks = computed(() => taskStore.tasks.filter((t) => t.case_id === props.caseId))
 
-// Methods
 async function loadTasks() {
-  await taskStore.loadTasks({ case_id: props.caseId })
+  await taskStore.loadTasks()
 }
 
 async function handleCreateTask(taskData) {
@@ -62,16 +52,5 @@ async function handleCreateTask(taskData) {
   await loadTasks()
 }
 
-// Watch for case ID changes
-watch(
-  () => props.caseId,
-  () => {
-    loadTasks()
-  },
-)
-
-// Lifecycle
-onMounted(async () => {
-  await loadTasks()
-})
+watch(() => props.caseId, loadTasks, { immediate: true })
 </script>

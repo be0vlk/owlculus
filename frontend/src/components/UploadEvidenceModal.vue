@@ -7,13 +7,11 @@
   >
     <v-card prepend-icon="mdi-cloud-upload" title="Upload Evidence">
       <v-card-text>
-        <v-form ref="formRef" @submit.prevent="handleSubmit">
-          <!-- Target Folder Alert -->
+        <v-form @submit.prevent="handleSubmit">
           <v-alert v-if="targetFolder" class="mb-4" icon="mdi-folder" type="info" variant="tonal">
             Uploading to: <strong>{{ targetFolder.title }}</strong>
           </v-alert>
 
-          <!-- Destination Folder Selection -->
           <v-select
             v-if="!targetFolder"
             v-model="selectedFolder"
@@ -21,8 +19,6 @@
             item-title="label"
             item-value="value"
             label="Destination Folder"
-            variant="outlined"
-            density="comfortable"
             placeholder="Select a folder or upload to root"
             clearable
             class="mb-4"
@@ -33,29 +29,22 @@
             </template>
           </v-select>
 
-          <!-- Category Selection -->
           <v-select
             v-model="form.category"
             :items="CATEGORIES"
             label="Category (Optional)"
-            variant="outlined"
-            density="comfortable"
             placeholder="Select a category"
             clearable
             class="mb-4"
           />
 
-          <!-- Description -->
           <v-textarea
             v-model="form.description"
             label="Description (Optional)"
             rows="3"
-            variant="outlined"
-            density="comfortable"
             class="mb-4"
           />
 
-          <!-- File Upload Area -->
           <v-card
             variant="outlined"
             class="upload-area mb-4"
@@ -90,7 +79,6 @@
             </v-card-text>
           </v-card>
 
-          <!-- Selected Files Display -->
           <v-card v-if="selectedFiles.length > 0" variant="outlined" class="mb-4">
             <v-card-title class="text-body-large">
               Selected Files ({{ selectedFiles.length }})
@@ -128,7 +116,6 @@
             </v-list>
           </v-card>
 
-          <!-- Error Display -->
           <v-alert v-if="fileError" class="mb-4" type="error" variant="tonal">
             {{ fileError }}
           </v-alert>
@@ -142,7 +129,6 @@
         <v-btn :disabled="uploading" variant="text" @click="$emit('close')"> Cancel </v-btn>
         <v-btn
           color="primary"
-          variant="flat"
           @click="handleSubmit"
           :disabled="uploading || selectedFiles.length === 0"
           :loading="uploading"
@@ -156,7 +142,7 @@
 
 <script setup>
 import { useDialogFocusRestore } from '@/composables/useDialogFocusRestore'
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { evidenceService } from '../services/evidence'
 import { FileExtensionGroups, getIconByExtension, MimeGroups } from '@/utils/fileExtension.js'
 // Vuetify components are auto-imported
@@ -183,6 +169,10 @@ const props = defineProps({
     type: Object,
     default: null,
   },
+  folders: {
+    type: Array,
+    default: () => [],
+  },
 })
 
 const emit = defineEmits(['close', 'uploaded'])
@@ -205,12 +195,8 @@ const selectedFiles = ref([])
 const uploading = ref(false)
 const fileError = ref(null)
 const selectedFolder = ref(null)
-const availableFolders = ref([])
-const loadingFolders = ref(false)
 const isDragOver = ref(false)
-const formRef = ref(null)
 
-// Computed properties
 const folderOptions = computed(() => {
   const buildFolderTree = (folders, parentId = null, prefix = '') => {
     const options = []
@@ -218,13 +204,8 @@ const folderOptions = computed(() => {
 
     children.forEach((folder) => {
       const label = prefix + '📁 ' + folder.title
-      options.push({
-        label,
-        value: folder,
-        folder,
-      })
+      options.push({ label, value: folder })
 
-      // Add nested folders with indentation
       const nestedOptions = buildFolderTree(folders, folder.id, prefix + '  ')
       options.push(...nestedOptions)
     })
@@ -232,23 +213,8 @@ const folderOptions = computed(() => {
     return options
   }
 
-  return buildFolderTree(availableFolders.value)
+  return buildFolderTree(props.folders)
 })
-
-// Methods
-const loadFolders = async () => {
-  if (!props.caseId) return
-
-  try {
-    loadingFolders.value = true
-    const folders = await evidenceService.getFolderTree(props.caseId)
-    availableFolders.value = folders
-  } catch (error) {
-    console.error('Failed to load folders:', error)
-  } finally {
-    loadingFolders.value = false
-  }
-}
 
 function addFiles(files) {
   const invalidFiles = files.filter((file) => file.size > 15 * 1024 * 1024)
@@ -328,24 +294,6 @@ async function handleSubmit() {
   }
 }
 
-// Watch for dialog opening to load folders
-watch(
-  () => props.show,
-  (newShow) => {
-    if (newShow && props.caseId) {
-      loadFolders()
-    }
-  },
-)
-
-// Load folders on mount if dialog is already open
-onMounted(() => {
-  if (props.show && props.caseId) {
-    loadFolders()
-  }
-})
-
-// Helper function to get appropriate file icon
 const getFileIcon = (item) => {
   const fileExtension = item.split('.').pop().toLowerCase()
 

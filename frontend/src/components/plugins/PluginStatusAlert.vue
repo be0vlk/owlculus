@@ -1,19 +1,19 @@
 <template>
   <v-alert
     v-if="message"
-    :type="alertType"
-    :variant="variant"
-    :density="density"
-    :prominent="prominent"
-    :class="alertClass"
+    :type="style.type"
+    variant="tonal"
+    :density="type === 'status' ? 'compact' : 'default'"
+    :prominent="type === 'error'"
+    :class="{ 'mb-4': type === 'complete' }"
   >
-    <template v-if="showTitle" #title>
+    <template v-if="style.title" #title>
       <div class="d-flex align-center">
-        <v-icon :icon="titleIcon" class="mr-2" />
-        {{ titleText }}
+        <v-icon :icon="style.icon" class="mr-2" />
+        {{ pluginName ? `${pluginName} ${style.title}` : '' }}
       </div>
     </template>
-    <div v-if="showTitle">
+    <div v-if="style.title">
       {{ message }}
     </div>
     <template v-else>
@@ -41,48 +41,10 @@ const props = defineProps({
   },
 })
 
-const alertType = computed(() => {
-  switch (props.type) {
-    case 'status':
-      return 'info'
-    case 'complete':
-      return 'success'
-    case 'error':
-      return 'error'
-    default:
-      return 'info'
-  }
-})
-
-const variant = computed(() => (props.type === 'status' ? 'tonal' : 'tonal'))
-const density = computed(() => (props.type === 'status' ? 'compact' : 'default'))
-const prominent = computed(() => props.type === 'error')
-const alertClass = computed(() => (props.type === 'complete' ? 'mb-4' : ''))
-
-const showTitle = computed(() => props.type !== 'status')
-
-const titleIcon = computed(() => {
-  switch (props.type) {
-    case 'complete':
-      return 'mdi-check-circle'
-    case 'error':
-      return 'mdi-alert-circle'
-    default:
-      return ''
-  }
-})
-
-const titleText = computed(() => {
-  if (props.pluginName) {
-    switch (props.type) {
-      case 'complete':
-        return `${props.pluginName} Complete`
-      case 'error':
-        return `${props.pluginName} Error`
-      default:
-        return ''
-    }
-  }
-  return ''
-})
+const styles = {
+  status: { type: 'info' },
+  complete: { type: 'success', icon: 'mdi-check-circle', title: 'Complete' },
+  error: { type: 'error', icon: 'mdi-alert-circle', title: 'Error' },
+}
+const style = computed(() => styles[props.type])
 </script>

@@ -11,8 +11,7 @@ from redis import Redis
 from redis.asyncio import Redis as AsyncRedis
 
 from app.core.config import settings
-from app.core.login_rate_limiting import RedisLoginRateLimiter
-from app.core.rate_limiting import RedisClientRateLimiter
+from app.core.rate_limiting import RedisClientRateLimiter, RedisLoginRateLimiter
 from app.core.redis_health import storage_ready
 from tests.executions.conftest import eventually
 from tests.executions.test_login_limits import login_app
@@ -161,8 +160,10 @@ async def test_maintenance_waits_for_old_budgets_and_preserves_persisted_queue(
     eventually(restarted)
     assert old.lindex("migration-fixture-queue", 0) == b"retained-work"
     eventually(
-        lambda: not list(old.scan_iter("owlculus:login-rate-limit:*"))
-        and not list(old.scan_iter("owlculus:bootstrap-rate-limit:*"))
+        lambda: (
+            not list(old.scan_iter("owlculus:login-rate-limit:*"))
+            and not list(old.scan_iter("owlculus:bootstrap-rate-limit:*"))
+        )
     )
     async with AsyncRedis.from_url(system.env["AUTH_REDIS_URL"]) as shared:
         await RedisLoginRateLimiter(shared).check("198.51.100.4", "acceptance")
@@ -179,15 +180,18 @@ async def test_bootstrap_http_uses_auth_store_under_pressure(
     from app.api.users import router
     from app.core import setup
     from app.core.exception_handler import handle_domain_exception
-    from app.core.exceptions import BaseException as DomainException
+    from app.core.exceptions import DomainException
     from app.database.connection import get_db
 
     monkeypatch.setattr(
         settings, "AUTH_REDIS_URL", execution_system.env["AUTH_REDIS_URL"]
     )
     monkeypatch.setattr(setup, "SETUP_TOKEN_FILE", tmp_path / "bootstrap-token")
-    token = setup.generate_setup_token()
+    token = setup.create_setup_token_once()[0]
     api = FastAPI()
+    api.state.bootstrap_rate_limiter = RedisClientRateLimiter(
+        AsyncRedis.from_url(execution_system.env["AUTH_REDIS_URL"])
+    )
     api.include_router(router, prefix="/users")
     api.add_exception_handler(DomainException, handle_domain_exception)
 
