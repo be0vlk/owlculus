@@ -9,6 +9,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 from fastapi import UploadFile
+from loguru import logger
 
 from app.core import file_storage
 from app.core.exceptions import DomainException, ValidationException
@@ -394,6 +395,40 @@ class TestSaveUploadFile:
             with pytest.raises(DomainException) as exc_info:
                 await file_storage.save_upload_file(sample_upload_file, case_id)
             assert "Could not save file" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("fails", [False, True])
+    async def test_save_upload_file_escapes_filename_in_log_messages(
+        self, temp_upload_dir, case_id, sample_upload_file, fails
+    ):
+        sample_upload_file.filename = "a.png\n2026-01-01 | INFO | forged\r\x1b[2J\u2028"
+        messages: list[str] = []
+        sink = logger.add(lambda message: messages.append(message.record["message"]))
+        try:
+            with (
+                patch("app.core.file_storage.validate_file_security"),
+                patch(
+                    "app.core.file_storage.secure_filename_with_path",
+                    side_effect=Exception("boom") if fails else None,
+                    return_value="a.png",
+                ) as mock_secure,
+            ):
+                if fails:
+                    with pytest.raises(DomainException):
+                        await file_storage.save_upload_file(sample_upload_file, case_id)
+                else:
+                    await file_storage.save_upload_file(sample_upload_file, case_id)
+        finally:
+            logger.remove(sink)
+
+        assert mock_secure.call_args.args[0] == sample_upload_file.filename
+        escaped = "a.png\\n2026-01-01 | INFO | forged\\r\\x1b[2J\\u2028"
+        assert messages[0] == f"File upload validated: {escaped}"
+        assert messages[-1] == (
+            f"Failed to save file {escaped}: boom"
+            if fails
+            else f"File uploaded successfully: {escaped} to {case_id}/a.png"
+        )
 
 
 class TestDeleteFile:

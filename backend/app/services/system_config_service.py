@@ -241,9 +241,12 @@ class SystemConfigService:
             key_data and StoredApiKey.from_mapping(provider, key_data).encrypted_key
         ):
             return
-        # Switching provider clears the saved URL but keeps the key, so an empty
-        # saved URL still counts as a different host.
-        saved_url = ((config.strixy_settings or {}).get("base_url") or "").rstrip("/")
+        # Only openai_compatible saves pass this check, so a URL saved under any
+        # other provider, or none, counts as a different host.
+        saved = config.strixy_settings or {}
+        saved_url = (
+            (saved.get("base_url") or "") if saved.get("provider") == provider else ""
+        ).rstrip("/")
         if saved_url != (base_url or "").rstrip("/"):
             raise ValidationException(
                 "The base URL changed, so the stored API key can't be used with it. "

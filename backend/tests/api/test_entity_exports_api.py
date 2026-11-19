@@ -237,6 +237,57 @@ def test_entity_csv_export_encodes_object_lists_as_json(
     assert json.loads(row["subdomains"]) == subdomains
 
 
+def test_entity_csv_export_neutralizes_spreadsheet_formulas(
+    client: TestClient,
+    session: Session,
+    export_admin: User,
+    export_case: Case,
+    authenticate_as,
+):
+    authenticate_as(export_admin)
+    data = {
+        "first_name": '=HYPERLINK("https://attacker.example","x")',
+        "last_name": "Safe",
+        "employer": "+1+1",
+        "nationality": "-2+3",
+        "email": "@SUM(1)",
+        "phone": "\t=1+1",
+        "other": "\r=1+1",
+        "notes": "<p>=cmd|' /C calc'!A0</p>",
+        "usernames": ["=1+1", "plain"],
+        "sources": {"=k": "+cmd", "ok": "plain"},
+    }
+    session.add(
+        Entity(
+            case_id=export_case.id,
+            entity_type="person",
+            data=data,
+            created_by_id=export_admin.id,
+        )
+    )
+    session.commit()
+    export_url = f"{settings.API_V1_STR}/cases/{export_case.id}/entities/export"
+
+    response = client.get(export_url)
+
+    row = next(csv.DictReader(io.StringIO(response.content.decode("utf-8-sig"))))
+    assert row["first_name"] == "'" + data["first_name"]
+    assert row["display_name"] == "'" + data["first_name"] + " Safe"
+    assert row["last_name"] == "Safe"
+    assert row["employer"] == "'+1+1"
+    assert row["nationality"] == "'-2+3"
+    assert row["email"] == "'@SUM(1)"
+    assert row["phone"] == "'\t=1+1"
+    assert row["other"] == "'\r=1+1"
+    assert row["notes"] == "'=cmd|' /C calc'!A0"
+    assert row["usernames"] == "'=1+1; plain"
+    assert row["sources.=k"] == "'+cmd"
+    assert row["sources.ok"] == "plain"
+
+    json_response = client.get(export_url, params={"format": "json"})
+    assert json_response.json()[0]["data"] == data
+
+
 def test_entity_export_applies_repeatable_types_and_display_or_description_search(
     client: TestClient,
     session: Session,

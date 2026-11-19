@@ -178,6 +178,40 @@ async def test_generate_case_number_subsequent(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("stored", "expected"),
+    [
+        (["2301-03", "2301-+7"], "2301-08"),
+        (["2301-03", "2301-07 "], "2301-08"),
+        (["2301-03", "2301- 7"], "2301-08"),
+        (["2301-03", "2301-٧"], "2301-08"),
+        (["2301-03", "2301-７"], "2301-08"),
+        (["2301-03", "2301-1_0"], "2301-11"),
+        (["2301-03", "2301-0000000042"], "2301-43"),
+        (["2301-03", "2301-1234567890"], "2301-1234567891"),
+        (["2301-03", "2301-abc"], "2301-04"),
+        (["2301-abc", "2301-"], "2301-01"),
+        (["2301-03", "2301-" + "1" * 4301], "2301-04"),
+        (["2301-03", "2301-" + "9" * 4300], "2301-04"),
+        (["2301-03", "2301-" + "9" * 4300, "2301-" + str(10**4300 - 2)], "2301-04"),
+    ],
+)
+async def test_generate_case_number_tolerates_unusable_suffixes(
+    case_service_instance: case_service.CaseService,
+    stored: list[str],
+    expected: str,
+):
+    for case_number in stored:
+        case_service_instance.db.add(models.Case(case_number=case_number))
+    case_service_instance.db.commit()
+
+    case_number = await case_service_instance._generate_case_number(
+        datetime(2023, 1, 15, 12, 0, 0)
+    )
+    assert case_number == expected
+
+
+@pytest.mark.asyncio
 async def test_get_cases_admin(
     case_service_instance: case_service.CaseService,
     sample_case: models.Case,

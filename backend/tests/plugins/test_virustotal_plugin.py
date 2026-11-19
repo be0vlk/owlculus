@@ -4,6 +4,7 @@ from typing import cast
 
 import pytest
 import vt
+import yarl
 from sqlmodel import Session
 
 from app.plugins.base_plugin import PluginRun, ResultEvent
@@ -64,6 +65,12 @@ OBJECTS = {
     },
     "/ip_addresses/192.0.2.1": {**ANALYSIS, "asn": 64500, "country": "EX"},
 }
+REQUESTED: list[str] = []
+
+
+def requested_url() -> yarl.URL:
+    [path] = REQUESTED
+    return yarl.URL("https://www.virustotal.com/api/v3" + path)
 
 
 class FakeClient:
@@ -77,11 +84,16 @@ class FakeClient:
         return False
 
     async def get_object_async(self, path):
+        REQUESTED.append(path)
         kind, object_id = path.split("/")[1:3]
         return vt.Object(kind, object_id, OBJECTS[path])
 
 
-async def analyze(monkeypatch, target):
+async def analyze(monkeypatch, target, analysis_type=None):
+    REQUESTED.clear()
+    params = {"target": target}
+    if analysis_type is not None:
+        params["analysis_type"] = analysis_type
     monkeypatch.setattr(vt, "Client", FakeClient)
     ctx = PluginRun.for_test(
         session=cast(Session, None),
@@ -90,7 +102,7 @@ async def analyze(monkeypatch, target):
         evidence=[],
         entities=[],
     )
-    return [event async for event in VirustotalPlugin().run({"target": target}, ctx)]
+    return [event async for event in VirustotalPlugin().run(params, ctx)]
 
 
 @pytest.mark.asyncio
@@ -166,3 +178,60 @@ async def test_non_file_analysis_drops_clean_vendors(
         ],
         **extra,
     }
+
+
+ENDPOINTS = {
+    "file": "/api/v3/files/",
+    "domain": "/api/v3/domains/",
+    "ip": "/api/v3/ip_addresses/",
+}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("analysis_type", ENDPOINTS)
+@pytest.mark.parametrize("target", ["x/../../users/me?relationships=a", "%2e%2e"])
+async def test_explicit_target_stays_one_segment_under_its_endpoint(
+    monkeypatch, analysis_type, target
+):
+    await analyze(monkeypatch, target, analysis_type)
+
+    url = requested_url()
+    endpoint = ENDPOINTS[analysis_type]
+    assert url.raw_path.startswith(endpoint)
+    assert "/" not in url.raw_path.removeprefix(endpoint)
+    assert url.raw_query_string == ""
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("analysis_type", "target"),
+    [
+        ("file", "a" * 64),
+        ("domain", "example.com"),
+        ("ip", "192.0.2.1"),
+        ("ip", "2001:db8::1"),
+    ],
+)
+async def test_valid_explicit_targets_request_the_unescaped_path(
+    monkeypatch, analysis_type, target
+):
+    await analyze(monkeypatch, target, analysis_type)
+
+    assert requested_url().raw_path == ENDPOINTS[analysis_type] + target
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("analysis_type", ENDPOINTS)
+async def test_dot_dot_target_is_rejected_without_a_request(monkeypatch, analysis_type):
+    events = await analyze(monkeypatch, "..", analysis_type)
+
+    assert events == [ResultEvent.error("Invalid target: '..'")]
+    assert REQUESTED == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("target", "object_id"), [(".", "Lg"), ("..", "Li4")])
+async def test_url_dot_targets_are_still_looked_up(monkeypatch, target, object_id):
+    await analyze(monkeypatch, target, "url")
+
+    assert requested_url().raw_path == "/api/v3/urls/" + object_id

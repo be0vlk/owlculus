@@ -4,6 +4,7 @@ Analyze files, URLs, domains, and IPs using VirusTotal threat intelligence
 
 import re
 import time
+import urllib.parse
 from collections.abc import AsyncGenerator
 from typing import Any
 
@@ -136,6 +137,10 @@ class VirustotalPlugin(BasePlugin):
         if analysis_type not in _ENDPOINTS:
             yield self.error(f"Invalid analysis type: {analysis_type}")
             return
+        # Quoting leaves ".." intact and the HTTP client collapses it into the parent path.
+        if analysis_type != "url" and target == "..":
+            yield self.error(f"Invalid target: '{target}'")
+            return
         try:
             async with vt.Client(api_key) as client:
                 client.timeout = timeout
@@ -155,7 +160,9 @@ class VirustotalPlugin(BasePlugin):
         self, client: vt.Client, kind: str, target: str, include_details: bool
     ) -> dict[str, Any]:
         """Look up one file hash, URL, domain or IP and shape the report."""
-        object_id = vt.url_id(target) if kind == "url" else target
+        object_id = (
+            vt.url_id(target) if kind == "url" else urllib.parse.quote(target, safe="")
+        )
         obj = await client.get_object_async(_ENDPOINTS[kind] + object_id)
         stats = obj.last_analysis_stats
         result: dict[str, Any] = {

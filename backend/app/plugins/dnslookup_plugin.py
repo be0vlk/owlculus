@@ -3,6 +3,7 @@ DNS lookup plugin for resolving domain names to IP addresses and performing reve
 """
 
 import asyncio
+import ipaddress
 import time
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -14,6 +15,24 @@ from dns.reversename import from_address
 
 from .base_plugin import BasePlugin, PluginRun, ResultEvent
 from .plugin_types import is_ip_address, unique_ip_writes
+
+_NAT64_WELL_KNOWN = ipaddress.IPv6Network("64:ff9b::/96")
+
+
+def _is_public_nameserver(value: str) -> bool:
+    try:
+        address = ipaddress.ip_address(value)
+    except ValueError:
+        return False
+    if isinstance(address, ipaddress.IPv6Address):
+        if address.is_site_local:
+            return False
+        if address.ipv4_mapped:
+            address = address.ipv4_mapped
+        elif address in _NAT64_WELL_KNOWN:
+            # Python flags the whole prefix global and reserved; only the embedded IPv4 is reached.
+            address = ipaddress.IPv4Address(int(address) & 0xFFFFFFFF)
+    return address.is_global and not (address.is_multicast or address.is_reserved)
 
 
 class DnsLookup(BasePlugin):
@@ -116,6 +135,12 @@ class DnsLookup(BasePlugin):
             nameservers = [
                 ns.strip() for ns in params["nameservers"].split(",") if ns.strip()
             ]
+            for nameserver in nameservers:
+                if not _is_public_nameserver(nameserver):
+                    yield self.error(
+                        f"'{nameserver}' is not a public IP address and cannot be used as a nameserver"
+                    )
+                    return
             resolver.nameservers = nameservers
         for target in targets:
             if lookup_mode == "reverse":

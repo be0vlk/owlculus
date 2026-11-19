@@ -426,6 +426,43 @@ def test_switching_provider_does_not_free_the_stored_compatible_key(
     list_models.assert_not_called()
 
 
+def test_a_base_url_saved_under_another_provider_does_not_free_the_compatible_key(
+    client, session, test_admin, monkeypatch
+):
+    monkeypatch.delenv("OPENAI_COMPATIBLE_API_KEY", raising=False)
+    authenticate_as(test_admin)
+    save_compatible(client, api_key="stored-secret")
+    staged = client.put(
+        "/api/admin/configuration/strixy",
+        json={"provider": "openai", "base_url": OTHER_HOST},
+    )
+    assert staged.status_code == 200
+    stored = session.exec(select(SystemConfiguration)).one()
+    assert stored.strixy_settings["base_url"] == OTHER_HOST
+
+    with (
+        patch("app.services.strixy_setup.list_models") as list_models,
+        patch("app.services.strixy_setup.test_connection") as test_connection,
+    ):
+        listed = client.post(
+            "/api/admin/configuration/strixy/models",
+            json={"provider": "openai_compatible", "base_url": OTHER_HOST},
+        )
+        tested = client.post(
+            "/api/admin/configuration/strixy/test",
+            json=COMPATIBLE | {"base_url": OTHER_HOST},
+        )
+        saved = save_compatible(client, base_url=OTHER_HOST)
+
+    for response in (listed, tested, saved):
+        assert response.status_code == 422
+        assert "Enter the API key again" in response.json()["detail"]
+    list_models.assert_not_called()
+    test_connection.assert_not_called()
+    session.refresh(stored)
+    assert stored.strixy_settings["provider"] == "openai"
+
+
 def test_stored_compatible_key_still_works_with_the_saved_base_url(
     client, test_admin, monkeypatch
 ):
