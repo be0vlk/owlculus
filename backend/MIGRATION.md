@@ -1,8 +1,8 @@
-# Upgrade to 2.1.0
+# Upgrade to 2.1.1
 
 If you're running an earlier version with Docker Compose, follow these steps.
-Upgrading from 2.0.3 needs no manual migration: `db-init` adds the new tables and
-columns. Steps marked *before 2.0.3* apply only to older installations. Schedule
+Upgrading from 2.1.0 needs no database changes. Upgrading from 2.0.3 needs no
+manual migration: `db-init` adds the new tables and columns. Steps marked *before 2.0.3* apply only to older installations. Schedule
 downtime and run the commands from your existing installation directory.
 
 Keep your Compose project name, `.env`, `POSTGRES_*` values, and `SECRET_KEY`.
@@ -93,6 +93,14 @@ Compose files with every command below.
    `db-init` should show exit code 0; all other services should become healthy.
    Sign in with an existing account, open a Case, download old Evidence, and run
    a Plugin and Hunt that save results. Check that stored provider keys still work.
+
+**Expected changes in 2.1.1:**
+
+- If you provide `OPENAI_COMPATIBLE_API_KEY` through the environment, also set
+  `OPENAI_COMPATIBLE_BASE_URL` to your server's base URL, and use the same URL
+  under Admin > Strixy. The key is only sent to that URL. A key entered under
+  Admin > Strixy is not affected.
+- Investigators now see only the Cases they belong to when they view Clients.
 
 **Expected changes in 2.1.0:**
 
