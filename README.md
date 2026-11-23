@@ -38,6 +38,13 @@ If `make setup` reports a missing `RUNTIME_POSTGRES_PASSWORD` when upgrading:
 2. Edit the existing `.env` in the repository root. Add `RUNTIME_POSTGRES_USER=owlculus_runtime` (different from `POSTGRES_USER`) and `RUNTIME_POSTGRES_PASSWORD=`, pasting the generated output after `=`. If that login already exists, use its existing password instead.
 3. Preserve `SECRET_KEY` and all existing `POSTGRES_*` values. Save the file and rerun `make setup`.
 
+### Using Monid (optional)
+
+Set `MONID_API_KEY` in the root `.env` and run `docker compose up -d` to enable
+People Data Labs person enrichment through Monid (one API key, pay per call).
+Person identifiers are sent to Monid. Company enrichment still uses your People Data Labs key.
+See the [Monid docs](https://docs.monid.ai).
+
 ## Contributing
 GitHub Issues and Pull Requests always welcome! Oh and make sure to at least read the CONTRIBUTING.md readme first for some basic guidelines.
 

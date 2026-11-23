@@ -2,14 +2,21 @@
 Enrich person and company data using People Data Labs API
 """
 
+import json
+import os
+import time
 from collections.abc import AsyncGenerator
 from typing import Any
 
+import httpx
 import peopledatalabs
 
 from app.services.api_key_vault import Provider
 
 from .base_plugin import BasePlugin, PluginRun, ResultEvent
+
+_MONID_API = "https://api.monid.ai"
+_MONID_TIMEOUT = 60
 
 # (request parameter, People Data Labs field); a later company domain wins.
 _FIELDS = {
@@ -92,6 +99,12 @@ class PeopledatalabsPlugin(BasePlugin):
             },
         }
 
+    def get_metadata(self) -> dict[str, Any]:
+        metadata = super().get_metadata()
+        if os.environ.get("MONID_API_KEY"):
+            metadata["api_key_requirements"] = []
+        return metadata
+
     async def run(
         self, params: dict[str, Any], ctx: PluginRun
     ) -> AsyncGenerator[ResultEvent, None]:
@@ -99,6 +112,9 @@ class PeopledatalabsPlugin(BasePlugin):
             yield self.error("Search type parameter is required")
             return
         search_type = params["search_type"]
+        if search_type == "person" and (monid_key := os.environ.get("MONID_API_KEY")):
+            yield self._enrich(None, search_type, params, monid_key=monid_key)
+            return
         api_key = ctx.key(Provider.PEOPLE_DATA_LABS)
         if not api_key:
             yield ctx.missing_key(Provider.PEOPLE_DATA_LABS)
@@ -113,7 +129,14 @@ class PeopledatalabsPlugin(BasePlugin):
             return
         yield self._enrich(getattr(client, search_type), search_type, params)
 
-    def _enrich(self, endpoint, kind: str, params: dict[str, Any]) -> ResultEvent:
+    def _enrich(
+        self,
+        endpoint,
+        kind: str,
+        params: dict[str, Any],
+        *,
+        monid_key: str | None = None,
+    ) -> ResultEvent:
         """Enrich one person or company from the identifiers given for it."""
         search_params = {
             field: params[param] for param, field in _FIELDS[kind] if params.get(param)
@@ -121,14 +144,22 @@ class PeopledatalabsPlugin(BasePlugin):
         if not search_params:
             return self.error(_MISSING_IDENTIFIER[kind])
         try:
-            result = endpoint.enrichment(**search_params, pretty=True)
-            if not result.ok:
-                error_data = result.json() if result.text else {}
-                error_msg = error_data.get("error", {}).get(
-                    "message", f"API error: {result.status_code}"
-                )
-                return self.error(f"People Data Labs API error: {error_msg}")
-            body = result.json()
+            if monid_key:
+                run = self._run_monid(monid_key, {**search_params, "pretty": True})
+                provider_response = run.get("providerResponse") or {}
+                status = provider_response.get("httpStatus", 200)
+                if status >= 400:
+                    error_data = provider_response.get("error")
+                    if not isinstance(error_data, dict):
+                        error_data = {}
+                    return self._provider_error(status, error_data)
+                body = run["output"]
+            else:
+                result = endpoint.enrichment(**search_params, pretty=True)
+                if not result.ok:
+                    error_data = result.json() if result.text else {}
+                    return self._provider_error(result.status_code, error_data)
+                body = result.json()
             if body.get("status") != 200 or not body.get("data"):
                 return self.error(f"No {kind} data found for the provided criteria")
             return self.data(
@@ -141,6 +172,53 @@ class PeopledatalabsPlugin(BasePlugin):
             )
         except Exception as e:
             return self.error(f"Error searching {kind} data: {e!s}")
+
+    def _provider_error(self, status: int, error_data: dict[str, Any]) -> ResultEvent:
+        error_msg = error_data.get("error", {}).get("message", f"API error: {status}")
+        return self.error(f"People Data Labs API error: {error_msg}")
+
+    @staticmethod
+    def _run_monid(api_key: str, params: dict[str, Any]) -> dict[str, Any]:
+        headers = {"Authorization": f"Bearer {api_key}"}
+        payload = {
+            "provider": "pdl",
+            "endpoint": "/v5/person/enrich",
+            "input": {"body": params},
+        }
+        deadline = time.monotonic() + _MONID_TIMEOUT
+        response = httpx.post(
+            f"{_MONID_API}/v1/run",
+            headers={**headers, "Content-Type": "application/json; charset=utf-8"},
+            content=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            timeout=_MONID_TIMEOUT,
+        )
+        response.raise_for_status()
+        run = response.json()
+        if response.status_code == 202:
+            run_id = run["runId"]
+            while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 2:
+                    raise TimeoutError("Monid run timed out")
+                time.sleep(2)
+                response = httpx.get(
+                    f"{_MONID_API}/v1/runs/{run_id}",
+                    headers=headers,
+                    timeout=remaining - 2,
+                )
+                response.raise_for_status()
+                run = response.json()
+                if run.get("status") in {
+                    "COMPLETED",
+                    "FAILED",
+                    "TIMED_OUT",
+                    "STOPPED",
+                    "BLOCKED",
+                }:
+                    break
+        if run.get("status") not in (None, "COMPLETED"):
+            raise RuntimeError(f"Monid run {run['status']}")
+        return run
 
     def format_evidence(
         self, results: list[dict[str, Any]], params: dict[str, Any]
